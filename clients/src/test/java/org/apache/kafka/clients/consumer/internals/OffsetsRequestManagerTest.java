@@ -500,6 +500,34 @@ public class OffsetsRequestManagerTest {
     }
 
     @Test
+    public void testResetPositionsThrowsPreviousException() {
+        when(subscriptionState.partitionsNeedingReset(time.milliseconds())).thenReturn(Collections.singleton(TEST_PARTITION_1));
+        when(subscriptionState.resetStrategy(any())).thenReturn(OffsetResetStrategy.EARLIEST);
+        mockSuccessfulRequest(Collections.singletonMap(TEST_PARTITION_1, LEADER_1));
+
+        requestManager.resetPositionsIfNeeded();
+
+        // Reset positions response with TopicAuthorizationException
+        NetworkClientDelegate.PollResult res = requestManager.poll(time.milliseconds());
+        NetworkClientDelegate.UnsentRequest unsentRequest = res.unsentRequests.get(0);
+        ClientResponse clientResponse = buildClientResponseWithErrors(
+                unsentRequest, Collections.singletonMap(TEST_PARTITION_1, Errors.TOPIC_AUTHORIZATION_FAILED));
+        clientResponse.onComplete();
+
+        assertTrue(unsentRequest.future().isDone());
+        assertFalse(unsentRequest.future().isCompletedExceptionally());
+
+        verify(subscriptionState).requestFailed(any(), anyLong());
+        verify(metadata).requestUpdate(false);
+
+        // Following resetPositions should raise the previous exception without performing any
+        // request
+        assertThrows(TopicAuthorizationException.class,
+                () -> requestManager.resetPositionsIfNeeded());
+        assertEquals(0, requestManager.requestsToSend());
+    }
+
+    @Test
     public void testValidatePositionsSuccess() {
         int currentOffset = 5;
         int expectedEndOffset = 100;
@@ -624,34 +652,6 @@ public class OffsetsRequestManagerTest {
         clientResponse.onComplete();
         assertTrue(unsentRequest.future().isDone());
         assertFalse(unsentRequest.future().isCompletedExceptionally());
-    }
-
-    @Test
-    public void testResetPositionsThrowsPreviousException() {
-        when(subscriptionState.partitionsNeedingReset(time.milliseconds())).thenReturn(Collections.singleton(TEST_PARTITION_1));
-        when(subscriptionState.resetStrategy(any())).thenReturn(OffsetResetStrategy.EARLIEST);
-        mockSuccessfulRequest(Collections.singletonMap(TEST_PARTITION_1, LEADER_1));
-
-        requestManager.resetPositionsIfNeeded();
-
-        // Reset positions response with TopicAuthorizationException
-        NetworkClientDelegate.PollResult res = requestManager.poll(time.milliseconds());
-        NetworkClientDelegate.UnsentRequest unsentRequest = res.unsentRequests.get(0);
-        ClientResponse clientResponse = buildClientResponseWithErrors(
-                unsentRequest, Collections.singletonMap(TEST_PARTITION_1, Errors.TOPIC_AUTHORIZATION_FAILED));
-        clientResponse.onComplete();
-
-        assertTrue(unsentRequest.future().isDone());
-        assertFalse(unsentRequest.future().isCompletedExceptionally());
-
-        verify(subscriptionState).requestFailed(any(), anyLong());
-        verify(metadata).requestUpdate(false);
-
-        // Following resetPositions should raise the previous exception without performing any
-        // request
-        assertThrows(TopicAuthorizationException.class,
-                () -> requestManager.resetPositionsIfNeeded());
-        assertEquals(0, requestManager.requestsToSend());
     }
 
     private ListOffsetsResponseData.ListOffsetsTopicResponse mockUnknownOffsetResponse(
