@@ -44,6 +44,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Predicate;
 
 import static org.apache.kafka.clients.consumer.internals.FetchUtils.requestMetadataUpdate;
 
@@ -256,9 +257,24 @@ public abstract class AbstractFetch<K, V> implements Closeable {
         return request;
     }
 
+    /**
+     * Return the list of <em>fetchable</em> partitions, which are the set of partitions to which we are subscribed,
+     * but <em>excluding</em> any partitions for which we still have buffered data. The idea is that since the user
+     * has yet to process the data for the partition that has already been fetch, we should not go send for more data
+     * until the previously-fetched data has been processed.
+     *
+     * @return List of {@link TopicPartition topic partitions} for which we should fetch data
+     */
     private List<TopicPartition> fetchablePartitions() {
-        Set<TopicPartition> exclude = fetchBuffer.partitions();
-        return subscriptions.fetchablePartitions(tp -> !exclude.contains(tp));
+        // This is the set of partitions we have in our buffer
+        Set<TopicPartition> buffered = fetchBuffer.partitions();
+
+        // This is the test that returns true if the partition is *not* buffered
+        Predicate<TopicPartition> isNotBuffered = tp -> !buffered.contains(tp);
+
+        // Return all partitions that are in an otherwise fetchable state *and* for which we don't already have some
+        // messages sitting in our buffer.
+        return subscriptions.fetchablePartitions(isNotBuffered);
     }
 
     /**
