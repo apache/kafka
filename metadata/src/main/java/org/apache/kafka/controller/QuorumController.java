@@ -151,7 +151,6 @@ import java.util.function.Supplier;
 import static java.util.concurrent.TimeUnit.MICROSECONDS;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 import static org.apache.kafka.controller.QuorumController.ControllerOperationFlag.DOES_NOT_UPDATE_QUEUE_TIME;
-import static org.apache.kafka.controller.QuorumController.ControllerOperationFlag.COMPLETES_IN_TRANSACTION;
 import static org.apache.kafka.controller.QuorumController.ControllerOperationFlag.RUNS_IN_PREMIGRATION;
 
 
@@ -684,21 +683,16 @@ public final class QuorumController implements Controller {
          * Operations without this flag will always return NOT_CONTROLLER when invoked in premigration
          * mode.
          * <p>
-         * In pre-migration mode, we are still waiting to load the metadata from Apache
-         * ZooKeeper into the metadata log. Therefore, the metadata log is mostly empty,
-         * even though the cluster really does have metadata. Very few operations should
-         * use this flag.
+         * In pre-migration mode, we are still waiting to load the metadata from Apache ZooKeeper into
+         * the metadata log. Therefore, the metadata log is mostly empty, even though the cluster really
+         * does have metadata
+         * <p>
+         * Events using this flag will be completed even if a transaction is ongoing. Pre-migration
+         * events will be completed using the unstable (committed) offset rather than the stable offset.
+         * <p>
+         * In practice, very few operations should use this flag.
          */
-        RUNS_IN_PREMIGRATION,
-
-        /**
-         * This flag signifies that an event will be completed even if it is part of an unfinished transaction.
-         * This is needed for metadata transactions so that external callers can add records to a transaction
-         * and still use the returned future. One example usage of this flag is the batches of migrations records.
-         * The migration driver needs to wait on each submitted batch to avoid overwhelming the controller queue
-         * with events, so it needs events to be completed based on the committed (i.e., not stable) offset.
-         */
-        COMPLETES_IN_TRANSACTION
+        RUNS_IN_PREMIGRATION
     }
 
     interface ControllerWriteOperation<T> {
@@ -779,7 +773,14 @@ public final class QuorumController implements Controller {
                 // If the operation did not return any records, then it was actually just
                 // a read after all, and not a read + write.  However, this read was done
                 // from the latest in-memory state, which might contain uncommitted data.
-                OptionalLong maybeOffset = deferredEventQueue.highestPendingOffset();
+                // If the operation can complete within a transaction, let it use the
+                // unstable purgatory so that it can complete sooner.
+                OptionalLong maybeOffset;
+                if (featureControl.inPreMigrationMode() && flags.contains(RUNS_IN_PREMIGRATION)) {
+                    maybeOffset = deferredUnstableEventQueue.highestPendingOffset();
+                } else {
+                    maybeOffset = deferredEventQueue.highestPendingOffset();
+                }
                 if (!maybeOffset.isPresent()) {
                     // If the purgatory is empty, there are no pending operations and no
                     // uncommitted state.  We can complete immediately.
@@ -841,7 +842,7 @@ public final class QuorumController implements Controller {
 
             // Remember the latest offset and future if it is not already completed
             if (!future.isDone()) {
-                if (flags.contains(COMPLETES_IN_TRANSACTION)) {
+                if (featureControl.inPreMigrationMode() && flags.contains(RUNS_IN_PREMIGRATION)) {
                     deferredUnstableEventQueue.add(resultAndOffset.offset(), this);
                 } else {
                     deferredEventQueue.add(resultAndOffset.offset(), this);
@@ -961,9 +962,7 @@ public final class QuorumController implements Controller {
     }
 
     class MigrationRecordConsumer implements ZkRecordConsumer {
-        private final EnumSet<ControllerOperationFlag> eventFlags = EnumSet.of(
-            RUNS_IN_PREMIGRATION, COMPLETES_IN_TRANSACTION
-        );
+        private final EnumSet<ControllerOperationFlag> eventFlags = EnumSet.of(RUNS_IN_PREMIGRATION);
 
         private volatile OffsetAndEpoch highestMigrationRecordOffset;
 
@@ -1313,7 +1312,7 @@ public final class QuorumController implements Controller {
                 rescheduleMaybeFenceStaleBrokers();
                 return result;
             },
-            EnumSet.of(DOES_NOT_UPDATE_QUEUE_TIME, RUNS_IN_PREMIGRATION));
+            EnumSet.of(DOES_NOT_UPDATE_QUEUE_TIME));
     }
 
     private void cancelMaybeFenceReplicas() {

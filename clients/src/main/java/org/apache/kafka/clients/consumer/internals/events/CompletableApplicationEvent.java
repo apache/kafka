@@ -79,8 +79,9 @@ public abstract class CompletableApplicationEvent<T> extends ApplicationEvent {
 
     @Override
     public String toString() {
-        return "CompletableApplicationEvent{" +
-                toStringBase() +
+        return getClass().getSimpleName() + "{" +
+                "future=" + future +
+                ", type=" + type +
                 '}';
     }
 }
