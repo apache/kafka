@@ -30,8 +30,6 @@ import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.List;
-import java.util.Optional;
 
 public class HeartbeatRequestManager implements RequestManager {
     private final Time time;
@@ -117,12 +115,12 @@ public class HeartbeatRequestManager implements RequestManager {
 
     private NetworkClientDelegate.UnsentRequest makeHeartbeatRequest() {
         ConsumerGroupHeartbeatRequestData data = new ConsumerGroupHeartbeatRequestData()
-            .setGroupId(groupId())
-            .setMemberEpoch(memberEpoch())
-            .setMemberId(memberId())
+            .setGroupId(membershipManager.groupId())
+            .setMemberEpoch(membershipManager.memberEpoch())
+            .setMemberId(membershipManager.memberId())
             .setRebalanceTimeoutMs(rebalanceTimeoutMs);
 
-        groupInstanceId().ifPresent(data::setInstanceId);
+        membershipManager.groupInstanceId().ifPresent(data::setInstanceId);
 
         if (this.subscriptions.hasPatternSubscription()) {
             // data.setSubscribedTopicRegex(this.subscriptions.groupSubscription())
@@ -130,12 +128,8 @@ public class HeartbeatRequestManager implements RequestManager {
             data.setSubscribedTopicNames(new ArrayList<>(this.subscriptions.subscription()));
         }
 
-        if (hasClientSideAssignment()) {
-            // TODO: unsupported at the moment
-        } else {
-            // data.setServerAssignor(membershipManager.assignorSelection().serverAssignor());
-            data.setServerAssignor("server-side-assignor");
-        }
+        // stubbed
+        data.setServerAssignor("stubbed.assignor");
 
         NetworkClientDelegate.UnsentRequest request = new NetworkClientDelegate.UnsentRequest(
             new ConsumerGroupHeartbeatRequest.Builder(data),
@@ -154,30 +148,6 @@ public class HeartbeatRequestManager implements RequestManager {
 
     private boolean hasClientSideAssignment() {
         return false;
-    }
-
-    private String getServerSideAssignor() {
-        return "range";
-    }
-
-    private List<ConsumerGroupHeartbeatRequestData.Assignor> getClientSideAssignor() {
-        return new ArrayList<>();
-    }
-
-    private Optional<String> groupInstanceId() {
-        return Optional.empty();
-    }
-
-    private String groupId() {
-        return "group-id";
-    }
-
-    private int memberEpoch() {
-        return 0;
-    }
-
-    private String memberId() {
-        return "member-id";
     }
 
     private void onFailure(final Throwable exception, final long responseTimeMs) {
