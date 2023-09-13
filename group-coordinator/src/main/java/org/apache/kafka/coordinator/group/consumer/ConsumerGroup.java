@@ -802,5 +802,4 @@ public class ConsumerGroup implements Group {
     private static Integer incValue(String key, Integer value) {
         return value == null ? 1 : value + 1;
     }
-
 }

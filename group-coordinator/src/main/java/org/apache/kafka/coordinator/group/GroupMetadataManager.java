@@ -41,6 +41,7 @@ import org.apache.kafka.common.message.LeaveGroupRequestData;
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse;
+import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.protocol.Errors;
@@ -430,6 +431,7 @@ public class GroupMetadataManager {
      *
      * @param statesFilter The states of the groups we want to list. If empty all groups are returned with their state.
      * @param committedOffset A specified committed offset corresponding to this shard
+     *
      * @return A list containing the ListGroupsResponseData.ListedGroup
      */
 

@@ -698,7 +698,8 @@ public class GroupCoordinatorServiceTest {
         when(runtime.partitions()).thenReturn(Sets.newSet(
             new TopicPartition("__consumer_offsets", 0),
             new TopicPartition("__consumer_offsets", 1),
-            new TopicPartition("__consumer_offsets", 2)));
+            new TopicPartition("__consumer_offsets", 2)
+        ));
         for (int i = 0; i < 2; i++) {
             when(runtime.scheduleReadOperation(
                 ArgumentMatchers.eq("list-groups"),
@@ -741,7 +742,8 @@ public class GroupCoordinatorServiceTest {
         when(runtime.partitions()).thenReturn(Sets.newSet(
             new TopicPartition("__consumer_offsets", 0),
             new TopicPartition("__consumer_offsets", 1),
-            new TopicPartition("__consumer_offsets", 2)));
+            new TopicPartition("__consumer_offsets", 2)
+        ));
         for (int i = 0; i < 2; i++) {
             when(runtime.scheduleReadOperation(
                 ArgumentMatchers.eq("list-groups"),
@@ -761,12 +763,9 @@ public class GroupCoordinatorServiceTest {
             request
         );
         ListGroupsResponseData listGroupsResponseData = responseFuture.get(5, TimeUnit.SECONDS);
-        List<ListGroupsResponseData.ListedGroup> expectedResults = Collections.emptyList();
-
-        List<ListGroupsResponseData.ListedGroup> actualResults = listGroupsResponseData.groups();
 
         assertEquals(Errors.COORDINATOR_LOAD_IN_PROGRESS.code(), listGroupsResponseData.errorCode());
-        assertEquals(expectedResults, actualResults);
+        assertEquals(Collections.emptyList(), listGroupsResponseData.groups());
     }
 
     @ParameterizedTest
@@ -833,6 +832,7 @@ public class GroupCoordinatorServiceTest {
             createConfig(),
             runtime
         );
+
         service.startup(() -> 1);
 
         OffsetFetchRequestData.OffsetFetchRequestGroup request =

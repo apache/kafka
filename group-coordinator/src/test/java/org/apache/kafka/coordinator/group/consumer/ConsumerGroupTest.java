@@ -641,8 +641,8 @@ public class ConsumerGroupTest {
         group.updateMember(new ConsumerGroupMember.Builder("member1")
             .setSubscribedTopicNames(Collections.singletonList("foo"))
             .build());
-        assertEquals(ConsumerGroup.ConsumerGroupState.EMPTY.toString(), group.stateAsString(0));
         snapshotRegistry.getOrCreateSnapshot(1);
+        assertEquals(ConsumerGroup.ConsumerGroupState.EMPTY.toString(), group.stateAsString(0));
         assertEquals(ConsumerGroup.ConsumerGroupState.STABLE.toString(), group.stateAsString(1));
     }
 
