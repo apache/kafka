@@ -645,7 +645,8 @@ public class GroupCoordinatorServiceTest {
         when(runtime.partitions()).thenReturn(Sets.newSet(
             new TopicPartition("__consumer_offsets", 0),
             new TopicPartition("__consumer_offsets", 1),
-            new TopicPartition("__consumer_offsets", 2)));
+            new TopicPartition("__consumer_offsets", 2)
+        ));
         for (int i = 0; i < partitionCount; i++) {
             when(runtime.scheduleReadOperation(
                 ArgumentMatchers.eq("list-groups"),
