@@ -686,7 +686,6 @@ subprojects {
 
   checkstyle {
     configDirectory = rootProject.layout.projectDirectory.dir("checkstyle")
-    configFile = new File(rootDir, "checkstyle/checkstyle.xml")
     configProperties = checkstyleConfigProperties("import-control.xml")
     toolVersion = versions.checkstyle
   }
