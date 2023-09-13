@@ -66,6 +66,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -73,7 +74,6 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 public abstract class TopicCommand {
     private static final Logger LOG = LoggerFactory.getLogger(TopicCommand.class);
@@ -976,17 +976,15 @@ public abstract class TopicCommand {
                 CommandLineUtils.checkInvalidArgs(parser, options, replicaAssignmentOpt, partitionsOpt, replicationFactorOpt);
             }
 
-            Set<OptionSpec<?>> allReplicationReportWithTopicsWithOverridesOpts =
-                Stream.concat(allReplicationReportOpts.stream(), Arrays.asList(topicsWithOverridesOpt).stream())
-                    .collect(Collectors.toSet());
+
             CommandLineUtils.checkInvalidArgs(parser, options, reportUnderReplicatedPartitionsOpt,
-                invalidOptions(allReplicationReportWithTopicsWithOverridesOpts, Arrays.asList(describeOpt, reportUnderReplicatedPartitionsOpt)));
+                invalidOptions(Collections.singleton(topicsWithOverridesOpt), Arrays.asList(describeOpt, reportUnderReplicatedPartitionsOpt)));
             CommandLineUtils.checkInvalidArgs(parser, options, reportUnderMinIsrPartitionsOpt,
-                invalidOptions(allReplicationReportWithTopicsWithOverridesOpts, Arrays.asList(describeOpt, reportUnderMinIsrPartitionsOpt)));
+                invalidOptions(Collections.singleton(topicsWithOverridesOpt), Arrays.asList(describeOpt, reportUnderMinIsrPartitionsOpt)));
             CommandLineUtils.checkInvalidArgs(parser, options, reportAtMinIsrPartitionsOpt,
-                invalidOptions(allReplicationReportWithTopicsWithOverridesOpts, Arrays.asList(describeOpt, reportAtMinIsrPartitionsOpt)));
+                invalidOptions(Collections.singleton(topicsWithOverridesOpt), Arrays.asList(describeOpt, reportAtMinIsrPartitionsOpt)));
             CommandLineUtils.checkInvalidArgs(parser, options, reportUnavailablePartitionsOpt,
-                invalidOptions(allReplicationReportWithTopicsWithOverridesOpts, Arrays.asList(describeOpt, reportUnavailablePartitionsOpt)));
+                invalidOptions(Collections.singleton(topicsWithOverridesOpt), Arrays.asList(describeOpt, reportUnavailablePartitionsOpt)));
             CommandLineUtils.checkInvalidArgs(parser, options, topicsWithOverridesOpt,
                 invalidOptions(new HashSet<>(allReplicationReportOpts), Arrays.asList(describeOpt)));
             CommandLineUtils.checkInvalidArgs(parser, options, ifExistsOpt,
@@ -999,10 +997,11 @@ public abstract class TopicCommand {
             return invalidOptions(new HashSet<>(), removeOptions);
         }
 
-        private Set<OptionSpec<?>> invalidOptions(Set<OptionSpec<?>> addOptions, List<OptionSpec<?>> removeOptions) {
-            return Stream.concat(allTopicLevelOpts.stream(), addOptions.stream())
-                .filter(opt -> !removeOptions.contains(opt))
-                .collect(Collectors.toSet());
+        private LinkedHashSet<OptionSpec<?>> invalidOptions(Set<OptionSpec<?>> addOptions, List<OptionSpec<?>> removeOptions) {
+            LinkedHashSet<OptionSpec<?>> finalOptions = new LinkedHashSet<>(allTopicLevelOpts);
+            finalOptions.removeAll(removeOptions);
+            finalOptions.addAll(addOptions);
+            return finalOptions;
         }
     }
 }
