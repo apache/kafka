@@ -64,7 +64,7 @@ import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, Fetc
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.params.provider.{EnumSource, ValueSource}
 import com.yammer.metrics.core.Gauge
 import kafka.log.remote.RemoteLogManager
 import org.apache.kafka.common.config.AbstractConfig
@@ -2583,7 +2583,7 @@ class ReplicaManagerTest {
       val transactionalRecords = MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, producerEpoch, sequence,
         new SimpleRecord("message".getBytes))
       val result = appendRecords(replicaManager, tp0, transactionalRecords, transactionalId = transactionalId, transactionStatePartition = Some(txnCoordinatorPartition1))
-      val expectedError = s"Unable to verify the partition has been added to the transaction. Underlying error:${Errors.COORDINATOR_NOT_AVAILABLE.toString}"
+      val expectedError = s"Unable to verify the partition has been added to the transaction. Underlying error: ${Errors.COORDINATOR_NOT_AVAILABLE.toString}"
       assertEquals(Errors.NOT_ENOUGH_REPLICAS, result.assertFired.error)
       assertEquals(expectedError, result.assertFired.errorMessage)
     } finally {
@@ -2591,8 +2591,9 @@ class ReplicaManagerTest {
     }
   }
 
-  @Test
-  def testVerificationErrorConversions(): Unit = {
+  @ParameterizedTest
+  @EnumSource(value = classOf[Errors], names = Array("NOT_COORDINATOR", "CONCURRENT_TRANSACTIONS", "COORDINATOR_LOAD_IN_PROGRESS", "COORDINATOR_NOT_AVAILABLE"))
+  def testVerificationErrorConversions(error: Errors): Unit = {
     val tp0 = new TopicPartition(topic, 0)
     val producerId = 24L
     val producerEpoch = 0.toShort
@@ -2619,26 +2620,16 @@ class ReplicaManagerTest {
         ))
 
       // Start verification and return the coordinator related errors.
-      var invocations = 1
-      def verifyError(error: Errors): Unit = {
-        val expectedMessage = s"Unable to verify the partition has been added to the transaction. Underlying error:${error.toString}"
-        val result = appendRecords(replicaManager, tp0, transactionalRecords, transactionalId = transactionalId, transactionStatePartition = Some(0))
-        val appendCallback = ArgumentCaptor.forClass(classOf[AddPartitionsToTxnManager.AppendCallback])
-        verify(addPartitionsToTxnManager, times(invocations)).addTxnData(ArgumentMatchers.eq(node), ArgumentMatchers.eq(transactionToAdd), appendCallback.capture())
+      val expectedMessage = s"Unable to verify the partition has been added to the transaction. Underlying error: ${error.toString}"
+      val result = appendRecords(replicaManager, tp0, transactionalRecords, transactionalId = transactionalId, transactionStatePartition = Some(0))
+      val appendCallback = ArgumentCaptor.forClass(classOf[AddPartitionsToTxnManager.AppendCallback])
+      verify(addPartitionsToTxnManager, times(1)).addTxnData(ArgumentMatchers.eq(node), ArgumentMatchers.eq(transactionToAdd), appendCallback.capture())
 
-        // Confirm we did not write to the log and instead returned the converted error with the correct error message.
-        val callback: AddPartitionsToTxnManager.AppendCallback = appendCallback.getValue()
-        callback(Map(tp0 -> error).toMap)
-        assertEquals(Errors.NOT_ENOUGH_REPLICAS, result.assertFired.error)
-        assertEquals(expectedMessage, result.assertFired.errorMessage)
-        invocations = invocations + 1
-      }
-
-      Set(Errors.NOT_COORDINATOR,
-        Errors.CONCURRENT_TRANSACTIONS,
-        Errors.COORDINATOR_LOAD_IN_PROGRESS,
-        Errors.COORDINATOR_NOT_AVAILABLE
-      ).foreach(verifyError(_))
+      // Confirm we did not write to the log and instead returned the converted error with the correct error message.
+      val callback: AddPartitionsToTxnManager.AppendCallback = appendCallback.getValue()
+      callback(Map(tp0 -> error).toMap)
+      assertEquals(Errors.NOT_ENOUGH_REPLICAS, result.assertFired.error)
+      assertEquals(expectedMessage, result.assertFired.errorMessage)
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }
