@@ -2634,7 +2634,11 @@ class ReplicaManagerTest {
         invocations = invocations + 1
       }
 
-      Set(Errors.NOT_COORDINATOR, Errors.CONCURRENT_TRANSACTIONS, Errors.COORDINATOR_LOAD_IN_PROGRESS).foreach(verifyError(_))
+      Set(Errors.NOT_COORDINATOR,
+        Errors.CONCURRENT_TRANSACTIONS,
+        Errors.COORDINATOR_LOAD_IN_PROGRESS,
+        Errors.COORDINATOR_NOT_AVAILABLE
+      ).foreach(verifyError(_))
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }

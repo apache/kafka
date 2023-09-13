@@ -774,26 +774,19 @@ class ReplicaManager(val config: KafkaConfig,
         
         val unverifiedResults = unverifiedEntries.map {
           case (topicPartition, error) =>
-            val finalError =
+            val finalException =
               error match {
+                case Errors.INVALID_TXN_STATE => error.exception("Partition was not added to the transaction")
                 case Errors.CONCURRENT_TRANSACTIONS |
                      Errors.COORDINATOR_LOAD_IN_PROGRESS |
                      Errors.COORDINATOR_NOT_AVAILABLE |
-                     Errors.NOT_COORDINATOR => Errors.NOT_ENOUGH_REPLICAS
-                case _ => error
+                     Errors.NOT_COORDINATOR => new NotEnoughReplicasException(
+                  s"Unable to verify the partition has been added to the transaction. Underlying error: ${error.toString}")
+                case _ => error.exception()
             }
-            val message =
-              error match {
-                case Errors.INVALID_TXN_STATE => "Partition was not added to the transaction"
-                case Errors.CONCURRENT_TRANSACTIONS |
-                     Errors.COORDINATOR_LOAD_IN_PROGRESS |
-                     Errors.COORDINATOR_NOT_AVAILABLE |
-                     Errors.NOT_COORDINATOR => s"Unable to verify the partition has been added to the transaction. Underlying error:${error.toString}"
-                case _ => error.message()
-              }
             topicPartition -> LogAppendResult(
               LogAppendInfo.UNKNOWN_LOG_APPEND_INFO,
-              Some(finalError.exception(message))
+              Some(finalException)
             )
         }
 
@@ -857,7 +850,7 @@ class ReplicaManager(val config: KafkaConfig,
 
         if (error != Errors.NONE) {
           appendEntries(entriesPerPartition)(notYetVerifiedEntriesPerPartition.map {
-            case (tp, _) => (tp, Errors.COORDINATOR_NOT_AVAILABLE)
+            case (tp, _) => (tp, error)
           }.toMap)
         } else {
           val topicGrouping = notYetVerifiedEntriesPerPartition.keySet.groupBy(tp => tp.topic())
