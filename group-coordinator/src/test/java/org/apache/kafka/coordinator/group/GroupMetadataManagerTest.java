@@ -8660,10 +8660,7 @@ public class GroupMetadataManagerTest {
                     .setGroupState(ConsumerGroup.ConsumerGroupState.EMPTY.toString())
             ).collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
 
-        assertEquals(expectAllGroupMap.size(), actualAllGroupMap.size());
-        for (Map.Entry<String, ListGroupsResponseData.ListedGroup> entry : expectAllGroupMap.entrySet()) {
-            assertEquals(entry.getValue(), actualAllGroupMap.get(entry.getKey()));
-        }
+        assertEquals(expectAllGroupMap, actualAllGroupMap);
 
         context.replay(RecordHelpers.newMemberSubscriptionRecord(consumerGroupId, new ConsumerGroupMember.Builder(memberId1)
             .setSubscribedTopicNames(Collections.singletonList(fooTopicName))
