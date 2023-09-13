@@ -20,7 +20,7 @@ package kafka.cluster
 import kafka.log.UnifiedLog
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.errors.NotLeaderOrFollowerException
 import org.apache.kafka.storage.internals.log.LogOffsetMetadata
 
 import java.util.concurrent.atomic.AtomicReference
@@ -108,13 +108,14 @@ class Replica(val brokerId: Int, val topicPartition: TopicPartition) extends Log
     followerStartOffset: Long,
     followerFetchTimeMs: Long,
     leaderEndOffset: Long,
-    brokerEpoch: Long
+    brokerEpoch: Long,
+    verifyBrokerEpoch: Boolean = false
   ): Unit = {
     replicaState.updateAndGet { currentReplicaState =>
       // Fence the update if it provides a stale broker epoch.
       val expectedBrokerEpoch = currentReplicaState.brokerEpoch.getOrElse(-1L)
-      if (brokerEpoch != -1 && brokerEpoch < expectedBrokerEpoch) {
-        throw Errors.NOT_LEADER_OR_FOLLOWER.exception(s"Received stale fetch state update. broker epoch=$brokerEpoch " +
+      if (verifyBrokerEpoch && currentReplicaState.brokerEpoch.exists(_ > brokerEpoch)) {
+        throw new NotLeaderOrFollowerException(s"Received stale fetch state update. broker epoch=$brokerEpoch " +
           s"vs expected=$expectedBrokerEpoch")
       }
 

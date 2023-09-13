@@ -321,21 +321,32 @@ class ReplicaTest {
       followerStartOffset = 1L,
       followerFetchTimeMs = 1,
       leaderEndOffset = 10L,
-      brokerEpoch = 1L
+      brokerEpoch = 2L
     )
     replica.updateFetchStateOrThrow(
       followerFetchOffsetMetadata = new LogOffsetMetadata(5L),
       followerStartOffset = 2L,
       followerFetchTimeMs = 2,
       leaderEndOffset = 10L,
+      brokerEpoch = 3L
+    )
+
+    // No exception to expect if verifyBrokerEpoch is false
+    replica.updateFetchStateOrThrow(
+      followerFetchOffsetMetadata = new LogOffsetMetadata(5L),
+      followerStartOffset = 2L,
+      followerFetchTimeMs = 3,
+      leaderEndOffset = 10L,
       brokerEpoch = 2L
     )
+
     assertThrows(classOf[NotLeaderOrFollowerException], () => replica.updateFetchStateOrThrow(
       followerFetchOffsetMetadata = new LogOffsetMetadata(5L),
       followerStartOffset = 2L,
       followerFetchTimeMs = 3,
       leaderEndOffset = 10L,
-      brokerEpoch = 1L
+      brokerEpoch = 1L,
+      true
     ))
     replica.updateFetchStateOrThrow(
       followerFetchOffsetMetadata = new LogOffsetMetadata(5L),

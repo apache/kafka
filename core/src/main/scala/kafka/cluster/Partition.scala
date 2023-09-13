@@ -20,7 +20,6 @@ import java.util.concurrent.locks.ReentrantReadWriteLock
 import java.util.Optional
 import java.util.concurrent.{CompletableFuture, CopyOnWriteArrayList}
 import kafka.api.LeaderAndIsr
-import kafka.cluster.ReplicaState
 import kafka.common.UnexpectedAppendOffsetException
 import kafka.controller.{KafkaController, StateChangeLogger}
 import kafka.log._
@@ -138,7 +137,8 @@ object Partition {
       delayedOperations = delayedOperations,
       metadataCache = replicaManager.metadataCache,
       logManager = replicaManager.logManager,
-      alterIsrManager = replicaManager.alterPartitionManager)
+      alterIsrManager = replicaManager.alterPartitionManager,
+      zkMigrationEnabled = () => replicaManager.config.migrationEnabled)
   }
 
   def removeMetrics(topicPartition: TopicPartition): Unit = {
@@ -291,7 +291,8 @@ class Partition(val topicPartition: TopicPartition,
                 delayedOperations: DelayedOperations,
                 metadataCache: MetadataCache,
                 logManager: LogManager,
-                alterIsrManager: AlterPartitionManager) extends Logging {
+                alterIsrManager: AlterPartitionManager,
+                zkMigrationEnabled: () => Boolean = () => false) extends Logging {
 
   import Partition.metricsGroup
 
@@ -865,13 +866,19 @@ class Partition(val topicPartition: TopicPartition,
     // No need to calculate low watermark if there is no delayed DeleteRecordsRequest
     val oldLeaderLW = if (delayedOperations.numDelayedDelete > 0) lowWatermarkIfLeader else -1L
     val prevFollowerEndOffset = replica.stateSnapshot.logEndOffset
-    replica.updateFetchStateOrThrow(
-      followerFetchOffsetMetadata,
-      followerStartOffset,
-      followerFetchTimeMs,
-      leaderEndOffset,
-      brokerEpoch
-    )
+
+    // Apply read lock here to avoid the race between ISR updates and the fetch requests from rebooted follower. It
+    // could break the broker epoch checks in the ISR expansion.
+    inReadLock(leaderIsrUpdateLock) {
+      replica.updateFetchStateOrThrow(
+        followerFetchOffsetMetadata,
+        followerStartOffset,
+        followerFetchTimeMs,
+        leaderEndOffset,
+        brokerEpoch,
+        zkMigrationEnabled()
+      )
+    }
 
     val newLeaderLW = if (delayedOperations.numDelayedDelete > 0) lowWatermarkIfLeader else -1L
     // check if the LW of the partition has incremented
@@ -960,19 +967,15 @@ class Partition(val topicPartition: TopicPartition,
    * This function can be triggered when a replica's LEO has incremented.
    */
   private def maybeExpandIsr(followerReplica: Replica): Unit = {
-    var followerReplicaState = followerReplica.stateSnapshot
-    val needsIsrUpdate = !partitionState.isInflight &&
-      canAddReplicaToIsr(followerReplica.brokerId, followerReplicaState) && inReadLock(leaderIsrUpdateLock) {
-      needsExpandIsr(followerReplica.brokerId, followerReplicaState)
+    val needsIsrUpdate = !partitionState.isInflight && canAddReplicaToIsr(followerReplica.brokerId) && inReadLock(leaderIsrUpdateLock) {
+      needsExpandIsr(followerReplica)
     }
     if (needsIsrUpdate) {
       val alterIsrUpdateOpt = inWriteLock(leaderIsrUpdateLock) {
         // check if this replica needs to be added to the ISR
-        followerReplicaState = followerReplica.stateSnapshot
         partitionState match {
-          case currentState: CommittedPartitionState if needsExpandIsr(followerReplica.brokerId, followerReplicaState) =>
-            val brokerEpoch = if (metadataCache.isInstanceOf[KRaftMetadataCache]) followerReplicaState.brokerEpoch.getOrElse(-1L) else -1
-            Some(prepareIsrExpand(currentState, new BrokerState().setBrokerId(followerReplica.brokerId).setBrokerEpoch(brokerEpoch)))
+          case currentState: CommittedPartitionState if needsExpandIsr(followerReplica) =>
+            Some(prepareIsrExpand(currentState, followerReplica.brokerId))
           case _ =>
             None
         }
@@ -983,28 +986,25 @@ class Partition(val topicPartition: TopicPartition,
     }
   }
 
-  // Make sure using the same replica state for the ISR eligibility check and the caught-up check. Otherwise, there
-  // can be a race between the fetch requests from a rebooted follower. Then we could perform two checks on different
-  // replica states.
-  private def needsExpandIsr(followerReplicaId: Int, followerReplicaState: ReplicaState): Boolean = {
-    canAddReplicaToIsr(followerReplicaId, followerReplicaState) && isFollowerInSync(followerReplicaState)
+  private def needsExpandIsr(followerReplica: Replica): Boolean = {
+    canAddReplicaToIsr(followerReplica.brokerId) && isFollowerInSync(followerReplica)
   }
 
-  private def canAddReplicaToIsr(followerReplicaId: Int, followerReplicaState: ReplicaState): Boolean = {
+  private def canAddReplicaToIsr(followerReplicaId: Int): Boolean = {
     val current = partitionState
     !current.isInflight &&
       !current.isr.contains(followerReplicaId) &&
-      isReplicaIsrEligible(followerReplicaId, followerReplicaState)
+      isReplicaIsrEligible(followerReplicaId)
   }
 
-  private def isFollowerInSync(followerReplicaState: ReplicaState): Boolean = {
+  private def isFollowerInSync(followerReplica: Replica): Boolean = {
     leaderLogIfLocal.exists { leaderLog =>
-      val followerEndOffset = followerReplicaState.logEndOffset
+      val followerEndOffset = followerReplica.stateSnapshot.logEndOffset
       followerEndOffset >= leaderLog.highWatermark && leaderEpochStartOffsetOpt.exists(followerEndOffset >= _)
     }
   }
 
-  private def isReplicaIsrEligible(followerReplicaId: Int, followerReplicaState: ReplicaState): Boolean = {
+  private def isReplicaIsrEligible(followerReplicaId: Int): Boolean = {
     metadataCache match {
       // In KRaft mode, only a replica which meets all of the following requirements is allowed to join the ISR.
       // 1. It is not fenced.
@@ -1019,8 +1019,7 @@ class Partition(val topicPartition: TopicPartition,
           warn(s"The replica state of replica ID:[$followerReplicaId] doesn't exist in the leader node. It might because the topic is already deleted.")
           return false
         }
-
-        val storedBrokerEpoch = followerReplicaState.brokerEpoch
+        val storedBrokerEpoch = mayBeReplica.get.stateSnapshot.brokerEpoch
         val cachedBrokerEpoch = kRaftMetadataCache.getAliveBrokerEpoch(followerReplicaId)
         !kRaftMetadataCache.isBrokerFenced(followerReplicaId) &&
           !kRaftMetadataCache.isBrokerShuttingDown(followerReplicaId) &&
@@ -1119,7 +1118,7 @@ class Partition(val topicPartition: TopicPartition,
 
       def shouldWaitForReplicaToJoinIsr: Boolean = {
         replicaState.isCaughtUp(leaderLogEndOffset.messageOffset, currentTimeMs, replicaLagTimeMaxMs) &&
-        isReplicaIsrEligible(replica.brokerId, replicaState)
+        isReplicaIsrEligible(replica.brokerId)
       }
 
       // Note here we are using the "maximal", see explanation above
@@ -1706,23 +1705,24 @@ class Partition(val topicPartition: TopicPartition,
 
   private def prepareIsrExpand(
     currentState: CommittedPartitionState,
-    newInSyncBrokerState: BrokerState
+    newInSyncReplicaId: Int
   ): PendingExpandIsr = {
     // When expanding the ISR, we assume that the new replica will make it into the ISR
     // before we receive confirmation that it has. This ensures that the HW will already
     // reflect the updated ISR even if there is a delay before we receive the confirmation.
     // Alternatively, if the update fails, no harm is done since the expanded ISR puts
     // a stricter requirement for advancement of the HW.
-    val isrWithBrokerEpoch = addBrokerEpochToIsr(partitionState.isr.toList)
+    val isrToSend = partitionState.isr + newInSyncReplicaId
+    val isrWithBrokerEpoch = addBrokerEpochToIsr(isrToSend.toList)
     val newLeaderAndIsr = LeaderAndIsr(
       localBrokerId,
       leaderEpoch,
       partitionState.leaderRecoveryState,
-      isrWithBrokerEpoch :+ newInSyncBrokerState,
+      isrWithBrokerEpoch,
       partitionEpoch
     )
     val updatedState = PendingExpandIsr(
-      newInSyncBrokerState.brokerId(),
+      newInSyncReplicaId,
       newLeaderAndIsr,
       currentState
     )
