@@ -2373,6 +2373,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
           s"${KafkaConfig.ControllerListenerNamesProp} must not be empty when running in ZooKeeper migration mode: ${controllerListenerNames.asJava}")
         require(interBrokerProtocolVersion.isMigrationSupported, s"Cannot enable ZooKeeper migration without setting " +
           s"'${KafkaConfig.InterBrokerProtocolVersionProp}' to 3.4 or higher")
+        require(logDirs.size == 1, "Cannot enable ZooKeeper migration when multiple log directories (aka JBOD) are in use.")
       } else {
         // controller listener names must be empty when not in KRaft mode
         require(controllerListenerNames.isEmpty,
