@@ -25,6 +25,7 @@ import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.ConsumerInterceptor;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.NoOffsetForPartitionException;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
@@ -35,6 +36,8 @@ import org.apache.kafka.clients.consumer.internals.events.EventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
 import org.apache.kafka.clients.consumer.internals.events.OffsetFetchApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.ResetPositionsApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.ValidatePositionsApplicationEvent;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
@@ -193,6 +196,9 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
                     // be processed in the collectFetches().
                     backgroundEvent.ifPresent(event -> processEvent(event, timeout));
                 }
+
+                updateFetchPositionsIfNeeded();
+
                 // The idea here is to have the background thread sending fetches autonomously, and the fetcher
                 // uses the poll loop to retrieve successful fetchResponse and process them on the polling thread.
                 final Fetch<K, V> fetch = collectFetches();
@@ -207,6 +213,34 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         // TODO: Once we implement poll(), clear wakeupTrigger in a finally block: wakeupTrigger.clearActiveTask();
 
         return ConsumerRecords.empty();
+    }
+
+    /**
+     * Set the fetch position to the committed position (if there is one) or reset it using the
+     * offset reset policy the user has configured (if partitions require reset)
+     *
+     * @return true if the operation completed without timing out
+     * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
+     * @throws NoOffsetForPartitionException                          If no offset is stored for a given partition and no offset reset policy is
+     *                                                                defined
+     */
+    private boolean updateFetchPositionsIfNeeded() {
+        // If any partitions have been truncated due to a leader change, we need to validate the offsets
+        ValidatePositionsApplicationEvent validatePositionsEvent = new ValidatePositionsApplicationEvent();
+        eventHandler.add(validatePositionsEvent);
+
+        // TODO: integrate logic for refreshing committed offsets if available
+
+        // If there are partitions still needing a position and a reset policy is defined,
+        // request reset using the default policy. If no reset strategy is defined and there
+        // are partitions with a missing position, then we will raise a NoOffsetForPartitionException exception.
+        subscriptions.resetInitializingPositions();
+
+        // Finally send an asynchronous request to look up and update the positions of any
+        // partitions which are awaiting reset.
+        ResetPositionsApplicationEvent resetPositionsEvent = new ResetPositionsApplicationEvent();
+        eventHandler.add(resetPositionsEvent);
+        return true;
     }
 
     /**

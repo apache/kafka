@@ -688,7 +688,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                 transitionTo(MigrationDriverState.SYNC_KRAFT_TO_ZK);
             } catch (Throwable t) {
                 MigrationManifest partialManifest = manifestBuilder.build();
-                log.error("Aborting the metadata migration from ZooKeeper to KRaft. {}.", partialManifest);
+                log.error("Aborting the metadata migration from ZooKeeper to KRaft. {}.", partialManifest, t);
                 zkRecordConsumer.abortMigration(); // This terminates the controller via fatal fault handler
                 super.handleException(t);
             }

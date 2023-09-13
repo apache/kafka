@@ -17,7 +17,7 @@
 package kafka.coordinator.transaction
 
 import kafka.coordinator.transaction.ProducerIdManager.{IterationLimit, NoRetry, RetryBackoffMs}
-import kafka.server.{BrokerToControllerChannelManager, ControllerRequestCompletionHandler}
+import kafka.server.{NodeToControllerChannelManager, ControllerRequestCompletionHandler}
 import kafka.utils.Logging
 import kafka.zk.{KafkaZkClient, ProducerIdBlockZNode}
 import org.apache.kafka.clients.ClientResponse
@@ -56,7 +56,7 @@ object ProducerIdManager {
   def rpc(brokerId: Int,
           time: Time,
           brokerEpochSupplier: () => Long,
-          controllerChannel: BrokerToControllerChannelManager): RPCProducerIdManager = {
+          controllerChannel: NodeToControllerChannelManager): RPCProducerIdManager = {
 
     new RPCProducerIdManager(brokerId, time, brokerEpochSupplier, controllerChannel)
   }
@@ -162,7 +162,7 @@ class ZkProducerIdManager(brokerId: Int, zkClient: KafkaZkClient) extends Produc
 class RPCProducerIdManager(brokerId: Int,
                            time: Time,
                            brokerEpochSupplier: () => Long,
-                           controllerChannel: BrokerToControllerChannelManager) extends ProducerIdManager with Logging {
+                           controllerChannel: NodeToControllerChannelManager) extends ProducerIdManager with Logging {
 
   this.logIdent = "[RPC ProducerId Manager " + brokerId + "]: "
 

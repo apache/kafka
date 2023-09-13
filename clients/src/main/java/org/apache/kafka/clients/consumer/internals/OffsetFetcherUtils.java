@@ -18,6 +18,8 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.NodeApiVersions;
+import org.apache.kafka.clients.consumer.LogTruncationException;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.IsolationLevel;
@@ -37,9 +39,11 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -59,8 +63,19 @@ class OffsetFetcherUtils {
     private final ApiVersions apiVersions;
     private final Logger log;
 
-    private final AtomicReference<RuntimeException> cachedOffsetForLeaderException = new AtomicReference<>();
-    private final AtomicReference<RuntimeException> cachedListOffsetsException = new AtomicReference<>();
+    /**
+     * Exception that occurred while validating positions, that will be propagated on the next
+     * call to validate positions. This could be an error received in the
+     * OffsetsForLeaderEpoch response, or a LogTruncationException detected when using a
+     * successful response to validate the positions. It will be cleared when thrown.
+     */
+    private final AtomicReference<RuntimeException> cachedValidatePositionsException = new AtomicReference<>();
+    /**
+     * Exception that occurred while resetting positions, that will be propagated on the next
+     * call to reset positions. This will have the error received in the response to the
+     * ListOffsets request. It will be cleared when thrown on the next call to reset.
+     */
+    private final AtomicReference<RuntimeException> cachedResetPositionsException = new AtomicReference<>();
     private final AtomicInteger metadataUpdateVersion = new AtomicInteger(-1);
 
     OffsetFetcherUtils(LogContext logContext,
@@ -171,7 +186,7 @@ class OffsetFetcherUtils {
     }
 
     Map<TopicPartition, SubscriptionState.FetchPosition> getPartitionsToValidate() {
-        RuntimeException exception = cachedOffsetForLeaderException.getAndSet(null);
+        RuntimeException exception = cachedValidatePositionsException.getAndSet(null);
         if (exception != null)
             throw exception;
 
@@ -187,9 +202,9 @@ class OffsetFetcherUtils {
                 .collect(Collectors.toMap(Function.identity(), subscriptionState::position));
     }
 
-    void maybeSetOffsetForLeaderException(RuntimeException e) {
-        if (!cachedOffsetForLeaderException.compareAndSet(null, e)) {
-            log.error("Discarding error in OffsetsForLeaderEpoch because another error is pending", e);
+    void maybeSetValidatePositionsException(RuntimeException e) {
+        if (!cachedValidatePositionsException.compareAndSet(null, e)) {
+            log.error("Discarding error validating positions because another error is pending", e);
         }
     }
 
@@ -209,7 +224,7 @@ class OffsetFetcherUtils {
 
     Map<TopicPartition, Long> getOffsetResetTimestamp() {
         // Raise exception from previous offset fetch if there is one
-        RuntimeException exception = cachedListOffsetsException.getAndSet(null);
+        RuntimeException exception = cachedResetPositionsException.getAndSet(null);
         if (exception != null)
             throw exception;
 
@@ -285,7 +300,7 @@ class OffsetFetcherUtils {
             return null;
     }
 
-    void onSuccessfulRequestForResettingPositions(
+    void onSuccessfulResponseForResettingPositions(
             final Map<TopicPartition, ListOffsetsRequestData.ListOffsetsPartition> resetTimestamps,
             final ListOffsetResult result) {
         if (!result.partitionsToRetry.isEmpty()) {
@@ -304,15 +319,66 @@ class OffsetFetcherUtils {
         }
     }
 
-    void onFailedRequestForResettingPositions(
+    void onFailedResponseForResettingPositions(
             final Map<TopicPartition, ListOffsetsRequestData.ListOffsetsPartition> resetTimestamps,
             final RuntimeException error) {
         subscriptionState.requestFailed(resetTimestamps.keySet(), time.milliseconds() + retryBackoffMs);
         metadata.requestUpdate(false);
 
-        if (!(error instanceof RetriableException) && !cachedListOffsetsException.compareAndSet(null,
+        if (!(error instanceof RetriableException) && !cachedResetPositionsException.compareAndSet(null,
                 error))
-            log.error("Discarding error in ListOffsetResponse because another error is pending", error);
+            log.error("Discarding error resetting positions because another error is pending",
+                    error);
+    }
+
+
+    void onSuccessfulResponseForValidatingPositions(
+            final Map<TopicPartition, SubscriptionState.FetchPosition> fetchPositions,
+            final OffsetsForLeaderEpochUtils.OffsetForEpochResult offsetsResult) {
+        List<SubscriptionState.LogTruncation> truncations = new ArrayList<>();
+        if (!offsetsResult.partitionsToRetry().isEmpty()) {
+            subscriptionState.setNextAllowedRetry(offsetsResult.partitionsToRetry(),
+                    time.milliseconds() + retryBackoffMs);
+            metadata.requestUpdate(false);
+        }
+
+        // For each OffsetsForLeader response, check if the end-offset is lower than our current offset
+        // for the partition. If so, it means we have experienced log truncation and need to reposition
+        // that partition's offset.
+        // In addition, check whether the returned offset and epoch are valid. If not, then we should reset
+        // its offset if reset policy is configured, or throw out of range exception.
+        offsetsResult.endOffsets().forEach((topicPartition, respEndOffset) -> {
+            SubscriptionState.FetchPosition requestPosition = fetchPositions.get(topicPartition);
+            Optional<SubscriptionState.LogTruncation> truncationOpt =
+                    subscriptionState.maybeCompleteValidation(topicPartition, requestPosition,
+                            respEndOffset);
+            truncationOpt.ifPresent(truncations::add);
+        });
+
+        if (!truncations.isEmpty()) {
+            maybeSetValidatePositionsException(buildLogTruncationException(truncations));
+        }
+    }
+
+    void onFailedResponseForValidatingPositions(final Map<TopicPartition, SubscriptionState.FetchPosition> fetchPositions,
+                                                final RuntimeException error) {
+        subscriptionState.requestFailed(fetchPositions.keySet(), time.milliseconds() + retryBackoffMs);
+        metadata.requestUpdate(false);
+
+        if (!(error instanceof RetriableException)) {
+            maybeSetValidatePositionsException(error);
+        }
+    }
+
+    private LogTruncationException buildLogTruncationException(List<SubscriptionState.LogTruncation> truncations) {
+        Map<TopicPartition, OffsetAndMetadata> divergentOffsets = new HashMap<>();
+        Map<TopicPartition, Long> truncatedFetchOffsets = new HashMap<>();
+        for (SubscriptionState.LogTruncation truncation : truncations) {
+            truncation.divergentOffsetOpt.ifPresent(divergentOffset ->
+                    divergentOffsets.put(truncation.topicPartition, divergentOffset));
+            truncatedFetchOffsets.put(truncation.topicPartition, truncation.fetchPosition.offset);
+        }
+        return new LogTruncationException(truncatedFetchOffsets, divergentOffsets);
     }
 
     // Visible for testing

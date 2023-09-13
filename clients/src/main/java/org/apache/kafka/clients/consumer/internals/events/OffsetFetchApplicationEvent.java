@@ -56,7 +56,7 @@ public class OffsetFetchApplicationEvent extends CompletableApplicationEvent<Map
 
     @Override
     public String toString() {
-        return "OffsetFetchApplicationEvent{" +
+        return getClass().getSimpleName() + "{" +
                 toStringBase() +
                 ", partitions=" + partitions +
                 '}';
