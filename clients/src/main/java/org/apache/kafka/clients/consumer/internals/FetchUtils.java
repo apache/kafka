@@ -47,7 +47,7 @@ public class FetchUtils {
     static void requestMetadataUpdate(final ConsumerMetadata metadata,
                                       final SubscriptionState subscriptions,
                                       final TopicPartition topicPartition) {
-        metadata.requestUpdate(true);
+        metadata.requestUpdate(false);
         subscriptions.clearPreferredReadReplica(topicPartition);
     }
 }
