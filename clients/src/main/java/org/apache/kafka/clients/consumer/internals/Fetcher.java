@@ -24,7 +24,6 @@ import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
-import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
@@ -52,11 +51,10 @@ import java.util.Map;
  *     on a different thread.</li>
  * </ul>
  */
-public class Fetcher<K, V> extends AbstractFetch<K, V> {
+public class Fetcher<K, V> extends AbstractFetch<K, V, ConsumerNetworkClient> {
 
     private final Logger log;
     private final FetchCollector<K, V> fetchCollector;
-    private final ConsumerNetworkClient client;
 
     public Fetcher(LogContext logContext,
                    ConsumerNetworkClient client,
@@ -73,7 +71,6 @@ public class Fetcher<K, V> extends AbstractFetch<K, V> {
                 fetchConfig,
                 metricsManager,
                 time);
-        this.client = client;
     }
 
     public void clearBufferedDataForUnassignedPartitions(Collection<TopicPartition> assignedPartitions) {
@@ -108,7 +105,7 @@ public class Fetcher<K, V> extends AbstractFetch<K, V> {
                 }
             };
 
-            final RequestFuture<ClientResponse> future = client.send(fetchTarget, request);
+            final RequestFuture<ClientResponse> future = nodeStatusDetector.send(fetchTarget, request);
             future.addListener(listener);
         }
 
@@ -127,7 +124,7 @@ public class Fetcher<K, V> extends AbstractFetch<K, V> {
             final Node fetchTarget = entry.getKey();
             final FetchSessionHandler.FetchRequestData data = entry.getValue();
             final FetchRequest.Builder request = createFetchRequest(fetchTarget, data);
-            final RequestFuture<ClientResponse> responseFuture = client.send(fetchTarget, request);
+            final RequestFuture<ClientResponse> responseFuture = nodeStatusDetector.send(fetchTarget, request);
 
             responseFuture.addListener(new RequestFutureListener<ClientResponse>() {
                 @Override
@@ -147,7 +144,7 @@ public class Fetcher<K, V> extends AbstractFetch<K, V> {
         // Poll to ensure that request has been written to the socket. Wait until either the timer has expired or until
         // all requests have received a response.
         while (timer.notExpired() && !requestFutures.stream().allMatch(RequestFuture::isDone)) {
-            client.poll(timer, null, true);
+            nodeStatusDetector.poll(timer, null, true);
         }
 
         if (!requestFutures.stream().allMatch(RequestFuture::isDone)) {
@@ -170,7 +167,7 @@ public class Fetcher<K, V> extends AbstractFetch<K, V> {
     @Override
     protected void closeInternal(final Timer timer) {
         // we do not need to re-enable wake-ups since we are closing already
-        client.disableWakeups();
+        nodeStatusDetector.disableWakeups();
         maybeCloseFetchSessions(timer);
         super.closeInternal(timer);
     }

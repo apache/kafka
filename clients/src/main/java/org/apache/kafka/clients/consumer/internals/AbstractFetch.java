@@ -52,12 +52,14 @@ import static org.apache.kafka.clients.consumer.internals.FetchUtils.requestMeta
  * {@code AbstractFetch} represents the basic state and logic for record fetching processing.
  * @param <K> Type for the message key
  * @param <V> Type for the message value
+ * @param <N> Type for the {@link NodeStatusDetector}; can be more specific if specialized functionality is needed by
+ *            the subclass
  */
-public abstract class AbstractFetch<K, V> implements Closeable {
+public abstract class AbstractFetch<K, V, N extends NodeStatusDetector> implements Closeable {
 
     private final Logger log;
     protected final LogContext logContext;
-    protected final NodeStatusDetector nodeStatusDetector;
+    protected final N nodeStatusDetector;
     protected final ConsumerMetadata metadata;
     protected final SubscriptionState subscriptions;
     protected final FetchConfig<K, V> fetchConfig;
@@ -71,7 +73,7 @@ public abstract class AbstractFetch<K, V> implements Closeable {
     private final Map<Integer, FetchSessionHandler> sessionHandlers;
 
     public AbstractFetch(final LogContext logContext,
-                         final NodeStatusDetector nodeStatusDetector,
+                         final N nodeStatusDetector,
                          final ConsumerMetadata metadata,
                          final SubscriptionState subscriptions,
                          final FetchConfig<K, V> fetchConfig,
