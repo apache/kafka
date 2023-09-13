@@ -261,7 +261,7 @@ class ConfigAdminManager(nodeId: Int,
         } catch {
           case t: Throwable => {
             val err = ApiError.fromThrowable(t)
-            info(s"Error preprocessing alterConfigs request on ${configResource}: ${err}")
+            error(s"Error preprocessing alterConfigs request on ${configResource}: ${err}")
             results.put(resource, err)
           }
         }
