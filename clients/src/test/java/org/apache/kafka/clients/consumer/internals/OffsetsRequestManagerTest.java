@@ -101,7 +101,7 @@ public class OffsetsRequestManagerTest {
         apiVersions = mock(ApiVersions.class);
         requestManager = new OffsetsRequestManager(subscriptionState, metadata,
                 DEFAULT_ISOLATION_LEVEL, time, RETRY_BACKOFF_MS, REQUEST_TIMEOUT_MS,
-                apiVersions, new LogContext());
+                apiVersions, mock(NetworkClientDelegate.class), new LogContext());
     }
 
     @Test

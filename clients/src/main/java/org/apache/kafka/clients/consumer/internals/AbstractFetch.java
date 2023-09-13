@@ -37,6 +37,7 @@ import org.slf4j.Logger;
 import org.slf4j.helpers.MessageFormatter;
 
 import java.io.Closeable;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -52,14 +53,12 @@ import static org.apache.kafka.clients.consumer.internals.FetchUtils.requestMeta
  * {@code AbstractFetch} represents the basic state and logic for record fetching processing.
  * @param <K> Type for the message key
  * @param <V> Type for the message value
- * @param <N> Type for the {@link NodeStatusDetector}; can be more specific if specialized functionality is needed by
- *            the subclass
  */
-public abstract class AbstractFetch<K, V, N extends NodeStatusDetector> implements Closeable {
+public abstract class AbstractFetch<K, V> implements Closeable {
 
     private final Logger log;
     protected final LogContext logContext;
-    protected final N nodeStatusDetector;
+    protected final ConsumerNetworkClient client;
     protected final ConsumerMetadata metadata;
     protected final SubscriptionState subscriptions;
     protected final FetchConfig<K, V> fetchConfig;
@@ -73,7 +72,7 @@ public abstract class AbstractFetch<K, V, N extends NodeStatusDetector> implemen
     private final Map<Integer, FetchSessionHandler> sessionHandlers;
 
     public AbstractFetch(final LogContext logContext,
-                         final N nodeStatusDetector,
+                         final ConsumerNetworkClient client,
                          final ConsumerMetadata metadata,
                          final SubscriptionState subscriptions,
                          final FetchConfig<K, V> fetchConfig,
@@ -81,7 +80,7 @@ public abstract class AbstractFetch<K, V, N extends NodeStatusDetector> implemen
                          final Time time) {
         this.log = logContext.logger(AbstractFetch.class);
         this.logContext = logContext;
-        this.nodeStatusDetector = nodeStatusDetector;
+        this.client = client;
         this.metadata = metadata;
         this.subscriptions = subscriptions;
         this.fetchConfig = fetchConfig;
@@ -331,7 +330,7 @@ public abstract class AbstractFetch<K, V, N extends NodeStatusDetector> implemen
                 // skip sending the close request.
                 final Node fetchTarget = cluster.nodeById(fetchTargetNodeId);
 
-                if (fetchTarget == null || nodeStatusDetector.isUnavailable(fetchTarget)) {
+                if (fetchTarget == null || client.isUnavailable(fetchTarget)) {
                     log.debug("Skip sending close session request to broker {} since it is not reachable", fetchTarget);
                     return;
                 }
@@ -378,8 +377,8 @@ public abstract class AbstractFetch<K, V, N extends NodeStatusDetector> implemen
             // Use the preferred read replica if set, otherwise the partition's leader
             Node node = selectReadReplica(partition, leaderOpt.get(), currentTimeMs);
 
-            if (nodeStatusDetector.isUnavailable(node)) {
-                nodeStatusDetector.maybeThrowAuthFailure(node);
+            if (client.isUnavailable(node)) {
+                client.maybeThrowAuthFailure(node);
 
                 // If we try to send during the reconnect backoff window, then the request is just
                 // going to be failed anyway before being sent, so skip sending the request for now
@@ -413,6 +412,46 @@ public abstract class AbstractFetch<K, V, N extends NodeStatusDetector> implemen
         return reqs;
     }
 
+    protected void maybeCloseFetchSessions(final Timer timer) {
+        final List<RequestFuture<ClientResponse>> requestFutures = new ArrayList<>();
+        Map<Node, FetchSessionHandler.FetchRequestData> fetchRequestMap = prepareCloseFetchSessionRequests();
+
+        for (Map.Entry<Node, FetchSessionHandler.FetchRequestData> entry : fetchRequestMap.entrySet()) {
+            final Node fetchTarget = entry.getKey();
+            final FetchSessionHandler.FetchRequestData data = entry.getValue();
+            final FetchRequest.Builder request = createFetchRequest(fetchTarget, data);
+            final RequestFuture<ClientResponse> responseFuture = client.send(fetchTarget, request);
+
+            responseFuture.addListener(new RequestFutureListener<ClientResponse>() {
+                @Override
+                public void onSuccess(ClientResponse value) {
+                    handleCloseFetchSessionResponse(fetchTarget, data);
+                }
+
+                @Override
+                public void onFailure(RuntimeException e) {
+                    handleCloseFetchSessionResponse(fetchTarget, data, e);
+                }
+            });
+
+            requestFutures.add(responseFuture);
+        }
+
+        // Poll to ensure that request has been written to the socket. Wait until either the timer has expired or until
+        // all requests have received a response.
+        while (timer.notExpired() && !requestFutures.stream().allMatch(RequestFuture::isDone)) {
+            client.poll(timer, null, true);
+        }
+
+        if (!requestFutures.stream().allMatch(RequestFuture::isDone)) {
+            // we ran out of time before completing all futures. It is ok since we don't want to block the shutdown
+            // here.
+            log.debug("All requests couldn't be sent in the specific timeout period {}ms. " +
+                    "This may result in unnecessary fetch sessions at the broker. Consider increasing the timeout passed for " +
+                    "KafkaConsumer.close(Duration timeout)", timer.timeoutMs());
+        }
+    }
+
     // Visible for testing
     protected FetchSessionHandler sessionHandler(int node) {
         return sessionHandlers.get(node);
@@ -427,6 +466,9 @@ public abstract class AbstractFetch<K, V, N extends NodeStatusDetector> implemen
      */
     // Visible for testing
     protected void closeInternal(Timer timer) {
+        // we do not need to re-enable wake-ups since we are closing already
+        client.disableWakeups();
+        maybeCloseFetchSessions(timer);
         Utils.closeQuietly(fetchBuffer, "fetchBuffer");
         Utils.closeQuietly(decompressionBufferSupplier, "decompressionBufferSupplier");
     }

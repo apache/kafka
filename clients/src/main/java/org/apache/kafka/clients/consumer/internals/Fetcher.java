@@ -23,13 +23,10 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Timer;
 import org.slf4j.Logger;
 
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -51,9 +48,8 @@ import java.util.Map;
  *     on a different thread.</li>
  * </ul>
  */
-public class Fetcher<K, V> extends AbstractFetch<K, V, ConsumerNetworkClient> {
+public class Fetcher<K, V> extends AbstractFetch<K, V> {
 
-    private final Logger log;
     private final FetchCollector<K, V> fetchCollector;
 
     public Fetcher(LogContext logContext,
@@ -64,7 +60,6 @@ public class Fetcher<K, V> extends AbstractFetch<K, V, ConsumerNetworkClient> {
                    FetchMetricsManager metricsManager,
                    Time time) {
         super(logContext, client, metadata, subscriptions, fetchConfig, metricsManager, time);
-        this.log = logContext.logger(Fetcher.class);
         this.fetchCollector = new FetchCollector<>(logContext,
                 metadata,
                 subscriptions,
@@ -105,7 +100,7 @@ public class Fetcher<K, V> extends AbstractFetch<K, V, ConsumerNetworkClient> {
                 }
             };
 
-            final RequestFuture<ClientResponse> future = nodeStatusDetector.send(fetchTarget, request);
+            final RequestFuture<ClientResponse> future = client.send(fetchTarget, request);
             future.addListener(listener);
         }
 
@@ -114,61 +109,5 @@ public class Fetcher<K, V> extends AbstractFetch<K, V, ConsumerNetworkClient> {
 
     public Fetch<K, V> collectFetch() {
         return fetchCollector.collectFetch(fetchBuffer);
-    }
-
-    protected void maybeCloseFetchSessions(final Timer timer) {
-        final List<RequestFuture<ClientResponse>> requestFutures = new ArrayList<>();
-        Map<Node, FetchSessionHandler.FetchRequestData> fetchRequestMap = prepareCloseFetchSessionRequests();
-
-        for (Map.Entry<Node, FetchSessionHandler.FetchRequestData> entry : fetchRequestMap.entrySet()) {
-            final Node fetchTarget = entry.getKey();
-            final FetchSessionHandler.FetchRequestData data = entry.getValue();
-            final FetchRequest.Builder request = createFetchRequest(fetchTarget, data);
-            final RequestFuture<ClientResponse> responseFuture = nodeStatusDetector.send(fetchTarget, request);
-
-            responseFuture.addListener(new RequestFutureListener<ClientResponse>() {
-                @Override
-                public void onSuccess(ClientResponse value) {
-                    handleCloseFetchSessionResponse(fetchTarget, data);
-                }
-
-                @Override
-                public void onFailure(RuntimeException e) {
-                    handleCloseFetchSessionResponse(fetchTarget, data, e);
-                }
-            });
-
-            requestFutures.add(responseFuture);
-        }
-
-        // Poll to ensure that request has been written to the socket. Wait until either the timer has expired or until
-        // all requests have received a response.
-        while (timer.notExpired() && !requestFutures.stream().allMatch(RequestFuture::isDone)) {
-            nodeStatusDetector.poll(timer, null, true);
-        }
-
-        if (!requestFutures.stream().allMatch(RequestFuture::isDone)) {
-            // we ran out of time before completing all futures. It is ok since we don't want to block the shutdown
-            // here.
-            log.debug("All requests couldn't be sent in the specific timeout period {}ms. " +
-                    "This may result in unnecessary fetch sessions at the broker. Consider increasing the timeout passed for " +
-                    "KafkaConsumer.close(Duration timeout)", timer.timeoutMs());
-        }
-    }
-
-    /**
-     * It is true that shared states (e.g. {@link FetchSessionHandler session handlers}) could be accessed by
-     * multiple threads, such as heartbeat thread. However, since this method is called within the context of the
-     * {@link org.apache.kafka.common.internals.IdempotentCloser}, it is <em>not</em> necessary to acquire a lock on
-     * the instance before modifying the states.
-     *
-     * @param timer Timer to enforce time limit
-     */
-    @Override
-    protected void closeInternal(final Timer timer) {
-        // we do not need to re-enable wake-ups since we are closing already
-        nodeStatusDetector.disableWakeups();
-        maybeCloseFetchSessions(timer);
-        super.closeInternal(timer);
     }
 }

@@ -48,7 +48,7 @@ import java.util.concurrent.CompletableFuture;
 /**
  * A wrapper around the {@link org.apache.kafka.clients.NetworkClient} to handle network poll and send operations.
  */
-public class NetworkClientDelegate implements NodeStatusDetector, AutoCloseable {
+public class NetworkClientDelegate implements AutoCloseable {
     private final KafkaClient client;
     private final Time time;
     private final Logger log;
@@ -71,28 +71,8 @@ public class NetworkClientDelegate implements NodeStatusDetector, AutoCloseable 
         this.tryConnectNodes = new HashSet<>();
     }
 
-    @Override
-    public boolean isUnavailable(Node node) {
-        return NetworkClientUtils.isUnavailable(client, node, time);
-    }
-
-    @Override
-    public void maybeThrowAuthFailure(Node node) {
-        NetworkClientUtils.maybeThrowAuthFailure(client, node);
-    }
-
-    @Override
     public void tryConnect(Node node) {
-        tryConnectNodes.add(node);
-    }
-
-    public void maybeTryConnect() {
-        List<Node> nodes = new ArrayList<>(tryConnectNodes);
-        tryConnectNodes.clear();
-
-        for (Node node : nodes) {
-            NetworkClientUtils.tryConnect(client, node, time);
-        }
+        NetworkClientUtils.tryConnect(client, node, time);
     }
 
     /**

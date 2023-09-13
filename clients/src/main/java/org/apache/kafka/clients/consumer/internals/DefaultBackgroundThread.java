@@ -165,6 +165,7 @@ public class DefaultBackgroundThread extends KafkaThread {
                             retryBackoffMs,
                             requestTimeoutMs,
                             apiVersions,
+                            networkClientDelegate,
                             logContext);
             CoordinatorRequestManager coordinatorRequestManager = null;
             CommitRequestManager commitRequestManager = null;
@@ -247,7 +248,6 @@ public class DefaultBackgroundThread extends KafkaThread {
                 .map(m -> m.get().poll(currentTimeMs))
                 .map(this::handlePollResult)
                 .reduce(MAX_POLL_TIMEOUT_MS, Math::min);
-        networkClientDelegate.maybeTryConnect();
         networkClientDelegate.poll(pollWaitTimeMs, currentTimeMs);
     }
 
