@@ -24,8 +24,10 @@ import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerInterceptor;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.IsolationLevel;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -34,6 +36,8 @@ import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.List;
@@ -54,6 +58,7 @@ public final class ConsumerUtils {
     public static final int CONSUMER_MAX_INFLIGHT_REQUESTS_PER_CONNECTION = 100;
 
     private static final String CONSUMER_CLIENT_ID_METRIC_TAG = "client-id";
+    private static final Logger log = LoggerFactory.getLogger(ConsumerUtils.class);
 
     public static ConsumerNetworkClient createConsumerNetworkClient(ConsumerConfig config,
                                                                     Metrics metrics,
@@ -139,6 +144,38 @@ public final class ConsumerUtils {
     @SuppressWarnings("unchecked")
     public static <K, V> List<ConsumerInterceptor<K, V>> configuredConsumerInterceptors(ConsumerConfig config) {
         return (List<ConsumerInterceptor<K, V>>) ClientUtils.configuredInterceptors(config, ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, ConsumerInterceptor.class);
+    }
+
+    public static boolean refreshCommittedOffsets(final Map<TopicPartition, OffsetAndMetadata> offsets,
+                                                  final ConsumerMetadata metadata,
+                                                  final SubscriptionState subscriptions) {
+        if (offsets == null) return false;
+
+        for (final Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsets.entrySet()) {
+            final TopicPartition tp = entry.getKey();
+            final OffsetAndMetadata offsetAndMetadata = entry.getValue();
+            if (offsetAndMetadata != null) {
+                // first update the epoch if necessary
+                entry.getValue().leaderEpoch().ifPresent(epoch -> metadata.updateLastSeenEpochIfNewer(entry.getKey(), epoch));
+
+                // it's possible that the partition is no longer assigned when the response is received,
+                // so we need to ignore seeking if that's the case
+                if (subscriptions.isAssigned(tp)) {
+                    final ConsumerMetadata.LeaderAndEpoch leaderAndEpoch = metadata.currentLeader(tp);
+                    final SubscriptionState.FetchPosition position = new SubscriptionState.FetchPosition(
+                            offsetAndMetadata.offset(), offsetAndMetadata.leaderEpoch(),
+                            leaderAndEpoch);
+
+                    subscriptions.seekUnvalidated(tp, position);
+
+                    log.info("Setting offset for partition {} to the committed offset {}", tp, position);
+                } else {
+                    log.info("Ignoring the returned {} since its partition {} is no longer assigned",
+                            offsetAndMetadata, tp);
+                }
+            }
+        }
+        return true;
     }
 
 }
