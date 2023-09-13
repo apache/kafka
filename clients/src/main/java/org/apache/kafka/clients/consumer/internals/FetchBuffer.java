@@ -117,9 +117,10 @@ public class FetchBuffer implements Closeable {
 
     /**
      * Return the set of {@link TopicPartition partitions} for which we have data in the buffer.
-     * @return Partition set
+     *
+     * @return {@link TopicPartition Partition} set
      */
-    Set<TopicPartition> partitions() {
+    Set<TopicPartition> bufferedPartitions() {
         final Set<TopicPartition> partitions = new HashSet<>();
 
         if (nextInLineFetch != null && !nextInLineFetch.isConsumed()) {

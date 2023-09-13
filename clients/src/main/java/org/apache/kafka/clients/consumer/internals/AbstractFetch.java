@@ -269,7 +269,7 @@ public abstract class AbstractFetch<K, V, N extends NodeStatusDetector> implemen
      */
     private List<TopicPartition> fetchablePartitions() {
         // This is the set of partitions we have in our buffer
-        Set<TopicPartition> buffered = fetchBuffer.partitions();
+        Set<TopicPartition> buffered = fetchBuffer.bufferedPartitions();
 
         // This is the test that returns true if the partition is *not* buffered
         Predicate<TopicPartition> isNotBuffered = tp -> !buffered.contains(tp);

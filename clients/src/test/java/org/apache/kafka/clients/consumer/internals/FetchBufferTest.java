@@ -136,16 +136,16 @@ public class FetchBufferTest {
             fetchBuffer.setNextInLineFetch(completedFetch(topicAPartition0));
             fetchBuffer.add(completedFetch(topicAPartition1));
             fetchBuffer.add(completedFetch(topicAPartition2));
-            assertEquals(allPartitions, fetchBuffer.partitions());
+            assertEquals(allPartitions, fetchBuffer.bufferedPartitions());
 
             fetchBuffer.setNextInLineFetch(null);
-            assertEquals(partitions(topicAPartition1, topicAPartition2), fetchBuffer.partitions());
+            assertEquals(partitions(topicAPartition1, topicAPartition2), fetchBuffer.bufferedPartitions());
 
             fetchBuffer.poll();
-            assertEquals(partitions(topicAPartition2), fetchBuffer.partitions());
+            assertEquals(partitions(topicAPartition2), fetchBuffer.bufferedPartitions());
 
             fetchBuffer.poll();
-            assertEquals(partitions(), fetchBuffer.partitions());
+            assertEquals(partitions(), fetchBuffer.bufferedPartitions());
         }
     }
 
@@ -157,16 +157,16 @@ public class FetchBufferTest {
         try (FetchBuffer fetchBuffer = new FetchBuffer(logContext)) {
             fetchBuffer.setNextInLineFetch(completedFetch(topicAPartition0));
             fetchBuffer.addAll(Arrays.asList(completedFetch(topicAPartition1), completedFetch(topicAPartition2)));
-            assertEquals(allPartitions, fetchBuffer.partitions());
+            assertEquals(allPartitions, fetchBuffer.bufferedPartitions());
 
             fetchBuffer.retainAll(partitions(topicAPartition1, topicAPartition2));
-            assertEquals(partitions(topicAPartition1, topicAPartition2), fetchBuffer.partitions());
+            assertEquals(partitions(topicAPartition1, topicAPartition2), fetchBuffer.bufferedPartitions());
 
             fetchBuffer.retainAll(partitions(topicAPartition2));
-            assertEquals(partitions(topicAPartition2), fetchBuffer.partitions());
+            assertEquals(partitions(topicAPartition2), fetchBuffer.bufferedPartitions());
 
             fetchBuffer.retainAll(partitions());
-            assertEquals(partitions(), fetchBuffer.partitions());
+            assertEquals(partitions(), fetchBuffer.bufferedPartitions());
         }
     }
 
