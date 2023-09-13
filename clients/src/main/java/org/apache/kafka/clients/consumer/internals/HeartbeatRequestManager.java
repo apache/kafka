@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
@@ -33,7 +34,6 @@ import java.util.Collections;
 
 public class HeartbeatRequestManager implements RequestManager {
     private final Time time;
-    private final LogContext logContext;
     private final Logger logger;
 
     private final int rebalanceTimeoutMs;
@@ -54,18 +54,17 @@ public class HeartbeatRequestManager implements RequestManager {
         final ErrorEventHandler nonRetriableErrorHandler) {
         this.coordinatorRequestManager = coordinatorRequestManager;
         this.time = time;
-        this.logContext = logContext;
         this.logger = logContext.logger(HeartbeatRequestManager.class);
         this.subscriptions = subscriptions;
         this.membershipManager = membershipManager;
         this.nonRetriableErrorHandler = nonRetriableErrorHandler;
-        this.rebalanceTimeoutMs = 50;
+        this.rebalanceTimeoutMs = config.getInt(CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG);
 
         long heartbeatIntervalMs = config.getInt(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG);
         long retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
         long retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
         this.heartbeatRequestState = new HeartbeatRequestState(logContext, time, heartbeatIntervalMs, retryBackoffMs,
-            retryBackoffMaxMs);
+            retryBackoffMaxMs, rebalanceTimeoutMs);
     }
 
     // Visible for testing
@@ -79,10 +78,9 @@ public class HeartbeatRequestManager implements RequestManager {
         final HeartbeatRequestState heartbeatRequestState,
         final ErrorEventHandler nonRetriableErrorHandler) {
         this.time = time;
-        this.logContext = logContext;
         this.logger = logContext.logger(this.getClass());
         this.subscriptions = subscriptions;
-        this.rebalanceTimeoutMs = 50;
+        this.rebalanceTimeoutMs = config.getInt(CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG);
         this.coordinatorRequestManager = coordinatorRequestManager;
         this.heartbeatRequestState = heartbeatRequestState;
         this.membershipManager = membershipManager;
@@ -123,7 +121,9 @@ public class HeartbeatRequestManager implements RequestManager {
         membershipManager.groupInstanceId().ifPresent(data::setInstanceId);
 
         if (this.subscriptions.hasPatternSubscription()) {
-            // data.setSubscribedTopicRegex(this.subscriptions.groupSubscription())
+            // We haven't discsussed how Regex is stored in the consumer. We could do it in the subscriptionState
+            // , in the memberStateManager, or here.
+            // data.setSubscribedTopicRegex(regex)
         } else {
             data.setSubscribedTopicNames(new ArrayList<>(this.subscriptions.subscription()));
         }
@@ -146,13 +146,9 @@ public class HeartbeatRequestManager implements RequestManager {
         return request;
     }
 
-    private boolean hasClientSideAssignment() {
-        return false;
-    }
-
     private void onFailure(final Throwable exception, final long responseTimeMs) {
         this.heartbeatRequestState.onFailedAttempt(responseTimeMs);
-        logger.debug("failed sending heartbeat");
+        logger.debug("failed sending heartbeat due to {}", exception.getMessage());
     }
 
     private void onSuccess(final ConsumerGroupHeartbeatResponse response, long currentTimeMs) {
@@ -208,7 +204,6 @@ public class HeartbeatRequestManager implements RequestManager {
                 response.data().errorMessage());
             nonRetriableErrorHandler.handle(Errors.UNRELEASED_INSTANCE_ID.exception());
         }
-        System.out.println("membership updatestate");
         membershipManager.updateState(response.data());
     }
 
