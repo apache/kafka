@@ -79,7 +79,6 @@ public class RemoteIndexCache implements Closeable {
     private static final String TMP_FILE_SUFFIX = ".tmp";
     public static final String REMOTE_LOG_INDEX_CACHE_CLEANER_THREAD = "remote-log-index-cleaner";
     public static final String DIR_NAME = "remote-log-index-cache";
-    private static final long DEFAULT_REMOTE_INDEX_CACHE_SIZE_BYTES = 1024 * 1024L;
 
     /**
      * Directory where the index files will be stored on disk.
@@ -116,11 +115,6 @@ public class RemoteIndexCache implements Closeable {
      * We use {@link Caffeine} cache instead of implementing a thread safe LRU cache on our own.
      */
     private Cache<Uuid, Entry> internalCache;
-
-    // Visible for testing
-    public RemoteIndexCache(RemoteStorageManager remoteStorageManager, String logDir) throws IOException {
-        this(DEFAULT_REMOTE_INDEX_CACHE_SIZE_BYTES, remoteStorageManager, logDir);
-    }
 
     /**
      * Creates RemoteIndexCache with the given configs.
