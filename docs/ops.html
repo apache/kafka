@@ -3862,7 +3862,7 @@ listeners=CONTROLLER://:9093
 
 <h3 class="anchor-heading"><a id="tiered_storage" class="anchor-link"></a><a href="#kraft">6.11 Tiered Storage</a></h3>
 
-<h4 class="anchor-heading"><a id="tiered_storage_overview" class="anchor-link"></a><a href="#tiered_storage_overview">Tiered Storage overview</a></h4>
+<h4 class="anchor-heading"><a id="tiered_storage_overview" class="anchor-link"></a><a href="#tiered_storage_overview">Tiered Storage Overview</a></h4>
 
 <p>Kafka data is mostly consumed in a streaming fashion using tail reads. Tail reads leverage OS's page cache to serve the data instead of disk reads.
   Older data is typically read from the disk for backfill or failure recovery purposes and is infrequent.</p>
@@ -3873,7 +3873,7 @@ listeners=CONTROLLER://:9093
 
 <h4 class="anchor-heading"><a id="tiered_storage_config" class="anchor-link"></a><a href="#tiered_storage_config">Configuration</a></h4>
 
-<h5 class="anchor-heading"><a id="tiered_storage_config_broker" class="anchor-link"></a><a href="#tiered_storage_config_broker">broker configurations</a></h5>
+<h5 class="anchor-heading"><a id="tiered_storage_config_broker" class="anchor-link"></a><a href="#tiered_storage_config_broker">Broker Configurations</a></h5>
 
 <p>By default, Kafka server will not enable tiered storage feature. <code>remote.log.storage.system.enable</code>
   is the property to control whether to enable tiered storage functionality in a broker or not. Setting it to "true" to enable this feature.
@@ -3881,18 +3881,18 @@ listeners=CONTROLLER://:9093
 
 <p><code>RemoteStorageManager</code> is an interface to provide the lifecycle of remote log segments and indexes. Kafka server
   doesn't provide out-of-the-box implementation of RemoteStorageManager. Configuring <code>remote.log.storage.manager.class.name</code>
-  or <code>remote.log.storage.manager.class.path</code> to specify the implementation of RemoteStorageManager.
+  and <code>remote.log.storage.manager.class.path</code> to specify the implementation of RemoteStorageManager.
 </p>
 
 <p><code>RemoteLogMetadataManager</code> is an interface to provide the lifecycle of metadata about remote log segments with strongly consistent semantics.
   By default, Kafka provides an implementation with storage as an internal topic. This implementation can be changed by configuring
-  <code>remote.log.metadata.manager.class.name</code> or <code>remote.log.metadata.manager.class.path</code>.
+  <code>remote.log.metadata.manager.class.name</code> and <code>remote.log.metadata.manager.class.path</code>.
   When adopting the default kafka internal topic based implementation, <code>remote.log.metadata.manager.listener.name</code>
   is a mandatory property to specify which listener the clients created by the default RemoteLogMetadataManager implementation.
 </p>
 
 
-<h5 class="anchor-heading"><a id="tiered_storage_config_topic" class="anchor-link"></a><a href="#tiered_storage_config_topic">topic configurations</a></h5>
+<h5 class="anchor-heading"><a id="tiered_storage_config_topic" class="anchor-link"></a><a href="#tiered_storage_config_topic">Topic Configurations</a></h5>
 
 <p>After correctly configuring broker side configurations for tiered storage feature, there are still configurations in topic level needed to be set.
   <code>remote.storage.enable</code> is the switch to determine if this topic want to use tiered storage or not. By default it is set as false.
@@ -3910,7 +3910,7 @@ listeners=CONTROLLER://:9093
   If unset, The value in <code>retention.ms</code> and <code>retention.bytes</code> will be used.
 </p>
 
-<h4 class="anchor-heading"><a id="tiered_storage_config_ex" class="anchor-link"></a><a href="#tiered_storage_config_ex">configurations example</a></h4>
+<h4 class="anchor-heading"><a id="tiered_storage_config_ex" class="anchor-link"></a><a href="#tiered_storage_config_ex">Configurations Example</a></h4>
 
 <p>Here is a sample configuration to enable tiered storage feature in broker side:
 <pre>
@@ -3923,13 +3923,12 @@ remote.log.metadata.manager.listener.name=PLAINTEXT
 </pre>
 </p>
 
-<p>After broker is startup, creating a topic with tiered storage enabled, and a small log time retention value to try this feature:
+<p>After broker is started, creating a topic with tiered storage enabled, and a small log time retention value to try this feature:
 <pre>bin/kafka-topics.sh --create --topic tieredTopic --bootstrap-server localhost:9092 --config remote.storage.enable=true --config local.retention.ms=1000
 </pre>
 </p>
 
-<p>Then, after the active segment is rolled, the old segment should be moved to remote storage and get deleted.
-  Checking the remote storage to verify it.
+<p>Then, after the active segment is rolled, the old segment should be moved to the remote storage and get deleted.
 </p>
 
 
