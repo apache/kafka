@@ -67,12 +67,16 @@ import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
 import org.apache.kafka.common.message.BrokerHeartbeatResponseData;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData;
 import org.apache.kafka.common.message.BrokerRegistrationResponseData;
+import org.apache.kafka.common.message.ConsumerGroupDescribeRequestData;
+import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.ControlledShutdownRequestData;
 import org.apache.kafka.common.message.ControlledShutdownResponseData;
 import org.apache.kafka.common.message.ControlledShutdownResponseData.RemainingPartition;
 import org.apache.kafka.common.message.ControlledShutdownResponseData.RemainingPartitionCollection;
+import org.apache.kafka.common.message.ControllerRegistrationRequestData;
+import org.apache.kafka.common.message.ControllerRegistrationResponseData;
 import org.apache.kafka.common.message.CreateAclsRequestData;
 import org.apache.kafka.common.message.CreateAclsResponseData;
 import org.apache.kafka.common.message.CreateDelegationTokenRequestData;
@@ -759,20 +763,22 @@ public class RequestResponseTest {
     public void testOffsetFetchRequestBuilderToStringV0ToV7() {
         List<Boolean> stableFlags = asList(true, false);
         for (Boolean requireStable : stableFlags) {
-            String allTopicPartitionsString = new OffsetFetchRequest.Builder("someGroup",
+            String allTopicPartitionsString = new OffsetFetchRequest.Builder(
+                "someGroup",
                 requireStable,
                 null,
-                false)
-                .toString();
+                false
+            ).toString();
 
-            assertTrue(allTopicPartitionsString.contains("groupId='someGroup', topics=null,"
-                + " groups=[], requireStable=" + requireStable));
-            String string = new OffsetFetchRequest.Builder("group1",
+            assertTrue(allTopicPartitionsString.contains("groupId='', topics=[],"
+                + " groups=[OffsetFetchRequestGroup(groupId='someGroup', memberId=null, memberEpoch=-1, topics=null)], requireStable=" + requireStable));
+            String string = new OffsetFetchRequest.Builder(
+                "group1",
                 requireStable,
                 singletonList(
                     new TopicPartition("test11", 1)),
-                false)
-                .toString();
+                false
+            ).toString();
             assertTrue(string.contains("test11"));
             assertTrue(string.contains("group1"));
             assertTrue(string.contains("requireStable=" + requireStable));
@@ -788,7 +794,7 @@ public class RequestResponseTest {
             false
         ).toString();
         assertTrue(allTopicPartitionsString.contains("groups=[OffsetFetchRequestGroup"
-            + "(groupId='someGroup', memberId='', memberEpoch=-1, topics=null)], requireStable=" + requireStable));
+            + "(groupId='someGroup', memberId=null, memberEpoch=-1, topics=null)], requireStable=" + requireStable));
 
         String subsetTopicPartitionsString = new OffsetFetchRequest.Builder(
             Collections.singletonMap(
@@ -1057,6 +1063,8 @@ public class RequestResponseTest {
             case LIST_TRANSACTIONS: return createListTransactionsRequest(version);
             case ALLOCATE_PRODUCER_IDS: return createAllocateProducerIdsRequest(version);
             case CONSUMER_GROUP_HEARTBEAT: return createConsumerGroupHeartbeatRequest(version);
+            case CONSUMER_GROUP_DESCRIBE: return createConsumerGroupDescribeRequest(version);
+            case CONTROLLER_REGISTRATION: return createControllerRegistrationRequest(version);
             default: throw new IllegalArgumentException("Unknown API key " + apikey);
         }
     }
@@ -1132,8 +1140,34 @@ public class RequestResponseTest {
             case LIST_TRANSACTIONS: return createListTransactionsResponse();
             case ALLOCATE_PRODUCER_IDS: return createAllocateProducerIdsResponse();
             case CONSUMER_GROUP_HEARTBEAT: return createConsumerGroupHeartbeatResponse();
+            case CONSUMER_GROUP_DESCRIBE: return createConsumerGroupDescribeResponse();
+            case CONTROLLER_REGISTRATION: return createControllerRegistrationResponse();
             default: throw new IllegalArgumentException("Unknown API key " + apikey);
         }
+    }
+
+    private ConsumerGroupDescribeRequest createConsumerGroupDescribeRequest(short version) {
+        ConsumerGroupDescribeRequestData data = new ConsumerGroupDescribeRequestData()
+            .setGroupIds(Collections.singletonList("group"))
+            .setIncludeAuthorizedOperations(false);
+        return new ConsumerGroupDescribeRequest.Builder(data).build(version);
+    }
+
+    private ConsumerGroupDescribeResponse createConsumerGroupDescribeResponse() {
+        ConsumerGroupDescribeResponseData data = new ConsumerGroupDescribeResponseData()
+            .setGroups(Collections.singletonList(
+                new ConsumerGroupDescribeResponseData.DescribedGroup()
+                    .setGroupId("group")
+                    .setErrorCode((short) 0)
+                    .setErrorMessage(Errors.forCode((short) 0).message())
+                    .setGroupState(ConsumerGroupState.EMPTY.toString())
+                    .setGroupEpoch(0)
+                    .setAssignmentEpoch(0)
+                    .setAssignorName("range")
+                    .setMembers(new ArrayList<ConsumerGroupDescribeResponseData.Member>(0))
+            ))
+            .setThrottleTimeMs(1000);
+        return new ConsumerGroupDescribeResponse(data);
     }
 
     private ConsumerGroupHeartbeatRequest createConsumerGroupHeartbeatRequest(short version) {
@@ -1174,6 +1208,38 @@ public class RequestResponseTest {
                 ))
             );
         return new ConsumerGroupHeartbeatResponse(data);
+    }
+
+    private ControllerRegistrationRequest createControllerRegistrationRequest(short version) {
+        ControllerRegistrationRequestData data = new ControllerRegistrationRequestData().
+                setControllerId(3).
+                setIncarnationId(Uuid.fromString("qiTdnbu6RPazh1Aufq4dxw")).
+                setZkMigrationReady(true).
+                setFeatures(new ControllerRegistrationRequestData.FeatureCollection(
+                        Arrays.asList(
+                                new ControllerRegistrationRequestData.Feature().
+                                        setName("metadata.version").
+                                        setMinSupportedVersion((short) 1).
+                                        setMinSupportedVersion((short) 15)
+                        ).iterator()
+                )).
+                setListeners(new ControllerRegistrationRequestData.ListenerCollection(
+                        Arrays.asList(
+                                new ControllerRegistrationRequestData.Listener().
+                                        setName("CONTROLLER").
+                                        setName("localhost").
+                                        setPort(9012).
+                                        setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
+                        ).iterator()
+                ));
+        return new ControllerRegistrationRequest(data, version);
+    }
+
+    private ControllerRegistrationResponse createControllerRegistrationResponse() {
+        ControllerRegistrationResponseData data = new ControllerRegistrationResponseData().
+                setErrorCode(Errors.NONE.code()).
+                setThrottleTimeMs(1000);
+        return new ControllerRegistrationResponse(data);
     }
 
     private FetchSnapshotRequest createFetchSnapshotRequest(short version) {

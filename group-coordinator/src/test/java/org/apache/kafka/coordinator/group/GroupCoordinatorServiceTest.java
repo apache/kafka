@@ -30,6 +30,7 @@ import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.RecordBatchTooLargeException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
+import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
@@ -41,6 +42,8 @@ import org.apache.kafka.common.message.ListGroupsRequestData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.message.OffsetFetchRequestData;
 import org.apache.kafka.common.message.OffsetFetchResponseData;
+import org.apache.kafka.common.message.LeaveGroupRequestData;
+import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.network.ClientInformation;
@@ -866,5 +869,88 @@ public class GroupCoordinatorServiceTest {
         );
 
         assertEquals(response, future.get(5, TimeUnit.SECONDS));
+    }
+
+    @Test
+    public void testLeaveGroup() throws Exception {
+        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorService(
+            new LogContext(),
+            createConfig(),
+            runtime
+        );
+
+        LeaveGroupRequestData request = new LeaveGroupRequestData()
+            .setGroupId("foo");
+
+        service.startup(() -> 1);
+
+        when(runtime.scheduleWriteOperation(
+            ArgumentMatchers.eq("generic-group-leave"),
+            ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
+            ArgumentMatchers.any()
+        )).thenReturn(CompletableFuture.completedFuture(
+            new LeaveGroupResponseData()
+        ));
+
+        CompletableFuture<LeaveGroupResponseData> future = service.leaveGroup(
+            requestContext(ApiKeys.LEAVE_GROUP),
+            request
+        );
+
+        assertTrue(future.isDone());
+        assertEquals(new LeaveGroupResponseData(), future.get());
+    }
+
+    @Test
+    public void testLeaveGroupThrowsUnknownMemberIdException() throws Exception {
+        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorService(
+            new LogContext(),
+            createConfig(),
+            runtime
+        );
+
+        LeaveGroupRequestData request = new LeaveGroupRequestData()
+            .setGroupId("foo")
+            .setMembers(Arrays.asList(
+                new LeaveGroupRequestData.MemberIdentity()
+                    .setMemberId("member-1")
+                    .setGroupInstanceId("instance-1"),
+                new LeaveGroupRequestData.MemberIdentity()
+                    .setMemberId("member-2")
+                    .setGroupInstanceId("instance-2")
+            ));
+
+        service.startup(() -> 1);
+
+        when(runtime.scheduleWriteOperation(
+            ArgumentMatchers.eq("generic-group-leave"),
+            ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
+            ArgumentMatchers.any()
+        )).thenReturn(FutureUtils.failedFuture(
+            new UnknownMemberIdException()
+        ));
+
+        CompletableFuture<LeaveGroupResponseData> future = service.leaveGroup(
+            requestContext(ApiKeys.LEAVE_GROUP),
+            request
+        );
+
+        assertTrue(future.isDone());
+        LeaveGroupResponseData expectedResponse = new LeaveGroupResponseData()
+            .setErrorCode(Errors.NONE.code())
+            .setMembers(Arrays.asList(
+                new LeaveGroupResponseData.MemberResponse()
+                    .setMemberId("member-1")
+                    .setGroupInstanceId("instance-1")
+                    .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code()),
+                new LeaveGroupResponseData.MemberResponse()
+                    .setMemberId("member-2")
+                    .setGroupInstanceId("instance-2")
+                    .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code())
+            ));
+
+        assertEquals(expectedResponse, future.get());
     }
 }

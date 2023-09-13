@@ -18,7 +18,9 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.Metadata;
+import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.StaleMetadataException;
+import org.apache.kafka.clients.consumer.LogTruncationException;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.internals.OffsetFetcherUtils.ListOffsetData;
 import org.apache.kafka.clients.consumer.internals.OffsetFetcherUtils.ListOffsetResult;
@@ -28,8 +30,11 @@ import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.ListOffsetsRequestData;
+import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.requests.ListOffsetsResponse;
+import org.apache.kafka.common.requests.OffsetsForLeaderEpochRequest;
+import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
@@ -48,6 +53,8 @@ import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 
 import static java.util.Objects.requireNonNull;
+import static org.apache.kafka.clients.consumer.internals.OffsetFetcherUtils.hasUsableOffsetForLeaderEpochVersion;
+import static org.apache.kafka.clients.consumer.internals.OffsetFetcherUtils.regroupFetchPositionsByLeader;
 
 /**
  * Manager responsible for building the following requests to retrieve partition offsets, and
@@ -68,15 +75,20 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
     private final IsolationLevel isolationLevel;
     private final Logger log;
     private final OffsetFetcherUtils offsetFetcherUtils;
+    private final SubscriptionState subscriptionState;
 
     private final Set<ListOffsetsRequestState> requestsToRetry;
     private final List<NetworkClientDelegate.UnsentRequest> requestsToSend;
+    private final long requestTimeoutMs;
+    private final Time time;
+    private final ApiVersions apiVersions;
 
     public OffsetsRequestManager(final SubscriptionState subscriptionState,
                                  final ConsumerMetadata metadata,
                                  final IsolationLevel isolationLevel,
                                  final Time time,
                                  final long retryBackoffMs,
+                                 final long requestTimeoutMs,
                                  final ApiVersions apiVersions,
                                  final LogContext logContext) {
         requireNonNull(subscriptionState);
@@ -91,6 +103,10 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
         this.log = logContext.logger(getClass());
         this.requestsToRetry = new HashSet<>();
         this.requestsToSend = new ArrayList<>();
+        this.subscriptionState = subscriptionState;
+        this.time = time;
+        this.requestTimeoutMs = requestTimeoutMs;
+        this.apiVersions = apiVersions;
         this.offsetFetcherUtils = new OffsetFetcherUtils(logContext, metadata, subscriptionState,
                 time, retryBackoffMs, apiVersions);
         // Register the cluster metadata update callback. Note this only relies on the
@@ -155,6 +171,52 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
     }
 
     /**
+     * Reset offsets for all assigned partitions that require it. Offsets will be reset
+     * with timestamps according to the reset strategy defined for each partition. This will
+     * generate ListOffsets requests for the partitions and timestamps, and enqueue them to be sent
+     * on the next call to {@link #poll(long)}.
+     *
+     * <p/>
+     *
+     * When a response is received, positions are updated in-memory, on the subscription state. If
+     * an error is received in the response, it will be saved to be thrown on the next call to
+     * this function (ex. {@link org.apache.kafka.common.errors.TopicAuthorizationException})
+     */
+    public void resetPositionsIfNeeded() {
+        Map<TopicPartition, Long> offsetResetTimestamps = offsetFetcherUtils.getOffsetResetTimestamp();
+
+        if (offsetResetTimestamps.isEmpty())
+            return;
+
+        List<NetworkClientDelegate.UnsentRequest> unsentRequests =
+                buildListOffsetsRequestsAndResetPositions(offsetResetTimestamps);
+        requestsToSend.addAll(unsentRequests);
+    }
+
+    /**
+     * Validate positions for all assigned partitions for which a leader change has been detected.
+     * This will generate OffsetsForLeaderEpoch requests for the partitions, with the known offset
+     * epoch and current leader epoch. It will enqueue the generated requests, to be sent on the
+     * next call to {@link #poll(long)}.
+     *
+     * <p/>
+     *
+     * When a response is received, positions are validated and, if a log truncation is
+     * detected, a {@link LogTruncationException} will be saved in memory, to be thrown on the
+     * next call to this function.
+     */
+    public void validatePositionsIfNeeded() {
+        Map<TopicPartition, SubscriptionState.FetchPosition> partitionsToValidate =
+                offsetFetcherUtils.getPartitionsToValidate();
+        if (partitionsToValidate.isEmpty()) {
+            return;
+        }
+        List<NetworkClientDelegate.UnsentRequest> unsentRequests =
+                buildOffsetsForLeaderEpochRequestsAndValidatePositions(partitionsToValidate);
+        requestsToSend.addAll(unsentRequests);
+    }
+
+    /**
      * Generate requests for partitions with known leaders. Update the listOffsetsRequestState by adding
      * partitions with unknown leader to the listOffsetsRequestState.remainingToSearch
      */
@@ -205,14 +267,14 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
             final boolean requireTimestamps,
             final ListOffsetsRequestState listOffsetsRequestState) {
         log.debug("Building ListOffsets request for partitions {}", timestampsToSearch);
-        Map<Node, Map<TopicPartition, ListOffsetsRequestData.ListOffsetsPartition>> partitionResetTimestampsByNode =
+        Map<Node, Map<TopicPartition, ListOffsetsRequestData.ListOffsetsPartition>> timestampsToSearchByNode =
                 groupListOffsetRequests(timestampsToSearch, Optional.of(listOffsetsRequestState));
-        if (partitionResetTimestampsByNode.isEmpty()) {
+        if (timestampsToSearchByNode.isEmpty()) {
             throw new StaleMetadataException();
         }
 
         final List<NetworkClientDelegate.UnsentRequest> unsentRequests = new ArrayList<>();
-        MultiNodeRequest multiNodeRequest = new MultiNodeRequest(partitionResetTimestampsByNode.size());
+        MultiNodeRequest multiNodeRequest = new MultiNodeRequest(timestampsToSearchByNode.size());
         multiNodeRequest.onComplete((multiNodeResult, error) -> {
             // Done sending request to a set of known leaders
             if (error == null) {
@@ -235,7 +297,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
             }
         });
 
-        for (Map.Entry<Node, Map<TopicPartition, ListOffsetsRequestData.ListOffsetsPartition>> entry : partitionResetTimestampsByNode.entrySet()) {
+        for (Map.Entry<Node, Map<TopicPartition, ListOffsetsRequestData.ListOffsetsPartition>> entry : timestampsToSearchByNode.entrySet()) {
             Node node = entry.getKey();
 
             CompletableFuture<ListOffsetResult> partialResult = buildListOffsetRequestToNode(
@@ -268,7 +330,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
                 .forConsumer(requireTimestamps, isolationLevel, false)
                 .setTargetTimes(ListOffsetsRequest.toListOffsetsTopics(targetTimes));
 
-        log.debug("Creating ListOffsetRequest {} for broker {} to reset positions", builder,
+        log.debug("Creating ListOffset request {} for broker {} to reset positions", builder,
                 node);
 
         NetworkClientDelegate.UnsentRequest unsentRequest = new NetworkClientDelegate.UnsentRequest(
@@ -278,7 +340,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
         CompletableFuture<ListOffsetResult> result = new CompletableFuture<>();
         unsentRequest.future().whenComplete((response, error) -> {
             if (error != null) {
-                log.debug("Sending ListOffsetRequest {} to broker {} failed",
+                log.debug("Sending ListOffset request {} to broker {} failed",
                         builder,
                         node,
                         error);
@@ -289,6 +351,154 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
                 try {
                     ListOffsetResult listOffsetResult =
                             offsetFetcherUtils.handleListOffsetResponse(lor);
+                    result.complete(listOffsetResult);
+                } catch (RuntimeException e) {
+                    result.completeExceptionally(e);
+                }
+            }
+        });
+        return result;
+    }
+
+    /**
+     * Make asynchronous ListOffsets request to fetch offsets by target times for the specified
+     * partitions.
+     * Use the retrieved offsets to reset positions in the subscription state.
+     *
+     * @param timestampsToSearch the mapping between partitions and target time
+     * @return A list of
+     * {@link org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.UnsentRequest}
+     * that can be polled to obtain the corresponding timestamps and offsets.
+     */
+    private List<NetworkClientDelegate.UnsentRequest> buildListOffsetsRequestsAndResetPositions(
+            final Map<TopicPartition, Long> timestampsToSearch) {
+        Map<Node, Map<TopicPartition, ListOffsetsRequestData.ListOffsetsPartition>> timestampsToSearchByNode =
+                groupListOffsetRequests(timestampsToSearch, Optional.empty());
+
+        final List<NetworkClientDelegate.UnsentRequest> unsentRequests = new ArrayList<>();
+
+        timestampsToSearchByNode.forEach((node, resetTimestamps) -> {
+            subscriptionState.setNextAllowedRetry(resetTimestamps.keySet(),
+                    time.milliseconds() + requestTimeoutMs);
+
+            CompletableFuture<ListOffsetResult> partialResult = buildListOffsetRequestToNode(
+                    node,
+                    resetTimestamps,
+                    false,
+                    unsentRequests);
+
+            partialResult.whenComplete((result, error) -> {
+                if (error == null) {
+                    offsetFetcherUtils.onSuccessfulResponseForResettingPositions(resetTimestamps,
+                            result);
+                } else {
+                    RuntimeException e;
+                    if (error instanceof RuntimeException) {
+                        e = (RuntimeException) error;
+                    } else {
+                        e = new RuntimeException("Unexpected failure in ListOffsets request for " +
+                                "resetting positions", error);
+                    }
+                    offsetFetcherUtils.onFailedResponseForResettingPositions(resetTimestamps, e);
+                }
+            });
+        });
+        return unsentRequests;
+    }
+
+    /**
+     * For each partition that needs validation, make an asynchronous request to get the end-offsets
+     * for the partition with the epoch less than or equal to the epoch the partition last saw.
+     * <p/>
+     * Requests are grouped by Node for efficiency.
+     */
+    private List<NetworkClientDelegate.UnsentRequest> buildOffsetsForLeaderEpochRequestsAndValidatePositions(
+            Map<TopicPartition, SubscriptionState.FetchPosition> partitionsToValidate) {
+
+        final Map<Node, Map<TopicPartition, SubscriptionState.FetchPosition>> regrouped =
+                regroupFetchPositionsByLeader(partitionsToValidate);
+
+        long nextResetTimeMs = time.milliseconds() + requestTimeoutMs;
+        final List<NetworkClientDelegate.UnsentRequest> unsentRequests = new ArrayList<>();
+        regrouped.forEach((node, fetchPositions) -> {
+
+            if (node.isEmpty()) {
+                metadata.requestUpdate(true);
+                return;
+            }
+
+            NodeApiVersions nodeApiVersions = apiVersions.get(node.idString());
+            if (nodeApiVersions == null) {
+                return;
+            }
+
+            if (!hasUsableOffsetForLeaderEpochVersion(nodeApiVersions)) {
+                log.debug("Skipping validation of fetch offsets for partitions {} since the broker does not " +
+                                "support the required protocol version (introduced in Kafka 2.3)",
+                        fetchPositions.keySet());
+                for (TopicPartition partition : fetchPositions.keySet()) {
+                    subscriptionState.completeValidation(partition);
+                }
+                return;
+            }
+
+            subscriptionState.setNextAllowedRetry(fetchPositions.keySet(), nextResetTimeMs);
+
+            CompletableFuture<OffsetsForLeaderEpochUtils.OffsetForEpochResult> partialResult =
+                    buildOffsetsForLeaderEpochRequestToNode(node, fetchPositions, unsentRequests);
+
+            partialResult.whenComplete((offsetsResult, error) -> {
+                if (error == null) {
+                    offsetFetcherUtils.onSuccessfulResponseForValidatingPositions(fetchPositions,
+                            offsetsResult);
+                } else {
+                    RuntimeException e;
+                    if (error instanceof RuntimeException) {
+                        e = (RuntimeException) error;
+                    } else {
+                        e = new RuntimeException("Unexpected failure in OffsetsForLeaderEpoch " +
+                                "request for validating positions", error);
+                    }
+                    offsetFetcherUtils.onFailedResponseForValidatingPositions(fetchPositions, e);
+                }
+            });
+
+        });
+
+        return unsentRequests;
+    }
+
+    /**
+     * Build OffsetsForLeaderEpoch request to send to a specific broker for the partitions and
+     * positions to fetch. This also adds the request to the list of unsentRequests.
+     **/
+    private CompletableFuture<OffsetsForLeaderEpochUtils.OffsetForEpochResult> buildOffsetsForLeaderEpochRequestToNode(
+            final Node node,
+            final Map<TopicPartition, SubscriptionState.FetchPosition> fetchPositions,
+            List<NetworkClientDelegate.UnsentRequest> unsentRequests) {
+        AbstractRequest.Builder<OffsetsForLeaderEpochRequest> builder =
+                OffsetsForLeaderEpochUtils.prepareRequest(fetchPositions);
+
+        log.debug("Creating OffsetsForLeaderEpoch request request {} to broker {}", builder, node);
+
+        NetworkClientDelegate.UnsentRequest unsentRequest = new NetworkClientDelegate.UnsentRequest(
+                builder,
+                Optional.ofNullable(node));
+        unsentRequests.add(unsentRequest);
+        CompletableFuture<OffsetsForLeaderEpochUtils.OffsetForEpochResult> result = new CompletableFuture<>();
+        unsentRequest.future().whenComplete((response, error) -> {
+            if (error != null) {
+                log.debug("Sending OffsetsForLeaderEpoch request {} to broker {} failed",
+                        builder,
+                        node,
+                        error);
+                result.completeExceptionally(error);
+            } else {
+                OffsetsForLeaderEpochResponse offsetsForLeaderEpochResponse = (OffsetsForLeaderEpochResponse) response.responseBody();
+                log.trace("Received OffsetsForLeaderEpoch response {} from broker {}", offsetsForLeaderEpochResponse, node);
+                try {
+                    OffsetsForLeaderEpochUtils.OffsetForEpochResult listOffsetResult =
+                            OffsetsForLeaderEpochUtils.handleResponse(fetchPositions, offsetsForLeaderEpochResponse);
                     result.complete(listOffsetResult);
                 } catch (RuntimeException e) {
                     result.completeExceptionally(e);
@@ -383,7 +593,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
 
             if (!leaderAndEpoch.leader.isPresent()) {
                 log.debug("Leader for partition {} is unknown for fetching offset {}", tp, offset);
-                metadata.requestUpdate(false);
+                metadata.requestUpdate(true);
                 listOffsetsRequestState.ifPresent(offsetsRequestState -> offsetsRequestState.remainingToSearch.put(tp, offset));
             } else {
                 int currentLeaderEpoch = leaderAndEpoch.epoch.orElse(ListOffsetsResponse.UNKNOWN_EPOCH);

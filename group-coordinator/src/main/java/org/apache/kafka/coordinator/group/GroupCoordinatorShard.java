@@ -22,7 +22,8 @@ import org.apache.kafka.common.message.HeartbeatRequestData;
 import org.apache.kafka.common.message.HeartbeatResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
-import org.apache.kafka.common.message.ListGroupsResponseData;
+import org.apache.kafka.common.message.LeaveGroupRequestData;
+import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
 import org.apache.kafka.common.message.OffsetFetchRequestData;
@@ -320,6 +321,21 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
         long committedOffset
     ) throws ApiException {
         return groupMetadataManager.listGroups(statesFilter, committedOffset);
+}
+
+     * Handles a LeaveGroup request.
+     *
+     * @param context The request context.
+     * @param request The actual LeaveGroup request.
+     *
+     * @return A Result containing the LeaveGroup response and
+     *         a list of records to update the state machine.
+     */
+    public CoordinatorResult<LeaveGroupResponseData, Record> genericGroupLeave(
+        RequestContext context,
+        LeaveGroupRequestData request
+    ) throws ApiException {
+        return groupMetadataManager.genericGroupLeave(context, request);
     }
 
     /**

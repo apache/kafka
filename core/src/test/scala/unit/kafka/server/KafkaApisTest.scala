@@ -48,6 +48,7 @@ import org.apache.kafka.common.message.AlterConfigsRequestData.{AlterableConfigC
 import org.apache.kafka.common.message.AlterConfigsRequestData.{AlterableConfig => LAlterableConfig}
 import org.apache.kafka.common.message.AlterConfigsResponseData.{AlterConfigsResourceResponse => LAlterConfigsResourceResponse}
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
+import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData.DescribedGroup
 import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, CreatableTopicCollection}
 import org.apache.kafka.common.message.DescribeConfigsResponseData.DescribeConfigsResult
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.{AlterConfigsResource => IAlterConfigsResource}
@@ -6209,5 +6210,22 @@ class KafkaApisTest {
 
     val response = verifyNoThrottling[ConsumerGroupHeartbeatResponse](requestChannelRequest)
     assertEquals(Errors.GROUP_AUTHORIZATION_FAILED.code, response.data.errorCode)
+  }
+
+  @Test
+  def testConsumerGroupDescribeReturnsUnsupportedVersion(): Unit = {
+    val groupId = "group0"
+    val consumerGroupDescribeRequestData = new ConsumerGroupDescribeRequestData()
+    consumerGroupDescribeRequestData.groupIds.add(groupId)
+    val requestChannelRequest = buildRequest(new ConsumerGroupDescribeRequest.Builder(consumerGroupDescribeRequestData, true).build())
+    val errorCode = Errors.UNSUPPORTED_VERSION.code
+    val expectedDescribedGroup = new DescribedGroup().setGroupId(groupId).setErrorCode(errorCode)
+    val expectedResponse = new ConsumerGroupDescribeResponseData()
+    expectedResponse.groups.add(expectedDescribedGroup)
+
+    createKafkaApis().handle(requestChannelRequest, RequestLocal.NoCaching)
+    val response = verifyNoThrottling[ConsumerGroupDescribeResponse](requestChannelRequest)
+
+    assertEquals(expectedResponse, response.data)
   }
 }
