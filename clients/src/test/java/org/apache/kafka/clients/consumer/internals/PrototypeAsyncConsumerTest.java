@@ -26,9 +26,12 @@ import org.apache.kafka.clients.consumer.internals.events.EventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
 import org.apache.kafka.clients.consumer.internals.events.OffsetFetchApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.ResetPositionsApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.ValidatePositionsApplicationEvent;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -36,7 +39,6 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
@@ -83,6 +85,7 @@ public class PrototypeAsyncConsumerTest {
     private final Time time = new MockTime();
     private LogContext logContext;
     private SubscriptionState subscriptions;
+    private ConsumerMetadata metadata;
     private EventHandler eventHandler;
     private Metrics metrics;
 
@@ -95,6 +98,7 @@ public class PrototypeAsyncConsumerTest {
         this.config = new ConsumerConfig(consumerProps);
         this.logContext = new LogContext();
         this.subscriptions = mock(SubscriptionState.class);
+        this.metadata = mock(ConsumerMetadata.class);
         this.eventHandler = mock(DefaultEventHandler.class);
         this.metrics = new Metrics(time);
     }
@@ -322,6 +326,81 @@ public class PrototypeAsyncConsumerTest {
         assertNoPendingWakeup(consumer.wakeupTrigger());
     }
 
+    @Test
+    public void testRefreshCommittedOffsetsSuccess() {
+        Map<TopicPartition, OffsetAndMetadata> committedOffsets =
+                Collections.singletonMap(new TopicPartition("t1", 1), new OffsetAndMetadata(10L));
+        testRefreshCommittedOffsetsSuccess(committedOffsets);
+    }
+
+    @Test
+    public void testRefreshCommittedOffsetsSuccessButNoCommittedOffsetsFound() {
+        testRefreshCommittedOffsetsSuccess(Collections.emptyMap());
+    }
+
+    @Test
+    public void testRefreshCommittedOffsetsShouldNotResetIfFailedWithTimeout() {
+        // Create consumer with group id to enable committed offset usage
+        this.groupId = "consumer-group-1";
+        consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
+
+        when(subscriptions.initializingPartitions()).thenReturn(Collections.singleton(new TopicPartition("t1", 1)));
+        when(eventHandler.addAndGet(ArgumentMatchers.isA(OffsetFetchApplicationEvent.class),
+                ArgumentMatchers.isA(Timer.class))).thenThrow(TimeoutException.class);
+
+        // Poll with 0 timeout to run a single iteration of the poll loop
+        consumer.poll(Duration.ofMillis(0));
+
+        // Verify that events were triggered for validating positions and fetching committed
+        // offsets, but no event should have been created to reset positions given that there
+        // were no committed offsets.
+        verify(eventHandler).add(ArgumentMatchers.isA(ValidatePositionsApplicationEvent.class));
+        verify(eventHandler).addAndGet(ArgumentMatchers.isA(OffsetFetchApplicationEvent.class),
+                ArgumentMatchers.isA(Timer.class));
+        verify(eventHandler, never()).add(ArgumentMatchers.isA(ResetPositionsApplicationEvent.class));
+    }
+
+    @Test
+    public void testRefreshCommittedOffsetsNotFetchedIfNoGroupId() {
+        // Create consumer without group id
+        this.groupId = null;
+        consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
+
+        when(subscriptions.initializingPartitions()).thenReturn(Collections.singleton(new TopicPartition("t1", 1)));
+        when(eventHandler.addAndGet(ArgumentMatchers.isA(OffsetFetchApplicationEvent.class),
+                ArgumentMatchers.isA(Timer.class))).thenThrow(TimeoutException.class);
+
+        // Poll with 0 timeout to run a single iteration of the poll loop
+        consumer.poll(Duration.ofMillis(0));
+
+        // Verify that no event was generated for fetching committed offsets
+        verify(eventHandler, never()).addAndGet(ArgumentMatchers.isA(OffsetFetchApplicationEvent.class),
+                ArgumentMatchers.isA(Timer.class));
+
+        verify(eventHandler).add(ArgumentMatchers.isA(ValidatePositionsApplicationEvent.class));
+        verify(eventHandler).add(ArgumentMatchers.isA(ResetPositionsApplicationEvent.class));
+    }
+
+    private void testRefreshCommittedOffsetsSuccess(Map<TopicPartition, OffsetAndMetadata> committedOffsets) {
+        // Create consumer with group id to enable committed offset usage
+        this.groupId = "consumer-group-1";
+        consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
+
+        when(subscriptions.initializingPartitions()).thenReturn(committedOffsets.keySet());
+        when(eventHandler.addAndGet(any(), any())).thenReturn(committedOffsets);
+
+        // Poll with 0 timeout to run a single iteration of the poll loop
+        consumer.poll(Duration.ofMillis(0));
+
+        // Verify that events were triggered for validating positions and fetching committed
+        // offsets, but no event should have been created to reset positions given that there
+        // were no committed offsets.
+        verify(eventHandler).add(ArgumentMatchers.isA(ValidatePositionsApplicationEvent.class));
+        verify(eventHandler).addAndGet(ArgumentMatchers.isA(OffsetFetchApplicationEvent.class),
+                ArgumentMatchers.isA(Timer.class));
+        verify(eventHandler).add(ArgumentMatchers.isA(ResetPositionsApplicationEvent.class));
+    }
+
     private void assertNoPendingWakeup(final WakeupTrigger wakeupTrigger) {
         assertTrue(wakeupTrigger.getPendingTask() == null);
     }
@@ -371,6 +450,7 @@ public class PrototypeAsyncConsumerTest {
                 logContext,
                 config,
                 subscriptions,
+                metadata,
                 eventHandler,
                 metrics,
                 Optional.ofNullable(this.groupId),
