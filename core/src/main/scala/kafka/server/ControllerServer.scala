@@ -122,7 +122,7 @@ class ControllerServer(
   @volatile var registrationsPublisher: ControllerRegistrationsPublisher = _
   @volatile var incarnationId: Uuid = _
   @volatile var registrationManager: ControllerRegistrationManager = _
-  @volatile var registrationChannelManager: BrokerToControllerChannelManager = _
+  @volatile var registrationChannelManager: NodeToControllerChannelManager = _
 
   private def maybeChangeStatus(from: ProcessStatus, to: ProcessStatus): Boolean = {
     lock.lock()
@@ -423,7 +423,7 @@ class ControllerServer(
        * Start the KIP-919 controller registration manager.
        */
       val controllerNodeProvider = RaftControllerNodeProvider(raftManager, config, controllerNodes.asScala)
-      registrationChannelManager = BrokerToControllerChannelManager(
+      registrationChannelManager = NodeToControllerChannelManager(
         controllerNodeProvider,
         time,
         metrics,

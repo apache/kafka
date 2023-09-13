@@ -26,7 +26,6 @@ import org.apache.kafka.test.TestUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
@@ -381,8 +380,14 @@ public final class LocalTieredStorage implements RemoteStorageManager {
                 final RemoteLogSegmentFileset fileset = openFileset(storageDirectory, metadata);
 
                 File file = fileset.getFile(fileType);
-                final InputStream inputStream = (fileType.isOptional() && !file.exists()) ?
-                        new ByteArrayInputStream(new byte[0]) : newInputStream(file.toPath(), READ);
+
+                final InputStream inputStream;
+                if (fileType.isOptional() && !file.exists()) {
+                    throw new RemoteResourceNotFoundException("Index file for type: " + indexType +
+                        " not found for segment " + metadata.remoteLogSegmentId());
+                } else {
+                    inputStream = newInputStream(file.toPath(), READ);
+                }
 
                 storageListeners.onStorageEvent(eventBuilder.withFileset(fileset).build());
 

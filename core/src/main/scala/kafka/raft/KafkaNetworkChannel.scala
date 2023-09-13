@@ -128,7 +128,7 @@ class KafkaNetworkChannel(
       } else if (clientResponse.authenticationException != null) {
         // For now we treat authentication errors as retriable. We use the
         // `NETWORK_EXCEPTION` error code for lack of a good alternative.
-        // Note that `BrokerToControllerChannelManager` will still log the
+        // Note that `NodeToControllerChannelManager` will still log the
         // authentication errors so that users have a chance to fix the problem.
         error(s"Request $request failed due to authentication error",
           clientResponse.authenticationException)

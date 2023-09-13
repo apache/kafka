@@ -113,7 +113,7 @@ class ControllerRegistrationManager(
    * The channel manager, or null if this manager has not been started yet.  This variable
    * can only be read or written from the event queue thread.
    */
-  private var _channelManager: BrokerToControllerChannelManager = _
+  private var _channelManager: NodeToControllerChannelManager = _
 
   /**
    * The event queue.
@@ -142,7 +142,7 @@ class ControllerRegistrationManager(
    *
    * @param channelManager                The channel manager to use.
    */
-  def start(channelManager: BrokerToControllerChannelManager): Unit = {
+  def start(channelManager: NodeToControllerChannelManager): Unit = {
     eventQueue.append(() => {
       try {
         info(s"initialized channel manager.")

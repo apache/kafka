@@ -94,7 +94,7 @@ trait KafkaBroker extends Logging {
   def shutdown(): Unit
   def brokerTopicStats: BrokerTopicStats
   def credentialProvider: CredentialProvider
-  def clientToControllerChannelManager: BrokerToControllerChannelManager
+  def clientToControllerChannelManager: NodeToControllerChannelManager
   def remoteLogManager: Option[RemoteLogManager]
   def tokenCache: DelegationTokenCache
 
