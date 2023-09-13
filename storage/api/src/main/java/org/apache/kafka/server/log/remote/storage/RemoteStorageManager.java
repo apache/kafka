@@ -22,6 +22,7 @@ import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata.Custo
 
 import java.io.Closeable;
 import java.io.InputStream;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -36,6 +37,9 @@ import java.util.Optional;
  * responsible for storing and fetching metadata about the remote log segments in a strongly consistent manner.
  * This allows {@link RemoteStorageManager} to have eventual consistency on metadata (although the data is stored
  * in strongly consistent semantics).
+ * <p>
+ * All properties prefixed with the config: "remote.log.storage.manager.impl.prefix"
+ * (default value is "rsm.config.") are passed when {@link #configure(Map)} is invoked on this instance.
  */
 @InterfaceStability.Evolving
 public interface RemoteStorageManager extends Configurable, Closeable {
