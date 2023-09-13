@@ -699,6 +699,4 @@ class BrokerServer(
   }
 
   override def boundPort(listenerName: ListenerName): Int = socketServer.boundPort(listenerName)
-
-  override def remoteLogManager: Option[RemoteLogManager] = remoteLogManagerOpt
 }

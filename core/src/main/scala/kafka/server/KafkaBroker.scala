@@ -95,7 +95,6 @@ trait KafkaBroker extends Logging {
   def brokerTopicStats: BrokerTopicStats
   def credentialProvider: CredentialProvider
   def clientToControllerChannelManager: NodeToControllerChannelManager
-  def remoteLogManager: Option[RemoteLogManager]
   def tokenCache: DelegationTokenCache
 
   private val metricsGroup = new KafkaMetricsGroup(this.getClass) {

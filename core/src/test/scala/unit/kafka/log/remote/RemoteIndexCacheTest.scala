@@ -66,22 +66,7 @@ class RemoteIndexCacheTest {
 
     cache = new RemoteIndexCache(rsm, tpDir.toString)
 
-    when(rsm.fetchIndex(any(classOf[RemoteLogSegmentMetadata]), any(classOf[IndexType])))
-      .thenAnswer(ans => {
-        val metadata = ans.getArgument[RemoteLogSegmentMetadata](0)
-        val indexType = ans.getArgument[IndexType](1)
-        val offsetIdx = createOffsetIndexForSegmentMetadata(metadata)
-        val timeIdx = createTimeIndexForSegmentMetadata(metadata)
-        val txnIdx = createTxIndexForSegmentMetadata(metadata)
-        maybeAppendIndexEntries(offsetIdx, timeIdx)
-        indexType match {
-          case IndexType.OFFSET => new FileInputStream(offsetIdx.file)
-          case IndexType.TIMESTAMP => new FileInputStream(timeIdx.file)
-          case IndexType.TRANSACTION => new FileInputStream(txnIdx.file)
-          case IndexType.LEADER_EPOCH => // leader-epoch-cache is not accessed.
-          case IndexType.PRODUCER_SNAPSHOT => // producer-snapshot is not accessed.
-        }
-      })
+    mockRsmFetchIndex(rsm)
   }
 
   @AfterEach
@@ -183,7 +168,7 @@ class RemoteIndexCacheTest {
 
   @Test
   def testCacheEntryExpiry(): Unit = {
-    val estimateEntryBytesSize = getEstimateEntryBytesSize()
+    val estimateEntryBytesSize = estimateOneEntryBytesSize()
     // close existing cache created in test setup before creating a new one
     Utils.closeQuietly(cache, "RemoteIndexCache created for unit test")
     cache = new RemoteIndexCache(2 * estimateEntryBytesSize, rsm, tpDir.toString)
@@ -231,7 +216,7 @@ class RemoteIndexCacheTest {
     // close existing cache created in test setup before creating a new one
     Utils.closeQuietly(cache, "RemoteIndexCache created for unit test")
 
-    cache = new RemoteIndexCache(2L, rsm, tpDir.toString)
+    cache = new RemoteIndexCache(2 * estimateOneEntryBytesSize(), rsm, tpDir.toString)
     val tpId = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0))
     val metadataList = generateRemoteLogSegmentMetadata(size = 3, tpId)
 
@@ -431,7 +416,7 @@ class RemoteIndexCacheTest {
 
   @Test
   def testReloadCacheAfterClose(): Unit = {
-    val estimateEntryBytesSize = getEstimateEntryBytesSize()
+    val estimateEntryBytesSize = estimateOneEntryBytesSize()
     // close existing cache created in test setup before creating a new one
     Utils.closeQuietly(cache, "RemoteIndexCache created for unit test")
     cache = new RemoteIndexCache(2 * estimateEntryBytesSize, rsm, tpDir.toString)
@@ -536,8 +521,6 @@ class RemoteIndexCacheTest {
         .findAny()
     }
 
-    Utils.closeQuietly(cache, "RemoteIndexCache created for unit test")
-    cache = new RemoteIndexCache(rsm, tpDir.toString)
     val tpId = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0))
     val metadataList = generateRemoteLogSegmentMetadata(size = 1, tpId)
 
@@ -645,15 +628,37 @@ class RemoteIndexCacheTest {
     }
   }
 
-  private def getEstimateEntryBytesSize(): Long = {
-    val cacheForEstimate = new RemoteIndexCache(2L, rsm, tpDir.toString)
-    val tpIdForEstimate = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0))
-    val metadataListForEstimate = generateRemoteLogSegmentMetadata(size = 1, tpIdForEstimate)
-    val entryForEstimate = cacheForEstimate.getIndexEntry(metadataListForEstimate.head)
-    val estimateEntryBytesSize = entryForEstimate.entrySizeBytes()
-    Utils.closeQuietly(cacheForEstimate, "RemoteIndexCache created for estimating entry size")
-    cleanup()
-    setup()
-    estimateEntryBytesSize
+  private def estimateOneEntryBytesSize(): Long = {
+    val tp = new TopicPartition("estimate-entry-bytes-size", 0)
+    val tpId = new TopicIdPartition(Uuid.randomUuid(), tp)
+    val tpDir = new File(logDir, tpId.toString)
+    Files.createDirectory(tpDir.toPath)
+    val rsm = mock(classOf[RemoteStorageManager])
+    mockRsmFetchIndex(rsm)
+    val cache = new RemoteIndexCache(2L, rsm, tpDir.toString)
+    val metadataList = generateRemoteLogSegmentMetadata(size = 1, tpId)
+    val entry = cache.getIndexEntry(metadataList.head)
+    val entrySizeInBytes = entry.entrySizeBytes()
+    Utils.closeQuietly(cache, "RemoteIndexCache created for estimating entry size")
+    entrySizeInBytes
+  }
+
+  private def mockRsmFetchIndex(rsm: RemoteStorageManager): Unit = {
+    when(rsm.fetchIndex(any(classOf[RemoteLogSegmentMetadata]), any(classOf[IndexType])))
+      .thenAnswer(ans => {
+        val metadata = ans.getArgument[RemoteLogSegmentMetadata](0)
+        val indexType = ans.getArgument[IndexType](1)
+        val offsetIdx = createOffsetIndexForSegmentMetadata(metadata)
+        val timeIdx = createTimeIndexForSegmentMetadata(metadata)
+        val txnIdx = createTxIndexForSegmentMetadata(metadata)
+        maybeAppendIndexEntries(offsetIdx, timeIdx)
+        indexType match {
+          case IndexType.OFFSET => new FileInputStream(offsetIdx.file)
+          case IndexType.TIMESTAMP => new FileInputStream(timeIdx.file)
+          case IndexType.TRANSACTION => new FileInputStream(txnIdx.file)
+          case IndexType.LEADER_EPOCH => // leader-epoch-cache is not accessed.
+          case IndexType.PRODUCER_SNAPSHOT => // producer-snapshot is not accessed.
+        }
+      })
   }
 }
