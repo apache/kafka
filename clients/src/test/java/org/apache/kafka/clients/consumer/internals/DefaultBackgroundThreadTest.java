@@ -56,6 +56,8 @@ import java.util.concurrent.LinkedBlockingQueue;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.RETRY_BACKOFF_MS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -67,6 +69,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+@SuppressWarnings("ClassDataAbstractionCoupling")
 public class DefaultBackgroundThreadTest {
     private static final long RETRY_BACKOFF_MS = 100;
     private final Properties properties = new Properties();
@@ -199,6 +202,7 @@ public class DefaultBackgroundThreadTest {
         when(coordinatorManager.poll(anyLong())).thenReturn(mockPollCoordinatorResult());
         when(commitManager.poll(anyLong())).thenReturn(mockPollCommitResult());
         when(offsetsRequestManager.poll(anyLong())).thenReturn(emptyPollOffsetsRequestResult());
+        when(this.topicMetadataRequestManager.poll(anyLong())).thenReturn(emptyPollOffsetsRequestResult());
         this.applicationEventsQueue = new LinkedBlockingQueue<>();
         this.backgroundEventsQueue = new LinkedBlockingQueue<>();
         DefaultBackgroundThread backgroundThread = mockBackgroundThread();
@@ -239,6 +243,7 @@ public class DefaultBackgroundThreadTest {
         when(coordinatorManager.poll(anyLong())).thenReturn(mockPollCoordinatorResult());
         when(commitManager.poll(anyLong())).thenReturn(mockPollCommitResult());
         when(offsetsRequestManager.poll(anyLong())).thenReturn(emptyPollOffsetsRequestResult());
+        when(topicMetadataRequestManager.poll(anyLong())).thenReturn(emptyPollOffsetsRequestResult());
         this.applicationEventsQueue = new LinkedBlockingQueue<>();
         this.backgroundEventsQueue = new LinkedBlockingQueue<>();
         DefaultBackgroundThread backgroundThread = mockBackgroundThread();
