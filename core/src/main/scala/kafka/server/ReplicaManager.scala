@@ -785,7 +785,11 @@ class ReplicaManager(val config: KafkaConfig,
             val message =
               error match {
                 case Errors.INVALID_TXN_STATE => "Partition was not added to the transaction"
-                case _ => error.message() // the above modified errors will have their original error message to clarify the error.
+                case Errors.CONCURRENT_TRANSACTIONS |
+                     Errors.COORDINATOR_LOAD_IN_PROGRESS |
+                     Errors.COORDINATOR_NOT_AVAILABLE |
+                     Errors.NOT_COORDINATOR => s"Unable to verify the partition has been added to the transaction. Underlying error:${error.toString}"
+                case _ => error.message()
               }
             topicPartition -> LogAppendResult(
               LogAppendInfo.UNKNOWN_LOG_APPEND_INFO,

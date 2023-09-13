@@ -2287,9 +2287,8 @@ class ReplicaManagerTest {
 
       // Confirm we did not write to the log and instead returned error.
       val callback: AddPartitionsToTxnManager.AppendCallback = appendCallback.getValue()
-      callback(Map(tp0 -> Errors.NOT_COORDINATOR).toMap)
-      assertEquals(Errors.NOT_ENOUGH_REPLICAS, result.assertFired.error)
-      assertEquals(Errors.NOT_COORDINATOR.message(), result.assertFired.errorMessage)
+      callback(Map(tp0 -> Errors.INVALID_PRODUCER_ID_MAPPING).toMap)
+      assertEquals(Errors.INVALID_PRODUCER_ID_MAPPING, result.assertFired.error)
       assertEquals(verificationGuard, getVerificationGuard(replicaManager, tp0, producerId))
 
       // Try to append a higher sequence (7) after the first one failed with a retriable error.
@@ -2584,8 +2583,9 @@ class ReplicaManagerTest {
       val transactionalRecords = MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, producerEpoch, sequence,
         new SimpleRecord("message".getBytes))
       val result = appendRecords(replicaManager, tp0, transactionalRecords, transactionalId = transactionalId, transactionStatePartition = Some(txnCoordinatorPartition1))
+      val expectedError = s"Unable to verify the partition has been added to the transaction. Underlying error:${Errors.COORDINATOR_NOT_AVAILABLE.toString}"
       assertEquals(Errors.NOT_ENOUGH_REPLICAS, result.assertFired.error)
-      assertEquals(Errors.COORDINATOR_NOT_AVAILABLE.message, result.assertFired.errorMessage)
+      assertEquals(expectedError, result.assertFired.errorMessage)
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }
@@ -2621,6 +2621,7 @@ class ReplicaManagerTest {
       // Start verification and return the coordinator related errors.
       var invocations = 1
       def verifyError(error: Errors): Unit = {
+        val expectedMessage = s"Unable to verify the partition has been added to the transaction. Underlying error:${error.toString}"
         val result = appendRecords(replicaManager, tp0, transactionalRecords, transactionalId = transactionalId, transactionStatePartition = Some(0))
         val appendCallback = ArgumentCaptor.forClass(classOf[AddPartitionsToTxnManager.AppendCallback])
         verify(addPartitionsToTxnManager, times(invocations)).addTxnData(ArgumentMatchers.eq(node), ArgumentMatchers.eq(transactionToAdd), appendCallback.capture())
@@ -2629,7 +2630,7 @@ class ReplicaManagerTest {
         val callback: AddPartitionsToTxnManager.AppendCallback = appendCallback.getValue()
         callback(Map(tp0 -> error).toMap)
         assertEquals(Errors.NOT_ENOUGH_REPLICAS, result.assertFired.error)
-        assertEquals(error.message(), result.assertFired.errorMessage)
+        assertEquals(expectedMessage, result.assertFired.errorMessage)
         invocations = invocations + 1
       }
 
