@@ -117,6 +117,7 @@ public class RemoteIndexCache implements Closeable {
      */
     private Cache<Uuid, Entry> internalCache;
 
+    // Visible for testing
     public RemoteIndexCache(RemoteStorageManager remoteStorageManager, String logDir) throws IOException {
         this(DEFAULT_REMOTE_INDEX_CACHE_SIZE_BYTES, remoteStorageManager, logDir);
     }

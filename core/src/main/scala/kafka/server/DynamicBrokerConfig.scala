@@ -25,7 +25,6 @@ import kafka.cluster.EndPoint
 import kafka.log.{LogCleaner, LogManager}
 import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.server.DynamicBrokerConfig._
-import kafka.server.DynamicRemoteLogConfig.DynamicRemoteLogConfigs
 import kafka.server.KafkaRaftServer.BrokerRole
 import kafka.utils.{CoreUtils, Logging, PasswordEncoder}
 import kafka.utils.Implicits._
@@ -91,7 +90,7 @@ object DynamicBrokerConfig {
     DynamicListenerConfig.ReconfigurableConfigs ++
     SocketServer.ReconfigurableConfigs ++
     ProducerStateManagerConfig.RECONFIGURABLE_CONFIGS.asScala ++
-    DynamicRemoteLogConfigs
+    DynamicRemoteLogConfig.ReconfigurableConfigs
 
   private val ClusterLevelListenerConfigs = Set(KafkaConfig.MaxConnectionsProp, KafkaConfig.MaxConnectionCreationRateProp, KafkaConfig.NumNetworkThreadsProp)
   private val PerBrokerConfigs = (DynamicSecurityConfigs ++ DynamicListenerConfig.ReconfigurableConfigs).diff(
@@ -1135,12 +1134,12 @@ class DynamicProducerStateManagerConfig(val producerStateManagerConfig: Producer
 
 class DynamicRemoteLogConfig(server: KafkaBroker) extends BrokerReconfigurable with Logging {
   override def reconfigurableConfigs: Set[String] = {
-    DynamicRemoteLogConfigs
+    DynamicRemoteLogConfig.ReconfigurableConfigs
   }
 
   override def validateReconfiguration(newConfig: KafkaConfig): Unit = {
     newConfig.values.forEach { (k, v) =>
-      if (DynamicRemoteLogConfigs.contains(k)) {
+      if (reconfigurableConfigs.contains(k)) {
         val newValue = v.asInstanceOf[Long]
         val oldValue = getValue(server.config, k)
         if (newValue != oldValue) {
@@ -1156,7 +1155,7 @@ class DynamicRemoteLogConfig(server: KafkaBroker) extends BrokerReconfigurable w
     val oldValue = oldConfig.getLong(RemoteLogManagerConfig.REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP)
     val newValue = newConfig.getLong(RemoteLogManagerConfig.REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP)
     if (oldValue != newValue) {
-      val remoteLogManager = server.remoteLogManager
+      val remoteLogManager = server.remoteLogManagerOpt
       if (remoteLogManager.nonEmpty) {
         remoteLogManager.get.resizeCacheSize(newValue)
         info(s"Dynamic remote log manager config: ${RemoteLogManagerConfig.REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP} updated, " +
@@ -1175,7 +1174,7 @@ class DynamicRemoteLogConfig(server: KafkaBroker) extends BrokerReconfigurable w
 }
 
 object DynamicRemoteLogConfig {
-  val DynamicRemoteLogConfigs = Set(
+  val ReconfigurableConfigs = Set(
     RemoteLogManagerConfig.REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP
   )
 }

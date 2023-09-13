@@ -798,7 +798,7 @@ class DynamicBrokerConfigTest {
     val remoteLogManagerMockOpt = Option(Mockito.mock(classOf[RemoteLogManager]))
 
     Mockito.when(serverMock.config).thenReturn(config)
-    Mockito.when(serverMock.remoteLogManager).thenReturn(remoteLogManagerMockOpt)
+    Mockito.when(serverMock.remoteLogManagerOpt).thenReturn(remoteLogManagerMockOpt)
 
     config.dynamicConfig.initialize(None)
     config.dynamicConfig.addBrokerReconfigurable(new DynamicRemoteLogConfig(serverMock))

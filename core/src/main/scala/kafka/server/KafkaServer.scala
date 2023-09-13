@@ -129,7 +129,7 @@ class KafkaServer(
 
   var logDirFailureChannel: LogDirFailureChannel = _
   @volatile private var _logManager: LogManager = _
-  @volatile var remoteLogManagerOpt: Option[RemoteLogManager] = None
+  var remoteLogManagerOpt: Option[RemoteLogManager] = None
 
   @volatile private var _replicaManager: ReplicaManager = _
   var adminManager: ZkAdminManager = _
@@ -191,8 +191,6 @@ class KafkaServer(
   override def replicaManager: ReplicaManager = _replicaManager
 
   override def logManager: LogManager = _logManager
-
-  override def remoteLogManager: Option[RemoteLogManager] = remoteLogManagerOpt
 
   def kafkaController: KafkaController = _kafkaController
 
