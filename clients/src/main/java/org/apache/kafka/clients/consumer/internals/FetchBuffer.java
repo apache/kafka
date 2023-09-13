@@ -29,8 +29,9 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.function.Predicate;
 
 /**
- * {@code FetchBuffer} buffers up the results from the broker responses as they are received. It is essentially a
- * wrapper around a {@link java.util.Queue} of {@link CompletedFetch}.
+ * {@code FetchBuffer} buffers up {@link CompletedFetch the results} from the broker responses as they are received.
+ * It is essentially a wrapper around a {@link java.util.Queue} of {@link CompletedFetch}. There is at most one
+ * {@link CompletedFetch} per partition in the queue.
  *
  * <p/>
  *
