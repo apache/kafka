@@ -33,7 +33,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
-import static org.apache.kafka.tiered.storage.utils.ActionUtils.describeTopic;
+import static org.apache.kafka.tiered.storage.utils.TieredStorageTestUtils.describeTopic;
 
 public final class ShrinkReplicaAction implements TieredStorageTestAction {
 
