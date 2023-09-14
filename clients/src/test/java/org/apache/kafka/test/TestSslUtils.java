@@ -464,8 +464,6 @@ public class TestSslUtils {
          * @param daysBeforeNow how many days before now the Certificate is valid for
          * @param daysAfterNow how many days from now the Certificate is valid for
          * @param issuer The issuer name. if null, "dn" is used
-         * @param parentCertificate The parent certificate used to sign this certificate. If null,
-         *        create self-signed certificate authority (CA)
          * @param parentKeyPair The parent key pair used to sign this certificate. If null, create
          *        self-signed certificate authority (CA)
          * @return A (self-) signed certificate

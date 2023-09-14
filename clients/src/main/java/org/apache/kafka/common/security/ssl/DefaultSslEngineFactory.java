@@ -270,7 +270,7 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
     }
 
     protected TrustManager[] getTrustManagers(SecurityStore truststore, String tmfAlgorithm) throws NoSuchAlgorithmException, KeyStoreException {
-        CommonNameLoggingTrustManagerFactoryWrapper tmf = CommonNameLoggingTrustManagerFactoryWrapper.getInstance(tmfAlgorithm);
+        TrustManagerFactory tmf = TrustManagerFactory.getInstance(tmfAlgorithm);
         KeyStore ts = truststore == null ? null : truststore.get();
         tmf.init(ts);
         return tmf.getTrustManagers();
