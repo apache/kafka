@@ -8657,13 +8657,20 @@ public class GroupMetadataManagerTest {
 
         assertEquals(expectAllGroupMap, actualAllGroupMap);
 
-        context.replay(RecordHelpers.newMemberSubscriptionRecord(consumerGroupId, new ConsumerGroupMember.Builder(memberId1)
-            .setSubscribedTopicNames(Collections.singletonList(fooTopicName))
-            .build()));
-        context.replay(RecordHelpers.newGroupEpochRecord(consumerGroupId, 11));
         context.commit();
         actualAllGroupMap = context.sendListGroups(Collections.emptyList()).stream()
             .collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
+        expectAllGroupMap =
+            Stream.of(
+                new ListGroupsResponseData.ListedGroup()
+                    .setGroupId(genericGroup.groupId())
+                    .setProtocolType(genericGroupType)
+                    .setGroupState(EMPTY.toString()),
+                new ListGroupsResponseData.ListedGroup()
+                    .setGroupId(consumerGroupId)
+                    .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
+                    .setGroupState(ConsumerGroup.ConsumerGroupState.ASSIGNING.toString())
+            ).collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
 
         assertEquals(expectAllGroupMap, actualAllGroupMap);
 
