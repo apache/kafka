@@ -286,7 +286,7 @@ public final class LocalTieredStorage implements RemoteStorageManager {
             final boolean existed = Files.exists(storageDirectory.toPath());
             if (!existed) {
                 try {
-                    logger.info("Creating directory: [{}]", storageDirectory.getAbsolutePath());
+//                    logger.info("Creating directory: [{}]", storageDirectory.getAbsolutePath());
                     Files.createDirectories(storageDirectory.toPath());
                 } catch (IOException e) {
                     throw new RuntimeException(format("Not able to create the storage directory '%s'", storageDirectory.getAbsolutePath()), e);

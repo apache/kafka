@@ -353,7 +353,7 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
                 return;
             }
 
-            log.info("Started configuring topic-based RLMM with configs: {}", configs);
+//            log.info("Started configuring topic-based RLMM with configs: {}", configs);
 
             rlmmConfig = new TopicBasedRemoteLogMetadataManagerConfig(configs);
             rlmTopicPartitioner = new RemoteLogMetadataTopicPartitioner(rlmmConfig.metadataTopicPartitionsCount());
@@ -522,7 +522,7 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
     @Override
     public void close() throws IOException {
         // Close all the resources.
-        log.info("Closing topic-based RLMM resources");
+//        log.info("Closing topic-based RLMM resources");
         if (closing.compareAndSet(false, true)) {
             lock.writeLock().lock();
             try {

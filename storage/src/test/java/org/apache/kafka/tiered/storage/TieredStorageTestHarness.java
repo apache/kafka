@@ -103,7 +103,7 @@ public abstract class TieredStorageTestHarness extends IntegrationTestHarness {
 
     // NOTE: Not able to refer TestInfoUtils#TestWithParameterizedQuorumName() in the ParameterizedTest name.
     @ParameterizedTest(name = "{displayName}.quorum={0}")
-    @ValueSource(strings = {"kraft"})
+    @ValueSource(strings = {"zk", "kraft"})
     public void executeTieredStorageTest(String quorum) {
         TieredStorageTestBuilder builder = new TieredStorageTestBuilder();
         writeTestSpecifications(builder);
