@@ -22,6 +22,7 @@ import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -90,6 +91,19 @@ public class MirrorUtilsTest {
     public void testCreateCompactedTopicAssumeTopicAlreadyExistsWithClusterAuthorizationException() throws Exception {
         Map<String, KafkaFuture<Void>> values = Collections.singletonMap(TOPIC, future);
         when(future.get()).thenThrow(new ExecutionException(new ClusterAuthorizationException("not authorised")));
+        when(ctr.values()).thenReturn(values);
+        when(admin.createTopics(any(), any())).thenReturn(ctr);
+        MirrorUtils.createCompactedTopic(TOPIC, (short) 1, (short) 1, admin);
+
+        verify(future).get();
+        verify(ctr).values();
+        verify(admin).createTopics(any(), any());
+    }
+
+    @Test
+    public void testCreateCompactedTopicAssumeTopicAlreadyExistsWithTopicAuthorizationException() throws Exception {
+        Map<String, KafkaFuture<Void>> values = Collections.singletonMap(TOPIC, future);
+        when(future.get()).thenThrow(new ExecutionException(new TopicAuthorizationException("not authorised")));
         when(ctr.values()).thenReturn(values);
         when(admin.createTopics(any(), any())).thenReturn(ctr);
         MirrorUtils.createCompactedTopic(TOPIC, (short) 1, (short) 1, admin);
