@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.LogTruncationException;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -83,10 +82,10 @@ public class DefaultBackgroundThreadTest {
     private OffsetsRequestManager offsetsRequestManager;
     private ErrorEventHandler errorEventHandler;
     private final int requestTimeoutMs = 500;
-    private GroupState groupState;
     private CommitRequestManager commitManager;
     private TopicMetadataRequestManager topicMetadataRequestManager;
     private HeartbeatRequestManager heartbeatRequestManager;
+    private MembershipManager membershipManager;
 
     @BeforeEach
     @SuppressWarnings("unchecked")
@@ -101,16 +100,7 @@ public class DefaultBackgroundThreadTest {
         this.offsetsRequestManager = mock(OffsetsRequestManager.class);
         this.heartbeatRequestManager = mock(HeartbeatRequestManager.class);
         this.errorEventHandler = mock(ErrorEventHandler.class);
-        GroupRebalanceConfig rebalanceConfig = new GroupRebalanceConfig(
-                100,
-                100,
-                100,
-                "group_id",
-                Optional.empty(),
-                100,
-                1000,
-                true);
-        this.groupState = new GroupState(rebalanceConfig);
+        this.membershipManager = mock(MembershipManager.class);
         this.commitManager = mock(CommitRequestManager.class);
         this.topicMetadataRequestManager = mock(TopicMetadataRequestManager.class);
     }
@@ -401,21 +391,20 @@ public class DefaultBackgroundThreadTest {
         properties.put(RETRY_BACKOFF_MS_CONFIG, RETRY_BACKOFF_MS);
 
         return new DefaultBackgroundThread(
-            this.time,
-            new ConsumerConfig(properties),
-            new LogContext(),
-            applicationEventsQueue,
-            backgroundEventsQueue,
-            this.errorEventHandler,
-            applicationEventProcessor,
-            this.metadata,
-            this.networkClient,
-            this.groupState,
-            this.coordinatorManager,
-            this.commitManager,
-            this.offsetsRequestManager,
-            this.topicMetadataRequestManager,
-            this.heartbeatRequestManager);
+                this.time,
+                new ConsumerConfig(properties),
+                new LogContext(),
+                applicationEventsQueue,
+                backgroundEventsQueue,
+                this.errorEventHandler,
+                applicationEventProcessor,
+                this.metadata,
+                this.networkClient,
+                this.membershipManager,
+                this.coordinatorManager,
+                this.commitManager,
+                this.offsetsRequestManager,
+                this.topicMetadataRequestManager);
     }
 
     private NetworkClientDelegate.PollResult mockPollCoordinatorResult() {

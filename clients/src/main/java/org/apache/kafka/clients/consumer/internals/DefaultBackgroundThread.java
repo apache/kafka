@@ -67,14 +67,13 @@ public class DefaultBackgroundThread extends KafkaThread {
     private final BlockingQueue<BackgroundEvent> backgroundEventQueue;
     private final ConsumerMetadata metadata;
     private final ConsumerConfig config;
-    // empty if groupId is null
     private final ApplicationEventProcessor applicationEventProcessor;
     private final NetworkClientDelegate networkClientDelegate;
     private final ErrorEventHandler errorEventHandler;
-    private final GroupState groupState;
     private boolean running;
 
     private final RequestManagers requestManagers;
+    private final Optional<MembershipManager> membershipManager;
 
     // Visible for testing
     @SuppressWarnings("ParameterNumber")
@@ -87,7 +86,7 @@ public class DefaultBackgroundThread extends KafkaThread {
                             final ApplicationEventProcessor processor,
                             final ConsumerMetadata metadata,
                             final NetworkClientDelegate networkClient,
-                            final GroupState groupState,
+                            final MembershipManager membershipManager,
                             final CoordinatorRequestManager coordinatorManager,
                             final CommitRequestManager commitRequestManager,
                             final OffsetsRequestManager offsetsRequestManager,
@@ -104,7 +103,8 @@ public class DefaultBackgroundThread extends KafkaThread {
         this.metadata = metadata;
         this.networkClientDelegate = networkClient;
         this.errorEventHandler = errorEventHandler;
-        this.groupState = groupState;
+        this.membershipManager = Optional.ofNullable(membershipManager);
+
         this.requestManagers = new RequestManagers(
                 offsetsRequestManager,
                 topicMetadataRequestManager,
@@ -155,7 +155,6 @@ public class DefaultBackgroundThread extends KafkaThread {
                 networkClient);
             this.running = true;
             this.errorEventHandler = new ErrorEventHandler(this.backgroundEventQueue);
-            this.groupState = new GroupState(rebalanceConfig);
             long retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
             long retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
             final int requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
@@ -178,15 +177,16 @@ public class DefaultBackgroundThread extends KafkaThread {
                 config);
             HeartbeatRequestManager heartbeatRequestManager = null;
 
-            // TODO: consolidate groupState and memberState
-            if (groupState.groupId != null) {
+            String groupId = config.getString(ConsumerConfig.GROUP_ID_CONFIG);
+            if (groupId != null) {
+                membershipManager = Optional.of(new MembershipManagerImpl(groupId));
                 coordinatorRequestManager = new CoordinatorRequestManager(
                         this.time,
                         logContext,
                         retryBackoffMs,
                         retryBackoffMaxMs,
                         this.errorEventHandler,
-                        groupState.groupId);
+                        membershipManager.get().groupId());
                 commitRequestManager = new CommitRequestManager(
                         this.time,
                         logContext,
@@ -203,6 +203,9 @@ public class DefaultBackgroundThread extends KafkaThread {
                         subscriptionState,
                         membershipManager,
                         errorEventHandler);
+                        membershipManager.get());
+            } else {
+                membershipManager = Optional.empty();
             }
 
             this.requestManagers = new RequestManagers(
