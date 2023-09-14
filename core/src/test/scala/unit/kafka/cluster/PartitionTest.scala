@@ -1374,7 +1374,7 @@ class PartitionTest extends AbstractPartitionTest {
     doAnswer(_ => {
       // simulate topic is deleted at the moment
       partition.delete()
-      val replica = new Replica(remoteBrokerId, topicPartition)
+      val replica = new Replica(remoteBrokerId, topicPartition, true)
       partition.updateFollowerFetchState(replica, mock(classOf[LogOffsetMetadata]), 0, initializeTimeMs, 0, 0)
       mock(classOf[LogReadInfo])
     }).when(partition).fetchRecords(any(), any(), anyLong(), anyInt(), anyBoolean(), anyBoolean())
@@ -1892,7 +1892,7 @@ class PartitionTest extends AbstractPartitionTest {
       metadataCache,
       logManager,
       alterPartitionManager,
-      () => zkMigrationEnabled
+      zkMigrationEnabled
     )
 
     partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
@@ -1920,7 +1920,7 @@ class PartitionTest extends AbstractPartitionTest {
     // be able to update the fetch state.
     val wrongReplicaEpoch = defaultBrokerEpoch(remoteBrokerId1) - 1
 
-    if (zkMigrationEnabled) {
+    if (!zkMigrationEnabled) {
       assertThrows(classOf[NotLeaderOrFollowerException], () => fetchFollower(partition,
         replicaId = remoteBrokerId1,
         fetchOffset = log.logEndOffset,

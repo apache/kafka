@@ -23,6 +23,8 @@ import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.log.LogOffsetMetadata
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue}
 import org.junit.jupiter.api.{BeforeEach, Test}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 object ReplicaTest {
   val BrokerId: Int = 0
@@ -38,7 +40,7 @@ class ReplicaTest {
 
   @BeforeEach
   def setup(): Unit = {
-    replica = new Replica(BrokerId, Partition)
+    replica = new Replica(BrokerId, Partition, true)
   }
 
   private def assertReplicaState(
@@ -314,8 +316,10 @@ class ReplicaTest {
     assertFalse(isCaughtUp(leaderEndOffset = 16L))
   }
 
-  @Test
-  def testFenceStaleUpdates(): Unit = {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testFenceStaleUpdates(verifyBrokerEpoch: Boolean): Unit = {
+    val replica = new Replica(BrokerId, Partition, verifyBrokerEpoch)
     replica.updateFetchStateOrThrow(
       followerFetchOffsetMetadata = new LogOffsetMetadata(5L),
       followerStartOffset = 1L,
@@ -330,24 +334,24 @@ class ReplicaTest {
       leaderEndOffset = 10L,
       brokerEpoch = 3L
     )
-
-    // No exception to expect if verifyBrokerEpoch is false
-    replica.updateFetchStateOrThrow(
-      followerFetchOffsetMetadata = new LogOffsetMetadata(5L),
-      followerStartOffset = 2L,
-      followerFetchTimeMs = 3,
-      leaderEndOffset = 10L,
-      brokerEpoch = 2L
-    )
-
-    assertThrows(classOf[NotLeaderOrFollowerException], () => replica.updateFetchStateOrThrow(
-      followerFetchOffsetMetadata = new LogOffsetMetadata(5L),
-      followerStartOffset = 2L,
-      followerFetchTimeMs = 3,
-      leaderEndOffset = 10L,
-      brokerEpoch = 1L,
-      true
-    ))
+    if (verifyBrokerEpoch) {
+      assertThrows(classOf[NotLeaderOrFollowerException], () => replica.updateFetchStateOrThrow(
+        followerFetchOffsetMetadata = new LogOffsetMetadata(5L),
+        followerStartOffset = 2L,
+        followerFetchTimeMs = 3,
+        leaderEndOffset = 10L,
+        brokerEpoch = 1L
+      ))
+    } else {
+      // No exception to expect if verifyBrokerEpoch is false
+      replica.updateFetchStateOrThrow(
+        followerFetchOffsetMetadata = new LogOffsetMetadata(5L),
+        followerStartOffset = 2L,
+        followerFetchTimeMs = 3,
+        leaderEndOffset = 10L,
+        brokerEpoch = 1L
+      )
+    }
     replica.updateFetchStateOrThrow(
       followerFetchOffsetMetadata = new LogOffsetMetadata(5L),
       followerStartOffset = 2L,

@@ -82,7 +82,7 @@ object ReplicaState {
   )
 }
 
-class Replica(val brokerId: Int, val topicPartition: TopicPartition) extends Logging {
+class Replica(val brokerId: Int, val topicPartition: TopicPartition, val verifyBrokerEpoch: Boolean) extends Logging {
   private val replicaState = new AtomicReference[ReplicaState](ReplicaState.Empty)
 
   def stateSnapshot: ReplicaState = replicaState.get
@@ -108,15 +108,13 @@ class Replica(val brokerId: Int, val topicPartition: TopicPartition) extends Log
     followerStartOffset: Long,
     followerFetchTimeMs: Long,
     leaderEndOffset: Long,
-    brokerEpoch: Long,
-    verifyBrokerEpoch: Boolean = false
+    brokerEpoch: Long
   ): Unit = {
     replicaState.updateAndGet { currentReplicaState =>
       // Fence the update if it provides a stale broker epoch.
-      val expectedBrokerEpoch = currentReplicaState.brokerEpoch.getOrElse(-1L)
-      if (verifyBrokerEpoch && currentReplicaState.brokerEpoch.exists(_ > brokerEpoch)) {
+      if (verifyBrokerEpoch && brokerEpoch != -1 && currentReplicaState.brokerEpoch.exists(_ > brokerEpoch)) {
         throw new NotLeaderOrFollowerException(s"Received stale fetch state update. broker epoch=$brokerEpoch " +
-          s"vs expected=$expectedBrokerEpoch")
+          s"vs expected=${currentReplicaState.brokerEpoch.get}")
       }
 
       val lastCaughtUpTime = if (followerFetchOffsetMetadata.messageOffset >= leaderEndOffset) {
