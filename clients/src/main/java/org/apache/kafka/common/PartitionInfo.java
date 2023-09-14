@@ -30,21 +30,25 @@ public class PartitionInfo {
     private final Node[] offlineReplicas;
 
     public PartitionInfo(String topic, int partition, Node leader, Node[] replicas, Node[] inSyncReplicas) {
-        this(topic, partition, leader, UNKNOWN_LEADER_EPOCH, replicas, inSyncReplicas, new Node[0]);
-    }
-
-    public PartitionInfo(String topic, int partition, Node leader, Node[] replicas, Node[] inSyncReplicas,
-        Node[] offlineReplicas) {
-        this(topic, partition, leader, UNKNOWN_LEADER_EPOCH, replicas, inSyncReplicas, offlineReplicas);
+        this(topic, partition, leader, replicas, inSyncReplicas, new Node[0]);
     }
 
     public PartitionInfo(String topic,
                          int partition,
                          Node leader,
-                         int leaderEpoch,
                          Node[] replicas,
                          Node[] inSyncReplicas,
                          Node[] offlineReplicas) {
+        this(topic, partition, leader, replicas, inSyncReplicas, offlineReplicas, UNKNOWN_LEADER_EPOCH);
+    }
+
+    public PartitionInfo(String topic,
+                         int partition,
+                         Node leader,
+                         Node[] replicas,
+                         Node[] inSyncReplicas,
+                         Node[] offlineReplicas,
+                         int leaderEpoch) {
         this.topic = topic;
         this.partition = partition;
         this.leader = leader;
