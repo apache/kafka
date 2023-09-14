@@ -287,11 +287,13 @@ public final class MirrorUtils {
                 log.debug("Unable to create topic '{}' since the brokers do not support the CreateTopics API." +
                                 " Falling back to assume topic exists or will be auto-created by the broker.",
                         topicName);
+                return;
             }
             if (cause instanceof ClusterAuthorizationException) {
                 log.debug("Not authorized to create topic '{}'." +
                                 " Falling back to assume topic exists or will be auto-created by the broker.",
                         topicName);
+                return;
             }
             if (cause instanceof InvalidConfigurationException) {
                 throw new ConnectException("Unable to create topic '" + topicName + "': " + cause.getMessage(),
