@@ -359,7 +359,7 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
             rlmTopicPartitioner = new RemoteLogMetadataTopicPartitioner(rlmmConfig.metadataTopicPartitionsCount());
             remotePartitionMetadataStore = new RemotePartitionMetadataStore(new File(rlmmConfig.logDir()).toPath());
             configured = true;
-            log.info("Successfully configured topic-based RLMM with config: {}", rlmmConfig);
+//            log.info("Successfully configured topic-based RLMM with config: {}", rlmmConfig);
 
             // Scheduling the initialization producer/consumer managers in a separate thread. Required resources may
             // not yet be available now. This thread makes sure that it is retried at regular intervals until it is

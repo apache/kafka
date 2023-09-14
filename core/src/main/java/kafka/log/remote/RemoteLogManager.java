@@ -1577,7 +1577,7 @@ public class RemoteLogManager implements Closeable {
         }
 
         public ScheduledFuture<?> scheduleWithFixedDelay(Runnable runnable, long initialDelay, long delay, TimeUnit timeUnit) {
-            LOGGER.info("Scheduling runnable {} with initial delay: {}, fixed delay: {}", runnable, initialDelay, delay);
+//            LOGGER.info("Scheduling runnable {} with initial delay: {}, fixed delay: {}", runnable, initialDelay, delay);
             return scheduledThreadPool.scheduleWithFixedDelay(runnable, initialDelay, delay, timeUnit);
         }
 
