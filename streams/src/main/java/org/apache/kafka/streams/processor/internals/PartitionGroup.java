@@ -384,20 +384,17 @@ public class PartitionGroup {
     }
 
     void updateLags() {
-        for (final TopicPartition tp : partitionQueues.keySet()) {
-            final OptionalLong l = lagProvider.apply(tp);
-            if (l.isPresent()) {
-                fetchedLags.put(tp, l.getAsLong());
-                logger.trace("Updated lag for {} to {}", tp, l.getAsLong());
-            } else {
-                fetchedLags.remove(tp);
+        if (maxTaskIdleMs != StreamsConfig.MAX_TASK_IDLE_MS_DISABLED) {
+            for (final TopicPartition tp : partitionQueues.keySet()) {
+                final OptionalLong l = lagProvider.apply(tp);
+                if (l.isPresent()) {
+                    fetchedLags.put(tp, l.getAsLong());
+                    logger.trace("Updated lag for {} to {}", tp, l.getAsLong());
+                } else {
+                    fetchedLags.remove(tp);
+                }
             }
         }
-    }
-
-    // for testing only
-    Map<TopicPartition, Long> fetchedLags() {
-        return fetchedLags;
     }
 
 }

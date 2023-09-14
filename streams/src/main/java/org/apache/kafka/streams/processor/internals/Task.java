@@ -162,11 +162,16 @@ public interface Task {
      */
     void prepareRecycle();
 
-    /** Prepares the consumer for the next polling phase for this task */
-    void preparePoll();
+    /**
+     * Resumes polling in the main consumer for all partitions for which
+     * the corresponding record queues have capacity (again).
+     */
+    void resumePollingForPartitionsWithAvailableSpace();
 
-    /** Wraps up after a polling phase for this task */
-    void postPoll();
+    /**
+     * Fetches up-to-date lag information from the consumer.
+     */
+    void updateLags();
 
     // runtime methods (using in RUNNING state)
 

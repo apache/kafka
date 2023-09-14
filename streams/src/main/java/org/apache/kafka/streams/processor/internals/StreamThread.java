@@ -765,11 +765,11 @@ public class StreamThread extends Thread {
         now = startMs;
 
         final long pollLatency;
-        taskManager.preparePoll();
+        taskManager.resumePollingForPartitionsWithAvailableSpace();
         try {
             pollLatency = pollPhase();
         } finally {
-            taskManager.postPoll();
+            taskManager.updateLags();
         }
 
         // Shutdown hook could potentially be triggered and transit the thread state to PENDING_SHUTDOWN during #pollRequests().
@@ -1002,7 +1002,6 @@ public class StreamThread extends Thread {
         while (!nonFatalExceptionsToHandle.isEmpty()) {
             streamsUncaughtExceptionHandler.accept(nonFatalExceptionsToHandle.poll(), true);
         }
-
         return pollLatency;
     }
 

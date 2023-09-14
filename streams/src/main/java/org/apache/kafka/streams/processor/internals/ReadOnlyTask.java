@@ -135,12 +135,12 @@ public class ReadOnlyTask implements Task {
     }
 
     @Override
-    public void preparePoll() {
+    public void resumePollingForPartitionsWithAvailableSpace() {
         throw new UnsupportedOperationException("This task is read-only");
     }
 
     @Override
-    public void postPoll() {
+    public void updateLags() {
         throw new UnsupportedOperationException("This task is read-only");
     }
 

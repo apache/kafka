@@ -255,11 +255,12 @@ public class StandbyTask extends AbstractTask implements Task {
     }
 
     @Override
-    public void preparePoll() {
+    public void resumePollingForPartitionsWithAvailableSpace() {
         // noop
     }
+
     @Override
-    public void postPoll() {
+    public void updateLags() {
         // noop
     }
 

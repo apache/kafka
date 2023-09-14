@@ -90,6 +90,7 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.MockitoJUnitRunner;
@@ -3055,7 +3056,7 @@ public class StreamThreadTest {
     }
 
     @Test
-    public void shouldCallPreparePollAndPostPollOnTaskManager() {
+    public void shouldUpdateLagsAfterPolling() {
         final Properties streamsConfigProps = StreamsTestUtils.getStreamsConfig();
         final StreamThread streamThread = setUpThread(streamsConfigProps);
         streamThread.setState(State.STARTING);
@@ -3063,8 +3064,24 @@ public class StreamThreadTest {
 
         streamThread.runOnce();
 
-        Mockito.verify(streamThread.taskManager()).preparePoll();
-        Mockito.verify(streamThread.taskManager()).postPoll();
+        final InOrder inOrder = Mockito.inOrder(mainConsumer, streamThread.taskManager());
+        inOrder.verify(mainConsumer).poll(Mockito.any());
+        inOrder.verify(streamThread.taskManager()).updateLags();
+    }
+
+
+    @Test
+    public void shouldResumePollingForPartitionsWithAvailableSpaceBeforePolling() {
+        final Properties streamsConfigProps = StreamsTestUtils.getStreamsConfig();
+        final StreamThread streamThread = setUpThread(streamsConfigProps);
+        streamThread.setState(State.STARTING);
+        streamThread.setState(State.PARTITIONS_ASSIGNED);
+
+        streamThread.runOnce();
+
+        final InOrder inOrder = Mockito.inOrder(streamThread.taskManager(), mainConsumer);
+        inOrder.verify(streamThread.taskManager()).resumePollingForPartitionsWithAvailableSpace();
+        inOrder.verify(mainConsumer).poll(Mockito.any());
     }
 
     @Test

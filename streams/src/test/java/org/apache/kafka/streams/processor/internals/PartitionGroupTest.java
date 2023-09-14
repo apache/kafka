@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.Collections;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
@@ -56,6 +55,7 @@ import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.nullValue;
+import static org.hamcrest.Matchers.startsWith;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
@@ -428,7 +428,17 @@ public class PartitionGroupTest {
 
     @Test
     public void shouldEmptyPartitionsOnClear() {
-        final PartitionGroup group = getBasicGroup();
+        final PartitionGroup group =
+            new PartitionGroup(
+                logContext,
+                mkMap(
+                    mkEntry(partition1, queue1)
+                ),
+                tp -> OptionalLong.of(0L),
+                getValueSensor(metrics, lastLatenessValue),
+                enforcedProcessingSensor,
+                10
+            );
 
         final List<ConsumerRecord<byte[], byte[]>> list = Arrays.asList(
                 new ConsumerRecord<>("topic", 1, 1L, recordKey, recordValue),
@@ -437,6 +447,7 @@ public class PartitionGroupTest {
         group.addRawRecords(partition1, list);
         group.nextRecord(new PartitionGroup.RecordInfo(), time.milliseconds());
         group.nextRecord(new PartitionGroup.RecordInfo(), time.milliseconds());
+        group.updateLags();
 
         group.clear();
 
@@ -444,7 +455,7 @@ public class PartitionGroupTest {
         assertThat(group.streamTime(), equalTo(RecordQueue.UNKNOWN));
         assertThat(group.nextRecord(new PartitionGroup.RecordInfo(), time.milliseconds()), equalTo(null));
         assertThat(group.partitionTimestamp(partition1), equalTo(RecordQueue.UNKNOWN));
-        assertThat(group.fetchedLags().size(), equalTo(0));
+        hasNoFetchedLag(group, partition1);
 
         group.addRawRecords(partition1, list);
     }
@@ -769,38 +780,73 @@ public class PartitionGroupTest {
         }
     }
 
+    private void hasNoFetchedLag(final PartitionGroup group, final TopicPartition partition) {
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(PartitionGroup.class)) {
+            LogCaptureAppender.setClassLoggerToTrace(PartitionGroup.class);
+            assertFalse(group.readyToProcess(0L));
+            assertThat(appender.getEvents(), hasItem(Matchers.hasProperty("message",
+                equalTo(String.format("[test] Waiting to fetch data for %s", partition)))));
+        }
+    }
+
+    private void hasZeroFetchedLag(final PartitionGroup group, final TopicPartition partition) {
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(PartitionGroup.class)) {
+            LogCaptureAppender.setClassLoggerToTrace(PartitionGroup.class);
+            assertFalse(group.readyToProcess(0L));
+            assertThat(appender.getEvents(), hasItem(Matchers.hasProperty("message",
+                startsWith(String.format("[test] Lag for %s is currently 0 and current time is %d. "
+                    + "Waiting for new data to be produced for configured idle time", partition, 0L)))));
+        }
+    }
+
+    @SuppressWarnings("SameParameterValue")
+    private void hasNonZeroFetchedLag(final PartitionGroup group, final TopicPartition partition, final long lag) {
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(PartitionGroup.class)) {
+            LogCaptureAppender.setClassLoggerToTrace(PartitionGroup.class);
+            assertFalse(group.readyToProcess(0L));
+            assertThat(appender.getEvents(), hasItem(Matchers.hasProperty("message",
+                equalTo(String.format("[test] Lag for %s is currently %d, but no data is buffered locally. "
+                    + "Waiting to buffer some records.", partition, lag)))));
+        }
+    }
+
+
     @Test
     public void shouldUpdateLags() {
         final HashMap<TopicPartition, OptionalLong> lags = new HashMap<>();
         final PartitionGroup group = new PartitionGroup(
             logContext,
             mkMap(
-                mkEntry(partition1, queue1),
-                mkEntry(partition2, queue2)
+                mkEntry(partition1, queue1)
             ),
             tp -> lags.getOrDefault(tp, OptionalLong.empty()),
             getValueSensor(metrics, lastLatenessValue),
             enforcedProcessingSensor,
-            0L
+            10L
         );
 
-        assertEquals(group.fetchedLags().size(), 0);
+        hasNoFetchedLag(group, partition1);
 
         lags.put(partition1, OptionalLong.of(5));
 
-        assertEquals(group.fetchedLags().size(), 0);
+        hasNoFetchedLag(group, partition1);
 
         group.updateLags();
 
-        assertEquals(group.fetchedLags(), Collections.singletonMap(partition1, 5L));
+        hasNonZeroFetchedLag(group, partition1, 5);
+
+        lags.put(partition1, OptionalLong.of(0));
+        group.updateLags();
+
+        hasZeroFetchedLag(group, partition1);
 
         lags.remove(partition1);
 
-        assertEquals(group.fetchedLags(), Collections.singletonMap(partition1, 5L));
+        hasZeroFetchedLag(group, partition1);
 
         group.updateLags();
 
-        assertEquals(group.fetchedLags(), Collections.emptyMap());
+        hasNoFetchedLag(group, partition1);
     }
 
     private PartitionGroup getBasicGroup() {

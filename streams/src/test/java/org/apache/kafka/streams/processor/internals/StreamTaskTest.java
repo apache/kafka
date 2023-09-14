@@ -524,7 +524,7 @@ public class StreamTaskTest {
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
 
-        task.preparePoll();
+        task.resumePollingForPartitionsWithAvailableSpace();
 
         task.addRecords(partition1, asList(
             getConsumerRecordWithOffsetAsTimestamp(partition1, 10, 101),
@@ -538,7 +538,7 @@ public class StreamTaskTest {
             getConsumerRecordWithOffsetAsTimestamp(partition2, 45, 203)
         ));
 
-        task.postPoll();
+        task.updateLags();
 
         assertTrue(task.process(0L));
         assertEquals(5, task.numBuffered());
@@ -1004,8 +1004,7 @@ public class StreamTaskTest {
         assertTrue(consumer.paused().contains(partition1));
         assertTrue(consumer.paused().contains(partition2));
 
-        // resume once we do a preparePoll
-        task.preparePoll();
+        task.resumePollingForPartitionsWithAvailableSpace();
 
         assertEquals(1, consumer.paused().size());
         assertTrue(consumer.paused().contains(partition2));
@@ -1024,8 +1023,7 @@ public class StreamTaskTest {
         assertEquals(1, consumer.paused().size());
         assertTrue(consumer.paused().contains(partition2));
 
-        // resume once we do a preparePoll
-        task.preparePoll();
+        task.resumePollingForPartitionsWithAvailableSpace();
 
         assertEquals(0, consumer.paused().size());
     }
@@ -1036,7 +1034,7 @@ public class StreamTaskTest {
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
 
-        task.preparePoll();
+        task.resumePollingForPartitionsWithAvailableSpace();
 
         task.addRecords(partition1, asList(
             getConsumerRecordWithOffsetAsTimestamp(partition1, 20),
@@ -1052,7 +1050,7 @@ public class StreamTaskTest {
             getConsumerRecordWithOffsetAsTimestamp(partition2, 161)
         ));
 
-        task.postPoll();
+        task.updateLags();
 
         // st: -1
         assertFalse(task.canPunctuateStreamTime());
@@ -1288,9 +1286,9 @@ public class StreamTaskTest {
         // the task should still be committed since the processed records have not reached the consumer position
         assertTrue(task.commitNeeded());
 
-        task.preparePoll();
+        task.resumePollingForPartitionsWithAvailableSpace();
         consumer.poll(Duration.ZERO);
-        task.postPoll();
+        task.updateLags();
         task.process(0L);
 
         assertTrue(task.commitNeeded());
@@ -1311,7 +1309,7 @@ public class StreamTaskTest {
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
 
-        task.preparePoll();
+        task.resumePollingForPartitionsWithAvailableSpace();
 
         consumer.addRecord(getConsumerRecordWithOffsetAsTimestamp(partition1, 0L));
         consumer.addRecord(getConsumerRecordWithOffsetAsTimestamp(partition1, 1L));
@@ -1322,7 +1320,7 @@ public class StreamTaskTest {
         task.addRecords(partition1, singletonList(getConsumerRecordWithOffsetAsTimestamp(partition1, 0L)));
         task.addRecords(partition1, singletonList(getConsumerRecordWithOffsetAsTimestamp(partition1, 1L)));
 
-        task.postPoll();
+        task.updateLags();
 
         task.process(0L);
         processorStreamTime.mockProcessor.addProcessorMetadata("key1", 100L);
@@ -1851,8 +1849,8 @@ public class StreamTaskTest {
         task.addRecords(partition1, singletonList(getConsumerRecordWithOffsetAsTimestamp(partition1, 5L)));
         task.addRecords(repartition, singletonList(getConsumerRecordWithOffsetAsTimestamp(repartition, 10L)));
 
-        task.preparePoll();
-        task.postPoll();
+        task.resumePollingForPartitionsWithAvailableSpace();
+        task.updateLags();
 
         assertTrue(task.process(0L));
         assertTrue(task.process(0L));
@@ -2542,10 +2540,10 @@ public class StreamTaskTest {
             getCorruptedConsumerRecordWithOffsetAsTimestamp(++offset));
         consumer.addRecord(records.get(0));
         consumer.addRecord(records.get(1));
-        task.preparePoll();
+        task.resumePollingForPartitionsWithAvailableSpace();
         consumer.poll(Duration.ZERO);
         task.addRecords(partition1, records);
-        task.postPoll();
+        task.updateLags();
 
         assertTrue(task.process(offset));
         assertTrue(task.commitNeeded());
@@ -2574,10 +2572,10 @@ public class StreamTaskTest {
             getConsumerRecordWithOffsetAsTimestamp(partition1, ++offset));
         consumer.addRecord(records.get(0));
         consumer.addRecord(records.get(1));
-        task.preparePoll();
+        task.resumePollingForPartitionsWithAvailableSpace();
         consumer.poll(Duration.ZERO);
         task.addRecords(partition1, records);
-        task.postPoll();
+        task.updateLags();
 
         assertTrue(task.process(offset));
         assertTrue(task.commitNeeded());
@@ -2603,10 +2601,10 @@ public class StreamTaskTest {
             getCorruptedConsumerRecordWithOffsetAsTimestamp(++offset));
         consumer.addRecord(records.get(0));
         consumer.addRecord(records.get(1));
-        task.preparePoll();
+        task.resumePollingForPartitionsWithAvailableSpace();
         consumer.poll(Duration.ZERO);
         task.addRecords(partition1, records);
-        task.postPoll();
+        task.updateLags();
 
         assertTrue(task.process(offset));
         assertTrue(task.commitNeeded());
@@ -2646,6 +2644,7 @@ public class StreamTaskTest {
         verify(processorStateManager, never()).changelogOffsets();
         verify(recordCollector, never()).offsets();
     }
+
 
     private ProcessorStateManager mockStateManager() {
         final ProcessorStateManager manager = mock(ProcessorStateManager.class);

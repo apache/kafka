@@ -1635,17 +1635,22 @@ public class TaskManager {
         return commit(tasks.allTasks());
     }
 
-    /** Prepare a poll-call on the main consumer */
-    public void preparePoll() {
+    /**
+     * Resumes polling in the main consumer for all partitions for which
+     * the corresponding record queues have capacity (again).
+     */
+    public void resumePollingForPartitionsWithAvailableSpace() {
         for (final Task t: tasks.activeTasks()) {
-            t.preparePoll();
+            t.resumePollingForPartitionsWithAvailableSpace();
         }
     }
 
-    /** Wrap-up a poll-call on the main consumer */
-    public void postPoll() {
+    /**
+     * Fetches up-to-date lag information from the consumer.
+     */
+    public void updateLags() {
         for (final Task t: tasks.activeTasks()) {
-            t.postPoll();
+            t.updateLags();
         }
     }
 

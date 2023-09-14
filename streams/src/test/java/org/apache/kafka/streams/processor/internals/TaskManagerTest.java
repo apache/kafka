@@ -287,7 +287,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldPreparePollForAllActiveTasks() {
+    public void shouldResumePollingForPartitionsWithAvailableSpaceForAllActiveTasks() {
         final StreamTask activeTask1 = statefulTask(taskId00, taskId00ChangelogPartitions)
             .inState(State.RUNNING)
             .withInputPartitions(taskId00Partitions).build();
@@ -296,16 +296,16 @@ public class TaskManagerTest {
             .withInputPartitions(taskId01Partitions).build();
         final TasksRegistry tasks = Mockito.mock(TasksRegistry.class);
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
-        when(tasks.allTasks()).thenReturn(mkSet(activeTask1, activeTask2));
+        when(tasks.activeTasks()).thenReturn(mkSet(activeTask1, activeTask2));
 
-        taskManager.preparePoll();
+        taskManager.resumePollingForPartitionsWithAvailableSpace();
 
-        Mockito.verify(activeTask1).preparePoll();
-        Mockito.verify(activeTask2).preparePoll();
+        Mockito.verify(activeTask1).resumePollingForPartitionsWithAvailableSpace();
+        Mockito.verify(activeTask2).resumePollingForPartitionsWithAvailableSpace();
     }
 
     @Test
-    public void shouldPostPollForAllActiveTasks() {
+    public void shouldUpdateLagForAllActiveTasks() {
         final StreamTask activeTask1 = statefulTask(taskId00, taskId00ChangelogPartitions)
             .inState(State.RUNNING)
             .withInputPartitions(taskId00Partitions).build();
@@ -314,12 +314,12 @@ public class TaskManagerTest {
             .withInputPartitions(taskId01Partitions).build();
         final TasksRegistry tasks = Mockito.mock(TasksRegistry.class);
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
-        when(tasks.allTasks()).thenReturn(mkSet(activeTask1, activeTask2));
+        when(tasks.activeTasks()).thenReturn(mkSet(activeTask1, activeTask2));
 
-        taskManager.postPoll();
+        taskManager.updateLags();
 
-        Mockito.verify(activeTask1).postPoll();
-        Mockito.verify(activeTask2).postPoll();
+        Mockito.verify(activeTask1).updateLags();
+        Mockito.verify(activeTask2).updateLags();
     }
 
     @Test
@@ -4872,12 +4872,12 @@ public class TaskManagerTest {
         }
 
         @Override
-        public void preparePoll() {
+        public void resumePollingForPartitionsWithAvailableSpace() {
             // noop
         }
 
         @Override
-        public void postPoll() {
+        public void updateLags() {
             // noop
         }
 
