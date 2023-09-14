@@ -35,6 +35,8 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.security.GeneralSecurityException;
+import java.security.NoSuchAlgorithmException;
+import java.security.KeyStoreException;
 import java.security.Key;
 import java.security.KeyFactory;
 import java.security.KeyStore;
@@ -68,6 +70,7 @@ import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLParameters;
 import javax.net.ssl.TrustManagerFactory;
+import javax.net.ssl.TrustManager;
 
 public class DefaultSslEngineFactory implements SslEngineFactory {
 
@@ -75,15 +78,15 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
     public static final String PEM_TYPE = "PEM";
 
     private Map<String, ?> configs;
-    protected String protocol;
-    protected String provider;
-    protected String kmfAlgorithm;
-    protected String tmfAlgorithm;
+    private String protocol;
+    private String provider;
+    private String kmfAlgorithm;
+    private String tmfAlgorithm;
     private SecurityStore keystore;
     private SecurityStore truststore;
     private String[] cipherSuites;
     private String[] enabledProtocols;
-    protected SecureRandom secureRandomImplementation;
+    private SecureRandom secureRandomImplementation;
     private SSLContext sslContext;
     private SslClientAuth sslClientAuth;
 
@@ -233,7 +236,7 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
         }
     }
 
-    protected SSLContext createSSLContext(SecurityStore keystore, SecurityStore truststore) {
+    private SSLContext createSSLContext(SecurityStore keystore, SecurityStore truststore) {
         try {
             SSLContext sslContext;
             if (provider != null)
@@ -255,17 +258,22 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
             }
 
             String tmfAlgorithm = this.tmfAlgorithm != null ? this.tmfAlgorithm : TrustManagerFactory.getDefaultAlgorithm();
-            TrustManagerFactory tmf = TrustManagerFactory.getInstance(tmfAlgorithm);
-            KeyStore ts = truststore == null ? null : truststore.get();
-            tmf.init(ts);
+            TrustManager[] trustManagers = getTrustManagers(truststore, tmfAlgorithm);
 
-            sslContext.init(keyManagers, tmf.getTrustManagers(), this.secureRandomImplementation);
+            sslContext.init(keyManagers, trustManagers, this.secureRandomImplementation);
             log.debug("Created SSL context with keystore {}, truststore {}, provider {}.",
                     keystore, truststore, sslContext.getProvider().getName());
             return sslContext;
         } catch (Exception e) {
             throw new KafkaException(e);
         }
+    }
+
+    protected TrustManager[] getTrustManagers(SecurityStore truststore, String tmfAlgorithm) throws NoSuchAlgorithmException, KeyStoreException {
+        CommonNameLoggingTrustManagerFactoryWrapper tmf = CommonNameLoggingTrustManagerFactoryWrapper.getInstance(tmfAlgorithm);
+        KeyStore ts = truststore == null ? null : truststore.get();
+        tmf.init(ts);
+        return tmf.getTrustManagers();
     }
 
     // Visibility to override for testing
