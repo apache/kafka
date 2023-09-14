@@ -21,8 +21,9 @@ import java.util.function.Supplier;
 
 /**
  * {@code IdempotentCloser} encapsulates some basic logic to ensure that a given resource is only closed once.
- * It provides methods to invoke callbacks (via optional {@link Runnable}s) for either the <em>initial</em> close
- * and/or any <em>subsequent</em> closes.
+ * The underlying mechanism for ensuring that the close only happens once <em>and</em> is thread safe
+ * is via the {@link AtomicBoolean#compareAndSet(boolean, boolean)}. Users can provide callbacks (via optional
+ * {@link Runnable}s) for either the <em>initial</em> close and/or any <em>subsequent</em> closes.
  *
  * <p/>
  *
@@ -43,7 +44,6 @@ import java.util.function.Supplier;
  *         writeToFile();
  *     }
  *
- *
  *     public boolean isClosed() {
  *         return closer.isClosed();
  *     }
@@ -61,9 +61,6 @@ import java.util.function.Supplier;
  *     }
  * }
  * </pre>
- *
- * Note that the callbacks are optional and if unused operates as a simple means to ensure resources
- * are only closed once.
  */
 public class IdempotentCloser implements AutoCloseable {
 
@@ -85,11 +82,23 @@ public class IdempotentCloser implements AutoCloseable {
         this.isClosed = new AtomicBoolean(isClosed);
     }
 
+    /**
+     * This method serves as an assert that the {@link IdempotentCloser} is still open. If it is open, this method
+     * simply returns. If it is closed, a new {@link IllegalStateException} will be thrown using the supplied message.
+     *
+     * @param message {@link Supplier} that supplies the message for the exception
+     */
     public void maybeThrowIllegalStateException(Supplier<String> message) {
         if (isClosed.get())
             throw new IllegalStateException(message.get());
     }
 
+    /**
+     * This method serves as an assert that the {@link IdempotentCloser} is still open. If it is open, this method
+     * simply returns. If it is closed, a new {@link IllegalStateException} will be thrown using the given message.
+     *
+     * @param message Message to use for the exception
+     */
     public void maybeThrowIllegalStateException(String message) {
         if (isClosed.get())
             throw new IllegalStateException(message);
@@ -99,15 +108,53 @@ public class IdempotentCloser implements AutoCloseable {
         return isClosed.get();
     }
 
+    /**
+     * Closes the resource in a thread-safe manner.
+     *
+     * <p/>
+     *
+     * After the execution has completed, calls to {@link #isClosed()} will return {@code false} and calls to
+     * {@link #maybeThrowIllegalStateException(String)} and {@link #maybeThrowIllegalStateException(Supplier)}
+     * will throw an {@link IllegalStateException}.
+     */
     @Override
     public void close() {
         close(null, null);
     }
 
+    /**
+     * Closes the resource in a thread-safe manner.
+     *
+     * <p/>
+     *
+     * After the execution has completed, calls to {@link #isClosed()} will return {@code false} and calls to
+     * {@link #maybeThrowIllegalStateException(String)} and {@link #maybeThrowIllegalStateException(Supplier)}
+     * will throw an {@link IllegalStateException}.
+     *
+     * @param onInitialClose Optional {@link Runnable} to execute when the resource is closed. Note that the
+     *                       object will still be considered closed even if an exception is thrown during the course
+     *                       of its execution; can be {@code null}
+     */
     public void close(final Runnable onInitialClose) {
         close(onInitialClose, null);
     }
 
+    /**
+     * Closes the resource in a thread-safe manner.
+     *
+     * <p/>
+     *
+     * After the execution has completed, calls to {@link #isClosed()} will return {@code false} and calls to
+     * {@link #maybeThrowIllegalStateException(String)} and {@link #maybeThrowIllegalStateException(Supplier)}
+     * will throw an {@link IllegalStateException}.
+     *
+     * @param onInitialClose    Optional {@link Runnable} to execute when the resource is closed. Note that the
+     *                          object will still be considered closed even if an exception is thrown during the course
+     *                          of its execution; can be {@code null}
+     * @param onSubsequentClose Optional {@link Runnable} to execute if this resource was previously closed. Note that
+     *                          no state will be affected if an exception is thrown during its execution; can be
+     *                          {@code null}
+     */
     public void close(final Runnable onInitialClose, final Runnable onSubsequentClose) {
         if (isClosed.compareAndSet(false, true)) {
             if (onInitialClose != null)
