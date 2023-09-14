@@ -92,7 +92,6 @@ public class HeartbeatRequestManager implements RequestManager {
         if (!coordinatorRequestManager.coordinator().isPresent() || notInGroup()) {
             return new NetworkClientDelegate.PollResult(
                 Long.MAX_VALUE, Collections.emptyList());
-
         }
 
         if (!heartbeatRequestState.canSendRequest(currentTimeMs)) {
@@ -128,7 +127,7 @@ public class HeartbeatRequestManager implements RequestManager {
             data.setSubscribedTopicNames(new ArrayList<>(this.subscriptions.subscription()));
         }
 
-        // stubbed
+        // TODO: fetch assignor config from membership manager
         data.setServerAssignor("stubbed.assignor");
 
         NetworkClientDelegate.UnsentRequest request = new NetworkClientDelegate.UnsentRequest(
