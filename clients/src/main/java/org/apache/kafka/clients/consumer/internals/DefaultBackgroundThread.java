@@ -103,7 +103,6 @@ public class DefaultBackgroundThread extends KafkaThread {
         this.networkClientDelegate = networkClient;
         this.errorEventHandler = errorEventHandler;
         this.membershipManager = Optional.ofNullable(membershipManager);
-
         this.requestManagers = new RequestManagers(
                 offsetsRequestManager,
                 topicMetadataRequestManager,
@@ -155,7 +154,7 @@ public class DefaultBackgroundThread extends KafkaThread {
             this.errorEventHandler = new ErrorEventHandler(this.backgroundEventQueue);
             long retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
             long retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
-            final int requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
+            int requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
 
             OffsetsRequestManager offsetsRequestManager =
                     new OffsetsRequestManager(
