@@ -22,6 +22,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.RetriableException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.MetadataRequest;
@@ -42,18 +43,19 @@ import java.util.stream.Collectors;
 /**
  * <p>
  * Manages the state of topic metadata requests. This manager returns a
- * {@link org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult} when a request is ready to
+ * {@link NetworkClientDelegate.PollResult} when a request is ready to
  * be sent. Specifically, this manager handles the following user API calls:
  * </p>
  * <ul>
- * <li>listOffsets</li>
+ * <li>listTopics</li>
  * <li>partitionsFor</li>
  * </ul>
  * <p>
  * The manager checks the state of the {@link TopicMetadataRequestState} before sending a new one to
  * prevent sending it without backing off from previous attempts.
  * It also checks the state of inflight requests to avoid overwhelming the broker with duplicate requests.
- * The {@code inflightRequests} are memoized by topic name. If all topics are requested, then {@code null} is used as the key.
+ * The {@code inflightRequests} are memorized by topic name. If all topics are requested, then we use {@code Optional
+ * .empty()} as the key.
  * Once a request is completed successfully, its corresponding entry is removed.
  * </p>
  */
@@ -156,6 +158,9 @@ public class TopicMetadataRequestManager implements RequestManager {
                         future.complete(res);
                         inflightRequests.remove(topic);
                     } catch (RetriableException e) {
+                        if (e instanceof TimeoutException) {
+                            inflightRequests.remove(topic);
+                        }
                         this.onFailedAttempt(currentTimeMs);
                     } catch (Exception t) {
                         this.future.completeExceptionally(t);

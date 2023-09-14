@@ -203,7 +203,8 @@ public class NetworkClientDelegate implements AutoCloseable {
         private Optional<Node> node; // empty if random node can be chosen
         private Timer timer;
 
-        public UnsentRequest(final AbstractRequest.Builder<?> requestBuilder, final Optional<Node> node) {
+        public UnsentRequest(final AbstractRequest.Builder<?> requestBuilder,
+                             final Optional<Node> node) {
             Objects.requireNonNull(requestBuilder);
             this.requestBuilder = requestBuilder;
             this.node = node;

@@ -31,4 +31,27 @@ public class TopicMetadataApplicationEvent extends CompletableApplicationEvent<M
     public String topic() {
         return topic;
     }
+
+    @Override
+    public String toString() {
+        return "TopicMetadataApplicationEvent(topic=" + topic + ")";
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof TopicMetadataApplicationEvent)) return false;
+        if (!super.equals(o)) return false;
+
+        TopicMetadataApplicationEvent that = (TopicMetadataApplicationEvent) o;
+
+        return topic.equals(that.topic);
+    }
+
+    @Override
+    public int hashCode() {
+        int result = super.hashCode();
+        result = 31 * result + topic.hashCode();
+        return result;
+    }
 }

@@ -21,7 +21,6 @@ import org.apache.kafka.common.TopicPartition;
 
 import java.util.Collections;
 import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 public class CommitApplicationEvent extends CompletableApplicationEvent<Void> {
@@ -45,20 +44,9 @@ public class CommitApplicationEvent extends CompletableApplicationEvent<Void> {
     public Map<TopicPartition, OffsetAndMetadata> offsets() {
         return offsets;
     }
-    private Optional<Exception> isValid(final Map<TopicPartition, OffsetAndMetadata> offsets) {
-        for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsets.entrySet()) {
-            TopicPartition topicPartition = entry.getKey();
-            OffsetAndMetadata offsetAndMetadata = entry.getValue();
-            if (offsetAndMetadata.offset() < 0) {
-                return Optional.of(new IllegalArgumentException("Invalid offset: " + offsetAndMetadata.offset()));
-            }
-        }
-        return Optional.empty();
-    }
 
     @Override
     public String toString() {
-        return "CommitApplicationEvent("
-                + "offsets=" + offsets + ")";
+        return getClass().getSimpleName() + "{offsets=" + offsets + "}";
     }
 }

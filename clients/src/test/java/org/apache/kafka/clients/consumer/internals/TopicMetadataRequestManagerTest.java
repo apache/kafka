@@ -142,6 +142,36 @@ public class TopicMetadataRequestManagerTest {
         assertFalse(future2.isCompletedExceptionally());
     }
 
+    @Test
+    void ensureTimeoutRequestIsRemoved() {
+        Optional<String> topic = Optional.of("hello");
+        CompletableFuture<Map<String, List<PartitionInfo>>> future =
+            this.topicMetadataRequestManager.requestTopicMetadata(topic);
+        NetworkClientDelegate.PollResult res = this.topicMetadataRequestManager.poll(this.time.milliseconds());
+        assertEquals(1, res.unsentRequests.size());
+
+        res.unsentRequests.get(0).future().complete(buildTopicMetadataClientResponse(
+            res.unsentRequests.get(0),
+            topic,
+            Errors.NETWORK_EXCEPTION));
+
+        // The first backoff should be around 100ms. Here to ensure the request is backoffed
+        this.time.sleep(80);
+        res = this.topicMetadataRequestManager.poll(this.time.milliseconds());
+        assertEquals(0, res.unsentRequests.size());
+
+        this.time.sleep(80);
+        res = this.topicMetadataRequestManager.poll(this.time.milliseconds());
+        assertEquals(1, res.unsentRequests.size());
+        res.unsentRequests.get(0).future().complete(buildTopicMetadataClientResponse(
+            res.unsentRequests.get(0),
+            topic,
+            Errors.REQUEST_TIMED_OUT));
+
+        // ensure timeout request is removed
+        assertTrue(topicMetadataRequestManager.inflightRequests().isEmpty());
+    }
+
     private ClientResponse buildTopicMetadataClientResponse(
         final NetworkClientDelegate.UnsentRequest request,
         final Optional<String> topic,
