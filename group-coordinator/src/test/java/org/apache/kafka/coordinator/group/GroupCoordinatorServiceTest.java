@@ -73,6 +73,7 @@ import java.net.InetAddress;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalInt;
@@ -638,10 +639,6 @@ public class GroupCoordinatorServiceTest {
                 .setGroupState("Dead")
                 .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
         );
-        Map<String, List<ListGroupsResponseData.ListedGroup>> expectResultMap = new HashMap<>();
-        for (ListGroupsResponseData.ListedGroup result : expectedResults) {
-            expectResultMap.put(result.groupId(), Collections.singletonList(result));
-        }
         when(runtime.partitions()).thenReturn(Sets.newSet(
             new TopicPartition("__consumer_offsets", 0),
             new TopicPartition("__consumer_offsets", 1),
@@ -662,10 +659,6 @@ public class GroupCoordinatorServiceTest {
 
         List<ListGroupsResponseData.ListedGroup> actualResults = responseFuture.get(5, TimeUnit.SECONDS).groups();
         assertEquals(expectedResults, actualResults);
-        assertEquals(expectResultMap.size(), actualResults.size());
-        for (ListGroupsResponseData.ListedGroup result : actualResults) {
-            assertEquals(expectResultMap.get(result.groupId()), Collections.singletonList(result));
-        }
     }
 
     @Test
@@ -690,10 +683,6 @@ public class GroupCoordinatorServiceTest {
                 .setGroupState("Empty")
                 .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
         );
-        Map<String, List<ListGroupsResponseData.ListedGroup>> expectResultMap = new HashMap<>();
-        for (ListGroupsResponseData.ListedGroup result : expectedResults) {
-            expectResultMap.put(result.groupId(), Collections.singletonList(result));
-        }
 
         ListGroupsRequestData request = new ListGroupsRequestData();
         when(runtime.partitions()).thenReturn(Sets.newSet(
@@ -721,10 +710,6 @@ public class GroupCoordinatorServiceTest {
         );
         List<ListGroupsResponseData.ListedGroup> actualResults = responseFuture.get(5, TimeUnit.SECONDS).groups();
         assertEquals(expectedResults, actualResults);
-        assertEquals(expectResultMap.size(), actualResults.size());
-        for (ListGroupsResponseData.ListedGroup result : actualResults) {
-            assertEquals(expectResultMap.get(result.groupId()), Collections.singletonList(result));
-        }
     }
 
     @Test

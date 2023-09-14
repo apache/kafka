@@ -437,10 +437,6 @@ public class GroupMetadataManagerTest {
             snapshotRegistry.revertToSnapshot(lastCommittedOffset);
         }
 
-        public void getOrCreateSnapshot() {
-            snapshotRegistry.getOrCreateSnapshot(lastCommittedOffset);
-        }
-
         public ConsumerGroup.ConsumerGroupState consumerGroupState(
             String groupId
         ) {
@@ -448,6 +444,7 @@ public class GroupMetadataManagerTest {
                 .getOrMaybeCreateConsumerGroup(groupId, false)
                 .state();
         }
+
         public ConsumerGroupMember.MemberState consumerGroupMemberState(
             String groupId,
             String memberId
@@ -461,7 +458,6 @@ public class GroupMetadataManagerTest {
         public CoordinatorResult<ConsumerGroupHeartbeatResponseData, Record> consumerGroupHeartbeat(
             ConsumerGroupHeartbeatRequestData request
         ) {
-
             RequestContext context = new RequestContext(
                 new RequestHeader(
                     ApiKeys.CONSUMER_GROUP_HEARTBEAT,
@@ -1148,7 +1144,6 @@ public class GroupMetadataManagerTest {
         private void replay(
             Record record
         ) {
-
             ApiMessageAndVersion key = record.key();
             ApiMessageAndVersion value = record.value();
 
@@ -8669,16 +8664,6 @@ public class GroupMetadataManagerTest {
         context.commit();
         actualAllGroupMap = context.sendListGroups(Collections.emptyList()).stream()
             .collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
-        expectAllGroupMap = Stream.of(
-            new ListGroupsResponseData.ListedGroup()
-                .setGroupId(genericGroup.groupId())
-                .setProtocolType(genericGroupType)
-                .setGroupState(EMPTY.toString()),
-            new ListGroupsResponseData.ListedGroup()
-                .setGroupId(consumerGroupId)
-                .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
-                .setGroupState(ConsumerGroup.ConsumerGroupState.ASSIGNING.toString())
-        ).collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
 
         assertEquals(expectAllGroupMap, actualAllGroupMap);
 
