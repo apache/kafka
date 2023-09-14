@@ -229,6 +229,10 @@ public class ReplicaFetcherTierStateMachine implements TierStateMachine {
                 Partition partition = replicaMgr.getPartitionOrException(topicPartition);
                 partition.truncateFullyAndStartAt(nextOffset, false, Option.apply(leaderLogStartOffset));
 
+
+                replicaMgr.brokerTopicStats().topicStats(topicPartition.topic()).buildRemoteLogAuxStateRequestRate().mark();
+                replicaMgr.brokerTopicStats().allTopicsStats().buildRemoteLogAuxStateRequestRate().mark();
+
                 // Increment start offsets
                 unifiedLog.maybeIncrementLogStartOffset(leaderLogStartOffset, LeaderOffsetIncremented);
                 unifiedLog.maybeIncrementLocalLogStartOffset(nextOffset, LeaderOffsetIncremented);
@@ -252,6 +256,8 @@ public class ReplicaFetcherTierStateMachine implements TierStateMachine {
                                 "with active producers size: {}, leaderLogStartOffset: {}, and logEndOffset: {}",
                         partition, unifiedLog.producerStateManager().activeProducers().size(), leaderLogStartOffset, nextOffset);
             } else {
+                replicaMgr.brokerTopicStats().topicStats(topicPartition.topic()).failedBuildRemoteLogAuxStateRate().mark();
+                replicaMgr.brokerTopicStats().allTopicsStats().failedBuildRemoteLogAuxStateRate().mark();
                 throw new RemoteStorageException("Couldn't build the state from remote store for partition: " + topicPartition +
                         ", currentLeaderEpoch: " + currentLeaderEpoch +
                         ", leaderLocalLogStartOffset: " + leaderLocalLogStartOffset +
