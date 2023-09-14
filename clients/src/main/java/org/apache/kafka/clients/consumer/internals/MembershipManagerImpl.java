@@ -136,6 +136,12 @@ public class MembershipManagerImpl implements MembershipManager {
         }
     }
 
+    @Override
+    public boolean notInGroup() {
+        return state() == MemberState.UNJOINED ||
+            state() == MemberState.FAILED;
+    }
+
     /**
      * Transition to {@link MemberState#STABLE} only if there are no target assignments left to
      * reconcile. Transition to {@link MemberState#RECONCILING} otherwise.

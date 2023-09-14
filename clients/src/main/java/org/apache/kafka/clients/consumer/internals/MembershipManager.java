@@ -59,4 +59,5 @@ public interface MembershipManager {
      * current assignment.
      */
     void updateAssignment(ConsumerGroupHeartbeatResponseData.Assignment assignment);
+    boolean notInGroup();
 }

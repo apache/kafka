@@ -89,7 +89,7 @@ public class HeartbeatRequestManager implements RequestManager {
 
     @Override
     public NetworkClientDelegate.PollResult poll(long currentTimeMs) {
-        if (!coordinatorRequestManager.coordinator().isPresent() || notInGroup()) {
+        if (!coordinatorRequestManager.coordinator().isPresent() || membershipManager.notInGroup()) {
             return new NetworkClientDelegate.PollResult(
                 Long.MAX_VALUE, Collections.emptyList());
         }
@@ -103,11 +103,6 @@ public class HeartbeatRequestManager implements RequestManager {
         NetworkClientDelegate.UnsentRequest request = makeHeartbeatRequest();
         // return Long.MAX_VALUE because we will update the timer when the response is received
         return new NetworkClientDelegate.PollResult(Long.MAX_VALUE, Collections.singletonList(request));
-    }
-
-    boolean notInGroup() {
-        return membershipManager.state() == MemberState.UNJOINED ||
-                membershipManager.state() == MemberState.FAILED;
     }
 
     private NetworkClientDelegate.UnsentRequest makeHeartbeatRequest() {
@@ -127,8 +122,9 @@ public class HeartbeatRequestManager implements RequestManager {
             data.setSubscribedTopicNames(new ArrayList<>(this.subscriptions.subscription()));
         }
 
-        // TODO: fetch assignor config from membership manager
-        data.setServerAssignor("stubbed.assignor");
+        if (this.membershipManager.assignorSelection().serverAssignor().isPresent()) {
+            data.setServerAssignor(this.membershipManager.assignorSelection().serverAssignor().get());
+        }
 
         NetworkClientDelegate.UnsentRequest request = new NetworkClientDelegate.UnsentRequest(
             new ConsumerGroupHeartbeatRequest.Builder(data),

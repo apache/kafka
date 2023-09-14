@@ -18,6 +18,7 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * Selection of a type of assignor used by a member to get partitions assigned as part of a
@@ -30,12 +31,12 @@ public class AssignorSelection {
     public enum Type { SERVER }
 
     private final AssignorSelection.Type type;
-    private String serverAssignor;
+    private Optional<String> serverAssignor;
 
     private AssignorSelection(Type type, String serverAssignor) {
         this.type = type;
         if (type == Type.SERVER) {
-            this.serverAssignor = serverAssignor;
+            this.serverAssignor = Optional.of(serverAssignor);
         } else {
             throw new IllegalArgumentException("Unsupported assignor type " + type);
         }
@@ -56,7 +57,7 @@ public class AssignorSelection {
         return new AssignorSelection(Type.SERVER, "uniform");
     }
 
-    public String serverAssignor() {
+    public Optional<String> serverAssignor() {
         return this.serverAssignor;
     }
 

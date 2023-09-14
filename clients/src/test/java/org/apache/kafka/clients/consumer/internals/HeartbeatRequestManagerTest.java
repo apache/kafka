@@ -50,6 +50,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -58,6 +59,7 @@ public class HeartbeatRequestManagerTest {
     private final int heartbeatInterval = 1000;
     private final long retryBackoffMaxMs = 3000;
     private final long retryBackoffMs = 100;
+    private final String groupId = "group-id";
 
     private Time mockTime;
     private LogContext mockLogContext;
@@ -99,7 +101,7 @@ public class HeartbeatRequestManagerTest {
         mockCoordinatorRequestManager = mock(CoordinatorRequestManager.class);
         when(mockCoordinatorRequestManager.coordinator()).thenReturn(Optional.of(new Node(1, "localhost", 9999)));
         mockSubscriptionState = mock(SubscriptionState.class);
-        mockMembershipManager = mock(MembershipManager.class);
+        mockMembershipManager = spy(new MembershipManagerImpl(groupId));
         heartbeatRequestState = mock(HeartbeatRequestManager.HeartbeatRequestState.class);
         errorEventHandler = mock(ErrorEventHandler.class);
         heartbeatRequestManager = new HeartbeatRequestManager(
@@ -116,12 +118,11 @@ public class HeartbeatRequestManagerTest {
     @ParameterizedTest
     @MethodSource("stateProvider")
     public void testPoll_sendHeartbeatOnMemberState(final MemberState state) {
-        when(mockMembershipManager.state()).thenReturn(state);
         when(heartbeatRequestState.canSendRequest(anyLong())).thenReturn(true);
         NetworkClientDelegate.PollResult result;
         result = heartbeatRequestManager.poll(mockTime.milliseconds());
 
-        if (heartbeatRequestManager.notInGroup()) {
+        if (mockMembershipManager.notInGroup()) {
             assertEquals(Long.MAX_VALUE, result.timeUntilNextPollMs);
             assertEquals(0, result.unsentRequests.size());
         } else {
@@ -146,7 +147,7 @@ public class HeartbeatRequestManagerTest {
         NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(mockTime.milliseconds());
         assertEquals(0, result.unsentRequests.size());
 
-        if (heartbeatRequestManager.notInGroup()) {
+        if (mockMembershipManager.notInGroup()) {
             assertEquals(Long.MAX_VALUE, result.timeUntilNextPollMs);
         } else {
             assertEquals(heartbeatInterval - 100, result.timeUntilNextPollMs);
