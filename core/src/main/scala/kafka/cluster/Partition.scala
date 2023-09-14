@@ -292,7 +292,7 @@ class Partition(val topicPartition: TopicPartition,
                 metadataCache: MetadataCache,
                 logManager: LogManager,
                 alterIsrManager: AlterPartitionManager,
-                val zkMigrationEnabled: Boolean = false) extends Logging {
+                zkMigrationEnabled: Boolean = false) extends Logging {
 
   import Partition.metricsGroup
 
