@@ -14,25 +14,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.clients.consumer.internals.events;
 
 /**
- * This is the abstract definition of the events created by the KafkaConsumer API
+ * Event for resetting offsets for all assigned partitions that require it. This is an
+ * asynchronous event that generates ListOffsets requests, and completes by updating in-memory
+ * positions when responses are received.
  */
-abstract public class ApplicationEvent {
-    public final Type type;
+public class ResetPositionsApplicationEvent extends CompletableApplicationEvent<Void> {
 
-    protected ApplicationEvent(Type type) {
-        this.type = type;
-    }
-
-    @Override
-    public String toString() {
-        return type + " ApplicationEvent";
-    }
-
-    public enum Type {
-        NOOP, COMMIT, POLL, FETCH_COMMITTED_OFFSET, METADATA_UPDATE, ASSIGNMENT_CHANGE,
-        LIST_OFFSETS, RESET_POSITIONS, VALIDATE_POSITIONS,
+    public ResetPositionsApplicationEvent() {
+        super(Type.RESET_POSITIONS);
     }
 }

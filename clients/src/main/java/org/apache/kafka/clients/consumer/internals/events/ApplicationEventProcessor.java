@@ -62,6 +62,10 @@ public class ApplicationEventProcessor {
                 return process((AssignmentChangeApplicationEvent) event);
             case LIST_OFFSETS:
                 return process((ListOffsetsApplicationEvent) event);
+            case RESET_POSITIONS:
+                return processResetPositionsEvent();
+            case VALIDATE_POSITIONS:
+                return processValidatePositionsEvent();
         }
         return false;
     }
@@ -138,6 +142,16 @@ public class ApplicationEventProcessor {
                 requestManagers.offsetsRequestManager.fetchOffsets(event.timestampsToSearch(),
                         event.requireTimestamps());
         event.chain(future);
+        return true;
+    }
+
+    private boolean processResetPositionsEvent() {
+        requestManagers.offsetsRequestManager.resetPositionsIfNeeded();
+        return true;
+    }
+
+    private boolean processValidatePositionsEvent() {
+        requestManagers.offsetsRequestManager.validatePositionsIfNeeded();
         return true;
     }
 }
