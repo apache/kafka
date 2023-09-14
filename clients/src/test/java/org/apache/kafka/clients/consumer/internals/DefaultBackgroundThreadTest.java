@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.LogTruncationException;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -83,9 +82,9 @@ public class DefaultBackgroundThreadTest {
     private OffsetsRequestManager offsetsRequestManager;
     private ErrorEventHandler errorEventHandler;
     private final int requestTimeoutMs = 500;
-    private GroupState groupState;
     private CommitRequestManager commitManager;
     private TopicMetadataRequestManager topicMetadataRequestManager;
+    private MembershipManager membershipManager;
 
     @BeforeEach
     @SuppressWarnings("unchecked")
@@ -99,16 +98,7 @@ public class DefaultBackgroundThreadTest {
         this.coordinatorManager = mock(CoordinatorRequestManager.class);
         this.offsetsRequestManager = mock(OffsetsRequestManager.class);
         this.errorEventHandler = mock(ErrorEventHandler.class);
-        GroupRebalanceConfig rebalanceConfig = new GroupRebalanceConfig(
-                100,
-                100,
-                100,
-                "group_id",
-                Optional.empty(),
-                100,
-                1000,
-                true);
-        this.groupState = new GroupState(rebalanceConfig);
+        this.membershipManager = mock(MembershipManager.class);
         this.commitManager = mock(CommitRequestManager.class);
         this.topicMetadataRequestManager = mock(TopicMetadataRequestManager.class);
     }
@@ -397,7 +387,7 @@ public class DefaultBackgroundThreadTest {
                 applicationEventProcessor,
                 this.metadata,
                 this.networkClient,
-                this.groupState,
+                this.membershipManager,
                 this.coordinatorManager,
                 this.commitManager,
                 this.offsetsRequestManager,

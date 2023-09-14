@@ -57,7 +57,7 @@ public class CommitRequestManager implements RequestManager {
     private final Logger log;
     private final Optional<AutoCommitState> autoCommitState;
     private final CoordinatorRequestManager coordinatorRequestManager;
-    private final GroupState groupState;
+    private final MembershipManager membershipManager;
     private final long retryBackoffMs;
     private final long retryBackoffMaxMs;
     private final boolean throwOnFetchStableOffsetUnsupported;
@@ -69,7 +69,7 @@ public class CommitRequestManager implements RequestManager {
             final SubscriptionState subscriptions,
             final ConsumerConfig config,
             final CoordinatorRequestManager coordinatorRequestManager,
-            final GroupState groupState) {
+            final MembershipManager membershipManager) {
         Objects.requireNonNull(coordinatorRequestManager, "Coordinator is needed upon committing offsets");
         this.logContext = logContext;
         this.log = logContext.logger(getClass());
@@ -82,7 +82,7 @@ public class CommitRequestManager implements RequestManager {
             this.autoCommitState = Optional.empty();
         }
         this.coordinatorRequestManager = coordinatorRequestManager;
-        this.groupState = groupState;
+        this.membershipManager = membershipManager;
         this.subscriptions = subscriptions;
         this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
         this.retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
@@ -173,19 +173,19 @@ public class CommitRequestManager implements RequestManager {
     private class OffsetCommitRequestState {
         private final Map<TopicPartition, OffsetAndMetadata> offsets;
         private final String groupId;
-        private final GroupState.Generation generation;
+        private final int memberEpoch;
         private final String groupInstanceId;
         private final CompletableFuture<Void> future;
 
         public OffsetCommitRequestState(final Map<TopicPartition, OffsetAndMetadata> offsets,
                                         final String groupId,
                                         final String groupInstanceId,
-                                        final GroupState.Generation generation) {
+                                        final int memberEpoch) {
             this.offsets = offsets;
             this.future = new CompletableFuture<>();
             this.groupId = groupId;
-            this.generation = generation;
             this.groupInstanceId = groupInstanceId;
+            this.memberEpoch = memberEpoch;
         }
 
         public NetworkClientDelegate.UnsentRequest toUnsentRequest() {
@@ -212,8 +212,8 @@ public class CommitRequestManager implements RequestManager {
             OffsetCommitRequest.Builder builder = new OffsetCommitRequest.Builder(
                     new OffsetCommitRequestData()
                             .setGroupId(this.groupId)
-                            .setGenerationIdOrMemberEpoch(generation.generationId)
-                            .setMemberId(generation.memberId)
+                            .setGenerationIdOrMemberEpoch(membershipManager.memberEpoch())
+                            .setMemberId(membershipManager.memberId())
                             .setGroupInstanceId(groupInstanceId)
                             .setTopics(new ArrayList<>(requestTopicDataMap.values())));
             return new NetworkClientDelegate.UnsentRequest(
@@ -231,25 +231,26 @@ public class CommitRequestManager implements RequestManager {
 
     private class OffsetFetchRequestState extends RequestState {
         public final Set<TopicPartition> requestedPartitions;
-        public final GroupState.Generation requestedGeneration;
-        private final CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future;
+        public final int memberEpoch;
+        public CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future;
+
         public OffsetFetchRequestState(final Set<TopicPartition> partitions,
-                                       final GroupState.Generation generation,
+                                       final int memberEpoch,
                                        final long retryBackoffMs,
                                        final long retryBackoffMaxMs) {
             super(logContext, CommitRequestManager.class.getSimpleName(), retryBackoffMs, retryBackoffMaxMs);
             this.requestedPartitions = partitions;
-            this.requestedGeneration = generation;
+            this.memberEpoch = memberEpoch;
             this.future = new CompletableFuture<>();
         }
 
         public boolean sameRequest(final OffsetFetchRequestState request) {
-            return Objects.equals(requestedGeneration, request.requestedGeneration) && requestedPartitions.equals(request.requestedPartitions);
+            return (memberEpoch == request.memberEpoch) && requestedPartitions.equals(request.requestedPartitions);
         }
 
         public NetworkClientDelegate.UnsentRequest toUnsentRequest() {
             OffsetFetchRequest.Builder builder = new OffsetFetchRequest.Builder(
-                    groupState.groupId,
+                    membershipManager.groupId(),
                     true,
                     new ArrayList<>(this.requestedPartitions),
                     throwOnFetchStableOffsetUnsupported);
@@ -262,7 +263,7 @@ public class CommitRequestManager implements RequestManager {
         public void onResponse(
                 final long currentTimeMs,
                 final OffsetFetchResponse response) {
-            Errors responseError = response.groupLevelError(groupState.groupId);
+            Errors responseError = response.groupLevelError(membershipManager.groupId());
             if (responseError != Errors.NONE) {
                 onFailure(currentTimeMs, responseError);
                 return;
@@ -282,7 +283,7 @@ public class CommitRequestManager implements RequestManager {
                 coordinatorRequestManager.markCoordinatorUnknown(responseError.message(), Time.SYSTEM.milliseconds());
                 retry(currentTimeMs);
             } else if (responseError == Errors.GROUP_AUTHORIZATION_FAILED) {
-                future.completeExceptionally(GroupAuthorizationException.forGroupId(groupState.groupId));
+                future.completeExceptionally(GroupAuthorizationException.forGroupId(membershipManager.groupId()));
             } else {
                 future.completeExceptionally(new KafkaException("Unexpected error in fetch offset response: " + responseError.message()));
             }
@@ -298,7 +299,7 @@ public class CommitRequestManager implements RequestManager {
                                final OffsetFetchResponse response) {
             Set<String> unauthorizedTopics = null;
             Map<TopicPartition, OffsetFetchResponse.PartitionData> responseData =
-                    response.partitionDataMap(groupState.groupId);
+                    response.partitionDataMap(membershipManager.groupId());
             Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>(responseData.size());
             Set<TopicPartition> unstableTxnOffsetTopicPartitions = new HashSet<>();
             for (Map.Entry<TopicPartition, OffsetFetchResponse.PartitionData> entry : responseData.entrySet()) {
@@ -364,7 +365,7 @@ public class CommitRequestManager implements RequestManager {
         public String toString() {
             return "OffsetFetchRequestState{" +
                     "requestedPartitions=" + requestedPartitions +
-                    ", requestedGeneration=" + requestedGeneration +
+                    ", memberEpoch=" + memberEpoch +
                     ", future=" + future +
                     ", " + toStringBase() +
                     '}';
@@ -395,9 +396,9 @@ public class CommitRequestManager implements RequestManager {
             // TODO: Dedupe committing the same offsets to the same partitions
             OffsetCommitRequestState request = new OffsetCommitRequestState(
                     offsets,
-                    groupState.groupId,
-                    groupState.groupInstanceId.orElse(null),
-                    groupState.generation);
+                    membershipManager.groupId(),
+                    membershipManager.groupInstanceId().orElse(null),
+                    membershipManager.memberEpoch());
             unsentOffsetCommits.add(request);
             return request.future;
         }
@@ -434,7 +435,7 @@ public class CommitRequestManager implements RequestManager {
         private CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> addOffsetFetchRequest(final Set<TopicPartition> partitions) {
             OffsetFetchRequestState request = new OffsetFetchRequestState(
                     partitions,
-                    groupState.generation,
+                    membershipManager.memberEpoch(),
                     retryBackoffMs,
                     retryBackoffMaxMs);
             return addOffsetFetchRequest(request);
