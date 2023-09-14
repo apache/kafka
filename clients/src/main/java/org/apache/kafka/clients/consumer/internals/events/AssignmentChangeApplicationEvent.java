@@ -26,8 +26,17 @@ public class AssignmentChangeApplicationEvent extends ApplicationEvent {
     final long currentTimeMs;
 
     public AssignmentChangeApplicationEvent(final Map<TopicPartition, OffsetAndMetadata> offsets, final long currentTimeMs) {
-        super(Type.ASSIGNMENT_CHANGE);
+        super(Type.ASSIGNMENT_CHANGE, AssignmentChangeApplicationEvent.class.getSimpleName());
         this.offsets = offsets;
         this.currentTimeMs = currentTimeMs;
+    }
+
+    @Override
+    public String toString() {
+        return "AssignmentChangeApplicationEvent{" +
+            toStringBase() +
+            ", offsets=" + offsets +
+            ", currentTimeMs=" + currentTimeMs +
+            '}';
     }
 }

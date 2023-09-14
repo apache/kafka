@@ -35,8 +35,8 @@ public abstract class CompletableApplicationEvent<T> extends ApplicationEvent {
 
     protected final CompletableFuture<T> future;
 
-    protected CompletableApplicationEvent(Type type) {
-        super(type);
+    protected CompletableApplicationEvent(Type type, String owner) {
+        super(type, owner);
         this.future = new CompletableFuture<>();
     }
 
@@ -90,10 +90,15 @@ public abstract class CompletableApplicationEvent<T> extends ApplicationEvent {
     }
 
     @Override
+    public String toStringBase() {
+        return super.toStringBase() +
+            ", future=" + future;
+    }
+
+    @Override
     public String toString() {
-        return getClass().getSimpleName() + "{" +
-                "future=" + future +
-                ", type=" + type +
-                '}';
+        return "CompletableApplicationEvent{" +
+            toStringBase() +
+            '}';
     }
 }

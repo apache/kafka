@@ -23,12 +23,15 @@ public class NoopApplicationEvent extends ApplicationEvent {
     public final String message;
 
     public NoopApplicationEvent(final String message) {
-        super(Type.NOOP);
+        super(Type.NOOP, NoopApplicationEvent.class.getSimpleName());
         this.message = message;
     }
 
     @Override
     public String toString() {
-        return getClass() + "_" + this.message;
+        return "NoopApplicationEvent{" +
+            toStringBase() +
+            ", message='" + message + '\'' +
+            '}';
     }
 }

@@ -21,18 +21,27 @@ package org.apache.kafka.clients.consumer.internals.events;
  */
 abstract public class ApplicationEvent {
     public final Type type;
+    protected final String owner;
 
-    protected ApplicationEvent(Type type) {
+    protected ApplicationEvent(Type type, String owner) {
         this.type = type;
+        this.owner = owner;
     }
 
     @Override
     public String toString() {
-        return type + " ApplicationEvent";
+        return "ApplicationEvent{" +
+            toStringBase() +
+            '}';
     }
 
     public enum Type {
         NOOP, COMMIT, POLL, FETCH_COMMITTED_OFFSET, METADATA_UPDATE, ASSIGNMENT_CHANGE,
         LIST_OFFSETS, RESET_POSITIONS, VALIDATE_POSITIONS,
+    }
+
+    protected String toStringBase() {
+        return "owner='" + owner + '\'' +
+            ", type=" + type;
     }
 }

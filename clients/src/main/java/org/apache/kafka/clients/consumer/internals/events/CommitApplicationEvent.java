@@ -28,7 +28,7 @@ public class CommitApplicationEvent extends ApplicationEvent {
     final private Map<TopicPartition, OffsetAndMetadata> offsets;
 
     public CommitApplicationEvent(final Map<TopicPartition, OffsetAndMetadata> offsets) {
-        super(Type.COMMIT);
+        super(Type.COMMIT, CommitApplicationEvent.class.getSimpleName());
         this.offsets = offsets;
         Optional<Exception> exception = isValid(offsets);
         if (exception.isPresent()) {
@@ -58,7 +58,9 @@ public class CommitApplicationEvent extends ApplicationEvent {
 
     @Override
     public String toString() {
-        return "CommitApplicationEvent("
-                + "offsets=" + offsets + ")";
+        return "CommitApplicationEvent{" +
+            toStringBase() +
+            ", offsets=" + offsets +
+            '}';
     }
 }

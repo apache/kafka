@@ -25,6 +25,13 @@ package org.apache.kafka.clients.consumer.internals.events;
 public class ResetPositionsApplicationEvent extends CompletableApplicationEvent<Void> {
 
     public ResetPositionsApplicationEvent() {
-        super(Type.RESET_POSITIONS);
+        super(Type.RESET_POSITIONS, ResetPositionsApplicationEvent.class.getSimpleName());
+    }
+
+    @Override
+    public String toString() {
+        return "ResetPositionsApplicationEvent{" +
+            toStringBase() +
+            '}';
     }
 }

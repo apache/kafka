@@ -37,7 +37,7 @@ public class ListOffsetsApplicationEvent extends CompletableApplicationEvent<Map
     private final boolean requireTimestamps;
 
     public ListOffsetsApplicationEvent(Map<TopicPartition, Long> timestampToSearch, boolean requireTimestamps) {
-        super(Type.LIST_OFFSETS);
+        super(Type.LIST_OFFSETS, ListOffsetsApplicationEvent.class.getSimpleName());
         this.timestampsToSearch = Collections.unmodifiableMap(timestampToSearch);
         this.requireTimestamps = requireTimestamps;
     }
@@ -85,9 +85,10 @@ public class ListOffsetsApplicationEvent extends CompletableApplicationEvent<Map
 
     @Override
     public String toString() {
-        return getClass().getSimpleName() + " {" +
-                "timestampsToSearch=" + timestampsToSearch + ", " +
-                "requireTimestamps=" + requireTimestamps + '}';
+        return "ListOffsetsApplicationEvent{" +
+            toStringBase() +
+            ", timestampsToSearch=" + timestampsToSearch +
+            ", requireTimestamps=" + requireTimestamps +
+            '}';
     }
-
 }
