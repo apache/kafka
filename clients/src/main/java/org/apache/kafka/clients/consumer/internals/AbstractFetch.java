@@ -317,7 +317,7 @@ public abstract class AbstractFetch<K, V> implements Closeable {
         }
     }
 
-    protected Map<Node, FetchSessionHandler.FetchRequestData> prepareCloseFetchSessionRequests() {
+    private Map<Node, FetchSessionHandler.FetchRequestData> prepareCloseFetchSessionRequests() {
         final Cluster cluster = metadata.fetch();
         Map<Node, FetchSessionHandler.Builder> fetchable = new LinkedHashMap<>();
 
