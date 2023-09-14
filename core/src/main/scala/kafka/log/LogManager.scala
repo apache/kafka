@@ -123,8 +123,7 @@ class LogManager(logDirs: Seq[File],
 
   private val dirLocks = lockLogDirs(liveLogDirs)
   private val dirIds = directoryIds(liveLogDirs)
-  // visible for testing
-  private[log] val directoryIds: Set[Uuid] = dirIds.values.toSet
+  val directoryIds: collection.immutable.Set[Uuid] = dirIds.values.toSet
   @volatile private var recoveryPointCheckpoints = liveLogDirs.map(dir =>
     (dir, new OffsetCheckpointFile(new File(dir, RecoveryPointCheckpointFile), logDirFailureChannel))).toMap
   @volatile private var logStartOffsetCheckpoints = liveLogDirs.map(dir =>

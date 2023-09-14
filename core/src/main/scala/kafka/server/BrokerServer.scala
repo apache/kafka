@@ -175,11 +175,6 @@ class BrokerServer(
 
       config.dynamicConfig.initialize(zkClientOpt = None)
 
-      lifecycleManager = new BrokerLifecycleManager(config,
-        time,
-        s"broker-${config.nodeId}-",
-        isZkBroker = false)
-
       /* start scheduler */
       kafkaScheduler = new KafkaScheduler(config.backgroundThreads)
       kafkaScheduler.startup()
@@ -199,6 +194,12 @@ class BrokerServer(
         brokerTopicStats, logDirFailureChannel, keepPartitionMetadataFile = true)
 
       remoteLogManagerOpt = createRemoteLogManager()
+
+      lifecycleManager = new BrokerLifecycleManager(config,
+        time,
+        s"broker-${config.nodeId}-",
+        isZkBroker = false,
+        logDirs = logManager.directoryIds)
 
       // Enable delegation token cache for all SCRAM mechanisms to simplify dynamic update.
       // This keeps the cache up-to-date if new SCRAM mechanisms are enabled dynamically.

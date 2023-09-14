@@ -197,6 +197,15 @@ class BrokerLifecycleManagerTest {
     result
   }
 
+  def poll[T](context: RegistrationTestContext, manager: BrokerLifecycleManager, future: Future[T]): T = {
+    while (!future.isDone || context.mockClient.hasInFlightRequests) {
+      context.poll()
+      manager.eventQueue.wakeup()
+      context.time.sleep(100)
+    }
+    future.get
+  }
+
   @Test
   def testOfflineDirsSentUntilHeartbeatSuccess(): Unit = {
     val ctx = new RegistrationTestContext(configProperties)
@@ -218,14 +227,6 @@ class BrokerLifecycleManagerTest {
       ctx.mockChannelManager, ctx.clusterId, ctx.advertisedListeners,
       Collections.emptyMap(), OptionalLong.empty())
 
-    def poll[T](context: RegistrationTestContext, manager: BrokerLifecycleManager, future: Future[T]): T = {
-      while (!future.isDone || context.mockClient.hasInFlightRequests) {
-        context.poll()
-        manager.eventQueue.wakeup()
-        context.time.sleep(100)
-      }
-      future.get
-    }
     poll(ctx, manager, registration)
     val dirs1 = poll(ctx, manager, hb1).data().offlineLogDirs()
     val dirs2 = poll(ctx, manager, hb2).data().offlineLogDirs()
@@ -234,6 +235,27 @@ class BrokerLifecycleManagerTest {
     assertEquals(offlineDirs, dirs1.asScala.toSet)
     assertEquals(offlineDirs, dirs2.asScala.toSet)
     assertEquals(Set.empty, dirs3.asScala.toSet)
+    manager.close()
+  }
+
+  @Test
+  def testRegistrationIncludesDirs(): Unit = {
+    val logDirs = Set("ad5FLIeCTnaQdai5vOjeng", "ybdzUKmYSLK6oiIpI6CPlw").map(Uuid.fromString)
+    val ctx = new RegistrationTestContext(configProperties)
+    val manager = new BrokerLifecycleManager(ctx.config, ctx.time, "registration-includes-dirs-",
+      isZkBroker = false, logDirs)
+    val controllerNode = new Node(3000, "localhost", 8021)
+    ctx.controllerNodeProvider.node.set(controllerNode)
+
+    val registration = prepareResponse(ctx, new BrokerRegistrationResponse(new BrokerRegistrationResponseData().setBrokerEpoch(1000)))
+
+    manager.start(() => ctx.highestMetadataOffset.get(),
+      ctx.mockChannelManager, ctx.clusterId, ctx.advertisedListeners,
+      Collections.emptyMap(), OptionalLong.empty())
+    val request = poll(ctx, manager, registration).asInstanceOf[BrokerRegistrationRequest]
+
+    assertEquals(logDirs, request.data.logDirs().asScala.toSet)
+
     manager.close()
   }
 }

@@ -56,7 +56,8 @@ class BrokerLifecycleManager(
   val config: KafkaConfig,
   val time: Time,
   val threadNamePrefix: String,
-  val isZkBroker: Boolean
+  val isZkBroker: Boolean,
+  val logDirs: Set[Uuid] = Set.empty[Uuid]
 ) extends Logging {
 
   private def logPrefix(): String = {
@@ -350,7 +351,8 @@ class BrokerLifecycleManager(
         setIncarnationId(incarnationId).
         setListeners(_advertisedListeners).
         setRack(rack.orNull).
-        setPreviousBrokerEpoch(previousBrokerEpoch.orElse(-1L))
+        setPreviousBrokerEpoch(previousBrokerEpoch.orElse(-1L)).
+        setLogDirs(logDirs.toList.asJava)
     if (isDebugEnabled) {
       debug(s"Sending broker registration $data")
     }
