@@ -72,17 +72,7 @@ public class MetadataSchemaChecker {
             JsonNode jsonNode1 = objectMapper.readTree(content.toString());
             JsonNode jsonNode2 = objectMapper.readTree(content1.toString());
 
-
-
-            if (!Objects.equals(jsonNode1.get("apiKey"), jsonNode2.get("apiKey"))) {
-                throw new RuntimeException("New schema has wrong api key, " + jsonNode2.get("apiKey") + " should be " + jsonNode1.get("apiKey"));
-            }
-            if (!Objects.equals(jsonNode1.get("type"), jsonNode2.get("type"))) {
-                throw new RuntimeException("New schema has wrong record type, " + jsonNode2.get("type") + " should be " + jsonNode1.get("type"));
-            }
-            String validVersions = String.valueOf(jsonNode1.get("validVersions"));
-            latestVersion = Character.getNumericValue(validVersions.charAt(validVersions.length() - 2));
-
+            checkApiTypeVersions(jsonNode1, jsonNode2);
             parser(jsonNode1, jsonNode2);
 
         } catch (FileNotFoundException e) {
@@ -91,6 +81,17 @@ public class MetadataSchemaChecker {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    private static void checkApiTypeVersions(JsonNode original, JsonNode edited) {
+        if (!Objects.equals(original.get("apiKey"), edited.get("apiKey"))) {
+            throw new RuntimeException("New schema has wrong api key, " + edited.get("apiKey") + " should be " + original.get("apiKey"));
+        }
+        if (!Objects.equals(original.get("type"), edited.get("type"))) {
+            throw new RuntimeException("New schema has wrong record type, " + edited.get("type") + " should be " + original.get("type"));
+        }
+        String validVersions = String.valueOf(original.get("validVersions"));
+        latestVersion = Character.getNumericValue(validVersions.charAt(validVersions.length() - 2));
     }
 
     private static void parser(JsonNode nodeOrig, JsonNode nodeNew) {
