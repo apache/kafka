@@ -25,6 +25,7 @@ import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
+import org.apache.kafka.server.log.remote.storage.RemoteResourceNotFoundException;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageException;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType;
@@ -32,6 +33,7 @@ import org.apache.kafka.server.util.ShutdownableThread;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.ByteArrayInputStream;
 import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
@@ -382,6 +384,10 @@ public class RemoteIndexCache implements Closeable {
             TransactionIndex txnIndex = loadIndexFile(txnIndexFile, remoteLogSegmentMetadata, rlsMetadata -> {
                 try {
                     return remoteStorageManager.fetchIndex(rlsMetadata, IndexType.TRANSACTION);
+                } catch (RemoteResourceNotFoundException e) {
+                    // Don't throw an exception since the transaction index may not exist because of no transactional
+                    // records. Instead, we return an empty stream so that an empty file is created in the cache
+                    return new ByteArrayInputStream(new byte[0]);
                 } catch (RemoteStorageException e) {
                     throw new KafkaException(e);
                 }

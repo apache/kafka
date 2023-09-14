@@ -59,7 +59,7 @@ class RegistrationTestContext(
     apiKey => new ApiVersion().setApiKey(apiKey.id).
       setMinVersion(apiKey.oldestVersion()).setMaxVersion(apiKey.latestVersion())
   }.toList.asJava)
-  val mockChannelManager = new MockBrokerToControllerChannelManager(mockClient,
+  val mockChannelManager = new MockNodeToControllerChannelManager(mockClient,
     time, controllerNodeProvider, nodeApiVersions)
   val clusterId = "x4AJGXQSRnephtTZzujw4w"
   val advertisedListeners = new ListenerCollection()

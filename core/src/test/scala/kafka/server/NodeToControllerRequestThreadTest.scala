@@ -36,7 +36,7 @@ import org.junit.jupiter.api.Test
 import org.mockito.Mockito._
 
 
-class BrokerToControllerRequestThreadTest {
+class NodeToControllerRequestThreadTest {
 
   private def controllerInfo(node: Option[Node]): ControllerInformation = {
     ControllerInformation(node, new ListenerName(""), SecurityProtocol.PLAINTEXT, "", isZkController = true)
@@ -57,13 +57,13 @@ class BrokerToControllerRequestThreadTest {
     when(controllerNodeProvider.getControllerInfo()).thenReturn(emptyControllerInfo)
 
     val retryTimeoutMs = 30000
-    val testRequestThread = new BrokerToControllerRequestThread(
+    val testRequestThread = new NodeToControllerRequestThread(
       mockClient, isNetworkClientForZkController = true, _ => mockClient, new ManualMetadataUpdater(),
       controllerNodeProvider, config, time, "", retryTimeoutMs)
     testRequestThread.started = true
 
     val completionHandler = new TestControllerRequestCompletionHandler(None)
-    val queueItem = BrokerToControllerQueueItem(
+    val queueItem = NodeToControllerQueueItem(
       time.milliseconds(),
       new MetadataRequest.Builder(new MetadataRequestData()),
       completionHandler
@@ -95,14 +95,14 @@ class BrokerToControllerRequestThreadTest {
     when(controllerNodeProvider.getControllerInfo()).thenReturn(controllerInfo(Some(activeController)))
 
     val expectedResponse = RequestTestUtils.metadataUpdateWith(2, Collections.singletonMap("a", 2))
-    val testRequestThread = new BrokerToControllerRequestThread(
+    val testRequestThread = new NodeToControllerRequestThread(
       mockClient, isNetworkClientForZkController = true, _ => mockClient, new ManualMetadataUpdater(),
       controllerNodeProvider, config, time, "", retryTimeoutMs = Long.MaxValue)
     testRequestThread.started = true
     mockClient.prepareResponse(expectedResponse)
 
     val completionHandler = new TestControllerRequestCompletionHandler(Some(expectedResponse))
-    val queueItem = BrokerToControllerQueueItem(
+    val queueItem = NodeToControllerQueueItem(
       time.milliseconds(),
       new MetadataRequest.Builder(new MetadataRequestData()),
       completionHandler
@@ -139,13 +139,13 @@ class BrokerToControllerRequestThreadTest {
       controllerInfo(Some(oldController)), controllerInfo(Some(newController)))
 
     val expectedResponse = RequestTestUtils.metadataUpdateWith(3, Collections.singletonMap("a", 2))
-    val testRequestThread = new BrokerToControllerRequestThread(
+    val testRequestThread = new NodeToControllerRequestThread(
       mockClient, isNetworkClientForZkController = true, _ => mockClient, new ManualMetadataUpdater(),
       controllerNodeProvider, config, time, "", retryTimeoutMs = Long.MaxValue)
     testRequestThread.started = true
 
     val completionHandler = new TestControllerRequestCompletionHandler(Some(expectedResponse))
-    val queueItem = BrokerToControllerQueueItem(
+    val queueItem = NodeToControllerQueueItem(
       time.milliseconds(),
       new MetadataRequest.Builder(new MetadataRequestData()),
       completionHandler,
@@ -191,13 +191,13 @@ class BrokerToControllerRequestThreadTest {
       Collections.singletonMap("a", Errors.NOT_CONTROLLER),
       Collections.singletonMap("a", 2))
     val expectedResponse = RequestTestUtils.metadataUpdateWith(3, Collections.singletonMap("a", 2))
-    val testRequestThread = new BrokerToControllerRequestThread(
+    val testRequestThread = new NodeToControllerRequestThread(
       mockClient, isNetworkClientForZkController = true,_ => mockClient, new ManualMetadataUpdater(),
       controllerNodeProvider, config, time, "", retryTimeoutMs = Long.MaxValue)
     testRequestThread.started = true
 
     val completionHandler = new TestControllerRequestCompletionHandler(Some(expectedResponse))
-    val queueItem = BrokerToControllerQueueItem(
+    val queueItem = NodeToControllerQueueItem(
       time.milliseconds(),
       new MetadataRequest.Builder(new MetadataRequestData()
         .setAllowAutoTopicCreation(true)),
@@ -258,7 +258,7 @@ class BrokerToControllerRequestThreadTest {
     // response for retry request after receiving NOT_CONTROLLER error
     val expectedResponse = RequestTestUtils.metadataUpdateWith(3, Collections.singletonMap("a", 2))
 
-    val testRequestThread = new BrokerToControllerRequestThread(
+    val testRequestThread = new NodeToControllerRequestThread(
       mockClient, isNetworkClientForZkController = true, _ => mockClient, new ManualMetadataUpdater(),
       controllerNodeProvider, config, time, "", retryTimeoutMs = Long.MaxValue)
     testRequestThread.started = true
@@ -271,7 +271,7 @@ class BrokerToControllerRequestThreadTest {
     val envelopeRequestBuilder = new EnvelopeRequest.Builder(ByteBuffer.allocate(0),
       kafkaPrincipalBuilder.serialize(kafkaPrincipal), "client-address".getBytes)
 
-    val queueItem = BrokerToControllerQueueItem(
+    val queueItem = NodeToControllerQueueItem(
       time.milliseconds(),
       envelopeRequestBuilder,
       completionHandler
@@ -321,13 +321,13 @@ class BrokerToControllerRequestThreadTest {
     val responseWithNotControllerError = RequestTestUtils.metadataUpdateWith("cluster1", 2,
       Collections.singletonMap("a", Errors.NOT_CONTROLLER),
       Collections.singletonMap("a", 2))
-    val testRequestThread = new BrokerToControllerRequestThread(
+    val testRequestThread = new NodeToControllerRequestThread(
       mockClient, isNetworkClientForZkController = true,_ => mockClient, new ManualMetadataUpdater(),
       controllerNodeProvider, config, time, "", retryTimeoutMs)
     testRequestThread.started = true
 
     val completionHandler = new TestControllerRequestCompletionHandler()
-    val queueItem = BrokerToControllerQueueItem(
+    val queueItem = NodeToControllerQueueItem(
       time.milliseconds(),
       new MetadataRequest.Builder(new MetadataRequestData()
         .setAllowAutoTopicCreation(true)),
@@ -372,7 +372,7 @@ class BrokerToControllerRequestThreadTest {
       override def onComplete(response: ClientResponse): Unit = callbackResponse.set(response)
     }
 
-    val queueItem = BrokerToControllerQueueItem(
+    val queueItem = NodeToControllerQueueItem(
       time.milliseconds(),
       new MetadataRequest.Builder(new MetadataRequestData()),
       completionHandler
@@ -380,7 +380,7 @@ class BrokerToControllerRequestThreadTest {
 
     mockClient.prepareUnsupportedVersionResponse(request => request.apiKey == ApiKeys.METADATA)
 
-    val testRequestThread = new BrokerToControllerRequestThread(
+    val testRequestThread = new NodeToControllerRequestThread(
       mockClient, isNetworkClientForZkController = true, _ => mockClient, new ManualMetadataUpdater(),
       controllerNodeProvider, config, time, "", retryTimeoutMs = Long.MaxValue)
     testRequestThread.started = true
@@ -410,7 +410,7 @@ class BrokerToControllerRequestThreadTest {
       override def onComplete(response: ClientResponse): Unit = callbackResponse.set(response)
     }
 
-    val queueItem = BrokerToControllerQueueItem(
+    val queueItem = NodeToControllerQueueItem(
       time.milliseconds(),
       new MetadataRequest.Builder(new MetadataRequestData()),
       completionHandler
@@ -418,7 +418,7 @@ class BrokerToControllerRequestThreadTest {
 
     mockClient.createPendingAuthenticationError(activeController, 50)
 
-    val testRequestThread = new BrokerToControllerRequestThread(
+    val testRequestThread = new NodeToControllerRequestThread(
       mockClient, isNetworkClientForZkController = true, _ => mockClient, new ManualMetadataUpdater(),
       controllerNodeProvider, config, time, "", retryTimeoutMs = Long.MaxValue)
     testRequestThread.started = true
@@ -440,12 +440,12 @@ class BrokerToControllerRequestThreadTest {
     val controllerNodeProvider = mock(classOf[ControllerNodeProvider])
     when(controllerNodeProvider.getControllerInfo()).thenReturn(emptyControllerInfo)
 
-    val testRequestThread = new BrokerToControllerRequestThread(
+    val testRequestThread = new NodeToControllerRequestThread(
       mockClient, isNetworkClientForZkController = true, _ => mockClient, new ManualMetadataUpdater(),
       controllerNodeProvider, config, time, "", retryTimeoutMs = Long.MaxValue)
 
     val completionHandler = new TestControllerRequestCompletionHandler(None)
-    val queueItem = BrokerToControllerQueueItem(
+    val queueItem = NodeToControllerQueueItem(
       time.milliseconds(),
       new MetadataRequest.Builder(new MetadataRequestData()),
       completionHandler
@@ -456,7 +456,7 @@ class BrokerToControllerRequestThreadTest {
   }
 
   private def pollUntil(
-    requestThread: BrokerToControllerRequestThread,
+    requestThread: NodeToControllerRequestThread,
     condition: () => Boolean,
     maxRetries: Int = 10
   ): Unit = {

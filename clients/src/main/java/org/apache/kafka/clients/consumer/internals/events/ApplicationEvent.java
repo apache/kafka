@@ -33,6 +33,6 @@ abstract public class ApplicationEvent {
 
     public enum Type {
         NOOP, COMMIT, POLL, FETCH_COMMITTED_OFFSET, METADATA_UPDATE, ASSIGNMENT_CHANGE,
-        LIST_OFFSETS,
+        LIST_OFFSETS, RESET_POSITIONS, VALIDATE_POSITIONS,
     }
 }
