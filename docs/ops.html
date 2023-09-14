@@ -3869,7 +3869,11 @@ listeners=CONTROLLER://:9093
 
 <p>In the tiered storage approach, Kafka cluster is configured with two tiers of storage - local and remote.
   The local tier is the same as the current Kafka that uses the local disks on the Kafka brokers to store the log segments.
-  The new remote tier uses external storage systems, such as HDFS or S3, to store the completed log segments.</p>
+  The new remote tier uses external storage systems, such as HDFS or S3, to store the completed log segments.
+  Please check <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-405%3A+Kafka+Tiered+Storage">KIP-405</a> for more information.
+</p>
+
+<p><b>Note: Tiered storage is considered as an early access feature, and is not recommended for use in production environments</b></p>
 
 <h4 class="anchor-heading"><a id="tiered_storage_config" class="anchor-link"></a><a href="#tiered_storage_config">Configuration</a></h4>
 
@@ -3929,6 +3933,21 @@ remote.log.metadata.manager.listener.name=PLAINTEXT
 </p>
 
 <p>Then, after the active segment is rolled, the old segment should be moved to the remote storage and get deleted.
+</p>
+
+<h4 class="anchor-heading"><a id="tiered_storage_limitation" class="anchor-link"></a><a href="#tiered_storage_limitation">Limitation</a></h4>
+
+<p>While the early access release of Tiered Storage offers the opportunity to try out this new feature, it is important to be aware of the following limitations:
+<ul>
+  <li>No support for clusters with multiple log directories (i.e. JBOD feature)</li>
+  <li>No support for compacted topics</li>
+  <li>Cannot disable tiered storage at the topic level</li>
+  <li>Deleting tiered storage enabled topics is required before disabling tiered storage at the broker level</li>
+  <li>Admin actions related to tiered storage feature are only supported on clients from version 3.0 onwards</li>
+</ul>
+</p>
+
+<p>For more information, please check <a href="https://cwiki.apache.org/confluence/display/KAFKA/Kafka+Tiered+Storage+Early+Access+Release+Notes">Tiered Storage Early Access Release Note</a>.
 </p>
 
 
