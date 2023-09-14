@@ -45,9 +45,8 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * This tests the {@link FetchBuffer} functionality in addition to what {@link FetcherTest} tests during the course
- * of its tests. One of the main concerns of these tests are that we correctly handle both places that data is held
- * internally:
+ * This tests the {@link FetchBuffer} functionality in addition to what {@link FetcherTest} covers in its tests.
+ * One of the main concerns of these tests are that we correctly handle both places that data is held internally:
  *
  * <ol>
  *     <li>A special "next in line" buffer</li>
@@ -106,6 +105,8 @@ public class FetchBufferTest {
      */
     @Test
     public void testCloseClearsData() {
+        // We don't use the try-with-resources approach because we want to have access to the FetchBuffer after
+        // the try block so that we can run our asserts on the object.
         FetchBuffer fetchBuffer = null;
 
         try {
@@ -131,7 +132,7 @@ public class FetchBufferTest {
      * Tests that the buffer returns partitions for both the queue and the next-in-line buffer.
      */
     @Test
-    public void testPartitions() {
+    public void testBufferedPartitions() {
         try (FetchBuffer fetchBuffer = new FetchBuffer(logContext)) {
             fetchBuffer.setNextInLineFetch(completedFetch(topicAPartition0));
             fetchBuffer.add(completedFetch(topicAPartition1));
