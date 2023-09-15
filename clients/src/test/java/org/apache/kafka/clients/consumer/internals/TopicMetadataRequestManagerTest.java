@@ -22,6 +22,9 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.errors.NetworkException;
+import org.apache.kafka.common.errors.RetriableException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractRequest;
@@ -55,21 +58,20 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZE
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class TopicMetadataRequestManagerTest {
     private MockTime time;
     private TopicMetadataRequestManager topicMetadataRequestManager;
 
-    private Properties props;
-
     @BeforeEach
     public void setup() {
         this.time = new MockTime();
-        this.props = new Properties();
-        this.props.put(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG, 100);
-        this.props.put(ALLOW_AUTO_CREATE_TOPICS_CONFIG, false);
-        this.props.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        this.props.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        Properties props = new Properties();
+        props.put(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG, 100);
+        props.put(ALLOW_AUTO_CREATE_TOPICS_CONFIG, false);
+        props.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        props.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         this.topicMetadataRequestManager = new TopicMetadataRequestManager(
             new LogContext(),
             new ConsumerConfig(props));
@@ -136,40 +138,29 @@ public class TopicMetadataRequestManagerTest {
         try {
             future.get();
         } catch (Throwable e) {
-            System.out.println(e.getMessage());
+            fail("Expecting to succeed, but got: {}", e);
         }
         assertTrue(future2.isDone());
         assertFalse(future2.isCompletedExceptionally());
     }
 
-    @Test
-    void ensureTimeoutRequestIsRemoved() {
+    @ParameterizedTest
+    @MethodSource("hardFailureExceptionProvider")
+    void testHardFailures(Exception exception) {
         Optional<String> topic = Optional.of("hello");
-        CompletableFuture<Map<String, List<PartitionInfo>>> future =
-            this.topicMetadataRequestManager.requestTopicMetadata(topic);
+
+        this.topicMetadataRequestManager.requestTopicMetadata(topic);
         NetworkClientDelegate.PollResult res = this.topicMetadataRequestManager.poll(this.time.milliseconds());
         assertEquals(1, res.unsentRequests.size());
 
-        res.unsentRequests.get(0).future().complete(buildTopicMetadataClientResponse(
-            res.unsentRequests.get(0),
-            topic,
-            Errors.NETWORK_EXCEPTION));
+        res.unsentRequests.get(0).future().completeExceptionally(exception);
 
-        // The first backoff should be around 100ms. Here to ensure the request is backoffed
-        this.time.sleep(80);
-        res = this.topicMetadataRequestManager.poll(this.time.milliseconds());
-        assertEquals(0, res.unsentRequests.size());
-
-        this.time.sleep(80);
-        res = this.topicMetadataRequestManager.poll(this.time.milliseconds());
-        assertEquals(1, res.unsentRequests.size());
-        res.unsentRequests.get(0).future().complete(buildTopicMetadataClientResponse(
-            res.unsentRequests.get(0),
-            topic,
-            Errors.REQUEST_TIMED_OUT));
-
-        // ensure timeout request is removed
-        assertTrue(topicMetadataRequestManager.inflightRequests().isEmpty());
+        if (exception instanceof TimeoutException ||
+                !(exception instanceof RetriableException)) {
+            assertTrue(topicMetadataRequestManager.inflightRequests().isEmpty());
+        } else {
+            assertFalse(topicMetadataRequestManager.inflightRequests().isEmpty());
+        }
     }
 
     private ClientResponse buildTopicMetadataClientResponse(
@@ -230,6 +221,13 @@ public class TopicMetadataRequestManagerTest {
             Arguments.of(Errors.UNKNOWN_SERVER_ERROR, false),
             Arguments.of(Errors.NETWORK_EXCEPTION, true),
             Arguments.of(Errors.NONE, false));
+    }
+
+    private static Collection<Arguments> hardFailureExceptionProvider() {
+        return Arrays.asList(
+                Arguments.of(new TimeoutException("timeout")),
+                Arguments.of(new KafkaException("non-retriable exception")),
+                Arguments.of(new NetworkException("retriable-exception")));
     }
 
 }

@@ -305,6 +305,8 @@ public class DefaultBackgroundThreadTest {
         verify(networkClient, times(1)).poll(anyLong(), anyLong());
         verify(commitManager, times(1)).updateAutoCommitTimer(currentTimeMs);
         verify(commitManager, times(1)).maybeAutoCommit(offset);
+
+        backgroundThread.close();
     }
 
     @Test

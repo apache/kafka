@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
@@ -120,9 +121,9 @@ public class TopicMetadataRequestManager implements RequestManager {
         CompletableFuture<Map<String, List<PartitionInfo>>> future;
 
         public TopicMetadataRequestState(final LogContext logContext,
-                                    final Optional<String> topic,
-                                    final long retryBackoffMs,
-                                    final long retryBackoffMaxMs) {
+                                         final Optional<String> topic,
+                                         final long retryBackoffMs,
+                                         final long retryBackoffMaxMs) {
             super(logContext, TopicMetadataRequestState.class.getSimpleName(), retryBackoffMs,
                 retryBackoffMaxMs);
             this.future = new CompletableFuture<>();
@@ -141,33 +142,55 @@ public class TopicMetadataRequestManager implements RequestManager {
 
             final MetadataRequest.Builder request;
             request = topic.map(t -> new MetadataRequest.Builder(Collections.singletonList(t), allowAutoTopicCreation))
-                .orElseGet(MetadataRequest.Builder::allTopics);
+                    .orElseGet(MetadataRequest.Builder::allTopics);
 
-            final NetworkClientDelegate.UnsentRequest unsent = new NetworkClientDelegate.UnsentRequest(
-                request,
-                Optional.empty(),
-                (response, exception) -> {
-                    if (exception != null) {
-                        this.future.completeExceptionally(new KafkaException(exception));
-                        inflightRequests.remove(topic);
-                        return;
-                    }
-
-                    try {
-                        Map<String, List<PartitionInfo>> res = handleTopicMetadataResponse((MetadataResponse) response.responseBody());
-                        future.complete(res);
-                        inflightRequests.remove(topic);
-                    } catch (RetriableException e) {
-                        if (e instanceof TimeoutException) {
-                            inflightRequests.remove(topic);
-                        }
-                        this.onFailedAttempt(currentTimeMs);
-                    } catch (Exception t) {
-                        this.future.completeExceptionally(t);
-                        inflightRequests.remove(topic);
-                    }
-                });
+            final NetworkClientDelegate.UnsentRequest unsent = createUnsentRequest(request);
             return Optional.of(unsent);
+        }
+
+        private NetworkClientDelegate.UnsentRequest createUnsentRequest(
+                final MetadataRequest.Builder request) {
+            return new NetworkClientDelegate.UnsentRequest(
+                    request,
+                    Optional.empty(),
+                    this::processResponseOrException
+            );
+        }
+
+        private void processResponseOrException(final ClientResponse response,
+                                                final Throwable exception) {
+            long responseTimeMs = System.currentTimeMillis();
+            if (exception != null) {
+                handleException(exception, responseTimeMs);
+                return;
+            }
+            handleResponse(response, responseTimeMs);
+        }
+
+        private void handleException(final Throwable exception, final long responseTimeMs) {
+            if (exception instanceof TimeoutException || !(exception instanceof RetriableException)) {
+                completeFutureAndRemoveRequest(new KafkaException(exception));
+            } else {
+                // We continue to retry on RetriableException
+                onFailedAttempt(responseTimeMs);
+            }
+        }
+
+        private void handleResponse(final ClientResponse response, final long responseTimeMs) {
+            try {
+                Map<String, List<PartitionInfo>> res = handleTopicMetadataResponse((MetadataResponse) response.responseBody());
+                future.complete(res);
+                inflightRequests.remove(topic);
+            } catch (RetriableException e) {
+                onFailedAttempt(responseTimeMs);
+            } catch (Exception t) {
+                completeFutureAndRemoveRequest(t);
+            }
+        }
+
+        private void completeFutureAndRemoveRequest(final Throwable throwable) {
+            this.future.completeExceptionally(throwable);
+            inflightRequests.remove(topic);
         }
 
         private Map<String, List<PartitionInfo>> handleTopicMetadataResponse(final MetadataResponse response) {
