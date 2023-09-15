@@ -28,78 +28,81 @@ import org.apache.kafka.streams.state.internals.RocksDBStore;
 import org.apache.kafka.streams.state.internals.RocksDBTimestampedStore;
 import org.apache.kafka.test.MockInternalProcessorContext;
 import org.apache.kafka.test.TestUtils;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
+import java.io.File;
 import java.io.IOException;
 import java.math.BigInteger;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Properties;
+import java.util.stream.Stream;
 
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.STATE_STORE_LEVEL_GROUP;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.STORE_ID_TAG;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TASK_ID_TAG;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.THREAD_ID_TAG;
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
-@RunWith(Parameterized.class)
 public class RocksDBBlockCacheMetricsTest {
 
     private static final String STORE_NAME = "test";
     private static final String METRICS_SCOPE = "test-scope";
 
-    @Parameterized.Parameters(name = "{0}")
-    public static Object[] stores() {
-        return new RocksDBStore[] {
-            new RocksDBStore(STORE_NAME, METRICS_SCOPE),
-            new RocksDBTimestampedStore(STORE_NAME, METRICS_SCOPE)
-        };
-    }
-
     private static TaskId taskId = new TaskId(0, 0);
-    private static StateStoreContext context;
 
-    @Parameterized.Parameter
-    public RocksDBStore store;
-
-    @Parameterized.BeforeParam
-    public static void setUpStore(final RocksDBStore store) {
-        context = new MockInternalProcessorContext(
-                new Properties(),
-                taskId,
-                TestUtils.tempDirectory("state")
+    public static Stream<Arguments> stores() {
+        final File stateDir = TestUtils.tempDirectory("state");
+        return Stream.of(
+            Arguments.of(new RocksDBStore(STORE_NAME, METRICS_SCOPE), new MockInternalProcessorContext(new Properties(), taskId, stateDir)),
+            Arguments.of(new RocksDBTimestampedStore(STORE_NAME, METRICS_SCOPE), new MockInternalProcessorContext(new Properties(), taskId, stateDir))
         );
+    }
+
+    static void withStore(final RocksDBStore store, final StateStoreContext context, final Runnable function) {
         store.init(context, store);
+        try {
+            function.run();
+        } finally {
+            store.close();
+            try {
+                Utils.delete(context.stateDir());
+            } catch (final IOException e) {
+                // ignore
+            }
+        }
     }
 
-    @Parameterized.AfterParam
-    public static void tearDownStore(final RocksDBStore store) throws IOException {
-        store.close();
-        Utils.delete(context.stateDir());
+    @ParameterizedTest
+    @MethodSource("stores")
+    public void shouldRecordCorrectBlockCacheCapacity(final RocksDBStore store, final StateStoreContext ctx) {
+        withStore(store, ctx, () ->
+                assertMetric(ctx, STATE_STORE_LEVEL_GROUP, RocksDBMetrics.CAPACITY_OF_BLOCK_CACHE, BigInteger.valueOf(50 * 1024 * 1024L)));
     }
 
-    @Test
-    public void shouldRecordCorrectBlockCacheCapacity() {
-        assertMetric(STATE_STORE_LEVEL_GROUP, RocksDBMetrics.CAPACITY_OF_BLOCK_CACHE, BigInteger.valueOf(50 * 1024 * 1024L));
+    @ParameterizedTest
+    @MethodSource("stores")
+    public void shouldRecordCorrectBlockCacheUsage(final RocksDBStore store, final StateStoreContext ctx) {
+        withStore(store, ctx, () -> {
+            final BlockBasedTableConfigWithAccessibleCache tableFormatConfig = (BlockBasedTableConfigWithAccessibleCache) store.getOptions().tableFormatConfig();
+            final long usage = tableFormatConfig.blockCache().getUsage();
+            assertMetric(ctx, STATE_STORE_LEVEL_GROUP, RocksDBMetrics.USAGE_OF_BLOCK_CACHE, BigInteger.valueOf(usage));
+        });
     }
 
-    @Test
-    public void shouldRecordCorrectBlockCacheUsage() {
-        final BlockBasedTableConfigWithAccessibleCache tableFormatConfig = (BlockBasedTableConfigWithAccessibleCache) store.getOptions().tableFormatConfig();
-        final long usage = tableFormatConfig.blockCache().getUsage();
-        assertMetric(STATE_STORE_LEVEL_GROUP, RocksDBMetrics.USAGE_OF_BLOCK_CACHE, BigInteger.valueOf(usage));
+    @ParameterizedTest
+    @MethodSource("stores")
+    public void shouldRecordCorrectBlockCachePinnedUsage(final RocksDBStore store, final StateStoreContext ctx) {
+        withStore(store, ctx, () -> {
+            final BlockBasedTableConfigWithAccessibleCache tableFormatConfig = (BlockBasedTableConfigWithAccessibleCache) store.getOptions().tableFormatConfig();
+            final long usage = tableFormatConfig.blockCache().getPinnedUsage();
+            assertMetric(ctx, STATE_STORE_LEVEL_GROUP, RocksDBMetrics.PINNED_USAGE_OF_BLOCK_CACHE, BigInteger.valueOf(usage));
+        });
     }
 
-    @Test
-    public void shouldRecordCorrectBlockCachePinnedUsage() {
-        final BlockBasedTableConfigWithAccessibleCache tableFormatConfig = (BlockBasedTableConfigWithAccessibleCache) store.getOptions().tableFormatConfig();
-        final long usage = tableFormatConfig.blockCache().getPinnedUsage();
-        assertMetric(STATE_STORE_LEVEL_GROUP, RocksDBMetrics.PINNED_USAGE_OF_BLOCK_CACHE, BigInteger.valueOf(usage));
-    }
-
-    public <T> void assertMetric(final String group, final String metricName, final T expected) {
+    public <T> void assertMetric(final StateStoreContext context, final String group, final String metricName, final T expected) {
         final StreamsMetricsImpl metrics = ProcessorContextUtils.getMetricsImpl(context);
         final MetricName name = metrics.metricsRegistry().metricName(
                 metricName,
@@ -108,7 +111,7 @@ public class RocksDBBlockCacheMetricsTest {
                 storeLevelTagMap(taskId.toString(), METRICS_SCOPE, STORE_NAME)
         );
         final KafkaMetric metric = (KafkaMetric) metrics.metrics().get(name);
-        assertEquals(String.format("Value for metric '%s-%s' was incorrect", group, metricName), expected, metric.metricValue());
+        assertEquals(expected, metric.metricValue(), String.format("Value for metric '%s-%s' was incorrect", group, metricName));
     }
 
     public Map<String, String> threadLevelTagMap(final String threadId) {
