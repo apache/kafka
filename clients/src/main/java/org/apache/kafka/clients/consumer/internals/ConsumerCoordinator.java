@@ -950,7 +950,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     /**
-     * Refresh the committed offsets for provided partitions.
+     * Refresh the committed offsets for partitions that require initialization.
      *
      * @param timer Timer bounding how long this method can block
      * @return true iff the operation completed within the timeout

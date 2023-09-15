@@ -146,12 +146,29 @@ public final class ConsumerUtils {
         return (List<ConsumerInterceptor<K, V>>) ClientUtils.configuredInterceptors(config, ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, ConsumerInterceptor.class);
     }
 
-    public static boolean refreshCommittedOffsets(final Map<TopicPartition, OffsetAndMetadata> offsets,
+    /**
+     * Update subscription state and metadata using the provided committed offsets:
+     * <li>Update partition offsets with the committed offsets</li>
+     * <li>Update the metadata with any newer leader epoch discovered in the committed offsets
+     * metadata</li>
+     * </p>
+     * This will ignore any partition included in the <code>offsetsAndMetadata</code> parameter that
+     * may no longer be assigned.
+     *
+     * @param offsetsAndMetadata Committed offsets and metadata to be used for updating the
+     *                           subscription state and metadata object.
+     * @param metadata           Metadata object to update with a new leader epoch if discovered in the
+     *                           committed offsets' metadata.
+     * @param subscriptions      Subscription state to update, setting partitions' offsets to the
+     *                           committed offsets.
+     * @return False if null <code>offsetsAndMetadata</code> is provided. True in any other case.
+     */
+    public static boolean refreshCommittedOffsets(final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata,
                                                   final ConsumerMetadata metadata,
                                                   final SubscriptionState subscriptions) {
-        if (offsets == null) return false;
+        if (offsetsAndMetadata == null) return false;
 
-        for (final Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsets.entrySet()) {
+        for (final Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsetsAndMetadata.entrySet()) {
             final TopicPartition tp = entry.getKey();
             final OffsetAndMetadata offsetAndMetadata = entry.getValue();
             if (offsetAndMetadata != null) {
