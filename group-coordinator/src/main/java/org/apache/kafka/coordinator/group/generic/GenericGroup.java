@@ -243,6 +243,16 @@ public class GenericGroup implements Group {
     }
 
     /**
+     * The state of this group based on the committed offset.
+     *
+     * @return The current state as a String.
+     */
+    @Override
+    public String stateAsString(long committedOffset) {
+        return this.state.toString();
+    }
+
+    /**
      * @return the group id.
      */
     public String groupId() {
@@ -1167,9 +1177,9 @@ public class GenericGroup implements Group {
     }
 
     /**
-     * @return the group formatted as a list group response.
+     * @return the group formatted as a list group response based on the committed offset.
      */
-    public ListGroupsResponseData.ListedGroup asListedGroup() {
+    public ListGroupsResponseData.ListedGroup asListedGroup(long committedOffset) {
         return new ListGroupsResponseData.ListedGroup()
             .setGroupId(groupId)
             .setProtocolType(protocolType.orElse(""))
