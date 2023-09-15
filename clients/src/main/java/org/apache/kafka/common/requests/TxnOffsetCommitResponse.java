@@ -47,9 +47,6 @@ import java.util.function.Function;
  *   - {@link Errors#UNKNOWN_MEMBER_ID}
  *   - {@link Errors#FENCED_INSTANCE_ID}
  *   - {@link Errors#ILLEGAL_GENERATION}
- *   - {@link Errors#INVALID_TXN_STATE}
- *   - {@link Errors#INVALID_PRODUCER_ID_MAPPING}
- *   - {@link Errors#CONCURRENT_TRANSACTIONS}
  */
 public class TxnOffsetCommitResponse extends AbstractResponse {
 

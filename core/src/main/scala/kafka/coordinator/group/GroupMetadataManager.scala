@@ -455,6 +455,10 @@ class GroupMetadataManager(brokerId: Int,
                        | Errors.INVALID_FETCH_SIZE =>
                     Errors.INVALID_COMMIT_OFFSET_SIZE
 
+                  case Errors.INVALID_PRODUCER_ID_MAPPING
+                       | Errors.INVALID_TXN_STATE =>
+                    Errors.UNKNOWN_MEMBER_ID
+
                   case other => other
                 }
               }

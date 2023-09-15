@@ -51,11 +51,8 @@ import java.util.stream.Collectors;
  * {@link Errors#CLUSTER_AUTHORIZATION_FAILED}
  * {@link Errors#TRANSACTIONAL_ID_AUTHORIZATION_FAILED}
  * {@link Errors#INVALID_RECORD}
- * {@link Errors#COORDINATOR_LOAD_IN_PROGRESS}
- * {@link Errors#COORDINATOR_NOT_AVAILABLE}
  * {@link Errors#INVALID_TXN_STATE}
  * {@link Errors#INVALID_PRODUCER_ID_MAPPING}
- * {@link Errors#CONCURRENT_TRANSACTIONS}
  */
 public class ProduceResponse extends AbstractResponse {
     public static final long INVALID_OFFSET = -1L;
