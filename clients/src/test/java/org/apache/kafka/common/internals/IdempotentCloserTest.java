@@ -107,7 +107,7 @@ public class IdempotentCloserTest {
     }
 
     /**
-     * Tests that the {@link IdempotentCloser#maybeThrowIllegalStateException(String)} method will not throw an
+     * Tests that the {@link IdempotentCloser#assertOpen(String)} method will not throw an
      * exception if the closer is in the "open" state, but if invoked after it's in the "closed" state, it will
      * throw the exception.
      */
@@ -119,12 +119,12 @@ public class IdempotentCloserTest {
         assertFalse(ic.isClosed());
 
         // maybeThrowIllegalStateException doesn't throw anything since the closer is still in its "open" state.
-        assertDoesNotThrow(() -> ic.maybeThrowIllegalStateException(() -> "test"));
+        assertDoesNotThrow(() -> ic.assertOpen(() -> "test"));
 
         // Post-close, our call to maybeThrowIllegalStateException will, in fact, throw said exception.
         ic.close();
         assertTrue(ic.isClosed());
-        assertThrows(IllegalStateException.class, () -> ic.maybeThrowIllegalStateException(() -> "test"));
+        assertThrows(IllegalStateException.class, () -> ic.assertOpen(() -> "test"));
     }
 
     /**
@@ -177,7 +177,7 @@ public class IdempotentCloserTest {
     public void testCreatedClosed() {
         IdempotentCloser ic = new IdempotentCloser(true);
         assertTrue(ic.isClosed());
-        assertThrows(IllegalStateException.class, () -> ic.maybeThrowIllegalStateException(() -> "test"));
+        assertThrows(IllegalStateException.class, () -> ic.assertOpen(() -> "test"));
         assertDoesNotThrow(() -> ic.close(CALLBACK_WITH_RUNTIME_EXCEPTION));
     }
 }

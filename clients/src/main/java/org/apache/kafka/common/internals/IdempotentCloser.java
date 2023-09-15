@@ -40,7 +40,7 @@ import java.util.function.Supplier;
  *     . . .
  *
  *     public boolean write() {
- *         closer.maybeThrowIllegalStateException(() -> String.format("Data file %s already closed!", file));
+ *         closer.assertOpen(() -> String.format("Data file %s already closed!", file));
  *         writeToFile();
  *     }
  *
@@ -88,7 +88,7 @@ public class IdempotentCloser implements AutoCloseable {
      *
      * @param message {@link Supplier} that supplies the message for the exception
      */
-    public void maybeThrowIllegalStateException(Supplier<String> message) {
+    public void assertOpen(Supplier<String> message) {
         if (isClosed.get())
             throw new IllegalStateException(message.get());
     }
@@ -99,7 +99,7 @@ public class IdempotentCloser implements AutoCloseable {
      *
      * @param message Message to use for the exception
      */
-    public void maybeThrowIllegalStateException(String message) {
+    public void assertOpen(String message) {
         if (isClosed.get())
             throw new IllegalStateException(message);
     }
@@ -114,7 +114,7 @@ public class IdempotentCloser implements AutoCloseable {
      * <p/>
      *
      * After the execution has completed, calls to {@link #isClosed()} will return {@code false} and calls to
-     * {@link #maybeThrowIllegalStateException(String)} and {@link #maybeThrowIllegalStateException(Supplier)}
+     * {@link #assertOpen(String)} and {@link #assertOpen(Supplier)}
      * will throw an {@link IllegalStateException}.
      */
     @Override
@@ -128,7 +128,7 @@ public class IdempotentCloser implements AutoCloseable {
      * <p/>
      *
      * After the execution has completed, calls to {@link #isClosed()} will return {@code false} and calls to
-     * {@link #maybeThrowIllegalStateException(String)} and {@link #maybeThrowIllegalStateException(Supplier)}
+     * {@link #assertOpen(String)} and {@link #assertOpen(Supplier)}
      * will throw an {@link IllegalStateException}.
      *
      * @param onInitialClose Optional {@link Runnable} to execute when the resource is closed. Note that the
@@ -145,7 +145,7 @@ public class IdempotentCloser implements AutoCloseable {
      * <p/>
      *
      * After the execution has completed, calls to {@link #isClosed()} will return {@code false} and calls to
-     * {@link #maybeThrowIllegalStateException(String)} and {@link #maybeThrowIllegalStateException(Supplier)}
+     * {@link #assertOpen(String)} and {@link #assertOpen(Supplier)}
      * will throw an {@link IllegalStateException}.
      *
      * @param onInitialClose    Optional {@link Runnable} to execute when the resource is closed. Note that the
