@@ -364,17 +364,8 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
 
         final OffsetFetchApplicationEvent event = new OffsetFetchApplicationEvent(partitions);
         wakeupTrigger.setActiveTask(event.future());
-        eventHandler.add(event);
         try {
-            return event.future().get(timeout.toMillis(), TimeUnit.MILLISECONDS);
-        } catch (InterruptedException e) {
-            throw new InterruptException(e);
-        } catch (TimeoutException e) {
-            throw new org.apache.kafka.common.errors.TimeoutException(e);
-        } catch (ExecutionException e) {
-            if (e.getCause() instanceof WakeupException)
-                throw new WakeupException();
-            throw new KafkaException(e);
+            return eventHandler.addAndGet(event, time.timer(timeout));
         } finally {
             wakeupTrigger.clearActiveTask();
         }

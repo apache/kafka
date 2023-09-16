@@ -165,6 +165,7 @@ public class DefaultBackgroundThread extends KafkaThread {
                             retryBackoffMs,
                             requestTimeoutMs,
                             apiVersions,
+                            networkClientDelegate,
                             logContext);
             CoordinatorRequestManager coordinatorRequestManager = null;
             CommitRequestManager commitRequestManager = null;

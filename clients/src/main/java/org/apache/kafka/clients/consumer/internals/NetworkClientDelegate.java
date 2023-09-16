@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.KafkaClient;
+import org.apache.kafka.clients.NetworkClientUtils;
 import org.apache.kafka.clients.RequestCompletionHandler;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.Node;
@@ -34,11 +35,13 @@ import org.slf4j.Logger;
 import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Queue;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -51,6 +54,7 @@ public class NetworkClientDelegate implements AutoCloseable {
     private final int requestTimeoutMs;
     private final Queue<UnsentRequest> unsentRequests;
     private final long retryBackoffMs;
+    private final Set<Node> tryConnectNodes;
 
     public NetworkClientDelegate(
             final Time time,
@@ -63,6 +67,11 @@ public class NetworkClientDelegate implements AutoCloseable {
         this.unsentRequests = new ArrayDeque<>();
         this.requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
         this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
+        this.tryConnectNodes = new HashSet<>();
+    }
+
+    public void tryConnect(Node node) {
+        NetworkClientUtils.tryConnect(client, node, time);
     }
 
     /**
