@@ -161,7 +161,8 @@ public final class ConsumerUtils {
      *                           committed offsets' metadata.
      * @param subscriptions      Subscription state to update, setting partitions' offsets to the
      *                           committed offsets.
-     * @return False if null <code>offsetsAndMetadata</code> is provided. True in any other case.
+     * @return False if null <code>offsetsAndMetadata</code> is provided, indicating that the
+     * refresh operation could not be performed. True in any other case.
      */
     public static boolean refreshCommittedOffsets(final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata,
                                                   final ConsumerMetadata metadata,
