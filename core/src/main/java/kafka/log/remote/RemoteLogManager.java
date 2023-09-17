@@ -1518,7 +1518,7 @@ public class RemoteLogManager implements Closeable {
 
     private static void shutdownAndAwaitTermination(ExecutorService pool, String poolName, long timeout, TimeUnit timeUnit) {
         // This pattern of shutting down thread pool is adopted from here: https://docs.oracle.com/en/java/javase/17/docs/api/java.base/java/util/concurrent/ExecutorService.html
-        LOGGER.info("Shutting down of thread pool {} is started", poolName);
+//        LOGGER.info("Shutting down of thread pool {} is started", poolName);
         pool.shutdown(); // Disable new tasks from being submitted
         try {
             // Wait a while for existing tasks to terminate
@@ -1537,7 +1537,7 @@ public class RemoteLogManager implements Closeable {
             Thread.currentThread().interrupt();
         }
 
-        LOGGER.info("Shutting down of thread pool {} is completed", poolName);
+//        LOGGER.info("Shutting down of thread pool {} is completed", poolName);
     }
 
     //Visible for testing
@@ -1577,7 +1577,7 @@ public class RemoteLogManager implements Closeable {
         }
 
         public ScheduledFuture<?> scheduleWithFixedDelay(Runnable runnable, long initialDelay, long delay, TimeUnit timeUnit) {
-            LOGGER.info("Scheduling runnable {} with initial delay: {}, fixed delay: {}", runnable, initialDelay, delay);
+//            LOGGER.info("Scheduling runnable {} with initial delay: {}, fixed delay: {}", runnable, initialDelay, delay);
             return scheduledThreadPool.scheduleWithFixedDelay(runnable, initialDelay, delay, timeUnit);
         }
 

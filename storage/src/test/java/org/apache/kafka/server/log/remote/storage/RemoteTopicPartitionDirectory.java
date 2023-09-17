@@ -120,7 +120,7 @@ public final class RemoteTopicPartitionDirectory {
         final boolean existed = directory.exists();
 
         if (!existed) {
-            LOGGER.info("Creating directory: " + directory.getAbsolutePath());
+//            LOGGER.info("Creating directory: " + directory.getAbsolutePath());
             directory.mkdirs();
         }
 

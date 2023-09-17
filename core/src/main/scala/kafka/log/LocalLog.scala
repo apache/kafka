@@ -508,7 +508,9 @@ class LocalLog(@volatile private var _dir: File,
             s" size of offset index: ${activeSegment.offsetIndex.entries}.")
           val newSegment = createAndDeleteSegment(newOffset, activeSegment, asyncDelete = true, LogRoll(this))
           updateLogEndOffset(nextOffsetMetadata.messageOffset)
-          info(s"Rolled new log segment at offset $newOffset in ${time.hiResClockMs() - start} ms.")
+          warn(s"Rolled new log segment at offset $newOffset in ${time.hiResClockMs() - start} ms.")
+//          println(s"Rolled new log segment at offset $newOffset")
+//          System.err.println(s"Rolled new log segment at offset $newOffset")
           return newSegment
         } else {
           throw new KafkaException(s"Trying to roll a new log segment for topic partition $topicPartition with start offset $newOffset" +
@@ -545,6 +547,7 @@ class LocalLog(@volatile private var _dir: File,
       updateLogEndOffset(nextOffsetMetadata.messageOffset)
 
       info(s"Rolled new log segment at offset $newOffset in ${time.hiResClockMs() - start} ms.")
+      println(s"Rolled new log segment at offset $newOffset")
 
       newSegment
     }

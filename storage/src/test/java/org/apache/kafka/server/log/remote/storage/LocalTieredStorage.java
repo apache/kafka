@@ -286,7 +286,7 @@ public final class LocalTieredStorage implements RemoteStorageManager {
             final boolean existed = Files.exists(storageDirectory.toPath());
             if (!existed) {
                 try {
-                    logger.info("Creating directory: [{}]", storageDirectory.getAbsolutePath());
+//                    logger.info("Creating directory: [{}]", storageDirectory.getAbsolutePath());
                     Files.createDirectories(storageDirectory.toPath());
                 } catch (IOException e) {
                     throw new RuntimeException(format("Not able to create the storage directory '%s'", storageDirectory.getAbsolutePath()), e);
@@ -309,7 +309,7 @@ public final class LocalTieredStorage implements RemoteStorageManager {
             RemoteLogSegmentFileset fileset = null;
             try {
                 fileset = openFileset(storageDirectory, metadata);
-                logger.info("Offloading log segment for {} from segment={}", metadata.topicIdPartition(), data.logSegment());
+//                logger.info("Offloading log segment for {} from segment={}", metadata.topicIdPartition(), data.logSegment());
                 fileset.copy(transferer, data);
                 storageListeners.onStorageEvent(eventBuilder.withFileset(fileset).build());
             } catch (final Exception e) {

@@ -292,7 +292,7 @@ class ConsumerTask implements Runnable, Closeable {
 
     private void updateAssignments(final Set<TopicIdPartition> addedPartitions,
                                    final Set<TopicIdPartition> removedPartitions) {
-        log.info("Updating assignments for partitions added: {} and removed: {}", addedPartitions, removedPartitions);
+//        log.info("Updating assignments for partitions added: {} and removed: {}", addedPartitions, removedPartitions);
         if (!addedPartitions.isEmpty() || !removedPartitions.isEmpty()) {
             synchronized (assignPartitionsLock) {
                 // Make a copy of the existing assignments and update the copy.
@@ -325,7 +325,7 @@ class ConsumerTask implements Runnable, Closeable {
     @Override
     public void close() {
         if (!isClosed) {
-            log.info("Closing the instance");
+//            log.info("Closing the instance");
             synchronized (assignPartitionsLock) {
                 isClosed = true;
                 assignedUserTopicIdPartitions.values().forEach(this::markInitialized);
