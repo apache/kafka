@@ -25,7 +25,7 @@ import kafka.utils._
 import kafka.utils.Implicits._
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.clients.consumer.OffsetAndMetadata
-import org.apache.kafka.clients.{CommonClientConfigs, SubscriptionPattern}
+import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{KafkaException, Node, TopicPartition}
 import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
@@ -41,6 +41,8 @@ import scala.collection.immutable.TreeMap
 import scala.reflect.ClassTag
 import org.apache.kafka.common.ConsumerGroupState
 import org.apache.kafka.common.requests.ListOffsetsResponse
+
+import java.util.regex.{Pattern, PatternSyntaxException}
 
 object ConsumerGroupCommand extends Logging {
 
@@ -549,11 +551,17 @@ object ConsumerGroupCommand extends Logging {
 
     def verifyRegex(): Unit = {
       val regex = opts.options.valueOf(opts.verifyRegexOpt)
-      val subscriptionPattern = new SubscriptionPattern(regex)
-      if (subscriptionPattern.isValidPattern)
+      val isValidRegex = try {
+        Pattern.compile(regex)
+        true
+      } catch {
+        case _: PatternSyntaxException => false
+      }
+      if (isValidRegex) {
         println(s"$regex is a valid regular expression")
-      else
+      } else {
         println(s"$regex is an invalid regular expression")
+      }
     }
 
     /**

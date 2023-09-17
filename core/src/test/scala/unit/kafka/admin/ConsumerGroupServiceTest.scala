@@ -19,6 +19,7 @@ package kafka.admin
 
 import java.util
 import java.util.{Collections, Optional}
+
 import kafka.admin.ConsumerGroupCommand.{ConsumerGroupCommandOptions, ConsumerGroupService}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin._

@@ -148,8 +148,7 @@ versions += [
   swaggerAnnotations: "2.2.8",
   swaggerJaxrs2: "2.2.8",
   zinc: "1.9.2",
-  zookeeper: "3.8.2",
-  re2j: "1.7",
+  zookeeper: "3.8.2"
   zstd: "1.5.5-1"
 ]
 
@@ -246,6 +245,5 @@ libs += [
   jfreechart: "jfreechart:jfreechart:$versions.jfreechart",
   mavenArtifact: "org.apache.maven:maven-artifact:$versions.mavenArtifact",
   zstd: "com.github.luben:zstd-jni:$versions.zstd",
-  re2j: "com.google.re2j:re2j:$versions.re2j",
   httpclient: "org.apache.httpcomponents:httpclient:$versions.httpclient"
 ]
