@@ -100,7 +100,7 @@ public class TransactionsWithTieredStoreTest8 extends TransactionsTest {
                                     offsets.put(broker.config().brokerId(), offset);
                                     return entry.getValue() == offset;
                                 })
-                ), () -> "local log start offset doesn't change to the expected position:" + partitionLocalStartOffsets + ", current position:" + offsets);
+                ), 45000, () -> "local log start offset doesn't change to the expected position:" + partitionLocalStartOffsets + ", current position:" + offsets);
     }
 
     @SuppressWarnings("deprecation")
