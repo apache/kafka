@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import java.util.Arrays;
+import java.util.LinkedHashSet;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import org.apache.kafka.clients.GroupRebalanceConfig;
@@ -1651,64 +1651,61 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
     private static class MetadataSnapshot {
         private final int version;
-        private final Map<String, List<PartitionRackInfo>> partitionsPerTopic;
+        private final Map<String, Set<PartitionRack>> partitionRacksPerTopic;
 
         private MetadataSnapshot(Optional<String> clientRack, SubscriptionState subscription, Cluster cluster, int version) {
-            Map<String, List<PartitionRackInfo>> partitionsPerTopic = new HashMap<>();
-            for (String topic : subscription.metadataTopics()) {
-                List<PartitionInfo> partitions = cluster.partitionsForTopic(topic);
+            final Map<String, Set<PartitionRack>> partitionRacksPerTopic = new HashMap<>();
+            for (final String topic : subscription.metadataTopics()) {
+                final List<PartitionInfo> partitions = cluster.partitionsForTopic(topic);
                 if (partitions != null) {
-                    List<PartitionRackInfo> partitionRacks = partitions.stream()
-                            .map(p -> new PartitionRackInfo(clientRack, p))
-                            .collect(Collectors.toList());
-                    partitionsPerTopic.put(topic, partitionRacks);
+                    // we use a LinkedHashSet to improve iteration performance, even though we don't care about the order
+                    final Set<PartitionRack> partitionRacks = new LinkedHashSet<>(partitions.size() * 3);
+                    for (final PartitionInfo p : partitions) {
+                        if (clientRack.isPresent() && p.replicas() != null) {
+                            for (final Node node : p.replicas()) {
+                                partitionRacks.add(new PartitionRack(node.rack(), p.partition()));
+                            }
+                        } else {
+                            partitionRacks.add(new PartitionRack(null, p.partition()));
+                        }
+                    }
+                    partitionRacksPerTopic.put(topic, partitionRacks);
                 }
             }
-            this.partitionsPerTopic = partitionsPerTopic;
+            this.partitionRacksPerTopic = partitionRacksPerTopic;
             this.version = version;
         }
 
-        boolean matches(MetadataSnapshot other) {
-            return version == other.version || partitionsPerTopic.equals(other.partitionsPerTopic);
+        boolean matches(final MetadataSnapshot other) {
+            return version == other.version || partitionRacksPerTopic.equals(other.partitionRacksPerTopic);
         }
 
         @Override
         public String toString() {
-            return "(version" + version + ": " + partitionsPerTopic + ")";
+            return "(version" + version + ": " + partitionRacksPerTopic + ")";
         }
     }
 
-    private static class PartitionRackInfo {
-        private final Set<String> racks;
+    private static class PartitionRack {
+        private final String rack;
+        private final int partition;
 
-        PartitionRackInfo(Optional<String> clientRack, PartitionInfo partition) {
-            if (clientRack.isPresent() && partition.replicas() != null) {
-                racks = Arrays.stream(partition.replicas()).map(Node::rack).collect(Collectors.toSet());
-            } else {
-                racks = Collections.emptySet();
-            }
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) {
-                return true;
-            }
-            if (!(o instanceof PartitionRackInfo)) {
-                return false;
-            }
-            PartitionRackInfo rackInfo = (PartitionRackInfo) o;
-            return Objects.equals(racks, rackInfo.racks);
+        PartitionRack(final String rack, final int partition) {
+            this.rack = rack;
+            this.partition = partition;
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(racks);
+            return 31 * (31 + partition) + (rack == null ? 0 : rack.hashCode());
         }
 
         @Override
-        public String toString() {
-            return racks.isEmpty() ? "NO_RACKS" : "racks=" + racks;
+        public boolean equals(final Object obj) {
+            if (obj == this) return true;
+            if (!(obj instanceof PartitionRack)) return false;
+            final PartitionRack other = (PartitionRack) obj;
+            return (partition == other.partition) && Objects.equals(rack, other.rack);
         }
     }
 
