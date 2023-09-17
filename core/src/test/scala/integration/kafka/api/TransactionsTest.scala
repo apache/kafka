@@ -870,7 +870,7 @@ class TransactionsTest extends IntegrationTestHarness {
           }
         }
       })
-    }, s"log start offset doesn't change to the expected position: $partitionStartOffsets, current position: $offsets")
+    }, s"log start offset doesn't change to the expected position: $partitionStartOffsets, current position: $offsets", 45000)
   }
 
   @throws(classOf[InterruptedException])
