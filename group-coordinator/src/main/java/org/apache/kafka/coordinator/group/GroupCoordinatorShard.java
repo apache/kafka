@@ -24,6 +24,7 @@ import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.LeaveGroupRequestData;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
+import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
 import org.apache.kafka.common.message.OffsetFetchRequestData;
@@ -60,6 +61,7 @@ import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -306,6 +308,21 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
         OffsetCommitRequestData request
     ) throws ApiException {
         return offsetMetadataManager.commitOffset(context, request);
+    }
+
+    /**
+     * Handles a ListGroups request.
+     *
+     * @param statesFilter    The states of the groups we want to list.
+     *                        If empty all groups are returned with their state.
+     * @param committedOffset A specified committed offset corresponding to this shard
+     * @return A list containing the ListGroupsResponseData.ListedGroup
+     */
+    public List<ListGroupsResponseData.ListedGroup> listGroups(
+        List<String> statesFilter,
+        long committedOffset
+    ) throws ApiException {
+        return groupMetadataManager.listGroups(statesFilter, committedOffset);
     }
 
     /**

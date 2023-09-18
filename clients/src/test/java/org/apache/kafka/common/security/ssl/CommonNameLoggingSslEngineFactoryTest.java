@@ -14,18 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.consumer.internals.events;
+package org.apache.kafka.common.security.ssl;
 
-public class NewTopicsMetadataUpdateRequestEvent extends ApplicationEvent {
-
-    public NewTopicsMetadataUpdateRequestEvent() {
-        super(Type.METADATA_UPDATE);
-    }
+public class CommonNameLoggingSslEngineFactoryTest extends DefaultSslEngineFactoryTest {
 
     @Override
-    public String toString() {
-        return "NewTopicsMetadataUpdateRequestEvent{" +
-                toStringBase() +
-                '}';
+    protected DefaultSslEngineFactory sslEngineFactory() {
+        return new CommonNameLoggingSslEngineFactory();
     }
 }

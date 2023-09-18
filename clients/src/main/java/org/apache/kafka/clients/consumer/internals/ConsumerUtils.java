@@ -28,6 +28,10 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.errors.InterruptException;
+import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -38,6 +42,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.apache.kafka.common.utils.Timer;
 
 import java.util.Collections;
 import java.util.List;
@@ -45,6 +50,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
 public final class ConsumerUtils {
@@ -196,4 +203,22 @@ public final class ConsumerUtils {
         return true;
     }
 
+    public static <T> T getResult(CompletableFuture<T> future, Timer timer) {
+        try {
+            return future.get(timer.remainingMs(), TimeUnit.MILLISECONDS);
+        } catch (ExecutionException e) {
+            Throwable t = e.getCause();
+
+            if (t instanceof WakeupException)
+                throw new WakeupException();
+            else if (t instanceof KafkaException)
+                throw (KafkaException) t;
+            else
+                throw new KafkaException(t);
+        } catch (InterruptedException e) {
+            throw new InterruptException(e);
+        } catch (java.util.concurrent.TimeoutException e) {
+            throw new TimeoutException(e);
+        }
+    }
 }

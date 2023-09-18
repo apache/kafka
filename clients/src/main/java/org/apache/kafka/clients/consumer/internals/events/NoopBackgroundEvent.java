@@ -14,23 +14,49 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.consumer.internals;
+package org.apache.kafka.clients.consumer.internals.events;
 
-import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
+import java.util.Objects;
 
 /**
- * Noop event. Intentionally left it here for demonstration purpose.
+ * No-op event. Intentionally left it here for demonstration purpose.
  */
 public class NoopBackgroundEvent extends BackgroundEvent {
-    public final String message;
+
+    private final String message;
 
     public NoopBackgroundEvent(final String message) {
-        super(EventType.NOOP);
-        this.message = message;
+        super(Type.NOOP);
+        this.message = Objects.requireNonNull(message);
+    }
+
+    public String message() {
+        return message;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        if (!super.equals(o)) return false;
+
+        NoopBackgroundEvent that = (NoopBackgroundEvent) o;
+
+        return message.equals(that.message);
+    }
+
+    @Override
+    public int hashCode() {
+        int result = super.hashCode();
+        result = 31 * result + message.hashCode();
+        return result;
     }
 
     @Override
     public String toString() {
-        return getClass() + "_" + this.message;
+        return "NoopBackgroundEvent{" +
+                toStringBase() +
+                ", message='" + message + '\'' +
+                '}';
     }
 }

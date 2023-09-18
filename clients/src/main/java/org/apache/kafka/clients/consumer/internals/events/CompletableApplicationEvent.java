@@ -16,14 +16,10 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.errors.InterruptException;
-import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.clients.consumer.internals.ConsumerUtils;
 import org.apache.kafka.common.utils.Timer;
 
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Application event with a result in the form of a future, that can be retrieved within a
@@ -33,7 +29,7 @@ import java.util.concurrent.TimeUnit;
  */
 public abstract class CompletableApplicationEvent<T> extends ApplicationEvent {
 
-    protected final CompletableFuture<T> future;
+    private final CompletableFuture<T> future;
 
     protected CompletableApplicationEvent(Type type) {
         super(type);
@@ -45,20 +41,7 @@ public abstract class CompletableApplicationEvent<T> extends ApplicationEvent {
     }
 
     public T get(Timer timer) {
-        try {
-            return future.get(timer.remainingMs(), TimeUnit.MILLISECONDS);
-        } catch (ExecutionException e) {
-            Throwable t = e.getCause();
-
-            if (t instanceof KafkaException)
-                throw (KafkaException) t;
-            else
-                throw new KafkaException(t);
-        } catch (InterruptedException e) {
-            throw new InterruptException(e);
-        } catch (java.util.concurrent.TimeoutException e) {
-            throw new TimeoutException(e);
-        }
+        return ConsumerUtils.getResult(future, timer);
     }
 
     public void chain(final CompletableFuture<T> providedFuture) {
@@ -90,10 +73,14 @@ public abstract class CompletableApplicationEvent<T> extends ApplicationEvent {
     }
 
     @Override
+    protected String toStringBase() {
+        return super.toStringBase() + ", future=" + future;
+    }
+
+    @Override
     public String toString() {
         return getClass().getSimpleName() + "{" +
-                "future=" + future +
-                ", type=" + type +
+                toStringBase() +
                 '}';
     }
 }
