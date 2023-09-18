@@ -23,6 +23,8 @@ import org.apache.kafka.common.message.ControllerRegistrationRequestData;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.RegisterControllerRecord;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
@@ -67,10 +69,12 @@ import java.util.function.Function;
  * hostname explicitly in the configuration rather than binding to 0.0.0.0.)
  *
  * The second gotcha is that if someone configures an ephemeral port (aka port 0), we need to fill
- * The withEphemeralPortsCorrected resolves this by filling in the missing information for ephemeral
- * ports.
+ * in the port which is chosen at runtime. The withEphemeralPortsCorrected resolves this by filling
+ * in the missing information for ephemeral ports.
  */
 final public class ListenerInfo {
+    private final static Logger log = LoggerFactory.getLogger(ListenerInfo.class);
+
     /**
      * Create a ListenerInfo from data in a ControllerRegistrationRequest RPC.
      *
@@ -186,6 +190,7 @@ final public class ListenerInfo {
             String name = listener.listenerName().get();
             if (Optional.of(name).equals(firstListenerName)) {
                 listeners.put(name, listener);
+                break;
             }
         }
         for (Endpoint listener : rawListeners) {
@@ -212,6 +217,9 @@ final public class ListenerInfo {
     }
 
     public Endpoint firstListener() {
+        if (listeners.isEmpty()) {
+            throw new RuntimeException("No listeners found.");
+        }
         return listeners.values().iterator().next();
     }
 
@@ -231,6 +239,8 @@ final public class ListenerInfo {
                         prevEndpoint.securityProtocol(),
                         newHost,
                         prevEndpoint.port()));
+                log.info("{}: resolved wildcard host to {}", entry.getValue().listenerName().get(),
+                        newHost);
             } else {
                 newListeners.put(entry.getKey(), entry.getValue());
             }
@@ -257,6 +267,8 @@ final public class ListenerInfo {
                 Endpoint prevEndpoint = entry.getValue();
                 int newPort = getBoundPortCallback.apply(entry.getKey());
                 checkPortIsSerializable(newPort);
+                log.info("{}: resolved ephemeral port to {}", entry.getValue().listenerName().get(),
+                        newPort);
                 newListeners.put(entry.getKey(), new Endpoint(prevEndpoint.listenerName().get(),
                         prevEndpoint.securityProtocol(),
                         prevEndpoint.host(),
@@ -273,10 +285,10 @@ final public class ListenerInfo {
             throw new RuntimeException("Cannot serialize ephemeral port 0 in ListenerInfo.");
         } else if (port < 0) {
             throw new RuntimeException("Cannot serialize negative port number " + port +
-                    " in ListenerInfo.");
+                " in ListenerInfo.");
         } else if (port > 65535) {
             throw new RuntimeException("Cannot serialize invalid port number " + port +
-                    " in ListenerInfo.");
+                " in ListenerInfo.");
         }
     }
 
