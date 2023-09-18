@@ -26,7 +26,7 @@ import org.apache.kafka.common.message.ControllerRegistrationRequestData
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{ControllerRegistrationRequest, ControllerRegistrationResponse}
 import org.apache.kafka.metadata.VersionRange
-import org.apache.kafka.common.utils.{ExponentialBackoff, LogContext, Time}
+import org.apache.kafka.common.utils.{ExponentialBackoff, LogContext, Time, Utils}
 import org.apache.kafka.image.loader.LoaderManifest
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.image.publisher.MetadataPublisher
@@ -34,6 +34,7 @@ import org.apache.kafka.queue.EventQueue.DeadlineFunction
 import org.apache.kafka.queue.{EventQueue, KafkaEventQueue}
 import org.apache.kafka.server.common.MetadataVersion
 
+import java.net.InetAddress
 import scala.jdk.CollectionConverters._
 
 /**
@@ -74,7 +75,7 @@ class ControllerRegistrationManager(
     val collection = new ListenerCollection()
     config.controllerListeners.foreach(endPoint => {
       collection.add(new ControllerRegistrationRequestData.Listener().
-        setHost(endPoint.host).
+        setHost(if (Utils.isBlank(endPoint.host)) InetAddress.getLocalHost.getCanonicalHostName else endPoint.host).
         setName(endPoint.listenerName.value()).
         setPort(listenerPortOverrides.getOrElse(endPoint.listenerName.value(), endPoint.port)).
         setSecurityProtocol(endPoint.securityProtocol.id))
