@@ -28,9 +28,12 @@ import org.apache.kafka.clients.consumer.internals.events.EventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
 import org.apache.kafka.clients.consumer.internals.events.OffsetFetchApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.ResetPositionsApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.ValidatePositionsApplicationEvent;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -38,7 +41,6 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
@@ -84,11 +86,12 @@ import static org.mockito.Mockito.when;
 public class PrototypeAsyncConsumerTest {
 
     private PrototypeAsyncConsumer<?, ?> consumer;
-    private Map<String, Object> consumerProps = new HashMap<>();
+    private final Map<String, Object> consumerProps = new HashMap<>();
 
     private final Time time = new MockTime();
     private LogContext logContext;
     private SubscriptionState subscriptions;
+    private ConsumerMetadata metadata;
     private EventHandler eventHandler;
     private Metrics metrics;
 
@@ -101,6 +104,7 @@ public class PrototypeAsyncConsumerTest {
         this.config = new ConsumerConfig(consumerProps);
         this.logContext = new LogContext();
         this.subscriptions = mock(SubscriptionState.class);
+        this.metadata = mock(ConsumerMetadata.class);
         final DefaultBackgroundThread bt = mock(DefaultBackgroundThread.class);
         final BlockingQueue<ApplicationEvent> aq = new LinkedBlockingQueue<>();
         final BlockingQueue<BackgroundEvent> bq = new LinkedBlockingQueue<>();
@@ -145,7 +149,6 @@ public class PrototypeAsyncConsumerTest {
 
         assertFalse(future.isCompletedExceptionally());
     }
-
 
     @Test
     public void testCommitAsync_UserSuppliedCallback() {
@@ -361,6 +364,84 @@ public class PrototypeAsyncConsumerTest {
         assertNoPendingWakeup(consumer.wakeupTrigger());
     }
 
+    @Test
+    public void testRefreshCommittedOffsetsSuccess() {
+        Map<TopicPartition, OffsetAndMetadata> committedOffsets =
+                Collections.singletonMap(new TopicPartition("t1", 1), new OffsetAndMetadata(10L));
+        testRefreshCommittedOffsetsSuccess(committedOffsets);
+    }
+
+    @Test
+    public void testRefreshCommittedOffsetsSuccessButNoCommittedOffsetsFound() {
+        testRefreshCommittedOffsetsSuccess(Collections.emptyMap());
+    }
+
+    @Test
+    public void testRefreshCommittedOffsetsShouldNotResetIfFailedWithTimeout() {
+        // Create consumer with group id to enable committed offset usage
+        this.groupId = "consumer-group-1";
+
+        testUpdateFetchPositionsWithFetchCommittedOffsetsTimeout(true);
+    }
+
+    @Test
+    public void testRefreshCommittedOffsetsNotCalledIfNoGroupId() {
+        // Create consumer without group id so committed offsets are not used for updating positions
+        this.groupId = null;
+        consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
+
+        testUpdateFetchPositionsWithFetchCommittedOffsetsTimeout(false);
+    }
+
+    private void testUpdateFetchPositionsWithFetchCommittedOffsetsTimeout(boolean committedOffsetsEnabled) {
+        consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
+
+        // Uncompleted future that will time out if used
+        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> committedFuture = new CompletableFuture<>();
+
+        when(subscriptions.initializingPartitions()).thenReturn(Collections.singleton(new TopicPartition("t1", 1)));
+
+        try (MockedConstruction<OffsetFetchApplicationEvent> ignored = offsetFetchEventMocker(committedFuture)) {
+
+            // Poll with 0 timeout to run a single iteration of the poll loop
+            consumer.poll(Duration.ofMillis(0));
+
+            verify(eventHandler).add(ArgumentMatchers.isA(ValidatePositionsApplicationEvent.class));
+
+            if (committedOffsetsEnabled) {
+                // Verify there was an OffsetFetch event and no ResetPositions event
+                verify(eventHandler).add(ArgumentMatchers.isA(OffsetFetchApplicationEvent.class));
+                verify(eventHandler,
+                        never()).add(ArgumentMatchers.isA(ResetPositionsApplicationEvent.class));
+            } else {
+                // Verify there was not any OffsetFetch event but there should be a ResetPositions
+                verify(eventHandler,
+                        never()).add(ArgumentMatchers.isA(OffsetFetchApplicationEvent.class));
+                verify(eventHandler).add(ArgumentMatchers.isA(ResetPositionsApplicationEvent.class));
+            }
+        }
+    }
+
+    private void testRefreshCommittedOffsetsSuccess(Map<TopicPartition, OffsetAndMetadata> committedOffsets) {
+        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> committedFuture = new CompletableFuture<>();
+        committedFuture.complete(committedOffsets);
+
+        // Create consumer with group id to enable committed offset usage
+        this.groupId = "consumer-group-1";
+        consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
+
+        try (MockedConstruction<OffsetFetchApplicationEvent> ignored = offsetFetchEventMocker(committedFuture)) {
+            when(subscriptions.initializingPartitions()).thenReturn(committedOffsets.keySet());
+
+            // Poll with 0 timeout to run a single iteration of the poll loop
+            consumer.poll(Duration.ofMillis(0));
+
+            verify(eventHandler).add(ArgumentMatchers.isA(ValidatePositionsApplicationEvent.class));
+            verify(eventHandler).add(ArgumentMatchers.isA(OffsetFetchApplicationEvent.class));
+            verify(eventHandler).add(ArgumentMatchers.isA(ResetPositionsApplicationEvent.class));
+        }
+    }
+
     private void assertNoPendingWakeup(final WakeupTrigger wakeupTrigger) {
         assertTrue(wakeupTrigger.getPendingTask() == null);
     }
@@ -410,6 +491,7 @@ public class PrototypeAsyncConsumerTest {
                 logContext,
                 config,
                 subscriptions,
+                metadata,
                 eventHandler,
                 metrics,
                 Optional.ofNullable(this.groupId),
