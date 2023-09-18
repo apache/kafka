@@ -19,7 +19,6 @@ package org.apache.kafka.clients.consumer.internals.events;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.internals.CommitRequestManager;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
-import org.apache.kafka.clients.consumer.internals.NoopBackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.RequestManagers;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
@@ -50,7 +49,7 @@ public class ApplicationEventProcessor {
 
     public boolean process(final ApplicationEvent event) {
         Objects.requireNonNull(event);
-        switch (event.type) {
+        switch (event.type()) {
             case NOOP:
                 return process((NoopApplicationEvent) event);
             case COMMIT:
@@ -83,7 +82,7 @@ public class ApplicationEventProcessor {
      * @param event a {@link NoopApplicationEvent}
      */
     private boolean process(final NoopApplicationEvent event) {
-        return backgroundEventQueue.add(new NoopBackgroundEvent(event.message));
+        return backgroundEventQueue.add(new NoopBackgroundEvent(event.message()));
     }
 
     private boolean process(final PollApplicationEvent event) {
@@ -92,7 +91,7 @@ public class ApplicationEventProcessor {
         }
 
         CommitRequestManager manager = requestManagers.commitRequestManager.get();
-        manager.updateAutoCommitTimer(event.pollTimeMs);
+        manager.updateAutoCommitTimer(event.pollTimeMs());
         return true;
     }
 
@@ -131,8 +130,8 @@ public class ApplicationEventProcessor {
             return false;
         }
         CommitRequestManager manager = requestManagers.commitRequestManager.get();
-        manager.updateAutoCommitTimer(event.currentTimeMs);
-        manager.maybeAutoCommit(event.offsets);
+        manager.updateAutoCommitTimer(event.currentTimeMs());
+        manager.maybeAutoCommit(event.offsets());
         return true;
     }
 

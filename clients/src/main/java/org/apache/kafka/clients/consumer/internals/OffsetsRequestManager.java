@@ -82,6 +82,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
     private final long requestTimeoutMs;
     private final Time time;
     private final ApiVersions apiVersions;
+    private final NetworkClientDelegate networkClientDelegate;
 
     public OffsetsRequestManager(final SubscriptionState subscriptionState,
                                  final ConsumerMetadata metadata,
@@ -90,12 +91,14 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
                                  final long retryBackoffMs,
                                  final long requestTimeoutMs,
                                  final ApiVersions apiVersions,
+                                 final NetworkClientDelegate networkClientDelegate,
                                  final LogContext logContext) {
         requireNonNull(subscriptionState);
         requireNonNull(metadata);
         requireNonNull(isolationLevel);
         requireNonNull(time);
         requireNonNull(apiVersions);
+        requireNonNull(networkClientDelegate);
         requireNonNull(logContext);
 
         this.metadata = metadata;
@@ -107,6 +110,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
         this.time = time;
         this.requestTimeoutMs = requestTimeoutMs;
         this.apiVersions = apiVersions;
+        this.networkClientDelegate = networkClientDelegate;
         this.offsetFetcherUtils = new OffsetFetcherUtils(logContext, metadata, subscriptionState,
                 time, retryBackoffMs, apiVersions);
         // Register the cluster metadata update callback. Note this only relies on the
@@ -429,6 +433,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
 
             NodeApiVersions nodeApiVersions = apiVersions.get(node.idString());
             if (nodeApiVersions == null) {
+                networkClientDelegate.tryConnect(node);
                 return;
             }
 
