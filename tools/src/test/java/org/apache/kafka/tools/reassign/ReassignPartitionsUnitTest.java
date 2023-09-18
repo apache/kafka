@@ -81,6 +81,8 @@ import static kafka.admin.ReassignPartitionsCommand.parseExecuteAssignmentArgs;
 import static kafka.admin.ReassignPartitionsCommand.parseGenerateAssignmentArgs;
 import static kafka.admin.ReassignPartitionsCommand.partitionReassignmentStatesToString;
 import static kafka.admin.ReassignPartitionsCommand.replicaMoveStatesToString;
+import static kafka.admin.ReassignPartitionsCommand.topicLevelFollowerThrottle;
+import static kafka.admin.ReassignPartitionsCommand.topicLevelLeaderThrottle;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -726,9 +728,9 @@ public class ReassignPartitionsUnitTest {
         Map<String, String> configs = new HashMap<>();
         config.entries().forEach(entry -> configs.put(entry.name(), entry.value()));
         assertEquals(expectedLeaderThrottle,
-            configs.getOrDefault(ReassignPartitionsCommand.topicLevelLeaderThrottle(), ""));
+            configs.getOrDefault(topicLevelLeaderThrottle(), ""));
         assertEquals(expectedFollowerThrottle,
-            configs.getOrDefault(ReassignPartitionsCommand.topicLevelFollowerThrottle(), ""));
+            configs.getOrDefault(topicLevelFollowerThrottle(), ""));
     }
 
     @Test
