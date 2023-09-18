@@ -36,7 +36,6 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -59,6 +58,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.mockito.Mockito.spy;
 
 public class TopicMetadataRequestManagerTest {
     private MockTime time;
@@ -72,9 +72,9 @@ public class TopicMetadataRequestManagerTest {
         props.put(ALLOW_AUTO_CREATE_TOPICS_CONFIG, false);
         props.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         props.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        this.topicMetadataRequestManager = new TopicMetadataRequestManager(
+        this.topicMetadataRequestManager = spy(new TopicMetadataRequestManager(
             new LogContext(),
-            new ConsumerConfig(props));
+            new ConsumerConfig(props)));
     }
 
     @ParameterizedTest
@@ -105,17 +105,6 @@ public class TopicMetadataRequestManagerTest {
         } else {
             assertEquals(0, inflights.size());
         }
-    }
-
-    @Test
-    public void testEnsureRequestRemovedFromInflightsOnErrorResponse() {
-        this.topicMetadataRequestManager.requestTopicMetadata(Optional.of("hello"));
-        this.time.sleep(100);
-        NetworkClientDelegate.PollResult res = this.topicMetadataRequestManager.poll(this.time.milliseconds());
-        res.unsentRequests.get(0).future().completeExceptionally(new KafkaException("some error"));
-
-        List<TopicMetadataRequestManager.TopicMetadataRequestState> inflights = this.topicMetadataRequestManager.inflightRequests();
-        assertTrue(inflights.isEmpty());
     }
 
     @ParameterizedTest
@@ -155,11 +144,10 @@ public class TopicMetadataRequestManagerTest {
 
         res.unsentRequests.get(0).future().completeExceptionally(exception);
 
-        if (exception instanceof TimeoutException ||
-                !(exception instanceof RetriableException)) {
-            assertTrue(topicMetadataRequestManager.inflightRequests().isEmpty());
-        } else {
+        if (exception instanceof RetriableException) {
             assertFalse(topicMetadataRequestManager.inflightRequests().isEmpty());
+        } else {
+            assertTrue(topicMetadataRequestManager.inflightRequests().isEmpty());
         }
     }
 

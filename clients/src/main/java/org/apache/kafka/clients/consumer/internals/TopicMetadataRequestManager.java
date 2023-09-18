@@ -158,17 +158,14 @@ public class TopicMetadataRequestManager implements RequestManager {
 
         private void processResponseOrException(final ClientResponse response,
                                                 final Throwable exception) {
-            if (exception != null) {
-                handleException(exception, response.receivedTimeMs());
+            if (exception == null) {
+                handleResponse(response, response.receivedTimeMs());
                 return;
             }
-            handleResponse(response, response.receivedTimeMs());
-        }
 
-        private void handleException(final Throwable exception, final long responseTimeMs) {
             if (exception instanceof RetriableException) {
                 // We continue to retry on RetriableException
-                onFailedAttempt(responseTimeMs);
+                onFailedAttempt(response.receivedTimeMs());
             } else {
                 completeFutureAndRemoveRequest(new KafkaException(exception));
             }
