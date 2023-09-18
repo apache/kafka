@@ -23,7 +23,7 @@ public class NoopApplicationEvent extends ApplicationEvent {
     public final String message;
 
     public NoopApplicationEvent(final String message) {
-        super(Type.NOOP, NoopApplicationEvent.class.getSimpleName());
+        super(Type.NOOP);
         this.message = message;
     }
 

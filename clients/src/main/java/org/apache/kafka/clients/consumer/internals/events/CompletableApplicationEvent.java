@@ -35,8 +35,8 @@ public abstract class CompletableApplicationEvent<T> extends ApplicationEvent {
 
     protected final CompletableFuture<T> future;
 
-    protected CompletableApplicationEvent(Type type, String owner) {
-        super(type, owner);
+    protected CompletableApplicationEvent(Type type) {
+        super(type);
         this.future = new CompletableFuture<>();
     }
 

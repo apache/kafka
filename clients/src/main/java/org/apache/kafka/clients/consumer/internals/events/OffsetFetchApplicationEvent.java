@@ -27,7 +27,7 @@ public class OffsetFetchApplicationEvent extends CompletableApplicationEvent<Map
     private final Set<TopicPartition> partitions;
 
     public OffsetFetchApplicationEvent(final Set<TopicPartition> partitions) {
-        super(Type.FETCH_COMMITTED_OFFSET, OffsetFetchApplicationEvent.class.getSimpleName());
+        super(Type.FETCH_COMMITTED_OFFSET);
         this.partitions = Collections.unmodifiableSet(partitions);
     }
 

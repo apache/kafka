@@ -21,11 +21,9 @@ package org.apache.kafka.clients.consumer.internals.events;
  */
 abstract public class ApplicationEvent {
     public final Type type;
-    protected final String owner;
 
-    protected ApplicationEvent(Type type, String owner) {
+    protected ApplicationEvent(Type type) {
         this.type = type;
-        this.owner = owner;
     }
 
     @Override
@@ -41,7 +39,6 @@ abstract public class ApplicationEvent {
     }
 
     protected String toStringBase() {
-        return "owner='" + owner + '\'' +
-            ", type=" + type;
+        return "type=" + type;
     }
 }

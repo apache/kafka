@@ -20,7 +20,7 @@ public class PollApplicationEvent extends ApplicationEvent {
     public final long pollTimeMs;
 
     protected PollApplicationEvent(final long currentTimeMs) {
-        super(Type.POLL, PollApplicationEvent.class.getSimpleName());
+        super(Type.POLL);
         this.pollTimeMs = currentTimeMs;
     }
 

@@ -25,7 +25,7 @@ package org.apache.kafka.clients.consumer.internals.events;
 public class ValidatePositionsApplicationEvent extends CompletableApplicationEvent<Void> {
 
     public ValidatePositionsApplicationEvent() {
-        super(Type.VALIDATE_POSITIONS, ValidatePositionsApplicationEvent.class.getSimpleName());
+        super(Type.VALIDATE_POSITIONS);
     }
 
     @Override

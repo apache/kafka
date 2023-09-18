@@ -28,7 +28,7 @@ public class CommitApplicationEvent extends ApplicationEvent {
     final private Map<TopicPartition, OffsetAndMetadata> offsets;
 
     public CommitApplicationEvent(final Map<TopicPartition, OffsetAndMetadata> offsets) {
-        super(Type.COMMIT, CommitApplicationEvent.class.getSimpleName());
+        super(Type.COMMIT);
         this.offsets = offsets;
         Optional<Exception> exception = isValid(offsets);
         if (exception.isPresent()) {
