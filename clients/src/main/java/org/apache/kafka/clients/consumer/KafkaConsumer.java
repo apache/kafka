@@ -752,7 +752,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                         config.getBoolean(ConsumerConfig.THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED),
                         config.getString(ConsumerConfig.CLIENT_RACK_CONFIG));
             }
-            FetchConfig<K, V> fetchConfig = createFetchConfig(config, this.deserializers);
+            FetchConfig fetchConfig = createFetchConfig(config);
             this.fetcher = new Fetcher<>(
                     logContext,
                     this.client,
@@ -1252,7 +1252,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 Math.min(coordinator.timeToNextPoll(timer.currentTimeMs()), timer.remainingMs());
 
         // if data is available already, return it immediately
-        final Fetch<K, V> fetch = fetcher.collectFetch();
+        final Fetch<K, V> fetch = fetcher.collectFetch(deserializers);
         if (!fetch.isEmpty()) {
             return fetch;
         }
@@ -1279,7 +1279,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         });
         timer.update(pollTimer.currentTimeMs());
 
-        return fetcher.collectFetch();
+        return fetcher.collectFetch(deserializers);
     }
 
     /**

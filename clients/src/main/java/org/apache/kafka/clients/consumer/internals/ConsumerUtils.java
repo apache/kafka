@@ -142,10 +142,9 @@ public final class ConsumerUtils {
         return new FetchMetricsManager(metrics, metricsRegistry);
     }
 
-    public static <K, V> FetchConfig<K, V> createFetchConfig(ConsumerConfig config,
-                                                             Deserializers<K, V> deserializers) {
+    public static FetchConfig createFetchConfig(ConsumerConfig config) {
         IsolationLevel isolationLevel = configuredIsolationLevel(config);
-        return new FetchConfig<>(config, deserializers, isolationLevel);
+        return new FetchConfig(config, isolationLevel);
     }
 
     @SuppressWarnings("unchecked")

@@ -20,12 +20,17 @@ import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.FetchSessionHandler;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.internals.IdempotentCloser;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Timer;
+import org.slf4j.Logger;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -47,24 +52,38 @@ import java.util.Map;
  *     on a different thread.</li>
  * </ul>
  */
-public class Fetcher<K, V> extends AbstractFetch<K, V> {
+public class Fetcher<K, V> extends AbstractFetch {
 
+    private final Logger log;
+    private final ConsumerNetworkClient client;
     private final FetchCollector<K, V> fetchCollector;
 
     public Fetcher(LogContext logContext,
                    ConsumerNetworkClient client,
                    ConsumerMetadata metadata,
                    SubscriptionState subscriptions,
-                   FetchConfig<K, V> fetchConfig,
+                   FetchConfig fetchConfig,
                    FetchMetricsManager metricsManager,
                    Time time) {
-        super(logContext, client, metadata, subscriptions, fetchConfig, metricsManager, time);
+        super(logContext, metadata, subscriptions, fetchConfig, metricsManager, time);
+        this.log = logContext.logger(Fetcher.class);
+        this.client = client;
         this.fetchCollector = new FetchCollector<>(logContext,
                 metadata,
                 subscriptions,
                 fetchConfig,
                 metricsManager,
                 time);
+    }
+
+    @Override
+    protected boolean isUnavailable(Node node) {
+        return client.isUnavailable(node);
+    }
+
+    @Override
+    protected void maybeThrowAuthFailure(Node node) {
+        client.maybeThrowAuthFailure(node);
     }
 
     public void clearBufferedDataForUnassignedPartitions(Collection<TopicPartition> assignedPartitions) {
@@ -78,6 +97,7 @@ public class Fetcher<K, V> extends AbstractFetch<K, V> {
      */
     public synchronized int sendFetches() {
         Map<Node, FetchSessionHandler.FetchRequestData> fetchRequestMap = prepareFetchRequests();
+
 
         for (Map.Entry<Node, FetchSessionHandler.FetchRequestData> entry : fetchRequestMap.entrySet()) {
             final Node fetchTarget = entry.getKey();
@@ -106,7 +126,62 @@ public class Fetcher<K, V> extends AbstractFetch<K, V> {
         return fetchRequestMap.size();
     }
 
-    public Fetch<K, V> collectFetch() {
-        return fetchCollector.collectFetch(fetchBuffer);
+    protected void maybeCloseFetchSessions(final Timer timer) {
+        final List<RequestFuture<ClientResponse>> requestFutures = new ArrayList<>();
+        Map<Node, FetchSessionHandler.FetchRequestData> fetchRequestMap = prepareCloseFetchSessionRequests();
+
+        for (Map.Entry<Node, FetchSessionHandler.FetchRequestData> entry : fetchRequestMap.entrySet()) {
+            final Node fetchTarget = entry.getKey();
+            final FetchSessionHandler.FetchRequestData data = entry.getValue();
+            final FetchRequest.Builder request = createFetchRequest(fetchTarget, data);
+            final RequestFuture<ClientResponse> responseFuture = client.send(fetchTarget, request);
+
+            responseFuture.addListener(new RequestFutureListener<ClientResponse>() {
+                @Override
+                public void onSuccess(ClientResponse value) {
+                    handleCloseFetchSessionResponse(fetchTarget, data);
+                }
+
+                @Override
+                public void onFailure(RuntimeException e) {
+                    handleCloseFetchSessionResponse(fetchTarget, data, e);
+                }
+            });
+
+            requestFutures.add(responseFuture);
+        }
+
+        // Poll to ensure that request has been written to the socket. Wait until either the timer has expired or until
+        // all requests have received a response.
+        while (timer.notExpired() && !requestFutures.stream().allMatch(RequestFuture::isDone)) {
+            client.poll(timer, null, true);
+        }
+
+        if (!requestFutures.stream().allMatch(RequestFuture::isDone)) {
+            // we ran out of time before completing all futures. It is ok since we don't want to block the shutdown
+            // here.
+            log.debug("All requests couldn't be sent in the specific timeout period {}ms. " +
+                    "This may result in unnecessary fetch sessions at the broker. Consider increasing the timeout passed for " +
+                    "KafkaConsumer.close(Duration timeout)", timer.timeoutMs());
+        }
+    }
+
+    public Fetch<K, V> collectFetch(Deserializers<K, V> deserializers) {
+        return fetchCollector.collectFetch(fetchBuffer, deserializers);
+    }
+
+    /**
+     * This method is called by {@link #close(Timer)} which is guarded by the {@link IdempotentCloser}) such as to only
+     * be executed once the first time that any of the {@link #close()} methods are called. Subclasses can override
+     * this method without the need for extra synchronization at the instance level.
+     *
+     * @param timer Timer to enforce time limit
+     */
+    // Visible for testing
+    protected void closeInternal(Timer timer) {
+        // we do not need to re-enable wake-ups since we are closing already
+        client.disableWakeups();
+        maybeCloseFetchSessions(timer);
+        super.closeInternal(timer);
     }
 }

@@ -16,41 +16,149 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.ApiVersions;
+import org.apache.kafka.clients.GroupRebalanceConfig;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
+import org.apache.kafka.common.IsolationLevel;
+import org.apache.kafka.common.internals.IdempotentCloser;
+import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Time;
+import org.slf4j.Logger;
+
+import java.io.Closeable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.BlockingQueue;
+import java.util.function.Supplier;
 
 import static java.util.Objects.requireNonNull;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createFetchConfig;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.configuredIsolationLevel;
 
 /**
  * {@code RequestManagers} provides a means to pass around the set of {@link RequestManager} instances in the system.
  * This allows callers to both use the specific {@link RequestManager} instance, or to iterate over the list via
  * the {@link #entries()} method.
  */
-public class RequestManagers {
+public class RequestManagers implements Closeable {
 
+    private final Logger log;
     public final Optional<CoordinatorRequestManager> coordinatorRequestManager;
     public final Optional<CommitRequestManager> commitRequestManager;
     public final OffsetsRequestManager offsetsRequestManager;
-    private final List<Optional<? extends RequestManager>> entries;
+    public final FetchRequestManager fetchRequestManager;
 
-    public RequestManagers(OffsetsRequestManager offsetsRequestManager,
+    private final List<Optional<? extends RequestManager>> entries;
+    private final IdempotentCloser closer = new IdempotentCloser();
+
+    public RequestManagers(LogContext logContext,
+                           OffsetsRequestManager offsetsRequestManager,
+                           FetchRequestManager fetchRequestManager,
                            Optional<CoordinatorRequestManager> coordinatorRequestManager,
                            Optional<CommitRequestManager> commitRequestManager) {
-        this.offsetsRequestManager = requireNonNull(offsetsRequestManager,
-                "OffsetsRequestManager cannot be null");
+        this.log = logContext.logger(RequestManagers.class);
+        this.offsetsRequestManager = requireNonNull(offsetsRequestManager, "OffsetsRequestManager cannot be null");
         this.coordinatorRequestManager = coordinatorRequestManager;
         this.commitRequestManager = commitRequestManager;
+        this.fetchRequestManager = fetchRequestManager;
 
         List<Optional<? extends RequestManager>> list = new ArrayList<>();
         list.add(coordinatorRequestManager);
         list.add(commitRequestManager);
         list.add(Optional.of(offsetsRequestManager));
+        list.add(Optional.of(fetchRequestManager));
         entries = Collections.unmodifiableList(list);
     }
 
     public List<Optional<? extends RequestManager>> entries() {
         return entries;
+    }
+
+    @Override
+    public void close() {
+        closer.close(
+                () -> {
+                    log.debug("Closing RequestManagers");
+
+                    entries.forEach(rm -> {
+                        rm.ifPresent(requestManager -> {
+                            try {
+                                requestManager.close();
+                            } catch (Throwable t) {
+                                log.debug("Error closing request manager {}", requestManager.getClass().getSimpleName(), t);
+                            }
+                        });
+                    });
+                    log.debug("RequestManagers has been closed");
+                },
+                () -> log.debug("RequestManagers was already closed"));
+
+    }
+
+    /**
+     * Creates a {@link Supplier} for deferred creation during invocation by
+     * {@link org.apache.kafka.clients.consumer.internals.DefaultBackgroundThread}.
+     */
+    public static <K, V> Supplier<RequestManagers> supplier(final Time time,
+                                                            final LogContext logContext,
+                                                            final BlockingQueue<BackgroundEvent> backgroundEventQueue,
+                                                            final ConsumerMetadata metadata,
+                                                            final SubscriptionState subscriptions,
+                                                            final ConsumerConfig config,
+                                                            final GroupRebalanceConfig groupRebalanceConfig,
+                                                            final ApiVersions apiVersions,
+                                                            final FetchMetricsManager fetchMetricsManager,
+                                                            final Supplier<NetworkClientDelegate> networkClientDelegateSupplier) {
+        return new CachedSupplier<RequestManagers>() {
+            @Override
+            protected RequestManagers create() {
+                final NetworkClientDelegate networkClientDelegate = networkClientDelegateSupplier.get();
+                final ErrorEventHandler errorEventHandler = new ErrorEventHandler(backgroundEventQueue);
+                final IsolationLevel isolationLevel = configuredIsolationLevel(config);
+                final FetchConfig fetchConfig = createFetchConfig(config);
+                long retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
+                long retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
+                final int requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
+                final OffsetsRequestManager listOffsets = new OffsetsRequestManager(subscriptions,
+                        metadata,
+                        isolationLevel,
+                        time,
+                        retryBackoffMs,
+                        requestTimeoutMs,
+                        apiVersions,
+                        networkClientDelegate,
+                        logContext);
+                final FetchRequestManager fetch = new FetchRequestManager(logContext,
+                        time,
+                        errorEventHandler,
+                        metadata,
+                        subscriptions,
+                        fetchConfig,
+                        fetchMetricsManager,
+                        networkClientDelegate);
+                CoordinatorRequestManager coordinator = null;
+                CommitRequestManager commit = null;
+
+                if (groupRebalanceConfig != null && groupRebalanceConfig.groupId != null) {
+                    final GroupState groupState = new GroupState(groupRebalanceConfig);
+                    coordinator = new CoordinatorRequestManager(time,
+                            logContext,
+                            retryBackoffMs,
+                            retryBackoffMaxMs,
+                            errorEventHandler,
+                            groupState.groupId);
+                    commit = new CommitRequestManager(time, logContext, subscriptions, config, coordinator, groupState);
+                }
+
+                return new RequestManagers(logContext,
+                        listOffsets,
+                        fetch,
+                        Optional.ofNullable(coordinator),
+                        Optional.ofNullable(commit));
+            }
+        };
     }
 }
