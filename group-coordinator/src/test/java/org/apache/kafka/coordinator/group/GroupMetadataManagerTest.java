@@ -38,6 +38,10 @@ import org.apache.kafka.common.message.HeartbeatResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember;
+import org.apache.kafka.common.message.LeaveGroupRequestData;
+import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
+import org.apache.kafka.common.message.LeaveGroupResponseData;
+import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupRequestData.SyncGroupRequestAssignment;
 import org.apache.kafka.common.message.SyncGroupResponseData;
@@ -112,8 +116,10 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol;
@@ -452,8 +458,6 @@ public class GroupMetadataManagerTest {
         public CoordinatorResult<ConsumerGroupHeartbeatResponseData, Record> consumerGroupHeartbeat(
             ConsumerGroupHeartbeatRequestData request
         ) {
-            snapshotRegistry.getOrCreateSnapshot(lastCommittedOffset);
-
             RequestContext context = new RequestContext(
                 new RequestHeader(
                     ApiKeys.CONSUMER_GROUP_HEARTBEAT,
@@ -738,7 +742,6 @@ public class GroupMetadataManagerTest {
             return new SyncResult(responseFuture, coordinatorResult);
         }
 
-
         public RebalanceResult staticMembersJoinAndRebalance(
             String groupId,
             String leaderInstanceId,
@@ -854,7 +857,7 @@ public class GroupMetadataManagerTest {
             );
         }
 
-        public JoinGroupResponseData setupGroupWithPendingMember(GenericGroup group) throws Exception {
+        public PendingMemberGroupResult setupGroupWithPendingMember(GenericGroup group) throws Exception {
             // Add the first member
             JoinGroupRequestData joinRequest = new JoinGroupRequestBuilder()
                 .withGroupId("group-id")
@@ -957,9 +960,14 @@ public class GroupMetadataManagerTest {
             assertTrue(followerJoinResult.records.isEmpty());
             assertFalse(followerJoinResult.joinFuture.isDone());
             assertTrue(group.isInState(PREPARING_REBALANCE));
+            assertEquals(2, group.size());
             assertEquals(1, group.numPendingJoinMembers());
 
-            return pendingMemberJoinResult.joinFuture.get();
+            return new PendingMemberGroupResult(
+                leaderJoinResponse.memberId(),
+                followerId,
+                pendingMemberJoinResult.joinFuture.get()
+            );
         }
 
         public void verifySessionExpiration(GenericGroup group, int timeoutMs) {
@@ -1014,6 +1022,10 @@ public class GroupMetadataManagerTest {
                 context,
                 request
             );
+        }
+
+        public List<ListGroupsResponseData.ListedGroup> sendListGroups(List<String> statesFilter) {
+            return groupMetadataManager.listGroups(statesFilter, lastCommittedOffset);
         }
 
         public void verifyHeartbeat(
@@ -1099,6 +1111,28 @@ public class GroupMetadataManagerTest {
             return joinResponses;
         }
 
+        public CoordinatorResult<LeaveGroupResponseData, Record> sendGenericGroupLeave(
+            LeaveGroupRequestData request
+        ) {
+            RequestContext context = new RequestContext(
+                new RequestHeader(
+                    ApiKeys.LEAVE_GROUP,
+                    ApiKeys.LEAVE_GROUP.latestVersion(),
+                    "client",
+                    0
+                ),
+                "1",
+                InetAddress.getLoopbackAddress(),
+                KafkaPrincipal.ANONYMOUS,
+                ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
+                SecurityProtocol.PLAINTEXT,
+                ClientInformation.EMPTY,
+                false
+            );
+
+            return groupMetadataManager.genericGroupLeave(context, request);
+        }
+
         private ApiMessage messageOrNull(ApiMessageAndVersion apiMessageAndVersion) {
             if (apiMessageAndVersion == null) {
                 return null;
@@ -1173,6 +1207,7 @@ public class GroupMetadataManagerTest {
             }
 
             lastWrittenOffset++;
+            snapshotRegistry.getOrCreateSnapshot(lastWrittenOffset);
         }
     }
 
@@ -7730,7 +7765,7 @@ public class GroupMetadataManagerTest {
 
         // Set up a group in with a pending member. The test checks if the pending member joining
         // completes the rebalancing operation
-        JoinGroupResponseData pendingMemberResponse = context.setupGroupWithPendingMember(group);
+        JoinGroupResponseData pendingMemberResponse = context.setupGroupWithPendingMember(group).pendingMemberResponse;
 
         // Compete join group for the pending member
         JoinGroupRequestData request = new JoinGroupRequestBuilder()
@@ -8574,6 +8609,83 @@ public class GroupMetadataManagerTest {
         assertEquals(Errors.REBALANCE_IN_PROGRESS.code(), heartbeatResponse.errorCode());
     }
 
+    @Test
+    public void testListGroups() {
+        String consumerGroupId = "consumer-group-id";
+        String genericGroupId = "generic-group-id";
+        String memberId1 = Uuid.randomUuid().toString();
+        String genericGroupType = "generic";
+        Uuid fooTopicId = Uuid.randomUuid();
+        String fooTopicName = "foo";
+
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroup(new ConsumerGroupBuilder(consumerGroupId, 10))
+            .build();
+        context.replay(newGroupMetadataRecord(
+            genericGroupId,
+            new GroupMetadataValue()
+                .setMembers(Collections.emptyList())
+                .setGeneration(2)
+                .setLeader(null)
+                .setProtocolType(genericGroupType)
+                .setProtocol("range")
+                .setCurrentStateTimestamp(context.time.milliseconds()),
+            MetadataVersion.latest()));
+        context.commit();
+        GenericGroup genericGroup = context.groupMetadataManager.getOrMaybeCreateGenericGroup(genericGroupId, false);
+        context.replay(RecordHelpers.newMemberSubscriptionRecord(consumerGroupId, new ConsumerGroupMember.Builder(memberId1)
+            .setSubscribedTopicNames(Collections.singletonList(fooTopicName))
+            .build()));
+        context.replay(RecordHelpers.newGroupEpochRecord(consumerGroupId, 11));
+
+        Map<String, ListGroupsResponseData.ListedGroup> actualAllGroupMap =
+            context.sendListGroups(Collections.emptyList())
+                .stream().collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
+        Map<String, ListGroupsResponseData.ListedGroup> expectAllGroupMap =
+            Stream.of(
+                new ListGroupsResponseData.ListedGroup()
+                    .setGroupId(genericGroup.groupId())
+                    .setProtocolType(genericGroupType)
+                    .setGroupState(EMPTY.toString()),
+                new ListGroupsResponseData.ListedGroup()
+                    .setGroupId(consumerGroupId)
+                    .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
+                    .setGroupState(ConsumerGroup.ConsumerGroupState.EMPTY.toString())
+            ).collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
+
+        assertEquals(expectAllGroupMap, actualAllGroupMap);
+
+        context.commit();
+        actualAllGroupMap = context.sendListGroups(Collections.emptyList()).stream()
+            .collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
+        expectAllGroupMap =
+            Stream.of(
+                new ListGroupsResponseData.ListedGroup()
+                    .setGroupId(genericGroup.groupId())
+                    .setProtocolType(genericGroupType)
+                    .setGroupState(EMPTY.toString()),
+                new ListGroupsResponseData.ListedGroup()
+                    .setGroupId(consumerGroupId)
+                    .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
+                    .setGroupState(ConsumerGroup.ConsumerGroupState.ASSIGNING.toString())
+            ).collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
+
+        assertEquals(expectAllGroupMap, actualAllGroupMap);
+
+        actualAllGroupMap = context.sendListGroups(Collections.singletonList("Empty")).stream()
+            .collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
+        expectAllGroupMap = Stream.of(
+            new ListGroupsResponseData.ListedGroup()
+                .setGroupId(genericGroup.groupId())
+                .setProtocolType(genericGroupType)
+                .setGroupState(EMPTY.toString())
+        ).collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
+
+        assertEquals(expectAllGroupMap, actualAllGroupMap);
+    }
+
     public static <T> void assertUnorderedListEquals(
         List<T> expected,
         List<T> actual
@@ -8745,6 +8857,552 @@ public class GroupMetadataManagerTest {
             .collect(Collectors.toSet());
 
         assertEquals(expectedGroupInstanceIds, groupInstanceIds);
+    }
+
+    @Test
+    public void testGroupStuckInRebalanceTimeoutDueToNonjoinedStaticMember() throws Exception {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+        int longSessionTimeoutMs = 10000;
+        int rebalanceTimeoutMs = 5000;
+        RebalanceResult rebalanceResult = context.staticMembersJoinAndRebalance(
+            "group-id",
+            "leader-instance-id",
+            "follower-instance-id",
+            rebalanceTimeoutMs,
+            longSessionTimeoutMs
+        );
+        GenericGroup group = context.groupMetadataManager.getOrMaybeCreateGenericGroup("group-id", false);
+
+        // New member joins
+        JoinResult joinResult = context.sendGenericGroupJoin(
+            new JoinGroupRequestBuilder()
+                .withGroupId("group-id")
+                .withMemberId(UNKNOWN_MEMBER_ID)
+                .withProtocolSuperset()
+                .withSessionTimeoutMs(longSessionTimeoutMs)
+                .build()
+        );
+
+        // The new dynamic member has been elected as leader
+        assertNoOrEmptyResult(context.sleep(rebalanceTimeoutMs));
+        assertTrue(joinResult.joinFuture.isDone());
+        assertEquals(Errors.NONE.code(), joinResult.joinFuture.get().errorCode());
+        assertEquals(joinResult.joinFuture.get().leader(), joinResult.joinFuture.get().memberId());
+        assertEquals(3, joinResult.joinFuture.get().members().size());
+        assertEquals(2, joinResult.joinFuture.get().generationId());
+        assertTrue(group.isInState(COMPLETING_REBALANCE));
+
+        assertEquals(
+            mkSet(rebalanceResult.leaderId, rebalanceResult.followerId, joinResult.joinFuture.get().memberId()),
+            group.allMemberIds()
+        );
+        assertEquals(
+            mkSet(rebalanceResult.leaderId, rebalanceResult.followerId),
+            group.allStaticMemberIds()
+        );
+        assertEquals(
+            mkSet(joinResult.joinFuture.get().memberId()),
+            group.allDynamicMemberIds()
+        );
+
+        // Send a special leave group request from static follower, moving group towards PreparingRebalance
+        CoordinatorResult<LeaveGroupResponseData, Record> leaveResult = context.sendGenericGroupLeave(
+            new LeaveGroupRequestData()
+                .setGroupId("group-id")
+                .setMembers(Collections.singletonList(
+                    new MemberIdentity()
+                        .setMemberId(rebalanceResult.followerId)
+                        .setGroupInstanceId("follower-instance-id")
+                ))
+        );
+
+        LeaveGroupResponseData expectedResponse = new LeaveGroupResponseData()
+            .setMembers(Collections.singletonList(
+                new LeaveGroupResponseData.MemberResponse()
+                    .setMemberId(rebalanceResult.followerId)
+                    .setGroupInstanceId("follower-instance-id")));
+
+        assertEquals(expectedResponse, leaveResult.response());
+        assertTrue(group.isInState(PREPARING_REBALANCE));
+
+        context.sleep(rebalanceTimeoutMs);
+        // Only static leader is maintained, and group is stuck at PreparingRebalance stage
+        assertTrue(group.allDynamicMemberIds().isEmpty());
+        assertEquals(Collections.singleton(rebalanceResult.leaderId), group.allMemberIds());
+        assertTrue(group.allDynamicMemberIds().isEmpty());
+        assertEquals(2, group.generationId());
+        assertTrue(group.isInState(PREPARING_REBALANCE));
+    }
+
+    @Test
+    public void testPendingMembersLeaveGroup() throws Exception {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+        GenericGroup group = context.createGenericGroup("group-id");
+        JoinGroupResponseData pendingJoinResponse = context.setupGroupWithPendingMember(group).pendingMemberResponse;
+
+        CoordinatorResult<LeaveGroupResponseData, Record> leaveResult = context.sendGenericGroupLeave(
+            new LeaveGroupRequestData()
+                .setGroupId("group-id")
+                .setMembers(Collections.singletonList(
+                    new MemberIdentity()
+                        .setMemberId(pendingJoinResponse.memberId())
+                ))
+        );
+
+        LeaveGroupResponseData expectedResponse = new LeaveGroupResponseData()
+            .setMembers(Collections.singletonList(
+                new LeaveGroupResponseData.MemberResponse()
+                    .setGroupInstanceId(null)
+                    .setMemberId(pendingJoinResponse.memberId())));
+
+        assertEquals(expectedResponse, leaveResult.response());
+        assertTrue(leaveResult.records().isEmpty());
+
+        assertTrue(group.isInState(COMPLETING_REBALANCE));
+        assertEquals(2, group.allMembers().size());
+        assertEquals(2, group.allDynamicMemberIds().size());
+        assertEquals(0, group.numPendingJoinMembers());
+    }
+
+    @Test
+    public void testLeaveGroupInvalidGroup() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+        context.createGenericGroup("group-id");
+
+        assertThrows(UnknownMemberIdException.class, () -> context.sendGenericGroupLeave(
+            new LeaveGroupRequestData()
+                .setGroupId("invalid-group-id")
+        ));
+    }
+
+    @Test
+    public void testLeaveGroupUnknownGroup() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+
+        assertThrows(UnknownMemberIdException.class, () -> context.sendGenericGroupLeave(
+            new LeaveGroupRequestData()
+                .setGroupId("unknown-group-id")
+                .setMembers(Collections.singletonList(
+                    new MemberIdentity()
+                        .setMemberId("member-id")
+                ))
+        ));
+    }
+
+    @Test
+    public void testLeaveGroupUnknownMemberIdExistingGroup() throws Exception {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+        context.createGenericGroup("group-id");
+
+        context.joinGenericGroupAsDynamicMemberAndCompleteJoin(
+            new JoinGroupRequestBuilder()
+                .withGroupId("group-id")
+                .withMemberId(UNKNOWN_MEMBER_ID)
+                .withDefaultProtocolTypeAndProtocols()
+                .build()
+        );
+
+        CoordinatorResult<LeaveGroupResponseData, Record> leaveResult = context.sendGenericGroupLeave(
+            new LeaveGroupRequestData()
+                .setGroupId("group-id")
+                .setMembers(Collections.singletonList(
+                    new MemberIdentity()
+                        .setMemberId("unknown-member-id")
+                ))
+        );
+
+        LeaveGroupResponseData expectedResponse = new LeaveGroupResponseData()
+            .setMembers(Collections.singletonList(
+                new LeaveGroupResponseData.MemberResponse()
+                    .setGroupInstanceId(null)
+                    .setMemberId("unknown-member-id")
+                    .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code())));
+
+        assertEquals(expectedResponse, leaveResult.response());
+        assertTrue(leaveResult.records().isEmpty());
+    }
+
+    @Test
+    public void testLeaveDeadGroup() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+        GenericGroup group = context.createGenericGroup("group-id");
+        group.transitionTo(DEAD);
+
+        CoordinatorResult<LeaveGroupResponseData, Record> leaveResult = context.sendGenericGroupLeave(
+            new LeaveGroupRequestData()
+                .setGroupId("group-id")
+                .setMembers(Collections.singletonList(
+                    new MemberIdentity()
+                        .setMemberId("member-id")
+                ))
+        );
+
+        LeaveGroupResponseData expectedResponse = new LeaveGroupResponseData()
+            .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code());
+
+        assertEquals(expectedResponse, leaveResult.response());
+        assertTrue(leaveResult.records().isEmpty());
+    }
+
+    @Test
+    public void testValidLeaveGroup() throws Exception {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+        GenericGroup group = context.createGenericGroup("group-id");
+
+        JoinGroupResponseData joinResponse = context.joinGenericGroupAsDynamicMemberAndCompleteJoin(
+            new JoinGroupRequestBuilder()
+                .withGroupId("group-id")
+                .withMemberId(UNKNOWN_MEMBER_ID)
+                .withDefaultProtocolTypeAndProtocols()
+                .build()
+        );
+
+        // Dynamic member leaves. The group becomes empty.
+        CoordinatorResult<LeaveGroupResponseData, Record> leaveResult = context.sendGenericGroupLeave(
+            new LeaveGroupRequestData()
+                .setGroupId("group-id")
+                .setMembers(Collections.singletonList(
+                    new MemberIdentity()
+                        .setMemberId(joinResponse.memberId())
+                ))
+        );
+        assertEquals(
+            Collections.singletonList(newGroupMetadataRecordWithCurrentState(group, MetadataVersion.latest())),
+            leaveResult.records()
+        );
+        // Simulate a successful write to the log.
+        leaveResult.appendFuture().complete(null);
+
+        LeaveGroupResponseData expectedResponse = new LeaveGroupResponseData()
+            .setMembers(Collections.singletonList(
+                new LeaveGroupResponseData.MemberResponse()
+                    .setGroupInstanceId(null)
+                    .setMemberId(joinResponse.memberId())));
+
+        assertEquals(expectedResponse, leaveResult.response());
+        assertTrue(group.isInState(EMPTY));
+        assertEquals(2, group.generationId());
+    }
+
+    @Test
+    public void testLeaveGroupWithFencedInstanceId() throws Exception {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+        context.createGenericGroup("group-id");
+
+        context.joinGenericGroupAndCompleteJoin(
+            new JoinGroupRequestBuilder()
+                .withGroupId("group-id")
+                .withGroupInstanceId("group-instance-id")
+                .withMemberId(UNKNOWN_MEMBER_ID)
+                .withDefaultProtocolTypeAndProtocols()
+                .build(),
+            true,
+            true
+        );
+
+        CoordinatorResult<LeaveGroupResponseData, Record> leaveResult = context.sendGenericGroupLeave(
+            new LeaveGroupRequestData()
+                .setGroupId("group-id")
+                .setMembers(Collections.singletonList(
+                    new MemberIdentity()
+                        .setGroupInstanceId("group-instance-id")
+                        .setMemberId("other-member-id") // invalid member id
+                ))
+        );
+
+        LeaveGroupResponseData expectedResponse = new LeaveGroupResponseData()
+            .setMembers(Collections.singletonList(
+                new LeaveGroupResponseData.MemberResponse()
+                    .setGroupInstanceId("group-instance-id")
+                    .setMemberId("other-member-id")
+                    .setErrorCode(Errors.FENCED_INSTANCE_ID.code())));
+
+        assertEquals(expectedResponse, leaveResult.response());
+        assertTrue(leaveResult.records().isEmpty());
+    }
+
+    @Test
+    public void testLeaveGroupStaticMemberWithUnknownMemberId() throws Exception {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+        context.createGenericGroup("group-id");
+
+        context.joinGenericGroupAndCompleteJoin(
+            new JoinGroupRequestBuilder()
+                .withGroupId("group-id")
+                .withGroupInstanceId("group-instance-id")
+                .withMemberId(UNKNOWN_MEMBER_ID)
+                .withDefaultProtocolTypeAndProtocols()
+                .build(),
+            true,
+            true
+        );
+
+        // Having unknown member id will not affect the request processing due to valid group instance id.
+        CoordinatorResult<LeaveGroupResponseData, Record> leaveResult = context.sendGenericGroupLeave(
+            new LeaveGroupRequestData()
+                .setGroupId("group-id")
+                .setMembers(Collections.singletonList(
+                    new MemberIdentity()
+                        .setGroupInstanceId("group-instance-id")
+                        .setMemberId(UNKNOWN_MEMBER_ID)
+                ))
+        );
+
+        LeaveGroupResponseData expectedResponse = new LeaveGroupResponseData()
+            .setMembers(Collections.singletonList(
+                new LeaveGroupResponseData.MemberResponse()
+                    .setGroupInstanceId("group-instance-id")));
+
+        assertEquals(expectedResponse, leaveResult.response());
+    }
+
+    @Test
+    public void testStaticMembersValidBatchLeaveGroup() throws Exception {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+        context.staticMembersJoinAndRebalance(
+            "group-id",
+            "leader-instance-id",
+            "follower-instance-id"
+        );
+
+        CoordinatorResult<LeaveGroupResponseData, Record> leaveResult = context.sendGenericGroupLeave(
+            new LeaveGroupRequestData()
+                .setGroupId("group-id")
+                .setMembers(
+                    Arrays.asList(
+                        new MemberIdentity()
+                            .setGroupInstanceId("leader-instance-id"),
+                        new MemberIdentity()
+                            .setGroupInstanceId("follower-instance-id")
+                    )
+                )
+        );
+
+        LeaveGroupResponseData expectedResponse = new LeaveGroupResponseData()
+            .setMembers(Arrays.asList(
+                new LeaveGroupResponseData.MemberResponse()
+                    .setGroupInstanceId("leader-instance-id"),
+                new LeaveGroupResponseData.MemberResponse()
+                    .setGroupInstanceId("follower-instance-id")));
+
+        assertEquals(expectedResponse, leaveResult.response());
+    }
+
+    @Test
+    public void testStaticMembersLeaveUnknownGroup() throws Exception {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+        context.staticMembersJoinAndRebalance(
+            "group-id",
+            "leader-instance-id",
+            "follower-instance-id"
+        );
+
+        assertThrows(UnknownMemberIdException.class, () -> context.sendGenericGroupLeave(
+            new LeaveGroupRequestData()
+                .setGroupId("invalid-group-id") // Invalid group id
+                .setMembers(
+                    Arrays.asList(
+                        new MemberIdentity()
+                            .setGroupInstanceId("leader-instance-id"),
+                        new MemberIdentity()
+                            .setGroupInstanceId("follower-instance-id")
+                    )
+                )
+        ));
+    }
+
+    @Test
+    public void testStaticMembersFencedInstanceBatchLeaveGroup() throws Exception {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+        context.staticMembersJoinAndRebalance(
+            "group-id",
+            "leader-instance-id",
+            "follower-instance-id"
+        );
+
+        CoordinatorResult<LeaveGroupResponseData, Record> leaveResult = context.sendGenericGroupLeave(
+            new LeaveGroupRequestData()
+                .setGroupId("group-id")
+                .setMembers(
+                    Arrays.asList(
+                        new MemberIdentity()
+                            .setGroupInstanceId("leader-instance-id"),
+                        new MemberIdentity()
+                            .setGroupInstanceId("follower-instance-id")
+                            .setMemberId("invalid-member-id")
+                    )
+                )
+        );
+
+        LeaveGroupResponseData expectedResponse = new LeaveGroupResponseData()
+            .setMembers(Arrays.asList(
+                new LeaveGroupResponseData.MemberResponse()
+                    .setGroupInstanceId("leader-instance-id"),
+                new LeaveGroupResponseData.MemberResponse()
+                    .setGroupInstanceId("follower-instance-id")
+                    .setMemberId("invalid-member-id")
+                    .setErrorCode(Errors.FENCED_INSTANCE_ID.code())));
+
+        assertEquals(expectedResponse, leaveResult.response());
+    }
+
+    @Test
+    public void testStaticMembersUnknownInstanceBatchLeaveGroup() throws Exception {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+        context.staticMembersJoinAndRebalance(
+            "group-id",
+            "leader-instance-id",
+            "follower-instance-id"
+        );
+
+        CoordinatorResult<LeaveGroupResponseData, Record> leaveResult = context.sendGenericGroupLeave(
+            new LeaveGroupRequestData()
+                .setGroupId("group-id")
+                .setMembers(
+                    Arrays.asList(
+                        new MemberIdentity()
+                            .setGroupInstanceId("unknown-instance-id"), // Unknown instance id
+                        new MemberIdentity()
+                            .setGroupInstanceId("follower-instance-id")
+                    )
+                )
+        );
+
+        LeaveGroupResponseData expectedResponse = new LeaveGroupResponseData()
+            .setMembers(Arrays.asList(
+                new LeaveGroupResponseData.MemberResponse()
+                    .setGroupInstanceId("unknown-instance-id")
+                    .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code()),
+                new LeaveGroupResponseData.MemberResponse()
+                    .setGroupInstanceId("follower-instance-id")));
+
+        assertEquals(expectedResponse, leaveResult.response());
+        assertTrue(leaveResult.records().isEmpty());
+    }
+
+    @Test
+    public void testPendingMemberBatchLeaveGroup() throws Exception {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+        GenericGroup group = context.createGenericGroup("group-id");
+        JoinGroupResponseData pendingJoinResponse = context.setupGroupWithPendingMember(group).pendingMemberResponse;
+
+        CoordinatorResult<LeaveGroupResponseData, Record> leaveResult = context.sendGenericGroupLeave(
+            new LeaveGroupRequestData()
+                .setGroupId("group-id")
+                .setMembers(
+                    Arrays.asList(
+                        new MemberIdentity()
+                            .setGroupInstanceId("unknown-instance-id"), // Unknown instance id
+                        new MemberIdentity()
+                            .setMemberId(pendingJoinResponse.memberId())
+                    )
+                )
+        );
+
+        LeaveGroupResponseData expectedResponse = new LeaveGroupResponseData()
+            .setMembers(Arrays.asList(
+                new LeaveGroupResponseData.MemberResponse()
+                    .setGroupInstanceId("unknown-instance-id")
+                    .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code()),
+                new LeaveGroupResponseData.MemberResponse()
+                    .setGroupInstanceId(null)
+                    .setMemberId(pendingJoinResponse.memberId())));
+
+        assertEquals(expectedResponse, leaveResult.response());
+    }
+
+    @Test
+    public void testJoinedMemberPendingMemberBatchLeaveGroup() throws Exception {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+        GenericGroup group = context.createGenericGroup("group-id");
+        PendingMemberGroupResult pendingMemberGroupResult = context.setupGroupWithPendingMember(group);
+
+        CoordinatorResult<LeaveGroupResponseData, Record> leaveResult = context.sendGenericGroupLeave(
+            new LeaveGroupRequestData()
+                .setGroupId("group-id")
+                .setMembers(
+                    Arrays.asList(
+                        new MemberIdentity()
+                            .setMemberId(pendingMemberGroupResult.leaderId),
+                        new MemberIdentity()
+                            .setMemberId(pendingMemberGroupResult.followerId),
+                        new MemberIdentity()
+                            .setMemberId(pendingMemberGroupResult.pendingMemberResponse.memberId())
+                    )
+                )
+        );
+
+        LeaveGroupResponseData expectedResponse = new LeaveGroupResponseData()
+            .setMembers(Arrays.asList(
+                new LeaveGroupResponseData.MemberResponse()
+                    .setGroupInstanceId(null)
+                    .setMemberId(pendingMemberGroupResult.leaderId),
+                new LeaveGroupResponseData.MemberResponse()
+                    .setGroupInstanceId(null)
+                    .setMemberId(pendingMemberGroupResult.followerId),
+                new LeaveGroupResponseData.MemberResponse()
+                    .setGroupInstanceId(null)
+                    .setMemberId(pendingMemberGroupResult.pendingMemberResponse.memberId())));
+
+        assertEquals(expectedResponse, leaveResult.response());
+    }
+
+    @Test
+    public void testJoinedMemberPendingMemberBatchLeaveGroupWithUnknownMember() throws Exception {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+        GenericGroup group = context.createGenericGroup("group-id");
+        PendingMemberGroupResult pendingMemberGroupResult = context.setupGroupWithPendingMember(group);
+
+        CoordinatorResult<LeaveGroupResponseData, Record> leaveResult = context.sendGenericGroupLeave(
+            new LeaveGroupRequestData()
+                .setGroupId("group-id")
+                .setMembers(
+                    Arrays.asList(
+                        new MemberIdentity()
+                            .setMemberId(pendingMemberGroupResult.leaderId),
+                        new MemberIdentity()
+                            .setMemberId(pendingMemberGroupResult.followerId),
+                        new MemberIdentity()
+                            .setMemberId(pendingMemberGroupResult.pendingMemberResponse.memberId()),
+                        new MemberIdentity()
+                            .setMemberId("unknown-member-id")
+                    )
+                )
+        );
+
+        LeaveGroupResponseData expectedResponse = new LeaveGroupResponseData()
+            .setMembers(Arrays.asList(
+                new LeaveGroupResponseData.MemberResponse()
+                    .setGroupInstanceId(null)
+                    .setMemberId(pendingMemberGroupResult.leaderId),
+                new LeaveGroupResponseData.MemberResponse()
+                    .setGroupInstanceId(null)
+                    .setMemberId(pendingMemberGroupResult.followerId),
+                new LeaveGroupResponseData.MemberResponse()
+                    .setGroupInstanceId(null)
+                    .setMemberId(pendingMemberGroupResult.pendingMemberResponse.memberId()),
+                new LeaveGroupResponseData.MemberResponse()
+                    .setGroupInstanceId(null)
+                    .setMemberId("unknown-member-id")
+                    .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code())));
+
+        assertEquals(expectedResponse, leaveResult.response());
     }
 
     private static void assertNoOrEmptyResult(List<ExpiredTimeout<Void, Record>> timeouts) {
@@ -8967,6 +9625,22 @@ public class GroupMetadataManagerTest {
             this.leaderAssignment = leaderAssignment;
             this.followerId = followerId;
             this.followerAssignment = followerAssignment;
+        }
+    }
+
+    private static class PendingMemberGroupResult {
+        String leaderId;
+        String followerId;
+        JoinGroupResponseData pendingMemberResponse;
+
+        public PendingMemberGroupResult(
+            String leaderId,
+            String followerId,
+            JoinGroupResponseData pendingMemberResponse
+        ) {
+            this.leaderId = leaderId;
+            this.followerId = followerId;
+            this.pendingMemberResponse = pendingMemberResponse;
         }
     }
 
