@@ -68,13 +68,13 @@ public class TopicMetadataRequestManager implements RequestManager {
     private final Logger log;
     private final LogContext logContext;
 
-    public TopicMetadataRequestManager(final LogContext logContext, final ConsumerConfig config) {
-        this.logContext = logContext;
-        this.log = logContext.logger(this.getClass());
-        this.inflightRequests = new HashMap<>();
-        this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
-        this.retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
-        this.allowAutoTopicCreation = config.getBoolean(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG);
+    public TopicMetadataRequestManager(final LogContext context, final ConsumerConfig config) {
+        logContext = context;
+        log = logContext.logger(this.getClass());
+        inflightRequests = new HashMap<>();
+        retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
+        retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
+        allowAutoTopicCreation = config.getBoolean(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG);
     }
 
     @Override
@@ -125,7 +125,7 @@ public class TopicMetadataRequestManager implements RequestManager {
                                          final long retryBackoffMaxMs) {
             super(logContext, TopicMetadataRequestState.class.getSimpleName(), retryBackoffMs,
                 retryBackoffMaxMs);
-            this.future = new CompletableFuture<>();
+            future = new CompletableFuture<>();
             this.topic = topic;
         }
 
@@ -134,10 +134,10 @@ public class TopicMetadataRequestManager implements RequestManager {
          * {@link org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.UnsentRequest} if needed.
          */
         private Optional<NetworkClientDelegate.UnsentRequest> send(final long currentTimeMs) {
-            if (!this.canSendRequest(currentTimeMs)) {
+            if (!canSendRequest(currentTimeMs)) {
                 return Optional.empty();
             }
-            this.onSendAttempt(currentTimeMs);
+            onSendAttempt(currentTimeMs);
 
             final MetadataRequest.Builder request;
             request = topic.map(t -> new MetadataRequest.Builder(Collections.singletonList(t), allowAutoTopicCreation))
