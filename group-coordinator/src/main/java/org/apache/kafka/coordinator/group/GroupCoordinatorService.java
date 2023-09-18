@@ -77,10 +77,14 @@ import org.slf4j.Logger;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.ArrayList;
+import java.util.Map;
+import java.util.HashMap;
 import java.util.OptionalInt;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.IntSupplier;
@@ -523,9 +527,38 @@ public class GroupCoordinatorService implements GroupCoordinator {
             return FutureUtils.failedFuture(Errors.COORDINATOR_NOT_AVAILABLE.exception());
         }
 
-        return FutureUtils.failedFuture(Errors.UNSUPPORTED_VERSION.exception(
-            "This API is not implemented yet."
-        ));
+        final Map<Integer, List<String>> groupsByPartition = new HashMap<>();
+        for (String groupId : groupIds) {
+            final int partition = partitionFor(groupId);
+            final List<String> groupList = groupsByPartition.getOrDefault(partition, new ArrayList<>());
+            groupList.add(groupId);
+            groupsByPartition.put(partition, groupList);
+        }
+
+        List<CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection>> futures = new ArrayList<>();
+        for (Map.Entry<Integer, List<String>> entry : groupsByPartition.entrySet()) {
+            int partition = entry.getKey();
+            List<String> groupList = entry.getValue();
+            CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> future =
+                    runtime.scheduleWriteOperation("delete-group",
+                            new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, partition),
+                            coordinator -> coordinator.genericGroupDelete(context, groupList));
+            futures.add(future);
+        }
+
+        CompletableFuture<Void> allFutures = CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]));
+        return allFutures.thenApply(v -> {
+            DeleteGroupsResponseData.DeletableGroupResultCollection res = new DeleteGroupsResponseData.DeletableGroupResultCollection();
+            for (CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> future : futures) {
+                try {
+                    DeleteGroupsResponseData.DeletableGroupResultCollection result = future.get();
+                    res.addAll(result);
+                } catch (ExecutionException | InterruptedException exception) {
+                    log.error("Delete groups {} request hit an unexpected exception: {}", groupIds, exception.getMessage());
+                }
+            }
+            return res;
+        });
     }
 
     /**
@@ -705,9 +738,37 @@ public class GroupCoordinatorService implements GroupCoordinator {
             return FutureUtils.failedFuture(Errors.COORDINATOR_NOT_AVAILABLE.exception());
         }
 
-        return FutureUtils.failedFuture(Errors.UNSUPPORTED_VERSION.exception(
-            "This API is not implemented yet."
-        ));
+        if (!isGroupIdNotEmpty(request.groupId())) {
+            return FutureUtils.failedFuture(Errors.INVALID_GROUP_ID.exception());
+        }
+
+        return runtime.scheduleWriteOperation(
+                "delete-offset",
+                topicPartitionFor(request.groupId()),
+                coordinator -> coordinator.DeleteOffsets(context, request)
+        ).exceptionally(exception -> {
+            if (exception instanceof UnknownTopicOrPartitionException ||
+                    exception instanceof NotEnoughReplicasException) {
+                return new OffsetDeleteResponseData()
+                        .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code());
+            }
+
+            if (exception instanceof NotLeaderOrFollowerException ||
+                    exception instanceof KafkaStorageException) {
+                return new OffsetDeleteResponseData()
+                        .setErrorCode(Errors.NOT_COORDINATOR.code());
+            }
+
+            if (exception instanceof RecordTooLargeException ||
+                    exception instanceof RecordBatchTooLargeException ||
+                    exception instanceof InvalidFetchSizeException) {
+                return new OffsetDeleteResponseData()
+                        .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code());
+            }
+
+            return new OffsetDeleteResponseData()
+                    .setErrorCode(Errors.forException(exception).code());
+        });
     }
 
     /**

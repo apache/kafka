@@ -22,6 +22,7 @@ import org.apache.kafka.common.errors.StaleMemberEpochException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.coordinator.group.Group;
+import org.apache.kafka.coordinator.group.generic.GenericGroupState;
 import org.apache.kafka.image.ClusterImage;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsImage;
@@ -199,6 +200,16 @@ public class ConsumerGroup implements Group {
     }
 
     /**
+     * Returns true if the current state is DEAD.
+     *
+     * @return a boolean indicating if the current state is DEAD.
+     */
+    @Override
+    public boolean isDead() {
+        return this.state.get() == ConsumerGroupState.DEAD;
+    }
+
+    /**
      * @return The group id.
      */
     @Override
@@ -339,6 +350,16 @@ public class ConsumerGroup implements Group {
      */
     public Set<String> subscribedTopicNames() {
         return Collections.unmodifiableSet(subscribedTopicNames.keySet());
+    }
+
+    /**
+     * Returns true if the consumer group is actively subscribed to the topic.
+     *
+     * @param topic the topic name.
+     * @return a boolean indicating whether the group is subscribed to the topic.
+     */
+    public boolean isSubscribedToTopic(String topic) {
+        return subscribedTopicNames.keySet().contains(topic);
     }
 
     /**

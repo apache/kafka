@@ -31,6 +31,7 @@ import org.apache.kafka.common.message.OffsetFetchRequestData;
 import org.apache.kafka.common.message.OffsetFetchResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
+import org.apache.kafka.common.message.*;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.requests.RequestContext;
@@ -262,6 +263,14 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
         );
     }
 
+    public CoordinatorResult<DeleteGroupsResponseData.DeletableGroupResultCollection, Record> genericGroupDelete(
+            RequestContext context,
+            List<String> groupIds
+    ) {
+//        CoordinatorResult<DeleteGroupsResponseData, Record> cleanupGroupCoordinatorResult = groupMetadataManager.cleanupGroupMetadata(...);
+//        CoordinatorResult<OffsetDeleteResponseData, Record> deleteOffsetCoordinatorResult = offsetMetadataManager.deleteAllOffsets();
+    }
+
     /**
      * Fetch offsets for a given set of partitions and a given group.
      *
@@ -339,6 +348,22 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
         LeaveGroupRequestData request
     ) throws ApiException {
         return groupMetadataManager.genericGroupLeave(context, request);
+    }
+
+    /**
+     * Handles a OffsetDelete request.
+     *
+     * @param context The request context.
+     * @param request The actual OffsetDelete request.
+     *
+     * @return A Result containing the OffsetDeleteResponse response and
+     *         a list of records to update the state machine.
+     */
+    public CoordinatorResult<OffsetDeleteResponseData, Record> DeleteOffsets(
+            RequestContext context,
+            OffsetDeleteRequestData request
+    ) throws ApiException {
+        return offsetMetadataManager.deleteOffsets(context, request);
     }
 
     /**

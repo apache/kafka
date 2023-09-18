@@ -19,12 +19,10 @@ package org.apache.kafka.coordinator.group;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.StaleMemberEpochException;
-import org.apache.kafka.common.message.OffsetCommitRequestData;
-import org.apache.kafka.common.message.OffsetCommitResponseData;
+import org.apache.kafka.common.message.*;
 import org.apache.kafka.common.message.OffsetCommitResponseData.OffsetCommitResponseTopic;
 import org.apache.kafka.common.message.OffsetCommitResponseData.OffsetCommitResponsePartition;
-import org.apache.kafka.common.message.OffsetFetchRequestData;
-import org.apache.kafka.common.message.OffsetFetchResponseData;
+import org.apache.kafka.common.message.OffsetDeleteResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.RequestContext;
@@ -243,6 +241,26 @@ public class OffsetMetadataManager {
     }
 
     /**
+     * Validates an OffsetDelete request.
+     *
+     * @param request The actual request.
+     */
+    private Group validateOffsetDelete(
+            RequestContext context,
+            OffsetDeleteRequestData request
+    ) throws GroupIdNotFoundException {
+        Group group = groupMetadataManager.group(request.groupId());
+
+        if (group.isDead()) {
+            throw new GroupIdNotFoundException(String.format("Group %s is dead.", request.groupId()));
+        }
+
+        // TODO: generation check
+
+        return group;
+    }
+
+    /**
      * Computes the expiration timestamp based on the retention time provided in the OffsetCommit
      * request.
      *
@@ -330,6 +348,54 @@ public class OffsetMetadataManager {
             });
         });
 
+        return new CoordinatorResult<>(records, response);
+    }
+
+    /**
+     * Handles an OffsetDelete request.
+     *
+     * @param context The request context.
+     * @param request The OffsetDelete request.
+     *
+     * @return A Result containing the OffsetDeleteResponseData response and
+     *         a list of records to update the state machine.
+     */
+    public CoordinatorResult<OffsetDeleteResponseData, Record> deleteOffsets(
+            RequestContext context,
+            OffsetDeleteRequestData request
+    ) throws ApiException {
+        Group group = validateOffsetDelete(context, request);
+
+        final List<Record> records = new ArrayList<>();
+        final OffsetDeleteResponseData.OffsetDeleteResponseTopicCollection responseTopicCollection =
+                new OffsetDeleteResponseData.OffsetDeleteResponseTopicCollection();
+
+        request.topics().forEach(topic -> {
+            final OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection responsePartitionCollection =
+                    new OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection();
+
+            final boolean subscribedToTopic = group.isSubscribedToTopic(topic.name());
+            topic.partitions().forEach(partition -> {
+                records.add(RecordHelpers.newOffsetCommitTombstoneRecord(
+                        request.groupId(),
+                        topic.name(),
+                        partition.partitionIndex()
+                ));
+
+                OffsetDeleteResponseData.OffsetDeleteResponsePartition responsePartition =
+                        new OffsetDeleteResponseData.OffsetDeleteResponsePartition().setPartitionIndex(partition.partitionIndex());
+                if (subscribedToTopic) {
+                    responsePartition = responsePartition.setErrorCode(Errors.GROUP_SUBSCRIBED_TO_TOPIC.code());
+                }
+                responsePartitionCollection.add(responsePartition);
+            });
+
+            final OffsetDeleteResponseData.OffsetDeleteResponseTopic responseTopic =
+                    new OffsetDeleteResponseData.OffsetDeleteResponseTopic().setPartitions(responsePartitionCollection);
+            responseTopicCollection.add(responseTopic);
+        });
+
+        final OffsetDeleteResponseData response = new OffsetDeleteResponseData().setTopics(responseTopicCollection);
         return new CoordinatorResult<>(records, response);
     }
 

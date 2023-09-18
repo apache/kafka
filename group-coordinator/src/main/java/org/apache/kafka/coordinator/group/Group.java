@@ -90,4 +90,17 @@ public interface Group {
         int memberEpoch,
         long lastCommittedOffset
     ) throws KafkaException;
+
+    /**
+     * Returns true if the group is actively subscribed to the topic.
+     *
+     * @param topic the topic name.
+     * @return whether the group is subscribed to the topic.
+     */
+    public boolean isSubscribedToTopic(String topic);
+
+    /**
+     * Returns true if the group is DEAD.
+     */
+    public boolean isDead();
 }

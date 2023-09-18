@@ -253,6 +253,14 @@ public class GenericGroup implements Group {
     }
 
     /**
+     * @return ture if the current state is DEAD.
+     */
+    @Override
+    public boolean isDead() {
+        return this.state == GenericGroupState.DEAD;
+    }
+
+    /**
      * @return the group id.
      */
     public String groupId() {
@@ -1015,7 +1023,7 @@ public class GenericGroup implements Group {
 
     /**
      * Returns true if the consumer group is actively subscribed to the topic. When the consumer
-     * group does not know, because the information is not available yet or because the it has
+     * group does not know, because the information is not available yet or because it has
      * failed to parse the Consumer Protocol, it returns true to be safe.
      *
      * @param topic the topic name.
