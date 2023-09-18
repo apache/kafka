@@ -19,7 +19,9 @@ package org.apache.kafka.raft;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.protocol.types.TaggedFields;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.raft.generated.QuorumStateData;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 
@@ -105,6 +107,20 @@ public class FileBasedStateStoreTest {
                 "\"appliedOffset\": 0,\"currentVoters\":[{\"voterId\":9990},{\"voterId\":9991},{\"voterId\":9992}]," +
                 "\"data_version\":2}";
         assertCantReadQuorumStateVersion(jsonString);
+    }
+
+    @Test
+    public void testSupportedVersion() {
+        // If the next few checks fail, please check that they are compatible with previous releases of KRaft
+
+        // Check that FileBasedStateStore supports the latest version
+        assertEquals(FileBasedStateStore.HIGHEST_SUPPORTED_VERSION, QuorumStateData.HIGHEST_SUPPORTED_VERSION);
+        // Check that the supported versions haven't changed
+        assertEquals(0, QuorumStateData.HIGHEST_SUPPORTED_VERSION);
+        assertEquals(0, QuorumStateData.LOWEST_SUPPORTED_VERSION);
+        // For the latest version check that the number of tagged fields hasn't changed
+        TaggedFields taggedFields = (TaggedFields) QuorumStateData.SCHEMA_0.get(6).def.type;
+        assertEquals(0, taggedFields.numFields());
     }
 
     public void assertCantReadQuorumStateVersion(String jsonString) throws IOException {

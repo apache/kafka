@@ -639,9 +639,9 @@ public class ConsumerConfig extends AbstractConfig {
         }
     }
 
-    protected static Map<String, Object> appendDeserializerToConfig(Map<String, Object> configs,
-                                                                    Deserializer<?> keyDeserializer,
-                                                                    Deserializer<?> valueDeserializer) {
+    public static Map<String, Object> appendDeserializerToConfig(Map<String, Object> configs,
+                                                                 Deserializer<?> keyDeserializer,
+                                                                 Deserializer<?> valueDeserializer) {
         // validate deserializer configuration, if the passed deserializer instance is null, the user must explicitly set a valid deserializer configuration value
         Map<String, Object> newConfigs = new HashMap<>(configs);
         if (keyDeserializer != null)

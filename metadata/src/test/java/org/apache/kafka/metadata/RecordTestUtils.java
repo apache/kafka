@@ -18,21 +18,25 @@
 package org.apache.kafka.metadata;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.metadata.RegisterControllerRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.BatchReader;
 import org.apache.kafka.raft.internals.MemoryBatchReader;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.util.MockRandom;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -315,5 +319,37 @@ public class RecordTestUtils {
         return new ApiMessageAndVersion(
             new TopicRecord().setName("test" + index).
             setTopicId(new Uuid(random.nextLong(), random.nextLong())), (short) 0);
+    }
+
+    public static RegisterControllerRecord createTestControllerRegistration(
+        int id,
+        boolean zkMigrationReady
+    ) {
+        return new RegisterControllerRecord().
+            setControllerId(id).
+            setIncarnationId(new Uuid(3465346L, id)).
+            setZkMigrationReady(zkMigrationReady).
+            setEndPoints(new RegisterControllerRecord.ControllerEndpointCollection(
+                Arrays.asList(
+                    new RegisterControllerRecord.ControllerEndpoint().
+                        setName("CONTROLLER").
+                        setHost("localhost").
+                        setPort(8000 + id).
+                        setSecurityProtocol(SecurityProtocol.PLAINTEXT.id),
+                    new RegisterControllerRecord.ControllerEndpoint().
+                        setName("CONTROLLER_SSL").
+                        setHost("localhost").
+                        setPort(9000 + id).
+                        setSecurityProtocol(SecurityProtocol.SSL.id)
+                ).iterator()
+            )).
+            setFeatures(new RegisterControllerRecord.ControllerFeatureCollection(
+                Arrays.asList(
+                    new RegisterControllerRecord.ControllerFeature().
+                        setName(MetadataVersion.FEATURE_NAME).
+                        setMinSupportedVersion(MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel()).
+                        setMaxSupportedVersion(MetadataVersion.IBP_3_6_IV1.featureLevel())
+                ).iterator()
+            ));
     }
 }
