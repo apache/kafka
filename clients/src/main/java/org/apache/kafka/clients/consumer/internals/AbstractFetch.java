@@ -18,10 +18,13 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.FetchSessionHandler;
+import org.apache.kafka.clients.KafkaClient;
+import org.apache.kafka.clients.NetworkClientUtils;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.internals.IdempotentCloser;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -37,11 +40,9 @@ import org.slf4j.Logger;
 import org.slf4j.helpers.MessageFormatter;
 
 import java.io.Closeable;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -58,7 +59,6 @@ public abstract class AbstractFetch<K, V> implements Closeable {
 
     private final Logger log;
     protected final LogContext logContext;
-    protected final ConsumerNetworkClient client;
     protected final ConsumerMetadata metadata;
     protected final SubscriptionState subscriptions;
     protected final FetchConfig<K, V> fetchConfig;
@@ -72,7 +72,6 @@ public abstract class AbstractFetch<K, V> implements Closeable {
     private final Map<Integer, FetchSessionHandler> sessionHandlers;
 
     public AbstractFetch(final LogContext logContext,
-                         final ConsumerNetworkClient client,
                          final ConsumerMetadata metadata,
                          final SubscriptionState subscriptions,
                          final FetchConfig<K, V> fetchConfig,
@@ -80,7 +79,6 @@ public abstract class AbstractFetch<K, V> implements Closeable {
                          final Time time) {
         this.log = logContext.logger(AbstractFetch.class);
         this.logContext = logContext;
-        this.client = client;
         this.metadata = metadata;
         this.subscriptions = subscriptions;
         this.fetchConfig = fetchConfig;
@@ -91,6 +89,23 @@ public abstract class AbstractFetch<K, V> implements Closeable {
         this.metricsManager = metricsManager;
         this.time = time;
     }
+
+    /**
+     * Check if the node is disconnected and unavailable for immediate reconnection (i.e. if it is in
+     * reconnect backoff window following the disconnect).
+     *
+     * @param node {@link Node} to check for availability
+     * @see NetworkClientUtils#isUnavailable(KafkaClient, Node, Time)
+     */
+    protected abstract boolean isUnavailable(Node node);
+
+    /**
+     * Checks for an authentication error on a given node and throws the exception if it exists.
+     *
+     * @param node {@link Node} to check for a previous {@link AuthenticationException}; if found it is thrown
+     * @see NetworkClientUtils#maybeThrowAuthFailure(KafkaClient, Node)
+     */
+    protected abstract void maybeThrowAuthFailure(Node node);
 
     /**
      * Return whether we have any completed fetches pending return to the user. This method is thread-safe. Has
@@ -317,7 +332,7 @@ public abstract class AbstractFetch<K, V> implements Closeable {
         }
     }
 
-    private Map<Node, FetchSessionHandler.FetchRequestData> prepareCloseFetchSessionRequests() {
+    protected Map<Node, FetchSessionHandler.FetchRequestData> prepareCloseFetchSessionRequests() {
         final Cluster cluster = metadata.fetch();
         Map<Node, FetchSessionHandler.Builder> fetchable = new LinkedHashMap<>();
 
@@ -330,7 +345,7 @@ public abstract class AbstractFetch<K, V> implements Closeable {
                 // skip sending the close request.
                 final Node fetchTarget = cluster.nodeById(fetchTargetNodeId);
 
-                if (fetchTarget == null || client.isUnavailable(fetchTarget)) {
+                if (fetchTarget == null || isUnavailable(fetchTarget)) {
                     log.debug("Skip sending close session request to broker {} since it is not reachable", fetchTarget);
                     return;
                 }
@@ -377,8 +392,8 @@ public abstract class AbstractFetch<K, V> implements Closeable {
             // Use the preferred read replica if set, otherwise the partition's leader
             Node node = selectReadReplica(partition, leaderOpt.get(), currentTimeMs);
 
-            if (client.isUnavailable(node)) {
-                client.maybeThrowAuthFailure(node);
+            if (isUnavailable(node)) {
+                maybeThrowAuthFailure(node);
 
                 // If we try to send during the reconnect backoff window, then the request is just
                 // going to be failed anyway before being sent, so skip sending the request for now
@@ -412,46 +427,6 @@ public abstract class AbstractFetch<K, V> implements Closeable {
         return reqs;
     }
 
-    protected void maybeCloseFetchSessions(final Timer timer) {
-        final List<RequestFuture<ClientResponse>> requestFutures = new ArrayList<>();
-        Map<Node, FetchSessionHandler.FetchRequestData> fetchRequestMap = prepareCloseFetchSessionRequests();
-
-        for (Map.Entry<Node, FetchSessionHandler.FetchRequestData> entry : fetchRequestMap.entrySet()) {
-            final Node fetchTarget = entry.getKey();
-            final FetchSessionHandler.FetchRequestData data = entry.getValue();
-            final FetchRequest.Builder request = createFetchRequest(fetchTarget, data);
-            final RequestFuture<ClientResponse> responseFuture = client.send(fetchTarget, request);
-
-            responseFuture.addListener(new RequestFutureListener<ClientResponse>() {
-                @Override
-                public void onSuccess(ClientResponse value) {
-                    handleCloseFetchSessionResponse(fetchTarget, data);
-                }
-
-                @Override
-                public void onFailure(RuntimeException e) {
-                    handleCloseFetchSessionResponse(fetchTarget, data, e);
-                }
-            });
-
-            requestFutures.add(responseFuture);
-        }
-
-        // Poll to ensure that request has been written to the socket. Wait until either the timer has expired or until
-        // all requests have received a response.
-        while (timer.notExpired() && !requestFutures.stream().allMatch(RequestFuture::isDone)) {
-            client.poll(timer, null, true);
-        }
-
-        if (!requestFutures.stream().allMatch(RequestFuture::isDone)) {
-            // we ran out of time before completing all futures. It is ok since we don't want to block the shutdown
-            // here.
-            log.debug("All requests couldn't be sent in the specific timeout period {}ms. " +
-                    "This may result in unnecessary fetch sessions at the broker. Consider increasing the timeout passed for " +
-                    "KafkaConsumer.close(Duration timeout)", timer.timeoutMs());
-        }
-    }
-
     // Visible for testing
     protected FetchSessionHandler sessionHandler(int node) {
         return sessionHandlers.get(node);
@@ -467,8 +442,6 @@ public abstract class AbstractFetch<K, V> implements Closeable {
     // Visible for testing
     protected void closeInternal(Timer timer) {
         // we do not need to re-enable wake-ups since we are closing already
-        client.disableWakeups();
-        maybeCloseFetchSessions(timer);
         Utils.closeQuietly(fetchBuffer, "fetchBuffer");
         Utils.closeQuietly(decompressionBufferSupplier, "decompressionBufferSupplier");
     }

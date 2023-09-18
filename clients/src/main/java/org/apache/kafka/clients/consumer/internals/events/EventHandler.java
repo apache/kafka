@@ -19,7 +19,7 @@ package org.apache.kafka.clients.consumer.internals.events;
 import org.apache.kafka.common.utils.Timer;
 
 import java.io.Closeable;
-import java.util.Optional;
+import java.time.Duration;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
@@ -28,17 +28,6 @@ import java.util.concurrent.TimeUnit;
  * the {@code add()} method and to retrieve events via the {@code poll()} method.
  */
 public interface EventHandler extends Closeable {
-    /**
-     * Retrieves and removes a {@link BackgroundEvent}. Returns an empty Optional instance if there is nothing.
-     * @return an Optional of {@link BackgroundEvent} if the value is present. Otherwise, an empty Optional.
-     */
-    Optional<BackgroundEvent> poll();
-
-    /**
-     * Check whether there are pending {@code BackgroundEvent} await to be consumed.
-     * @return true if there are no pending event
-     */
-    boolean isEmpty();
 
     /**
      * Add an {@link ApplicationEvent} to the handler. The method returns true upon successful add; otherwise returns
@@ -62,4 +51,10 @@ public interface EventHandler extends Closeable {
      * @param <T>   Type of return value of the event
      */
     <T> T addAndGet(final CompletableApplicationEvent<T> event, final Timer timer);
+
+    default void close() {
+        close(Duration.ofMillis(Long.MAX_VALUE));
+    }
+
+    void close(Duration timeout);
 }

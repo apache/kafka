@@ -16,119 +16,56 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.ApiVersions;
-import org.apache.kafka.clients.ClientUtils;
-import org.apache.kafka.clients.GroupRebalanceConfig;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventHandler;
-import org.apache.kafka.common.internals.ClusterResourceListeners;
-import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.internals.IdempotentCloser;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+import org.slf4j.Logger;
 
-import java.net.InetSocketAddress;
-import java.util.List;
+import java.time.Duration;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingQueue;
+import java.util.function.Supplier;
 
 /**
- * An {@code EventHandler} that uses a single background thread to consume {@code ApplicationEvent} and produce
- * {@code BackgroundEvent} from the {@link DefaultBackgroundThread}.
+ * An {@link EventHandler} that uses a single background thread to consume {@link ApplicationEvent} and produce
+ * {@link BackgroundEvent} from the {@link DefaultBackgroundThread}.
  */
-public class DefaultEventHandler implements EventHandler {
+public class DefaultEventHandler<K, V> implements EventHandler {
 
+    private final Logger log;
     private final BlockingQueue<ApplicationEvent> applicationEventQueue;
-    private final BlockingQueue<BackgroundEvent> backgroundEventQueue;
-    private final DefaultBackgroundThread backgroundThread;
-
-    public DefaultEventHandler(final ConsumerConfig config,
-                               final GroupRebalanceConfig groupRebalanceConfig,
-                               final LogContext logContext,
-                               final SubscriptionState subscriptionState,
-                               final ApiVersions apiVersions,
-                               final Metrics metrics,
-                               final ClusterResourceListeners clusterResourceListeners,
-                               final Sensor fetcherThrottleTimeSensor) {
-        this(Time.SYSTEM,
-                config,
-                groupRebalanceConfig,
-                logContext,
-                new LinkedBlockingQueue<>(),
-                new LinkedBlockingQueue<>(),
-                subscriptionState,
-                apiVersions,
-                metrics,
-                clusterResourceListeners,
-                fetcherThrottleTimeSensor);
-    }
+    private final DefaultBackgroundThread<K, V> backgroundThread;
+    private final IdempotentCloser closer = new IdempotentCloser();
 
     public DefaultEventHandler(final Time time,
-                               final ConsumerConfig config,
-                               final GroupRebalanceConfig groupRebalanceConfig,
                                final LogContext logContext,
                                final BlockingQueue<ApplicationEvent> applicationEventQueue,
                                final BlockingQueue<BackgroundEvent> backgroundEventQueue,
-                               final SubscriptionState subscriptionState,
-                               final ApiVersions apiVersions,
-                               final Metrics metrics,
-                               final ClusterResourceListeners clusterResourceListeners,
-                               final Sensor fetcherThrottleTimeSensor) {
+                               final Supplier<ApplicationEventProcessor<K, V>> applicationEventProcessorSupplier,
+                               final Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
+                               final Supplier<RequestManagers<K, V>> requestManagersSupplier) {
+        this.log = logContext.logger(DefaultEventHandler.class);
         this.applicationEventQueue = applicationEventQueue;
-        this.backgroundEventQueue = backgroundEventQueue;
-
-        // Bootstrap a metadata object with the bootstrap server IP address, which will be used once for the
-        // subsequent metadata refresh once the background thread has started up.
-        final ConsumerMetadata metadata = new ConsumerMetadata(config,
-                subscriptionState,
+        this.backgroundThread = new DefaultBackgroundThread<>(time,
                 logContext,
-                clusterResourceListeners);
-        final List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config);
-        metadata.bootstrap(addresses);
-
-        this.backgroundThread = new DefaultBackgroundThread(
-            time,
-            config,
-            groupRebalanceConfig,
-            logContext,
-            this.applicationEventQueue,
-            this.backgroundEventQueue,
-            metadata,
-            subscriptionState,
-            apiVersions,
-            metrics,
-            fetcherThrottleTimeSensor);
-        backgroundThread.start();
-    }
-
-    // VisibleForTesting
-    DefaultEventHandler(final DefaultBackgroundThread backgroundThread,
-                        final BlockingQueue<ApplicationEvent> applicationEventQueue,
-                        final BlockingQueue<BackgroundEvent> backgroundEventQueue) {
-        this.backgroundThread = backgroundThread;
-        this.applicationEventQueue = applicationEventQueue;
-        this.backgroundEventQueue = backgroundEventQueue;
-        backgroundThread.start();
-    }
-
-    @Override
-    public Optional<BackgroundEvent> poll() {
-        return Optional.ofNullable(backgroundEventQueue.poll());
-    }
-
-    @Override
-    public boolean isEmpty() {
-        return backgroundEventQueue.isEmpty();
+                applicationEventQueue,
+                applicationEventProcessorSupplier,
+                networkClientDelegateSupplier,
+                requestManagersSupplier);
+        this.backgroundThread.start();
     }
 
     @Override
     public boolean add(final ApplicationEvent event) {
+        Objects.requireNonNull(event, "ApplicationEvent provided to add must be non-null");
+        log.trace("Enqueued event: {}", event);
         backgroundThread.wakeup();
         return applicationEventQueue.add(event);
     }
@@ -141,11 +78,25 @@ public class DefaultEventHandler implements EventHandler {
         return event.get(timer);
     }
 
-    public void close() {
-        try {
-            backgroundThread.close();
-        } catch (final Exception e) {
-            throw new RuntimeException(e);
-        }
+    public void close(final Duration timeout) {
+        Objects.requireNonNull(timeout, "Duration provided to close must be non-null");
+
+        closer.close(
+                () ->  {
+                    log.info("Closing the default consumer event handler");
+
+                    try {
+                        long timeoutMs = timeout.toMillis();
+
+                        if (timeoutMs < 0)
+                            throw new IllegalArgumentException("The timeout cannot be negative.");
+
+                        backgroundThread.close();
+                        log.info("The default consumer event handler was closed");
+                    } catch (final Exception e) {
+                        throw new KafkaException(e);
+                    }
+                },
+                () -> log.info("The default consumer event handler was already closed"));
     }
 }

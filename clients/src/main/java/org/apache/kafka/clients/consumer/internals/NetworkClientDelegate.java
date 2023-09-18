@@ -16,8 +16,10 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientResponse;
+import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.NetworkClientUtils;
 import org.apache.kafka.clients.RequestCompletionHandler;
@@ -26,6 +28,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -35,26 +38,29 @@ import org.slf4j.Logger;
 import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Queue;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.BiConsumer;
+import java.util.function.Supplier;
+
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_MAX_INFLIGHT_REQUESTS_PER_CONNECTION;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP_PREFIX;
 
 /**
  * A wrapper around the {@link org.apache.kafka.clients.NetworkClient} to handle network poll and send operations.
  */
 public class NetworkClientDelegate implements AutoCloseable {
+
     private final KafkaClient client;
     private final Time time;
     private final Logger log;
     private final int requestTimeoutMs;
     private final Queue<UnsentRequest> unsentRequests;
     private final long retryBackoffMs;
-    private final Set<Node> tryConnectNodes;
 
     public NetworkClientDelegate(
             final Time time,
@@ -67,9 +73,35 @@ public class NetworkClientDelegate implements AutoCloseable {
         this.unsentRequests = new ArrayDeque<>();
         this.requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
         this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
-        this.tryConnectNodes = new HashSet<>();
     }
 
+    /**
+     * Check if the node is disconnected and unavailable for immediate reconnection (i.e. if it is in
+     * reconnect backoff window following the disconnect).
+     *
+     * @param node {@link Node} to check for availability
+     * @see NetworkClientUtils#isUnavailable(KafkaClient, Node, Time)
+     */
+    public boolean isUnavailable(Node node) {
+        return NetworkClientUtils.isUnavailable(client, node, time);
+    }
+
+    /**
+     * Checks for an authentication error on a given node and throws the exception if it exists.
+     *
+     * @param node {@link Node} to check for a previous {@link AuthenticationException}; if found it is thrown
+     * @see NetworkClientUtils#maybeThrowAuthFailure(KafkaClient, Node)
+     */
+    public void maybeThrowAuthFailure(Node node) {
+        NetworkClientUtils.maybeThrowAuthFailure(client, node);
+    }
+
+    /**
+     * Initiate a connection if currently possible. This is only really useful for resetting
+     * the failed status of a socket.
+     *
+     * @param node The node to connect to
+     */
     public void tryConnect(Node node) {
         NetworkClientUtils.tryConnect(client, node, time);
     }
@@ -80,7 +112,6 @@ public class NetworkClientDelegate implements AutoCloseable {
      *
      * @param timeoutMs     timeout time
      * @param currentTimeMs current time
-     * @return a list of client response
      */
     public void poll(final long timeoutMs, final long currentTimeMs) {
         trySend(currentTimeMs);
@@ -224,6 +255,13 @@ public class NetworkClientDelegate implements AutoCloseable {
             this.handler = handler;
         }
 
+        public UnsentRequest(final AbstractRequest.Builder<?> requestBuilder,
+                             final Node node,
+                             final BiConsumer<ClientResponse, Throwable> responseHandler) {
+            this(requestBuilder, Optional.of(node));
+            future().whenComplete(responseHandler);
+        }
+
         public void setTimer(final Time time, final long requestTimeoutMs) {
             this.timer = time.timer(requestTimeoutMs);
         }
@@ -238,6 +276,10 @@ public class NetworkClientDelegate implements AutoCloseable {
 
         AbstractRequest.Builder<?> requestBuilder() {
             return requestBuilder;
+        }
+
+        Optional<Node> node() {
+            return node;
         }
 
         @Override
@@ -281,4 +323,31 @@ public class NetworkClientDelegate implements AutoCloseable {
         }
     }
 
+    /**
+     * Creates a {@link Supplier} for deferred creation during invocation by
+     * {@link org.apache.kafka.clients.consumer.internals.DefaultBackgroundThread}.
+     */
+    public static Supplier<NetworkClientDelegate> supplier(final Time time,
+                                                           final LogContext logContext,
+                                                           final ConsumerMetadata metadata,
+                                                           final ConsumerConfig config,
+                                                           final ApiVersions apiVersions,
+                                                           final Metrics metrics,
+                                                           final FetchMetricsManager fetchMetricsManager) {
+        return new CachedSupplier<NetworkClientDelegate>() {
+            @Override
+            protected NetworkClientDelegate create() {
+                KafkaClient client = ClientUtils.createNetworkClient(config,
+                        metrics,
+                        CONSUMER_METRIC_GROUP_PREFIX,
+                        logContext,
+                        apiVersions,
+                        time,
+                        CONSUMER_MAX_INFLIGHT_REQUESTS_PER_CONNECTION,
+                        metadata,
+                        fetchMetricsManager.throttleTimeSensor());
+                return new NetworkClientDelegate(time, config, logContext, client);
+            }
+        };
+    }
 }
