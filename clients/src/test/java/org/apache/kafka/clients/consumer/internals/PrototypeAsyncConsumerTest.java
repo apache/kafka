@@ -86,7 +86,7 @@ import static org.mockito.Mockito.when;
 public class PrototypeAsyncConsumerTest {
 
     private PrototypeAsyncConsumer<?, ?> consumer;
-    private Map<String, Object> consumerProps = new HashMap<>();
+    private final Map<String, Object> consumerProps = new HashMap<>();
 
     private final Time time = new MockTime();
     private LogContext logContext;
@@ -149,7 +149,6 @@ public class PrototypeAsyncConsumerTest {
 
         assertFalse(future.isCompletedExceptionally());
     }
-
 
     @Test
     public void testCommitAsync_UserSuppliedCallback() {
@@ -381,63 +380,66 @@ public class PrototypeAsyncConsumerTest {
     public void testRefreshCommittedOffsetsShouldNotResetIfFailedWithTimeout() {
         // Create consumer with group id to enable committed offset usage
         this.groupId = "consumer-group-1";
-        consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
 
-        when(subscriptions.initializingPartitions()).thenReturn(Collections.singleton(new TopicPartition("t1", 1)));
-        when(eventHandler.addAndGet(ArgumentMatchers.isA(OffsetFetchApplicationEvent.class),
-                ArgumentMatchers.isA(Timer.class))).thenThrow(TimeoutException.class);
-
-        // Poll with 0 timeout to run a single iteration of the poll loop
-        consumer.poll(Duration.ofMillis(0));
-
-        // Verify that events were triggered for validating positions and fetching committed
-        // offsets, but no event should have been created to reset positions given that there
-        // were no committed offsets.
-        verify(eventHandler).add(ArgumentMatchers.isA(ValidatePositionsApplicationEvent.class));
-        verify(eventHandler).addAndGet(ArgumentMatchers.isA(OffsetFetchApplicationEvent.class),
-                ArgumentMatchers.isA(Timer.class));
-        verify(eventHandler, never()).add(ArgumentMatchers.isA(ResetPositionsApplicationEvent.class));
+        testUpdateFetchPositionsWithFetchCommittedOffsetsTimeout(true);
     }
 
     @Test
-    public void testRefreshCommittedOffsetsNotFetchedIfNoGroupId() {
-        // Create consumer without group id
+    public void testRefreshCommittedOffsetsNotCalledIfNoGroupId() {
+        // Create consumer without group id so committed offsets are not used for updating positions
         this.groupId = null;
         consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
 
+        testUpdateFetchPositionsWithFetchCommittedOffsetsTimeout(false);
+    }
+
+    private void testUpdateFetchPositionsWithFetchCommittedOffsetsTimeout(boolean committedOffsetsEnabled) {
+        consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
+
+        // Uncompleted future that will time out if used
+        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> committedFuture = new CompletableFuture<>();
+
         when(subscriptions.initializingPartitions()).thenReturn(Collections.singleton(new TopicPartition("t1", 1)));
-        when(eventHandler.addAndGet(ArgumentMatchers.isA(OffsetFetchApplicationEvent.class),
-                ArgumentMatchers.isA(Timer.class))).thenThrow(TimeoutException.class);
 
-        // Poll with 0 timeout to run a single iteration of the poll loop
-        consumer.poll(Duration.ofMillis(0));
+        try (MockedConstruction<OffsetFetchApplicationEvent> ignored = offsetFetchEventMocker(committedFuture)) {
 
-        // Verify that no event was generated for fetching committed offsets
-        verify(eventHandler, never()).addAndGet(ArgumentMatchers.isA(OffsetFetchApplicationEvent.class),
-                ArgumentMatchers.isA(Timer.class));
+            // Poll with 0 timeout to run a single iteration of the poll loop
+            consumer.poll(Duration.ofMillis(0));
 
-        verify(eventHandler).add(ArgumentMatchers.isA(ValidatePositionsApplicationEvent.class));
-        verify(eventHandler).add(ArgumentMatchers.isA(ResetPositionsApplicationEvent.class));
+            verify(eventHandler).add(ArgumentMatchers.isA(ValidatePositionsApplicationEvent.class));
+
+            if (committedOffsetsEnabled) {
+                // Verify there was an OffsetFetch event and no ResetPositions event
+                verify(eventHandler).add(ArgumentMatchers.isA(OffsetFetchApplicationEvent.class));
+                verify(eventHandler,
+                        never()).add(ArgumentMatchers.isA(ResetPositionsApplicationEvent.class));
+            } else {
+                // Verify there was not any OffsetFetch event but there should be a ResetPositions
+                verify(eventHandler,
+                        never()).add(ArgumentMatchers.isA(OffsetFetchApplicationEvent.class));
+                verify(eventHandler).add(ArgumentMatchers.isA(ResetPositionsApplicationEvent.class));
+            }
+        }
     }
 
     private void testRefreshCommittedOffsetsSuccess(Map<TopicPartition, OffsetAndMetadata> committedOffsets) {
+        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> committedFuture = new CompletableFuture<>();
+        committedFuture.complete(committedOffsets);
+
         // Create consumer with group id to enable committed offset usage
         this.groupId = "consumer-group-1";
         consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
 
-        when(subscriptions.initializingPartitions()).thenReturn(committedOffsets.keySet());
-        when(eventHandler.addAndGet(any(), any())).thenReturn(committedOffsets);
+        try (MockedConstruction<OffsetFetchApplicationEvent> ignored = offsetFetchEventMocker(committedFuture)) {
+            when(subscriptions.initializingPartitions()).thenReturn(committedOffsets.keySet());
 
-        // Poll with 0 timeout to run a single iteration of the poll loop
-        consumer.poll(Duration.ofMillis(0));
+            // Poll with 0 timeout to run a single iteration of the poll loop
+            consumer.poll(Duration.ofMillis(0));
 
-        // Verify that events were triggered for validating positions and fetching committed
-        // offsets, but no event should have been created to reset positions given that there
-        // were no committed offsets.
-        verify(eventHandler).add(ArgumentMatchers.isA(ValidatePositionsApplicationEvent.class));
-        verify(eventHandler).addAndGet(ArgumentMatchers.isA(OffsetFetchApplicationEvent.class),
-                ArgumentMatchers.isA(Timer.class));
-        verify(eventHandler).add(ArgumentMatchers.isA(ResetPositionsApplicationEvent.class));
+            verify(eventHandler).add(ArgumentMatchers.isA(ValidatePositionsApplicationEvent.class));
+            verify(eventHandler).add(ArgumentMatchers.isA(OffsetFetchApplicationEvent.class));
+            verify(eventHandler).add(ArgumentMatchers.isA(ResetPositionsApplicationEvent.class));
+        }
     }
 
     private void assertNoPendingWakeup(final WakeupTrigger wakeupTrigger) {
