@@ -128,11 +128,11 @@ public class ReassignPartitionsUnitTest {
         states.put(new TopicPartition("bar", 0),
             new ReassignPartitionsCommand.PartitionReassignmentState(seq(1, 2, 3), seq(1, 2, 4), false));
 
-        assertEquals(
-            "Status of partition reassignment:" + System.lineSeparator() +
-            "Reassignment of partition bar-0 is still in progress." + System.lineSeparator() +
-            "Reassignment of partition foo-0 is completed." + System.lineSeparator() +
-            "Reassignment of partition foo-1 is still in progress.",
+        assertEquals(String.join(System.lineSeparator(),
+            "Status of partition reassignment:",
+            "Reassignment of partition bar-0 is still in progress.",
+            "Reassignment of partition foo-0 is completed.",
+            "Reassignment of partition foo-1 is still in progress."),
             partitionReassignmentStatesToString(asScala(states)));
     }
 
@@ -272,14 +272,14 @@ public class ReassignPartitionsUnitTest {
             "/tmp/kafka-logs1", "/tmp/kafka-logs2"));
         states.put(new TopicPartitionReplica("quux", 2, 1), new ReassignPartitionsCommand.MissingLogDirMoveState("/tmp/kafka-logs1"));
 
-        assertEquals(
-            "Reassignment of replica bar-0-0 completed successfully." + System.lineSeparator() +
-            "Reassignment of replica foo-0-0 is still in progress." + System.lineSeparator() +
-            "Partition foo-1 on broker 0 is not being moved from log dir /tmp/kafka-logs0 to /tmp/kafka-logs1." + System.lineSeparator() +
-            "Partition quux-0 cannot be found in any live log directory on broker 0." + System.lineSeparator() +
-            "Partition quux-1 on broker 1 is being moved to log dir /tmp/kafka-logs2 instead of /tmp/kafka-logs1." + System.lineSeparator() +
+        assertEquals(String.join(System.lineSeparator(),
+            "Reassignment of replica bar-0-0 completed successfully.",
+            "Reassignment of replica foo-0-0 is still in progress.",
+            "Partition foo-1 on broker 0 is not being moved from log dir /tmp/kafka-logs0 to /tmp/kafka-logs1.",
+            "Partition quux-0 cannot be found in any live log directory on broker 0.",
+            "Partition quux-1 on broker 1 is being moved to log dir /tmp/kafka-logs2 instead of /tmp/kafka-logs1.",
             "Partition quux-2 is not found in any live log dir on broker 1. " +
-                "There is likely an offline log directory on the broker.",
+                "There is likely an offline log directory on the broker."),
             replicaMoveStatesToString(asScala(states)));
     }
 
@@ -446,15 +446,15 @@ public class ReassignPartitionsUnitTest {
         currentParts.put(new TopicPartition("bar", 0), seq(7, 8));
         currentParts.put(new TopicPartition("baz", 0), seq(10, 11, 12));
 
-        assertEquals(
-            "Current partition replica assignment" + System.lineSeparator() +
-            System.lineSeparator() +
+        assertEquals(String.join(System.lineSeparator(),
+            "Current partition replica assignment",
+            "",
             "{\"version\":1,\"partitions\":" +
                 "[{\"topic\":\"bar\",\"partition\":0,\"replicas\":[7,8],\"log_dirs\":[\"any\",\"any\"]}," +
                 "{\"topic\":\"foo\",\"partition\":1,\"replicas\":[4,5,6],\"log_dirs\":[\"any\",\"any\",\"any\"]}]" +
-                "}" + System.lineSeparator() +
-            System.lineSeparator() +
-            "Save this to use as the --reassignment-json-file option during rollback",
+                "}",
+            "",
+            "Save this to use as the --reassignment-json-file option during rollback"),
             currentPartitionReplicaAssignmentToString(asScala(proposedParts), asScala(currentParts))
         );
     }
@@ -673,10 +673,11 @@ public class ReassignPartitionsUnitTest {
                 alterPartitionReassignments(adminClient, asScala(reassignments));
 
             assertTrue(reassignmentResult.isEmpty());
-            assertEquals("Current partition reassignments:" + System.lineSeparator() +
-                    "bar-0: replicas: 2,3,0. removing: 0." + System.lineSeparator() +
-                    "foo-0: replicas: 0,1,2. adding: 4." + System.lineSeparator() +
-                    "foo-1: replicas: 1,2,3. adding: 4,5. removing: 1,2.",
+            assertEquals(String.join(System.lineSeparator(),
+                "Current partition reassignments:",
+                "bar-0: replicas: 2,3,0. removing: 0.",
+                "foo-0: replicas: 0,1,2. adding: 4.",
+                "foo-1: replicas: 1,2,3. adding: 4,5. removing: 1,2."),
                 curReassignmentsToString(adminClient));
         }
     }
