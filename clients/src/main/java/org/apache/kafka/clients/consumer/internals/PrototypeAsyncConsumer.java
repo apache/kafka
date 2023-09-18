@@ -143,7 +143,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
 
     // to keep from repeatedly scanning subscriptions in poll(), cache the result during metadata updates
     private boolean cachedSubscriptionHasAllFetchPositions;
-    private WakeupTrigger wakeupTrigger = new WakeupTrigger();
+    private final WakeupTrigger wakeupTrigger = new WakeupTrigger();
 
     public PrototypeAsyncConsumer(final Properties properties,
                                   final Deserializer<K> keyDeserializer,
@@ -333,7 +333,6 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
 
             do {
                 updateAssignmentMetadataIfNeeded(timer);
-                updateFetchPositionsIfNeeded(timer);
                 final Fetch<K, V> fetch = pollForFetches(timer);
 
                 if (!fetch.isEmpty()) {
@@ -354,40 +353,6 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
             this.kafkaConsumerMetrics.recordPollEnd(timer.currentTimeMs());
         }
         // TODO: Once we implement poll(), clear wakeupTrigger in a finally block: wakeupTrigger.clearActiveTask();
-    }
-
-    /**
-     * Set the fetch position to the committed position (if there is one) or reset it using the
-     * offset reset policy the user has configured (if partitions require reset)
-     *
-     * @return true if the operation completed without timing out
-     * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
-     * @throws NoOffsetForPartitionException                          If no offset is stored for a given partition and no offset reset policy is
-     *                                                                defined
-     */
-    private boolean updateFetchPositionsIfNeeded(final Timer timer) {
-        // If any partitions have been truncated due to a leader change, we need to validate the offsets
-        ValidatePositionsApplicationEvent validatePositionsEvent = new ValidatePositionsApplicationEvent();
-        eventHandler.add(validatePositionsEvent);
-
-        // If there are any partitions which do not have a valid position and are not
-        // awaiting reset, then we need to fetch committed offsets. We will only do a
-        // coordinator lookup if there are partitions which have missing positions, so
-        // a consumer with manually assigned partitions can avoid a coordinator dependence
-        // by always ensuring that assigned partitions have an initial position.
-        if (isCommittedOffsetsManagementEnabled() && !refreshCommittedOffsetsIfNeeded(timer))
-            return false;
-
-        // If there are partitions still needing a position and a reset policy is defined,
-        // request reset using the default policy. If no reset strategy is defined and there
-        // are partitions with a missing position, then we will raise a NoOffsetForPartitionException exception.
-        subscriptions.resetInitializingPositions();
-
-        // Finally send an asynchronous request to look up and update the positions of any
-        // partitions which are awaiting reset.
-        ResetPositionsApplicationEvent resetPositionsEvent = new ResetPositionsApplicationEvent();
-        eventHandler.add(resetPositionsEvent);
-        return true;
     }
 
     /**
@@ -423,7 +388,6 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
                 commitCallback.onComplete(offsets, null);
             }
         }).exceptionally(e -> {
-            System.out.println(e);
             throw new KafkaException(e);
         });
     }
@@ -796,10 +760,11 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     public void commitSync(Map<TopicPartition, OffsetAndMetadata> offsets, Duration timeout) {
         long commitStart = time.nanoseconds();
         try {
-            maybeThrowInvalidGroupIdException();
+            CompletableFuture<Void> commitFuture = commit(offsets, true);
             offsets.forEach(this::updateLastSeenEpochIfNewer);
-            eventHandler.addAndGet(new CommitApplicationEvent(offsets), time.timer(timeout));
+            ConsumerUtils.getResult(commitFuture, time.timer(timeout));
         } finally {
+            wakeupTrigger.clearActiveTask();
             kafkaConsumerMetrics.recordCommitSync(time.nanoseconds() - commitStart);
         }
     }
@@ -825,7 +790,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
-    public void subscribe(Collection<String> topics, ConsumerRebalanceListener listener) {
+    public void subscribe(Collection<String> topics, ConsumerRebalanceListener callback) {
         maybeThrowInvalidGroupIdException();
         if (topics == null)
             throw new IllegalArgumentException("Topic collection to subscribe to cannot be null");
@@ -850,7 +815,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
 
             fetchBuffer.retainAll(currentTopicPartitions);
             log.info("Subscribed to topic(s): {}", join(topics, ", "));
-            if (this.subscriptions.subscribe(new HashSet<>(topics), listener))
+            if (this.subscriptions.subscribe(new HashSet<>(topics), callback))
                 metadata.requestUpdateForNewTopics();
         }
     }
@@ -1012,8 +977,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
      */
     private boolean updateFetchPositions(final Timer timer) {
         // If any partitions have been truncated due to a leader change, we need to validate the offsets
-        ValidatePositionsApplicationEvent validatePositionsEvent = new ValidatePositionsApplicationEvent();
-        eventHandler.add(validatePositionsEvent);
+        eventHandler.add(new ValidatePositionsApplicationEvent());
 
         cachedSubscriptionHasAllFetchPositions = subscriptions.hasAllFetchPositions();
         if (cachedSubscriptionHasAllFetchPositions) return true;
@@ -1026,7 +990,6 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         if (isCommittedOffsetsManagementEnabled() && !refreshCommittedOffsetsIfNeeded(timer))
             return false;
 
-
         // If there are partitions still needing a position and a reset policy is defined,
         // request reset using the default policy. If no reset strategy is defined and there
         // are partitions with a missing position, then we will raise a NoOffsetForPartitionException exception.
@@ -1034,8 +997,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
 
         // Finally send an asynchronous request to look up and update the positions of any
         // partitions which are awaiting reset.
-        ResetPositionsApplicationEvent resetPositionsEvent = new ResetPositionsApplicationEvent();
-        eventHandler.add(resetPositionsEvent);
+        eventHandler.add(new ResetPositionsApplicationEvent());
         return true;
     }
 
@@ -1047,7 +1009,6 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     private boolean isCommittedOffsetsManagementEnabled() {
         return groupId.isPresent();
     }
-
 
     /**
      * Refresh the committed offsets for provided partitions.
@@ -1102,11 +1063,6 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
             if (exception != null)
                 log.error("Offset commit with offsets {} failed", offsets, exception);
         }
-    }
-
-    // Functions below are for testing only
-    String getClientId() {
-        return clientId;
     }
 
     boolean updateAssignmentMetadataIfNeeded(Timer timer) {

@@ -74,7 +74,6 @@ public class PrototypeAsyncConsumerTest {
     private static final Optional<String> DEFAULT_GROUP_ID = Optional.of("group.id");
 
     private ConsumerTestBuilder.PrototypeAsyncConsumerTestBuilder testBuilder;
-    private SubscriptionState subscriptions;
     private EventHandler eventHandler;
 
     @BeforeEach
@@ -91,7 +90,6 @@ public class PrototypeAsyncConsumerTest {
 
     private void setup(Optional<String> groupIdOpt) {
         testBuilder = new ConsumerTestBuilder.PrototypeAsyncConsumerTestBuilder(groupIdOpt);
-        subscriptions = testBuilder.subscriptions;
         eventHandler = testBuilder.eventHandler;
         consumer = testBuilder.consumer;
     }
@@ -118,7 +116,7 @@ public class PrototypeAsyncConsumerTest {
         doReturn(future).when(consumer).commit(offsets, false);
         consumer.commitAsync(offsets, null);
         future.complete(null);
-        TestUtils.waitForCondition(() -> future.isDone(),
+        TestUtils.waitForCondition(future::isDone,
                 2000,
                 "commit future should complete");
 
@@ -246,7 +244,7 @@ public class PrototypeAsyncConsumerTest {
                 assertDoesNotThrow(() -> consumer.beginningOffsets(partitions,
                         Duration.ofMillis(1)));
         Map<TopicPartition, Long> expectedOffsets = expectedOffsetsAndTimestamp.entrySet().stream()
-                .collect(Collectors.toMap(e -> e.getKey(), e -> e.getValue().offset()));
+                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().offset()));
         assertEquals(expectedOffsets, result);
         verify(eventHandler).addAndGet(ArgumentMatchers.isA(ListOffsetsApplicationEvent.class),
                 ArgumentMatchers.isA(Timer.class));
@@ -322,14 +320,18 @@ public class PrototypeAsyncConsumerTest {
 
     @Test
     public void testRefreshCommittedOffsetsSuccess() {
-        Map<TopicPartition, OffsetAndMetadata> committedOffsets =
-                Collections.singletonMap(new TopicPartition("t1", 1), new OffsetAndMetadata(10L));
-        testRefreshCommittedOffsetsSuccess(committedOffsets);
+        TopicPartition partition = new TopicPartition("t1", 1);
+        Set<TopicPartition> partitions = Collections.singleton(partition);
+        Map<TopicPartition, OffsetAndMetadata> committedOffsets = Collections.singletonMap(partition, new OffsetAndMetadata(10L));
+        testRefreshCommittedOffsetsSuccess(partitions, committedOffsets);
     }
 
     @Test
     public void testRefreshCommittedOffsetsSuccessButNoCommittedOffsetsFound() {
-        testRefreshCommittedOffsetsSuccess(Collections.emptyMap());
+        TopicPartition partition = new TopicPartition("t1", 1);
+        Set<TopicPartition> partitions = Collections.singleton(partition);
+        Map<TopicPartition, OffsetAndMetadata> committedOffsets = Collections.emptyMap();
+        testRefreshCommittedOffsetsSuccess(partitions, committedOffsets);
     }
 
     @Test
@@ -354,10 +356,10 @@ public class PrototypeAsyncConsumerTest {
         // Uncompleted future that will time out if used
         CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> committedFuture = new CompletableFuture<>();
 
-        when(subscriptions.initializingPartitions()).thenReturn(Collections.singleton(new TopicPartition("t1", 1)));
+
+        consumer.assign(singleton(new TopicPartition("t1", 1)));
 
         try (MockedConstruction<OffsetFetchApplicationEvent> ignored = offsetFetchEventMocker(committedFuture)) {
-
             // Poll with 0 timeout to run a single iteration of the poll loop
             consumer.poll(Duration.ofMillis(0));
 
@@ -377,17 +379,17 @@ public class PrototypeAsyncConsumerTest {
         }
     }
 
-    private void testRefreshCommittedOffsetsSuccess(Map<TopicPartition, OffsetAndMetadata> committedOffsets) {
+    private void testRefreshCommittedOffsetsSuccess(Set<TopicPartition> partitions,
+                                                    Map<TopicPartition, OffsetAndMetadata> committedOffsets) {
         CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> committedFuture = new CompletableFuture<>();
         committedFuture.complete(committedOffsets);
 
         // Create consumer with group id to enable committed offset usage
         cleanup();
         setup(Optional.of("consumer-group-id"));
+        consumer.assign(partitions);
 
         try (MockedConstruction<OffsetFetchApplicationEvent> ignored = offsetFetchEventMocker(committedFuture)) {
-            when(subscriptions.initializingPartitions()).thenReturn(committedOffsets.keySet());
-
             // Poll with 0 timeout to run a single iteration of the poll loop
             consumer.poll(Duration.ofMillis(0));
 

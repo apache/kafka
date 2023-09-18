@@ -110,7 +110,7 @@ public class ConsumerTestBuilder implements Closeable {
         final long requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
         this.metrics = createMetrics(config, time);
 
-        this.subscriptions = createSubscriptionState(config, logContext);
+        this.subscriptions = spy(createSubscriptionState(config, logContext));
         this.metadata = spy(new ConsumerMetadata(config, subscriptions, logContext, new ClusterResourceListeners()));
         this.fetchConfig = createFetchConfig(config, new Deserializers<>(config));
         this.metricsManager = createFetchMetricsManager(metrics);
