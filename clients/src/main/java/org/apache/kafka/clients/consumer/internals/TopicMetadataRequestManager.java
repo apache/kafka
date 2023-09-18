@@ -23,7 +23,6 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.RetriableException;
-import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.MetadataRequest;
@@ -159,20 +158,19 @@ public class TopicMetadataRequestManager implements RequestManager {
 
         private void processResponseOrException(final ClientResponse response,
                                                 final Throwable exception) {
-            long responseTimeMs = System.currentTimeMillis();
             if (exception != null) {
-                handleException(exception, responseTimeMs);
+                handleException(exception, response.receivedTimeMs());
                 return;
             }
-            handleResponse(response, responseTimeMs);
+            handleResponse(response, response.receivedTimeMs());
         }
 
         private void handleException(final Throwable exception, final long responseTimeMs) {
-            if (exception instanceof TimeoutException || !(exception instanceof RetriableException)) {
-                completeFutureAndRemoveRequest(new KafkaException(exception));
-            } else {
+            if (exception instanceof RetriableException) {
                 // We continue to retry on RetriableException
                 onFailedAttempt(responseTimeMs);
+            } else {
+                completeFutureAndRemoveRequest(new KafkaException(exception));
             }
         }
 

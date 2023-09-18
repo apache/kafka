@@ -247,7 +247,7 @@ public class CommitRequestManager implements RequestManager {
             return Objects.equals(requestedGeneration, request.requestedGeneration) && requestedPartitions.equals(request.requestedPartitions);
         }
 
-        public NetworkClientDelegate.UnsentRequest toUnsentRequest(final long currentTimeMs) {
+        public NetworkClientDelegate.UnsentRequest toUnsentRequest() {
             OffsetFetchRequest.Builder builder = new OffsetFetchRequest.Builder(
                     groupState.groupId,
                     true,
@@ -256,7 +256,7 @@ public class CommitRequestManager implements RequestManager {
             return new NetworkClientDelegate.UnsentRequest(
                     builder,
                     coordinatorRequestManager.coordinator(),
-                    (r, t) -> onResponse(currentTimeMs, (OffsetFetchResponse) r.responseBody()));
+                    (r, t) -> onResponse(r.receivedTimeMs(), (OffsetFetchResponse) r.responseBody()));
         }
 
         public void onResponse(
@@ -464,7 +464,7 @@ public class CommitRequestManager implements RequestManager {
             // Add all sendable offset fetch requests to the unsentRequests list and to the inflightOffsetFetches list
             for (OffsetFetchRequestState request : partitionedBySendability.get(true)) {
                 request.onSendAttempt(currentTimeMs);
-                unsentRequests.add(request.toUnsentRequest(currentTimeMs));
+                unsentRequests.add(request.toUnsentRequest());
                 inflightOffsetFetches.add(request);
             }
 
