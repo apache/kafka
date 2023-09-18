@@ -75,6 +75,11 @@ public class NetworkClientDelegate implements AutoCloseable {
         this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
     }
 
+    // Visible for testing
+    Queue<UnsentRequest> unsentRequests() {
+        return unsentRequests;
+    }
+
     /**
      * Check if the node is disconnected and unavailable for immediate reconnection (i.e. if it is in
      * reconnect backoff window following the disconnect).
@@ -149,8 +154,7 @@ public class NetworkClientDelegate implements AutoCloseable {
         }
     }
 
-    private boolean doSend(final UnsentRequest r,
-                           final long currentTimeMs) {
+    boolean doSend(final UnsentRequest r, final long currentTimeMs) {
         Node node = r.node.orElse(client.leastLoadedNode(currentTimeMs));
         if (node == null || nodeUnavailable(node)) {
             log.debug("No broker available to send the request: {}. Retrying.", r);
@@ -167,7 +171,7 @@ public class NetworkClientDelegate implements AutoCloseable {
         return true;
     }
 
-    private void checkDisconnects() {
+    protected void checkDisconnects() {
         // Check the connection of the unsent request. Disconnect the disconnected node if it is unable to be connected.
         Iterator<UnsentRequest> iter = unsentRequests.iterator();
         while (iter.hasNext()) {
@@ -239,7 +243,7 @@ public class NetworkClientDelegate implements AutoCloseable {
     public static class UnsentRequest {
         private final AbstractRequest.Builder<?> requestBuilder;
         private final FutureCompletionHandler handler;
-        private Optional<Node> node; // empty if random node can be chosen
+        private final Optional<Node> node; // empty if random node can be chosen
         private Timer timer;
 
         public UnsentRequest(final AbstractRequest.Builder<?> requestBuilder, final Optional<Node> node) {
@@ -270,7 +274,7 @@ public class NetworkClientDelegate implements AutoCloseable {
             return handler.future;
         }
 
-        RequestCompletionHandler callback() {
+        FutureCompletionHandler callback() {
             return handler;
         }
 
