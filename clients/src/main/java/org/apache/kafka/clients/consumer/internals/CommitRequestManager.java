@@ -289,8 +289,8 @@ public class CommitRequestManager implements RequestManager {
         }
 
         private void retry(final long currentTimeMs) {
-            this.onFailedAttempt(currentTimeMs);
-            this.onSendAttempt(currentTimeMs);
+            onFailedAttempt(currentTimeMs);
+            onSendAttempt(currentTimeMs);
             pendingRequests.addOffsetFetchRequest(this);
         }
 

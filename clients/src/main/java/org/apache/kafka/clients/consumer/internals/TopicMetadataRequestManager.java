@@ -139,12 +139,11 @@ public class TopicMetadataRequestManager implements RequestManager {
             }
             onSendAttempt(currentTimeMs);
 
-            final MetadataRequest.Builder request;
-            request = topic.map(t -> new MetadataRequest.Builder(Collections.singletonList(t), allowAutoTopicCreation))
+            final MetadataRequest.Builder request =
+                topic.map(t -> new MetadataRequest.Builder(Collections.singletonList(t), allowAutoTopicCreation))
                     .orElseGet(MetadataRequest.Builder::allTopics);
 
-            final NetworkClientDelegate.UnsentRequest unsent = createUnsentRequest(request);
-            return Optional.of(unsent);
+            return Optional.of(createUnsentRequest(request));
         }
 
         private NetworkClientDelegate.UnsentRequest createUnsentRequest(
@@ -165,6 +164,7 @@ public class TopicMetadataRequestManager implements RequestManager {
 
             if (exception instanceof RetriableException) {
                 // We continue to retry on RetriableException
+                // TODO: TimeoutException will continue to retry despite user API timeout.
                 onFailedAttempt(response.receivedTimeMs());
             } else {
                 completeFutureAndRemoveRequest(new KafkaException(exception));
