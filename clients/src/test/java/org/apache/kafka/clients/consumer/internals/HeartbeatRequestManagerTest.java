@@ -34,6 +34,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Arrays;
 import java.util.Collection;
@@ -116,17 +117,20 @@ public class HeartbeatRequestManagerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("stateProvider")
-    public void testPoll_sendHeartbeatOnMemberState(final MemberState state) {
+    @ValueSource(booleans = {true, false})
+    public void testPoll_sendHeartbeatOnMemberState(boolean notInGroup) {
+        // Mocking notInGroup
+        when(mockMembershipManager.notInGroup()).thenReturn(notInGroup);
         when(heartbeatRequestState.canSendRequest(anyLong())).thenReturn(true);
+
         NetworkClientDelegate.PollResult result;
         result = heartbeatRequestManager.poll(mockTime.milliseconds());
 
-        if (mockMembershipManager.notInGroup()) {
-            assertEquals(Long.MAX_VALUE, result.timeUntilNextPollMs);
+        assertEquals(Long.MAX_VALUE, result.timeUntilNextPollMs);
+
+        if (notInGroup) {
             assertEquals(0, result.unsentRequests.size());
         } else {
-            assertEquals(Long.MAX_VALUE, result.timeUntilNextPollMs);
             assertEquals(1, result.unsentRequests.size());
         }
     }
