@@ -634,7 +634,7 @@ class KafkaServer(
       config,
       addPartitionsToTxnNetworkClient,
       metadataCache,
-      transactionCoordinator.partitionFor,
+      transactionalId => transactionCoordinator.partitionFor(transactionalId),
       time
     )
 
