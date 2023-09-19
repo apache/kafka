@@ -132,14 +132,25 @@ class TransactionsTest extends IntegrationTestHarness {
     maybeVerifyLocalLogStartOffsets(Map((tp11, 0), (tp22, 0)))
     producer.abortTransaction()
 
+    maybeWaitForAtLeastOneSegmentUpload(Seq(tp11, tp22))
+
+    // We've sent 1 record + 1 abort mark = 2 (segments) to each topic partition,
+    // so 1 segment should be offloaded, the local log start offset should be 1
+    // And log start offset is still 0
+    verifyLogStartOffsets(Map((tp11, 0), (tp22, 0)))
+    maybeVerifyLocalLogStartOffsets(Map((tp11, 1L), (tp22, 1L)))
+
     producer.beginTransaction()
     producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, 1, "1", "1", willBeCommitted = true))
     producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, 2, "3", "3", willBeCommitted = true))
+
+    // Before records are committed, these records won't be offloaded.
+    verifyLogStartOffsets(Map((tp11, 0), (tp22, 0)))
+    maybeVerifyLocalLogStartOffsets(Map((tp11, 1L), (tp22, 1L)))
+
     producer.commitTransaction()
 
-    maybeWaitForAtLeastOneSegmentUpload(tp11, tp22)
-
-    // We've send 2 records + 1 abort mark + 1 commit mark = 4 (segments),
+    // We've sent 2 records + 1 abort mark + 1 commit mark = 4 (segments) to each topic partition,
     // so 3 segments should be offloaded, the local log start offset should be 3
     // And log start offset is still 0
     verifyLogStartOffsets(Map((tp11, 0), (tp22, 0)))
@@ -258,9 +269,8 @@ class TransactionsTest extends IntegrationTestHarness {
     producer1.abortTransaction()
     producer2.commitTransaction()
 
-    maybeWaitForAtLeastOneSegmentUpload(tp10)
-
-    // We've send 4 records + 1 abort mark + 1 commit mark = 6 (segments),
+    maybeWaitForAtLeastOneSegmentUpload(Seq(tp10))
+    // We've sent 4 records + 1 abort mark + 1 commit mark = 6 (segments),
     // so 5 segments should be offloaded, the local log start offset should be 5
     // And log start offset is still 0
     verifyLogStartOffsets(Map((tp10, 0)))
@@ -361,7 +371,7 @@ class TransactionsTest extends IntegrationTestHarness {
     for (partition <- 0 until numPartitions) {
       partitions += new TopicPartition(topic2, partition)
     }
-    maybeWaitForAtLeastOneSegmentUpload(partitions.toSeq: _*)
+    maybeWaitForAtLeastOneSegmentUpload(partitions.toSeq)
 
     // In spite of random aborts, we should still have exactly 500 messages in topic2. I.e. we should not
     // re-copy or miss any messages from topic1, since the consumed offsets were committed transactionally.
@@ -855,7 +865,7 @@ class TransactionsTest extends IntegrationTestHarness {
     producer
   }
 
-  def maybeWaitForAtLeastOneSegmentUpload(topicPartitions: TopicPartition*): Unit = {
+  def maybeWaitForAtLeastOneSegmentUpload(topicPartitions: Seq[TopicPartition]): Unit = {
   }
 
   def verifyLogStartOffsets(partitionStartOffsets: Map[TopicPartition, Int]): Unit = {
