@@ -59,5 +59,11 @@ public interface MembershipManager {
      * current assignment.
      */
     void updateAssignment(ConsumerGroupHeartbeatResponseData.Assignment assignment);
-    boolean notInGroup();
+
+    void onFatalError(short errorCode);
+
+    /**
+     * Return true if the member should send heartbeat to the coordinator
+     */
+    boolean shouldSendHeartbeat();
 }

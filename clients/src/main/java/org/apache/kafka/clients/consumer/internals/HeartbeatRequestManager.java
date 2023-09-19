@@ -32,6 +32,17 @@ import org.slf4j.Logger;
 import java.util.ArrayList;
 import java.util.Collections;
 
+/**
+ * Manages the request creation and response handling for the heartbeat. The module creates a {@link ConsumerGroupHeartbeatRequest}
+ * using the state stored in the {@link MembershipManager} and enqueue it to the network queue to be sent out. Once
+ * the response is received, the module will update the state in the {@link MembershipManager} and handle any errors.
+ *
+ * The manager only emits heartbeat when the member is in a group. If the member is not in a group, or the
+ * coordinator is lost, the heartbeat won't be sent.
+ *
+ * If the heartbeat request fails, the module will trigger the exponential backoff, and resend the request. See
+ * {@link HeartbeatRequestState} for more details.
+ */
 public class HeartbeatRequestManager implements RequestManager {
     private final Time time;
     private final Logger logger;
@@ -60,10 +71,9 @@ public class HeartbeatRequestManager implements RequestManager {
         this.nonRetriableErrorHandler = nonRetriableErrorHandler;
         this.rebalanceTimeoutMs = config.getInt(CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG);
 
-        long heartbeatIntervalMs = config.getInt(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG);
         long retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
         long retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
-        this.heartbeatRequestState = new HeartbeatRequestState(logContext, time, heartbeatIntervalMs, retryBackoffMs,
+        this.heartbeatRequestState = new HeartbeatRequestState(logContext, time, -1, retryBackoffMs,
             retryBackoffMaxMs, rebalanceTimeoutMs);
     }
 
@@ -89,7 +99,7 @@ public class HeartbeatRequestManager implements RequestManager {
 
     @Override
     public NetworkClientDelegate.PollResult poll(long currentTimeMs) {
-        if (!coordinatorRequestManager.coordinator().isPresent() || membershipManager.notInGroup()) {
+        if (!coordinatorRequestManager.coordinator().isPresent() || membershipManager.shouldSendHeartbeat()) {
             return new NetworkClientDelegate.PollResult(
                 Long.MAX_VALUE, Collections.emptyList());
         }
@@ -122,20 +132,17 @@ public class HeartbeatRequestManager implements RequestManager {
             data.setSubscribedTopicNames(new ArrayList<>(this.subscriptions.subscription()));
         }
 
-        if (this.membershipManager.assignorSelection().serverAssignor().isPresent()) {
-            data.setServerAssignor(this.membershipManager.assignorSelection().serverAssignor().get());
-        }
+        this.membershipManager.assignorSelection().serverAssignor().ifPresent(data::setServerAssignor);
 
         NetworkClientDelegate.UnsentRequest request = new NetworkClientDelegate.UnsentRequest(
             new ConsumerGroupHeartbeatRequest.Builder(data),
             coordinatorRequestManager.coordinator());
 
         request.future().whenComplete((response, exception) -> {
-            final long currentTimeMs = time.milliseconds();
             if (exception == null) {
-                onSuccess((ConsumerGroupHeartbeatResponse) response.responseBody(), currentTimeMs);
+                onSuccess((ConsumerGroupHeartbeatResponse) response.responseBody(), response.receivedTimeMs());
             } else {
-                onFailure(exception, currentTimeMs);
+                onFailure(exception, response.receivedTimeMs());
             }
         });
         return request;
@@ -148,6 +155,7 @@ public class HeartbeatRequestManager implements RequestManager {
 
     private void onSuccess(final ConsumerGroupHeartbeatResponse response, long currentTimeMs) {
         if (response.data().errorCode() == Errors.NONE.code()) {
+            this.heartbeatRequestState.updateHeartbeatIntervalMs(response.data().heartbeatIntervalMs());
             this.heartbeatRequestState.onSuccessfulAttempt(currentTimeMs);
             this.heartbeatRequestState.reset();
             try {
@@ -158,27 +166,27 @@ public class HeartbeatRequestManager implements RequestManager {
             return;
         }
 
-        onError(response, currentTimeMs);
+        onErrorResponse(response, currentTimeMs);
     }
 
-    private void onError(final ConsumerGroupHeartbeatResponse response,
-                         final long currentTimeMs) {
-
+    private void onErrorResponse(final ConsumerGroupHeartbeatResponse response,
+                                 final long currentTimeMs) {
         this.heartbeatRequestState.onFailedAttempt(currentTimeMs);
         short errorCode = response.data().errorCode();
         if (errorCode == Errors.NOT_COORDINATOR.code() || errorCode == Errors.COORDINATOR_NOT_AVAILABLE.code()) {
-            logger.info("GroupHeartbeatRequest failed: coordinator is either not started or not valid. Retrying in " +
-                    "{}ms: {}",
-                heartbeatRequestState.remainingBackoffMs(currentTimeMs),
-                response.data().errorMessage());
+            logInfo("Coordinator is either not started or not valid. Retrying", response, currentTimeMs);
             coordinatorRequestManager.markCoordinatorUnknown(response.data().errorMessage(), currentTimeMs);
         } else if (errorCode == Errors.COORDINATOR_LOAD_IN_PROGRESS.code()) {
             // retry
-            logger.info("GroupHeartbeatRequest failed: Coordinator {} is loading. Retrying in {}ms: {}",
-                coordinatorRequestManager.coordinator(),
-                heartbeatRequestState.remainingBackoffMs(currentTimeMs),
-                response.data().errorMessage());
-        } else if (errorCode == Errors.GROUP_AUTHORIZATION_FAILED.code()) {
+            logInfo("Coordinator {} is loading. Retrying", response, currentTimeMs);
+        } else {
+            onFatalError(response);
+        }
+    }
+
+    private void onFatalError(final ConsumerGroupHeartbeatResponse response) {
+        final short errorCode = response.data().errorCode();
+        if (errorCode == Errors.GROUP_AUTHORIZATION_FAILED.code()) {
             GroupAuthorizationException error = GroupAuthorizationException.forGroupId(membershipManager.groupId());
             logger.error("GroupHeartbeatRequest failed due to group authorization failure: {}", error.getMessage());
             nonRetriableErrorHandler.handle(error);
@@ -199,11 +207,21 @@ public class HeartbeatRequestManager implements RequestManager {
                 response.data().errorMessage());
             nonRetriableErrorHandler.handle(Errors.UNRELEASED_INSTANCE_ID.exception());
         }
-        membershipManager.updateState(response.data());
+
+        membershipManager.onFatalError(response.data().errorCode());
+    }
+
+    private void logInfo(final String message,
+                         final ConsumerGroupHeartbeatResponse response,
+                         final long currentTimeMs) {
+        logger.info("{} in {}ms: {}",
+            message,
+            heartbeatRequestState.remainingBackoffMs(currentTimeMs),
+            response.data().errorMessage());
     }
 
     static class HeartbeatRequestState extends RequestState {
-        final long heartbeatIntervalMs;
+        long heartbeatIntervalMs;
         final Timer heartbeatTimer;
 
         public HeartbeatRequestState(
@@ -220,7 +238,7 @@ public class HeartbeatRequestManager implements RequestManager {
         public HeartbeatRequestState(
             final LogContext logContext,
             final Time time,
-            final long heartbeatIntervalMs,
+            long heartbeatIntervalMs,
             final long retryBackoffMs,
             final long retryBackoffMaxMs,
             final double jitter) {
@@ -250,6 +268,15 @@ public class HeartbeatRequestManager implements RequestManager {
                 return this.remainingBackoffMs(currentTimeMs);
             }
             return heartbeatTimer.remainingMs();
+        }
+
+        private void updateHeartbeatIntervalMs(final long heartbeatIntervalMs) {
+            if (this.heartbeatIntervalMs == heartbeatIntervalMs) {
+                // no need to update the timer if the interval hasn't changed
+                return;
+            }
+            this.heartbeatIntervalMs = heartbeatIntervalMs;
+            this.heartbeatTimer.updateAndReset(heartbeatIntervalMs);
         }
     }
 }

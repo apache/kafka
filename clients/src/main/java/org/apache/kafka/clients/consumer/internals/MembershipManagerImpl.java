@@ -115,29 +115,32 @@ public class MembershipManagerImpl implements MembershipManager {
 
     @Override
     public void updateState(ConsumerGroupHeartbeatResponseData response) {
-        if (response.errorCode() == Errors.NONE.code()) {
-            this.memberId = response.memberId();
-            this.memberEpoch = response.memberEpoch();
-            ConsumerGroupHeartbeatResponseData.Assignment assignment = response.assignment();
-            if (assignment != null) {
-                setTargetAssignment(assignment);
-            }
-            maybeTransitionToStable();
-        } else {
-            if (response.errorCode() == Errors.FENCED_MEMBER_EPOCH.code() || response.errorCode() == Errors.UNKNOWN_MEMBER_ID.code()) {
-                resetEpoch();
-                transitionTo(MemberState.FENCED);
-            } else if (response.errorCode() == Errors.UNRELEASED_INSTANCE_ID.code()) {
-                transitionTo(MemberState.FAILED);
-            }
-            // TODO: handle other errors here to update state accordingly, mainly making the
-            //  distinction between the recoverable errors and the fatal ones, that should FAILED
-            //  the member
+        this.memberId = response.memberId();
+        this.memberEpoch = response.memberEpoch();
+        ConsumerGroupHeartbeatResponseData.Assignment assignment = response.assignment();
+        if (assignment != null) {
+            setTargetAssignment(assignment);
         }
+        maybeTransitionToStable();
     }
 
     @Override
-    public boolean notInGroup() {
+    public void onFatalError(final short errorCode) {
+        if (errorCode == Errors.FENCED_MEMBER_EPOCH.code() ||
+            errorCode == Errors.UNKNOWN_MEMBER_ID.code()) {
+            resetEpoch();
+            transitionTo(MemberState.FENCED);
+        } else if (errorCode == Errors.UNRELEASED_INSTANCE_ID.code()) {
+            transitionTo(MemberState.FAILED);
+        }
+        // TODO: handle other errors here to update state accordingly, mainly making the
+        //  distinction between the recoverable errors and the fatal ones, that should FAILED
+        //  the member
+    }
+
+
+    @Override
+    public boolean shouldSendHeartbeat() {
         return state() == MemberState.UNJOINED ||
             state() == MemberState.FAILED;
     }
