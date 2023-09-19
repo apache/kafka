@@ -16,14 +16,20 @@
  */
 package org.apache.kafka.streams.processor.internals.tasks;
 
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.StreamTask;
+import org.apache.kafka.streams.processor.internals.TaskExecutionMetadata;
 import org.apache.kafka.streams.processor.internals.TasksRegistry;
+import org.apache.kafka.test.StreamsTestUtils.TaskBuilder;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -35,25 +41,33 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkObjectProperties;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class DefaultTaskManagerTest {
 
+    private final static long VERIFICATION_TIMEOUT = 15000;
+
     private final Time time = new MockTime(1L);
-    private final StreamTask task = mock(StreamTask.class);
+    private final TaskId taskId = new TaskId(0, 0, "A");
+    private final StreamTask task = TaskBuilder.statelessTask(taskId).build();
     private final TasksRegistry tasks = mock(TasksRegistry.class);
     private final TaskExecutor taskExecutor = mock(TaskExecutor.class);
+    private final StreamsException exception = mock(StreamsException.class);
+    private final TaskExecutionMetadata taskExecutionMetadata = mock(TaskExecutionMetadata.class);
 
     private final StreamsConfig config = new StreamsConfig(configProps());
     private final TaskManager taskManager = new DefaultTaskManager(time, "TaskManager", tasks, config,
-        (taskManager, name, time) -> taskExecutor);
+        (taskManager, name, time, taskExecutionMetadata) -> taskExecutor, taskExecutionMetadata);
 
     private Properties configProps() {
         return mkObjectProperties(mkMap(
@@ -65,9 +79,9 @@ public class DefaultTaskManagerTest {
 
     @BeforeEach
     public void setUp() {
-        when(task.id()).thenReturn(new TaskId(0, 0, "A"));
         when(task.isProcessable(anyLong())).thenReturn(true);
-        when(task.isActive()).thenReturn(true);
+        when(tasks.activeTasks()).thenReturn(Collections.singleton(task));
+        when(tasks.task(taskId)).thenReturn(task);
     }
 
     @Test
@@ -80,11 +94,163 @@ public class DefaultTaskManagerTest {
     }
 
     @Test
-    public void shouldAssignTask() {
+    public void shouldAssignTaskThatCanBeProcessed() {
         taskManager.add(Collections.singleton(task));
         when(tasks.activeTasks()).thenReturn(Collections.singleton(task));
+        when(taskExecutionMetadata.canProcessTask(eq(task), anyLong())).thenReturn(true);
 
         assertEquals(task, taskManager.assignNextTask(taskExecutor));
+        assertNull(taskManager.assignNextTask(taskExecutor));
+    }
+
+    private class AwaitingRunnable implements Runnable {
+        private final CountDownLatch awaitDone = new CountDownLatch(1);
+        private final AtomicBoolean shutdownRequested = new AtomicBoolean(false);
+        @Override
+        public void run() {
+            while (!shutdownRequested.get()) {
+                try {
+                    taskManager.awaitProcessableTasks();
+                } catch (final InterruptedException ignored) {
+                }
+                awaitDone.countDown();
+            }
+        }
+
+        public void shutdown() {
+            shutdownRequested.set(true);
+            taskManager.signalProcessableTasks();
+        }
+    }
+
+    @Test
+    public void shouldBlockOnAwait() throws InterruptedException {
+        final AwaitingRunnable awaitingRunnable = new AwaitingRunnable();
+        final Thread awaitingThread = new Thread(awaitingRunnable);
+        awaitingThread.start();
+
+        assertFalse(awaitingRunnable.awaitDone.await(100, TimeUnit.MILLISECONDS));
+
+        awaitingRunnable.shutdown();
+    }
+
+    @Test
+    public void shouldReturnFromAwaitOnInterruption() throws InterruptedException {
+        final AwaitingRunnable awaitingRunnable = new AwaitingRunnable();
+        final Thread awaitingThread = new Thread(awaitingRunnable);
+        awaitingThread.start();
+        verify(tasks, timeout(VERIFICATION_TIMEOUT).atLeastOnce()).activeTasks();
+
+        awaitingThread.interrupt();
+
+        assertTrue(awaitingRunnable.awaitDone.await(VERIFICATION_TIMEOUT, TimeUnit.MILLISECONDS));
+
+        awaitingRunnable.shutdown();
+    }
+
+    @Test
+    public void shouldReturnFromAwaitOnSignalProcessableTasks() throws InterruptedException {
+        final AwaitingRunnable awaitingRunnable = new AwaitingRunnable();
+        final Thread awaitingThread = new Thread(awaitingRunnable);
+        awaitingThread.start();
+        verify(tasks, timeout(VERIFICATION_TIMEOUT).atLeastOnce()).activeTasks();
+
+        taskManager.signalProcessableTasks();
+
+        assertTrue(awaitingRunnable.awaitDone.await(VERIFICATION_TIMEOUT, TimeUnit.MILLISECONDS));
+
+        awaitingRunnable.shutdown();
+    }
+
+    @Test
+    public void shouldReturnFromAwaitOnUnassignment() throws InterruptedException {
+        taskManager.add(Collections.singleton(task));
+        when(taskExecutionMetadata.canProcessTask(eq(task), anyLong())).thenReturn(true);
+
+        final StreamTask task = taskManager.assignNextTask(taskExecutor);
+        assertNotNull(task);
+        final AwaitingRunnable awaitingRunnable = new AwaitingRunnable();
+        final Thread awaitingThread = new Thread(awaitingRunnable);
+        awaitingThread.start();
+        verify(tasks, timeout(VERIFICATION_TIMEOUT).atLeastOnce()).activeTasks();
+
+        taskManager.unassignTask(task, taskExecutor);
+
+        assertTrue(awaitingRunnable.awaitDone.await(VERIFICATION_TIMEOUT, TimeUnit.MILLISECONDS));
+
+        awaitingRunnable.shutdown();
+    }
+
+    @Test
+    public void shouldReturnFromAwaitOnAdding() throws InterruptedException {
+        final AwaitingRunnable awaitingRunnable = new AwaitingRunnable();
+        final Thread awaitingThread = new Thread(awaitingRunnable);
+        awaitingThread.start();
+        verify(tasks, timeout(VERIFICATION_TIMEOUT).atLeastOnce()).activeTasks();
+
+        taskManager.add(Collections.singleton(task));
+
+        assertTrue(awaitingRunnable.awaitDone.await(VERIFICATION_TIMEOUT, TimeUnit.MILLISECONDS));
+
+        awaitingRunnable.shutdown();
+    }
+
+    @Test
+    public void shouldReturnFromAwaitOnUnlocking() throws InterruptedException {
+        taskManager.add(Collections.singleton(task));
+        taskManager.lockTasks(Collections.singleton(task.id()));
+        final AwaitingRunnable awaitingRunnable = new AwaitingRunnable();
+        final Thread awaitingThread = new Thread(awaitingRunnable);
+        awaitingThread.start();
+        verify(tasks, timeout(VERIFICATION_TIMEOUT).atLeastOnce()).activeTasks();
+
+        taskManager.unlockAllTasks();
+
+        assertTrue(awaitingRunnable.awaitDone.await(VERIFICATION_TIMEOUT, TimeUnit.MILLISECONDS));
+
+        awaitingRunnable.shutdown();
+    }
+
+    @Test
+    public void shouldAssignTasksThatCanBeSystemTimePunctuated() {
+        taskManager.add(Collections.singleton(task));
+        when(tasks.activeTasks()).thenReturn(Collections.singleton(task));
+        when(taskExecutionMetadata.canProcessTask(eq(task), anyLong())).thenReturn(true);
+        when(task.canPunctuateSystemTime()).thenReturn(true);
+
+        assertEquals(task, taskManager.assignNextTask(taskExecutor));
+        assertNull(taskManager.assignNextTask(taskExecutor));
+    }
+
+    @Test
+    public void shouldAssignTasksThatCanBeStreamTimePunctuated() {
+        taskManager.add(Collections.singleton(task));
+        when(tasks.activeTasks()).thenReturn(Collections.singleton(task));
+        when(taskExecutionMetadata.canPunctuateTask(eq(task))).thenReturn(true);
+        when(task.canPunctuateStreamTime()).thenReturn(true);
+
+        assertEquals(task, taskManager.assignNextTask(taskExecutor));
+        assertNull(taskManager.assignNextTask(taskExecutor));
+    }
+
+    @Test
+    public void shouldNotAssignTasksForPunctuationIfPunctuationDisabled() {
+        taskManager.add(Collections.singleton(task));
+        when(tasks.activeTasks()).thenReturn(Collections.singleton(task));
+        when(taskExecutionMetadata.canPunctuateTask(eq(task))).thenReturn(false);
+        when(task.canPunctuateStreamTime()).thenReturn(true);
+        when(task.canPunctuateSystemTime()).thenReturn(true);
+
+        assertNull(taskManager.assignNextTask(taskExecutor));
+    }
+
+    @Test
+    public void shouldNotAssignTasksForProcessingIfProcessingDisabled() {
+        taskManager.add(Collections.singleton(task));
+        when(tasks.activeTasks()).thenReturn(Collections.singleton(task));
+        when(taskExecutionMetadata.canProcessTask(eq(task), anyLong())).thenReturn(false);
+        when(task.isProcessable(anyLong())).thenReturn(true);
+
         assertNull(taskManager.assignNextTask(taskExecutor));
     }
 
@@ -92,6 +258,7 @@ public class DefaultTaskManagerTest {
     public void shouldUnassignTask() {
         taskManager.add(Collections.singleton(task));
         when(tasks.activeTasks()).thenReturn(Collections.singleton(task));
+        when(taskExecutionMetadata.canProcessTask(eq(task), anyLong())).thenReturn(true);
 
         assertEquals(task, taskManager.assignNextTask(taskExecutor));
 
@@ -103,6 +270,7 @@ public class DefaultTaskManagerTest {
     public void shouldNotUnassignNotOwnedTask() {
         taskManager.add(Collections.singleton(task));
         when(tasks.activeTasks()).thenReturn(Collections.singleton(task));
+        when(taskExecutionMetadata.canProcessTask(eq(task), anyLong())).thenReturn(true);
 
         assertEquals(task, taskManager.assignNextTask(taskExecutor));
 
@@ -167,6 +335,38 @@ public class DefaultTaskManagerTest {
     }
 
     @Test
+    public void shouldNotSetUncaughtExceptionsForUnassignedTasks() {
+        taskManager.add(Collections.singleton(task));
+
+        final Exception e = assertThrows(IllegalArgumentException.class, () -> taskManager.setUncaughtException(exception, task.id()));
+        assertEquals("An uncaught exception can only be set as long as the task is still assigned", e.getMessage());
+    }
+
+    @Test
+    public void shouldNotSetUncaughtExceptionsTwice() {
+        taskManager.add(Collections.singleton(task));
+        when(tasks.activeTasks()).thenReturn(Collections.singleton(task));
+        when(taskExecutionMetadata.canProcessTask(eq(task), anyLong())).thenReturn(true);
+        taskManager.assignNextTask(taskExecutor);
+        taskManager.setUncaughtException(exception, task.id());
+
+        final Exception e = assertThrows(IllegalArgumentException.class, () -> taskManager.setUncaughtException(exception, task.id()));
+        assertEquals("The uncaught exception must be cleared before restarting processing", e.getMessage());
+    }
+
+    @Test
+    public void shouldReturnAndClearExceptionsOnDrainExceptions() {
+        taskManager.add(Collections.singleton(task));
+        when(tasks.activeTasks()).thenReturn(Collections.singleton(task));
+        when(taskExecutionMetadata.canProcessTask(eq(task), anyLong())).thenReturn(true);
+        taskManager.assignNextTask(taskExecutor);
+        taskManager.setUncaughtException(exception, task.id());
+
+        assertEquals(taskManager.drainUncaughtExceptions(), Collections.singletonMap(task.id(), exception));
+        assertEquals(taskManager.drainUncaughtExceptions(), Collections.emptyMap());
+    }
+
+    @Test
     public void shouldUnassignLockingTask() {
         final KafkaFutureImpl<StreamTask> future = new KafkaFutureImpl<>();
 
@@ -175,6 +375,7 @@ public class DefaultTaskManagerTest {
         when(tasks.task(task.id())).thenReturn(task);
         when(tasks.contains(task.id())).thenReturn(true);
         when(taskExecutor.unassign()).thenReturn(future);
+        when(taskExecutionMetadata.canProcessTask(eq(task), anyLong())).thenReturn(true);
 
         assertEquals(task, taskManager.assignNextTask(taskExecutor));
 

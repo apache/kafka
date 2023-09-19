@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.storage;
 
+import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.data.SchemaBuilder;
@@ -203,6 +204,11 @@ public class SimpleHeaderConverterTest {
         assertEquals(Schema.Type.ARRAY, result.schema().type());
         assertNull(result.schema().valueSchema());
         assertEquals(list, result.value());
+    }
+
+    @Test
+    public void converterShouldReturnAppInfoParserVersion() {
+        assertEquals(AppInfoParser.getVersion(), converter.version());
     }
 
     protected SchemaAndValue roundTrip(Schema schema, Object input) {

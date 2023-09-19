@@ -24,9 +24,12 @@ import org.apache.kafka.common.network.{ClientInformation, ListenerName}
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.{RequestContext, RequestHeader}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
-import org.apache.kafka.common.utils.MockTime
-import org.junit.jupiter.api.Assertions.assertEquals
+import org.apache.kafka.common.utils.{MockTime, Time}
+import org.apache.kafka.server.log.remote.storage.{RemoteLogManagerConfig, RemoteStorageMetrics}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 import org.mockito.ArgumentMatchers
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.{mock, when}
@@ -44,7 +47,86 @@ class KafkaRequestHandlerTest {
     val metrics = new RequestChannel.Metrics(None)
     val requestChannel = new RequestChannel(10, "", time, metrics)
     val apiHandler = mock(classOf[ApiRequestHandler])
+    try {
+      val handler = new KafkaRequestHandler(0, 0, mock(classOf[Meter]), new AtomicInteger(1), requestChannel, apiHandler, time)
 
+      val request = makeRequest(time, metrics)
+      requestChannel.sendRequest(request)
+
+      def callback(ms: Int): Unit = {
+        time.sleep(ms)
+        handler.stop()
+      }
+
+      when(apiHandler.handle(ArgumentMatchers.eq(request), any())).thenAnswer { _ =>
+        time.sleep(2)
+        KafkaRequestHandler.wrap(callback(_: Int))(1)
+        request.apiLocalCompleteTimeNanos = time.nanoseconds
+      }
+
+      handler.run()
+
+      assertEquals(startTime, request.requestDequeueTimeNanos)
+      assertEquals(startTime + 2000000, request.apiLocalCompleteTimeNanos)
+      assertEquals(Some(startTime + 2000000), request.callbackRequestDequeueTimeNanos)
+      assertEquals(Some(startTime + 3000000), request.callbackRequestCompleteTimeNanos)
+    } finally {
+      metrics.close()
+    }
+  }
+
+  @Test
+  def testCallbackTryCompleteActions(): Unit = {
+    val time = new MockTime()
+    val metrics = mock(classOf[RequestChannel.Metrics])
+    val apiHandler = mock(classOf[ApiRequestHandler])
+    val requestChannel = new RequestChannel(10, "", time, metrics)
+    val handler = new KafkaRequestHandler(0, 0, mock(classOf[Meter]), new AtomicInteger(1), requestChannel, apiHandler, time)
+
+    var handledCount = 0
+    var tryCompleteActionCount = 0
+
+    def callback(x: Int): Unit = {
+      handler.stop()
+    }
+
+    val request = makeRequest(time, metrics)
+    requestChannel.sendRequest(request)
+
+    when(apiHandler.handle(ArgumentMatchers.eq(request), any())).thenAnswer { _ =>
+      handledCount = handledCount + 1
+      KafkaRequestHandler.wrap(callback(_: Int))(1)
+    }
+
+    when(apiHandler.tryCompleteActions()).thenAnswer { _ =>
+      tryCompleteActionCount = tryCompleteActionCount + 1
+    }
+
+    handler.run()
+
+    assertEquals(1, handledCount)
+    assertEquals(1, tryCompleteActionCount)
+  }
+
+
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testTopicStats(systemRemoteStorageEnabled: Boolean): Unit = {
+    val topic = "topic"
+    val props = kafka.utils.TestUtils.createDummyBrokerConfig()
+    props.setProperty(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, systemRemoteStorageEnabled.toString)
+    val brokerTopicStats = new BrokerTopicStats(java.util.Optional.of(KafkaConfig.fromProps(props)))
+    brokerTopicStats.topicStats(topic)
+    RemoteStorageMetrics.brokerTopicStatsMetrics.forEach(metric => {
+      if (systemRemoteStorageEnabled) {
+        assertTrue(brokerTopicStats.topicStats(topic).metricMap.contains(metric.getName))
+      } else {
+        assertFalse(brokerTopicStats.topicStats(topic).metricMap.contains(metric.getName))
+      }
+    })
+  }
+
+  def makeRequest(time: Time, metrics: RequestChannel.Metrics): RequestChannel.Request = {
     // Make unsupported API versions request to avoid having to parse a real request
     val requestHeader = mock(classOf[RequestHeader])
     when(requestHeader.apiKey()).thenReturn(ApiKeys.API_VERSIONS)
@@ -52,29 +134,7 @@ class KafkaRequestHandlerTest {
 
     val context = new RequestContext(requestHeader, "0", mock(classOf[InetAddress]), new KafkaPrincipal("", ""),
       new ListenerName(""), SecurityProtocol.PLAINTEXT, mock(classOf[ClientInformation]), false)
-    val request = new RequestChannel.Request(0, context, time.nanoseconds(),
-      mock(classOf[MemoryPool]), mock(classOf[ByteBuffer]), metrics)
-
-    val handler = new KafkaRequestHandler(0, 0, mock(classOf[Meter]), new AtomicInteger(1), requestChannel, apiHandler, time)
-
-    requestChannel.sendRequest(request)
-
-    def callback(ms: Int): Unit = {
-      time.sleep(ms)
-      handler.stop()
-    }
-
-    when(apiHandler.handle(ArgumentMatchers.eq(request), any())).thenAnswer { _ =>
-      time.sleep(2)
-      KafkaRequestHandler.wrap(callback(_: Int))(1)
-      request.apiLocalCompleteTimeNanos = time.nanoseconds
-    }
-
-    handler.run()
-
-    assertEquals(startTime, request.requestDequeueTimeNanos)
-    assertEquals(startTime + 2000000, request.apiLocalCompleteTimeNanos)
-    assertEquals(Some(startTime + 2000000), request.callbackRequestDequeueTimeNanos)
-    assertEquals(Some(startTime + 3000000), request.callbackRequestCompleteTimeNanos)
+    new RequestChannel.Request(0, context, time.nanoseconds(),
+      mock(classOf[MemoryPool]), ByteBuffer.allocate(0), metrics)
   }
 }

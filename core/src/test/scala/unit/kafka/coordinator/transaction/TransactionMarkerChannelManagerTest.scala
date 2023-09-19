@@ -28,13 +28,13 @@ import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.{RequestHeader, TransactionResult, WriteTxnMarkersRequest, WriteTxnMarkersResponse}
 import org.apache.kafka.common.utils.MockTime
 import org.apache.kafka.common.{Node, TopicPartition}
-import org.apache.kafka.server.metrics.KafkaYammerMetrics
+import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
 import org.apache.kafka.server.util.RequestAndCompletionHandler
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.mockito.ArgumentMatchers.any
 import org.mockito.{ArgumentCaptor, ArgumentMatchers}
-import org.mockito.Mockito.{mock, times, verify, when}
+import org.mockito.Mockito.{mock, mockConstruction, times, verify, verifyNoMoreInteractions, when}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
@@ -85,6 +85,27 @@ class TransactionMarkerChannelManagerTest {
       .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata1))))
     when(txnStateManager.getTransactionState(ArgumentMatchers.eq(transactionalId2)))
       .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata2))))
+  }
+
+  @Test
+  def testRemoveMetricsOnClose(): Unit = {
+    val mockMetricsGroupCtor = mockConstruction(classOf[KafkaMetricsGroup])
+    try {
+      val transactionMarkerChannelManager = new TransactionMarkerChannelManager(
+        KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, "localhost:2181")),
+        metadataCache,
+        networkClient,
+        txnStateManager,
+        time)
+      transactionMarkerChannelManager.shutdown()
+      val mockMetricsGroup = mockMetricsGroupCtor.constructed.get(0)
+      TransactionMarkerChannelManager.MetricNames.foreach(metricName => verify(mockMetricsGroup).newGauge(ArgumentMatchers.eq(metricName), any()))
+      TransactionMarkerChannelManager.MetricNames.foreach(verify(mockMetricsGroup).removeMetric(_))
+      // assert that we have verified all invocations on
+      verifyNoMoreInteractions(mockMetricsGroup)
+    } finally {
+      mockMetricsGroupCtor.close()
+    }
   }
 
   @Test

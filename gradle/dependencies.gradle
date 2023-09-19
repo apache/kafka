@@ -53,6 +53,23 @@ if ( !versions.scala.contains('-') ) {
   versions["baseScala"] = versions.scala
 }
 
+// We use Mockito 4.11 with Scala 2.13+ for Java 20 support and Mockito 4.9 with Scala 2.12
+// to workaround ambiguous reference to `Mockito.spy` compiler errors. Since Scala 2.12 support
+// is going away soon, this is simpler than adjusting the code.
+String mockitoVersion
+if (scalaVersion == "2.12")
+  mockitoVersion = "4.9.0"
+else
+  mockitoVersion = "4.11.0"
+
+// easymock 5.1 is required for Java 20 support, but it breaks tests using powermock
+// powermock doesn't work with Java 16 or newer and hence it's safe to use easymock 5.1 in this case only
+String easymockVersion
+if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_16))
+  easymockVersion = "5.1.0"
+else
+  easymockVersion = "4.3"
+
 // When adding, removing or updating dependencies, please also update the LICENSE-binary file accordingly.
 // See https://issues.apache.org/jira/browse/KAFKA-12622 for steps to verify the LICENSE-binary file is correct.
 versions += [
@@ -60,16 +77,15 @@ versions += [
   apacheda: "1.0.2",
   apacheds: "2.0.0-M24",
   argparse4j: "0.7.0",
-  bcpkix: "1.73",
+  bcpkix: "1.75",
   caffeine: "2.9.3", // 3.x supports JDK 11 and above
   checkstyle: "8.36.2",
   commonsCli: "1.4",
   commonsValidator: "1.7",
   dropwizardMetrics: "4.1.12.1",
-  gradle: "8.1.1",
+  gradle: "8.2.1",
   grgit: "4.1.1",
   httpclient: "4.5.14",
-  easymock: "4.3",
   jackson: "2.13.5",
   jacksonDatabind: "2.13.5",
   jacoco: "0.8.10",
@@ -87,7 +103,7 @@ versions += [
   jopt: "5.0.4",
   jose4j: "0.9.3",
   junit: "5.9.3",
-  jqwik: "1.7.2",
+  jqwik: "1.7.4",
   kafka_0100: "0.10.0.1",
   kafka_0101: "0.10.1.1",
   kafka_0102: "0.10.2.2",
@@ -107,16 +123,17 @@ versions += [
   kafka_31: "3.1.2",
   kafka_32: "3.2.3",
   kafka_33: "3.3.1",
+  kafka_34: "3.4.1",
+  kafka_35: "3.5.1",
   lz4: "1.8.0",
-  mavenArtifact: "3.8.4",
+  mavenArtifact: "3.8.8",
   metrics: "2.2.0",
-  mockito: "4.9.0",
-  netty: "4.1.92.Final",
+  netty: "4.1.94.Final",
   pcollections: "4.0.1",
   powermock: "2.0.9",
-  reflections: "0.9.12",
+  reflections: "0.10.2",
   reload4j: "1.2.25",
-  rocksDB: "7.1.2",
+  rocksDB: "7.9.2",
   scalaCollectionCompat: "2.10.0",
   // When updating the scalafmt version please also update the version field in checkstyle/.scalafmt.conf. scalafmt now
   // has the version field as mandatory in its configuration, see
@@ -125,14 +142,16 @@ versions += [
   scalaJava8Compat : "1.0.2",
   scoverage: "1.9.3",
   slf4j: "1.7.36",
-  snappy: "1.1.10.1",
+  snappy: "1.1.10.3",
   spotbugs: "4.7.3",
+  // New version of Swagger 2.2.14 requires minimum JDK 11.
   swaggerAnnotations: "2.2.8",
   swaggerJaxrs2: "2.2.8",
-  zinc: "1.8.0",
-  zookeeper: "3.6.4",
+  zinc: "1.9.2",
+  zookeeper: "3.8.2",
   zstd: "1.5.5-1"
 ]
+
 libs += [
   activation: "javax.activation:activation:$versions.activation",
   apacheda: "org.apache.directory.api:api-all:$versions.apacheda",
@@ -149,7 +168,7 @@ libs += [
   caffeine: "com.github.ben-manes.caffeine:caffeine:$versions.caffeine",
   commonsCli: "commons-cli:commons-cli:$versions.commonsCli",
   commonsValidator: "commons-validator:commons-validator:$versions.commonsValidator",
-  easymock: "org.easymock:easymock:$versions.easymock",
+  easymock: "org.easymock:easymock:$easymockVersion",
   jacksonAnnotations: "com.fasterxml.jackson.core:jackson-annotations:$versions.jackson",
   jacksonDatabind: "com.fasterxml.jackson.core:jackson-databind:$versions.jacksonDatabind",
   jacksonDataformatCsv: "com.fasterxml.jackson.dataformat:jackson-dataformat-csv:$versions.jackson",
@@ -196,13 +215,15 @@ libs += [
   kafkaStreams_31: "org.apache.kafka:kafka-streams:$versions.kafka_31",
   kafkaStreams_32: "org.apache.kafka:kafka-streams:$versions.kafka_32",
   kafkaStreams_33: "org.apache.kafka:kafka-streams:$versions.kafka_33",
+  kafkaStreams_34: "org.apache.kafka:kafka-streams:$versions.kafka_34",
+  kafkaStreams_35: "org.apache.kafka:kafka-streams:$versions.kafka_35",
   log4j: "ch.qos.reload4j:reload4j:$versions.reload4j",
   lz4: "org.lz4:lz4-java:$versions.lz4",
   metrics: "com.yammer.metrics:metrics-core:$versions.metrics",
   dropwizardMetrics: "io.dropwizard.metrics:metrics-core:$versions.dropwizardMetrics",
-  mockitoCore: "org.mockito:mockito-core:$versions.mockito",
-  mockitoInline: "org.mockito:mockito-inline:$versions.mockito",
-  mockitoJunitJupiter: "org.mockito:mockito-junit-jupiter:$versions.mockito",
+  mockitoCore: "org.mockito:mockito-core:$mockitoVersion",
+  mockitoInline: "org.mockito:mockito-inline:$mockitoVersion",
+  mockitoJunitJupiter: "org.mockito:mockito-junit-jupiter:$mockitoVersion",
   nettyHandler: "io.netty:netty-handler:$versions.netty",
   nettyTransportNativeEpoll: "io.netty:netty-transport-native-epoll:$versions.netty",
   pcollections: "org.pcollections:pcollections:$versions.pcollections",

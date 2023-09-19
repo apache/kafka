@@ -158,10 +158,11 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
             // generation amongst
             for (final TopicPartition tp : memberData.partitions) {
                 if (allTopics.contains(tp.topic())) {
-                    String otherConsumer = allPreviousPartitionsToOwner.put(tp, consumer);
+                    String otherConsumer = allPreviousPartitionsToOwner.get(tp);
                     if (otherConsumer == null) {
                         // this partition is not owned by other consumer in the same generation
                         ownedPartitions.add(tp);
+                        allPreviousPartitionsToOwner.put(tp, consumer);
                     } else {
                         final int otherMemberGeneration = subscriptions.get(otherConsumer).generationId().orElse(DEFAULT_GENERATION);
 
@@ -179,7 +180,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                             consumerToOwnedPartitions.get(otherConsumer).remove(tp);
                             allPreviousPartitionsToOwner.put(tp, consumer);
                             log.warn("Consumer {} in generation {} and consumer {} in generation {} claiming the same " +
-                                            "TopicPartition {} in different generations. The topic partition wil be " +
+                                            "TopicPartition {} in different generations. The topic partition will be " +
                                             "assigned to the member with the higher generation {}.",
                                     consumer, memberGeneration,
                                     otherConsumer, otherMemberGeneration,
@@ -188,7 +189,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                         } else {
                             // let the other member continue to own the topic partition
                             log.warn("Consumer {} in generation {} and consumer {} in generation {} claiming the same " +
-                                            "TopicPartition {} in different generations. The topic partition wil be " +
+                                            "TopicPartition {} in different generations. The topic partition will be " +
                                             "assigned to the member with the higher generation {}.",
                                     consumer, memberGeneration,
                                     otherConsumer, otherMemberGeneration,
@@ -1172,7 +1173,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                         if (!currentAssignment.get(consumer).contains(topicPartition)) {
                             String otherConsumer = allPartitions.get(topicPartition);
                             int otherConsumerPartitionCount = currentAssignment.get(otherConsumer).size();
-                            if (consumerPartitionCount < otherConsumerPartitionCount) {
+                            if (consumerPartitionCount + 1 < otherConsumerPartitionCount) {
                                 log.debug("{} can be moved from consumer {} to consumer {} for a more balanced assignment.",
                                         topicPartition, otherConsumer, consumer);
                                 return false;

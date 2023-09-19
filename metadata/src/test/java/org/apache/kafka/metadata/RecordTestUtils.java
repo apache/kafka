@@ -18,28 +18,35 @@
 package org.apache.kafka.metadata;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.metadata.RegisterControllerRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.BatchReader;
 import org.apache.kafka.raft.internals.MemoryBatchReader;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.util.MockRandom;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -67,17 +74,10 @@ public class RecordTestUtils {
                     try {
                         Method method = target.getClass().getMethod("replay",
                             record.getClass(),
-                            Optional.class);
-                        method.invoke(target, record, Optional.empty());
-                    } catch (NoSuchMethodException t) {
-                        try {
-                            Method method = target.getClass().getMethod("replay",
-                                record.getClass(),
-                                long.class);
-                            method.invoke(target, record, 0L);
-                        } catch (NoSuchMethodException i) {
-                            // ignore
-                        }
+                            long.class);
+                        method.invoke(target, record, 0L);
+                    } catch (NoSuchMethodException i) {
+                        // ignore
                     }
                 }
             } catch (InvocationTargetException e) {
@@ -93,6 +93,100 @@ public class RecordTestUtils {
         ApiMessageAndVersion recordAndVersion
     ) {
         replayAll(target, Collections.singletonList(recordAndVersion));
+    }
+
+    public static <T extends ApiMessage> Optional<T> recordAtIndexAs(
+            Class<T> recordClazz,
+            List<ApiMessageAndVersion> recordsAndVersions,
+            int recordIndex
+    ) {
+        if (recordIndex > recordsAndVersions.size() - 1) {
+            return Optional.empty();
+        } else {
+            if (recordIndex == -1) {
+                return recordsAndVersions.stream().map(ApiMessageAndVersion::message)
+                    .filter(record -> record.getClass().isAssignableFrom(recordClazz))
+                    .map(recordClazz::cast)
+                    .findFirst();
+            } else {
+                ApiMessageAndVersion messageAndVersion = recordsAndVersions.get(recordIndex);
+                ApiMessage record = messageAndVersion.message();
+                if (record.getClass().isAssignableFrom(recordClazz)) {
+                    return Optional.of(recordClazz.cast(record));
+                } else {
+                    return Optional.empty();
+                }
+            }
+
+        }
+    }
+
+    public static class TestThroughAllIntermediateImagesLeadingToFinalImageHelper<D, I> {
+        private final Supplier<I> emptyImageSupplier;
+        private final Function<I, D> deltaUponImageCreator;
+
+        public TestThroughAllIntermediateImagesLeadingToFinalImageHelper(
+            Supplier<I> emptyImageSupplier, Function<I, D> deltaUponImageCreator
+        ) {
+            this.emptyImageSupplier = Objects.requireNonNull(emptyImageSupplier);
+            this.deltaUponImageCreator = Objects.requireNonNull(deltaUponImageCreator);
+        }
+
+        public I getEmptyImage() {
+            return this.emptyImageSupplier.get();
+        }
+
+        public D createDeltaUponImage(I image) {
+            return this.deltaUponImageCreator.apply(image);
+        }
+
+        @SuppressWarnings("unchecked")
+        public I createImageByApplyingDelta(D delta) {
+            try {
+                try {
+                    Method method = delta.getClass().getMethod("apply");
+                    return (I) method.invoke(delta);
+                } catch (NoSuchMethodException e) {
+                    throw new RuntimeException(e);
+                }
+            } catch (InvocationTargetException e) {
+                throw new RuntimeException(e.getCause());
+            } catch (IllegalAccessException e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+        public void test(I finalImage, List<ApiMessageAndVersion> fromRecords) {
+            for (int numRecordsForfirstImage = 1; numRecordsForfirstImage <= fromRecords.size(); ++numRecordsForfirstImage) {
+                // create first image from first numRecordsForfirstImage records
+                D delta = createDeltaUponImage(getEmptyImage());
+                RecordTestUtils.replayAll(delta, fromRecords.subList(0, numRecordsForfirstImage));
+                I firstImage = createImageByApplyingDelta(delta);
+                // for all possible further batch sizes, apply as many batches as it takes to get to the final image
+                int remainingRecords = fromRecords.size() - numRecordsForfirstImage;
+                if (remainingRecords == 0) {
+                    assertEquals(finalImage, firstImage);
+                } else {
+                    // for all possible further batch sizes...
+                    for (int maxRecordsForSuccessiveBatches = 1; maxRecordsForSuccessiveBatches <= remainingRecords; ++maxRecordsForSuccessiveBatches) {
+                        I latestIntermediateImage = firstImage;
+                        // ... apply as many batches as it takes to get to the final image
+                        int numAdditionalBatches = (int) Math.ceil(remainingRecords * 1.0 / maxRecordsForSuccessiveBatches);
+                        for (int additionalBatchNum = 0; additionalBatchNum < numAdditionalBatches; ++additionalBatchNum) {
+                            // apply up to maxRecordsForSuccessiveBatches records on top of the latest intermediate image
+                            // to obtain the next intermediate image.
+                            delta = createDeltaUponImage(latestIntermediateImage);
+                            int applyFromIndex = numRecordsForfirstImage + additionalBatchNum * maxRecordsForSuccessiveBatches;
+                            int applyToIndex = Math.min(fromRecords.size(), applyFromIndex + maxRecordsForSuccessiveBatches);
+                            RecordTestUtils.replayAll(delta, fromRecords.subList(applyFromIndex, applyToIndex));
+                            latestIntermediateImage = createImageByApplyingDelta(delta);
+                        }
+                        // The final intermediate image received should be the expected final image
+                        assertEquals(finalImage, latestIntermediateImage);
+                    }
+                }
+            }
+        }
     }
 
     /**
@@ -225,5 +319,37 @@ public class RecordTestUtils {
         return new ApiMessageAndVersion(
             new TopicRecord().setName("test" + index).
             setTopicId(new Uuid(random.nextLong(), random.nextLong())), (short) 0);
+    }
+
+    public static RegisterControllerRecord createTestControllerRegistration(
+        int id,
+        boolean zkMigrationReady
+    ) {
+        return new RegisterControllerRecord().
+            setControllerId(id).
+            setIncarnationId(new Uuid(3465346L, id)).
+            setZkMigrationReady(zkMigrationReady).
+            setEndPoints(new RegisterControllerRecord.ControllerEndpointCollection(
+                Arrays.asList(
+                    new RegisterControllerRecord.ControllerEndpoint().
+                        setName("CONTROLLER").
+                        setHost("localhost").
+                        setPort(8000 + id).
+                        setSecurityProtocol(SecurityProtocol.PLAINTEXT.id),
+                    new RegisterControllerRecord.ControllerEndpoint().
+                        setName("CONTROLLER_SSL").
+                        setHost("localhost").
+                        setPort(9000 + id).
+                        setSecurityProtocol(SecurityProtocol.SSL.id)
+                ).iterator()
+            )).
+            setFeatures(new RegisterControllerRecord.ControllerFeatureCollection(
+                Arrays.asList(
+                    new RegisterControllerRecord.ControllerFeature().
+                        setName(MetadataVersion.FEATURE_NAME).
+                        setMinSupportedVersion(MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel()).
+                        setMaxSupportedVersion(MetadataVersion.IBP_3_6_IV1.featureLevel())
+                ).iterator()
+            ));
     }
 }

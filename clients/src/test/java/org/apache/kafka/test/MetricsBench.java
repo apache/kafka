@@ -49,8 +49,8 @@ public class MetricsBench {
             long start = System.nanoTime();
             for (int i = 0; i < iters; i++)
                 parent.record(i);
-            double ellapsed = (System.nanoTime() - start) / (double) iters;
-            System.out.println(String.format("%.2f ns per metric recording.", ellapsed));
+            double elapsed = (System.nanoTime() - start) / (double) iters;
+            System.out.println(String.format("%.2f ns per metric recording.", elapsed));
         } finally {
             metrics.close();
         }

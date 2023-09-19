@@ -57,16 +57,11 @@ import java.util.Set;
  * @param <K> Record key type
  * @param <V> Record value type
  */
-class CompletedFetch<K, V> {
+public class CompletedFetch<K, V> {
 
     final TopicPartition partition;
     final FetchResponseData.PartitionData partitionData;
     final short requestVersion;
-
-    long nextFetchOffset;
-    Optional<Integer> lastEpoch;
-    boolean isConsumed = false;
-    boolean initialized = false;
 
     private final Logger log;
     private final SubscriptionState subscriptions;
@@ -84,6 +79,10 @@ class CompletedFetch<K, V> {
     private CloseableIterator<Record> records;
     private Exception cachedRecordException = null;
     private boolean corruptLastRecord = false;
+    private long nextFetchOffset;
+    private Optional<Integer> lastEpoch;
+    private boolean isConsumed = false;
+    private boolean initialized = false;
 
     CompletedFetch(LogContext logContext,
                    SubscriptionState subscriptions,
@@ -108,6 +107,27 @@ class CompletedFetch<K, V> {
         this.abortedProducerIds = new HashSet<>();
         this.abortedTransactions = abortedTransactions(partitionData);
     }
+
+    long nextFetchOffset() {
+        return nextFetchOffset;
+    }
+
+    Optional<Integer> lastEpoch() {
+        return lastEpoch;
+    }
+
+    boolean isInitialized() {
+        return initialized;
+    }
+
+    void setInitialized() {
+        this.initialized = true;
+    }
+
+    public boolean isConsumed() {
+        return isConsumed;
+    }
+
 
     /**
      * After each partition is parsed, we update the current metric totals with the total bytes
@@ -295,9 +315,9 @@ class CompletedFetch<K, V> {
             long timestamp = record.timestamp();
             Headers headers = new RecordHeaders(record.headers());
             ByteBuffer keyBytes = record.key();
-            K key = keyBytes == null ? null : fetchConfig.keyDeserializer.deserialize(partition.topic(), headers, keyBytes);
+            K key = keyBytes == null ? null : fetchConfig.deserializers.keyDeserializer.deserialize(partition.topic(), headers, keyBytes);
             ByteBuffer valueBytes = record.value();
-            V value = valueBytes == null ? null : fetchConfig.valueDeserializer.deserialize(partition.topic(), headers, valueBytes);
+            V value = valueBytes == null ? null : fetchConfig.deserializers.valueDeserializer.deserialize(partition.topic(), headers, valueBytes);
             return new ConsumerRecord<>(partition.topic(), partition.partition(), offset,
                     timestamp, timestampType,
                     keyBytes == null ? ConsumerRecord.NULL_SIZE : keyBytes.remaining(),

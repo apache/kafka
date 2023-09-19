@@ -47,6 +47,7 @@ public class ProducerAppendInfo {
     private final long producerId;
     private final ProducerStateEntry currentEntry;
     private final AppendOrigin origin;
+    private final VerificationStateEntry verificationStateEntry;
 
     private final List<TxnMetadata> transactions = new ArrayList<>();
     private final ProducerStateEntry updatedEntry;
@@ -54,25 +55,28 @@ public class ProducerAppendInfo {
     /**
      * Creates a new instance with the provided parameters.
      *
-     * @param topicPartition topic partition
-     * @param producerId     The id of the producer appending to the log
-     * @param currentEntry   The current entry associated with the producer id which contains metadata for a fixed number of
-     *                       the most recent appends made by the producer. Validation of the first incoming append will
-     *                       be made against the latest append in the current entry. New appends will replace older appends
-     *                       in the current entry so that the space overhead is constant.
-     * @param origin         Indicates the origin of the append which implies the extent of validation. For example, offset
-     *                       commits, which originate from the group coordinator, do not have sequence numbers and therefore
-     *                       only producer epoch validation is done. Appends which come through replication are not validated
-     *                       (we assume the validation has already been done) and appends from clients require full validation.
+     * @param topicPartition         topic partition
+     * @param producerId             The id of the producer appending to the log
+     * @param currentEntry           The current entry associated with the producer id which contains metadata for a fixed number of
+     *                               the most recent appends made by the producer. Validation of the first incoming append will
+     *                               be made against the latest append in the current entry. New appends will replace older appends
+     *                               in the current entry so that the space overhead is constant.
+     * @param origin                 Indicates the origin of the append which implies the extent of validation. For example, offset
+     *                               commits, which originate from the group coordinator, do not have sequence numbers and therefore
+     *                               only producer epoch validation is done. Appends which come through replication are not validated
+     *                               (we assume the validation has already been done) and appends from clients require full validation.
+     * @param verificationStateEntry The most recent entry used for verification if no append has been completed yet otherwise null
      */
     public ProducerAppendInfo(TopicPartition topicPartition,
                               long producerId,
                               ProducerStateEntry currentEntry,
-                              AppendOrigin origin) {
+                              AppendOrigin origin,
+                              VerificationStateEntry verificationStateEntry) {
         this.topicPartition = topicPartition;
         this.producerId = producerId;
         this.currentEntry = currentEntry;
         this.origin = origin;
+        this.verificationStateEntry = verificationStateEntry;
 
         updatedEntry = currentEntry.withProducerIdAndBatchMetadata(producerId, Optional.empty());
     }
@@ -105,6 +109,11 @@ public class ProducerAppendInfo {
     }
 
     private void checkSequence(short producerEpoch, int appendFirstSeq, long offset) {
+        if (verificationStateEntry != null && appendFirstSeq > verificationStateEntry.lowestSequence()) {
+            throw new OutOfOrderSequenceException("Out of order sequence number for producer " + producerId + " at " +
+                    "offset " + offset + " in partition " + topicPartition + ": " + appendFirstSeq +
+                    " (incoming seq. number), " + verificationStateEntry.lowestSequence() + " (earliest seen sequence)");
+        }
         if (producerEpoch != updatedEntry.producerEpoch()) {
             if (appendFirstSeq != 0) {
                 if (updatedEntry.producerEpoch() != RecordBatch.NO_PRODUCER_EPOCH) {

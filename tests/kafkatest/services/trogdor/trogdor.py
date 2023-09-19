@@ -176,9 +176,9 @@ class TrogdorService(KafkaPathResolverMixin, Service):
 
     def wait_node(self, node, timeout_sec=None):
         if self.is_coordinator(node):
-            return len(node.account.java_pids(self.coordinator_class_name())) == 0
+            return not node.account.java_pids(self.coordinator_class_name())
         else:
-            return len(node.account.java_pids(self.agent_class_name())) == 0
+            return not node.account.java_pids(self.agent_class_name())
 
     def stop_node(self, node):
         """Halt trogdor processes on this node."""

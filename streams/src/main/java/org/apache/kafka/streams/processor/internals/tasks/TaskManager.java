@@ -16,7 +16,9 @@
  */
 package org.apache.kafka.streams.processor.internals.tasks;
 
+import java.util.Map;
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ReadOnlyTask;
 import org.apache.kafka.streams.processor.internals.StreamTask;
@@ -70,8 +72,6 @@ public interface TaskManager {
 
     /**
      * Unlock all of the managed active tasks from the task manager. Similar to {@link #unlockTasks(Set)}.
-     *
-     * This method does not block, instead a future is returned.
      */
     void unlockAllTasks();
 
@@ -98,4 +98,35 @@ public interface TaskManager {
      * @return set of all managed active tasks
      */
     Set<ReadOnlyTask> getTasks();
+
+    /**
+     * Called whenever an existing task has thrown an uncaught exception.
+     *
+     * Setting an uncaught exception for a task prevents it from being reassigned until the
+     * corresponding exception has been handled in the polling thread.
+     *
+     */
+    void setUncaughtException(StreamsException exception, TaskId taskId);
+
+    /**
+     * Returns and clears all uncaught exceptions that were fell through to the processing
+     * threads and need to be handled in the polling thread.
+     *
+     * Called by the polling thread to handle processing exceptions, e.g. to abort
+     * transactions or shut down the application.
+     *
+     * @return A map from task ID to the exception that occurred.
+     */
+    Map<TaskId, StreamsException> drainUncaughtExceptions();
+
+    /**
+     * Signals that at least one task has become processable, e.g. because it was resumed or new records may be available.
+     */
+    void signalProcessableTasks();
+
+    /**
+     * Blocks until unassigned processable tasks may be available.
+     */
+    void awaitProcessableTasks() throws InterruptedException;
+
 }

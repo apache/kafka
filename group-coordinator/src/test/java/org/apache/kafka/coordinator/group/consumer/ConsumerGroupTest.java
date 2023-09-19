@@ -17,10 +17,12 @@
 package org.apache.kafka.coordinator.group.consumer;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.StaleMemberEpochException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.coordinator.group.GroupMetadataManagerTest;
-import org.apache.kafka.image.TopicsImage;
+import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.junit.jupiter.api.Test;
 
@@ -32,6 +34,7 @@ import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
+import static org.apache.kafka.coordinator.group.RecordHelpersTest.mkMapOfPartitionRacks;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -392,20 +395,21 @@ public class ConsumerGroupTest {
         Uuid barTopicId = Uuid.randomUuid();
         Uuid zarTopicId = Uuid.randomUuid();
 
-        TopicsImage image = new GroupMetadataManagerTest.TopicsImageBuilder()
+        MetadataImage image = new GroupMetadataManagerTest.MetadataImageBuilder()
             .addTopic(fooTopicId, "foo", 1)
             .addTopic(barTopicId, "bar", 2)
             .addTopic(zarTopicId, "zar", 3)
+            .addRacks()
             .build();
 
         ConsumerGroupMember member1 = new ConsumerGroupMember.Builder("member1")
-            .setSubscribedTopicNames(Arrays.asList("foo"))
+            .setSubscribedTopicNames(Collections.singletonList("foo"))
             .build();
         ConsumerGroupMember member2 = new ConsumerGroupMember.Builder("member2")
-            .setSubscribedTopicNames(Arrays.asList("bar"))
+            .setSubscribedTopicNames(Collections.singletonList("bar"))
             .build();
         ConsumerGroupMember member3 = new ConsumerGroupMember.Builder("member3")
-            .setSubscribedTopicNames(Arrays.asList("zar"))
+            .setSubscribedTopicNames(Collections.singletonList("zar"))
             .build();
 
         ConsumerGroup consumerGroup = createConsumerGroup("group-foo");
@@ -416,19 +420,21 @@ public class ConsumerGroupTest {
             consumerGroup.computeSubscriptionMetadata(
                 null,
                 null,
-                image
+                image.topics(),
+                image.cluster()
             )
         );
 
         // Compute while taking into account member 1.
         assertEquals(
             mkMap(
-                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1))
+                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1, mkMapOfPartitionRacks(1)))
             ),
             consumerGroup.computeSubscriptionMetadata(
                 null,
                 member1,
-                image
+                image.topics(),
+                image.cluster()
             )
         );
 
@@ -438,12 +444,13 @@ public class ConsumerGroupTest {
         // It should return foo now.
         assertEquals(
             mkMap(
-                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1))
+                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1, mkMapOfPartitionRacks(1)))
             ),
             consumerGroup.computeSubscriptionMetadata(
                 null,
                 null,
-                image
+                image.topics(),
+                image.cluster()
             )
         );
 
@@ -453,20 +460,22 @@ public class ConsumerGroupTest {
             consumerGroup.computeSubscriptionMetadata(
                 member1,
                 null,
-                image
+                image.topics(),
+                image.cluster()
             )
         );
 
         // Compute while taking into account member 2.
         assertEquals(
             mkMap(
-                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1)),
-                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2))
+                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1, mkMapOfPartitionRacks(1))),
+                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2, mkMapOfPartitionRacks(2)))
             ),
             consumerGroup.computeSubscriptionMetadata(
                 null,
                 member2,
-                image
+                image.topics(),
+                image.cluster()
             )
         );
 
@@ -476,51 +485,55 @@ public class ConsumerGroupTest {
         // It should return foo and bar.
         assertEquals(
             mkMap(
-                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1)),
-                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2))
+                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1, mkMapOfPartitionRacks(1))),
+                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2, mkMapOfPartitionRacks(2)))
             ),
             consumerGroup.computeSubscriptionMetadata(
                 null,
                 null,
-                image
+                image.topics(),
+                image.cluster()
             )
         );
 
         // Compute while taking into account removal of member 2.
         assertEquals(
             mkMap(
-                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1))
+                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1, mkMapOfPartitionRacks(1)))
             ),
             consumerGroup.computeSubscriptionMetadata(
                 member2,
                 null,
-                image
+                image.topics(),
+                image.cluster()
             )
         );
 
         // Removing member1 results in returning bar.
         assertEquals(
             mkMap(
-                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2))
+                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2, mkMapOfPartitionRacks(2)))
             ),
             consumerGroup.computeSubscriptionMetadata(
                 member1,
                 null,
-                image
+                image.topics(),
+                image.cluster()
             )
         );
 
         // Compute while taking into account member 3.
         assertEquals(
             mkMap(
-                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1)),
-                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2)),
-                mkEntry("zar", new TopicMetadata(zarTopicId, "zar", 3))
+                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1, mkMapOfPartitionRacks(1))),
+                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2, mkMapOfPartitionRacks(2))),
+                mkEntry("zar", new TopicMetadata(zarTopicId, "zar", 3, mkMapOfPartitionRacks(3)))
             ),
             consumerGroup.computeSubscriptionMetadata(
                 null,
                 member3,
-                image
+                image.topics(),
+                image.cluster()
             )
         );
 
@@ -530,15 +543,120 @@ public class ConsumerGroupTest {
         // It should return foo, bar and zar.
         assertEquals(
             mkMap(
-                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1)),
-                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2)),
-                mkEntry("zar", new TopicMetadata(zarTopicId, "zar", 3))
+                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1, mkMapOfPartitionRacks(1))),
+                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2, mkMapOfPartitionRacks(2))),
+                mkEntry("zar", new TopicMetadata(zarTopicId, "zar", 3, mkMapOfPartitionRacks(3)))
             ),
             consumerGroup.computeSubscriptionMetadata(
                 null,
                 null,
-                image
+                image.topics(),
+                image.cluster()
             )
         );
+    }
+
+    @Test
+    public void testMetadataRefreshDeadline() {
+        MockTime time = new MockTime();
+        ConsumerGroup group = createConsumerGroup("group-foo");
+
+        // Group epoch starts at 0.
+        assertEquals(0, group.groupEpoch());
+
+        // The refresh time deadline should be empty when the group is created or loaded.
+        assertTrue(group.hasMetadataExpired(time.milliseconds()));
+        assertEquals(0L, group.metadataRefreshDeadline().deadlineMs);
+        assertEquals(0, group.metadataRefreshDeadline().epoch);
+
+        // Set the refresh deadline. The metadata remains valid because the deadline
+        // has not past and the group epoch is correct.
+        group.setMetadataRefreshDeadline(time.milliseconds() + 1000, group.groupEpoch());
+        assertFalse(group.hasMetadataExpired(time.milliseconds()));
+        assertEquals(time.milliseconds() + 1000, group.metadataRefreshDeadline().deadlineMs);
+        assertEquals(group.groupEpoch(), group.metadataRefreshDeadline().epoch);
+
+        // Advance past the deadline. The metadata should have expired.
+        time.sleep(1001L);
+        assertTrue(group.hasMetadataExpired(time.milliseconds()));
+
+        // Set the refresh time deadline with a higher group epoch. The metadata is considered
+        // as expired because the group epoch attached to the deadline is higher than the
+        // current group epoch.
+        group.setMetadataRefreshDeadline(time.milliseconds() + 1000, group.groupEpoch() + 1);
+        assertTrue(group.hasMetadataExpired(time.milliseconds()));
+        assertEquals(time.milliseconds() + 1000, group.metadataRefreshDeadline().deadlineMs);
+        assertEquals(group.groupEpoch() + 1, group.metadataRefreshDeadline().epoch);
+
+        // Advance the group epoch.
+        group.setGroupEpoch(group.groupEpoch() + 1);
+
+        // Set the refresh deadline. The metadata remains valid because the deadline
+        // has not past and the group epoch is correct.
+        group.setMetadataRefreshDeadline(time.milliseconds() + 1000, group.groupEpoch());
+        assertFalse(group.hasMetadataExpired(time.milliseconds()));
+        assertEquals(time.milliseconds() + 1000, group.metadataRefreshDeadline().deadlineMs);
+        assertEquals(group.groupEpoch(), group.metadataRefreshDeadline().epoch);
+
+        // Request metadata refresh. The metadata expires immediately.
+        group.requestMetadataRefresh();
+        assertTrue(group.hasMetadataExpired(time.milliseconds()));
+        assertEquals(0L, group.metadataRefreshDeadline().deadlineMs);
+        assertEquals(0, group.metadataRefreshDeadline().epoch);
+    }
+
+    @Test
+    public void testValidateOffsetCommit() {
+        ConsumerGroup group = createConsumerGroup("group-foo");
+
+        // Simulate a call from the admin client without member id and member epoch.
+        // This should pass only if the group is empty.
+        group.validateOffsetCommit("", "", -1);
+
+        // The member does not exist.
+        assertThrows(UnknownMemberIdException.class, () ->
+            group.validateOffsetCommit("member-id", null, 0));
+
+        // Create a member.
+        group.getOrMaybeCreateMember("member-id", true);
+
+        // A call from the admin client should fail as the group is not empty.
+        assertThrows(UnknownMemberIdException.class, () ->
+            group.validateOffsetCommit("", "", -1));
+
+        // The member epoch is stale.
+        assertThrows(StaleMemberEpochException.class, () ->
+            group.validateOffsetCommit("member-id", "", 10));
+
+        // This should succeed.
+        group.validateOffsetCommit("member-id", "", 0);
+    }
+
+    @Test
+    public void testValidateOffsetFetch() {
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
+        ConsumerGroup group = new ConsumerGroup(snapshotRegistry, "group-foo");
+
+        // Simulate a call from the admin client without member id and member epoch.
+        group.validateOffsetFetch(null, -1, Long.MAX_VALUE);
+
+        // The member does not exist.
+        assertThrows(UnknownMemberIdException.class, () ->
+            group.validateOffsetFetch("member-id", 0, Long.MAX_VALUE));
+
+        // Create a member.
+        snapshotRegistry.getOrCreateSnapshot(0);
+        group.getOrMaybeCreateMember("member-id", true);
+
+        // The member does not exist at last committed offset 0.
+        assertThrows(UnknownMemberIdException.class, () ->
+            group.validateOffsetFetch("member-id", 0, 0));
+
+        // The member exists but the epoch is stale when the last committed offset is not considered.
+        assertThrows(StaleMemberEpochException.class, () ->
+            group.validateOffsetFetch("member-id", 10, Long.MAX_VALUE));
+
+        // This should succeed.
+        group.validateOffsetFetch("member-id", 0, Long.MAX_VALUE);
     }
 }

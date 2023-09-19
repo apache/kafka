@@ -18,8 +18,8 @@ package kafka.zk
 
 import kafka.security.authorizer.AclEntry.{WildcardHost, WildcardPrincipalString}
 import kafka.server.{ConfigType, KafkaConfig}
-import kafka.test.ClusterInstance
-import kafka.test.annotation.{AutoStart, ClusterConfigProperty, ClusterTest, Type}
+import kafka.test.{ClusterConfig, ClusterGenerator, ClusterInstance}
+import kafka.test.annotation.{AutoStart, ClusterConfigProperty, ClusterTemplate, ClusterTest, Type}
 import kafka.test.junit.ClusterTestExtensions
 import kafka.test.junit.ZkClusterInvocationContext.ZkClusterInstance
 import kafka.testkit.{KafkaClusterTestKit, TestKitNodes}
@@ -55,6 +55,26 @@ import java.util.{Properties, UUID}
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
 
+object ZkMigrationIntegrationTest {
+  def addZkBrokerProps(props: Properties): Unit = {
+    props.setProperty("inter.broker.listener.name", "EXTERNAL")
+    props.setProperty("listeners", "PLAINTEXT://localhost:0,EXTERNAL://localhost:0")
+    props.setProperty("advertised.listeners", "PLAINTEXT://localhost:0,EXTERNAL://localhost:0")
+    props.setProperty("listener.security.protocol.map", "EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
+  }
+
+  def zkClustersForAllMigrationVersions(clusterGenerator: ClusterGenerator): Unit = {
+    Seq(MetadataVersion.IBP_3_4_IV0, MetadataVersion.IBP_3_5_IV2, MetadataVersion.IBP_3_6_IV2).foreach { mv =>
+      val clusterConfig = ClusterConfig.defaultClusterBuilder()
+        .metadataVersion(mv)
+        .brokers(3)
+        .`type`(Type.ZK)
+        .build()
+      addZkBrokerProps(clusterConfig.serverProperties())
+      clusterGenerator.accept(clusterConfig)
+    }
+  }
+}
 
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 @Timeout(300)
@@ -163,7 +183,10 @@ class ZkMigrationIntegrationTest {
       readyFuture.get(30, TimeUnit.SECONDS)
 
       val zkClient = zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying().zkClient
-      TestUtils.waitUntilTrue(() => zkClient.getControllerId.contains(3000), "Timed out waiting for KRaft controller to take over")
+      TestUtils.waitUntilTrue(
+        () => zkClient.getControllerId.contains(3000),
+        "Timed out waiting for KRaft controller to take over",
+        30000)
 
       def inDualWrite(): Boolean = {
         val migrationState = kraftCluster.controllers().get(3000).migrationSupport.get.migrationDriver.migrationState().get(10, TimeUnit.SECONDS)
@@ -286,7 +309,10 @@ class ZkMigrationIntegrationTest {
 
       // Wait for migration to begin
       log.info("Waiting for ZK migration to begin")
-      TestUtils.waitUntilTrue(() => zkClient.getControllerId.contains(3000), "Timed out waiting for KRaft controller to take over")
+      TestUtils.waitUntilTrue(
+        () => zkClient.getControllerId.contains(3000),
+        "Timed out waiting for KRaft controller to take over",
+        30000)
 
       // Alter the metadata
       log.info("Updating metadata with AdminClient")
@@ -302,12 +328,7 @@ class ZkMigrationIntegrationTest {
   }
 
   // SCRAM and Quota are intermixed. Test Quota Only here
-  @ClusterTest(clusterType = Type.ZK, brokers = 3, metadataVersion = MetadataVersion.IBP_3_4_IV0, serverProperties = Array(
-    new ClusterConfigProperty(key = "inter.broker.listener.name", value = "EXTERNAL"),
-    new ClusterConfigProperty(key = "listeners", value = "PLAINTEXT://localhost:0,EXTERNAL://localhost:0"),
-    new ClusterConfigProperty(key = "advertised.listeners", value = "PLAINTEXT://localhost:0,EXTERNAL://localhost:0"),
-    new ClusterConfigProperty(key = "listener.security.protocol.map", value = "EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT"),
-  ))
+  @ClusterTemplate("zkClustersForAllMigrationVersions")
   def testDualWrite(zkCluster: ClusterInstance): Unit = {
     // Create a topic in ZK mode
     var admin = zkCluster.createAdminClient()
@@ -328,7 +349,7 @@ class ZkMigrationIntegrationTest {
     val clusterId = zkCluster.clusterId()
     val kraftCluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
-        setBootstrapMetadataVersion(MetadataVersion.IBP_3_4_IV0).
+        setBootstrapMetadataVersion(zkCluster.config().metadataVersion()).
         setClusterId(Uuid.fromString(clusterId)).
         setNumBrokerNodes(0).
         setNumControllerNodes(1).build())
@@ -358,7 +379,10 @@ class ZkMigrationIntegrationTest {
 
       // Wait for migration to begin
       log.info("Waiting for ZK migration to begin")
-      TestUtils.waitUntilTrue(() => zkClient.getControllerId.contains(3000), "Timed out waiting for KRaft controller to take over")
+      TestUtils.waitUntilTrue(
+        () => zkClient.getControllerId.contains(3000),
+        "Timed out waiting for KRaft controller to take over",
+        30000)
 
       // Alter the metadata
       log.info("Updating metadata with AdminClient")
@@ -422,7 +446,10 @@ class ZkMigrationIntegrationTest {
 
       // Wait for migration to begin
       log.info("Waiting for ZK migration to begin")
-      TestUtils.waitUntilTrue(() => zkClient.getControllerId.contains(3000), "Timed out waiting for KRaft controller to take over")
+      TestUtils.waitUntilTrue(
+        () => zkClient.getControllerId.contains(3000),
+        "Timed out waiting for KRaft controller to take over",
+        30000)
 
       // Alter the metadata
       log.info("Updating metadata with AdminClient")
@@ -481,7 +508,10 @@ class ZkMigrationIntegrationTest {
 
       // Wait for migration to begin
       log.info("Waiting for ZK migration to begin")
-      TestUtils.waitUntilTrue(() => zkClient.getControllerId.contains(3000), "Timed out waiting for KRaft controller to take over")
+      TestUtils.waitUntilTrue(
+        () => zkClient.getControllerId.contains(3000),
+        "Timed out waiting for KRaft controller to take over",
+        30000)
 
       // Alter the metadata
       log.info("Create new topic with AdminClient")
@@ -495,14 +525,20 @@ class ZkMigrationIntegrationTest {
       // Verify the changes made to KRaft are seen in ZK
       verifyTopicPartitionMetadata(topicName, existingPartitions, zkClient)
 
+      val newPartitionCount = 3
       log.info("Create new partitions with AdminClient")
-      admin.createPartitions(Map(topicName -> NewPartitions.increaseTo(3)).asJava).all().get(60, TimeUnit.SECONDS)
+      admin.createPartitions(Map(topicName -> NewPartitions.increaseTo(newPartitionCount)).asJava).all().get(60, TimeUnit.SECONDS)
+      val (topicDescOpt, _) = TestUtils.computeUntilTrue(topicDesc(topicName, admin))(td => {
+        td.isDefined && td.get.partitions().asScala.size == newPartitionCount
+      })
+      assertTrue(topicDescOpt.isDefined)
+      val partitions = topicDescOpt.get.partitions().asScala
+      assertEquals(newPartitionCount, partitions.size)
 
       // Verify the changes seen in Zk.
       verifyTopicPartitionMetadata(topicName, existingPartitions ++ Seq(new TopicPartition(topicName, 2)), zkClient)
     } finally {
-      zkCluster.stop()
-      kraftCluster.close()
+      shutdownInSequence(zkCluster, kraftCluster)
     }
   }
 
@@ -520,6 +556,14 @@ class ZkMigrationIntegrationTest {
             topicIdReplicaAssignment.exists(_.assignment(tp).replicas == lisr.leaderAndIsr.isr)
         }
     }, "Unable to find topic partition metadata")
+  }
+
+  def topicDesc(topic: String, admin: Admin): Option[TopicDescription] = {
+    try {
+      admin.describeTopics(util.Collections.singleton(topic)).allTopicNames().get().asScala.get(topic)
+    } catch {
+      case _: Throwable => None
+    }
   }
 
   def allocateProducerId(bootstrapServers: String): Unit = {

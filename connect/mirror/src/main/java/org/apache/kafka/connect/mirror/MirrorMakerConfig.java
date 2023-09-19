@@ -42,7 +42,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.stream.Collectors;
 
-import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
+import static org.apache.kafka.common.config.ConfigDef.CaseInsensitiveValidString.in;
 
 /** Top-level config describing replication flows between multiple Kafka clusters.
  *  <p>

@@ -89,7 +89,7 @@ public interface TimeOrderedKeyValueBuffer<K, V, T> extends StateStore {
 
     Maybe<ValueAndTimestamp<V>> priorValueForBuffered(K key);
 
-    void put(long time, Record<K, T> record, ProcessorRecordContext recordContext);
+    boolean put(long time, Record<K, T> record, ProcessorRecordContext recordContext);
 
     int numRecords();
 

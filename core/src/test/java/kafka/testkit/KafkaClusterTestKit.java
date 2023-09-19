@@ -72,8 +72,11 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
+
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 
 @SuppressWarnings("deprecation") // Needed for Scala 2.12 compatibility
@@ -492,6 +495,19 @@ public class KafkaClusterTestKit implements AutoCloseable {
 
     public Map<Integer, ControllerServer> controllers() {
         return controllers;
+    }
+
+    public Controller waitForActiveController() throws InterruptedException {
+        AtomicReference<Controller> active = new AtomicReference<>(null);
+        TestUtils.retryOnExceptionWithTimeout(60_000, () -> {
+            for (ControllerServer controllerServer : controllers.values()) {
+                if (controllerServer.controller().isActive()) {
+                    active.set(controllerServer.controller());
+                }
+            }
+            assertNotNull(active.get(), "No active controller found");
+        });
+        return active.get();
     }
 
     public Map<Integer, BrokerServer> brokers() {

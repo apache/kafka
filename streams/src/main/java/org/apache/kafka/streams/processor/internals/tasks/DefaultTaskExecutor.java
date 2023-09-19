@@ -16,13 +16,19 @@
  */
 package org.apache.kafka.streams.processor.internals.tasks;
 
+import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_V2;
+
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.internals.ReadOnlyTask;
 import org.apache.kafka.streams.processor.internals.StreamTask;
+import org.apache.kafka.streams.processor.internals.Task;
+import org.apache.kafka.streams.processor.internals.TaskExecutionMetadata;
 import org.slf4j.Logger;
 
 import java.time.Duration;
@@ -54,7 +60,10 @@ public class DefaultTaskExecutor implements TaskExecutor {
                 while (isRunning.get()) {
                     runOnce(time.milliseconds());
                 }
-                // TODO: add exception handling
+            } catch (final StreamsException e) {
+                handleException(e);
+            } catch (final Exception e) {
+                handleException(new StreamsException(e));
             } finally {
                 if (currentTask != null) {
                     unassignCurrentTask();
@@ -62,6 +71,15 @@ public class DefaultTaskExecutor implements TaskExecutor {
 
                 shutdownGate.countDown();
                 log.info("Task executor thread shutdown");
+            }
+        }
+
+        private void handleException(final StreamsException e) {
+            if (currentTask != null) {
+                taskManager.setUncaughtException(e, currentTask.id());
+            } else {
+                // If we do not currently have a task assigned and still get an error, this is fatal for the executor thread
+                throw e;
             }
         }
 
@@ -74,15 +92,76 @@ public class DefaultTaskExecutor implements TaskExecutor {
 
             if (currentTask == null) {
                 currentTask = taskManager.assignNextTask(DefaultTaskExecutor.this);
+            }
+
+            if (currentTask == null) {
+                try {
+                    taskManager.awaitProcessableTasks();
+                } catch (final InterruptedException ignored) {
+                    // Can be ignored, the cause of the interrupted will be handled in the event loop
+                }
             } else {
-                // if a task is no longer processable, ask task-manager to give it another
-                // task in the next iteration
-                if (currentTask.isProcessable(nowMs)) {
-                    currentTask.process(nowMs);
-                } else {
+                boolean progressed = false;
+
+                if (taskExecutionMetadata.canProcessTask(currentTask, nowMs) && currentTask.isProcessable(nowMs)) {
+                    if (processTask(currentTask, nowMs, time)) {
+                        progressed = true;
+                    }
+                }
+
+                if (taskExecutionMetadata.canPunctuateTask(currentTask)) {
+                    if (currentTask.maybePunctuateStreamTime()) {
+                        log.trace("punctuated stream time for task {} ", currentTask.id());
+                        progressed = true;
+                    }
+                    if (currentTask.maybePunctuateSystemTime()) {
+                        log.trace("punctuated system time for task {} ", currentTask.id());
+                        progressed = true;
+                    }
+                }
+
+                if (!progressed) {
                     unassignCurrentTask();
                 }
             }
+        }
+
+        private boolean processTask(final Task task, final long now, final Time time) {
+            boolean processed = false;
+            try {
+                processed = task.process(now);
+                if (processed) {
+                    task.clearTaskTimeout();
+                    // TODO: enable regardless of whether using named topologies
+                    if (taskExecutionMetadata.hasNamedTopologies() && taskExecutionMetadata.processingMode() != EXACTLY_ONCE_V2) {
+                        log.trace("Successfully processed task {}", task.id());
+                        taskExecutionMetadata.addToSuccessfullyProcessed(task);
+                    }
+                }
+            } catch (final TimeoutException timeoutException) {
+                // TODO consolidate TimeoutException retries with general error handling
+                task.maybeInitTaskTimeoutOrThrow(now, timeoutException);
+                log.error(
+                    String.format(
+                        "Could not complete processing records for %s due to the following exception; will move to next task and retry later",
+                        task.id()),
+                    timeoutException
+                );
+            } catch (final TaskMigratedException e) {
+                log.info("Failed to process stream task {} since it got migrated to another thread already. " +
+                    "Will trigger a new rebalance and close all tasks as zombies together.", task.id());
+                throw e;
+            } catch (final StreamsException e) {
+                log.error(String.format("Failed to process stream task %s due to the following error:", task.id()), e);
+                e.setTaskId(task.id());
+                throw e;
+            } catch (final RuntimeException e) {
+                log.error(String.format("Failed to process stream task %s due to the following error:", task.id()), e);
+                throw new StreamsException(e, task.id());
+            } finally {
+                task.recordProcessBatchTime(time.milliseconds() - now);
+            }
+            return processed;
         }
 
         private StreamTask unassignCurrentTask() {
@@ -103,6 +182,7 @@ public class DefaultTaskExecutor implements TaskExecutor {
     private final Time time;
     private final String name;
     private final TaskManager taskManager;
+    private final TaskExecutionMetadata taskExecutionMetadata;
 
     private StreamTask currentTask = null;
     private TaskExecutorThread taskExecutorThread = null;
@@ -110,10 +190,12 @@ public class DefaultTaskExecutor implements TaskExecutor {
 
     public DefaultTaskExecutor(final TaskManager taskManager,
                                final String name,
-                               final Time time) {
+                               final Time time,
+                               final TaskExecutionMetadata taskExecutionMetadata) {
         this.time = time;
         this.name = name;
         this.taskManager = taskManager;
+        this.taskExecutionMetadata = taskExecutionMetadata;
     }
 
     @Override
