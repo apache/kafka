@@ -267,7 +267,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
         );
     }
 
-    public CoordinatorResult<DeleteGroupsResponseData.DeletableGroupResultCollection, Record> DeleteGroups(
+    public CoordinatorResult<DeleteGroupsResponseData.DeletableGroupResultCollection, Record> deleteGroups(
             RequestContext context,
             List<String> groupIds
     ) throws ApiException {
@@ -378,7 +378,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
      * @return A Result containing the OffsetDeleteResponse response and
      *         a list of records to update the state machine.
      */
-    public CoordinatorResult<OffsetDeleteResponseData, Record> DeleteOffsets(
+    public CoordinatorResult<OffsetDeleteResponseData, Record> deleteOffsets(
             RequestContext context,
             OffsetDeleteRequestData request
     ) throws ApiException {

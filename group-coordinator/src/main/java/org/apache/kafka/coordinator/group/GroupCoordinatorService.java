@@ -541,7 +541,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> future =
                     runtime.scheduleWriteOperation("delete-group",
                             new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, partition),
-                            coordinator -> coordinator.DeleteGroups(context, groupList));
+                            coordinator -> coordinator.deleteGroups(context, groupList));
             futures.add(future);
         }
 
@@ -744,7 +744,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         return runtime.scheduleWriteOperation(
                 "delete-offset",
                 topicPartitionFor(request.groupId()),
-                coordinator -> coordinator.DeleteOffsets(context, request)
+                coordinator -> coordinator.deleteOffsets(context, request)
         ).exceptionally(exception -> {
             if (exception instanceof UnknownTopicOrPartitionException ||
                     exception instanceof NotEnoughReplicasException) {
