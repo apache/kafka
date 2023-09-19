@@ -52,7 +52,7 @@ import java.util.Map;
  *     on a different thread.</li>
  * </ul>
  */
-public class Fetcher<K, V> extends AbstractFetch<K, V> {
+public class Fetcher<K, V> extends AbstractFetch {
 
     private final Logger log;
     private final ConsumerNetworkClient client;
@@ -62,7 +62,7 @@ public class Fetcher<K, V> extends AbstractFetch<K, V> {
                    ConsumerNetworkClient client,
                    ConsumerMetadata metadata,
                    SubscriptionState subscriptions,
-                   FetchConfig<K, V> fetchConfig,
+                   FetchConfig fetchConfig,
                    FetchMetricsManager metricsManager,
                    Time time) {
         super(logContext, metadata, subscriptions, fetchConfig, metricsManager, time);
@@ -166,8 +166,8 @@ public class Fetcher<K, V> extends AbstractFetch<K, V> {
         }
     }
 
-    public Fetch<K, V> collectFetch() {
-        return fetchCollector.collectFetch(fetchBuffer);
+    public Fetch<K, V> collectFetch(Deserializers<K, V> deserializers) {
+        return fetchCollector.collectFetch(fetchBuffer, deserializers);
     }
 
     /**

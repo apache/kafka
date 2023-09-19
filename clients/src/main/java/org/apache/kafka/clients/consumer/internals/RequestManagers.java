@@ -22,7 +22,6 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.internals.IdempotentCloser;
-import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
@@ -44,20 +43,20 @@ import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.configur
  * This allows callers to both use the specific {@link RequestManager} instance, or to iterate over the list via
  * the {@link #entries()} method.
  */
-public class RequestManagers<K, V> implements Closeable {
+public class RequestManagers implements Closeable {
 
     private final Logger log;
     public final Optional<CoordinatorRequestManager> coordinatorRequestManager;
     public final Optional<CommitRequestManager> commitRequestManager;
     public final OffsetsRequestManager offsetsRequestManager;
-    public final FetchRequestManager<K, V> fetchRequestManager;
+    public final FetchRequestManager fetchRequestManager;
 
     private final List<Optional<? extends RequestManager>> entries;
     private final IdempotentCloser closer = new IdempotentCloser();
 
     public RequestManagers(LogContext logContext,
                            OffsetsRequestManager offsetsRequestManager,
-                           FetchRequestManager<K, V> fetchRequestManager,
+                           FetchRequestManager fetchRequestManager,
                            Optional<CoordinatorRequestManager> coordinatorRequestManager,
                            Optional<CommitRequestManager> commitRequestManager) {
         this.log = logContext.logger(RequestManagers.class);
@@ -103,25 +102,23 @@ public class RequestManagers<K, V> implements Closeable {
      * Creates a {@link Supplier} for deferred creation during invocation by
      * {@link org.apache.kafka.clients.consumer.internals.DefaultBackgroundThread}.
      */
-    public static <K, V> Supplier<RequestManagers<K, V>> supplier(final Time time,
-                                                                  final LogContext logContext,
-                                                                  final BlockingQueue<BackgroundEvent> backgroundEventQueue,
-                                                                  final ConsumerMetadata metadata,
-                                                                  final SubscriptionState subscriptions,
-                                                                  final ConsumerConfig config,
-                                                                  final GroupRebalanceConfig groupRebalanceConfig,
-                                                                  final ApiVersions apiVersions,
-                                                                  final FetchMetricsManager fetchMetricsManager,
-                                                                  final Supplier<NetworkClientDelegate> networkClientDelegateSupplier) {
-        return new CachedSupplier<RequestManagers<K, V>>() {
+    public static <K, V> Supplier<RequestManagers> supplier(final Time time,
+                                                            final LogContext logContext,
+                                                            final BlockingQueue<BackgroundEvent> backgroundEventQueue,
+                                                            final ConsumerMetadata metadata,
+                                                            final SubscriptionState subscriptions,
+                                                            final ConsumerConfig config,
+                                                            final GroupRebalanceConfig groupRebalanceConfig,
+                                                            final ApiVersions apiVersions,
+                                                            final FetchMetricsManager fetchMetricsManager,
+                                                            final Supplier<NetworkClientDelegate> networkClientDelegateSupplier) {
+        return new CachedSupplier<RequestManagers>() {
             @Override
-            protected RequestManagers<K, V> create() {
-                Deserializer<K> keyDeserializer = new NoopDeserializer<>();
-                Deserializer<V> valueDeserializer = new NoopDeserializer<>();
+            protected RequestManagers create() {
                 final NetworkClientDelegate networkClientDelegate = networkClientDelegateSupplier.get();
                 final ErrorEventHandler errorEventHandler = new ErrorEventHandler(backgroundEventQueue);
                 final IsolationLevel isolationLevel = configuredIsolationLevel(config);
-                final FetchConfig<K, V> fetchConfig = createFetchConfig(config, new Deserializers<>(keyDeserializer, valueDeserializer));
+                final FetchConfig fetchConfig = createFetchConfig(config);
                 long retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
                 long retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
                 final int requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
@@ -134,7 +131,7 @@ public class RequestManagers<K, V> implements Closeable {
                         apiVersions,
                         networkClientDelegate,
                         logContext);
-                final FetchRequestManager<K, V> fetch = new FetchRequestManager<>(logContext,
+                final FetchRequestManager fetch = new FetchRequestManager(logContext,
                         time,
                         errorEventHandler,
                         metadata,
@@ -156,20 +153,12 @@ public class RequestManagers<K, V> implements Closeable {
                     commit = new CommitRequestManager(time, logContext, subscriptions, config, coordinator, groupState);
                 }
 
-                return new RequestManagers<>(logContext,
+                return new RequestManagers(logContext,
                         listOffsets,
                         fetch,
                         Optional.ofNullable(coordinator),
                         Optional.ofNullable(commit));
             }
         };
-    }
-
-    private static class NoopDeserializer<T> implements Deserializer<T> {
-
-        @Override
-        public T deserialize(final String topic, final byte[] data) {
-            throw new RuntimeException("who dares call me!?!?!");
-        }
     }
 }

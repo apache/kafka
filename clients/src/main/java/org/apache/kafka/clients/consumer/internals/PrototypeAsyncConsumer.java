@@ -212,7 +212,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
                     apiVersions,
                     metrics,
                     fetchMetricsManager);
-            final Supplier<RequestManagers<String, String>> requestManagersSupplier = RequestManagers.supplier(time,
+            final Supplier<RequestManagers> requestManagersSupplier = RequestManagers.supplier(time,
                     logContext,
                     backgroundEventQueue,
                     metadata,
@@ -222,14 +222,13 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
                     apiVersions,
                     fetchMetricsManager,
                     networkClientDelegateSupplier);
-            final Supplier<ApplicationEventProcessor<String, String>> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(logContext,
+            final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(logContext,
                     metadata,
                     backgroundEventQueue,
                     requestManagersSupplier);
-            this.eventHandler = new DefaultEventHandler<>(time,
+            this.eventHandler = new DefaultEventHandler(time,
                     logContext,
                     applicationEventQueue,
-                    backgroundEventQueue,
                     applicationEventProcessorSupplier,
                     networkClientDelegateSupplier,
                     requestManagersSupplier);
@@ -245,7 +244,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
                 //config.ignore(ConsumerConfig.THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED);
             }
             // These are specific to the foreground thread
-            FetchConfig<K, V> fetchConfig = createFetchConfig(config, deserializers);
+            FetchConfig fetchConfig = createFetchConfig(config);
             this.fetchBuffer = new FetchBuffer(logContext);
             this.fetchCollector = new FetchCollector<>(logContext,
                     metadata,
@@ -928,7 +927,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         long pollTimeout = timer.remainingMs();
 
         // if data is available already, return it immediately
-        final Fetch<K, V> fetch = fetchCollector.collectFetch(fetchBuffer);
+        final Fetch<K, V> fetch = fetchCollector.collectFetch(fetchBuffer, deserializers);
         if (!fetch.isEmpty()) {
             return fetch;
         }
@@ -963,7 +962,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
             timer.update(pollTimer.currentTimeMs());
         }
 
-        return fetchCollector.collectFetch(fetchBuffer);
+        return fetchCollector.collectFetch(fetchBuffer, deserializers);
     }
 
     /**

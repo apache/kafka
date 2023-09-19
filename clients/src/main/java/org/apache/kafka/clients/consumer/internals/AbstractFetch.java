@@ -52,16 +52,14 @@ import static org.apache.kafka.clients.consumer.internals.FetchUtils.requestMeta
 
 /**
  * {@code AbstractFetch} represents the basic state and logic for record fetching processing.
- * @param <K> Type for the message key
- * @param <V> Type for the message value
  */
-public abstract class AbstractFetch<K, V> implements Closeable {
+public abstract class AbstractFetch implements Closeable {
 
     private final Logger log;
     protected final LogContext logContext;
     protected final ConsumerMetadata metadata;
     protected final SubscriptionState subscriptions;
-    protected final FetchConfig<K, V> fetchConfig;
+    protected final FetchConfig fetchConfig;
     protected final Time time;
     protected final FetchMetricsManager metricsManager;
     protected final FetchBuffer fetchBuffer;
@@ -74,7 +72,7 @@ public abstract class AbstractFetch<K, V> implements Closeable {
     public AbstractFetch(final LogContext logContext,
                          final ConsumerMetadata metadata,
                          final SubscriptionState subscriptions,
-                         final FetchConfig<K, V> fetchConfig,
+                         final FetchConfig fetchConfig,
                          final FetchMetricsManager metricsManager,
                          final Time time) {
         this.log = logContext.logger(AbstractFetch.class);

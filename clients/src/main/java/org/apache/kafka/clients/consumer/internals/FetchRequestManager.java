@@ -37,11 +37,8 @@ import org.slf4j.Logger;
  * {@code FetchRequestManager} is responsible for generating {@link FetchRequest} that represent the
  * {@link SubscriptionState#fetchablePartitions(Predicate)} based on the user's topic subscription/partition
  * assignment.
- *
- * @param <K> Record key type
- * @param <V> Record value type
  */
-public class FetchRequestManager<K, V> extends AbstractFetch<K, V> implements RequestManager {
+public class FetchRequestManager extends AbstractFetch implements RequestManager {
 
     private final Logger log;
     private final ErrorEventHandler errorEventHandler;
@@ -52,7 +49,7 @@ public class FetchRequestManager<K, V> extends AbstractFetch<K, V> implements Re
                         final ErrorEventHandler errorEventHandler,
                         final ConsumerMetadata metadata,
                         final SubscriptionState subscriptions,
-                        final FetchConfig<K, V> fetchConfig,
+                        final FetchConfig fetchConfig,
                         final FetchMetricsManager metricsManager,
                         final NetworkClientDelegate networkClientDelegate) {
         super(logContext, metadata, subscriptions, fetchConfig, metricsManager, time);

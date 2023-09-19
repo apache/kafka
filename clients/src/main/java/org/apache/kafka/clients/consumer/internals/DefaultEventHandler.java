@@ -37,23 +37,22 @@ import java.util.function.Supplier;
  * An {@link EventHandler} that uses a single background thread to consume {@link ApplicationEvent} and produce
  * {@link BackgroundEvent} from the {@link DefaultBackgroundThread}.
  */
-public class DefaultEventHandler<K, V> implements EventHandler {
+public class DefaultEventHandler implements EventHandler {
 
     private final Logger log;
     private final BlockingQueue<ApplicationEvent> applicationEventQueue;
-    private final DefaultBackgroundThread<K, V> backgroundThread;
+    private final DefaultBackgroundThread backgroundThread;
     private final IdempotentCloser closer = new IdempotentCloser();
 
     public DefaultEventHandler(final Time time,
                                final LogContext logContext,
                                final BlockingQueue<ApplicationEvent> applicationEventQueue,
-                               final BlockingQueue<BackgroundEvent> backgroundEventQueue,
-                               final Supplier<ApplicationEventProcessor<K, V>> applicationEventProcessorSupplier,
+                               final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier,
                                final Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
-                               final Supplier<RequestManagers<K, V>> requestManagersSupplier) {
+                               final Supplier<RequestManagers> requestManagersSupplier) {
         this.log = logContext.logger(DefaultEventHandler.class);
         this.applicationEventQueue = applicationEventQueue;
-        this.backgroundThread = new DefaultBackgroundThread<>(time,
+        this.backgroundThread = new DefaultBackgroundThread(time,
                 logContext,
                 applicationEventQueue,
                 applicationEventProcessorSupplier,

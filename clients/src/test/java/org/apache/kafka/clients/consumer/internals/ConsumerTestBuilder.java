@@ -69,16 +69,16 @@ public class ConsumerTestBuilder implements Closeable {
     final long retryBackoffMs;
     final SubscriptionState subscriptions;
     final ConsumerMetadata metadata;
-    final FetchConfig<String, String> fetchConfig;
+    final FetchConfig fetchConfig;
     final Metrics metrics;
     final FetchMetricsManager metricsManager;
     final NetworkClientDelegate networkClientDelegate;
     final OffsetsRequestManager offsetsRequestManager;
     final CoordinatorRequestManager coordinatorRequestManager;
     final CommitRequestManager commitRequestManager;
-    final FetchRequestManager<String, String> fetchRequestManager;
-    final RequestManagers<String, String> requestManagers;
-    final ApplicationEventProcessor<String, String> applicationEventProcessor;
+    final FetchRequestManager fetchRequestManager;
+    final RequestManagers requestManagers;
+    final ApplicationEventProcessor applicationEventProcessor;
     final BackgroundEventProcessor backgroundEventProcessor;
     final MockClient client;
 
@@ -112,7 +112,7 @@ public class ConsumerTestBuilder implements Closeable {
 
         this.subscriptions = spy(createSubscriptionState(config, logContext));
         this.metadata = spy(new ConsumerMetadata(config, subscriptions, logContext, new ClusterResourceListeners()));
-        this.fetchConfig = createFetchConfig(config, new Deserializers<>(config));
+        this.fetchConfig = createFetchConfig(config);
         this.metricsManager = createFetchMetricsManager(metrics);
 
         this.client = new MockClient(time, metadata);
@@ -151,7 +151,7 @@ public class ConsumerTestBuilder implements Closeable {
                 config,
                 coordinatorRequestManager,
                 groupState));
-        this.fetchRequestManager = spy(new FetchRequestManager<>(logContext,
+        this.fetchRequestManager = spy(new FetchRequestManager(logContext,
                 time,
                 errorEventHandler,
                 metadata,
@@ -159,12 +159,12 @@ public class ConsumerTestBuilder implements Closeable {
                 fetchConfig,
                 metricsManager,
                 networkClientDelegate));
-        this.requestManagers = new RequestManagers<>(logContext,
+        this.requestManagers = new RequestManagers(logContext,
                 offsetsRequestManager,
                 fetchRequestManager,
                 Optional.of(coordinatorRequestManager),
                 Optional.of(commitRequestManager));
-        this.applicationEventProcessor = spy(new ApplicationEventProcessor<>(
+        this.applicationEventProcessor = spy(new ApplicationEventProcessor(
                 backgroundEventQueue,
                 requestManagers,
                 metadata,
@@ -179,10 +179,10 @@ public class ConsumerTestBuilder implements Closeable {
 
     public static class DefaultBackgroundThreadTestBuilder extends ConsumerTestBuilder {
 
-        final DefaultBackgroundThread<String, String> backgroundThread;
+        final DefaultBackgroundThread backgroundThread;
 
         public DefaultBackgroundThreadTestBuilder() {
-            this.backgroundThread = new DefaultBackgroundThread<>(
+            this.backgroundThread = new DefaultBackgroundThread(
                     time,
                     logContext,
                     applicationEventQueue,
@@ -202,11 +202,10 @@ public class ConsumerTestBuilder implements Closeable {
         final EventHandler eventHandler;
 
         public DefaultEventHandlerTestBuilder() {
-            this.eventHandler = spy(new DefaultEventHandler<>(
+            this.eventHandler = spy(new DefaultEventHandler(
                     time,
                     logContext,
                     applicationEventQueue,
-                    backgroundEventQueue,
                     () -> applicationEventProcessor,
                     () -> networkClientDelegate,
                     () -> requestManagers));

@@ -70,11 +70,11 @@ public class DefaultBackgroundThreadTest {
     private ConsumerMetadata metadata;
     private NetworkClientDelegate networkClient;
     private BlockingQueue<ApplicationEvent> applicationEventsQueue;
-    private ApplicationEventProcessor<String, String> applicationEventProcessor;
+    private ApplicationEventProcessor applicationEventProcessor;
     private CoordinatorRequestManager coordinatorManager;
     private OffsetsRequestManager offsetsRequestManager;
     private CommitRequestManager commitManager;
-    private DefaultBackgroundThread<String, String> backgroundThread;
+    private DefaultBackgroundThread backgroundThread;
     private MockClient client;
 
     @BeforeEach

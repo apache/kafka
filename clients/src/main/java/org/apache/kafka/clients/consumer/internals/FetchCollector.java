@@ -54,14 +54,14 @@ public class FetchCollector<K, V> {
     private final Logger log;
     private final ConsumerMetadata metadata;
     private final SubscriptionState subscriptions;
-    private final FetchConfig<K, V> fetchConfig;
+    private final FetchConfig fetchConfig;
     private final FetchMetricsManager metricsManager;
     private final Time time;
 
     public FetchCollector(final LogContext logContext,
                           final ConsumerMetadata metadata,
                           final SubscriptionState subscriptions,
-                          final FetchConfig<K, V> fetchConfig,
+                          final FetchConfig fetchConfig,
                           final FetchMetricsManager metricsManager,
                           final Time time) {
         this.log = logContext.logger(FetchCollector.class);
@@ -87,7 +87,7 @@ public class FetchCollector<K, V> {
      *         the defaultResetPolicy is NONE
      * @throws TopicAuthorizationException If there is TopicAuthorization error in fetchResponse.
      */
-    public Fetch<K, V> collectFetch(final FetchBuffer fetchBuffer) {
+    public Fetch<K, V> collectFetch(final FetchBuffer fetchBuffer, final Deserializers<K, V> deserializers) {
         final Fetch<K, V> fetch = Fetch.empty();
         final Queue<CompletedFetch> pausedCompletedFetches = new ArrayDeque<>();
         int recordsRemaining = fetchConfig.maxPollRecords;
@@ -128,7 +128,7 @@ public class FetchCollector<K, V> {
                     pausedCompletedFetches.add(nextInLineFetch);
                     fetchBuffer.setNextInLineFetch(null);
                 } else {
-                    final Fetch<K, V> nextFetch = fetchRecords(nextInLineFetch);
+                    final Fetch<K, V> nextFetch = fetchRecords(nextInLineFetch, deserializers);
                     recordsRemaining -= nextFetch.numRecords();
                     fetch.add(nextFetch);
                 }
@@ -145,7 +145,7 @@ public class FetchCollector<K, V> {
         return fetch;
     }
 
-    private Fetch<K, V> fetchRecords(final CompletedFetch nextInLineFetch) {
+    private Fetch<K, V> fetchRecords(final CompletedFetch nextInLineFetch, Deserializers<K, V> deserializers) {
         final TopicPartition tp = nextInLineFetch.partition;
 
         if (!subscriptions.isAssigned(tp)) {
@@ -162,7 +162,9 @@ public class FetchCollector<K, V> {
                 throw new IllegalStateException("Missing position for fetchable partition " + tp);
 
             if (nextInLineFetch.nextFetchOffset() == position.offset) {
-                List<ConsumerRecord<K, V>> partRecords = nextInLineFetch.fetchRecords(fetchConfig, fetchConfig.maxPollRecords);
+                List<ConsumerRecord<K, V>> partRecords = nextInLineFetch.fetchRecords(fetchConfig,
+                        deserializers,
+                        fetchConfig.maxPollRecords);
 
                 log.trace("Returning {} fetched records at offset {} for assigned partition {}",
                         partRecords.size(), position, tp);

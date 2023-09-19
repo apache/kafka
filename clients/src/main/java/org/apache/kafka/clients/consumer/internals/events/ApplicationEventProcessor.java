@@ -34,7 +34,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
 
-public class ApplicationEventProcessor<K, V> {
+public class ApplicationEventProcessor {
 
     private final BlockingQueue<BackgroundEvent> backgroundEventQueue;
 
@@ -42,10 +42,10 @@ public class ApplicationEventProcessor<K, V> {
 
     private final ConsumerMetadata metadata;
 
-    private final RequestManagers<K, V> requestManagers;
+    private final RequestManagers requestManagers;
 
     public ApplicationEventProcessor(final BlockingQueue<BackgroundEvent> backgroundEventQueue,
-                                     final RequestManagers<K, V> requestManagers,
+                                     final RequestManagers requestManagers,
                                      final ConsumerMetadata metadata,
                                      final LogContext logContext) {
         this.log = logContext.logger(ApplicationEventProcessor.class);
@@ -184,15 +184,15 @@ public class ApplicationEventProcessor<K, V> {
      * Creates a {@link Supplier} for deferred creation during invocation by
      * {@link org.apache.kafka.clients.consumer.internals.DefaultBackgroundThread}.
      */
-    public static <K, V> Supplier<ApplicationEventProcessor<K, V>> supplier(final LogContext logContext,
-                                                                            final ConsumerMetadata metadata,
-                                                                            final BlockingQueue<BackgroundEvent> backgroundEventQueue,
-                                                                            final Supplier<RequestManagers<K, V>> requestManagersSupplier) {
-        return new CachedSupplier<ApplicationEventProcessor<K, V>>() {
+    public static Supplier<ApplicationEventProcessor> supplier(final LogContext logContext,
+                                                               final ConsumerMetadata metadata,
+                                                               final BlockingQueue<BackgroundEvent> backgroundEventQueue,
+                                                               final Supplier<RequestManagers> requestManagersSupplier) {
+        return new CachedSupplier<ApplicationEventProcessor>() {
             @Override
-            protected ApplicationEventProcessor<K, V> create() {
-                RequestManagers<K, V> requestManagers = requestManagersSupplier.get();
-                return new ApplicationEventProcessor<>(backgroundEventQueue, requestManagers, metadata, logContext);
+            protected ApplicationEventProcessor create() {
+                RequestManagers requestManagers = requestManagersSupplier.get();
+                return new ApplicationEventProcessor(backgroundEventQueue, requestManagers, metadata, logContext);
             }
         };
     }

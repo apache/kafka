@@ -181,6 +181,7 @@ public class FetcherTest {
     private Metrics metrics;
     private ApiVersions apiVersions = new ApiVersions();
     private ConsumerNetworkClient consumerClient;
+    private Deserializers<?, ?> deserializers;
     private Fetcher<?, ?> fetcher;
     private OffsetFetcher offsetFetcher;
 
@@ -879,7 +880,7 @@ public class FetcherTest {
         // The fetcher should block on Deserialization error
         for (int i = 0; i < 2; i++) {
             try {
-                fetcher.collectFetch();
+                collectFetch();
                 fail("fetchedRecords should have raised");
             } catch (SerializationException e) {
                 // the position should not advance since no data has been returned
@@ -960,7 +961,7 @@ public class FetcherTest {
         // the fetchedRecords() should always throw exception due to the invalid message at the starting offset.
         for (int i = 0; i < 2; i++) {
             try {
-                fetcher.collectFetch();
+                collectFetch();
                 fail("fetchedRecords should have raised KafkaException");
             } catch (KafkaException e) {
                 assertEquals(blockedOffset, subscriptions.position(tp0).offset);
@@ -972,7 +973,7 @@ public class FetcherTest {
         // Seek to skip the bad record and fetch again.
         subscriptions.seekUnvalidated(tp0, new SubscriptionState.FetchPosition(toOffset, Optional.empty(), metadata.currentLeader(tp0)));
         // Should not throw exception after the seek.
-        fetcher.collectFetch();
+        collectFetch();
         assertEquals(1, sendFetches());
         client.prepareResponse(fullFetchResponse(tidp0, MemoryRecords.readableRecords(responseBuffer), Errors.NONE, 100L, 0));
         consumerClient.poll(time.timer(0));
@@ -1016,7 +1017,7 @@ public class FetcherTest {
         // the fetchedRecords() should always throw exception due to the bad batch.
         for (int i = 0; i < 2; i++) {
             try {
-                fetcher.collectFetch();
+                collectFetch();
                 fail("fetchedRecords should have raised KafkaException");
             } catch (KafkaException e) {
                 assertEquals(0, subscriptions.position(tp0).offset);
@@ -1045,7 +1046,7 @@ public class FetcherTest {
         client.prepareResponse(fullFetchResponse(tidp0, MemoryRecords.readableRecords(buffer), Errors.NONE, 100L, 0));
         consumerClient.poll(time.timer(0));
         try {
-            fetcher.collectFetch();
+            collectFetch();
             fail("fetchedRecords should have raised");
         } catch (KafkaException e) {
             // the position should not advance since no data has been returned
@@ -1219,7 +1220,7 @@ public class FetcherTest {
             client.setNodeApiVersions(NodeApiVersions.create(ApiKeys.FETCH.id, (short) 2, (short) 2));
             makeFetchRequestWithIncompleteRecord();
             try {
-                fetcher.collectFetch();
+                collectFetch();
                 fail("RecordTooLargeException should have been raised");
             } catch (RecordTooLargeException e) {
                 assertTrue(e.getMessage().startsWith("There are some messages at [Partition=Offset]: "));
@@ -1242,7 +1243,7 @@ public class FetcherTest {
         buildFetcher();
         makeFetchRequestWithIncompleteRecord();
         try {
-            fetcher.collectFetch();
+            collectFetch();
             fail("RecordTooLargeException should have been raised");
         } catch (KafkaException e) {
             assertTrue(e.getMessage().startsWith("Failed to make progress reading messages"));
@@ -1275,7 +1276,7 @@ public class FetcherTest {
         client.prepareResponse(fullFetchResponse(tidp0, this.records, Errors.TOPIC_AUTHORIZATION_FAILED, 100L, 0));
         consumerClient.poll(time.timer(0));
         try {
-            fetcher.collectFetch();
+            collectFetch();
             fail("fetchedRecords should have thrown");
         } catch (TopicAuthorizationException e) {
             assertEquals(singleton(topicName), e.unauthorizedTopics());
@@ -1703,7 +1704,7 @@ public class FetcherTest {
         assertFalse(subscriptions.isOffsetResetNeeded(tp0));
         for (int i = 0; i < 2; i++) {
             OffsetOutOfRangeException e = assertThrows(OffsetOutOfRangeException.class, () ->
-                    fetcher.collectFetch());
+                    collectFetch());
             assertEquals(singleton(tp0), e.offsetOutOfRangePartitions().keySet());
             assertEquals(0L, e.offsetOutOfRangePartitions().get(tp0).longValue());
         }
@@ -2189,7 +2190,7 @@ public class FetcherTest {
         assertEquals(1, sendFetches());
         client.prepareResponse(FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, new LinkedHashMap<>(partitions)));
         consumerClient.poll(time.timer(0));
-        fetcher.collectFetch();
+        collectFetch();
 
         int expectedBytes = 0;
         for (Record record : records.records())
@@ -2235,7 +2236,7 @@ public class FetcherTest {
 
         client.prepareResponse(FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, new LinkedHashMap<>(partitions)));
         consumerClient.poll(time.timer(0));
-        fetcher.collectFetch();
+        collectFetch();
 
         // we should have ignored the record at the wrong offset
         int expectedBytes = 0;
@@ -2840,7 +2841,8 @@ public class FetcherTest {
                 isolationLevel,
                 apiVersions);
 
-        FetchConfig<byte[], byte[]> fetchConfig = new FetchConfig<>(
+        deserializers = new Deserializers<>(new ByteArrayDeserializer(), new ByteArrayDeserializer());
+        FetchConfig fetchConfig = new FetchConfig(
                 minBytes,
                 maxBytes,
                 maxWaitMs,
@@ -2848,7 +2850,6 @@ public class FetcherTest {
                 2 * numPartitions,
                 true, // check crcs
                 CommonClientConfigs.DEFAULT_CLIENT_RACK,
-                new Deserializers<>(new ByteArrayDeserializer(), new ByteArrayDeserializer()),
                 isolationLevel);
         fetcher = new Fetcher<byte[], byte[]>(
                 logContext,
@@ -3564,7 +3565,7 @@ public class FetcherTest {
     }
 
     /**
-     * Assert that the {@link Fetcher#collectFetch() latest fetch} does not contain any
+     * Assert that the {@link Fetcher#collectFetch(Deserializers) latest fetch} does not contain any
      * {@link Fetch#records() user-visible records}, did not
      * {@link Fetch#positionAdvanced() advance the consumer's position},
      * and is {@link Fetch#isEmpty() empty}.
@@ -3584,7 +3585,10 @@ public class FetcherTest {
 
     @SuppressWarnings("unchecked")
     private <K, V> Fetch<K, V> collectFetch() {
-        return (Fetch) fetcher.collectFetch();
+        // Ugh. What am I doing wrong here?
+        Fetcher<K, V> f = (Fetcher<K, V>) fetcher;
+        Deserializers<K, V> d = (Deserializers<K, V>) deserializers;
+        return f.collectFetch(d);
     }
 
     private void buildFetcher(int maxPollRecords) {
@@ -3642,7 +3646,7 @@ public class FetcherTest {
                                      SubscriptionState subscriptionState,
                                      LogContext logContext) {
         buildDependencies(metricConfig, metadataExpireMs, subscriptionState, logContext);
-        FetchConfig<K, V> fetchConfig = new FetchConfig<>(
+        FetchConfig fetchConfig = new FetchConfig(
                 minBytes,
                 maxBytes,
                 maxWaitMs,
@@ -3650,8 +3654,8 @@ public class FetcherTest {
                 maxPollRecords,
                 true, // check crc
                 CommonClientConfigs.DEFAULT_CLIENT_RACK,
-                new Deserializers<>(keyDeserializer, valueDeserializer),
                 isolationLevel);
+        deserializers = new Deserializers<>(keyDeserializer, valueDeserializer);
         fetcher = spy(new Fetcher<>(
                 logContext,
                 consumerClient,
