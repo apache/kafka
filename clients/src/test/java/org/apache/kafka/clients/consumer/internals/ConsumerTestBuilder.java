@@ -231,16 +231,18 @@ public class ConsumerTestBuilder implements Closeable {
                     config.getList(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG),
                     config.originals(Collections.singletonMap(ConsumerConfig.CLIENT_ID_CONFIG, clientId))
             );
+            Deserializers<String, String> deserializers = new Deserializers<>(new StringDeserializer(), new StringDeserializer());
             FetchCollector<String, String> fetchCollector = new FetchCollector<>(logContext,
                     metadata,
                     subscriptions,
                     fetchConfig,
+                    deserializers,
                     metricsManager,
                     time);
             this.consumer = spy(new PrototypeAsyncConsumer<>(
                     logContext,
                     clientId,
-                    new Deserializers<>(new StringDeserializer(), new StringDeserializer()),
+                    deserializers,
                     new FetchBuffer(logContext),
                     fetchCollector,
                     new ConsumerInterceptors<>(Collections.emptyList()),

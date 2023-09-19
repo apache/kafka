@@ -55,6 +55,7 @@ public class FetchCollector<K, V> {
     private final ConsumerMetadata metadata;
     private final SubscriptionState subscriptions;
     private final FetchConfig fetchConfig;
+    private final Deserializers<K, V> deserializers;
     private final FetchMetricsManager metricsManager;
     private final Time time;
 
@@ -62,12 +63,14 @@ public class FetchCollector<K, V> {
                           final ConsumerMetadata metadata,
                           final SubscriptionState subscriptions,
                           final FetchConfig fetchConfig,
+                          final Deserializers<K, V> deserializers,
                           final FetchMetricsManager metricsManager,
                           final Time time) {
         this.log = logContext.logger(FetchCollector.class);
         this.metadata = metadata;
         this.subscriptions = subscriptions;
         this.fetchConfig = fetchConfig;
+        this.deserializers = deserializers;
         this.metricsManager = metricsManager;
         this.time = time;
     }
@@ -87,7 +90,7 @@ public class FetchCollector<K, V> {
      *         the defaultResetPolicy is NONE
      * @throws TopicAuthorizationException If there is TopicAuthorization error in fetchResponse.
      */
-    public Fetch<K, V> collectFetch(final FetchBuffer fetchBuffer, final Deserializers<K, V> deserializers) {
+    public Fetch<K, V> collectFetch(final FetchBuffer fetchBuffer) {
         final Fetch<K, V> fetch = Fetch.empty();
         final Queue<CompletedFetch> pausedCompletedFetches = new ArrayDeque<>();
         int recordsRemaining = fetchConfig.maxPollRecords;
@@ -128,7 +131,7 @@ public class FetchCollector<K, V> {
                     pausedCompletedFetches.add(nextInLineFetch);
                     fetchBuffer.setNextInLineFetch(null);
                 } else {
-                    final Fetch<K, V> nextFetch = fetchRecords(nextInLineFetch, deserializers);
+                    final Fetch<K, V> nextFetch = fetchRecords(nextInLineFetch);
                     recordsRemaining -= nextFetch.numRecords();
                     fetch.add(nextFetch);
                 }
@@ -145,7 +148,7 @@ public class FetchCollector<K, V> {
         return fetch;
     }
 
-    private Fetch<K, V> fetchRecords(final CompletedFetch nextInLineFetch, Deserializers<K, V> deserializers) {
+    private Fetch<K, V> fetchRecords(final CompletedFetch nextInLineFetch) {
         final TopicPartition tp = nextInLineFetch.partition;
 
         if (!subscriptions.isAssigned(tp)) {

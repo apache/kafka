@@ -56,6 +56,7 @@ import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochRequest;
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse;
 import org.apache.kafka.common.requests.RequestTestUtils;
+import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
@@ -1260,6 +1261,7 @@ public class OffsetFetcherTest {
                 metadata,
                 subscriptions,
                 fetchConfig,
+                new Deserializers<>(new ByteArrayDeserializer(), new ByteArrayDeserializer()),
                 new FetchMetricsManager(metrics, metricsRegistry),
                 time);
 

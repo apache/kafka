@@ -29,6 +29,7 @@ import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetrics;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
+import org.apache.kafka.clients.consumer.internals.Deserializers;
 import org.apache.kafka.clients.consumer.internals.FetchConfig;
 import org.apache.kafka.clients.consumer.internals.FetchMetricsManager;
 import org.apache.kafka.clients.consumer.internals.Fetcher;
@@ -2688,6 +2689,7 @@ public class KafkaConsumerTest {
                 metadata,
                 subscription,
                 fetchConfig,
+                new Deserializers<>(keyDeserializer, deserializer),
                 metricsManager,
                 time);
         OffsetFetcher offsetFetcher = new OffsetFetcher(loggerFactory,

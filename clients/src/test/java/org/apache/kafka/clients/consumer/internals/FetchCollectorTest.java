@@ -106,7 +106,7 @@ public class FetchCollectorTest {
         assertFalse(completedFetch.isInitialized());
 
         // Fetch the data and validate that we get all the records we want back.
-        Fetch<String, String> fetch = fetchCollector.collectFetch(fetchBuffer, deserializers);
+        Fetch<String, String> fetch = fetchCollector.collectFetch(fetchBuffer);
         assertFalse(fetch.isEmpty());
         assertEquals(recordCount, fetch.numRecords());
 
@@ -130,7 +130,7 @@ public class FetchCollectorTest {
         assertEquals(recordCount, position.offset);
 
         // Now attempt to collect more records from the fetch buffer.
-        fetch = fetchCollector.collectFetch(fetchBuffer, deserializers);
+        fetch = fetchCollector.collectFetch(fetchBuffer);
 
         // The Fetch object is non-null, but it's empty.
         assertEquals(0, fetch.numRecords());
@@ -154,7 +154,7 @@ public class FetchCollectorTest {
 
         CompletedFetch completedFetch = completedFetchBuilder.build();
         fetchBuffer.add(completedFetch);
-        Fetch<String, String> fetch = fetchCollector.collectFetch(fetchBuffer, deserializers);
+        Fetch<String, String> fetch = fetchCollector.collectFetch(fetchBuffer);
 
         // The Fetch and read replica settings should be empty.
         assertEquals(DEFAULT_RECORD_COUNT, fetch.numRecords());
@@ -177,7 +177,7 @@ public class FetchCollectorTest {
         // Add some valid CompletedFetch records to the FetchBuffer queue and collect them into the Fetch.
         CompletedFetch completedFetch = completedFetchBuilder.build();
         fetchBuffer.add(completedFetch);
-        Fetch<String, String> fetch = fetchCollector.collectFetch(fetchBuffer, deserializers);
+        Fetch<String, String> fetch = fetchCollector.collectFetch(fetchBuffer);
 
         // Verify that no records are fetched for the partition as it did not have a valid position set.
         assertEquals(0, fetch.numRecords());
@@ -194,6 +194,7 @@ public class FetchCollectorTest {
                 metadata,
                 subscriptions,
                 fetchConfig,
+                deserializers,
                 metricsManager,
                 time) {
 
@@ -213,7 +214,7 @@ public class FetchCollectorTest {
         assertFalse(fetchBuffer.isEmpty());
 
         // Now run our ill-fated collectFetch.
-        assertThrows(expectedException.getClass(), () -> fetchCollector.collectFetch(fetchBuffer, deserializers));
+        assertThrows(expectedException.getClass(), () -> fetchCollector.collectFetch(fetchBuffer));
 
         // If the number of records in the CompletedFetch was 0, the call to FetchCollector.collectFetch() will
         // remove it from the queue. If there are records in the CompletedFetch, FetchCollector.collectFetch will
@@ -246,7 +247,7 @@ public class FetchCollectorTest {
         // Ensure that the partition for the next-in-line CompletedFetch is still 'paused'.
         assertTrue(subscriptions.isPaused(completedFetch.partition));
 
-        Fetch<String, String> fetch = fetchCollector.collectFetch(fetchBuffer, deserializers);
+        Fetch<String, String> fetch = fetchCollector.collectFetch(fetchBuffer);
 
         // There should be no records in the Fetch as the partition being fetched is 'paused'.
         assertEquals(0, fetch.numRecords());
@@ -278,7 +279,7 @@ public class FetchCollectorTest {
         assertEquals(Optional.of(preferredReadReplicaId), subscriptions.preferredReadReplica(topicAPartition0, time.milliseconds()));
 
         // Fetch the data and validate that we get all the records we want back.
-        Fetch<String, String> fetch = fetchCollector.collectFetch(fetchBuffer, deserializers);
+        Fetch<String, String> fetch = fetchCollector.collectFetch(fetchBuffer);
         assertTrue(fetch.isEmpty());
         assertTrue(metadata.updateRequested());
         assertEquals(Optional.empty(), subscriptions.preferredReadReplica(topicAPartition0, time.milliseconds()));
@@ -293,7 +294,7 @@ public class FetchCollectorTest {
         fetchBuffer.add(completedFetch);
 
         // Fetch the data and validate that we get our first batch of records back.
-        Fetch<String, String> fetch = fetchCollector.collectFetch(fetchBuffer, deserializers);
+        Fetch<String, String> fetch = fetchCollector.collectFetch(fetchBuffer);
         assertFalse(fetch.isEmpty());
         assertEquals(DEFAULT_RECORD_COUNT, fetch.numRecords());
 
@@ -303,7 +304,7 @@ public class FetchCollectorTest {
                 .error(Errors.OFFSET_OUT_OF_RANGE)
                 .build();
         fetchBuffer.add(completedFetch);
-        fetch = fetchCollector.collectFetch(fetchBuffer, deserializers);
+        fetch = fetchCollector.collectFetch(fetchBuffer);
         assertTrue(fetch.isEmpty());
 
         // Try to fetch more data and validate that we get an empty Fetch back.
@@ -312,7 +313,7 @@ public class FetchCollectorTest {
                 .error(Errors.OFFSET_OUT_OF_RANGE)
                 .build();
         fetchBuffer.add(completedFetch);
-        fetch = fetchCollector.collectFetch(fetchBuffer, deserializers);
+        fetch = fetchCollector.collectFetch(fetchBuffer);
         assertTrue(fetch.isEmpty());
     }
 
@@ -332,7 +333,7 @@ public class FetchCollectorTest {
                 .error(Errors.OFFSET_OUT_OF_RANGE)
                 .build();
         fetchBuffer.add(completedFetch);
-        Fetch<String, String> fetch = fetchCollector.collectFetch(fetchBuffer, deserializers);
+        Fetch<String, String> fetch = fetchCollector.collectFetch(fetchBuffer);
 
         // The Fetch and read replica settings should be empty.
         assertTrue(fetch.isEmpty());
@@ -349,7 +350,7 @@ public class FetchCollectorTest {
                 .error(Errors.TOPIC_AUTHORIZATION_FAILED)
                 .build();
         fetchBuffer.add(completedFetch);
-        assertThrows(TopicAuthorizationException.class, () -> fetchCollector.collectFetch(fetchBuffer, deserializers));
+        assertThrows(TopicAuthorizationException.class, () -> fetchCollector.collectFetch(fetchBuffer));
     }
 
     @Test
@@ -362,7 +363,7 @@ public class FetchCollectorTest {
                 .error(Errors.UNKNOWN_LEADER_EPOCH)
                 .build();
         fetchBuffer.add(completedFetch);
-        Fetch<String, String> fetch = fetchCollector.collectFetch(fetchBuffer, deserializers);
+        Fetch<String, String> fetch = fetchCollector.collectFetch(fetchBuffer);
         assertTrue(fetch.isEmpty());
     }
 
@@ -376,7 +377,7 @@ public class FetchCollectorTest {
                 .error(Errors.UNKNOWN_SERVER_ERROR)
                 .build();
         fetchBuffer.add(completedFetch);
-        Fetch<String, String> fetch = fetchCollector.collectFetch(fetchBuffer, deserializers);
+        Fetch<String, String> fetch = fetchCollector.collectFetch(fetchBuffer);
         assertTrue(fetch.isEmpty());
     }
 
@@ -390,7 +391,7 @@ public class FetchCollectorTest {
                 .error(Errors.CORRUPT_MESSAGE)
                 .build();
         fetchBuffer.add(completedFetch);
-        assertThrows(KafkaException.class, () -> fetchCollector.collectFetch(fetchBuffer, deserializers));
+        assertThrows(KafkaException.class, () -> fetchCollector.collectFetch(fetchBuffer));
     }
 
     @ParameterizedTest
@@ -403,7 +404,7 @@ public class FetchCollectorTest {
                 .error(error)
                 .build();
         fetchBuffer.add(completedFetch);
-        assertThrows(IllegalStateException.class, () -> fetchCollector.collectFetch(fetchBuffer, deserializers));
+        assertThrows(IllegalStateException.class, () -> fetchCollector.collectFetch(fetchBuffer));
     }
 
     /**
@@ -449,6 +450,7 @@ public class FetchCollectorTest {
                 metadata,
                 subscriptions,
                 fetchConfig,
+                deserializers,
                 metricsManager,
                 time);
         fetchBuffer = new FetchBuffer(logContext);

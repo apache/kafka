@@ -759,6 +759,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     this.metadata,
                     this.subscriptions,
                     fetchConfig,
+                    this.deserializers,
                     fetchMetricsManager,
                     this.time);
             this.offsetFetcher = new OffsetFetcher(logContext,
@@ -1252,7 +1253,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 Math.min(coordinator.timeToNextPoll(timer.currentTimeMs()), timer.remainingMs());
 
         // if data is available already, return it immediately
-        final Fetch<K, V> fetch = fetcher.collectFetch(deserializers);
+        final Fetch<K, V> fetch = fetcher.collectFetch();
         if (!fetch.isEmpty()) {
             return fetch;
         }
@@ -1279,7 +1280,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         });
         timer.update(pollTimer.currentTimeMs());
 
-        return fetcher.collectFetch(deserializers);
+        return fetcher.collectFetch();
     }
 
     /**

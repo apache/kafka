@@ -63,6 +63,7 @@ public class Fetcher<K, V> extends AbstractFetch {
                    ConsumerMetadata metadata,
                    SubscriptionState subscriptions,
                    FetchConfig fetchConfig,
+                   Deserializers<K, V> deserializers,
                    FetchMetricsManager metricsManager,
                    Time time) {
         super(logContext, metadata, subscriptions, fetchConfig, metricsManager, time);
@@ -72,6 +73,7 @@ public class Fetcher<K, V> extends AbstractFetch {
                 metadata,
                 subscriptions,
                 fetchConfig,
+                deserializers,
                 metricsManager,
                 time);
     }
@@ -166,8 +168,8 @@ public class Fetcher<K, V> extends AbstractFetch {
         }
     }
 
-    public Fetch<K, V> collectFetch(Deserializers<K, V> deserializers) {
-        return fetchCollector.collectFetch(fetchBuffer, deserializers);
+    public Fetch<K, V> collectFetch() {
+        return fetchCollector.collectFetch(fetchBuffer);
     }
 
     /**

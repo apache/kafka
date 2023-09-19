@@ -181,7 +181,6 @@ public class FetcherTest {
     private Metrics metrics;
     private ApiVersions apiVersions = new ApiVersions();
     private ConsumerNetworkClient consumerClient;
-    private Deserializers<?, ?> deserializers;
     private Fetcher<?, ?> fetcher;
     private OffsetFetcher offsetFetcher;
 
@@ -2841,7 +2840,7 @@ public class FetcherTest {
                 isolationLevel,
                 apiVersions);
 
-        deserializers = new Deserializers<>(new ByteArrayDeserializer(), new ByteArrayDeserializer());
+        Deserializers<byte[], byte[]> deserializers = new Deserializers<>(new ByteArrayDeserializer(), new ByteArrayDeserializer());
         FetchConfig fetchConfig = new FetchConfig(
                 minBytes,
                 maxBytes,
@@ -2857,6 +2856,7 @@ public class FetcherTest {
                 metadata,
                 subscriptions,
                 fetchConfig,
+                deserializers,
                 metricsManager,
                 time) {
             @Override
@@ -3565,7 +3565,7 @@ public class FetcherTest {
     }
 
     /**
-     * Assert that the {@link Fetcher#collectFetch(Deserializers) latest fetch} does not contain any
+     * Assert that the {@link Fetcher#collectFetch() latest fetch} does not contain any
      * {@link Fetch#records() user-visible records}, did not
      * {@link Fetch#positionAdvanced() advance the consumer's position},
      * and is {@link Fetch#isEmpty() empty}.
@@ -3585,10 +3585,7 @@ public class FetcherTest {
 
     @SuppressWarnings("unchecked")
     private <K, V> Fetch<K, V> collectFetch() {
-        // Ugh. What am I doing wrong here?
-        Fetcher<K, V> f = (Fetcher<K, V>) fetcher;
-        Deserializers<K, V> d = (Deserializers<K, V>) deserializers;
-        return f.collectFetch(d);
+        return (Fetch<K, V>) fetcher.collectFetch();
     }
 
     private void buildFetcher(int maxPollRecords) {
@@ -3655,13 +3652,13 @@ public class FetcherTest {
                 true, // check crc
                 CommonClientConfigs.DEFAULT_CLIENT_RACK,
                 isolationLevel);
-        deserializers = new Deserializers<>(keyDeserializer, valueDeserializer);
         fetcher = spy(new Fetcher<>(
                 logContext,
                 consumerClient,
                 metadata,
                 subscriptionState,
                 fetchConfig,
+                new Deserializers<>(keyDeserializer, valueDeserializer),
                 metricsManager,
                 time));
         offsetFetcher = new OffsetFetcher(logContext,
