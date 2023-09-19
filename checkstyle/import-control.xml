@@ -290,6 +290,10 @@
     <allow pkg="javax.rmi.ssl"/>
     <allow pkg="kafka.utils" />
     <allow pkg="scala.collection" />
+
+    <subpackage name="reassign">
+      <allow pkg="kafka.admin" />
+    </subpackage>
   </subpackage>
 
   <subpackage name="trogdor">

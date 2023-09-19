@@ -50,9 +50,9 @@ public class OffsetControlManagerTest {
         assertNull(offsetControl.currentSnapshotName());
         assertEquals(-1L, offsetControl.lastCommittedOffset());
         assertEquals(-1, offsetControl.lastCommittedEpoch());
-        assertEquals(-1, offsetControl.lastStableOffset());
-        assertEquals(-1, offsetControl.transactionStartOffset());
-        assertEquals(-1, offsetControl.nextWriteOffset());
+        assertEquals(-1L, offsetControl.lastStableOffset());
+        assertEquals(-1L, offsetControl.transactionStartOffset());
+        assertEquals(-1L, offsetControl.nextWriteOffset());
         assertFalse(offsetControl.active());
         assertEquals(Arrays.asList(-1L), offsetControl.snapshotRegistry().epochsList());
     }

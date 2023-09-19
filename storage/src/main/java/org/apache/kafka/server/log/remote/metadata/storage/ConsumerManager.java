@@ -27,9 +27,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
-import java.io.File;
 import java.io.IOException;
-import java.nio.file.Path;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeoutException;
@@ -40,8 +38,6 @@ import java.util.concurrent.TimeoutException;
  * {@link TopicBasedRemoteLogMetadataManagerConfig#consumeWaitMs()}.
  */
 public class ConsumerManager implements Closeable {
-
-    public static final String COMMITTED_OFFSETS_FILE_NAME = "_rlmm_committed_offsets";
 
     private static final Logger log = LoggerFactory.getLogger(ConsumerManager.class);
     private static final long CONSUME_RECHECK_INTERVAL_MS = 50L;
@@ -60,15 +56,13 @@ public class ConsumerManager implements Closeable {
 
         //Create a task to consume messages and submit the respective events to RemotePartitionMetadataEventHandler.
         KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(rlmmConfig.consumerProperties());
-        Path committedOffsetsPath = new File(rlmmConfig.logDir(), COMMITTED_OFFSETS_FILE_NAME).toPath();
         consumerTask = new ConsumerTask(
-                consumer,
-                rlmmConfig.remoteLogMetadataTopicName(),
-                remotePartitionMetadataEventHandler,
-                topicPartitioner,
-                committedOffsetsPath,
-                time,
-                60_000L
+            remotePartitionMetadataEventHandler,
+            topicPartitioner,
+            consumer,
+            100L,
+            300_000L,
+            time
         );
         consumerTaskThread = KafkaThread.nonDaemon("RLMMConsumerTask", consumerTask);
     }
@@ -104,35 +98,28 @@ public class ConsumerManager implements Closeable {
      */
     public void waitTillConsumptionCatchesUp(RecordMetadata recordMetadata,
                                              long timeoutMs) throws TimeoutException {
-        final int partition = recordMetadata.partition();
-        final long consumeCheckIntervalMs = Math.min(CONSUME_RECHECK_INTERVAL_MS, timeoutMs);
-
-        log.info("Waiting until consumer is caught up with the target partition: [{}]", partition);
-
+        int partition = recordMetadata.partition();
         // If the current assignment does not have the subscription for this partition then return immediately.
-        if (!consumerTask.isPartitionAssigned(partition)) {
-            throw new KafkaException("This consumer is not assigned to the target partition " + partition + ". " +
-                    "Partitions currently assigned: " + consumerTask.metadataPartitionsAssigned());
+        if (!consumerTask.isMetadataPartitionAssigned(partition)) {
+            throw new KafkaException("This consumer is not assigned to the target partition " + partition +
+                    ". Currently assigned partitions: " + consumerTask.metadataPartitionsAssigned());
         }
-
-        final long offset = recordMetadata.offset();
+        long offset = recordMetadata.offset();
         long startTimeMs = time.milliseconds();
+        long consumeCheckIntervalMs = Math.min(CONSUME_RECHECK_INTERVAL_MS, timeoutMs);
+        log.info("Wait until the consumer is caught up with the target partition {} up-to offset {}", partition, offset);
         while (true) {
-            log.debug("Checking if partition [{}] is up to date with offset [{}]", partition, offset);
-            long receivedOffset = consumerTask.receivedOffsetForPartition(partition).orElse(-1L);
-            if (receivedOffset >= offset) {
+            long readOffset = consumerTask.readOffsetForMetadataPartition(partition).orElse(-1L);
+            if (readOffset >= offset) {
                 return;
             }
-
-            log.debug("Expected offset [{}] for partition [{}], but the committed offset: [{}],  Sleeping for [{}] to retry again",
-                    offset, partition, receivedOffset, consumeCheckIntervalMs);
-
+            log.debug("Expected offset for partition {} is {}, but the read offset is {}. " +
+                    "Sleeping for {} ms to retry again", partition, offset, readOffset, consumeCheckIntervalMs);
             if (time.milliseconds() - startTimeMs > timeoutMs) {
-                log.warn("Expected offset for partition:[{}] is : [{}], but the committed offset: [{}] ",
-                        partition, receivedOffset, offset);
+                log.warn("Expected offset for partition {} is {}, but the read offset is {}",
+                        partition, offset, readOffset);
                 throw new TimeoutException("Timed out in catching up with the expected offset by consumer.");
             }
-
             time.sleep(consumeCheckIntervalMs);
         }
     }
@@ -158,7 +145,7 @@ public class ConsumerManager implements Closeable {
         consumerTask.removeAssignmentsForPartitions(partitions);
     }
 
-    public Optional<Long> receivedOffsetForPartition(int metadataPartition) {
-        return consumerTask.receivedOffsetForPartition(metadataPartition);
+    public Optional<Long> readOffsetForPartition(int metadataPartition) {
+        return consumerTask.readOffsetForMetadataPartition(metadataPartition);
     }
 }

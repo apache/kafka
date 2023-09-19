@@ -14,23 +14,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.consumer.internals;
+package org.apache.kafka.tiered.storage.integration;
 
-import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
+import java.util.Arrays;
+import java.util.List;
 
-/**
- * Noop event. Intentionally left it here for demonstration purpose.
- */
-public class NoopBackgroundEvent extends BackgroundEvent {
-    public final String message;
+public final class ReassignReplicaExpandTest extends BaseReassignReplicaTest {
 
-    public NoopBackgroundEvent(final String message) {
-        super(EventType.NOOP);
-        this.message = message;
-    }
-
+    /**
+     * Expand the replication factor of the topic by changing the replica list from 0 to 0, 1
+     * @return the replica-ids of the topic
+     */
     @Override
-    public String toString() {
-        return getClass() + "_" + this.message;
+    protected List<Integer> replicaIds() {
+        return Arrays.asList(broker0, broker1);
     }
 }

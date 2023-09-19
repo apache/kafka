@@ -21,6 +21,7 @@ import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.network.Mode;
 import org.apache.kafka.common.security.auth.SslEngineFactory;
 import org.apache.kafka.common.security.ssl.DefaultSslEngineFactory;
+import org.bouncycastle.asn1.ASN1EncodableVector;
 import org.bouncycastle.asn1.DEROctetString;
 import org.bouncycastle.asn1.DERSequence;
 import org.bouncycastle.asn1.DERT61String;
@@ -30,9 +31,11 @@ import org.bouncycastle.asn1.x500.RDN;
 import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.asn1.x500.style.BCStyle;
 import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
+import org.bouncycastle.asn1.x509.BasicConstraints;
 import org.bouncycastle.asn1.x509.Extension;
 import org.bouncycastle.asn1.x509.GeneralName;
 import org.bouncycastle.asn1.x509.GeneralNames;
+import org.bouncycastle.asn1.x509.KeyPurposeId;
 import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
 import org.bouncycastle.cert.X509CertificateHolder;
 import org.bouncycastle.cert.X509v3CertificateBuilder;
@@ -106,7 +109,7 @@ public class TestSslUtils {
      *
      * @param dn the X.509 Distinguished Name, eg "CN=Test, L=London, C=GB"
      * @param pair the KeyPair
-     * @param days how many days from now the Certificate is valid for
+     * @param days how many days from now the Certificate is valid for, or - for negative values - how many days before now
      * @param algorithm the signing algorithm, eg "SHA1withRSA"
      * @return the self-signed certificate
      * @throws CertificateException thrown if a security error or an IO error occurred.
@@ -115,6 +118,28 @@ public class TestSslUtils {
                                                       int days, String algorithm)
         throws  CertificateException {
         return new CertificateBuilder(days, algorithm).generate(dn, pair);
+    }
+
+    /**
+     * Generate a signed certificate. Self-signed, if no issuer and parentKeyPair are supplied
+     * 
+     * @param dn The distinguished name of this certificate
+     * @param keyPair A key pair
+     * @param daysBeforeNow how many days before now the Certificate is valid for
+     * @param daysAfterNow how many days from now the Certificate is valid for
+     * @param issuer The issuer who signs the certificate. Leave null if you want to generate a root
+     *        CA.
+     * @param parentKeyPair The key pair of the issuer. Leave null if you want to generate a root
+     *        CA.
+     * @param algorithm the signing algorithm, eg "SHA1withRSA"
+     * @return the signed certificate
+     * @throws CertificateException
+     */
+    public static X509Certificate generateSignedCertificate(String dn, KeyPair keyPair,
+            int daysBeforeNow, int daysAfterNow, String issuer, KeyPair parentKeyPair,
+            String algorithm, boolean isCA, boolean isServerCert, boolean isClientCert) throws CertificateException {
+        return new CertificateBuilder(0, algorithm).generateSignedCertificate(dn, keyPair,
+                daysBeforeNow, daysAfterNow, issuer, parentKeyPair, isCA, isServerCert, isClientCert);
     }
 
     public static KeyPair generateKeyPair(String algorithm) throws NoSuchAlgorithmException {
@@ -415,8 +440,10 @@ public class TestSslUtils {
                 else
                     throw new IllegalArgumentException("Unsupported algorithm " + keyAlgorithm);
                 ContentSigner sigGen = signerBuilder.build(privateKeyAsymKeyParam);
-                Date from = new Date();
-                Date to = new Date(from.getTime() + days * 86400000L);
+                // Negative numbers for "days" can be used to generate expired certificates
+                Date now = new Date();
+                Date from = (days >= 0) ? now : new Date(now.getTime() + days * 86400000L);
+                Date to = (days >= 0) ? new Date(now.getTime() + days * 86400000L) : now;
                 BigInteger sn = new BigInteger(64, new SecureRandom());
                 X509v3CertificateBuilder v3CertGen = new X509v3CertificateBuilder(dn, sn, from, to, dn, subPubKeyInfo);
 
@@ -424,6 +451,98 @@ public class TestSslUtils {
                     v3CertGen.addExtension(Extension.subjectAlternativeName, false, subjectAltName);
                 X509CertificateHolder certificateHolder = v3CertGen.build(sigGen);
                 return new JcaX509CertificateConverter().setProvider("BC").getCertificate(certificateHolder);
+            } catch (CertificateException ce) {
+                throw ce;
+            } catch (Exception e) {
+                throw new CertificateException(e);
+            }
+        }
+        
+        /**
+         * @param dn The distinguished name to use
+         * @param keyPair A key pair to use
+         * @param daysBeforeNow how many days before now the Certificate is valid for
+         * @param daysAfterNow how many days from now the Certificate is valid for
+         * @param issuer The issuer name. if null, "dn" is used
+         * @param parentKeyPair The parent key pair used to sign this certificate. If null, create
+         *        self-signed certificate authority (CA)
+         * @return A (self-) signed certificate
+         * @throws CertificateException
+         */
+        public X509Certificate generateSignedCertificate(String dn, KeyPair keyPair,
+                int daysBeforeNow, int daysAfterNow, String issuer, KeyPair parentKeyPair, boolean isCA, boolean isServerCert, boolean isClientCert)
+                throws CertificateException {
+            X500Name issuerOrDn = (issuer != null) ? new X500Name(issuer) : new X500Name(dn);
+            return generateSignedCertificate(new X500Name(dn), keyPair, daysBeforeNow, daysAfterNow,
+                    issuerOrDn, parentKeyPair, isCA, isServerCert, isClientCert);
+        }
+
+        /**
+         * 
+         * @param dn The distinguished name to use
+         * @param keyPair A key pair to use
+         * @param daysBeforeNow how many days before now the Certificate is valid for
+         * @param daysAfterNow how many days from now the Certificate is valid for
+         * @param issuer The issuer name. if null, "dn" is used
+         * @param parentKeyPair The parent key pair used to sign this certificate. If null, create
+         *        self-signed certificate authority (CA)
+         * @return A (self-) signed certificate
+         * @throws CertificateException
+         */
+        public X509Certificate generateSignedCertificate(X500Name dn, KeyPair keyPair,
+                int daysBeforeNow, int daysAfterNow, X500Name issuer, KeyPair parentKeyPair, boolean isCA, boolean isServerCert, boolean isClientCert)
+                throws CertificateException {
+            try {
+                Security.addProvider(new BouncyCastleProvider());
+                AlgorithmIdentifier sigAlgId =
+                        new DefaultSignatureAlgorithmIdentifierFinder().find(algorithm);
+                AlgorithmIdentifier digAlgId =
+                        new DefaultDigestAlgorithmIdentifierFinder().find(sigAlgId);
+                // Create self-signed certificate if no parentKeyPair has been specified, otherwise
+                // sign with private key of parentKeyPair
+                KeyPair signingKeyPair = (parentKeyPair != null) ? parentKeyPair : keyPair;
+                AsymmetricKeyParameter privateKeyAsymKeyParam =
+                        PrivateKeyFactory.createKey(signingKeyPair.getPrivate().getEncoded());
+                SubjectPublicKeyInfo subPubKeyInfo =
+                        SubjectPublicKeyInfo.getInstance(keyPair.getPublic().getEncoded());
+                BcContentSignerBuilder signerBuilder;
+                String keyAlgorithm = keyPair.getPublic().getAlgorithm();
+                if (keyAlgorithm.equals("RSA"))
+                    signerBuilder = new BcRSAContentSignerBuilder(sigAlgId, digAlgId);
+                else if (keyAlgorithm.equals("DSA"))
+                    signerBuilder = new BcDSAContentSignerBuilder(sigAlgId, digAlgId);
+                else if (keyAlgorithm.equals("EC"))
+                    signerBuilder = new BcECContentSignerBuilder(sigAlgId, digAlgId);
+                else
+                    throw new IllegalArgumentException("Unsupported algorithm " + keyAlgorithm);
+                ContentSigner sigGen = signerBuilder.build(privateKeyAsymKeyParam);
+                // Negative numbers for "days" can be used to generate expired certificates
+                Date now = new Date();
+                Date from = new Date(now.getTime() - daysBeforeNow * 86400000L);
+                Date to = new Date(now.getTime() + daysAfterNow * 86400000L);
+                BigInteger sn = new BigInteger(64, new SecureRandom());
+                X500Name issuerOrDn = (issuer != null) ? issuer : dn;
+                X509v3CertificateBuilder v3CertGen =
+                        new X509v3CertificateBuilder(issuerOrDn, sn, from, to, dn, subPubKeyInfo);
+                if (isCA) {
+                    v3CertGen.addExtension(Extension.basicConstraints, true, new BasicConstraints(isCA));
+                }
+                if (isServerCert || isClientCert) {
+                    ASN1EncodableVector purposes = new ASN1EncodableVector();
+                    if (isServerCert) {
+                        purposes.add(KeyPurposeId.id_kp_serverAuth);
+                    }
+                    if (isClientCert) {
+                        purposes.add(KeyPurposeId.id_kp_clientAuth);
+                    }
+                    v3CertGen.addExtension(Extension.extendedKeyUsage, false, new DERSequence(purposes));
+                }
+                if (subjectAltName != null) {
+                    v3CertGen.addExtension(Extension.subjectAlternativeName, false, subjectAltName);
+                }
+                X509CertificateHolder certificateHolder = v3CertGen.build(sigGen);
+                return new JcaX509CertificateConverter().setProvider("BC")
+                        .getCertificate(certificateHolder);
             } catch (CertificateException ce) {
                 throw ce;
             } catch (Exception e) {
