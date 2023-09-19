@@ -1176,7 +1176,7 @@ public class RemoteLogManager implements Closeable {
             }
         }
         // segment end offset should be with in the log end offset.
-        if (segmentEndOffset > logEndOffset) {
+        if (segmentEndOffset >= logEndOffset) {
             LOGGER.debug("Segment {} end offset {} is more than log end offset {}.",
                     segmentMetadata.remoteLogSegmentId(), segmentEndOffset, logEndOffset);
             return false;

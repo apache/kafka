@@ -1262,14 +1262,15 @@ public class RemoteLogManagerTest {
                 segmentEpochs7), logEndOffset, leaderEpochToStartOffset));
 
         // Test a remote segment having larger end offset than the log end offset
-        TreeMap<Integer, Long> segmentEpochs8 = new TreeMap<>();
-        segmentEpochs8.put(1, 15L);
-        segmentEpochs8.put(2, 20L);
-
         assertFalse(RemoteLogManager.isRemoteSegmentWithinLeaderEpochs(createRemoteLogSegmentMetadata(
                 15,
                 95, // larger than log end offset
-                segmentEpochs8), logEndOffset, leaderEpochToStartOffset));
+                leaderEpochToStartOffset), logEndOffset, leaderEpochToStartOffset));
+
+        assertFalse(RemoteLogManager.isRemoteSegmentWithinLeaderEpochs(createRemoteLogSegmentMetadata(
+                15,
+                90, // equal to the log end offset
+                leaderEpochToStartOffset), logEndOffset, leaderEpochToStartOffset));
 
         // Test whether a segment's first offset is earlier to the respective epoch's start offset
         TreeMap<Integer, Long> segmentEpochs9 = new TreeMap<>();
