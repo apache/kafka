@@ -185,7 +185,6 @@ public class FetchRequestManagerTest {
     private Metrics metrics;
     private ApiVersions apiVersions = new ApiVersions();
     private ConsumerNetworkClient oldConsumerClient;
-    private Deserializers<?, ?> deserializers;
     private TestableFetchRequestManager<?, ?> fetcher;
     private TestableNetworkClientDelegate consumerClient;
     private OffsetFetcher offsetFetcher;
@@ -3286,7 +3285,7 @@ public class FetchRequestManagerTest {
     }
 
     /**
-     * Assert that the {@link Fetcher#collectFetch(Deserializers)}  latest fetch} does not contain any
+     * Assert that the {@link Fetcher#collectFetch()}  latest fetch} does not contain any
      * {@link Fetch#records() user-visible records}, did not
      * {@link Fetch#positionAdvanced() advance the consumer's position},
      * and is {@link Fetch#isEmpty() empty}.
@@ -3364,7 +3363,7 @@ public class FetchRequestManagerTest {
                                      SubscriptionState subscriptionState,
                                      LogContext logContext) {
         buildDependencies(metricConfig, metadataExpireMs, subscriptionState, logContext);
-        deserializers = new Deserializers<>(keyDeserializer, valueDeserializer);
+        Deserializers<K, V> deserializers = new Deserializers<>(keyDeserializer, valueDeserializer);
         FetchConfig fetchConfig = new FetchConfig(
                 minBytes,
                 maxBytes,
@@ -3378,6 +3377,7 @@ public class FetchRequestManagerTest {
                 metadata,
                 subscriptions,
                 fetchConfig,
+                deserializers,
                 metricsManager,
                 time);
         fetcher = spy(new TestableFetchRequestManager<>(
@@ -3446,9 +3446,8 @@ public class FetchRequestManagerTest {
             this.fetchCollector = fetchCollector;
         }
 
-        @SuppressWarnings("unchecked")
         private Fetch<K, V> collectFetch() {
-            return fetchCollector.collectFetch(fetchBuffer, (Deserializers<K, V>) deserializers);
+            return fetchCollector.collectFetch(fetchBuffer);
         }
 
         private int sendFetches() {

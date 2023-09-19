@@ -152,7 +152,7 @@ public class CompletedFetch {
         }
     }
 
-    private <K, V> void maybeEnsureValid(FetchConfig fetchConfig, RecordBatch batch) {
+    private void maybeEnsureValid(FetchConfig fetchConfig, RecordBatch batch) {
         if (fetchConfig.checkCrcs && batch.magic() >= RecordBatch.MAGIC_VALUE_V2) {
             try {
                 batch.ensureValid();
@@ -163,7 +163,7 @@ public class CompletedFetch {
         }
     }
 
-    private <K, V> void maybeEnsureValid(FetchConfig fetchConfig, Record record) {
+    private void maybeEnsureValid(FetchConfig fetchConfig, Record record) {
         if (fetchConfig.checkCrcs) {
             try {
                 record.ensureValid();
@@ -181,7 +181,7 @@ public class CompletedFetch {
         }
     }
 
-    private <K, V> Record nextFetchedRecord(FetchConfig fetchConfig) {
+    private Record nextFetchedRecord(FetchConfig fetchConfig) {
         while (true) {
             if (records == null || !records.hasNext()) {
                 maybeCloseRecordStream();

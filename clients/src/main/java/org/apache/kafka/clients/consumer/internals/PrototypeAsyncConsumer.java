@@ -250,6 +250,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
                     metadata,
                     subscriptions,
                     fetchConfig,
+                    deserializers,
                     fetchMetricsManager,
                     time);
 
@@ -927,7 +928,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         long pollTimeout = timer.remainingMs();
 
         // if data is available already, return it immediately
-        final Fetch<K, V> fetch = fetchCollector.collectFetch(fetchBuffer, deserializers);
+        final Fetch<K, V> fetch = fetchCollector.collectFetch(fetchBuffer);
         if (!fetch.isEmpty()) {
             return fetch;
         }
@@ -962,7 +963,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
             timer.update(pollTimer.currentTimeMs());
         }
 
-        return fetchCollector.collectFetch(fetchBuffer, deserializers);
+        return fetchCollector.collectFetch(fetchBuffer);
     }
 
     /**
