@@ -140,7 +140,7 @@ public class HeartbeatRequestManager implements RequestManager {
 
         request.future().whenComplete((response, exception) -> {
             if (exception == null) {
-                onSuccess((ConsumerGroupHeartbeatResponse) response.responseBody(), response.receivedTimeMs());
+                onResponse((ConsumerGroupHeartbeatResponse) response.responseBody(), response.receivedTimeMs());
             } else {
                 onFailure(exception, response.receivedTimeMs());
             }
@@ -153,7 +153,7 @@ public class HeartbeatRequestManager implements RequestManager {
         logger.debug("failed sending heartbeat due to {}", exception.getMessage());
     }
 
-    private void onSuccess(final ConsumerGroupHeartbeatResponse response, long currentTimeMs) {
+    private void onResponse(final ConsumerGroupHeartbeatResponse response, long currentTimeMs) {
         if (response.data().errorCode() == Errors.NONE.code()) {
             this.heartbeatRequestState.updateHeartbeatIntervalMs(response.data().heartbeatIntervalMs());
             this.heartbeatRequestState.onSuccessfulAttempt(currentTimeMs);
@@ -180,11 +180,11 @@ public class HeartbeatRequestManager implements RequestManager {
             // retry
             logInfo("Coordinator {} is loading. Retrying", response, currentTimeMs);
         } else {
-            onFatalError(response);
+            onFatalErrorResponse(response);
         }
     }
 
-    private void onFatalError(final ConsumerGroupHeartbeatResponse response) {
+    private void onFatalErrorResponse(final ConsumerGroupHeartbeatResponse response) {
         final short errorCode = response.data().errorCode();
         if (errorCode == Errors.GROUP_AUTHORIZATION_FAILED.code()) {
             GroupAuthorizationException error = GroupAuthorizationException.forGroupId(membershipManager.groupId());
