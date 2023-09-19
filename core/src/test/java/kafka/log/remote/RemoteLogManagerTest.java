@@ -74,6 +74,7 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
@@ -105,6 +106,7 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiConsumer;
 import java.util.function.Supplier;
@@ -189,6 +191,7 @@ public class RemoteLogManagerTest {
             return epochs;
         }
     };
+    private final AtomicLong currentLogStartOffset = new AtomicLong(0L);
 
     private final UnifiedLog mockLog = mock(UnifiedLog.class);
 
@@ -204,7 +207,7 @@ public class RemoteLogManagerTest {
         kafka.utils.TestUtils.clearYammerMetrics();
         remoteLogManager = new RemoteLogManager(remoteLogManagerConfig, brokerId, logDir, clusterId, time,
                 tp -> Optional.of(mockLog),
-                (topicPartition, offset) -> { },
+                (topicPartition, offset) -> currentLogStartOffset.set(offset),
                 brokerTopicStats) {
             public RemoteStorageManager createRemoteStorageManager() {
                 return remoteStorageManager;
@@ -1706,6 +1709,115 @@ public class RemoteLogManagerTest {
         }
     }
 
+    @ParameterizedTest
+    @CsvSource(value = {"50, 0", "50, 1", "50, 23", "50, 50"})
+    public void testDeleteLogSegmentDueToRetentionSizeBreach(int segmentCount,
+                                                             int deletableSegmentCount)
+            throws RemoteStorageException, ExecutionException, InterruptedException, IOException {
+        int recordsPerSegment = 100;
+        int segmentSize = 1024;
+        List<EpochEntry> epochEntries = Arrays.asList(
+                new EpochEntry(0, 0L),
+                new EpochEntry(1, 20L),
+                new EpochEntry(3, 50L),
+                new EpochEntry(4, 100L)
+        );
+        checkpoint.write(epochEntries);
+        LeaderEpochFileCache cache = new LeaderEpochFileCache(tp, checkpoint);
+        int currentLeaderEpoch = epochEntries.get(epochEntries.size() - 1).epoch;
+
+        long localLogSegmentsSize = 512L;
+        long retentionSize = ((long) segmentCount - deletableSegmentCount) * segmentSize + localLogSegmentsSize;
+        Map<String, Long> logProps = new HashMap<>();
+        logProps.put("retention.bytes", retentionSize);
+        logProps.put("retention.ms", -1L);
+        LogConfig mockLogConfig = new LogConfig(logProps);
+        when(mockLog.config()).thenReturn(mockLogConfig);
+
+        int logStartOffset = 0;
+        long localLogStartOffset = (long) segmentCount * recordsPerSegment;
+        long logEndOffset = ((long) segmentCount * recordsPerSegment) + 1;
+        when(mockLog.leaderEpochCache()).thenReturn(Option.apply(cache));
+        when(mockLog.localLogStartOffset()).thenReturn(localLogStartOffset);
+        when(mockLog.logEndOffset()).thenReturn(logEndOffset);
+        when(mockLog.onlyLocalLogSegmentsSize()).thenReturn(localLogSegmentsSize);
+
+        List<RemoteLogSegmentMetadata> segmentMetadataList = listRemoteLogSegmentMetadata(
+                leaderTopicIdPartition, segmentCount, recordsPerSegment, segmentSize, epochEntries);
+        verifyDeleteLogSegment(segmentMetadataList, deletableSegmentCount, currentLeaderEpoch, logStartOffset, mockLog);
+    }
+
+    @ParameterizedTest
+    @CsvSource(value = {"50, 0", "50, 1", "50, 23", "50, 50"})
+    public void testDeleteLogSegmentDueToRetentionTimeBreach(int segmentCount,
+                                                             int deletableSegmentCount)
+            throws RemoteStorageException, ExecutionException, InterruptedException, IOException {
+        int recordsPerSegment = 100;
+        int segmentSize = 1024;
+        List<EpochEntry> epochEntries = Arrays.asList(
+                new EpochEntry(0, 0L),
+                new EpochEntry(1, 20L),
+                new EpochEntry(3, 50L),
+                new EpochEntry(4, 100L)
+        );
+        checkpoint.write(epochEntries);
+        LeaderEpochFileCache cache = new LeaderEpochFileCache(tp, checkpoint);
+        int currentLeaderEpoch = epochEntries.get(epochEntries.size() - 1).epoch;
+
+        long localLogSegmentsSize = 512L;
+        long retentionSize = -1L;
+        Map<String, Long> logProps = new HashMap<>();
+        logProps.put("retention.bytes", retentionSize);
+        logProps.put("retention.ms", 1L);
+        LogConfig mockLogConfig = new LogConfig(logProps);
+        when(mockLog.config()).thenReturn(mockLogConfig);
+
+        int logStartOffset = 0;
+        long localLogStartOffset = (long) segmentCount * recordsPerSegment;
+        long logEndOffset = ((long) segmentCount * recordsPerSegment) + 1;
+        when(mockLog.leaderEpochCache()).thenReturn(Option.apply(cache));
+        when(mockLog.localLogStartOffset()).thenReturn(localLogStartOffset);
+        when(mockLog.logEndOffset()).thenReturn(logEndOffset);
+        when(mockLog.onlyLocalLogSegmentsSize()).thenReturn(localLogSegmentsSize);
+
+        List<RemoteLogSegmentMetadata> segmentMetadataList = listRemoteLogSegmentMetadataByTime(
+                leaderTopicIdPartition, segmentCount, deletableSegmentCount, recordsPerSegment, segmentSize, epochEntries);
+        verifyDeleteLogSegment(segmentMetadataList, deletableSegmentCount, currentLeaderEpoch, logStartOffset, mockLog);
+    }
+
+    private void verifyDeleteLogSegment(List<RemoteLogSegmentMetadata> segmentMetadataList,
+                                        int deletableSegmentCount,
+                                        int currentLeaderEpoch,
+                                        long logStartOffset,
+                                        UnifiedLog mockLog)
+            throws RemoteStorageException, ExecutionException, InterruptedException {
+        when(mockLog.logStartOffset()).thenReturn(logStartOffset);
+        when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition))
+                .thenReturn(segmentMetadataList.iterator());
+        when(remoteLogMetadataManager.listRemoteLogSegments(eq(leaderTopicIdPartition), anyInt()))
+                .thenAnswer(invocation -> {
+                    int leaderEpoch = invocation.getArgument(1);
+                    return segmentMetadataList.stream()
+                            .filter(segmentMetadata -> segmentMetadata.segmentLeaderEpochs().containsKey(leaderEpoch))
+                            .iterator();
+                });
+        when(remoteLogMetadataManager.updateRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadataUpdate.class)))
+                .thenAnswer(answer -> CompletableFuture.runAsync(() -> { }));
+        RemoteLogManager.RLMTask task = remoteLogManager.new RLMTask(leaderTopicIdPartition, 128);
+        task.convertToLeader(currentLeaderEpoch);
+        task.cleanupExpiredRemoteLogSegments();
+
+        ArgumentCaptor<RemoteLogSegmentMetadata> deletedMetadataCapture = ArgumentCaptor.forClass(RemoteLogSegmentMetadata.class);
+        verify(remoteStorageManager, times(deletableSegmentCount)).deleteLogSegmentData(deletedMetadataCapture.capture());
+        if (deletableSegmentCount > 0) {
+            List<RemoteLogSegmentMetadata> deletedMetadataList = deletedMetadataCapture.getAllValues();
+            RemoteLogSegmentMetadata expectedEndMetadata = segmentMetadataList.get(deletableSegmentCount - 1);
+            assertEquals(segmentMetadataList.get(0), deletedMetadataList.get(0));
+            assertEquals(expectedEndMetadata, deletedMetadataList.get(deletedMetadataList.size() - 1));
+            assertEquals(currentLogStartOffset.get(), expectedEndMetadata.endOffset() + 1);
+        }
+    }
+
     private List<RemoteLogSegmentMetadata> listRemoteLogSegmentMetadata(TopicIdPartition topicIdPartition,
                                                                         int segmentCount,
                                                                         int recordsPerSegment,
@@ -1718,9 +1830,22 @@ public class RemoteLogManagerTest {
                                                                         int recordsPerSegment,
                                                                         int segmentSize,
                                                                         List<EpochEntry> epochEntries) {
+        return listRemoteLogSegmentMetadataByTime(
+                topicIdPartition, segmentCount, 0, recordsPerSegment, segmentSize, epochEntries);
+    }
+
+    private List<RemoteLogSegmentMetadata> listRemoteLogSegmentMetadataByTime(TopicIdPartition topicIdPartition,
+                                                                              int segmentCount,
+                                                                              int deletableSegmentCount,
+                                                                              int recordsPerSegment,
+                                                                              int segmentSize,
+                                                                              List<EpochEntry> epochEntries) {
         List<RemoteLogSegmentMetadata> segmentMetadataList = new ArrayList<>();
         for (int idx = 0; idx < segmentCount; idx++) {
             long timestamp = time.milliseconds();
+            if (idx < deletableSegmentCount) {
+                timestamp = time.milliseconds() - 1;
+            }
             long startOffset = (long) idx * recordsPerSegment;
             long endOffset = startOffset + recordsPerSegment - 1;
             List<EpochEntry> localTotalEpochEntries = epochEntries.isEmpty() ? totalEpochEntries : epochEntries;
