@@ -271,6 +271,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
             RequestContext context,
             List<String> groupIds
     ) throws ApiException {
+
         CoordinatorResult<DeleteGroupsResponseData.DeletableGroupResultCollection, Record> groupDeleteCoordinatorResult =
                 groupMetadataManager.groupDelete(context, groupIds);
 
