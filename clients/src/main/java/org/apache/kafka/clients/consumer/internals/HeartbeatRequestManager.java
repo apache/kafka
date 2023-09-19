@@ -99,7 +99,7 @@ public class HeartbeatRequestManager implements RequestManager {
 
     @Override
     public NetworkClientDelegate.PollResult poll(long currentTimeMs) {
-        if (!coordinatorRequestManager.coordinator().isPresent() || membershipManager.shouldSendHeartbeat()) {
+        if (!coordinatorRequestManager.coordinator().isPresent() || !membershipManager.shouldSendHeartbeat()) {
             return new NetworkClientDelegate.PollResult(
                 Long.MAX_VALUE, Collections.emptyList());
         }
@@ -207,7 +207,6 @@ public class HeartbeatRequestManager implements RequestManager {
                 response.data().errorMessage());
             nonRetriableErrorHandler.handle(Errors.UNRELEASED_INSTANCE_ID.exception());
         }
-
         membershipManager.onFatalError(response.data().errorCode());
     }
 

@@ -116,9 +116,9 @@ public class HeartbeatRequestManagerTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    public void testSendHeartbeatOnMemberState(boolean notInGroup) {
+    public void testSendHeartbeatOnMemberState(boolean shouldSendHeartbeat) {
         // Mocking notInGroup
-        when(mockMembershipManager.shouldSendHeartbeat()).thenReturn(notInGroup);
+        when(mockMembershipManager.shouldSendHeartbeat()).thenReturn(shouldSendHeartbeat);
         when(heartbeatRequestState.canSendRequest(anyLong())).thenReturn(true);
 
         NetworkClientDelegate.PollResult result;
@@ -126,10 +126,10 @@ public class HeartbeatRequestManagerTest {
 
         assertEquals(Long.MAX_VALUE, result.timeUntilNextPollMs);
 
-        if (notInGroup) {
-            assertEquals(0, result.unsentRequests.size());
-        } else {
+        if (shouldSendHeartbeat) {
             assertEquals(1, result.unsentRequests.size());
+        } else {
+            assertEquals(0, result.unsentRequests.size());
         }
     }
 
@@ -150,9 +150,9 @@ public class HeartbeatRequestManagerTest {
         assertEquals(0, result.unsentRequests.size());
 
         if (mockMembershipManager.shouldSendHeartbeat()) {
-            assertEquals(Long.MAX_VALUE, result.timeUntilNextPollMs);
-        } else {
             assertEquals(heartbeatInterval - 100, result.timeUntilNextPollMs);
+        } else {
+            assertEquals(Long.MAX_VALUE, result.timeUntilNextPollMs);
         }
     }
 
