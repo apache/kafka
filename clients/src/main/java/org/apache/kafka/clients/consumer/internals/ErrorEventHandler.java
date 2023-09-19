@@ -22,13 +22,18 @@ import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
 import java.util.Queue;
 
 public class ErrorEventHandler {
+
     private final Queue<BackgroundEvent> backgroundEventQueue;
 
     public ErrorEventHandler(Queue<BackgroundEvent> backgroundEventQueue) {
         this.backgroundEventQueue = backgroundEventQueue;
     }
 
-    public void handle(Throwable e) {
+    public void handle(RuntimeException e) {
         backgroundEventQueue.add(new ErrorBackgroundEvent(e));
+    }
+
+    public void handle(Throwable e) {
+        handle(new RuntimeException(e));
     }
 }

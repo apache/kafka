@@ -16,20 +16,28 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult;
-
-import java.io.Closeable;
+import java.util.function.Supplier;
 
 /**
- * {@code PollResult} consist of {@code UnsentRequest} if there are requests to send; otherwise, return the time till
- * the next poll event.
+ * Simple {@link Supplier} that caches the initial creation of the object and stores it for later calls
+ * to {@link #get()}.
+ *
+ * <p/>
+ *
+ * <em>Note</em>: this class is not thread safe! Use only in contexts which are designed/guaranteed to be
+ * single-threaded.
  */
-public interface RequestManager extends Closeable {
+public abstract class CachedSupplier<T> implements Supplier<T> {
 
-    PollResult poll(long currentTimeMs);
+    private T result;
+
+    protected abstract T create();
 
     @Override
-    default void close() {
-        // Do nothing...
+    public T get() {
+        if (result == null)
+            result = create();
+
+        return result;
     }
 }
