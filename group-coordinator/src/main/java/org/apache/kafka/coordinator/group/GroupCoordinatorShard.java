@@ -286,7 +286,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
 
         final List<Record> records = groupDeleteCoordinatorResult.records();
         records.addAll(deleteOffsetCoordinatorResult.records());
-        return new CoordinatorResult(records, groupDeleteCoordinatorResult.response());
+        return new CoordinatorResult<>(records, groupDeleteCoordinatorResult.response());
     }
 
     /**
