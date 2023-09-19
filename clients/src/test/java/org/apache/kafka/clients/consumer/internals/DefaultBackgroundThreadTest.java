@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.LogTruncationException;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
@@ -27,7 +28,10 @@ import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
 import org.apache.kafka.clients.consumer.internals.events.NoopApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.ResetPositionsApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.ValidatePositionsApplicationEvent;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -53,9 +57,11 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.RETRY_BACKOFF_MS_
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
@@ -181,6 +187,87 @@ public class DefaultBackgroundThreadTest {
         assertTrue(applicationEventsQueue.isEmpty());
         backgroundThread.close();
     }
+
+    @Test
+    public void testResetPositionsEventIsProcessed() {
+        when(coordinatorManager.poll(anyLong())).thenReturn(mockPollCoordinatorResult());
+        when(commitManager.poll(anyLong())).thenReturn(mockPollCommitResult());
+        when(offsetsRequestManager.poll(anyLong())).thenReturn(emptyPollOffsetsRequestResult());
+        this.applicationEventsQueue = new LinkedBlockingQueue<>();
+        this.backgroundEventsQueue = new LinkedBlockingQueue<>();
+        DefaultBackgroundThread backgroundThread = mockBackgroundThread();
+        ResetPositionsApplicationEvent e = new ResetPositionsApplicationEvent();
+        this.applicationEventsQueue.add(e);
+        backgroundThread.runOnce();
+        verify(applicationEventProcessor).process(any(ResetPositionsApplicationEvent.class));
+        assertTrue(applicationEventsQueue.isEmpty());
+        backgroundThread.close();
+    }
+
+    @Test
+    public void testResetPositionsProcessFailure() {
+        when(coordinatorManager.poll(anyLong())).thenReturn(mockPollCoordinatorResult());
+        when(commitManager.poll(anyLong())).thenReturn(mockPollCommitResult());
+        when(offsetsRequestManager.poll(anyLong())).thenReturn(emptyPollOffsetsRequestResult());
+        this.applicationEventsQueue = new LinkedBlockingQueue<>();
+        this.backgroundEventsQueue = new LinkedBlockingQueue<>();
+        applicationEventProcessor = spy(new ApplicationEventProcessor(
+                this.backgroundEventsQueue,
+                mockRequestManagers(),
+                metadata));
+        DefaultBackgroundThread backgroundThread = mockBackgroundThread();
+
+        TopicAuthorizationException authException = new TopicAuthorizationException("Topic authorization failed");
+        doThrow(authException).when(offsetsRequestManager).resetPositionsIfNeeded();
+
+        ResetPositionsApplicationEvent event = new ResetPositionsApplicationEvent();
+        this.applicationEventsQueue.add(event);
+        assertThrows(TopicAuthorizationException.class, backgroundThread::runOnce);
+
+        verify(applicationEventProcessor).process(any(ResetPositionsApplicationEvent.class));
+        backgroundThread.close();
+    }
+
+    @Test
+    public void testValidatePositionsEventIsProcessed() {
+        when(coordinatorManager.poll(anyLong())).thenReturn(mockPollCoordinatorResult());
+        when(commitManager.poll(anyLong())).thenReturn(mockPollCommitResult());
+        when(offsetsRequestManager.poll(anyLong())).thenReturn(emptyPollOffsetsRequestResult());
+        this.applicationEventsQueue = new LinkedBlockingQueue<>();
+        this.backgroundEventsQueue = new LinkedBlockingQueue<>();
+        DefaultBackgroundThread backgroundThread = mockBackgroundThread();
+        ValidatePositionsApplicationEvent e = new ValidatePositionsApplicationEvent();
+        this.applicationEventsQueue.add(e);
+        backgroundThread.runOnce();
+        verify(applicationEventProcessor).process(any(ValidatePositionsApplicationEvent.class));
+        assertTrue(applicationEventsQueue.isEmpty());
+        backgroundThread.close();
+    }
+
+    @Test
+    public void testValidatePositionsProcessFailure() {
+        when(coordinatorManager.poll(anyLong())).thenReturn(mockPollCoordinatorResult());
+        when(commitManager.poll(anyLong())).thenReturn(mockPollCommitResult());
+        when(offsetsRequestManager.poll(anyLong())).thenReturn(emptyPollOffsetsRequestResult());
+        this.applicationEventsQueue = new LinkedBlockingQueue<>();
+        this.backgroundEventsQueue = new LinkedBlockingQueue<>();
+        applicationEventProcessor = spy(new ApplicationEventProcessor(
+                this.backgroundEventsQueue,
+                mockRequestManagers(),
+                metadata));
+        DefaultBackgroundThread backgroundThread = mockBackgroundThread();
+
+        LogTruncationException logTruncationException = new LogTruncationException(Collections.emptyMap(), Collections.emptyMap());
+        doThrow(logTruncationException).when(offsetsRequestManager).validatePositionsIfNeeded();
+
+        ValidatePositionsApplicationEvent event = new ValidatePositionsApplicationEvent();
+        this.applicationEventsQueue.add(event);
+        assertThrows(LogTruncationException.class, backgroundThread::runOnce);
+
+        verify(applicationEventProcessor).process(any(ValidatePositionsApplicationEvent.class));
+        backgroundThread.close();
+    }
+
     @Test
     public void testAssignmentChangeEvent() {
         this.applicationEventsQueue = new LinkedBlockingQueue<>();

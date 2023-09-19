@@ -338,7 +338,7 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
                 .orElseThrow(() -> new IllegalArgumentException("Unknown brokerId " + brokerId));
         }
 
-        private Stream<KafkaServer> servers() {
+        public Stream<KafkaServer> servers() {
             return JavaConverters.asJavaCollection(clusterReference.get().servers()).stream();
         }
     }

@@ -35,8 +35,9 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
 import scala.annotation.nowarn
+import scala.collection.Seq
 import scala.jdk.CollectionConverters._
-import scala.collection.mutable.Buffer
+import scala.collection.mutable.{Buffer, ListBuffer}
 import scala.concurrent.ExecutionException
 
 class TransactionsTest extends IntegrationTestHarness {
@@ -54,26 +55,43 @@ class TransactionsTest extends IntegrationTestHarness {
   val transactionalConsumers = Buffer[Consumer[Array[Byte], Array[Byte]]]()
   val nonTransactionalConsumers = Buffer[Consumer[Array[Byte], Array[Byte]]]()
 
-  serverConfig.put(KafkaConfig.AutoCreateTopicsEnableProp, false.toString)
-  // Set a smaller value for the number of partitions for the __consumer_offsets topic
-  // so that the creation of that topic/partition(s) and subsequent leader assignment doesn't take relatively long
-  serverConfig.put(KafkaConfig.OffsetsTopicPartitionsProp, 1.toString)
-  serverConfig.put(KafkaConfig.TransactionsTopicPartitionsProp, 3.toString)
-  serverConfig.put(KafkaConfig.TransactionsTopicReplicationFactorProp, 2.toString)
-  serverConfig.put(KafkaConfig.TransactionsTopicMinISRProp, 2.toString)
-  serverConfig.put(KafkaConfig.ControlledShutdownEnableProp, true.toString)
-  serverConfig.put(KafkaConfig.UncleanLeaderElectionEnableProp, false.toString)
-  serverConfig.put(KafkaConfig.AutoLeaderRebalanceEnableProp, false.toString)
-  serverConfig.put(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
-  serverConfig.put(KafkaConfig.TransactionsAbortTimedOutTransactionCleanupIntervalMsProp, "200")
+  def overridingProps(): Properties = {
+    val props = new Properties()
+    props.put(KafkaConfig.AutoCreateTopicsEnableProp, false.toString)
+     // Set a smaller value for the number of partitions for the __consumer_offsets topic + // so that the creation of that topic/partition(s) and subsequent leader assignment doesn't take relatively long
+    props.put(KafkaConfig.OffsetsTopicPartitionsProp, 1.toString)
+    props.put(KafkaConfig.TransactionsTopicPartitionsProp, 3.toString)
+    props.put(KafkaConfig.TransactionsTopicReplicationFactorProp, 2.toString)
+    props.put(KafkaConfig.TransactionsTopicMinISRProp, 2.toString)
+    props.put(KafkaConfig.ControlledShutdownEnableProp, true.toString)
+    props.put(KafkaConfig.UncleanLeaderElectionEnableProp, false.toString)
+    props.put(KafkaConfig.AutoLeaderRebalanceEnableProp, false.toString)
+    props.put(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
+    props.put(KafkaConfig.TransactionsAbortTimedOutTransactionCleanupIntervalMsProp, "200")
+    props
+
+  }
+
+  override protected def modifyConfigs(props: Seq[Properties]): Unit = {
+    props.foreach(p => p.putAll(overridingProps()))
+  }
+
+  override protected def kraftControllerConfigs(): Seq[Properties] = {
+    Seq(overridingProps())
+
+  }
+
+  def topicConfig(): Properties = {
+    val topicConfig = new Properties()
+    topicConfig.put(KafkaConfig.MinInSyncReplicasProp, 2.toString)
+    topicConfig
+  }
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
     super.setUp(testInfo)
-    val topicConfig = new Properties()
-    topicConfig.put(KafkaConfig.MinInSyncReplicasProp, 2.toString)
-    createTopic(topic1, numPartitions, brokerCount, topicConfig)
-    createTopic(topic2, numPartitions, brokerCount, topicConfig)
+    createTopic(topic1, numPartitions, brokerCount, topicConfig())
+    createTopic(topic2, numPartitions, brokerCount, topicConfig())
 
     for (_ <- 0 until transactionalProducerCount)
       createTransactionalProducer("transactional-producer")
@@ -97,19 +115,24 @@ class TransactionsTest extends IntegrationTestHarness {
     val producer = transactionalProducers.head
     val consumer = transactionalConsumers.head
     val unCommittedConsumer = nonTransactionalConsumers.head
+    val tp11 = new TopicPartition(topic1, 1)
+    val tp22 = new TopicPartition(topic2, 2)
 
     producer.initTransactions()
 
     producer.beginTransaction()
-    producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, null, "2", "2", willBeCommitted = false))
-    producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "4", "4", willBeCommitted = false))
+    producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, 2, "2", "2", willBeCommitted = false))
+    producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, 1, "4", "4", willBeCommitted = false))
     producer.flush()
+
     producer.abortTransaction()
 
     producer.beginTransaction()
-    producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "1", "1", willBeCommitted = true))
-    producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, null, "3", "3", willBeCommitted = true))
+    producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, 1, "1", "1", willBeCommitted = true))
+    producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, 2, "3", "3", willBeCommitted = true))
     producer.commitTransaction()
+
+    maybeWaitForAtLeastOneSegmentUpload(tp11, tp22)
 
     consumer.subscribe(List(topic1, topic2).asJava)
     unCommittedConsumer.subscribe(List(topic1, topic2).asJava)
@@ -199,6 +222,7 @@ class TransactionsTest extends IntegrationTestHarness {
   def testDelayedFetchIncludesAbortedTransaction(quorum: String): Unit = {
     val producer1 = transactionalProducers.head
     val producer2 = createTransactionalProducer("other")
+    val tp10 = new TopicPartition(topic1, 0)
 
     producer1.initTransactions()
     producer2.initTransactions()
@@ -218,13 +242,15 @@ class TransactionsTest extends IntegrationTestHarness {
     producer1.abortTransaction()
     producer2.commitTransaction()
 
+    maybeWaitForAtLeastOneSegmentUpload(tp10)
+
     // ensure that the consumer's fetch will sit in purgatory
     val consumerProps = new Properties()
     consumerProps.put(ConsumerConfig.FETCH_MIN_BYTES_CONFIG, "100000")
     consumerProps.put(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, "100")
     val readCommittedConsumer = createReadCommittedConsumer(props = consumerProps)
 
-    readCommittedConsumer.assign(Set(new TopicPartition(topic1, 0)).asJava)
+    readCommittedConsumer.assign(Set(tp10).asJava)
     val records = consumeRecords(readCommittedConsumer, numRecords = 2)
     assertEquals(2, records.size)
 
@@ -308,6 +334,12 @@ class TransactionsTest extends IntegrationTestHarness {
     } finally {
       consumer.close()
     }
+
+    val partitions = ListBuffer.empty[TopicPartition]
+    for (partition <- 0 until numPartitions) {
+      partitions += new TopicPartition(topic2, partition)
+    }
+    maybeWaitForAtLeastOneSegmentUpload(partitions.toSeq: _*)
 
     // In spite of random aborts, we should still have exactly 500 messages in topic2. I.e. we should not
     // re-copy or miss any messages from topic1, since the consumed offsets were committed transactionally.
@@ -592,10 +624,8 @@ class TransactionsTest extends IntegrationTestHarness {
     val unCommittedConsumer = nonTransactionalConsumers.head
     val topicWith10Partitions = "largeTopic"
     val topicWith10PartitionsAndOneReplica = "largeTopicOneReplica"
-    val topicConfig = new Properties()
-    topicConfig.put(KafkaConfig.MinInSyncReplicasProp, 2.toString)
 
-    createTopic(topicWith10Partitions, 10, brokerCount, topicConfig)
+    createTopic(topicWith10Partitions, 10, brokerCount, topicConfig())
     createTopic(topicWith10PartitionsAndOneReplica, 10, 1, new Properties())
 
     firstProducer.initTransactions()
@@ -801,5 +831,8 @@ class TransactionsTest extends IntegrationTestHarness {
     )
     transactionalProducers += producer
     producer
+  }
+
+  def maybeWaitForAtLeastOneSegmentUpload(topicPartitions: TopicPartition*): Unit = {
   }
 }
