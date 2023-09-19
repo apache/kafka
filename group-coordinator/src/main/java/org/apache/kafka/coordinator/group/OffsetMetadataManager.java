@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.coordinator.group;
 
+import com.sun.tools.javac.util.DefinedBy;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.StaleMemberEpochException;
@@ -246,17 +247,10 @@ public class OffsetMetadataManager {
      * @param request The actual request.
      */
     private Group validateOffsetDelete(
-            RequestContext context,
             OffsetDeleteRequestData request
     ) throws GroupIdNotFoundException {
         Group group = groupMetadataManager.group(request.groupId());
-
-        if (group.isDead()) {
-            throw new GroupIdNotFoundException(String.format("Group %s is dead.", request.groupId()));
-        }
-
-        // TODO: generation check
-
+        group.validateOffsetDelete();
         return group;
     }
 
@@ -364,7 +358,7 @@ public class OffsetMetadataManager {
             RequestContext context,
             OffsetDeleteRequestData request
     ) throws ApiException {
-        Group group = validateOffsetDelete(context, request);
+        Group group = validateOffsetDelete(request);
 
         final List<Record> records = new ArrayList<>();
         final OffsetDeleteResponseData.OffsetDeleteResponseTopicCollection responseTopicCollection =
@@ -373,8 +367,8 @@ public class OffsetMetadataManager {
         request.topics().forEach(topic -> {
             final OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection responsePartitionCollection =
                     new OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection();
-
             final boolean subscribedToTopic = group.isSubscribedToTopic(topic.name());
+
             topic.partitions().forEach(partition -> {
                 records.add(RecordHelpers.newOffsetCommitTombstoneRecord(
                         request.groupId(),
@@ -393,6 +387,47 @@ public class OffsetMetadataManager {
             final OffsetDeleteResponseData.OffsetDeleteResponseTopic responseTopic =
                     new OffsetDeleteResponseData.OffsetDeleteResponseTopic().setPartitions(responsePartitionCollection);
             responseTopicCollection.add(responseTopic);
+        });
+
+        final OffsetDeleteResponseData response = new OffsetDeleteResponseData().setTopics(responseTopicCollection);
+        return new CoordinatorResult<>(records, response);
+    }
+
+    /**
+     * Deletes all the offsets of the given groups to handle a GroupDelete request.
+     * Validations are done in groupDelete method in GroupMetadataManager.
+     *
+     * @param context The request context.
+     * @param groupIds The list of group ids of the given groups.
+     * @return A Result containing the OffsetDeleteResponseData response and
+     *         a list of records to update the state machine.
+     */
+    public CoordinatorResult<OffsetDeleteResponseData, Record> deleteAllOffsets(
+            RequestContext context,
+            List<String> groupIds
+    ) throws ApiException {
+        final List<Record> records = new ArrayList<>();
+        final OffsetDeleteResponseData.OffsetDeleteResponseTopicCollection responseTopicCollection =
+                new OffsetDeleteResponseData.OffsetDeleteResponseTopicCollection();
+        groupIds.forEach(groupId -> {
+            TimelineHashMap<String, TimelineHashMap<Integer, OffsetAndMetadata>> offsetsByTopic =
+                    offsetsByGroup.get(groupId);
+
+            offsetsByTopic.forEach((topic, offsetsByPartition) -> {
+                final OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection responsePartitionCollection =
+                        new OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection();
+
+                offsetsByPartition.forEach((partition, offsetAndMetadata) -> {
+                    records.add(RecordHelpers.newOffsetCommitTombstoneRecord(groupId, topic, partition));
+                    responsePartitionCollection.add(
+                            new OffsetDeleteResponseData.OffsetDeleteResponsePartition().setPartitionIndex(partition)
+                    );
+                });
+
+                responseTopicCollection.add(
+                        new OffsetDeleteResponseData.OffsetDeleteResponseTopic().setPartitions(responsePartitionCollection)
+                );
+            });
         });
 
         final OffsetDeleteResponseData response = new OffsetDeleteResponseData().setTopics(responseTopicCollection);

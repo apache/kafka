@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group.generic;
 
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
+import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
@@ -54,6 +55,7 @@ import static org.apache.kafka.coordinator.group.generic.GenericGroupState.COMPL
 import static org.apache.kafka.coordinator.group.generic.GenericGroupState.DEAD;
 import static org.apache.kafka.coordinator.group.generic.GenericGroupState.EMPTY;
 import static org.apache.kafka.coordinator.group.generic.GenericGroupState.PREPARING_REBALANCE;
+import static org.apache.kafka.coordinator.group.generic.GenericGroupState.STABLE;
 
 /**
  * This class holds metadata for a generic group where the
@@ -250,14 +252,6 @@ public class GenericGroup implements Group {
     @Override
     public String stateAsString(long committedOffset) {
         return this.state.toString();
-    }
-
-    /**
-     * @return ture if the current state is DEAD.
-     */
-    @Override
-    public boolean isDead() {
-        return this.state == GenericGroupState.DEAD;
     }
 
     /**
@@ -854,6 +848,36 @@ public class GenericGroup implements Group {
     ) throws GroupIdNotFoundException {
         if (isInState(DEAD)) {
             throw new GroupIdNotFoundException(String.format("Group %s is in dead state.", groupId));
+        }
+    }
+
+    /**
+     * Validates the OffsetDelete request.
+     */
+    @Override
+    public void validateOffsetDelete() throws GroupIdNotFoundException {
+        if (isInState(DEAD)) {
+            throw new GroupIdNotFoundException(String.format("Group %s is in dead state.", groupId));
+        }
+    }
+
+    /**
+     * Validates the GroupDelete request.
+     */
+    @Override
+    public void validateGroupDelete() throws ApiException {
+        if (isInState(DEAD)) {
+            throw new GroupIdNotFoundException(String.format("Group %s is in dead state.", groupId));
+        } else if (isInState(STABLE)
+                || isInState(PREPARING_REBALANCE)
+                || isInState(COMPLETING_REBALANCE)) {
+            throw Errors.NON_EMPTY_GROUP.exception();
+        }
+
+        // We avoid writing the tombstone when the generationId is 0, since this group is only using
+        // Kafka for offset storage.
+        if (generationId() <= 0) {
+            throw Errors.UNKNOWN_SERVER_ERROR.exception();
         }
     }
 

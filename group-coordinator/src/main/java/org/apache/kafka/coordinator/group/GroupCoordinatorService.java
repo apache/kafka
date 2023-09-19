@@ -77,7 +77,6 @@ import org.slf4j.Logger;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.ArrayList;
 import java.util.Map;
 import java.util.HashMap;
 import java.util.OptionalInt;
@@ -535,20 +534,20 @@ public class GroupCoordinatorService implements GroupCoordinator {
             groupsByPartition.put(partition, groupList);
         }
 
-        List<CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection>> futures = new ArrayList<>();
+        final List<CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection>> futures = new ArrayList<>();
         for (Map.Entry<Integer, List<String>> entry : groupsByPartition.entrySet()) {
             int partition = entry.getKey();
             List<String> groupList = entry.getValue();
             CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> future =
                     runtime.scheduleWriteOperation("delete-group",
                             new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, partition),
-                            coordinator -> coordinator.genericGroupDelete(context, groupList));
+                            coordinator -> coordinator.DeleteGroups(context, groupList));
             futures.add(future);
         }
 
-        CompletableFuture<Void> allFutures = CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]));
+        final CompletableFuture<Void> allFutures = CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]));
         return allFutures.thenApply(v -> {
-            DeleteGroupsResponseData.DeletableGroupResultCollection res = new DeleteGroupsResponseData.DeletableGroupResultCollection();
+            final DeleteGroupsResponseData.DeletableGroupResultCollection res = new DeleteGroupsResponseData.DeletableGroupResultCollection();
             for (CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> future : futures) {
                 try {
                     DeleteGroupsResponseData.DeletableGroupResultCollection result = future.get();

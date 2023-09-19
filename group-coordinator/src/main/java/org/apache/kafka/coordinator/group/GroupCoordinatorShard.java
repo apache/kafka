@@ -18,6 +18,7 @@ package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.DeleteGroupsResponseData;
 import org.apache.kafka.common.message.HeartbeatRequestData;
 import org.apache.kafka.common.message.HeartbeatResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
@@ -27,13 +28,15 @@ import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
+import org.apache.kafka.common.message.OffsetDeleteRequestData;
+import org.apache.kafka.common.message.OffsetDeleteResponseData;
 import org.apache.kafka.common.message.OffsetFetchRequestData;
 import org.apache.kafka.common.message.OffsetFetchResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
-import org.apache.kafka.common.message.*;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.protocol.ApiMessage;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -62,6 +65,7 @@ import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
@@ -263,12 +267,26 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
         );
     }
 
-    public CoordinatorResult<DeleteGroupsResponseData.DeletableGroupResultCollection, Record> genericGroupDelete(
+    public CoordinatorResult<DeleteGroupsResponseData.DeletableGroupResultCollection, Record> DeleteGroups(
             RequestContext context,
             List<String> groupIds
-    ) {
-//        CoordinatorResult<DeleteGroupsResponseData, Record> cleanupGroupCoordinatorResult = groupMetadataManager.cleanupGroupMetadata(...);
-//        CoordinatorResult<OffsetDeleteResponseData, Record> deleteOffsetCoordinatorResult = offsetMetadataManager.deleteAllOffsets();
+    ) throws ApiException {
+        CoordinatorResult<DeleteGroupsResponseData.DeletableGroupResultCollection, Record> groupDeleteCoordinatorResult =
+                groupMetadataManager.groupDelete(context, groupIds);
+
+        List<String> validGroupIds = new ArrayList<>();
+        for (DeleteGroupsResponseData.DeletableGroupResult result : groupDeleteCoordinatorResult.response()) {
+            if (result.errorCode() == Errors.NONE.code()) {
+                validGroupIds.add(result.groupId());
+            }
+        }
+
+        CoordinatorResult<OffsetDeleteResponseData, Record> deleteOffsetCoordinatorResult =
+                offsetMetadataManager.deleteAllOffsets(context, validGroupIds);
+
+        final List<Record> records = groupDeleteCoordinatorResult.records();
+        records.addAll(deleteOffsetCoordinatorResult.records());
+        return new CoordinatorResult(records, groupDeleteCoordinatorResult.response());
     }
 
     /**

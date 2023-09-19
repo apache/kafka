@@ -31,6 +31,7 @@ import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnsupportedAssignorException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.DeleteGroupsResponseData;
 import org.apache.kafka.common.message.HeartbeatRequestData;
 import org.apache.kafka.common.message.HeartbeatResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol;
@@ -3070,6 +3071,41 @@ public class GroupMetadataManager {
         );
         group.remove(member.memberId());
     }
+
+    public CoordinatorResult<DeleteGroupsResponseData.DeletableGroupResultCollection, Record> groupDelete(
+            RequestContext context,
+            List<String> groupIds
+    ) throws ApiException {
+        final DeleteGroupsResponseData.DeletableGroupResultCollection resultCollection =
+                new DeleteGroupsResponseData.DeletableGroupResultCollection();
+        final List<Record> records = new ArrayList<>();
+
+        groupIds.forEach(groupId -> {
+            DeleteGroupsResponseData.DeletableGroupResult result =
+                    new DeleteGroupsResponseData.DeletableGroupResult().setGroupId(groupId);
+            try {
+                validateGroupDelete(groupId);
+                records.add(RecordHelpers.newGroupMetadataTombstoneRecord(groupId));
+            } catch (ApiException ex) {
+                result = result.setErrorCode(Errors.forException(ex).code());
+            }
+            resultCollection.add(result);
+        });
+
+        return new CoordinatorResult<>(records, resultCollection);
+    }
+
+    private void validateGroupDelete(String groupId) throws ApiException {
+
+        // For backwards compatibility, we support group delete for the empty groupId.
+        if (groupId == null) {
+            throw Errors.INVALID_GROUP_ID.exception();
+        }
+
+        Group group = group(groupId);
+        group.validateGroupDelete();
+    }
+
 
     /**
      * Checks whether the given protocol type or name in the request is inconsistent with the group's.

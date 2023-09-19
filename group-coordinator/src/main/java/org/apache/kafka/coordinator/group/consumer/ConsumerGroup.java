@@ -18,11 +18,13 @@ package org.apache.kafka.coordinator.group.consumer;
 
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.ApiException;
+import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.StaleMemberEpochException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.message.ListGroupsResponseData;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.coordinator.group.Group;
-import org.apache.kafka.coordinator.group.generic.GenericGroupState;
 import org.apache.kafka.image.ClusterImage;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsImage;
@@ -197,16 +199,6 @@ public class ConsumerGroup implements Group {
             .setGroupId(groupId)
             .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
             .setGroupState(state.get(committedOffset).toString());
-    }
-
-    /**
-     * Returns true if the current state is DEAD.
-     *
-     * @return a boolean indicating if the current state is DEAD.
-     */
-    @Override
-    public boolean isDead() {
-        return this.state.get() == ConsumerGroupState.DEAD;
     }
 
     /**
@@ -611,6 +603,36 @@ public class ConsumerGroup implements Group {
                 memberId, groupId));
         }
         validateMemberEpoch(memberEpoch, member.memberEpoch());
+    }
+
+    /**
+     * Validates the OffsetDelete request.
+     */
+    @Override
+    public void validateOffsetDelete() throws GroupIdNotFoundException {
+        if (state() == ConsumerGroupState.DEAD) {
+            throw new GroupIdNotFoundException(String.format("Group %s is in dead state.", groupId));
+        }
+    }
+
+    /**
+     * Validates the GroupDelete request.
+     */
+    @Override
+    public void validateGroupDelete() throws ApiException {
+        if (state() == ConsumerGroupState.DEAD) {
+            throw new GroupIdNotFoundException(String.format("Group %s is in dead state.", groupId));
+        } else if (state() == ConsumerGroupState.STABLE
+                || state() == ConsumerGroupState.ASSIGNING
+                || state() == ConsumerGroupState.RECONCILING) {
+            throw Errors.NON_EMPTY_GROUP.exception();
+        }
+
+        // We avoid writing the tombstone when the generationId is 0, since this group is only using
+        // Kafka for offset storage.
+        if (groupEpoch() <= 0) {
+            throw Errors.UNKNOWN_SERVER_ERROR.exception();
+        }
     }
 
     /**
