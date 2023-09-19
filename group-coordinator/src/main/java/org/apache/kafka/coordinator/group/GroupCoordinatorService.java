@@ -745,29 +745,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 "delete-offset",
                 topicPartitionFor(request.groupId()),
                 coordinator -> coordinator.deleteOffsets(context, request)
-        ).exceptionally(exception -> {
-            if (exception instanceof UnknownTopicOrPartitionException ||
-                    exception instanceof NotEnoughReplicasException) {
-                return new OffsetDeleteResponseData()
-                        .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code());
-            }
-
-            if (exception instanceof NotLeaderOrFollowerException ||
-                    exception instanceof KafkaStorageException) {
-                return new OffsetDeleteResponseData()
-                        .setErrorCode(Errors.NOT_COORDINATOR.code());
-            }
-
-            if (exception instanceof RecordTooLargeException ||
-                    exception instanceof RecordBatchTooLargeException ||
-                    exception instanceof InvalidFetchSizeException) {
-                return new OffsetDeleteResponseData()
-                        .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code());
-            }
-
-            return new OffsetDeleteResponseData()
-                    .setErrorCode(Errors.forException(exception).code());
-        });
+        );
     }
 
     /**

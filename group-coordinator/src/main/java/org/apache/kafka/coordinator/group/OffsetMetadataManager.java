@@ -361,38 +361,41 @@ public class OffsetMetadataManager {
             RequestContext context,
             OffsetDeleteRequestData request
     ) throws ApiException {
-        Group group = validateOffsetDelete(request);
-
         final List<Record> records = new ArrayList<>();
         final OffsetDeleteResponseData.OffsetDeleteResponseTopicCollection responseTopicCollection =
                 new OffsetDeleteResponseData.OffsetDeleteResponseTopicCollection();
+        OffsetDeleteResponseData response = new OffsetDeleteResponseData();
+        try {
+            Group group = validateOffsetDelete(request);
 
-        request.topics().forEach(topic -> {
-            final OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection responsePartitionCollection =
-                    new OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection();
-            final boolean subscribedToTopic = group.isSubscribedToTopic(topic.name());
+            request.topics().forEach(topic -> {
+                final OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection responsePartitionCollection =
+                        new OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection();
+                final boolean subscribedToTopic = group.isSubscribedToTopic(topic.name());
 
-            topic.partitions().forEach(partition -> {
-                records.add(RecordHelpers.newOffsetCommitTombstoneRecord(
-                        request.groupId(),
-                        topic.name(),
-                        partition.partitionIndex()
-                ));
+                topic.partitions().forEach(partition -> {
+                    records.add(RecordHelpers.newOffsetCommitTombstoneRecord(
+                            request.groupId(),
+                            topic.name(),
+                            partition.partitionIndex()
+                    ));
 
-                OffsetDeleteResponseData.OffsetDeleteResponsePartition responsePartition =
-                        new OffsetDeleteResponseData.OffsetDeleteResponsePartition().setPartitionIndex(partition.partitionIndex());
-                if (subscribedToTopic) {
-                    responsePartition = responsePartition.setErrorCode(Errors.GROUP_SUBSCRIBED_TO_TOPIC.code());
-                }
-                responsePartitionCollection.add(responsePartition);
+                    OffsetDeleteResponseData.OffsetDeleteResponsePartition responsePartition =
+                            new OffsetDeleteResponseData.OffsetDeleteResponsePartition().setPartitionIndex(partition.partitionIndex());
+                    if (subscribedToTopic) {
+                        responsePartition = responsePartition.setErrorCode(Errors.GROUP_SUBSCRIBED_TO_TOPIC.code());
+                    }
+                    responsePartitionCollection.add(responsePartition);
+                });
+
+                final OffsetDeleteResponseData.OffsetDeleteResponseTopic responseTopic =
+                        new OffsetDeleteResponseData.OffsetDeleteResponseTopic().setPartitions(responsePartitionCollection);
+                responseTopicCollection.add(responseTopic);
             });
-
-            final OffsetDeleteResponseData.OffsetDeleteResponseTopic responseTopic =
-                    new OffsetDeleteResponseData.OffsetDeleteResponseTopic().setPartitions(responsePartitionCollection);
-            responseTopicCollection.add(responseTopic);
-        });
-
-        final OffsetDeleteResponseData response = new OffsetDeleteResponseData().setTopics(responseTopicCollection);
+            response = response.setTopics(responseTopicCollection);
+        } catch (ApiException ex) {
+            response = response.setErrorCode(Errors.forException(ex).code());
+        }
         return new CoordinatorResult<>(records, response);
     }
 
