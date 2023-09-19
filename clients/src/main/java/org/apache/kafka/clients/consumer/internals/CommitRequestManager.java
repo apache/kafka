@@ -53,23 +53,26 @@ public class CommitRequestManager implements RequestManager {
     // TODO: current in ConsumerConfig but inaccessible in the internal package.
     private static final String THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED = "internal.throw.on.fetch.stable.offset.unsupported";
     // TODO: We will need to refactor the subscriptionState
-    private final SubscriptionState subscriptionState;
+    private final SubscriptionState subscriptions;
+    private final LogContext logContext;
     private final Logger log;
     private final Optional<AutoCommitState> autoCommitState;
     private final CoordinatorRequestManager coordinatorRequestManager;
     private final GroupState groupState;
     private final long retryBackoffMs;
+    private final long retryBackoffMaxMs;
     private final boolean throwOnFetchStableOffsetUnsupported;
     final PendingRequests pendingRequests;
 
     public CommitRequestManager(
             final Time time,
             final LogContext logContext,
-            final SubscriptionState subscriptionState,
+            final SubscriptionState subscriptions,
             final ConsumerConfig config,
             final CoordinatorRequestManager coordinatorRequestManager,
             final GroupState groupState) {
         Objects.requireNonNull(coordinatorRequestManager, "Coordinator is needed upon committing offsets");
+        this.logContext = logContext;
         this.log = logContext.logger(getClass());
         this.pendingRequests = new PendingRequests();
         if (config.getBoolean(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG)) {
@@ -81,8 +84,9 @@ public class CommitRequestManager implements RequestManager {
         }
         this.coordinatorRequestManager = coordinatorRequestManager;
         this.groupState = groupState;
-        this.subscriptionState = subscriptionState;
+        this.subscriptions = subscriptions;
         this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
+        this.retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
         this.throwOnFetchStableOffsetUnsupported = config.getBoolean(THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED);
     }
 
@@ -92,7 +96,12 @@ public class CommitRequestManager implements RequestManager {
      */
     @Override
     public NetworkClientDelegate.PollResult poll(final long currentTimeMs) {
-        maybeAutoCommit(this.subscriptionState.allConsumed());
+        // poll only when the coordinator node is known.
+        if (!coordinatorRequestManager.coordinator().isPresent()) {
+            return new NetworkClientDelegate.PollResult(Long.MAX_VALUE, Collections.emptyList());
+        }
+
+        maybeAutoCommit(this.subscriptions.allConsumed());
         if (!pendingRequests.hasUnsentRequests()) {
             return new NetworkClientDelegate.PollResult(Long.MAX_VALUE, Collections.emptyList());
         }
@@ -160,9 +169,9 @@ public class CommitRequestManager implements RequestManager {
                 })
                 .exceptionally(t -> {
                     if (t instanceof RetriableCommitFailedException) {
-                        log.debug("Asynchronous auto-commit of offsets {} failed due to retriable error: {}", allConsumedOffsets, t);
+                        log.debug("Asynchronous auto-commit of offsets {} failed due to retriable error: {}", allConsumedOffsets, t.getMessage());
                     } else {
-                        log.warn("Asynchronous auto-commit of offsets {} failed: {}", allConsumedOffsets, t.getMessage());
+                        log.warn("Asynchronous auto-commit of offsets {} failed", allConsumedOffsets, t);
                     }
                     return null;
                 });
@@ -232,8 +241,9 @@ public class CommitRequestManager implements RequestManager {
 
         public OffsetFetchRequestState(final Set<TopicPartition> partitions,
                                        final GroupState.Generation generation,
-                                       final long retryBackoffMs) {
-            super(retryBackoffMs);
+                                       final long retryBackoffMs,
+                                       final long retryBackoffMaxMs) {
+            super(logContext, CommitRequestManager.class.getSimpleName(), retryBackoffMs, retryBackoffMaxMs);
             this.requestedPartitions = partitions;
             this.requestedGeneration = generation;
             this.future = new CompletableFuture<>();
@@ -358,6 +368,16 @@ public class CommitRequestManager implements RequestManager {
                 }
             });
         }
+
+        @Override
+        public String toString() {
+            return "OffsetFetchRequestState{" +
+                    "requestedPartitions=" + requestedPartitions +
+                    ", requestedGeneration=" + requestedGeneration +
+                    ", future=" + future +
+                    ", " + toStringBase() +
+                    '}';
+        }
     }
 
     /**
@@ -423,7 +443,8 @@ public class CommitRequestManager implements RequestManager {
             OffsetFetchRequestState request = new OffsetFetchRequestState(
                     partitions,
                     groupState.generation,
-                    retryBackoffMs);
+                    retryBackoffMs,
+                    retryBackoffMaxMs);
             return addOffsetFetchRequest(request);
         }
 

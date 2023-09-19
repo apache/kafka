@@ -227,7 +227,7 @@ public class ReplicaFetcherTierStateMachine implements TierStateMachine {
 
                 // Truncate the existing local log before restoring the leader epoch cache and producer snapshots.
                 Partition partition = replicaMgr.getPartitionOrException(topicPartition);
-                partition.truncateFullyAndStartAt(nextOffset, false);
+                partition.truncateFullyAndStartAt(nextOffset, false, Option.apply(leaderLogStartOffset));
 
                 // Build leader epoch cache.
                 unifiedLog.maybeIncrementLogStartOffset(leaderLogStartOffset, LeaderOffsetIncremented);

@@ -27,7 +27,6 @@ import org.slf4j.LoggerFactory;
 import javax.ws.rs.core.Response;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
@@ -38,7 +37,6 @@ import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.test.TestUtils.waitForCondition;
-import static org.junit.Assert.assertEquals;
 
 /**
  * A set of common assertions that can be applied to a Connect cluster during integration testing
@@ -239,9 +237,27 @@ public class EmbeddedConnectClusterAssertions {
      * @param connectorClass the class of the connector to validate
      * @param connConfig     the intended configuration
      * @param numErrors      the number of errors expected
+     * @param detailMessage  the assertion message
      */
     public void assertExactlyNumErrorsOnConnectorConfigValidation(String connectorClass, Map<String, String> connConfig,
-        int numErrors, String detailMessage) throws InterruptedException {
+                                                                  int numErrors, String detailMessage) throws InterruptedException {
+        assertExactlyNumErrorsOnConnectorConfigValidation(connectorClass, connConfig, numErrors, detailMessage, VALIDATION_DURATION_MS);
+    }
+
+    /**
+     * Assert that the required number of errors are produced by a connector config validation.
+     *
+     * @param connectorClass the class of the connector to validate
+     * @param connConfig     the intended configuration
+     * @param numErrors      the number of errors expected
+     * @param detailMessage  the assertion message
+     * @param timeout        how long to retry for before throwing an exception
+     *
+     * @throws AssertionError if the exact number of errors is not produced during config
+     * validation before the timeout expires
+     */
+    public void assertExactlyNumErrorsOnConnectorConfigValidation(String connectorClass, Map<String, String> connConfig,
+        int numErrors, String detailMessage, long timeout) throws InterruptedException {
         try {
             waitForCondition(
                 () -> checkValidationErrors(
@@ -250,7 +266,7 @@ public class EmbeddedConnectClusterAssertions {
                     numErrors,
                     (actual, expected) -> actual == expected
                 ).orElse(false),
-                VALIDATION_DURATION_MS,
+                timeout,
                 "Didn't meet the exact requested number of validation errors: " + numErrors);
         } catch (AssertionError e) {
             throw new AssertionError(detailMessage, e);
@@ -439,47 +455,41 @@ public class EmbeddedConnectClusterAssertions {
     }
 
     /**
-     * Assert that a connector and its tasks are not running.
+     * Assert that a connector does not exist. This can be used to verify that a connector has been successfully deleted.
      *
      * @param connectorName the connector name
      * @param detailMessage the assertion message
      * @throws InterruptedException
      */
-    public void assertConnectorAndTasksAreNotRunning(String connectorName, String detailMessage)
+    public void assertConnectorDoesNotExist(String connectorName, String detailMessage)
             throws InterruptedException {
         try {
             waitForCondition(
-                () -> checkConnectorAndTasksAreNotRunning(connectorName),
+                () -> checkConnectorDoesNotExist(connectorName),
                 CONNECTOR_SETUP_DURATION_MS,
-                "At least the connector or one of its tasks is still running");
+                "The connector should not exist.");
         } catch (AssertionError e) {
             throw new AssertionError(detailMessage, e);
         }
     }
 
     /**
-     * Check whether the connector or any of its tasks are still in RUNNING state
+     * Check whether a connector exists by querying the <strong><em>GET /connectors/{connector}/status</em></strong> endpoint
      *
-     * @param connectorName the connector
-     * @return true if the connector and all the tasks are not in RUNNING state; false otherwise
+     * @param connectorName the connector name
+     * @return true if the connector does not exist; false otherwise
      */
-    protected boolean checkConnectorAndTasksAreNotRunning(String connectorName) {
-        ConnectorStateInfo info;
+    protected boolean checkConnectorDoesNotExist(String connectorName) {
         try {
-            info = connect.connectorStatus(connectorName);
+            connect.connectorStatus(connectorName);
         } catch (ConnectRestException e) {
             return e.statusCode() == Response.Status.NOT_FOUND.getStatusCode();
         } catch (Exception e) {
             log.error("Could not check connector state info.", e);
             return false;
         }
-        if (info == null) {
-            return true;
-        }
-        return !info.connector().state().equals(AbstractStatus.State.RUNNING.toString())
-                && info.tasks().stream().noneMatch(s -> s.state().equals(AbstractStatus.State.RUNNING.toString()));
+        return false;
     }
-
 
     /**
      * Assert that a connector is in the stopped state and has no tasks.
@@ -501,9 +511,6 @@ public class EmbeddedConnectClusterAssertions {
                     ).orElse(false),
                     CONNECTOR_SHUTDOWN_DURATION_MS,
                     "At least the connector or one of its tasks is still running");
-            // If the connector is truly stopped, we should also see an empty set of tasks and task configs
-            assertEquals(Collections.emptyList(), connect.connectorInfo(connectorName).tasks());
-            assertEquals(Collections.emptyMap(), connect.taskConfigs(connectorName));
         } catch (AssertionError e) {
             throw new AssertionError(detailMessage, e);
         }

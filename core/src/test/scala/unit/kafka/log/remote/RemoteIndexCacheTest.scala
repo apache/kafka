@@ -20,7 +20,7 @@ import kafka.utils.TestUtils
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType
-import org.apache.kafka.server.log.remote.storage.{RemoteLogSegmentId, RemoteLogSegmentMetadata, RemoteStorageManager}
+import org.apache.kafka.server.log.remote.storage.{RemoteLogSegmentId, RemoteLogSegmentMetadata, RemoteResourceNotFoundException, RemoteStorageManager}
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.log.RemoteIndexCache.{REMOTE_LOG_INDEX_CACHE_CLEANER_THREAD, remoteOffsetIndexFile, remoteOffsetIndexFileName, remoteTimeIndexFile, remoteTimeIndexFileName, remoteTransactionIndexFile, remoteTransactionIndexFileName}
 import org.apache.kafka.storage.internals.log.{LogFileUtils, OffsetIndex, OffsetPosition, RemoteIndexCache, TimeIndex, TransactionIndex}
@@ -32,8 +32,9 @@ import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito._
 import org.slf4j.{Logger, LoggerFactory}
 
-import java.io.{File, FileInputStream}
+import java.io.{File, FileInputStream, IOException}
 import java.nio.file.Files
+import java.util
 import java.util.Collections
 import java.util.concurrent.{CountDownLatch, Executors, TimeUnit}
 import scala.collection.mutable
@@ -90,7 +91,11 @@ class RemoteIndexCacheTest {
     Utils.closeQuietly(cache, "RemoteIndexCache created for unit test")
     // best effort to delete the per-test resource. Even if we don't delete, it is ok because the parent directory
     // will be deleted at the end of test.
-    Utils.delete(logDir)
+    try {
+      Utils.delete(logDir)
+    } catch {
+      case _: IOException => // ignore
+    }
     // Verify no lingering threads. It is important to have this as the very last statement in the @aftereach
     // because this may throw an exception and prevent cleanup after it
     TestUtils.assertNoNonDaemonThreads(REMOTE_LOG_INDEX_CACHE_CLEANER_THREAD)
@@ -136,6 +141,31 @@ class RemoteIndexCacheTest {
     assertEquals(offsetPosition2.position, resultPosition2)
     assertNotNull(cache.getIndexEntry(rlsMetadata))
     verifyNoInteractions(rsm)
+  }
+
+  @Test
+  def testFetchIndexForMissingTransactionIndex(): Unit = {
+    when(rsm.fetchIndex(any(classOf[RemoteLogSegmentMetadata]), any(classOf[IndexType])))
+      .thenAnswer(ans => {
+        val metadata = ans.getArgument[RemoteLogSegmentMetadata](0)
+        val indexType = ans.getArgument[IndexType](1)
+        val offsetIdx = createOffsetIndexForSegmentMetadata(metadata)
+        val timeIdx = createTimeIndexForSegmentMetadata(metadata)
+        maybeAppendIndexEntries(offsetIdx, timeIdx)
+        indexType match {
+          case IndexType.OFFSET => new FileInputStream(offsetIdx.file)
+          case IndexType.TIMESTAMP => new FileInputStream(timeIdx.file)
+          // Throw RemoteResourceNotFoundException since transaction index is not available
+          case IndexType.TRANSACTION => throw new RemoteResourceNotFoundException("txn index not found")
+          case IndexType.LEADER_EPOCH => // leader-epoch-cache is not accessed.
+          case IndexType.PRODUCER_SNAPSHOT => // producer-snapshot is not accessed.
+        }
+      })
+
+    val entry = cache.getIndexEntry(rlsMetadata)
+    // Verify an empty file is created in the cache directory
+    assertTrue(entry.txnIndex().file().exists())
+    assertEquals(0, entry.txnIndex().file().length())
   }
 
   @Test
@@ -443,8 +473,59 @@ class RemoteIndexCacheTest {
     verifyNoMoreInteractions(rsm)
   }
 
-  private def generateSpyCacheEntry(): RemoteIndexCache.Entry = {
-    val remoteLogSegmentId = RemoteLogSegmentId.generateNew(idPartition)
+  @Test
+  def testRemoveItem(): Unit = {
+    val segmentId = rlsMetadata.remoteLogSegmentId()
+    val segmentUuid = segmentId.id()
+    // generate and add entry to cache
+    val spyEntry = generateSpyCacheEntry(segmentId)
+    cache.internalCache.put(segmentUuid, spyEntry)
+    assertTrue(cache.internalCache().asMap().containsKey(segmentUuid))
+    assertFalse(spyEntry.isMarkedForCleanup)
+
+    cache.remove(segmentId.id())
+    assertFalse(cache.internalCache().asMap().containsKey(segmentUuid))
+    TestUtils.waitUntilTrue(() => spyEntry.isMarkedForCleanup, "Failed to mark cache entry for cleanup after invalidation")
+  }
+
+  @Test
+  def testRemoveNonExistentItem(): Unit = {
+    // generate and add entry to cache
+    val segmentId = rlsMetadata.remoteLogSegmentId()
+    val segmentUuid = segmentId.id()
+    // generate and add entry to cache
+    val spyEntry = generateSpyCacheEntry(segmentId)
+    cache.internalCache.put(segmentUuid, spyEntry)
+    assertTrue(cache.internalCache().asMap().containsKey(segmentUuid))
+
+    // remove a random Uuid
+    cache.remove(Uuid.randomUuid())
+    assertTrue(cache.internalCache().asMap().containsKey(segmentUuid))
+    assertFalse(spyEntry.isMarkedForCleanup)
+  }
+
+  @Test
+  def testRemoveMultipleItems(): Unit = {
+    // generate and add entry to cache
+    val uuidAndEntryList = new util.HashMap[Uuid, RemoteIndexCache.Entry]()
+    for (_ <- 0 until 10) {
+      val segmentId = RemoteLogSegmentId.generateNew(idPartition)
+      val segmentUuid = segmentId.id()
+      val spyEntry = generateSpyCacheEntry(segmentId)
+      uuidAndEntryList.put(segmentUuid, spyEntry)
+
+      cache.internalCache.put(segmentUuid, spyEntry)
+      assertTrue(cache.internalCache().asMap().containsKey(segmentUuid))
+      assertFalse(spyEntry.isMarkedForCleanup)
+    }
+    cache.removeAll(uuidAndEntryList.keySet())
+    uuidAndEntryList.values().forEach { entry =>
+      TestUtils.waitUntilTrue(() => entry.isMarkedForCleanup, "Failed to mark cache entry for cleanup after invalidation")
+    }
+  }
+
+  private def generateSpyCacheEntry(remoteLogSegmentId: RemoteLogSegmentId
+                                    = RemoteLogSegmentId.generateNew(idPartition)): RemoteIndexCache.Entry = {
     val rlsMetadata = new RemoteLogSegmentMetadata(remoteLogSegmentId, baseOffset, lastOffset,
       time.milliseconds(), brokerId, time.milliseconds(), segmentSize, Collections.singletonMap(0, 0L))
     val timeIndex = spy(createTimeIndexForSegmentMetadata(rlsMetadata))

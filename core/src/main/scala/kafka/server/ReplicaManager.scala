@@ -89,6 +89,8 @@ case class LogDeleteRecordsResult(requestedOffset: Long, lowWatermark: Long, exc
   }
 }
 
+case class StopPartition(topicPartition: TopicPartition, deleteLocalLog: Boolean, deleteRemoteLog: Boolean = false)
+
 /**
  * Result metadata of a log read operation on the log
  * @param info @FetchDataInfo returned by the @Log read
@@ -456,7 +458,7 @@ class ReplicaManager(val config: KafkaConfig,
       } else {
         this.controllerEpoch = controllerEpoch
 
-        val stoppedPartitions = mutable.Map.empty[TopicPartition, Boolean]
+        val stoppedPartitions = mutable.Buffer.empty[StopPartition]
         partitionStates.forKeyValue { (topicPartition, partitionState) =>
           val deletePartition = partitionState.deletePartition()
 
@@ -478,7 +480,8 @@ class ReplicaManager(val config: KafkaConfig,
               if (requestLeaderEpoch == LeaderAndIsr.EpochDuringDelete ||
                   requestLeaderEpoch == LeaderAndIsr.NoEpoch ||
                   requestLeaderEpoch >= currentLeaderEpoch) {
-                stoppedPartitions += topicPartition -> deletePartition
+                stoppedPartitions += StopPartition(topicPartition, deletePartition,
+                  deletePartition && partition.isLeader && requestLeaderEpoch == LeaderAndIsr.EpochDuringDelete)
                 // Assume that everything will go right. It is overwritten in case of an error.
                 responseMap.put(topicPartition, Errors.NONE)
               } else if (requestLeaderEpoch < currentLeaderEpoch) {
@@ -499,12 +502,12 @@ class ReplicaManager(val config: KafkaConfig,
             case HostedPartition.None =>
               // Delete log and corresponding folders in case replica manager doesn't hold them anymore.
               // This could happen when topic is being deleted while broker is down and recovers.
-              stoppedPartitions += topicPartition -> deletePartition
+              stoppedPartitions += StopPartition(topicPartition, deletePartition)
               responseMap.put(topicPartition, Errors.NONE)
           }
         }
 
-        stopPartitions(stoppedPartitions).foreach { case (topicPartition, e) =>
+        stopPartitions(stoppedPartitions.toSet).foreach { case (topicPartition, e) =>
           if (e.isInstanceOf[KafkaStorageException]) {
               stateChangeLogger.error(s"Ignoring StopReplica request (delete=true) from " +
                 s"controller $controllerId with correlation id $correlationId " +
@@ -526,25 +529,38 @@ class ReplicaManager(val config: KafkaConfig,
   /**
    * Stop the given partitions.
    *
-   * @param partitionsToStop    A map from a topic partition to a boolean indicating
-   *                            whether the partition should be deleted.
-   *
-   * @return                    A map from partitions to exceptions which occurred.
-   *                            If no errors occurred, the map will be empty.
+   * @param partitionsToStop A map from a topic partition to a boolean indicating
+   *                         whether the partition should be deleted.
+   * @return A map from partitions to exceptions which occurred.
+   *         If no errors occurred, the map will be empty.
    */
-  protected def stopPartitions(
-    partitionsToStop: Map[TopicPartition, Boolean]
-  ): Map[TopicPartition, Throwable] = {
+  private def stopPartitions(partitionsToStop: Map[TopicPartition, Boolean]): Map[TopicPartition, Throwable] = {
+    stopPartitions(partitionsToStop.map {
+      case (topicPartition, deleteLocalLog) => StopPartition(topicPartition, deleteLocalLog)
+    }.toSet)
+  }
+
+  /**
+   * Stop the given partitions.
+   *
+   * @param partitionsToStop set of topic-partitions to be stopped which also indicates whether to remove the
+   *                         partition data from the local and remote log storage.
+   *
+   * @return                 A map from partitions to exceptions which occurred.
+   *                         If no errors occurred, the map will be empty.
+   */
+  private def stopPartitions(partitionsToStop: Set[StopPartition]): Map[TopicPartition, Throwable] = {
     // First stop fetchers for all partitions.
-    val partitions = partitionsToStop.keySet
+    val partitions = partitionsToStop.map(_.topicPartition)
     replicaFetcherManager.removeFetcherForPartitions(partitions)
     replicaAlterLogDirsManager.removeFetcherForPartitions(partitions)
 
     // Second remove deleted partitions from the partition map. Fetchers rely on the
     // ReplicaManager to get Partition's information so they must be stopped first.
     val partitionsToDelete = mutable.Set.empty[TopicPartition]
-    partitionsToStop.forKeyValue { (topicPartition, shouldDelete) =>
-      if (shouldDelete) {
+    partitionsToStop.foreach { stopPartition =>
+      val topicPartition = stopPartition.topicPartition
+      if (stopPartition.deleteLocalLog) {
         getPartition(topicPartition) match {
           case hostedPartition: HostedPartition.Online =>
             if (allPartitions.remove(topicPartition, hostedPartition)) {
@@ -568,6 +584,13 @@ class ReplicaManager(val config: KafkaConfig,
     if (partitionsToDelete.nonEmpty) {
       // Delete the logs and checkpoint.
       logManager.asyncDelete(partitionsToDelete, (tp, e) => errorMap.put(tp, e))
+    }
+    remoteLogManager.foreach { rlm =>
+      // exclude the partitions with offline/error state
+      val partitions = partitionsToStop.filterNot(sp => errorMap.contains(sp.topicPartition)).toSet.asJava
+      if (!partitions.isEmpty) {
+        rlm.stopPartitions(partitions, (tp, e) => errorMap.put(tp, e))
+      }
     }
     errorMap
   }
@@ -730,38 +753,55 @@ class ReplicaManager(val config: KafkaConfig,
         val localProduceResults = appendToLocalLog(internalTopicsAllowed = internalTopicsAllowed,
           origin, verifiedEntries, requiredAcks, requestLocal, verificationGuards.toMap)
         debug("Produce to local log in %d ms".format(time.milliseconds - sTime))
-        
-        val unverifiedResults = unverifiedEntries.map { case (topicPartition, error) =>
-          val message = if (error == Errors.INVALID_TXN_STATE) "Partition was not added to the transaction" else error.message()
-          topicPartition -> LogAppendResult(
-            LogAppendInfo.UNKNOWN_LOG_APPEND_INFO,
-            Some(error.exception(message))
-          )
-        }
 
-        val errorResults = errorsPerPartition.map { case (topicPartition, error) =>
-          topicPartition -> LogAppendResult(
-            LogAppendInfo.UNKNOWN_LOG_APPEND_INFO,
-            Some(error.exception())
-          )
+        def produceStatusResult(appendResult: Map[TopicPartition, LogAppendResult],
+                                useCustomMessage: Boolean): Map[TopicPartition, ProducePartitionStatus] = {
+          appendResult.map { case (topicPartition, result) =>
+            topicPartition -> ProducePartitionStatus(
+              result.info.lastOffset + 1, // required offset
+              new PartitionResponse(
+                result.error,
+                result.info.firstOffset.map[Long](_.messageOffset).orElse(-1L),
+                result.info.lastOffset,
+                result.info.logAppendTime,
+                result.info.logStartOffset,
+                result.info.recordErrors,
+                if (useCustomMessage) result.exception.get.getMessage else result.info.errorMessage
+              )
+            ) // response status
+          }
         }
         
-        val allResults = localProduceResults ++ unverifiedResults ++ errorResults
-
-        val produceStatus = allResults.map { case (topicPartition, result) =>
-          topicPartition -> ProducePartitionStatus(
-            result.info.lastOffset + 1, // required offset
-            new PartitionResponse(
-              result.error,
-              result.info.firstOffset.map[Long](_.messageOffset).orElse(-1L),
-              result.info.lastOffset,
-              result.info.logAppendTime,
-              result.info.logStartOffset,
-              result.info.recordErrors,
-              result.info.errorMessage
+        val unverifiedResults = unverifiedEntries.map {
+          case (topicPartition, error) =>
+            val finalException =
+              error match {
+                case Errors.INVALID_TXN_STATE => error.exception("Partition was not added to the transaction")
+                case Errors.CONCURRENT_TRANSACTIONS |
+                     Errors.COORDINATOR_LOAD_IN_PROGRESS |
+                     Errors.COORDINATOR_NOT_AVAILABLE |
+                     Errors.NOT_COORDINATOR => new NotEnoughReplicasException(
+                         s"Unable to verify the partition has been added to the transaction. Underlying error: ${error.toString}")
+                case _ => error.exception()
+            }
+            topicPartition -> LogAppendResult(
+              LogAppendInfo.UNKNOWN_LOG_APPEND_INFO,
+              Some(finalException)
             )
-          ) // response status
         }
+
+        val errorResults = errorsPerPartition.map {
+          case (topicPartition, error) =>
+            topicPartition -> LogAppendResult(
+              LogAppendInfo.UNKNOWN_LOG_APPEND_INFO,
+              Some(error.exception())
+            )
+        }
+
+        val produceStatus = Set((localProduceResults, false), (unverifiedResults, true), (errorResults, false)).flatMap {
+          case (results, useCustomError) => produceStatusResult(results, useCustomError)
+        }.toMap
+        val allResults = localProduceResults ++ unverifiedResults ++ errorResults
 
         actionQueue.add {
           () => allResults.foreach { case (topicPartition, result) =>
@@ -809,28 +849,30 @@ class ReplicaManager(val config: KafkaConfig,
         val (error, node) = getTransactionCoordinator(transactionStatePartition.get)
 
         if (error != Errors.NONE) {
-          throw error.exception() // Can throw coordinator not available -- which is retriable
+          appendEntries(entriesPerPartition)(notYetVerifiedEntriesPerPartition.map {
+            case (tp, _) => (tp, error)
+          }.toMap)
+        } else {
+          val topicGrouping = notYetVerifiedEntriesPerPartition.keySet.groupBy(tp => tp.topic())
+          val topicCollection = new AddPartitionsToTxnTopicCollection()
+          topicGrouping.foreach { case (topic, tps) =>
+            topicCollection.add(new AddPartitionsToTxnTopic()
+              .setName(topic)
+              .setPartitions(tps.map(tp => Integer.valueOf(tp.partition())).toList.asJava))
+          }
+
+          // Map not yet verified partitions to a request object.
+          // We verify above that all partitions use the same producer ID.
+          val batchInfo = notYetVerifiedEntriesPerPartition.head._2.firstBatch()
+          val notYetVerifiedTransaction = new AddPartitionsToTxnTransaction()
+            .setTransactionalId(transactionalId)
+            .setProducerId(batchInfo.producerId())
+            .setProducerEpoch(batchInfo.producerEpoch())
+            .setVerifyOnly(true)
+            .setTopics(topicCollection)
+
+          addPartitionsToTxnManager.foreach(_.addTxnData(node, notYetVerifiedTransaction, KafkaRequestHandler.wrap(appendEntries(entriesPerPartition)(_))))
         }
-
-        val topicGrouping = notYetVerifiedEntriesPerPartition.keySet.groupBy(tp => tp.topic())
-        val topicCollection = new AddPartitionsToTxnTopicCollection()
-        topicGrouping.foreach { case (topic, tps) =>
-          topicCollection.add(new AddPartitionsToTxnTopic()
-            .setName(topic)
-            .setPartitions(tps.map(tp => Integer.valueOf(tp.partition())).toList.asJava))
-        }
-
-        // Map not yet verified partitions to a request object.
-        // We verify above that all partitions use the same producer ID.
-        val batchInfo = notYetVerifiedEntriesPerPartition.head._2.firstBatch()
-        val notYetVerifiedTransaction = new AddPartitionsToTxnTransaction()
-          .setTransactionalId(transactionalId)
-          .setProducerId(batchInfo.producerId())
-          .setProducerEpoch(batchInfo.producerEpoch())
-          .setVerifyOnly(true)
-          .setTopics(topicCollection)
-
-        addPartitionsToTxnManager.foreach(_.addTxnData(node, notYetVerifiedTransaction, KafkaRequestHandler.wrap(appendEntries(entriesPerPartition)(_))))
       }
     } else {
       // If required.acks is outside accepted range, something is wrong with the client
@@ -1240,6 +1282,7 @@ class ReplicaManager(val config: KafkaConfig,
     } catch {
       case e: RejectedExecutionException =>
         // Return the error if any in scheduling the remote fetch task
+        warn("Unable to fetch data from remote storage", e)
         return Some(createLogReadResult(e))
     }
 
@@ -2418,7 +2461,15 @@ class ReplicaManager(val config: KafkaConfig,
       // Handle deleted partitions. We need to do this first because we might subsequently
       // create new partitions with the same names as the ones we are deleting here.
       if (!localChanges.deletes.isEmpty) {
-        val deletes = localChanges.deletes.asScala.map(tp => (tp, true)).toMap
+        val deletes = localChanges.deletes.asScala
+          .map { tp =>
+            val isCurrentLeader = Option(delta.image().getTopic(tp.topic()))
+              .map(image => image.partitions().get(tp.partition()))
+              .exists(partition => partition.leader == config.nodeId)
+            val deleteRemoteLog = delta.topicWasDeleted(tp.topic()) && isCurrentLeader
+            StopPartition(tp, deleteLocalLog = true, deleteRemoteLog = deleteRemoteLog)
+          }
+          .toSet
         stateChangeLogger.info(s"Deleting ${deletes.size} partition(s).")
         stopPartitions(deletes).forKeyValue { (topicPartition, e) =>
           if (e.isInstanceOf[KafkaStorageException]) {

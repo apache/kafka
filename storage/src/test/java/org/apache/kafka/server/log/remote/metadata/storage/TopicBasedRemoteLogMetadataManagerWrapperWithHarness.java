@@ -93,7 +93,7 @@ public class TopicBasedRemoteLogMetadataManagerWrapperWithHarness implements Rem
 
     @Override
     public void close() throws IOException {
-        remoteLogMetadataManagerHarness.remoteLogMetadataManager().close();
+        remoteLogMetadataManagerHarness.close();
     }
 
     @Override

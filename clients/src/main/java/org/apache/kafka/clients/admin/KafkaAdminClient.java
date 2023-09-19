@@ -151,8 +151,6 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.network.ChannelBuilder;
-import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
@@ -226,6 +224,7 @@ import org.apache.kafka.common.security.scram.internals.ScramFormatter;
 import org.apache.kafka.common.security.token.delegation.DelegationToken;
 import org.apache.kafka.common.security.token.delegation.TokenInformation;
 import org.apache.kafka.common.utils.AppInfoParser;
+import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
@@ -372,6 +371,8 @@ public class KafkaAdminClient extends AdminClient {
     private final int maxRetries;
 
     private final long retryBackoffMs;
+    private final long retryBackoffMaxMs;
+    private final ExponentialBackoff retryBackoff;
 
     /**
      * Get or create a list value from a map.
@@ -482,8 +483,6 @@ public class KafkaAdminClient extends AdminClient {
         NetworkClient networkClient = null;
         Time time = Time.SYSTEM;
         String clientId = generateClientId(config);
-        ChannelBuilder channelBuilder = null;
-        Selector selector = null;
         ApiVersions apiVersions = new ApiVersions();
         LogContext logContext = createLogContext(clientId);
 
@@ -493,9 +492,7 @@ public class KafkaAdminClient extends AdminClient {
             AdminMetadataManager metadataManager = new AdminMetadataManager(logContext,
                 config.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG),
                 config.getLong(AdminClientConfig.METADATA_MAX_AGE_CONFIG));
-            List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(
-                    config.getList(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG),
-                    config.getString(AdminClientConfig.CLIENT_DNS_LOOKUP_CONFIG));
+            List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config);
             metadataManager.update(Cluster.bootstrap(addresses), time.milliseconds());
             List<MetricsReporter> reporters = CommonClientConfigs.metricsReporters(clientId, config);
             Map<String, String> metricTags = Collections.singletonMap("client-id", clientId);
@@ -506,36 +503,22 @@ public class KafkaAdminClient extends AdminClient {
             MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX,
                     config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
             metrics = new Metrics(metricConfig, reporters, time, metricsContext);
-            String metricGrpPrefix = "admin-client";
-            channelBuilder = ClientUtils.createChannelBuilder(config, time, logContext);
-            selector = new Selector(config.getLong(AdminClientConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG),
-                    metrics, time, metricGrpPrefix, channelBuilder, logContext);
-            networkClient = new NetworkClient(
-                metadataManager.updater(),
-                null,
-                selector,
+            networkClient = ClientUtils.createNetworkClient(config,
                 clientId,
-                1,
-                config.getLong(AdminClientConfig.RECONNECT_BACKOFF_MS_CONFIG),
-                config.getLong(AdminClientConfig.RECONNECT_BACKOFF_MAX_MS_CONFIG),
-                config.getInt(AdminClientConfig.SEND_BUFFER_CONFIG),
-                config.getInt(AdminClientConfig.RECEIVE_BUFFER_CONFIG),
-                (int) TimeUnit.HOURS.toMillis(1),
-                config.getLong(AdminClientConfig.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG),
-                config.getLong(AdminClientConfig.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG),
-                time,
-                true,
-                apiVersions,
-                null,
+                metrics,
+                "admin-client",
                 logContext,
+                apiVersions,
+                time,
+                1,
+                (int) TimeUnit.HOURS.toMillis(1),
+                metadataManager.updater(),
                 (hostResolver == null) ? new DefaultHostResolver() : hostResolver);
             return new KafkaAdminClient(config, clientId, time, metadataManager, metrics, networkClient,
                 timeoutProcessorFactory, logContext);
         } catch (Throwable exc) {
             closeQuietly(metrics, "Metrics");
             closeQuietly(networkClient, "NetworkClient");
-            closeQuietly(selector, "Selector");
-            closeQuietly(channelBuilder, "ChannelBuilder");
             throw new KafkaException("Failed to create new KafkaAdminClient", exc);
         }
     }
@@ -586,6 +569,12 @@ public class KafkaAdminClient extends AdminClient {
             new TimeoutProcessorFactory() : timeoutProcessorFactory;
         this.maxRetries = config.getInt(AdminClientConfig.RETRIES_CONFIG);
         this.retryBackoffMs = config.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG);
+        this.retryBackoffMaxMs = config.getLong(AdminClientConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
+        this.retryBackoff = new ExponentialBackoff(
+            retryBackoffMs,
+            CommonClientConfigs.RETRY_BACKOFF_EXP_BASE,
+            retryBackoffMaxMs,
+            CommonClientConfigs.RETRY_BACKOFF_JITTER);
         config.logUnused();
         AppInfoParser.registerAppInfo(JMX_PREFIX, clientId, metrics, time.milliseconds());
         log.debug("Kafka admin client initialized");
@@ -797,8 +786,7 @@ public class KafkaAdminClient extends AdminClient {
                 runnable.pendingCalls.add(this);
                 return;
             }
-            tries++;
-            nextAllowedTryMs = now + retryBackoffMs;
+            nextAllowedTryMs = now + retryBackoff.backoff(tries++);
 
             // If the call has timed out, fail.
             if (calcTimeoutMsRemainingAsInt(now, deadlineMs) <= 0) {
@@ -1248,7 +1236,7 @@ public class KafkaAdminClient extends AdminClient {
                         call.fail(now, authException);
                     } else {
                         call.fail(now, new DisconnectException(String.format(
-                            "Cancelled %s request with correlation id %s due to node %s being disconnected",
+                            "Cancelled %s request with correlation id %d due to node %s being disconnected",
                             call.callName, correlationId, response.destination())));
                     }
                 } else {
@@ -4208,6 +4196,7 @@ public class KafkaAdminClient extends AdminClient {
             future,
             deadlineMs,
             retryBackoffMs,
+            retryBackoffMaxMs,
             logContext
         );
 

@@ -25,7 +25,8 @@ import kafka.log.remote.RemoteLogManager
 import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.raft.KafkaRaftManager
 import kafka.security.CredentialProvider
-import kafka.server.metadata.{AclPublisher, BrokerMetadataPublisher, ClientQuotaMetadataManager, DynamicClientQuotaPublisher, DynamicConfigPublisher, KRaftMetadataCache, ScramPublisher}
+import kafka.server.metadata.{AclPublisher, BrokerMetadataPublisher, ClientQuotaMetadataManager,
+DynamicClientQuotaPublisher, DynamicConfigPublisher, KRaftMetadataCache, ScramPublisher, DelegationTokenPublisher}
 import kafka.utils.CoreUtils
 import org.apache.kafka.clients.NetworkClient
 import org.apache.kafka.common.config.ConfigException
@@ -118,7 +119,7 @@ class BrokerServer(
 
   var transactionCoordinator: TransactionCoordinator = _
 
-  var clientToControllerChannelManager: BrokerToControllerChannelManager = _
+  var clientToControllerChannelManager: NodeToControllerChannelManager = _
 
   var forwardingManager: ForwardingManager = _
 
@@ -214,7 +215,7 @@ class BrokerServer(
       val controllerNodes = RaftConfig.voterConnectionsToNodes(voterConnections).asScala
       val controllerNodeProvider = RaftControllerNodeProvider(raftManager, config, controllerNodes)
 
-      clientToControllerChannelManager = BrokerToControllerChannelManager(
+      clientToControllerChannelManager = NodeToControllerChannelManager(
         controllerNodeProvider,
         time,
         metrics,
@@ -279,11 +280,8 @@ class BrokerServer(
       )
 
       /* start token manager */
-      if (config.tokenAuthEnabled) {
-        throw new UnsupportedOperationException("Delegation tokens are not supported")
-      }
-      tokenManager = new DelegationTokenManager(config, tokenCache, time , null)
-      tokenManager.startup() // does nothing, we just need a token manager in order to compile right now...
+      tokenManager = new DelegationTokenManager(config, tokenCache, time)
+      tokenManager.startup()
 
       groupCoordinator = createGroupCoordinator()
 
@@ -305,7 +303,7 @@ class BrokerServer(
         groupCoordinator, transactionCoordinator)
 
       dynamicConfigHandlers = Map[String, ConfigHandler](
-        ConfigType.Topic -> new TopicConfigHandler(logManager, config, quotaManagers, None),
+        ConfigType.Topic -> new TopicConfigHandler(replicaManager, config, quotaManagers, None),
         ConfigType.Broker -> new BrokerConfigHandler(config, quotaManagers))
 
       val networkListeners = new ListenerCollection()
@@ -322,7 +320,7 @@ class BrokerServer(
           k -> VersionRange.of(v.min, v.max)
       }.asJava
 
-      val brokerLifecycleChannelManager = BrokerToControllerChannelManager(
+      val brokerLifecycleChannelManager = NodeToControllerChannelManager(
         controllerNodeProvider,
         time,
         metrics,
@@ -418,6 +416,11 @@ class BrokerServer(
           sharedServer.metadataPublishingFaultHandler,
           "broker",
           credentialProvider),
+        new DelegationTokenPublisher(
+          config,
+          sharedServer.metadataPublishingFaultHandler,
+          "broker",
+          tokenManager),
         new AclPublisher(
           config.nodeId,
           sharedServer.metadataPublishingFaultHandler,
@@ -460,17 +463,21 @@ class BrokerServer(
       new KafkaConfig(config.originals(), true)
 
       // Start RemoteLogManager before broker start serving the requests.
-      remoteLogManagerOpt.foreach(rlm => {
+      remoteLogManagerOpt.foreach { rlm =>
         val listenerName = config.remoteLogManagerConfig.remoteLogMetadataManagerListenerName()
         if (listenerName != null) {
-          val endpoint = endpoints.stream.filter(e => e.listenerName.equals(ListenerName.normalised(listenerName)))
+          val endpoint = endpoints.stream
+            .filter(e =>
+              e.listenerName().isPresent &&
+              ListenerName.normalised(e.listenerName().get()).equals(ListenerName.normalised(listenerName))
+            )
             .findFirst()
-            .orElseThrow(() => new ConfigException(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP +
-              " should be set as a listener name within valid broker listener name list."))
+            .orElseThrow(() => new ConfigException(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP,
+              listenerName, "Should be set as a listener name within valid broker listener name list: " + endpoints))
           rlm.onEndPointCreated(EndPoint.fromJava(endpoint))
         }
         rlm.startup()
-      })
+      }
 
       // We're now ready to unfence the broker. This also allows this broker to transition
       // from RECOVERY state to RUNNING state, once the controller unfences the broker.
@@ -572,7 +579,13 @@ class BrokerServer(
       }
 
       Some(new RemoteLogManager(config.remoteLogManagerConfig, config.brokerId, config.logDirs.head, clusterId, time,
-        (tp: TopicPartition) => logManager.getLog(tp).asJava, brokerTopicStats));
+        (tp: TopicPartition) => logManager.getLog(tp).asJava,
+        (tp: TopicPartition, remoteLogStartOffset: java.lang.Long) => {
+          logManager.getLog(tp).foreach { log =>
+            log.updateLogStartOffsetFromRemoteTier(remoteLogStartOffset)
+          }
+        },
+        brokerTopicStats))
     } else {
       None
     }
