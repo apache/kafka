@@ -2326,9 +2326,8 @@ class KafkaApisTest {
         any(),
         any(),
         any(),
-        any(),
-        any())
-      ).thenAnswer(_ => responseCallback.getValue.apply(Map(tp -> new PartitionResponse(Errors.INVALID_PRODUCER_EPOCH))))
+        any()
+      )).thenAnswer(_ => responseCallback.getValue.apply(Map(tp -> new PartitionResponse(Errors.INVALID_PRODUCER_EPOCH))))
 
       when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
         any[Long])).thenReturn(0)
@@ -2351,7 +2350,6 @@ class KafkaApisTest {
   def testTransactionalParametersSetCorrectly(): Unit = {
     val topic = "topic"
     val transactionalId = "txn1"
-    val transactionCoordinatorPartition = 35
 
     addTopicToMetadataCache(topic, numPartitions = 2)
 
@@ -2379,10 +2377,6 @@ class KafkaApisTest {
 
       val kafkaApis = createKafkaApis()
       
-      when(txnCoordinator.partitionFor(
-        ArgumentMatchers.eq(transactionalId))
-      ).thenReturn(transactionCoordinatorPartition)
-      
       kafkaApis.handleProduceRequest(request, RequestLocal.withThreadConfinedCaching)
       
       verify(replicaManager).appendRecords(anyLong,
@@ -2395,7 +2389,6 @@ class KafkaApisTest {
         any(),
         any(),
         ArgumentMatchers.eq(transactionalId),
-        ArgumentMatchers.eq(Some(transactionCoordinatorPartition)),
         any())
     }
   }
@@ -2523,9 +2516,8 @@ class KafkaApisTest {
       any(),
       ArgumentMatchers.eq(requestLocal),
       any(),
-      any(),
-      any())
-    ).thenAnswer(_ => responseCallback.getValue.apply(Map(tp2 -> new PartitionResponse(Errors.NONE))))
+      any()
+    )).thenAnswer(_ => responseCallback.getValue.apply(Map(tp2 -> new PartitionResponse(Errors.NONE))))
 
     createKafkaApis().handleWriteTxnMarkersRequest(request, requestLocal)
 
@@ -2656,9 +2648,8 @@ class KafkaApisTest {
       any(),
       ArgumentMatchers.eq(requestLocal),
       any(),
-      any(),
-      any())
-    ).thenAnswer(_ => responseCallback.getValue.apply(Map(tp2 -> new PartitionResponse(Errors.NONE))))
+      any()
+    )).thenAnswer(_ => responseCallback.getValue.apply(Map(tp2 -> new PartitionResponse(Errors.NONE))))
 
     createKafkaApis().handleWriteTxnMarkersRequest(request, requestLocal)
     verify(requestChannel).sendResponse(
@@ -2690,7 +2681,6 @@ class KafkaApisTest {
       any(),
       any(),
       ArgumentMatchers.eq(requestLocal),
-      any(),
       any(),
       any())
   }

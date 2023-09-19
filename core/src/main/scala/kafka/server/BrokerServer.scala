@@ -257,7 +257,13 @@ class BrokerServer(
 
       val addPartitionsLogContext = new LogContext(s"[AddPartitionsToTxnManager broker=${config.brokerId}]")
       val addPartitionsToTxnNetworkClient: NetworkClient = NetworkUtils.buildNetworkClient("AddPartitionsManager", config, metrics, time, addPartitionsLogContext)
-      val addPartitionsToTxnManager: AddPartitionsToTxnManager = new AddPartitionsToTxnManager(config, addPartitionsToTxnNetworkClient, time)
+      val addPartitionsToTxnManager: AddPartitionsToTxnManager = new AddPartitionsToTxnManager(
+        config,
+        addPartitionsToTxnNetworkClient,
+        metadataCache,
+        transactionCoordinator.partitionFor,
+        time
+      )
 
       this._replicaManager = new ReplicaManager(
         config = config,
