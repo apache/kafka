@@ -294,7 +294,7 @@
     <allow pkg="scala.collection" />
 
     <subpackage name="reassign">
-        <allow pkg="kafka.admin" />
+      <allow pkg="kafka.admin" />
       <allow pkg="kafka.cluster" />
       <allow pkg="kafka.server" />
       <allow pkg="kafka.log" />
