@@ -48,7 +48,7 @@ class ControllerRegistrationManagerTest {
     properties.setProperty(KafkaConfig.LogDirsProp, "/tmp/foo")
     properties.setProperty(KafkaConfig.ProcessRolesProp, "controller")
     properties.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, s"CONTROLLER:PLAINTEXT")
-    properties.setProperty(KafkaConfig.ListenersProp, s"CONTROLLER://localhost:0")
+    properties.setProperty(KafkaConfig.ListenersProp, s"CONTROLLER://localhost:8001")
     properties.setProperty(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
     properties.setProperty(KafkaConfig.NodeIdProp, "1")
     properties.setProperty(KafkaConfig.QuorumVotersProp, s"1@localhost:8000,2@localhost:5000,3@localhost:7000")
