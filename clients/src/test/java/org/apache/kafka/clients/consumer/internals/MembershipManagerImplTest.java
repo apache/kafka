@@ -18,16 +18,14 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ConsumerGroupHeartbeatResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
 
 import java.util.Arrays;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -78,72 +76,42 @@ public class MembershipManagerImplTest {
         assertEquals(MemberState.RECONCILING, membershipManager.state());
     }
 
-    @ParameterizedTest
-    @EnumSource(Errors.class)
-    public void testMemberIdAndEpochResetOnErrors(Errors error) {
-        MembershipManagerImpl membershipManager = new MembershipManagerImpl(GROUP_ID, logContext);
-        ConsumerGroupHeartbeatResponse heartbeatResponse = createConsumerGroupHeartbeatResponse(null);
-        membershipManager.updateState(heartbeatResponse.data());
-        assertEquals(MemberState.STABLE, membershipManager.state());
-        assertEquals(MEMBER_ID, membershipManager.memberId());
-        assertEquals(MEMBER_EPOCH, membershipManager.memberEpoch());
-
-        ConsumerGroupHeartbeatResponse heartbeatResponseWithError =
-                createConsumerGroupHeartbeatResponseWithError(error);
-        membershipManager.updateState(heartbeatResponseWithError.data());
-        if (error == Errors.UNKNOWN_MEMBER_ID || error == Errors.FENCED_MEMBER_EPOCH) {
-            // Should reset member epoch and keep member id
-            assertFalse(membershipManager.memberId().isEmpty());
-            assertEquals(0, membershipManager.memberEpoch());
-        } else {
-            // Should not reset member id or epoch
-            assertFalse(membershipManager.memberId().isEmpty());
-            assertNotEquals(0, membershipManager.memberEpoch());
-        }
-    }
-
-    public void testStateTransitionsOnErrors(MembershipManagerImpl membershipManager,
-                                             Errors error) {
-        ConsumerGroupHeartbeatResponse heartbeatResponseWithError =
-                createConsumerGroupHeartbeatResponseWithError(error);
-        membershipManager.updateState(heartbeatResponseWithError.data());
-        MemberState initialState = membershipManager.state();
-
-        if (error == Errors.NONE) {
-            assertEquals(MemberState.STABLE, membershipManager.state());
-        } else if (error == Errors.UNKNOWN_MEMBER_ID || error == Errors.FENCED_MEMBER_EPOCH) {
-            assertEquals(MemberState.FENCED, membershipManager.state());
-        } else if (error.exception() instanceof RetriableException) {
-            // Should leave state unchanged
-            assertEquals(initialState, membershipManager.state());
-        } else
-            // Should transition state to FAILED
-            assertEquals(MemberState.FAILED, membershipManager.state());
-    }
-
-    @ParameterizedTest
-    @EnumSource(Errors.class)
-    public void testTransitionsOnErrorsWhenStateIsStable(Errors error) {
+    @Test
+    public void testFencingWhenStateIsStable() {
         MembershipManagerImpl membershipManager = new MembershipManagerImpl(GROUP_ID, logContext);
         ConsumerGroupHeartbeatResponse heartbeatResponse = createConsumerGroupHeartbeatResponse(null);
         membershipManager.updateState(heartbeatResponse.data());
         assertEquals(MemberState.STABLE, membershipManager.state());
 
-        testStateTransitionsOnErrors(membershipManager, error);
+        testStateUpdateOnFenceError(membershipManager);
     }
 
-    @ParameterizedTest
-    @EnumSource(Errors.class)
-    public void testTransitionsOnErrorsWhenStateIsUnjoined(Errors error) {
+    @Test
+    public void testFencingWhenStateIsReconciling() {
+        MembershipManagerImpl membershipManager = new MembershipManagerImpl(GROUP_ID, logContext);
+        ConsumerGroupHeartbeatResponse heartbeatResponse = createConsumerGroupHeartbeatResponse(createAssignment());
+        membershipManager.updateState(heartbeatResponse.data());
+        assertEquals(MemberState.RECONCILING, membershipManager.state());
+
+        testStateUpdateOnFenceError(membershipManager);
+    }
+
+    @Test
+    public void testFatalFailureWhenStateIsUnjoined() {
         MembershipManagerImpl membershipManager = new MembershipManagerImpl(GROUP_ID, logContext);
         assertEquals(MemberState.UNJOINED, membershipManager.state());
 
-        if (error == Errors.UNKNOWN_MEMBER_ID || error == Errors.FENCED_MEMBER_EPOCH) {
-            // Exclude fencing scenarios as it is not a valid transition from UNJOINED
-            return;
-        }
+        testStateUpdateOnFatalFailure(membershipManager);
+    }
 
-        testStateTransitionsOnErrors(membershipManager, error);
+    @Test
+    public void testFatalFailureWhenStateIsStable() {
+        MembershipManagerImpl membershipManager = new MembershipManagerImpl(GROUP_ID, logContext);
+        ConsumerGroupHeartbeatResponse heartbeatResponse = createConsumerGroupHeartbeatResponse(null);
+        membershipManager.updateState(heartbeatResponse.data());
+        assertEquals(MemberState.STABLE, membershipManager.state());
+
+        testStateUpdateOnFatalFailure(membershipManager);
     }
 
     @Test
@@ -151,30 +119,35 @@ public class MembershipManagerImplTest {
         MembershipManagerImpl membershipManager = new MembershipManagerImpl(GROUP_ID, logContext);
         assertEquals(MemberState.UNJOINED, membershipManager.state());
 
-        // Receiving UNKNOWN_MEMBER_ID when the member is not part of the group is not expected
-        // and should fail with invalid transition.
-        ConsumerGroupHeartbeatResponse unknownMemberResponse =
-                createConsumerGroupHeartbeatResponseWithError(Errors.UNKNOWN_MEMBER_ID);
-        assertThrows(IllegalStateException.class,
-                () -> membershipManager.updateState(unknownMemberResponse.data()));
-
-        // Receiving FENCED_MEMBER_EPOCH when the member is not part of the group is not expected
-        // and should fail with invalid transition.
-        ConsumerGroupHeartbeatResponse fencedEpochResponse =
-                createConsumerGroupHeartbeatResponseWithError(Errors.FENCED_MEMBER_EPOCH);
-        assertThrows(IllegalStateException.class,
-                () -> membershipManager.updateState(fencedEpochResponse.data()));
+        // Getting fenced when the member is not part of the group is not expected and should
+        // fail with invalid transition.
+        assertThrows(IllegalStateException.class, membershipManager::fenceMember);
     }
 
     @Test
-    public void testUpdateAssignment() {
+    public void testUpdateStateFailsOnResponsesWithErrors() {
+        MembershipManagerImpl membershipManager = new MembershipManagerImpl(GROUP_ID, logContext);
+        // Updating state with a heartbeat response containing errors cannot be performed and
+        // should fail.
+        ConsumerGroupHeartbeatResponse unknownMemberResponse =
+                createConsumerGroupHeartbeatResponseWithError(Errors.UNKNOWN_MEMBER_ID);
+        assertThrows(IllegalArgumentException.class,
+                () -> membershipManager.updateState(unknownMemberResponse.data()));
+    }
+
+    @Test
+    public void testAssignmentUpdatedAsReceivedAndProcessed() {
         MembershipManagerImpl membershipManager = new MembershipManagerImpl(GROUP_ID, logContext);
         ConsumerGroupHeartbeatResponseData.Assignment newAssignment = createAssignment();
         ConsumerGroupHeartbeatResponse heartbeatResponse = createConsumerGroupHeartbeatResponse(newAssignment);
         membershipManager.updateState(heartbeatResponse.data());
 
         // Target assignment should be in the process of being reconciled
-        checkAssignments(membershipManager, null, newAssignment, null);
+        checkAssignments(membershipManager, null, newAssignment);
+        // Mark assignment processing completed
+        membershipManager.onTargetAssignmentProcessComplete(Optional.empty());
+        // Target assignment should now be the current assignment
+        checkAssignments(membershipManager, newAssignment, null);
     }
 
     @Test
@@ -184,44 +157,38 @@ public class MembershipManagerImplTest {
         membershipManager.updateState(createConsumerGroupHeartbeatResponse(newAssignment1).data());
 
         // First target assignment received should be in the process of being reconciled
-        checkAssignments(membershipManager, null, newAssignment1, null);
+        checkAssignments(membershipManager, null, newAssignment1);
 
         // Second target assignment received while there is another one being reconciled
         ConsumerGroupHeartbeatResponseData.Assignment newAssignment2 = createAssignment();
         membershipManager.updateState(createConsumerGroupHeartbeatResponse(newAssignment2).data());
-        checkAssignments(membershipManager, null, newAssignment1, newAssignment2);
-    }
-
-    @Test
-    public void testNextTargetAssignmentHoldsLatestAssignmentReceivedWhileAnotherInProcess() {
-        MembershipManagerImpl membershipManager = new MembershipManagerImpl(GROUP_ID, logContext);
-        ConsumerGroupHeartbeatResponseData.Assignment newAssignment1 = createAssignment();
-        membershipManager.updateState(createConsumerGroupHeartbeatResponse(newAssignment1).data());
-
-        // First target assignment received, remains in the process of being reconciled
-        checkAssignments(membershipManager, null, newAssignment1, null);
-
-        // Second target assignment received while there is another one being reconciled
-        ConsumerGroupHeartbeatResponseData.Assignment newAssignment2 = createAssignment();
-        membershipManager.updateState(createConsumerGroupHeartbeatResponse(newAssignment2).data());
-        checkAssignments(membershipManager, null, newAssignment1, newAssignment2);
-
-        // If more assignments are received while there is one being reconciled, the most recent
-        // assignment received is kept as nextTargetAssignment
-        ConsumerGroupHeartbeatResponseData.Assignment newAssignment3 = createAssignment();
-        membershipManager.updateState(createConsumerGroupHeartbeatResponse(newAssignment3).data());
-        checkAssignments(membershipManager, null, newAssignment1, newAssignment3);
+        checkAssignments(membershipManager, null, newAssignment1);
     }
 
     private void checkAssignments(
             MembershipManagerImpl membershipManager,
             ConsumerGroupHeartbeatResponseData.Assignment expectedCurrentAssignment,
-            ConsumerGroupHeartbeatResponseData.Assignment expectedTargetAssignment,
-            ConsumerGroupHeartbeatResponseData.Assignment expectedNextTargetAssignment) {
-        assertEquals(expectedCurrentAssignment, membershipManager.assignment());
+            ConsumerGroupHeartbeatResponseData.Assignment expectedTargetAssignment) {
+        assertEquals(expectedCurrentAssignment, membershipManager.currentAssignment());
         assertEquals(expectedTargetAssignment, membershipManager.targetAssignment().orElse(null));
-        assertEquals(expectedNextTargetAssignment, membershipManager.nextTargetAssignment().orElse(null));
+    }
 
+    private void testStateUpdateOnFenceError(MembershipManager membershipManager) {
+        membershipManager.fenceMember();
+        assertEquals(MemberState.FENCED, membershipManager.state());
+        // Should reset member epoch and keep member id
+        assertFalse(membershipManager.memberId().isEmpty());
+        assertEquals(0, membershipManager.memberEpoch());
+    }
+
+    private void testStateUpdateOnFatalFailure(MembershipManager membershipManager) {
+        String initialMemberId = membershipManager.memberId();
+        int initialMemberEpoch = membershipManager.memberEpoch();
+        membershipManager.failMember();
+        assertEquals(MemberState.FAILED, membershipManager.state());
+        // Should not reset member id or epoch
+        assertEquals(initialMemberId, membershipManager.memberId());
+        assertEquals(initialMemberEpoch, membershipManager.memberEpoch());
     }
 
     private ConsumerGroupHeartbeatResponse createConsumerGroupHeartbeatResponse(ConsumerGroupHeartbeatResponseData.Assignment assignment) {
