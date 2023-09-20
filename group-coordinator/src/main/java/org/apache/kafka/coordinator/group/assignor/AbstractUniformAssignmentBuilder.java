@@ -151,6 +151,7 @@ public abstract class AbstractUniformAssignmentBuilder {
             AssignmentSpec assignmentSpec,
             SubscribedTopicDescriber subscribedTopicDescriber,
             Set<Uuid> topicIds
+
         ) {
             Map<String, List<String>> membersByRack = new HashMap<>();
             assignmentSpec.members().forEach((memberId, assignmentMemberSpec) ->

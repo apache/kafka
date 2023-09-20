@@ -80,7 +80,7 @@ public class UniformAssignor implements PartitionAssignor {
         } else {
             LOG.debug("Detected that the members are subscribed to different sets of topics, invoking the "
                 + "general assignment algorithm");
-            assignmentBuilder = new GeneralUniformAssignmentBuilder();
+            assignmentBuilder = new GeneralUniformAssignmentBuilder(assignmentSpec, subscribedTopicDescriber);
         }
 
         return assignmentBuilder.buildAssignment();
