@@ -43,6 +43,7 @@ import java.util.concurrent.LinkedBlockingQueue;
  * {@code BackgroundEvent} from the {@link DefaultBackgroundThread}.
  */
 public class DefaultEventHandler implements EventHandler {
+
     private final BlockingQueue<ApplicationEvent> applicationEventQueue;
     private final BlockingQueue<BackgroundEvent> backgroundEventQueue;
     private final DefaultBackgroundThread backgroundThread;

@@ -21,14 +21,19 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
 import org.apache.kafka.clients.consumer.internals.events.OffsetFetchApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.ResetPositionsApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.ValidatePositionsApplicationEvent;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -36,7 +41,6 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
@@ -44,6 +48,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatchers;
 import org.mockito.MockedConstruction;
+import org.mockito.stubbing.Answer;
 
 import java.time.Duration;
 import java.util.Collections;
@@ -52,7 +57,10 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Future;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.stream.Collectors;
 
 import static java.util.Collections.singleton;
@@ -78,11 +86,12 @@ import static org.mockito.Mockito.when;
 public class PrototypeAsyncConsumerTest {
 
     private PrototypeAsyncConsumer<?, ?> consumer;
-    private Map<String, Object> consumerProps = new HashMap<>();
+    private final Map<String, Object> consumerProps = new HashMap<>();
 
     private final Time time = new MockTime();
     private LogContext logContext;
     private SubscriptionState subscriptions;
+    private ConsumerMetadata metadata;
     private EventHandler eventHandler;
     private Metrics metrics;
 
@@ -95,7 +104,11 @@ public class PrototypeAsyncConsumerTest {
         this.config = new ConsumerConfig(consumerProps);
         this.logContext = new LogContext();
         this.subscriptions = mock(SubscriptionState.class);
-        this.eventHandler = mock(DefaultEventHandler.class);
+        this.metadata = mock(ConsumerMetadata.class);
+        final DefaultBackgroundThread bt = mock(DefaultBackgroundThread.class);
+        final BlockingQueue<ApplicationEvent> aq = new LinkedBlockingQueue<>();
+        final BlockingQueue<BackgroundEvent> bq = new LinkedBlockingQueue<>();
+        this.eventHandler = spy(new DefaultEventHandler(bt, aq, bq));
         this.metrics = new Metrics(time);
     }
 
@@ -137,7 +150,6 @@ public class PrototypeAsyncConsumerTest {
         assertFalse(future.isCompletedExceptionally());
     }
 
-
     @Test
     public void testCommitAsync_UserSuppliedCallback() {
         CompletableFuture<Void> future = new CompletableFuture<>();
@@ -157,32 +169,62 @@ public class PrototypeAsyncConsumerTest {
 
     @Test
     public void testCommitted() {
-        Set<TopicPartition> mockTopicPartitions = mockTopicPartitionOffset().keySet();
+        Map<TopicPartition, OffsetAndMetadata> offsets = mockTopicPartitionOffset();
         CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> committedFuture = new CompletableFuture<>();
-        try (MockedConstruction<OffsetFetchApplicationEvent> mockConstruction =
-                 mockConstruction(OffsetFetchApplicationEvent.class, (mock, ctx) -> {
-                     when(mock.future()).thenReturn(committedFuture);
-                 })) {
-            committedFuture.complete(mockTopicPartitionOffset());
-            consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
-            assertDoesNotThrow(() -> consumer.committed(mockTopicPartitions, Duration.ofMillis(1000)));
+        committedFuture.complete(offsets);
+
+        try (MockedConstruction<OffsetFetchApplicationEvent> ignored = offsetFetchEventMocker(committedFuture)) {
+            this.consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
+            assertDoesNotThrow(() -> consumer.committed(offsets.keySet(), Duration.ofMillis(1000)));
             verify(eventHandler).add(ArgumentMatchers.isA(OffsetFetchApplicationEvent.class));
         }
     }
 
     @Test
     public void testCommitted_ExceptionThrown() {
-        Set<TopicPartition> mockTopicPartitions = mockTopicPartitionOffset().keySet();
+        Map<TopicPartition, OffsetAndMetadata> offsets = mockTopicPartitionOffset();
         CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> committedFuture = new CompletableFuture<>();
-        try (MockedConstruction<OffsetFetchApplicationEvent> mockConstruction =
-                 mockConstruction(OffsetFetchApplicationEvent.class, (mock, ctx) -> {
-                     when(mock.future()).thenReturn(committedFuture);
-                 })) {
-            committedFuture.completeExceptionally(new KafkaException("Test exception"));
-            consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
-            assertThrows(KafkaException.class, () -> consumer.committed(mockTopicPartitions, Duration.ofMillis(1000)));
+        committedFuture.completeExceptionally(new KafkaException("Test exception"));
+
+        try (MockedConstruction<OffsetFetchApplicationEvent> ignored = offsetFetchEventMocker(committedFuture)) {
+            this.consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
+            assertThrows(KafkaException.class, () -> consumer.committed(offsets.keySet(), Duration.ofMillis(1000)));
             verify(eventHandler).add(ArgumentMatchers.isA(OffsetFetchApplicationEvent.class));
         }
+    }
+
+    /**
+     * This is a rather ugly bit of code. Not my choice :(
+     *
+     * <p/>
+     *
+     * Inside the {@link org.apache.kafka.clients.consumer.Consumer#committed(Set, Duration)} call we create an
+     * instance of {@link OffsetFetchApplicationEvent} that holds the partitions and internally holds a
+     * {@link CompletableFuture}. We want to test different behaviours of the {@link Future#get()}, such as
+     * returning normally, timing out, throwing an error, etc. By mocking the construction of the event object that
+     * is created, we can affect that behavior.
+     */
+    private static MockedConstruction<OffsetFetchApplicationEvent> offsetFetchEventMocker(CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future) {
+        // This "answer" is where we pass the future to be invoked by the ConsumerUtils.getResult() method
+        Answer<Map<TopicPartition, OffsetAndMetadata>> getInvocationAnswer = invocation -> {
+            // This argument captures the actual argument value that was passed to the event's get() method, so we
+            // just "forward" that value to our mocked call
+            Timer timer = invocation.getArgument(0);
+            return ConsumerUtils.getResult(future, timer);
+        };
+
+        MockedConstruction.MockInitializer<OffsetFetchApplicationEvent> mockInitializer = (mock, ctx) -> {
+            // When the event's get() method is invoked, we call the "answer" method just above
+            when(mock.get(any())).thenAnswer(getInvocationAnswer);
+
+            // When the event's type() method is invoked, we have to return the type as it will be null in the mock
+            when(mock.type()).thenReturn(ApplicationEvent.Type.FETCH_COMMITTED_OFFSET);
+
+            // This is needed for the WakeupTrigger code that keeps track of the active task
+            when(mock.future()).thenReturn(future);
+        };
+
+        return mockConstruction(OffsetFetchApplicationEvent.class, mockInitializer);
     }
 
     @Test
@@ -322,11 +364,89 @@ public class PrototypeAsyncConsumerTest {
         assertNoPendingWakeup(consumer.wakeupTrigger());
     }
 
+    @Test
+    public void testRefreshCommittedOffsetsSuccess() {
+        Map<TopicPartition, OffsetAndMetadata> committedOffsets =
+                Collections.singletonMap(new TopicPartition("t1", 1), new OffsetAndMetadata(10L));
+        testRefreshCommittedOffsetsSuccess(committedOffsets);
+    }
+
+    @Test
+    public void testRefreshCommittedOffsetsSuccessButNoCommittedOffsetsFound() {
+        testRefreshCommittedOffsetsSuccess(Collections.emptyMap());
+    }
+
+    @Test
+    public void testRefreshCommittedOffsetsShouldNotResetIfFailedWithTimeout() {
+        // Create consumer with group id to enable committed offset usage
+        this.groupId = "consumer-group-1";
+
+        testUpdateFetchPositionsWithFetchCommittedOffsetsTimeout(true);
+    }
+
+    @Test
+    public void testRefreshCommittedOffsetsNotCalledIfNoGroupId() {
+        // Create consumer without group id so committed offsets are not used for updating positions
+        this.groupId = null;
+        consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
+
+        testUpdateFetchPositionsWithFetchCommittedOffsetsTimeout(false);
+    }
+
+    private void testUpdateFetchPositionsWithFetchCommittedOffsetsTimeout(boolean committedOffsetsEnabled) {
+        consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
+
+        // Uncompleted future that will time out if used
+        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> committedFuture = new CompletableFuture<>();
+
+        when(subscriptions.initializingPartitions()).thenReturn(Collections.singleton(new TopicPartition("t1", 1)));
+
+        try (MockedConstruction<OffsetFetchApplicationEvent> ignored = offsetFetchEventMocker(committedFuture)) {
+
+            // Poll with 0 timeout to run a single iteration of the poll loop
+            consumer.poll(Duration.ofMillis(0));
+
+            verify(eventHandler).add(ArgumentMatchers.isA(ValidatePositionsApplicationEvent.class));
+
+            if (committedOffsetsEnabled) {
+                // Verify there was an OffsetFetch event and no ResetPositions event
+                verify(eventHandler).add(ArgumentMatchers.isA(OffsetFetchApplicationEvent.class));
+                verify(eventHandler,
+                        never()).add(ArgumentMatchers.isA(ResetPositionsApplicationEvent.class));
+            } else {
+                // Verify there was not any OffsetFetch event but there should be a ResetPositions
+                verify(eventHandler,
+                        never()).add(ArgumentMatchers.isA(OffsetFetchApplicationEvent.class));
+                verify(eventHandler).add(ArgumentMatchers.isA(ResetPositionsApplicationEvent.class));
+            }
+        }
+    }
+
+    private void testRefreshCommittedOffsetsSuccess(Map<TopicPartition, OffsetAndMetadata> committedOffsets) {
+        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> committedFuture = new CompletableFuture<>();
+        committedFuture.complete(committedOffsets);
+
+        // Create consumer with group id to enable committed offset usage
+        this.groupId = "consumer-group-1";
+        consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
+
+        try (MockedConstruction<OffsetFetchApplicationEvent> ignored = offsetFetchEventMocker(committedFuture)) {
+            when(subscriptions.initializingPartitions()).thenReturn(committedOffsets.keySet());
+
+            // Poll with 0 timeout to run a single iteration of the poll loop
+            consumer.poll(Duration.ofMillis(0));
+
+            verify(eventHandler).add(ArgumentMatchers.isA(ValidatePositionsApplicationEvent.class));
+            verify(eventHandler).add(ArgumentMatchers.isA(OffsetFetchApplicationEvent.class));
+            verify(eventHandler).add(ArgumentMatchers.isA(ResetPositionsApplicationEvent.class));
+        }
+    }
+
     private void assertNoPendingWakeup(final WakeupTrigger wakeupTrigger) {
         assertTrue(wakeupTrigger.getPendingTask() == null);
     }
 
-    private HashMap<TopicPartition, OffsetAndMetadata> mockTopicPartitionOffset() {
+    private Map<TopicPartition, OffsetAndMetadata> mockTopicPartitionOffset() {
         final TopicPartition t0 = new TopicPartition("t0", 2);
         final TopicPartition t1 = new TopicPartition("t0", 3);
         HashMap<TopicPartition, OffsetAndMetadata> topicPartitionOffsets = new HashMap<>();
@@ -335,7 +455,7 @@ public class PrototypeAsyncConsumerTest {
         return topicPartitionOffsets;
     }
 
-    private HashMap<TopicPartition, OffsetAndTimestamp> mockOffsetAndTimestamp() {
+    private Map<TopicPartition, OffsetAndTimestamp> mockOffsetAndTimestamp() {
         final TopicPartition t0 = new TopicPartition("t0", 2);
         final TopicPartition t1 = new TopicPartition("t0", 3);
         HashMap<TopicPartition, OffsetAndTimestamp> offsetAndTimestamp = new HashMap<>();
@@ -344,7 +464,7 @@ public class PrototypeAsyncConsumerTest {
         return offsetAndTimestamp;
     }
 
-    private HashMap<TopicPartition, Long> mockTimestampToSearch() {
+    private Map<TopicPartition, Long> mockTimestampToSearch() {
         final TopicPartition t0 = new TopicPartition("t0", 2);
         final TopicPartition t1 = new TopicPartition("t0", 3);
         HashMap<TopicPartition, Long> timestampToSearch = new HashMap<>();
@@ -371,6 +491,7 @@ public class PrototypeAsyncConsumerTest {
                 logContext,
                 config,
                 subscriptions,
+                metadata,
                 eventHandler,
                 metrics,
                 Optional.ofNullable(this.groupId),
