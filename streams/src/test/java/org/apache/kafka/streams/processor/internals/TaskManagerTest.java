@@ -778,16 +778,55 @@ public class TaskManagerTest {
         final TasksRegistry tasks = mock(TasksRegistry.class);
         when(tasks.drainPendingTasksToInit()).thenReturn(mkSet(task00, task01));
         final LockException lockException = new LockException("Where are my keys??");
-        doThrow(lockException)
-            .when(task00).initializeIfNeeded();
+        doThrow(lockException).when(task00).initializeIfNeeded();
         taskManager = setUpTaskManager(StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE, tasks, true);
 
         taskManager.checkStateUpdater(time.milliseconds(), noOpResetter);
 
         Mockito.verify(task00).initializeIfNeeded();
         Mockito.verify(task01).initializeIfNeeded();
-        Mockito.verify(tasks).addPendingTasksToInit(Collections.singleton(task00));
+        Mockito.verify(tasks).addPendingTasksToInit(
+            Mockito.argThat(tasksToInit -> tasksToInit.contains(task00) && !tasksToInit.contains(task01))
+        );
+        Mockito.verify(stateUpdater, never()).add(task00);
         Mockito.verify(stateUpdater).add(task01);
+    }
+
+    @Test
+    public void shouldRetryInitializationWhenLockExceptionAfterRecyclingInStateUpdater() {
+        final StreamTask task00 = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .withInputPartitions(taskId00Partitions)
+            .inState(State.RESTORING).build();
+        final StandbyTask task01 = standbyTask(taskId01, taskId01ChangelogPartitions)
+            .withInputPartitions(taskId01Partitions)
+            .inState(State.RUNNING).build();
+        final StandbyTask task00Converted = standbyTask(taskId00, taskId00Partitions)
+            .withInputPartitions(taskId00Partitions).build();
+        final StreamTask task01Converted = statefulTask(taskId01, taskId01Partitions)
+            .withInputPartitions(taskId01Partitions).build();
+        when(stateUpdater.hasRemovedTasks()).thenReturn(true);
+        when(stateUpdater.drainRemovedTasks()).thenReturn(mkSet(task00, task01));
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        when(tasks.removePendingTaskToRecycle(task00.id())).thenReturn(taskId00Partitions);
+        when(tasks.removePendingTaskToRecycle(task01.id())).thenReturn(taskId01Partitions);
+        taskManager = setUpTaskManager(StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE, tasks, true);
+        when(activeTaskCreator.createActiveTaskFromStandby(task01, taskId01Partitions,
+            consumer)).thenReturn(task01Converted);
+        when(standbyTaskCreator.createStandbyTaskFromActive(task00, taskId00Partitions))
+            .thenReturn(task00Converted);
+        final LockException lockException = new LockException("Where are my keys??");
+        doThrow(lockException).when(task00Converted).initializeIfNeeded();
+        taskManager = setUpTaskManager(StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE, tasks, true);
+
+        taskManager.checkStateUpdater(time.milliseconds(), noOpResetter);
+
+        Mockito.verify(task00Converted).initializeIfNeeded();
+        Mockito.verify(task01Converted).initializeIfNeeded();
+        Mockito.verify(tasks).addPendingTasksToInit(
+            Mockito.argThat(tasksToInit -> tasksToInit.contains(task00Converted) && !tasksToInit.contains(task01Converted))
+        );
+        Mockito.verify(stateUpdater, never()).add(task00Converted);
+        Mockito.verify(stateUpdater).add(task01Converted);
     }
 
     @Test
