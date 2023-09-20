@@ -190,16 +190,21 @@ public class HeartbeatRequestManagerTest {
         result.unsentRequests.get(0).future().complete(response);
         ConsumerGroupHeartbeatResponse mockResponse = (ConsumerGroupHeartbeatResponse) response.responseBody();
 
-        if (error.code() == Errors.NONE.code()) {
+        short errorCode = error.code();
+        if (errorCode == Errors.NONE.code()) {
             verify(errorEventHandler, never()).handle(any());
             verify(mockMembershipManager).updateState(mockResponse.data());
             assertEquals(heartbeatInterval, heartbeatRequestState.nextHeartbeatMs(mockTime.milliseconds()));
         } else if (isFatal) {
             verify(errorEventHandler).handle(any());
-            verify(mockMembershipManager).onFatalError(mockResponse.data().errorCode());
-
-            // The memberStateManager should have stopped heartbeat at this point
             assertEquals(retryBackoffMs, heartbeatRequestState.nextHeartbeatMs(mockTime.milliseconds()));
+            if (errorCode == Errors.UNRELEASED_INSTANCE_ID.code()) {
+                verify(mockMembershipManager).failMember();
+            } else if (errorCode == Errors.FENCED_MEMBER_EPOCH.code() ||
+                errorCode == Errors.UNKNOWN_MEMBER_ID.code()) {
+                verify(mockMembershipManager).fenceMember();
+            }
+            // The memberStateManager should have stopped heartbeat at this point
         } else {
             // NOT_COORDINATOR/COORDINATOR_LOAD_IN_PROGRESS/COORDINATOR_NOT_AVAILABLE
             // should be automatically retried

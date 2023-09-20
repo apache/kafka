@@ -205,8 +205,15 @@ public class HeartbeatRequestManager implements RequestManager {
                 membershipManager.groupInstanceId().orElse("null"),
                 response.data().errorMessage());
             nonRetriableErrorHandler.handle(Errors.UNRELEASED_INSTANCE_ID.exception());
+            membershipManager.failMember();
+        } else if (errorCode == Errors.FENCED_MEMBER_EPOCH.code() ||
+            errorCode == Errors.UNKNOWN_MEMBER_ID.code()) {
+            membershipManager.fenceMember();
+        } else {
+            // If the manager receives an unknown error - there could be a bug in the code or a new error code
+            logger.error("GroupHeartbeatRequest failed due to unexpected error: {}", Errors.forCode(errorCode));
+            membershipManager.failMember();
         }
-        membershipManager.onFatalError(response.data().errorCode());
     }
 
     private void logInfo(final String message,

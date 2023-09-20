@@ -18,7 +18,6 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
-import org.apache.kafka.common.protocol.Errors;
 
 import java.util.Optional;
 
@@ -125,19 +124,15 @@ public class MembershipManagerImpl implements MembershipManager {
     }
 
     @Override
-    public void onFatalError(final short errorCode) {
-        if (errorCode == Errors.FENCED_MEMBER_EPOCH.code() ||
-            errorCode == Errors.UNKNOWN_MEMBER_ID.code()) {
-            resetEpoch();
-            transitionTo(MemberState.FENCED);
-        } else if (errorCode == Errors.UNRELEASED_INSTANCE_ID.code()) {
-            transitionTo(MemberState.FAILED);
-        }
-        // TODO: handle other errors here to update state accordingly, mainly making the
-        //  distinction between the recoverable errors and the fatal ones, that should FAILED
-        //  the member
+    public void fenceMember() {
+        resetEpoch();
+        transitionTo(MemberState.FENCED);
     }
 
+    @Override
+    public void failMember() {
+        transitionTo(MemberState.FAILED);
+    }
 
     @Override
     public boolean shouldSendHeartbeat() {
