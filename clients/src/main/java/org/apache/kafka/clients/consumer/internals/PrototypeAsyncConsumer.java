@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientUtils;
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -25,6 +26,7 @@ import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.ConsumerInterceptor;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.NoOffsetForPartitionException;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
@@ -35,6 +37,8 @@ import org.apache.kafka.clients.consumer.internals.events.EventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
 import org.apache.kafka.clients.consumer.internals.events.OffsetFetchApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.ResetPositionsApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.ValidatePositionsApplicationEvent;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
@@ -50,8 +54,10 @@ import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Timer;
 import org.slf4j.Logger;
 
+import java.net.InetSocketAddress;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collection;
@@ -101,6 +107,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     private final Logger log;
     private final Deserializers<K, V> deserializers;
     private final SubscriptionState subscriptions;
+    private final ConsumerMetadata metadata;
     private final Metrics metrics;
     private final long defaultApiTimeoutMs;
 
@@ -135,6 +142,9 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
                 metrics.reporters(),
                 interceptorList,
                 Arrays.asList(deserializers.keyDeserializer, deserializers.valueDeserializer));
+        this.metadata = new ConsumerMetadata(config, subscriptions, logContext, clusterResourceListeners);
+        final List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config);
+        metadata.bootstrap(addresses);
         this.eventHandler = new DefaultEventHandler(
                 config,
                 groupRebalanceConfig,
@@ -152,6 +162,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
                            LogContext logContext,
                            ConsumerConfig config,
                            SubscriptionState subscriptions,
+                           ConsumerMetadata metadata,
                            EventHandler eventHandler,
                            Metrics metrics,
                            Optional<String> groupId,
@@ -160,6 +171,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         this.logContext = logContext;
         this.log = logContext.logger(getClass());
         this.subscriptions = subscriptions;
+        this.metadata = metadata;
         this.metrics = metrics;
         this.groupId = groupId;
         this.defaultApiTimeoutMs = defaultApiTimeoutMs;
@@ -179,6 +191,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public ConsumerRecords<K, V> poll(final Duration timeout) {
+        Timer timer = time.timer(timeout);
         try {
             do {
                 if (!eventHandler.isEmpty()) {
@@ -193,6 +206,9 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
                     // be processed in the collectFetches().
                     backgroundEvent.ifPresent(event -> processEvent(event, timeout));
                 }
+
+                updateFetchPositionsIfNeeded(timer);
+
                 // The idea here is to have the background thread sending fetches autonomously, and the fetcher
                 // uses the poll loop to retrieve successful fetchResponse and process them on the polling thread.
                 final Fetch<K, V> fetch = collectFetches();
@@ -207,6 +223,40 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         // TODO: Once we implement poll(), clear wakeupTrigger in a finally block: wakeupTrigger.clearActiveTask();
 
         return ConsumerRecords.empty();
+    }
+
+    /**
+     * Set the fetch position to the committed position (if there is one) or reset it using the
+     * offset reset policy the user has configured (if partitions require reset)
+     *
+     * @return true if the operation completed without timing out
+     * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
+     * @throws NoOffsetForPartitionException                          If no offset is stored for a given partition and no offset reset policy is
+     *                                                                defined
+     */
+    private boolean updateFetchPositionsIfNeeded(final Timer timer) {
+        // If any partitions have been truncated due to a leader change, we need to validate the offsets
+        ValidatePositionsApplicationEvent validatePositionsEvent = new ValidatePositionsApplicationEvent();
+        eventHandler.add(validatePositionsEvent);
+
+        // If there are any partitions which do not have a valid position and are not
+        // awaiting reset, then we need to fetch committed offsets. We will only do a
+        // coordinator lookup if there are partitions which have missing positions, so
+        // a consumer with manually assigned partitions can avoid a coordinator dependence
+        // by always ensuring that assigned partitions have an initial position.
+        if (isCommittedOffsetsManagementEnabled() && !refreshCommittedOffsetsIfNeeded(timer))
+            return false;
+
+        // If there are partitions still needing a position and a reset policy is defined,
+        // request reset using the default policy. If no reset strategy is defined and there
+        // are partitions with a missing position, then we will raise a NoOffsetForPartitionException exception.
+        subscriptions.resetInitializingPositions();
+
+        // Finally send an asynchronous request to look up and update the positions of any
+        // partitions which are awaiting reset.
+        ResetPositionsApplicationEvent resetPositionsEvent = new ResetPositionsApplicationEvent();
+        eventHandler.add(resetPositionsEvent);
+        return true;
     }
 
     /**
@@ -330,17 +380,8 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
 
         final OffsetFetchApplicationEvent event = new OffsetFetchApplicationEvent(partitions);
         wakeupTrigger.setActiveTask(event.future());
-        eventHandler.add(event);
         try {
-            return event.future().get(timeout.toMillis(), TimeUnit.MILLISECONDS);
-        } catch (InterruptedException e) {
-            throw new InterruptException(e);
-        } catch (TimeoutException e) {
-            throw new org.apache.kafka.common.errors.TimeoutException(e);
-        } catch (ExecutionException e) {
-            if (e.getCause() instanceof WakeupException)
-                throw new WakeupException();
-            throw new KafkaException(e);
+            return eventHandler.addAndGet(event, time.timer(timeout));
         } finally {
             wakeupTrigger.clearActiveTask();
         }
@@ -632,6 +673,35 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         clusterResourceListeners.maybeAdd(valueDeserializer);
         return clusterResourceListeners;
     }
+
+    /**
+     *
+     * Indicates if the consumer is using the Kafka-based offset management strategy,
+     * according to config {@link CommonClientConfigs#GROUP_ID_CONFIG}
+     */
+    private boolean isCommittedOffsetsManagementEnabled() {
+        return groupId.isPresent();
+    }
+
+    /**
+     * Refresh the committed offsets for partitions that require initialization.
+     *
+     * @param timer Timer bounding how long this method can block
+     * @return true iff the operation completed within the timeout
+     */
+    private boolean refreshCommittedOffsetsIfNeeded(Timer timer) {
+        final Set<TopicPartition> initializingPartitions = subscriptions.initializingPartitions();
+
+        log.debug("Refreshing committed offsets for partitions {}", initializingPartitions);
+        try {
+            final Map<TopicPartition, OffsetAndMetadata> offsets = eventHandler.addAndGet(new OffsetFetchApplicationEvent(initializingPartitions), timer);
+            return ConsumerUtils.refreshCommittedOffsets(offsets, this.metadata, this.subscriptions);
+        } catch (org.apache.kafka.common.errors.TimeoutException e) {
+            log.error("Couldn't refresh committed offsets before timeout expired");
+            return false;
+        }
+    }
+
 
     // This is here temporary as we don't have public access to the ConsumerConfig in this module.
     public static Map<String, Object> appendDeserializerToConfig(Map<String, Object> configs,

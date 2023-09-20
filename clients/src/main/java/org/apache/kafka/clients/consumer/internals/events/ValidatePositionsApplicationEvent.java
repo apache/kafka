@@ -14,23 +14,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
+package org.apache.kafka.clients.consumer.internals.events;
 
 /**
- * Noop event. Intentionally left it here for demonstration purpose.
+ * Event for validating offsets for all assigned partitions for which a leader change has been
+ * detected. This is an asynchronous event that generates OffsetForLeaderEpoch requests, and
+ * completes by validating in-memory positions against the offsets received in the responses.
  */
-public class NoopBackgroundEvent extends BackgroundEvent {
-    public final String message;
+public class ValidatePositionsApplicationEvent extends CompletableApplicationEvent<Void> {
 
-    public NoopBackgroundEvent(final String message) {
-        super(EventType.NOOP);
-        this.message = message;
-    }
-
-    @Override
-    public String toString() {
-        return getClass() + "_" + this.message;
+    public ValidatePositionsApplicationEvent() {
+        super(Type.VALIDATE_POSITIONS);
     }
 }

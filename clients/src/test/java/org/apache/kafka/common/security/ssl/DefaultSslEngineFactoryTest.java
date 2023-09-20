@@ -194,13 +194,17 @@ public class DefaultSslEngineFactoryTest {
 
     private static final Password KEY_PASSWORD = new Password("key-password");
 
-    private DefaultSslEngineFactory factory = new DefaultSslEngineFactory();
+    private DefaultSslEngineFactory factory = sslEngineFactory();
     Map<String, Object> configs = new HashMap<>();
 
     @BeforeEach
     public void setUp() {
-        factory = new DefaultSslEngineFactory();
+        factory = sslEngineFactory();
         configs.put(SslConfigs.SSL_PROTOCOL_CONFIG, "TLSv1.2");
+    }
+
+    protected DefaultSslEngineFactory sslEngineFactory() {
+        return new DefaultSslEngineFactory();
     }
 
     @Test

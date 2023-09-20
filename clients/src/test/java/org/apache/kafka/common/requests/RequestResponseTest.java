@@ -763,20 +763,22 @@ public class RequestResponseTest {
     public void testOffsetFetchRequestBuilderToStringV0ToV7() {
         List<Boolean> stableFlags = asList(true, false);
         for (Boolean requireStable : stableFlags) {
-            String allTopicPartitionsString = new OffsetFetchRequest.Builder("someGroup",
+            String allTopicPartitionsString = new OffsetFetchRequest.Builder(
+                "someGroup",
                 requireStable,
                 null,
-                false)
-                .toString();
+                false
+            ).toString();
 
-            assertTrue(allTopicPartitionsString.contains("groupId='someGroup', topics=null,"
-                + " groups=[], requireStable=" + requireStable));
-            String string = new OffsetFetchRequest.Builder("group1",
+            assertTrue(allTopicPartitionsString.contains("groupId='', topics=[],"
+                + " groups=[OffsetFetchRequestGroup(groupId='someGroup', memberId=null, memberEpoch=-1, topics=null)], requireStable=" + requireStable));
+            String string = new OffsetFetchRequest.Builder(
+                "group1",
                 requireStable,
                 singletonList(
                     new TopicPartition("test11", 1)),
-                false)
-                .toString();
+                false
+            ).toString();
             assertTrue(string.contains("test11"));
             assertTrue(string.contains("group1"));
             assertTrue(string.contains("requireStable=" + requireStable));
@@ -792,7 +794,7 @@ public class RequestResponseTest {
             false
         ).toString();
         assertTrue(allTopicPartitionsString.contains("groups=[OffsetFetchRequestGroup"
-            + "(groupId='someGroup', memberId='', memberEpoch=-1, topics=null)], requireStable=" + requireStable));
+            + "(groupId='someGroup', memberId=null, memberEpoch=-1, topics=null)], requireStable=" + requireStable));
 
         String subsetTopicPartitionsString = new OffsetFetchRequest.Builder(
             Collections.singletonMap(
