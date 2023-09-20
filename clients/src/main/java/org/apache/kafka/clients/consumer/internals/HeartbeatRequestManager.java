@@ -65,15 +65,14 @@ public class HeartbeatRequestManager implements RequestManager {
         final ErrorEventHandler nonRetriableErrorHandler) {
         this.coordinatorRequestManager = coordinatorRequestManager;
         this.time = time;
-        this.logger = logContext.logger(HeartbeatRequestManager.class);
+        this.logger = logContext.logger(getClass());
         this.subscriptions = subscriptions;
         this.membershipManager = membershipManager;
         this.nonRetriableErrorHandler = nonRetriableErrorHandler;
         this.rebalanceTimeoutMs = config.getInt(CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG);
-
         long retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
         long retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
-        this.heartbeatRequestState = new HeartbeatRequestState(logContext, time, -1, retryBackoffMs,
+        this.heartbeatRequestState = new HeartbeatRequestState(logContext, time, 0, retryBackoffMs,
             retryBackoffMaxMs, rebalanceTimeoutMs);
     }
 
