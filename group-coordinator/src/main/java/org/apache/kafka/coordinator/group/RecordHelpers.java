@@ -455,25 +455,6 @@ public class RecordHelpers {
     }
 
     /**
-     * Creates a ConsumerGroupMetadata tombstone.
-     *
-     * @param groupId  The group id.
-     * @return The record.
-     */
-    public static Record newConsumerGroupMetadataTombstoneRecord(
-        String groupId
-    ) {
-        return new Record(
-            new ApiMessageAndVersion(
-                new GroupMetadataKey()
-                    .setGroup(groupId),
-                (short) 3
-            ),
-            null // Tombstone
-        );
-    }
-
-    /**
      * Creates an empty GroupMetadata record.
      *
      * @param group              The generic group.

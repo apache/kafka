@@ -540,7 +540,17 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     "delete-group",
                     new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, partition),
                     coordinator -> coordinator.deleteGroups(context, groupList)
-                ).exceptionally(exception -> new DeleteGroupsResponseData.DeletableGroupResultCollection());
+                ).exceptionally(exception -> {
+                    DeleteGroupsResponseData.DeletableGroupResultCollection resultCollection =
+                        new DeleteGroupsResponseData.DeletableGroupResultCollection();
+                    groupIds.forEach(groupId -> {
+                        resultCollection.add(new DeleteGroupsResponseData.DeletableGroupResult()
+                            .setGroupId(groupId)
+                            .setErrorCode(Errors.forException(exception).code())
+                        );
+                    });
+                    return resultCollection;
+                });
 
             futures.add(future);
         });
@@ -734,7 +744,9 @@ public class GroupCoordinatorService implements GroupCoordinator {
         }
 
         if (!isGroupIdNotEmpty(request.groupId())) {
-            return FutureUtils.failedFuture(Errors.INVALID_GROUP_ID.exception());
+            return CompletableFuture.completedFuture(new OffsetDeleteResponseData()
+                .setErrorCode(Errors.INVALID_GROUP_ID.code())
+            );
         }
 
         return runtime.scheduleWriteOperation(

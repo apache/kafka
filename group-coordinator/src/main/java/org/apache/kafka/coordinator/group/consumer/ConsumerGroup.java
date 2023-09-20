@@ -643,7 +643,7 @@ public class ConsumerGroup implements Group {
      * @return The record.
      */
     public Record createMetadataTombstoneRecord() {
-        return RecordHelpers.newConsumerGroupMetadataTombstoneRecord(groupId());
+        return RecordHelpers.newGroupEpochTombstoneRecord(groupId());
     }
 
     /**
