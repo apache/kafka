@@ -71,7 +71,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @RunWith(MockitoJUnitRunner.StrictStubs.class)
-@SuppressWarnings("unchecked")
 public class StreamsProducerTest {
     private static final double BUFFER_POOL_WAIT_TIME = 1;
     private static final double FLUSH_TME = 2;
@@ -112,6 +111,7 @@ public class StreamsProducerTest {
 
     private final Time mockTime = mock(Time.class);
 
+    @SuppressWarnings("unchecked")
     final Producer<byte[], byte[]> mockedProducer = mock(Producer.class);
     final KafkaClientSupplier clientSupplier = new MockClientSupplier() {
         @Override
@@ -252,36 +252,27 @@ public class StreamsProducerTest {
         final List<PartitionInfo> partitionInfo = streamsProducerWithMock.partitionsFor(topic);
 
         assertThat(partitionInfo, sameInstance(expectedPartitionInfo));
-        verify(mockedProducer).partitionsFor(topic);
     }
 
     @Test
     public void shouldForwardCallToFlush() {
-        mockedProducer.flush();
-
         streamsProducerWithMock.flush();
-
-        verify(mockedProducer, times(2)).flush();
+        verify(mockedProducer).flush();
     }
 
-    @SuppressWarnings("rawtypes")
+    @SuppressWarnings({"rawtypes", "unchecked"})
     @Test
     public void shouldForwardCallToMetrics() {
         final Map metrics = new HashMap<>();
         when(mockedProducer.metrics()).thenReturn(metrics);
 
         assertSame(metrics, streamsProducerWithMock.metrics());
-
-        verify(mockedProducer).metrics();
     }
 
     @Test
     public void shouldForwardCallToClose() {
-        mockedProducer.close();
-
         streamsProducerWithMock.close();
-
-        verify(mockedProducer, times(2)).close();
+        verify(mockedProducer).close();
     }
 
     // error handling tests
