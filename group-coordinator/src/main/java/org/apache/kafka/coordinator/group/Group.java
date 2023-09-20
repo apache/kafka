@@ -108,4 +108,11 @@ public interface Group {
      * @return whether the group is subscribed to the topic.
      */
     boolean isSubscribedToTopic(String topic);
+
+    /**
+     * Creates a GroupMetadata tombstone.
+     *
+     * @return The record.
+     */
+    Record createMetadataTombstoneRecord();
 }

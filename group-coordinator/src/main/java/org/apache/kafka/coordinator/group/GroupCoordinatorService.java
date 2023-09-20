@@ -83,7 +83,6 @@ import java.util.OptionalInt;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.IntSupplier;
@@ -527,34 +526,31 @@ public class GroupCoordinatorService implements GroupCoordinator {
         }
 
         final Map<Integer, List<String>> groupsByPartition = new HashMap<>();
-        for (String groupId : groupIds) {
+        groupIds.forEach(groupId -> {
             final int partition = partitionFor(groupId);
             final List<String> groupList = groupsByPartition.getOrDefault(partition, new ArrayList<>());
             groupList.add(groupId);
             groupsByPartition.put(partition, groupList);
-        }
+        });
 
         final List<CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection>> futures = new ArrayList<>();
-        for (Map.Entry<Integer, List<String>> entry : groupsByPartition.entrySet()) {
-            int partition = entry.getKey();
-            List<String> groupList = entry.getValue();
+        groupsByPartition.forEach((partition, groupList) -> {
             CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> future =
-                    runtime.scheduleWriteOperation("delete-group",
-                            new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, partition),
-                            coordinator -> coordinator.deleteGroups(context, groupList));
+                runtime.scheduleWriteOperation(
+                    "delete-group",
+                    new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, partition),
+                    coordinator -> coordinator.deleteGroups(context, groupList)
+                ).exceptionally(exception -> new DeleteGroupsResponseData.DeletableGroupResultCollection());
+
             futures.add(future);
-        }
+        });
 
         final CompletableFuture<Void> allFutures = CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]));
         return allFutures.thenApply(v -> {
             final DeleteGroupsResponseData.DeletableGroupResultCollection res = new DeleteGroupsResponseData.DeletableGroupResultCollection();
             for (CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> future : futures) {
-                try {
-                    DeleteGroupsResponseData.DeletableGroupResultCollection result = future.get();
-                    res.addAll(result);
-                } catch (ExecutionException | InterruptedException exception) {
-                    log.error("Delete groups {} request hit an unexpected exception: {}", groupIds, exception.getMessage());
-                }
+                DeleteGroupsResponseData.DeletableGroupResultCollection result = future.join();
+                res.addAll(result);
             }
             return res;
         });
@@ -742,9 +738,9 @@ public class GroupCoordinatorService implements GroupCoordinator {
         }
 
         return runtime.scheduleWriteOperation(
-                "delete-offset",
-                topicPartitionFor(request.groupId()),
-                coordinator -> coordinator.deleteOffsets(context, request)
+            "delete-offset",
+            topicPartitionFor(request.groupId()),
+            coordinator -> coordinator.deleteOffsets(context, request)
         );
     }
 

@@ -358,38 +358,38 @@ public class OffsetMetadataManager {
      *         a list of records to update the state machine.
      */
     public CoordinatorResult<OffsetDeleteResponseData, Record> deleteOffsets(
-            RequestContext context,
-            OffsetDeleteRequestData request
+        RequestContext context,
+        OffsetDeleteRequestData request
     ) throws ApiException {
         final List<Record> records = new ArrayList<>();
         final OffsetDeleteResponseData.OffsetDeleteResponseTopicCollection responseTopicCollection =
-                new OffsetDeleteResponseData.OffsetDeleteResponseTopicCollection();
+            new OffsetDeleteResponseData.OffsetDeleteResponseTopicCollection();
         OffsetDeleteResponseData response = new OffsetDeleteResponseData();
         try {
             Group group = validateOffsetDelete(request);
 
             request.topics().forEach(topic -> {
                 final OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection responsePartitionCollection =
-                        new OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection();
+                    new OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection();
                 final boolean subscribedToTopic = group.isSubscribedToTopic(topic.name());
 
                 topic.partitions().forEach(partition -> {
-                    records.add(RecordHelpers.newOffsetCommitTombstoneRecord(
+                    OffsetDeleteResponseData.OffsetDeleteResponsePartition responsePartition =
+                        new OffsetDeleteResponseData.OffsetDeleteResponsePartition().setPartitionIndex(partition.partitionIndex());
+                    if (subscribedToTopic) {
+                        responsePartition = responsePartition.setErrorCode(Errors.GROUP_SUBSCRIBED_TO_TOPIC.code());
+                    } else {
+                        records.add(RecordHelpers.newOffsetCommitTombstoneRecord(
                             request.groupId(),
                             topic.name(),
                             partition.partitionIndex()
-                    ));
-
-                    OffsetDeleteResponseData.OffsetDeleteResponsePartition responsePartition =
-                            new OffsetDeleteResponseData.OffsetDeleteResponsePartition().setPartitionIndex(partition.partitionIndex());
-                    if (subscribedToTopic) {
-                        responsePartition = responsePartition.setErrorCode(Errors.GROUP_SUBSCRIBED_TO_TOPIC.code());
+                        ));
                     }
                     responsePartitionCollection.add(responsePartition);
                 });
 
                 final OffsetDeleteResponseData.OffsetDeleteResponseTopic responseTopic =
-                        new OffsetDeleteResponseData.OffsetDeleteResponseTopic().setPartitions(responsePartitionCollection);
+                    new OffsetDeleteResponseData.OffsetDeleteResponseTopic().setPartitions(responsePartitionCollection);
                 responseTopicCollection.add(responseTopic);
             });
             response = response.setTopics(responseTopicCollection);
@@ -400,44 +400,26 @@ public class OffsetMetadataManager {
     }
 
     /**
-     * Deletes all the offsets of the given groups to handle a GroupDelete request.
-     * Validations are done in groupDelete method in GroupMetadataManager.
+     * Handles an GroupDelete request.
+     * Populates the record list passed in with records to update the state machine.
+     * Validations are done in deleteGroups method in GroupCoordinatorShard.
      *
      * @param context The request context.
-     * @param groupIds The list of group ids of the given groups.
-     * @return A Result containing the OffsetDeleteResponseData response and
-     *         a list of records to update the state machine.
+     * @param groupId The group id of the given group.
+     * @param records The record list to populate.
      */
-    public CoordinatorResult<OffsetDeleteResponseData, Record> deleteAllOffsets(
-            RequestContext context,
-            List<String> groupIds
+    public void populateRecordListToDeleteAllOffsets(
+        RequestContext context,
+        String groupId,
+        List<Record> records
     ) throws ApiException {
-        final List<Record> records = new ArrayList<>();
-        final OffsetDeleteResponseData.OffsetDeleteResponseTopicCollection responseTopicCollection =
-                new OffsetDeleteResponseData.OffsetDeleteResponseTopicCollection();
-        groupIds.forEach(groupId -> {
-            TimelineHashMap<String, TimelineHashMap<Integer, OffsetAndMetadata>> offsetsByTopic =
-                    offsetsByGroup.get(groupId);
+        TimelineHashMap<String, TimelineHashMap<Integer, OffsetAndMetadata>> offsetsByTopic = offsetsByGroup.get(groupId);
 
-            offsetsByTopic.forEach((topic, offsetsByPartition) -> {
-                final OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection responsePartitionCollection =
-                        new OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection();
-
-                offsetsByPartition.forEach((partition, offsetAndMetadata) -> {
-                    records.add(RecordHelpers.newOffsetCommitTombstoneRecord(groupId, topic, partition));
-                    responsePartitionCollection.add(
-                            new OffsetDeleteResponseData.OffsetDeleteResponsePartition().setPartitionIndex(partition)
-                    );
-                });
-
-                responseTopicCollection.add(
-                        new OffsetDeleteResponseData.OffsetDeleteResponseTopic().setPartitions(responsePartitionCollection)
-                );
+        offsetsByTopic.forEach((topic, offsetsByPartition) -> {
+            offsetsByPartition.forEach((partition, offsetAndMetadata) -> {
+                records.add(RecordHelpers.newOffsetCommitTombstoneRecord(groupId, topic, partition));
             });
         });
-
-        final OffsetDeleteResponseData response = new OffsetDeleteResponseData().setTopics(responseTopicCollection);
-        return new CoordinatorResult<>(records, response);
     }
 
     /**

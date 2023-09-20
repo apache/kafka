@@ -3072,30 +3072,28 @@ public class GroupMetadataManager {
         group.remove(member.memberId());
     }
 
-    public CoordinatorResult<DeleteGroupsResponseData.DeletableGroupResultCollection, Record> groupDelete(
+    /**
+     * Handles a GroupDelete request.
+     *
+     * @param context The request context.
+     * @param groupId The group id of the group to be deleted.
+     * @return A Result containing the DeleteGroupsResponseData.DeletableGroupResult response and
+     *         a list of records to update the state machine.
+     */
+    public CoordinatorResult<DeleteGroupsResponseData.DeletableGroupResult, Record> groupDelete(
             RequestContext context,
-            List<String> groupIds
+            String groupId
     ) throws ApiException {
-        final DeleteGroupsResponseData.DeletableGroupResultCollection resultCollection =
-                new DeleteGroupsResponseData.DeletableGroupResultCollection();
+        DeleteGroupsResponseData.DeletableGroupResult result =
+            new DeleteGroupsResponseData.DeletableGroupResult().setGroupId(groupId);
+
         final List<Record> records = new ArrayList<>();
+        records.add(group(groupId).createMetadataTombstoneRecord());
 
-        groupIds.forEach(groupId -> {
-            DeleteGroupsResponseData.DeletableGroupResult result =
-                    new DeleteGroupsResponseData.DeletableGroupResult().setGroupId(groupId);
-            try {
-                validateGroupDelete(groupId);
-                records.add(RecordHelpers.newGroupMetadataTombstoneRecord(groupId));
-            } catch (ApiException ex) {
-                result = result.setErrorCode(Errors.forException(ex).code());
-            }
-            resultCollection.add(result);
-        });
-
-        return new CoordinatorResult<>(records, resultCollection);
+        return new CoordinatorResult<>(records, result);
     }
 
-    private void validateGroupDelete(String groupId) throws ApiException {
+    void validateGroupDelete(String groupId) throws ApiException {
 
         // For backwards compatibility, we support group delete for the empty groupId.
         if (groupId == null) {

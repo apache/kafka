@@ -25,6 +25,8 @@ import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.coordinator.group.Group;
+import org.apache.kafka.coordinator.group.Record;
+import org.apache.kafka.coordinator.group.RecordHelpers;
 import org.apache.kafka.image.ClusterImage;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsImage;
@@ -351,7 +353,7 @@ public class ConsumerGroup implements Group {
      * @return a boolean indicating whether the group is subscribed to the topic.
      */
     public boolean isSubscribedToTopic(String topic) {
-        return subscribedTopicNames.keySet().contains(topic);
+        return subscribedTopicNames.containsKey(topic);
     }
 
     /**
@@ -623,8 +625,8 @@ public class ConsumerGroup implements Group {
         if (state() == ConsumerGroupState.DEAD) {
             throw new GroupIdNotFoundException(String.format("Group %s is in dead state.", groupId));
         } else if (state() == ConsumerGroupState.STABLE
-                || state() == ConsumerGroupState.ASSIGNING
-                || state() == ConsumerGroupState.RECONCILING) {
+            || state() == ConsumerGroupState.ASSIGNING
+            || state() == ConsumerGroupState.RECONCILING) {
             throw Errors.NON_EMPTY_GROUP.exception();
         }
 
@@ -633,6 +635,15 @@ public class ConsumerGroup implements Group {
         if (groupEpoch() <= 0) {
             throw Errors.UNKNOWN_SERVER_ERROR.exception();
         }
+    }
+
+    /**
+     * Creates a GroupMetadata tombstone.
+     *
+     * @return The record.
+     */
+    public Record createMetadataTombstoneRecord() {
+        return RecordHelpers.newConsumerGroupMetadataTombstoneRecord(groupId());
     }
 
     /**

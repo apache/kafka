@@ -267,27 +267,43 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
         );
     }
 
+    /**
+     * Handles a GroupDelete request.
+     *
+     * @param context The request context.
+     * @param groupIds The groupIds of the groups to be deleted
+     * @return A Result containing the DeleteGroupsResponseData.DeletableGroupResultCollection response and
+     *         a list of records to update the state machine.
+     */
     public CoordinatorResult<DeleteGroupsResponseData.DeletableGroupResultCollection, Record> deleteGroups(
-            RequestContext context,
-            List<String> groupIds
+        RequestContext context,
+        List<String> groupIds
     ) throws ApiException {
+        final DeleteGroupsResponseData.DeletableGroupResultCollection resultCollection =
+            new DeleteGroupsResponseData.DeletableGroupResultCollection();
+        final List<Record> records = new ArrayList<>();
 
-        CoordinatorResult<DeleteGroupsResponseData.DeletableGroupResultCollection, Record> groupDeleteCoordinatorResult =
-                groupMetadataManager.groupDelete(context, groupIds);
+        groupIds.forEach(groupId -> {
+            try {
+                groupMetadataManager.validateGroupDelete(groupId);
 
-        List<String> validGroupIds = new ArrayList<>();
-        for (DeleteGroupsResponseData.DeletableGroupResult result : groupDeleteCoordinatorResult.response()) {
-            if (result.errorCode() == Errors.NONE.code()) {
-                validGroupIds.add(result.groupId());
+                offsetMetadataManager.populateRecordListToDeleteAllOffsets(context, groupId, records);
+                final CoordinatorResult<DeleteGroupsResponseData.DeletableGroupResult, Record> deleteGroupCoordinatorResult =
+                    groupMetadataManager.groupDelete(context, groupId);
+                records.addAll(deleteGroupCoordinatorResult.records());
+
+                resultCollection.add(deleteGroupCoordinatorResult.response());
+            } catch (ApiException exception) {
+                resultCollection.add(
+                    new DeleteGroupsResponseData.DeletableGroupResult()
+                        .setGroupId(groupId)
+                        .setErrorCode(Errors.forException(exception).code())
+                );
             }
-        }
+        });
 
-        CoordinatorResult<OffsetDeleteResponseData, Record> deleteOffsetCoordinatorResult =
-                offsetMetadataManager.deleteAllOffsets(context, validGroupIds);
+        return new CoordinatorResult<>(records, resultCollection);
 
-        final List<Record> records = groupDeleteCoordinatorResult.records();
-        records.addAll(deleteOffsetCoordinatorResult.records());
-        return new CoordinatorResult<>(records, groupDeleteCoordinatorResult.response());
     }
 
     /**
@@ -379,8 +395,8 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
      *         a list of records to update the state machine.
      */
     public CoordinatorResult<OffsetDeleteResponseData, Record> deleteOffsets(
-            RequestContext context,
-            OffsetDeleteRequestData request
+        RequestContext context,
+        OffsetDeleteRequestData request
     ) throws ApiException {
         return offsetMetadataManager.deleteOffsets(context, request);
     }

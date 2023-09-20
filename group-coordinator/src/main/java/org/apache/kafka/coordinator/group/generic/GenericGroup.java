@@ -33,6 +33,8 @@ import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.Group;
+import org.apache.kafka.coordinator.group.Record;
+import org.apache.kafka.coordinator.group.RecordHelpers;
 import org.slf4j.Logger;
 
 import java.nio.ByteBuffer;
@@ -869,8 +871,8 @@ public class GenericGroup implements Group {
         if (isInState(DEAD)) {
             throw new GroupIdNotFoundException(String.format("Group %s is in dead state.", groupId));
         } else if (isInState(STABLE)
-                || isInState(PREPARING_REBALANCE)
-                || isInState(COMPLETING_REBALANCE)) {
+            || isInState(PREPARING_REBALANCE)
+            || isInState(COMPLETING_REBALANCE)) {
             throw Errors.NON_EMPTY_GROUP.exception();
         }
 
@@ -879,6 +881,16 @@ public class GenericGroup implements Group {
         if (generationId() <= 0) {
             throw Errors.UNKNOWN_SERVER_ERROR.exception();
         }
+    }
+
+
+    /**
+     * Creates a GroupMetadata tombstone.
+     *
+     * @return The record.
+     */
+    public Record createMetadataTombstoneRecord() {
+        return RecordHelpers.newGroupMetadataTombstoneRecord(groupId());
     }
 
     /**
