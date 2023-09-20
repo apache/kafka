@@ -17,58 +17,101 @@
 
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest;
+import org.apache.kafka.common.utils.LogContext;
+import org.slf4j.Logger;
 
 import java.util.Optional;
 
 /**
- * Membership manager that maintains group membership for a single member following the new
+ * Membership manager that maintains group membership for a single member, following the new
  * consumer group protocol.
  * <p/>
- * This keeps membership state and assignment updated in-memory, based on the heartbeat responses
- * the member receives. It is also responsible for computing assignment for the group based on
- * the metadata, if the member has been selected by the broker to do so.
+ * This is responsible for:
+ * <li>Keeping member info (ex. member id, member epoch, assignment, etc.)</li>
+ * <li>Keeping member state as defined in {@link MemberState}.</li>
+ * <p/>
+ * Member info and state are updated based on the heartbeat responses the member receives.
  */
 public class MembershipManagerImpl implements MembershipManager {
 
+    /**
+     * ID of the consumer group the member will be part of., provided when creating the current
+     * membership manager.
+     */
     private final String groupId;
+
+    /**
+     * Group instance ID to be used by the member, provided when creating the current membership manager.
+     */
     private final Optional<String> groupInstanceId;
+
+    /**
+     * Member ID assigned by the server to the member, received in a heartbeat response when
+     * joining the group specified in {@link #groupId}
+     */
     private String memberId;
+
+    /**
+     * Current epoch of the member. It will be set to 0 by the member, and provided to the server
+     * on the heartbeat request, to join the group. It will be then maintained by the server,
+     * incremented as the member reconciles and acknowledges the assignments it receives.
+     */
     private int memberEpoch;
+
+    /**
+     * Current state of this member a part of the consumer group, as defined in {@link MemberState}
+     */
     private MemberState state;
+
+    /**
+     * Assignor type selection for the member. If non-null, the member will send its selection to
+     * the server on the {@link ConsumerGroupHeartbeatRequest}. If null, the server will select a
+     * default assignor for the member, which the member does not need to track.
+     */
     private AssignorSelection assignorSelection;
 
     /**
      * Assignment that the member received from the server and successfully processed.
      */
     private ConsumerGroupHeartbeatResponseData.Assignment currentAssignment;
+
     /**
      * Assignment that the member received from the server but hasn't completely processed
      * yet.
      */
     private Optional<ConsumerGroupHeartbeatResponseData.Assignment> targetAssignment;
+
     /**
      * Latest assignment that the member received from the server while a {@link #targetAssignment}
      * was in process.
      */
     private Optional<ConsumerGroupHeartbeatResponseData.Assignment> nextTargetAssignment;
 
-    public MembershipManagerImpl(String groupId) {
-        this(groupId, null, null);
+    /**
+     * slf4j logger.
+     */
+    private final Logger log;
+
+    public MembershipManagerImpl(String groupId, LogContext logContext) {
+        this(groupId, null, null, logContext);
     }
 
-    public MembershipManagerImpl(String groupId, String groupInstanceId, AssignorSelection assignorSelection) {
+    public MembershipManagerImpl(String groupId, String groupInstanceId,
+                                 AssignorSelection assignorSelection, LogContext logContext) {
+        if (groupId == null) {
+            throw new IllegalArgumentException("Group ID cannot be null.");
+        }
         this.groupId = groupId;
         this.state = MemberState.UNJOINED;
-        if (assignorSelection == null) {
-            setAssignorSelection(AssignorSelection.defaultAssignor());
-        } else {
-            setAssignorSelection(assignorSelection);
-        }
+        this.assignorSelection = assignorSelection;
         this.groupInstanceId = Optional.ofNullable(groupInstanceId);
         this.targetAssignment = Optional.empty();
         this.nextTargetAssignment = Optional.empty();
+        this.log = logContext.logger(MembershipManagerImpl.class);
     }
 
     /**
@@ -86,35 +129,49 @@ public class MembershipManagerImpl implements MembershipManager {
 
     private void transitionTo(MemberState nextState) {
         if (!this.state.equals(nextState) && !nextState.getPreviousValidStates().contains(state)) {
-            // TODO: handle invalid state transition
-            throw new RuntimeException(String.format("Invalid state transition from %s to %s",
+            throw new IllegalStateException(String.format("Invalid state transition from %s to %s",
                     state, nextState));
         }
         this.state = nextState;
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String groupId() {
         return groupId;
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public Optional<String> groupInstanceId() {
         return groupInstanceId;
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String memberId() {
         return memberId;
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public int memberEpoch() {
         return memberEpoch;
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public void updateState(ConsumerGroupHeartbeatResponseData response) {
+    public Optional<Errors> updateState(ConsumerGroupHeartbeatResponseData response) {
         if (response.errorCode() == Errors.NONE.code()) {
             this.memberId = response.memberId();
             this.memberEpoch = response.memberEpoch();
@@ -123,16 +180,21 @@ public class MembershipManagerImpl implements MembershipManager {
                 setTargetAssignment(assignment);
             }
             maybeTransitionToStable();
+            return Optional.empty();
         } else {
             if (response.errorCode() == Errors.FENCED_MEMBER_EPOCH.code() || response.errorCode() == Errors.UNKNOWN_MEMBER_ID.code()) {
                 resetEpoch();
                 transitionTo(MemberState.FENCED);
-            } else if (response.errorCode() == Errors.UNRELEASED_INSTANCE_ID.code()) {
-                transitionTo(MemberState.FAILED);
+            } else {
+                if (Errors.forCode(response.errorCode()).exception() instanceof RetriableException) {
+                    log.debug(String.format("Leaving member state %s unchanged after retriable " +
+                                    "error %s received in heartbeat response for member %s",
+                            state, Errors.forCode(response.errorCode()).exceptionName(), memberId));
+                } else {
+                    transitionTo(MemberState.FAILED);
+                }
             }
-            // TODO: handle other errors here to update state accordingly, mainly making the
-            //  distinction between the recoverable errors and the fatal ones, that should FAILED
-            //  the member
+            return Optional.of(Errors.forCode(response.errorCode()));
         }
     }
 
@@ -161,7 +223,6 @@ public class MembershipManagerImpl implements MembershipManager {
     private boolean hasPendingTargetAssignment() {
         return targetAssignment.isPresent() || nextTargetAssignment.isPresent();
     }
-
 
     /**
      * Update state and assignment as the member has successfully processed a new target
