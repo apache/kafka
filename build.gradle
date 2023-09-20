@@ -429,7 +429,7 @@ subprojects {
     ignoreFailures = userIgnoreFailures
 
     maxHeapSize = defaultMaxHeapSize
-    jvmArgs = defaultJvmArgs
+    jvmArgs '-XX:ActiveProcessorCount=1'
 
     testLogging {
       events = userTestLoggingEvents ?: testLoggingEvents
