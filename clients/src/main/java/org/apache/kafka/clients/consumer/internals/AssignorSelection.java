@@ -51,11 +51,6 @@ public class AssignorSelection {
         return new AssignorSelection(Type.SERVER, serverAssignor);
     }
 
-    public static AssignorSelection defaultAssignor() {
-        // TODO: review default selection
-        return new AssignorSelection(Type.SERVER, "uniform");
-    }
-
     public String serverAssignor() {
         return this.serverAssignor;
     }
