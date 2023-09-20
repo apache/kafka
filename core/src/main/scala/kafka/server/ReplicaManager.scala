@@ -845,11 +845,10 @@ class ReplicaManager(val config: KafkaConfig,
         // For unverified entries, send a request to verify. When verified, the append process will proceed via the callback.
         // We verify above that all partitions use the same producer ID.
         val batchInfo = notYetVerifiedEntriesPerPartition.head._2.firstBatch()
-        addPartitionsToTxnManager.foreach(_.addTxnData(
+        addPartitionsToTxnManager.foreach(_.verifyTransaction(
           transactionalId = transactionalId,
           producerId = batchInfo.producerId,
           producerEpoch = batchInfo.producerEpoch,
-          verifyOnly = true,
           topicPartitions = notYetVerifiedEntriesPerPartition.keySet.toSeq,
           callback = KafkaRequestHandler.wrap(appendEntries(entriesPerPartition)(_))
         ))

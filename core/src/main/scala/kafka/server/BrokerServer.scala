@@ -28,7 +28,6 @@ import kafka.security.CredentialProvider
 import kafka.server.metadata.{AclPublisher, BrokerMetadataPublisher, ClientQuotaMetadataManager,
 DynamicClientQuotaPublisher, DynamicConfigPublisher, KRaftMetadataCache, ScramPublisher, DelegationTokenPublisher}
 import kafka.utils.CoreUtils
-import org.apache.kafka.clients.NetworkClient
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.feature.SupportedVersionRange
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
@@ -256,11 +255,13 @@ class BrokerServer(
       alterPartitionManager.start()
 
       val addPartitionsLogContext = new LogContext(s"[AddPartitionsToTxnManager broker=${config.brokerId}]")
-      val addPartitionsToTxnNetworkClient: NetworkClient = NetworkUtils.buildNetworkClient("AddPartitionsManager", config, metrics, time, addPartitionsLogContext)
-      val addPartitionsToTxnManager: AddPartitionsToTxnManager = new AddPartitionsToTxnManager(
+      val addPartitionsToTxnNetworkClient = NetworkUtils.buildNetworkClient("AddPartitionsManager", config, metrics, time, addPartitionsLogContext)
+      val addPartitionsToTxnManager = new AddPartitionsToTxnManager(
         config,
         addPartitionsToTxnNetworkClient,
         metadataCache,
+        // The transaction coordinator is not created at this point so we must
+        // use a lambda here.
         transactionalId => transactionCoordinator.partitionFor(transactionalId),
         time
       )

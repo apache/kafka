@@ -629,11 +629,13 @@ class KafkaServer(
 
   protected def createReplicaManager(isShuttingDown: AtomicBoolean): ReplicaManager = {
     val addPartitionsLogContext = new LogContext(s"[AddPartitionsToTxnManager broker=${config.brokerId}]")
-    val addPartitionsToTxnNetworkClient: NetworkClient = NetworkUtils.buildNetworkClient("AddPartitionsManager", config, metrics, time, addPartitionsLogContext)
-    val addPartitionsToTxnManager: AddPartitionsToTxnManager = new AddPartitionsToTxnManager(
+    val addPartitionsToTxnNetworkClient = NetworkUtils.buildNetworkClient("AddPartitionsManager", config, metrics, time, addPartitionsLogContext)
+    val addPartitionsToTxnManager = new AddPartitionsToTxnManager(
       config,
       addPartitionsToTxnNetworkClient,
       metadataCache,
+      // The transaction coordinator is not created at this point so we must
+      // use a lambda here.
       transactionalId => transactionCoordinator.partitionFor(transactionalId),
       time
     )
