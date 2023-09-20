@@ -25,7 +25,7 @@ import org.apache.kafka.common.requests.ControllerRegistrationResponse
 import org.apache.kafka.common.utils.{ExponentialBackoff, Time}
 import org.apache.kafka.image.loader.{LogDeltaManifest, SnapshotManifest}
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
-import org.apache.kafka.metadata.{RecordTestUtils, VersionRange}
+import org.apache.kafka.metadata.{ListenerInfo, RecordTestUtils, VersionRange}
 import org.apache.kafka.raft.LeaderAndEpoch
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.test.TestUtils
@@ -37,6 +37,7 @@ import org.junit.jupiter.params.provider.ValueSource
 import java.util
 import java.util.{OptionalInt, Properties}
 import java.util.concurrent.{CompletableFuture, TimeUnit}
+import scala.jdk.CollectionConverters._
 
 @Timeout(value = 60)
 class ControllerRegistrationManagerTest {
@@ -67,13 +68,13 @@ class ControllerRegistrationManagerTest {
   private def newControllerRegistrationManager(
     context: RegistrationTestContext,
   ): ControllerRegistrationManager = {
-    new ControllerRegistrationManager(context.config,
+    new ControllerRegistrationManager(context.config.nodeId,
       context.clusterId,
       Time.SYSTEM,
       "controller-registration-manager-test-",
       createSupportedFeatures(MetadataVersion.IBP_3_7_IV0),
       RecordTestUtils.createTestControllerRegistration(1, false).incarnationId(),
-      Map(),
+      ListenerInfo.create(context.config.controllerListeners.map(_.toJava).asJava),
       new ExponentialBackoff(1, 2, 100, 0.02))
   }
 
