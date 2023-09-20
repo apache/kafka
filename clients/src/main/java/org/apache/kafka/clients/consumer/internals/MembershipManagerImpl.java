@@ -17,7 +17,6 @@
 
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest;
@@ -86,12 +85,6 @@ public class MembershipManagerImpl implements MembershipManager {
     private Optional<ConsumerGroupHeartbeatResponseData.Assignment> targetAssignment;
 
     /**
-     * Latest assignment that the member received from the server while a {@link #targetAssignment}
-     * was in process.
-     */
-    private Optional<ConsumerGroupHeartbeatResponseData.Assignment> nextTargetAssignment;
-
-    /**
      * slf4j logger.
      */
     private final Logger log;
@@ -110,7 +103,6 @@ public class MembershipManagerImpl implements MembershipManager {
         this.assignorSelection = assignorSelection;
         this.groupInstanceId = Optional.ofNullable(groupInstanceId);
         this.targetAssignment = Optional.empty();
-        this.nextTargetAssignment = Optional.empty();
         this.log = logContext.logger(MembershipManagerImpl.class);
     }
 
@@ -127,6 +119,12 @@ public class MembershipManagerImpl implements MembershipManager {
         this.assignorSelection = assignorSelection;
     }
 
+    /**
+     * Update the member state, setting it to the nextState only if it is a valid transition.
+     *
+     * @throws IllegalStateException If transitioning from the member {@link #state} to the
+     *                               nextState is not allowed as defined in {@link MemberState}.
+     */
     private void transitionTo(MemberState nextState) {
         if (!this.state.equals(nextState) && !nextState.getPreviousValidStates().contains(state)) {
             throw new IllegalStateException(String.format("Invalid state transition from %s to %s",
@@ -171,31 +169,34 @@ public class MembershipManagerImpl implements MembershipManager {
      * {@inheritDoc}
      */
     @Override
-    public Optional<Errors> updateState(ConsumerGroupHeartbeatResponseData response) {
-        if (response.errorCode() == Errors.NONE.code()) {
-            this.memberId = response.memberId();
-            this.memberEpoch = response.memberEpoch();
-            ConsumerGroupHeartbeatResponseData.Assignment assignment = response.assignment();
-            if (assignment != null) {
-                setTargetAssignment(assignment);
-            }
-            maybeTransitionToStable();
-            return Optional.empty();
-        } else {
-            if (response.errorCode() == Errors.FENCED_MEMBER_EPOCH.code() || response.errorCode() == Errors.UNKNOWN_MEMBER_ID.code()) {
-                resetEpoch();
-                transitionTo(MemberState.FENCED);
-            } else {
-                if (Errors.forCode(response.errorCode()).exception() instanceof RetriableException) {
-                    log.debug(String.format("Leaving member state %s unchanged after retriable " +
-                                    "error %s received in heartbeat response for member %s",
-                            state, Errors.forCode(response.errorCode()).exceptionName(), memberId));
-                } else {
-                    transitionTo(MemberState.FAILED);
-                }
-            }
-            return Optional.of(Errors.forCode(response.errorCode()));
+    public void updateState(ConsumerGroupHeartbeatResponseData response) {
+        if (response.errorCode() != Errors.NONE.code()) {
+            throw new IllegalArgumentException("Invalid response with error");
         }
+        this.memberId = response.memberId();
+        this.memberEpoch = response.memberEpoch();
+        ConsumerGroupHeartbeatResponseData.Assignment assignment = response.assignment();
+        if (assignment != null) {
+            setTargetAssignment(assignment);
+        }
+        maybeTransitionToStable();
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public void fenceMember() {
+        resetEpoch();
+        transitionTo(MemberState.FENCED);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public void failMember() {
+        transitionTo(MemberState.FAILED);
     }
 
     /**
@@ -211,91 +212,84 @@ public class MembershipManagerImpl implements MembershipManager {
         return state.equals(MemberState.STABLE);
     }
 
+    /**
+     * Take new target assignment received from the server and set it as targetAssignment to be
+     * processed. If an assignment is already in process this newTargetAssignment will be ignored
+     * for now.
+     */
     private void setTargetAssignment(ConsumerGroupHeartbeatResponseData.Assignment newTargetAssignment) {
         if (!targetAssignment.isPresent()) {
             targetAssignment = Optional.of(newTargetAssignment);
         } else {
-            // Keep the latest next target assignment
-            nextTargetAssignment = Optional.of(newTargetAssignment);
+            log.debug(String.format("Temporarily ignoring assignment %s received while member %s " +
+                    "is still processing a previous assignment.", newTargetAssignment, memberId));
         }
     }
 
+    /**
+     * Returns true if the member has a target assignment being processed.
+     */
     private boolean hasPendingTargetAssignment() {
-        return targetAssignment.isPresent() || nextTargetAssignment.isPresent();
-    }
-
-    /**
-     * Update state and assignment as the member has successfully processed a new target
-     * assignment.
-     * This indicates the end of the reconciliation phase for the member, and makes the target
-     * assignment the new current assignment.
-     *
-     * @param assignment Target assignment the member was able to successfully process
-     */
-    public void onAssignmentProcessSuccess(ConsumerGroupHeartbeatResponseData.Assignment assignment) {
-        updateAssignment(assignment);
-        transitionTo(MemberState.STABLE);
-    }
-
-    /**
-     * Update state and member info as the member was not able to process the assignment, due to
-     * errors in the execution of the user-provided callbacks.
-     *
-     * @param error Exception found during the execution of the user-provided callbacks
-     */
-    public void onAssignmentProcessFailure(Throwable error) {
-        transitionTo(MemberState.FAILED);
-        // TODO: update member info appropriately, to clear up whatever shouldn't be kept in
-        //  this unrecoverable state
+        return targetAssignment.isPresent();
     }
 
     private void resetEpoch() {
         this.memberEpoch = 0;
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public MemberState state() {
         return state;
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public AssignorSelection assignorSelection() {
         return this.assignorSelection;
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public ConsumerGroupHeartbeatResponseData.Assignment assignment() {
+    public ConsumerGroupHeartbeatResponseData.Assignment currentAssignment() {
         return this.currentAssignment;
     }
 
+
+    /**
+     * Assignment that the member received from the server but hasn't completely processed yet.
+     */
     // VisibleForTesting
     Optional<ConsumerGroupHeartbeatResponseData.Assignment> targetAssignment() {
         return targetAssignment;
     }
 
-    // VisibleForTesting
-    Optional<ConsumerGroupHeartbeatResponseData.Assignment> nextTargetAssignment() {
-        return nextTargetAssignment;
-    }
-
     /**
-     * Set the current assignment for the member. This indicates that the reconciliation of the
-     * target assignment has been successfully completed.
-     * This will clear the {@link #targetAssignment}, and take on the
-     * {@link #nextTargetAssignment} if any.
+     * This indicates that the reconciliation of the target assignment has been successfully
+     * completed, so it will make it effective by assigning it to the current assignment.
      *
-     * @param assignment Assignment that has been successfully processed as part of the
-     *                   reconciliation process.
+     * @params error Exception found while executing the user-provided callbacks to process the
+     * target assignment. Empty optional if no errors occurred.
      */
     @Override
-    public void updateAssignment(ConsumerGroupHeartbeatResponseData.Assignment assignment) {
-        this.currentAssignment = assignment;
-        if (!nextTargetAssignment.isPresent()) {
-            targetAssignment = Optional.empty();
-        } else {
-            targetAssignment = Optional.of(nextTargetAssignment.get());
-            nextTargetAssignment = Optional.empty();
+    public void onTargetAssignmentProcessComplete(Optional<Throwable> error) {
+        if (!targetAssignment.isPresent()) {
+            throw new IllegalStateException("Unexpected empty target assignment when completing " +
+                    "reconciliation process.");
         }
-        maybeTransitionToStable();
+        if (!error.isPresent()) {
+            this.currentAssignment = targetAssignment.get();
+            targetAssignment = Optional.empty();
+            maybeTransitionToStable();
+        } else {
+            log.debug("Updating state after assignment process failed");
+            transitionTo(MemberState.FAILED);
+        }
     }
 }

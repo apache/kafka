@@ -17,7 +17,6 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
-import org.apache.kafka.common.protocol.Errors;
 
 import java.util.Optional;
 
@@ -57,13 +56,12 @@ public interface MembershipManager {
     MemberState state();
 
     /**
-     * Update the member info and transition the member state based on a heartbeat response
+     * Update member info and transition member state based on a heartbeat response.
      *
      * @param response Heartbeat response to extract member info and errors from.
-     * @return Error found in the heartbeat response. It will return {@link Optional#empty()} if
-     * no errors are found.
      */
-    Optional<Errors> updateState(ConsumerGroupHeartbeatResponseData response);
+    // TODO: rename to indicate that this is for the success path (ex. updateStateOnSuccessfulHeartbeat)
+    void updateState(ConsumerGroupHeartbeatResponseData response);
 
     /**
      * Returns the {@link AssignorSelection} for the member
@@ -71,13 +69,26 @@ public interface MembershipManager {
     AssignorSelection assignorSelection();
 
     /**
-     * Returns the current assignment for the member
+     * Returns the current assignment for the member.
      */
-    ConsumerGroupHeartbeatResponseData.Assignment assignment();
+    ConsumerGroupHeartbeatResponseData.Assignment currentAssignment();
 
     /**
      * Update the assignment for the member, indicating that the provided assignment is the new
      * current assignment.
      */
-    void updateAssignment(ConsumerGroupHeartbeatResponseData.Assignment assignment);
+    void onTargetAssignmentProcessComplete(Optional<Throwable> error);
+
+    /**
+     * Transition the member to the FENCED state and update the member info as required. This is
+     * only invoked when the heartbeat returns a FENCED_MEMBER_EPOCH or UNKNOWN_MEMBER_ID error.
+     * code.
+     */
+    void fenceMember();
+
+    /**
+     * Transition the member to the FAILED state and update the member info as required. This is
+     * invoked when the heartbeat returns an UNRELEASED_MEMBER_ID error code.
+     */
+    void failMember();
 }
