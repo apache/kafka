@@ -21,7 +21,8 @@ import org.apache.kafka.streams.processor.internals.testutil.DummyStreamsConfig;
 import org.junit.Assert;
 import org.junit.Test;
 
-import static org.easymock.EasyMock.mock;
+import static org.mockito.Mockito.mock;
+
 
 public class TopologyMetadataTest {
     final static String TOPOLOGY1 = "topology1";
