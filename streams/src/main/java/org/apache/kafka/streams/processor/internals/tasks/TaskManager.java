@@ -72,8 +72,6 @@ public interface TaskManager {
 
     /**
      * Unlock all of the managed active tasks from the task manager. Similar to {@link #unlockTasks(Set)}.
-     *
-     * This method does not block, instead a future is returned.
      */
     void unlockAllTasks();
 
@@ -120,5 +118,15 @@ public interface TaskManager {
      * @return A map from task ID to the exception that occurred.
      */
     Map<TaskId, StreamsException> drainUncaughtExceptions();
+
+    /**
+     * Signals that at least one task has become processable, e.g. because it was resumed or new records may be available.
+     */
+    void signalProcessableTasks();
+
+    /**
+     * Blocks until unassigned processable tasks may be available.
+     */
+    void awaitProcessableTasks() throws InterruptedException;
 
 }
