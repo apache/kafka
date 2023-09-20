@@ -18,9 +18,11 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ConsumerGroupHeartbeatResponse;
+import org.apache.kafka.common.utils.LogContext;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -37,21 +39,13 @@ public class MembershipManagerImplTest {
     private static final String GROUP_ID = "test-group";
     private static final String MEMBER_ID = "test-member-1";
     private static final int MEMBER_EPOCH = 1;
-
-    @Test
-    public void testMembershipManagerDefaultAssignor() {
-        MembershipManagerImpl membershipManager = new MembershipManagerImpl(GROUP_ID);
-        assertEquals(AssignorSelection.defaultAssignor(), membershipManager.assignorSelection());
-
-        membershipManager = new MembershipManagerImpl(GROUP_ID, "instance1", null);
-        assertEquals(AssignorSelection.defaultAssignor(), membershipManager.assignorSelection());
-    }
+    private final LogContext logContext = new LogContext();
 
     @Test
     public void testMembershipManagerAssignorSelectionUpdate() {
         AssignorSelection firstAssignorSelection = AssignorSelection.newServerAssignor("uniform");
         MembershipManagerImpl membershipManager = new MembershipManagerImpl(GROUP_ID, "instance1",
-                firstAssignorSelection);
+                firstAssignorSelection, logContext);
         assertEquals(firstAssignorSelection, membershipManager.assignorSelection());
 
         AssignorSelection secondAssignorSelection = AssignorSelection.newServerAssignor("range");
@@ -63,14 +57,14 @@ public class MembershipManagerImplTest {
     }
 
     @Test
-    public void testMembershipManagerInitSupportsEmptyGroupInstanceId() {
-        new MembershipManagerImpl(GROUP_ID);
-        new MembershipManagerImpl(GROUP_ID, null, AssignorSelection.defaultAssignor());
+    public void testMembershipManagerInitSupportsNullGroupInstanceIdAndAssignor() {
+        new MembershipManagerImpl(GROUP_ID, logContext);
+        new MembershipManagerImpl(GROUP_ID, null, null, logContext);
     }
 
     @Test
     public void testTransitionToReconcilingOnlyIfAssignmentReceived() {
-        MembershipManagerImpl membershipManager = new MembershipManagerImpl(GROUP_ID);
+        MembershipManagerImpl membershipManager = new MembershipManagerImpl(GROUP_ID, logContext);
         assertEquals(MemberState.UNJOINED, membershipManager.state());
 
         ConsumerGroupHeartbeatResponse responseWithoutAssignment =
@@ -87,39 +81,96 @@ public class MembershipManagerImplTest {
     @ParameterizedTest
     @EnumSource(Errors.class)
     public void testMemberIdAndEpochResetOnErrors(Errors error) {
-        MembershipManagerImpl membershipManager = new MembershipManagerImpl(GROUP_ID);
-        ConsumerGroupHeartbeatResponse heartbeatResponse =
-                createConsumerGroupHeartbeatResponse(null);
+        MembershipManagerImpl membershipManager = new MembershipManagerImpl(GROUP_ID, logContext);
+        ConsumerGroupHeartbeatResponse heartbeatResponse = createConsumerGroupHeartbeatResponse(null);
         membershipManager.updateState(heartbeatResponse.data());
         assertEquals(MemberState.STABLE, membershipManager.state());
         assertEquals(MEMBER_ID, membershipManager.memberId());
         assertEquals(MEMBER_EPOCH, membershipManager.memberEpoch());
 
+        ConsumerGroupHeartbeatResponse heartbeatResponseWithError =
+                createConsumerGroupHeartbeatResponseWithError(error);
+        membershipManager.updateState(heartbeatResponseWithError.data());
         if (error == Errors.UNKNOWN_MEMBER_ID || error == Errors.FENCED_MEMBER_EPOCH) {
             // Should reset member epoch and keep member id
-            ConsumerGroupHeartbeatResponse heartbeatResponseWithMemberIdError =
-                    createConsumerGroupHeartbeatResponseWithError(Errors.FENCED_MEMBER_EPOCH);
-            membershipManager.updateState(heartbeatResponseWithMemberIdError.data());
-
             assertFalse(membershipManager.memberId().isEmpty());
             assertEquals(0, membershipManager.memberEpoch());
         } else {
             // Should not reset member id or epoch
-            ConsumerGroupHeartbeatResponse heartbeatResponseWithError =
-                    createConsumerGroupHeartbeatResponseWithError(error);
-            membershipManager.updateState(heartbeatResponseWithError.data());
-
             assertFalse(membershipManager.memberId().isEmpty());
             assertNotEquals(0, membershipManager.memberEpoch());
         }
     }
 
+    public void testStateTransitionsOnErrors(MembershipManagerImpl membershipManager,
+                                             Errors error) {
+        ConsumerGroupHeartbeatResponse heartbeatResponseWithError =
+                createConsumerGroupHeartbeatResponseWithError(error);
+        membershipManager.updateState(heartbeatResponseWithError.data());
+        MemberState initialState = membershipManager.state();
+
+        if (error == Errors.NONE) {
+            assertEquals(MemberState.STABLE, membershipManager.state());
+        } else if (error == Errors.UNKNOWN_MEMBER_ID || error == Errors.FENCED_MEMBER_EPOCH) {
+            assertEquals(MemberState.FENCED, membershipManager.state());
+        } else if (error.exception() instanceof RetriableException) {
+            // Should leave state unchanged
+            assertEquals(initialState, membershipManager.state());
+        } else
+            // Should transition state to FAILED
+            assertEquals(MemberState.FAILED, membershipManager.state());
+    }
+
+    @ParameterizedTest
+    @EnumSource(Errors.class)
+    public void testTransitionsOnErrorsWhenStateIsStable(Errors error) {
+        MembershipManagerImpl membershipManager = new MembershipManagerImpl(GROUP_ID, logContext);
+        ConsumerGroupHeartbeatResponse heartbeatResponse = createConsumerGroupHeartbeatResponse(null);
+        membershipManager.updateState(heartbeatResponse.data());
+        assertEquals(MemberState.STABLE, membershipManager.state());
+
+        testStateTransitionsOnErrors(membershipManager, error);
+    }
+
+    @ParameterizedTest
+    @EnumSource(Errors.class)
+    public void testTransitionsOnErrorsWhenStateIsUnjoined(Errors error) {
+        MembershipManagerImpl membershipManager = new MembershipManagerImpl(GROUP_ID, logContext);
+        assertEquals(MemberState.UNJOINED, membershipManager.state());
+
+        if (error == Errors.UNKNOWN_MEMBER_ID || error == Errors.FENCED_MEMBER_EPOCH) {
+            // Exclude fencing scenarios as it is not a valid transition from UNJOINED
+            return;
+        }
+
+        testStateTransitionsOnErrors(membershipManager, error);
+    }
+
+    @Test
+    public void testFencingShouldNotHappenWhenStateIsUnjoined() {
+        MembershipManagerImpl membershipManager = new MembershipManagerImpl(GROUP_ID, logContext);
+        assertEquals(MemberState.UNJOINED, membershipManager.state());
+
+        // Receiving UNKNOWN_MEMBER_ID when the member is not part of the group is not expected
+        // and should fail with invalid transition.
+        ConsumerGroupHeartbeatResponse unknownMemberResponse =
+                createConsumerGroupHeartbeatResponseWithError(Errors.UNKNOWN_MEMBER_ID);
+        assertThrows(IllegalStateException.class,
+                () -> membershipManager.updateState(unknownMemberResponse.data()));
+
+        // Receiving FENCED_MEMBER_EPOCH when the member is not part of the group is not expected
+        // and should fail with invalid transition.
+        ConsumerGroupHeartbeatResponse fencedEpochResponse =
+                createConsumerGroupHeartbeatResponseWithError(Errors.FENCED_MEMBER_EPOCH);
+        assertThrows(IllegalStateException.class,
+                () -> membershipManager.updateState(fencedEpochResponse.data()));
+    }
+
     @Test
     public void testUpdateAssignment() {
-        MembershipManagerImpl membershipManager = new MembershipManagerImpl(GROUP_ID);
+        MembershipManagerImpl membershipManager = new MembershipManagerImpl(GROUP_ID, logContext);
         ConsumerGroupHeartbeatResponseData.Assignment newAssignment = createAssignment();
-        ConsumerGroupHeartbeatResponse heartbeatResponse =
-                createConsumerGroupHeartbeatResponse(newAssignment);
+        ConsumerGroupHeartbeatResponse heartbeatResponse = createConsumerGroupHeartbeatResponse(newAssignment);
         membershipManager.updateState(heartbeatResponse.data());
 
         // Target assignment should be in the process of being reconciled
@@ -128,7 +179,7 @@ public class MembershipManagerImplTest {
 
     @Test
     public void testUpdateAssignmentReceivingAssignmentWhileAnotherInProcess() {
-        MembershipManagerImpl membershipManager = new MembershipManagerImpl(GROUP_ID);
+        MembershipManagerImpl membershipManager = new MembershipManagerImpl(GROUP_ID, logContext);
         ConsumerGroupHeartbeatResponseData.Assignment newAssignment1 = createAssignment();
         membershipManager.updateState(createConsumerGroupHeartbeatResponse(newAssignment1).data());
 
@@ -143,7 +194,7 @@ public class MembershipManagerImplTest {
 
     @Test
     public void testNextTargetAssignmentHoldsLatestAssignmentReceivedWhileAnotherInProcess() {
-        MembershipManagerImpl membershipManager = new MembershipManagerImpl(GROUP_ID);
+        MembershipManagerImpl membershipManager = new MembershipManagerImpl(GROUP_ID, logContext);
         ConsumerGroupHeartbeatResponseData.Assignment newAssignment1 = createAssignment();
         membershipManager.updateState(createConsumerGroupHeartbeatResponse(newAssignment1).data());
 
