@@ -90,7 +90,7 @@ public class CommitRequestManager implements RequestManager {
     }
 
     /**
-     * Poll for the {@link OffsetFetchRequest} and {@link OffsetCommitRequestState} request if there's any. The function will
+     * Poll for the {@link OffsetFetchRequest} and {@link OffsetCommitRequest} request if there's any. The function will
      * also try to autocommit the offsets, if feature is enabled.
      */
     @Override
@@ -221,9 +221,9 @@ public class CommitRequestManager implements RequestManager {
                     coordinatorRequestManager.coordinator(),
                     (response, throwable) -> {
                         if (throwable == null) {
-                            this.future.complete(null);
+                            future.complete(null);
                         } else {
-                            this.future.completeExceptionally(throwable);
+                            future.completeExceptionally(throwable);
                         }
                     });
         }
@@ -386,7 +386,7 @@ public class CommitRequestManager implements RequestManager {
         List<OffsetFetchRequestState> unsentOffsetFetches = new ArrayList<>();
         List<OffsetFetchRequestState> inflightOffsetFetches = new ArrayList<>();
 
-        // Visible for teseting
+        // Visible for testing
         boolean hasUnsentRequests() {
             return !unsentOffsetCommits.isEmpty() || !unsentOffsetFetches.isEmpty();
         }
@@ -407,7 +407,7 @@ public class CommitRequestManager implements RequestManager {
          * to the existing one.
          *
          * <p>If the request is new, it invokes a callback to remove itself from the {@code inflightOffsetFetches}
-         * upon completion.</>
+         * upon completion.
          */
         private CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> addOffsetFetchRequest(final OffsetFetchRequestState request) {
             Optional<OffsetFetchRequestState> dupe =
@@ -442,8 +442,7 @@ public class CommitRequestManager implements RequestManager {
 
         /**
          * Clear {@code unsentOffsetCommits} and moves all the sendable request in {@code unsentOffsetFetches} to the
-         * {@code inflightOffsetFetches} to bookkeep all of the inflight requests.
-         * <p>
+         * {@code inflightOffsetFetches} to bookkeep all the inflight requests.
          * Note: Sendable requests are determined by their timer as we are expecting backoff on failed attempt. See
          * {@link RequestState}.
          **/

@@ -70,7 +70,7 @@ public class TopicMetadataRequestManager implements RequestManager {
 
     public TopicMetadataRequestManager(final LogContext context, final ConsumerConfig config) {
         logContext = context;
-        log = logContext.logger(this.getClass());
+        log = logContext.logger(getClass());
         inflightRequests = new HashMap<>();
         retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
         retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
@@ -184,7 +184,7 @@ public class TopicMetadataRequestManager implements RequestManager {
         }
 
         private void completeFutureAndRemoveRequest(final Throwable throwable) {
-            this.future.completeExceptionally(throwable);
+            future.completeExceptionally(throwable);
             inflightRequests.remove(topic);
         }
 
