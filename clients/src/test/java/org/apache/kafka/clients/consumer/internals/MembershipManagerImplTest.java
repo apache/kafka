@@ -99,7 +99,7 @@ public class MembershipManagerImplTest {
             // Should reset member epoch and keep member id
             ConsumerGroupHeartbeatResponse heartbeatResponseWithMemberIdError =
                     createConsumerGroupHeartbeatResponseWithError(Errors.FENCED_MEMBER_EPOCH);
-            membershipManager.updateState(heartbeatResponseWithMemberIdError.data());
+            membershipManager.onFatalError(heartbeatResponseWithMemberIdError.data().errorCode());
 
             assertFalse(membershipManager.memberId().isEmpty());
             assertEquals(0, membershipManager.memberEpoch());
