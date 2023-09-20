@@ -30,6 +30,7 @@ import java.util.Set;
  * topic and partition metadata for the topics that the consumer group is subscribed to.
  */
 public class SubscribedTopicMetadata implements SubscribedTopicDescriber {
+
     /**
      * The topic Ids mapped to their corresponding {@link TopicMetadata}
      * object, which contains topic and partition metadata.
@@ -68,12 +69,12 @@ public class SubscribedTopicMetadata implements SubscribedTopicDescriber {
      * @param topicId       Uuid corresponding to the partition's topic.
      * @param partition     Partition Id within the topic.
      * @return The set of racks corresponding to the replicas of the topics partition.
-     *         If the topic Id does not exist, an empty set is returned
+     *         If the topic Id does not exist or no partition rack information is available, an empty set is returned.
      */
     @Override
     public Set<String> racksForPartition(Uuid topicId, int partition) {
         TopicMetadata topic = this.topicMetadata.get(topicId);
-        return topic == null ? Collections.emptySet() : topic.partitionRacks().get(partition);
+        return (topic == null) ? Collections.emptySet() : topic.partitionRacks().getOrDefault(partition, Collections.emptySet());
     }
 
     @Override
