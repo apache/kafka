@@ -108,7 +108,6 @@ public class DefaultTaskExecutorTest {
         taskExecutor.awaitShutdown(Duration.ofMinutes(1));
 
         waitForCondition(future::isDone, "Await for unassign future to complete");
-        assertTrue(future.isDone());
         assertNull(taskExecutor.currentTask(), "Have task assigned after shutdown");
     }
 

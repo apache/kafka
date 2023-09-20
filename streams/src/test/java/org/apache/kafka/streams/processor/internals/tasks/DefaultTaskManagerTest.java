@@ -82,7 +82,7 @@ public class DefaultTaskManagerTest {
 
     @Test
     public void shouldStartTaskExecutors() {
-        taskManager.start();
+        taskManager.startTaskExecutors();
 
         verify(taskExecutor).start();
     }
@@ -240,8 +240,7 @@ public class DefaultTaskManagerTest {
     public void shouldNotAssignTasksIfUncaughtExceptionPresent() {
         taskManager.add(Collections.singleton(task));
         when(tasks.activeTasks()).thenReturn(Collections.singleton(task));
-        when(taskExecutionMetadata.canPunctuateTask(eq(task))).thenReturn(true);
-        when(task.canPunctuateStreamTime()).thenReturn(true);
+        ensureTaskMakesProgress();
         taskManager.assignNextTask(taskExecutor);
         taskManager.setUncaughtException(mock(StreamsException.class), taskId);
         taskManager.unassignTask(task, taskExecutor);
@@ -445,4 +444,10 @@ public class DefaultTaskManagerTest {
 
         assertTrue(lockFuture.isDone());
     }
+
+    private void ensureTaskMakesProgress() {
+        when(taskExecutionMetadata.canPunctuateTask(eq(task))).thenReturn(true);
+        when(task.canPunctuateStreamTime()).thenReturn(true);
+    }
+
 }

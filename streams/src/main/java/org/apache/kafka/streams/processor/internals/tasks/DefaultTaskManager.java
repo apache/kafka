@@ -362,7 +362,7 @@ public class DefaultTaskManager implements TaskManager {
                 taskExecutionMetadata.canPunctuateTask(task) && (task.canPunctuateStreamTime() || task.canPunctuateSystemTime());
     }
 
-    public void start() {
+    public void startTaskExecutors() {
         for (final TaskExecutor t: taskExecutors) {
             t.start();
         }
