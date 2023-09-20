@@ -326,7 +326,7 @@
     <suppress checks="(NPathComplexity|MethodLength)"
               files="(GroupMetadataManager|ConsumerGroupTest|GroupMetadataManagerTest).java"/>
     <suppress checks="ClassFanOutComplexity"
-              files="(GroupMetadataManager|GroupMetadataManagerTest|GroupCoordinatorServiceTest).java"/>
+              files="(GroupMetadataManager|GroupMetadataManagerTest|GroupCoordinatorService|GroupCoordinatorServiceTest).java"/>
     <suppress checks="ParameterNumber"
               files="(ConsumerGroupMember|GroupMetadataManager).java"/>
     <suppress checks="ClassDataAbstractionCouplingCheck"
