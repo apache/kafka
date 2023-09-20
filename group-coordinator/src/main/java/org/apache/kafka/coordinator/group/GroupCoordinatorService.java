@@ -544,9 +544,10 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     DeleteGroupsResponseData.DeletableGroupResultCollection resultCollection =
                         new DeleteGroupsResponseData.DeletableGroupResultCollection();
                     groupIds.forEach(groupId -> {
-                        resultCollection.add(new DeleteGroupsResponseData.DeletableGroupResult()
-                            .setGroupId(groupId)
-                            .setErrorCode(Errors.forException(exception).code())
+                        resultCollection.add(
+                            new DeleteGroupsResponseData.DeletableGroupResult()
+                                .setGroupId(groupId)
+                                .setErrorCode(Errors.forException(exception).code())
                         );
                     });
                     return resultCollection;
