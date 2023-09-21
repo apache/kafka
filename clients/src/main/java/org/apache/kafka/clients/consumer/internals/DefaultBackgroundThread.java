@@ -110,7 +110,7 @@ public class DefaultBackgroundThread extends KafkaThread {
                 topicMetadataRequestManager,
                 Optional.ofNullable(coordinatorManager),
                 Optional.ofNullable(commitRequestManager),
-            Optional.ofNullable(heartbeatRequestManager));
+                Optional.ofNullable(heartbeatRequestManager));
     }
 
     public DefaultBackgroundThread(final Time time,
@@ -177,33 +177,32 @@ public class DefaultBackgroundThread extends KafkaThread {
                 logContext,
                 config);
             HeartbeatRequestManager heartbeatRequestManager = null;
-            MembershipManager membershipManaber = null;
 
             // TODO: consolidate groupState and memberState
             if (groupState.groupId != null) {
                 coordinatorRequestManager = new CoordinatorRequestManager(
-                    this.time,
-                    logContext,
-                    retryBackoffMs,
-                    retryBackoffMaxMs,
-                    this.errorEventHandler,
-                    groupState.groupId);
+                        this.time,
+                        logContext,
+                        retryBackoffMs,
+                        retryBackoffMaxMs,
+                        this.errorEventHandler,
+                        groupState.groupId);
                 commitRequestManager = new CommitRequestManager(
-                    this.time,
-                    logContext,
-                    subscriptionState,
-                    config,
-                    coordinatorRequestManager,
-                    groupState);
-                membershipManaber = new MembershipManagerImpl(groupState.groupId);
+                        this.time,
+                        logContext,
+                        subscriptionState,
+                        config,
+                        coordinatorRequestManager,
+                        groupState);
+                MembershipManager membershipManaber = new MembershipManagerImpl(groupState.groupId);
                 heartbeatRequestManager = new HeartbeatRequestManager(
-                    this.time,
-                    logContext,
-                    config,
-                    coordinatorRequestManager,
-                    subscriptionState,
-                    membershipManaber,
-                    errorEventHandler);
+                        this.time,
+                        logContext,
+                        config,
+                        coordinatorRequestManager,
+                        subscriptionState,
+                        membershipManaber,
+                        errorEventHandler);
             }
 
             this.requestManagers = new RequestManagers(

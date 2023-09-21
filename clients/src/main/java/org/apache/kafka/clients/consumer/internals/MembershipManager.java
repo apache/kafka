@@ -67,7 +67,7 @@ public interface MembershipManager {
     void fenceMember();
 
     /**
-     * Transition the member to the FAILED state.  This is invoked when the heartbeat returns an UNRELEASED_MEMBER_ID
+     * Transition the member to the FAILED state.  This is invoked when the heartbeat returns a non-retriable error.
      * error code.
      */
     void failMember();

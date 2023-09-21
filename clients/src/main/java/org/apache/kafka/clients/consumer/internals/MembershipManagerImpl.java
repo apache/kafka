@@ -17,7 +17,9 @@
 
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
+import org.apache.kafka.common.protocol.Errors;
 
 import java.util.Optional;
 
@@ -114,6 +116,13 @@ public class MembershipManagerImpl implements MembershipManager {
 
     @Override
     public void updateState(ConsumerGroupHeartbeatResponseData response) {
+        if (response.errorCode() != Errors.NONE.code()) {
+            String errorMessage = String.format(
+                    "Unexpected error in Heartbeat response. Expected no error, but received: %s",
+                    Errors.forCode(response.errorCode())
+            );
+            throw new IllegalStateException(errorMessage);
+        }
         this.memberId = response.memberId();
         this.memberEpoch = response.memberEpoch();
         ConsumerGroupHeartbeatResponseData.Assignment assignment = response.assignment();

@@ -37,14 +37,18 @@ import java.util.Collections;
  * using the state stored in the {@link MembershipManager} and enqueue it to the network queue to be sent out. Once
  * the response is received, the module will update the state in the {@link MembershipManager} and handle any errors.
  *
- * The manager only emits heartbeat when the member is in a group. If the member is not in a group, or the
- * coordinator is lost, the heartbeat won't be sent.
+ * The manager only emits heartbeat when the member is in a group, tries to join a group, or tries rejoin the group.
+ * If the member does not have groupId configured, left the group, or encountering fatal exceptions, the heartbeat will
+ * not be sent. If the coordinator not is not found, we will skip sending the heartbeat and tries to find a coordinator first.
  *
- * If the heartbeat request fails, the module will trigger the exponential backoff, and resend the request. See
+ * If the heartbeat failed due to retriable errors, such as, TimeoutException.  The subsequent attempt will be backoff
+ * exponentially.
+ *
+ * If the member completes the partition revocation process, a heartbeat request will be sent in the next event loop.
+ *
  * {@link HeartbeatRequestState} for more details.
  */
 public class HeartbeatRequestManager implements RequestManager {
-    private final Time time;
     private final Logger logger;
 
     private final int rebalanceTimeoutMs;
@@ -64,7 +68,6 @@ public class HeartbeatRequestManager implements RequestManager {
         final MembershipManager membershipManager,
         final ErrorEventHandler nonRetriableErrorHandler) {
         this.coordinatorRequestManager = coordinatorRequestManager;
-        this.time = time;
         this.logger = logContext.logger(getClass());
         this.subscriptions = subscriptions;
         this.membershipManager = membershipManager;
@@ -86,7 +89,6 @@ public class HeartbeatRequestManager implements RequestManager {
         final MembershipManager membershipManager,
         final HeartbeatRequestState heartbeatRequestState,
         final ErrorEventHandler nonRetriableErrorHandler) {
-        this.time = time;
         this.logger = logContext.logger(this.getClass());
         this.subscriptions = subscriptions;
         this.rebalanceTimeoutMs = config.getInt(CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG);

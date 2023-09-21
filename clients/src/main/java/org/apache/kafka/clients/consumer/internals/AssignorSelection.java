@@ -31,7 +31,7 @@ public class AssignorSelection {
     public enum Type { SERVER }
 
     private final AssignorSelection.Type type;
-    private Optional<String> serverAssignor;
+    private final Optional<String> serverAssignor;
 
     private AssignorSelection(Type type, String serverAssignor) {
         this.type = type;
