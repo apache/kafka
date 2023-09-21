@@ -17,7 +17,6 @@
 
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.protocol.Errors;
 
