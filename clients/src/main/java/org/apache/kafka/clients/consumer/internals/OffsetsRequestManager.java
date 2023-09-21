@@ -121,7 +121,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
 
     /**
      * Determine if there are pending fetch offsets requests to be sent and build a
-     * {@link org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult}
+     * {@link NetworkClientDelegate.PollResult}
      * containing it.
      */
     @Override
