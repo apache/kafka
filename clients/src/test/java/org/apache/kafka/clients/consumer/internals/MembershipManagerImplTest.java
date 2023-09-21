@@ -31,6 +31,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class MembershipManagerImplTest {
 
@@ -44,11 +45,13 @@ public class MembershipManagerImplTest {
         AssignorSelection firstAssignorSelection = AssignorSelection.newServerAssignor("uniform");
         MembershipManagerImpl membershipManager = new MembershipManagerImpl(GROUP_ID, "instance1",
                 firstAssignorSelection, logContext);
-        assertEquals(firstAssignorSelection, membershipManager.assignorSelection());
+        assertTrue(membershipManager.assignorSelection().isPresent());
+        assertEquals(firstAssignorSelection, membershipManager.assignorSelection().get());
 
         AssignorSelection secondAssignorSelection = AssignorSelection.newServerAssignor("range");
-        membershipManager.setAssignorSelection(secondAssignorSelection);
-        assertEquals(secondAssignorSelection, membershipManager.assignorSelection());
+        membershipManager.setAssignorSelection(Optional.of(secondAssignorSelection));
+        assertTrue(membershipManager.assignorSelection().isPresent());
+        assertEquals(secondAssignorSelection, membershipManager.assignorSelection().get());
 
         assertThrows(IllegalArgumentException.class,
                 () -> membershipManager.setAssignorSelection(null));

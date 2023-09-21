@@ -64,9 +64,10 @@ public interface MembershipManager {
     void updateState(ConsumerGroupHeartbeatResponseData response);
 
     /**
-     * Returns the {@link AssignorSelection} for the member
+     * Returns the {@link AssignorSelection} configured for the member, that will be sent out to
+     * the server to be used. If empty, then the server will select the assignor.
      */
-    AssignorSelection assignorSelection();
+    Optional<AssignorSelection> assignorSelection();
 
     /**
      * Returns the current assignment for the member.

@@ -38,7 +38,7 @@ import java.util.Optional;
 public class MembershipManagerImpl implements MembershipManager {
 
     /**
-     * ID of the consumer group the member will be part of., provided when creating the current
+     * ID of the consumer group the member will be part of, provided when creating the current
      * membership manager.
      */
     private final String groupId;
@@ -62,16 +62,16 @@ public class MembershipManagerImpl implements MembershipManager {
     private int memberEpoch;
 
     /**
-     * Current state of this member a part of the consumer group, as defined in {@link MemberState}
+     * Current state of this member as part of the consumer group, as defined in {@link MemberState}
      */
     private MemberState state;
 
     /**
-     * Assignor type selection for the member. If non-null, the member will send its selection to
-     * the server on the {@link ConsumerGroupHeartbeatRequest}. If null, the server will select a
-     * default assignor for the member, which the member does not need to track.
+     * Assignor selection configured for the member, that will be sent out to the server on the
+     * {@link ConsumerGroupHeartbeatRequest}. If empty, then the server will select the assignor
+     * to use.
      */
-    private AssignorSelection assignorSelection;
+    private Optional<AssignorSelection> assignorSelection;
 
     /**
      * Assignment that the member received from the server and successfully processed.
@@ -93,14 +93,16 @@ public class MembershipManagerImpl implements MembershipManager {
         this(groupId, null, null, logContext);
     }
 
-    public MembershipManagerImpl(String groupId, String groupInstanceId,
-                                 AssignorSelection assignorSelection, LogContext logContext) {
+    public MembershipManagerImpl(String groupId,
+                                 String groupInstanceId,
+                                 AssignorSelection assignorSelection,
+                                 LogContext logContext) {
         if (groupId == null) {
             throw new IllegalArgumentException("Group ID cannot be null.");
         }
         this.groupId = groupId;
         this.state = MemberState.UNJOINED;
-        this.assignorSelection = assignorSelection;
+        this.assignorSelection = Optional.ofNullable(assignorSelection);
         this.groupInstanceId = Optional.ofNullable(groupInstanceId);
         this.targetAssignment = Optional.empty();
         this.log = logContext.logger(MembershipManagerImpl.class);
@@ -109,12 +111,14 @@ public class MembershipManagerImpl implements MembershipManager {
     /**
      * Update assignor selection for the member.
      *
-     * @param assignorSelection New assignor selection
-     * @throws IllegalArgumentException If the provided assignor selection is null
+     * @param assignorSelection New assignor selection. If empty is provided, this will
+     *                          effectively clear the previous assignor selection defined for the
+     *                          member.
+     * @throws IllegalArgumentException If the provided optional assignor selection is null.
      */
-    public void setAssignorSelection(AssignorSelection assignorSelection) {
+    public void setAssignorSelection(Optional<AssignorSelection> assignorSelection) {
         if (assignorSelection == null) {
-            throw new IllegalArgumentException("Assignor selection cannot be null");
+            throw new IllegalArgumentException("Optional assignor selection cannot be null");
         }
         this.assignorSelection = assignorSelection;
     }
@@ -130,6 +134,7 @@ public class MembershipManagerImpl implements MembershipManager {
             throw new IllegalStateException(String.format("Invalid state transition from %s to %s",
                     state, nextState));
         }
+        log.trace("Member %s state transition from %s to %s", memberId, state, nextState);
         this.state = nextState;
     }
 
@@ -221,8 +226,8 @@ public class MembershipManagerImpl implements MembershipManager {
         if (!targetAssignment.isPresent()) {
             targetAssignment = Optional.of(newTargetAssignment);
         } else {
-            log.debug(String.format("Temporarily ignoring assignment %s received while member %s " +
-                    "is still processing a previous assignment.", newTargetAssignment, memberId));
+            log.debug("Temporarily ignoring assignment %s received while member %s is still " +
+                    "processing a previous assignment.", newTargetAssignment, memberId);
         }
     }
 
@@ -249,7 +254,7 @@ public class MembershipManagerImpl implements MembershipManager {
      * {@inheritDoc}
      */
     @Override
-    public AssignorSelection assignorSelection() {
+    public Optional<AssignorSelection> assignorSelection() {
         return this.assignorSelection;
     }
 
