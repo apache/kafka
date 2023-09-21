@@ -159,7 +159,7 @@ public class HeartbeatRequestManager implements RequestManager {
         if (Errors.forCode(response.data().errorCode()) == Errors.NONE) {
             this.heartbeatRequestState.updateHeartbeatIntervalMs(response.data().heartbeatIntervalMs());
             this.heartbeatRequestState.onSuccessfulAttempt(currentTimeMs);
-            this.heartbeatRequestState.reset();
+            this.heartbeatRequestState.resetTimer();
             try {
                 membershipManager.updateState(response.data());
             } catch (KafkaException e) {
@@ -263,9 +263,7 @@ public class HeartbeatRequestManager implements RequestManager {
             this.heartbeatTimer.update(currentTimeMs);
         }
 
-        @Override
-        public void reset() {
-            super.reset();
+        public void resetTimer() {
             this.heartbeatTimer.reset(heartbeatIntervalMs);
         }
 
