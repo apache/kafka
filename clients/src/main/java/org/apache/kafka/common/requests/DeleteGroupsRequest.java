@@ -25,6 +25,7 @@ import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 
 import java.nio.ByteBuffer;
+import java.util.List;
 
 public class DeleteGroupsRequest extends AbstractRequest {
     public static class Builder extends AbstractRequest.Builder<DeleteGroupsRequest> {
@@ -77,5 +78,19 @@ public class DeleteGroupsRequest extends AbstractRequest {
     @Override
     public DeleteGroupsRequestData data() {
         return data;
+    }
+
+    public static DeleteGroupsResponseData.DeletableGroupResultCollection getErrorResultCollection(
+        List<String> groupIds,
+        Errors error
+    ) {
+        DeleteGroupsResponseData.DeletableGroupResultCollection resultCollection =
+            new DeleteGroupsResponseData.DeletableGroupResultCollection();
+        groupIds.forEach(groupId -> resultCollection.add(
+            new DeleteGroupsResponseData.DeletableGroupResult()
+                .setGroupId(groupId)
+                .setErrorCode(error.code())
+        ));
+        return resultCollection;
     }
 }

@@ -53,6 +53,7 @@ import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.DeleteGroupsRequest;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.TransactionResult;
@@ -542,16 +543,35 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     topicPartition,
                     coordinator -> coordinator.deleteGroups(context, groupList)
                 ).exceptionally(exception -> {
-                    DeleteGroupsResponseData.DeletableGroupResultCollection resultCollection =
-                        new DeleteGroupsResponseData.DeletableGroupResultCollection();
-                    groupIds.forEach(groupId -> {
-                        resultCollection.add(
-                            new DeleteGroupsResponseData.DeletableGroupResult()
-                                .setGroupId(groupId)
-                                .setErrorCode(Errors.forException(exception).code())
+                    if (exception instanceof UnknownTopicOrPartitionException ||
+                        exception instanceof NotEnoughReplicasException) {
+                        return DeleteGroupsRequest.getErrorResultCollection(
+                            groupIds,
+                            Errors.COORDINATOR_NOT_AVAILABLE
                         );
-                    });
-                    return resultCollection;
+                    }
+
+                    if (exception instanceof NotLeaderOrFollowerException ||
+                        exception instanceof KafkaStorageException) {
+                        return DeleteGroupsRequest.getErrorResultCollection(
+                            groupIds,
+                            Errors.NOT_COORDINATOR
+                        );
+                    }
+
+                    if (exception instanceof RecordTooLargeException ||
+                        exception instanceof RecordBatchTooLargeException ||
+                        exception instanceof InvalidFetchSizeException) {
+                        return DeleteGroupsRequest.getErrorResultCollection(
+                            groupIds,
+                            Errors.UNKNOWN_SERVER_ERROR
+                        );
+                    }
+
+                    return DeleteGroupsRequest.getErrorResultCollection(
+                        groupIds,
+                        Errors.forException(exception)
+                    );
                 });
 
             futures.add(future);
