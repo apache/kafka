@@ -35,4 +35,16 @@ public interface CoordinatorEvent extends EventAccumulator.Event<TopicPartition>
      * @param exception An exception if the processing of the event failed or null otherwise.
      */
     void complete(Throwable exception);
+
+    /**
+     * @return The enqueue time in milliseconds.
+     */
+    long enqueueTimeMs();
+
+    /**
+     * Sets the enqueue time.
+     *
+     * @param enqueueTimeMs The enqueue time in milliseconds.
+     */
+    void setEnqueueTimeMs(long enqueueTimeMs);
 }
