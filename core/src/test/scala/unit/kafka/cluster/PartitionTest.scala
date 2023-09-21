@@ -1374,7 +1374,9 @@ class PartitionTest extends AbstractPartitionTest {
     doAnswer(_ => {
       // simulate topic is deleted at the moment
       partition.delete()
-      val replica = new Replica(remoteBrokerId, topicPartition, true)
+      val metadataCache = mock(classOf[KRaftMetadataCache])
+      when(metadataCache.getAliveBrokerEpoch(brokerId)).thenReturn(Option(defaultBrokerEpoch(brokerId)))
+      val replica = new Replica(remoteBrokerId, topicPartition, metadataCache)
       partition.updateFollowerFetchState(replica, mock(classOf[LogOffsetMetadata]), 0, initializeTimeMs, 0, 0)
       mock(classOf[LogReadInfo])
     }).when(partition).fetchRecords(any(), any(), anyLong(), anyInt(), anyBoolean(), anyBoolean())
@@ -1783,12 +1785,11 @@ class PartitionTest extends AbstractPartitionTest {
     val replicas = List(brokerId, remoteBrokerId1, remoteBrokerId2)
     val isr = Set(brokerId, remoteBrokerId2)
 
-    val metadataCache: MetadataCache = mock(classOf[KRaftMetadataCache])
-    addBrokerEpochToMockMetadataCache(metadataCache.asInstanceOf[KRaftMetadataCache], replicas)
+    val metadataCache: KRaftMetadataCache = mock(classOf[KRaftMetadataCache])
 
     // Mark the remote broker 1 as eligible in the metadata cache.
-    when(metadataCache.asInstanceOf[KRaftMetadataCache].isBrokerFenced(remoteBrokerId1)).thenReturn(false)
-    when(metadataCache.asInstanceOf[KRaftMetadataCache].isBrokerShuttingDown(remoteBrokerId1)).thenReturn(false)
+    when(metadataCache.isBrokerFenced(remoteBrokerId1)).thenReturn(false)
+    when(metadataCache.isBrokerShuttingDown(remoteBrokerId1)).thenReturn(false)
 
     val partition = new Partition(
       topicPartition,
@@ -1819,7 +1820,10 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(isr, partition.partitionState.maximalIsr)
 
     // Fetch to let the follower catch up to the log end offset, but using a wrong broker epoch. The expansion should fail.
+    addBrokerEpochToMockMetadataCache(metadataCache.asInstanceOf[KRaftMetadataCache], List(brokerId, remoteBrokerId2))
+    // Create a race case where the replica epoch get bumped right after the previous fetch succeeded.
     val wrongReplicaEpoch = defaultBrokerEpoch(remoteBrokerId1) - 1
+    when(metadataCache.getAliveBrokerEpoch(remoteBrokerId1)).thenReturn(Option(wrongReplicaEpoch), Option(defaultBrokerEpoch(remoteBrokerId1)))
     fetchFollower(partition,
       replicaId = remoteBrokerId1,
       fetchOffset = log.logEndOffset,
@@ -1866,9 +1870,8 @@ class PartitionTest extends AbstractPartitionTest {
     }
   }
 
-  @ParameterizedTest
-  @ValueSource(booleans = Array(true, false))
-  def testFenceFollowerFetchWithStaleBrokerEpoch(zkMigrationEnabled: Boolean): Unit = {
+  @Test
+  def testFenceFollowerFetchWithStaleBrokerEpoch(): Unit = {
     val log = logManager.getOrCreateLog(topicPartition, topicId = None)
     seedLogData(log, numRecords = 10, leaderEpoch = 4)
     val controllerEpoch = 0
@@ -1891,8 +1894,7 @@ class PartitionTest extends AbstractPartitionTest {
       delayedOperations,
       metadataCache,
       logManager,
-      alterPartitionManager,
-      zkMigrationEnabled
+      alterPartitionManager
     )
 
     partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
@@ -1920,33 +1922,18 @@ class PartitionTest extends AbstractPartitionTest {
     // be able to update the fetch state.
     val wrongReplicaEpoch = defaultBrokerEpoch(remoteBrokerId1) - 1
 
-    if (!zkMigrationEnabled) {
-      assertThrows(classOf[NotLeaderOrFollowerException], () => fetchFollower(partition,
-        replicaId = remoteBrokerId1,
-        fetchOffset = log.logEndOffset,
-        replicaEpoch = Some(wrongReplicaEpoch)
-      ))
+    assertThrows(classOf[NotLeaderOrFollowerException], () => fetchFollower(partition,
+      replicaId = remoteBrokerId1,
+      fetchOffset = log.logEndOffset,
+      replicaEpoch = Some(wrongReplicaEpoch)
+    ))
 
-      assertReplicaState(partition, remoteBrokerId1,
-        lastCaughtUpTimeMs = time.milliseconds(),
-        logStartOffset = 0L,
-        logEndOffset = log.logEndOffset,
-        brokerEpoch = Some(expectedReplicaEpoch)
-      )
-    } else {
-      assertDoesNotThrow(() => fetchFollower(partition,
-        replicaId = remoteBrokerId1,
-        fetchOffset = log.logEndOffset,
-        replicaEpoch = Some(wrongReplicaEpoch)
-      ))
-
-      assertReplicaState(partition, remoteBrokerId1,
-        lastCaughtUpTimeMs = time.milliseconds(),
-        logStartOffset = 0L,
-        logEndOffset = log.logEndOffset,
-        brokerEpoch = Some(wrongReplicaEpoch)
-      )
-    }
+    assertReplicaState(partition, remoteBrokerId1,
+      lastCaughtUpTimeMs = time.milliseconds(),
+      logStartOffset = 0L,
+      logEndOffset = log.logEndOffset,
+      brokerEpoch = Some(expectedReplicaEpoch)
+    )
   }
 
   @Test

@@ -137,8 +137,7 @@ object Partition {
       delayedOperations = delayedOperations,
       metadataCache = replicaManager.metadataCache,
       logManager = replicaManager.logManager,
-      alterIsrManager = replicaManager.alterPartitionManager,
-      zkMigrationEnabled = replicaManager.config.migrationEnabled)
+      alterIsrManager = replicaManager.alterPartitionManager)
   }
 
   def removeMetrics(topicPartition: TopicPartition): Unit = {
@@ -291,8 +290,7 @@ class Partition(val topicPartition: TopicPartition,
                 delayedOperations: DelayedOperations,
                 metadataCache: MetadataCache,
                 logManager: LogManager,
-                alterIsrManager: AlterPartitionManager,
-                zkMigrationEnabled: Boolean = false) extends Logging {
+                alterIsrManager: AlterPartitionManager) extends Logging {
 
   import Partition.metricsGroup
 
@@ -939,7 +937,7 @@ class Partition(val topicPartition: TopicPartition,
       // first add the new replicas and then remove the old ones.
       // Also, if the ZK migration is ongoing, the broker epoch can move backwards, so we should turn off the broker
       // Epoch check.
-      followers.foreach(id => remoteReplicasMap.getAndMaybePut(id, new Replica(id, topicPartition, !zkMigrationEnabled)))
+      followers.foreach(id => remoteReplicasMap.getAndMaybePut(id, new Replica(id, topicPartition, metadataCache)))
       remoteReplicasMap.removeAll(removedReplicas)
     } else {
       remoteReplicasMap.clear()

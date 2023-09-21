@@ -17,6 +17,7 @@
 package kafka.cluster
 
 import kafka.log.UnifiedLog
+import kafka.server.metadata.{KRaftMetadataCache, ZkMetadataCache}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException
 import org.apache.kafka.server.util.MockTime
@@ -25,6 +26,7 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows
 import org.junit.jupiter.api.{BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
+import org.mockito.Mockito.{mock, when}
 
 object ReplicaTest {
   val BrokerId: Int = 0
@@ -40,7 +42,9 @@ class ReplicaTest {
 
   @BeforeEach
   def setup(): Unit = {
-    replica = new Replica(BrokerId, Partition, true)
+    val metadataCache = mock(classOf[KRaftMetadataCache])
+    when(metadataCache.getAliveBrokerEpoch(BrokerId)).thenReturn(Option(1L))
+    replica = new Replica(BrokerId, Partition, metadataCache)
   }
 
   private def assertReplicaState(
@@ -318,8 +322,16 @@ class ReplicaTest {
 
   @ParameterizedTest
   @ValueSource(booleans = Array(true, false))
-  def testFenceStaleUpdates(verifyBrokerEpoch: Boolean): Unit = {
-    val replica = new Replica(BrokerId, Partition, verifyBrokerEpoch)
+  def testFenceStaleUpdates(isKraft: Boolean): Unit = {
+    val metadataCache = if (isKraft) {
+      val kRaftMetadataCache = mock(classOf[KRaftMetadataCache])
+      when(kRaftMetadataCache.getAliveBrokerEpoch(BrokerId)).thenReturn(Option(2L))
+      kRaftMetadataCache
+    } else {
+      mock(classOf[ZkMetadataCache])
+    }
+
+    val replica = new Replica(BrokerId, Partition, metadataCache)
     replica.updateFetchStateOrThrow(
       followerFetchOffsetMetadata = new LogOffsetMetadata(5L),
       followerStartOffset = 1L,
@@ -327,14 +339,7 @@ class ReplicaTest {
       leaderEndOffset = 10L,
       brokerEpoch = 2L
     )
-    replica.updateFetchStateOrThrow(
-      followerFetchOffsetMetadata = new LogOffsetMetadata(5L),
-      followerStartOffset = 2L,
-      followerFetchTimeMs = 2,
-      leaderEndOffset = 10L,
-      brokerEpoch = 3L
-    )
-    if (verifyBrokerEpoch) {
+    if (isKraft) {
       assertThrows(classOf[NotLeaderOrFollowerException], () => replica.updateFetchStateOrThrow(
         followerFetchOffsetMetadata = new LogOffsetMetadata(5L),
         followerStartOffset = 2L,
@@ -343,7 +348,7 @@ class ReplicaTest {
         brokerEpoch = 1L
       ))
     } else {
-      // No exception to expect if verifyBrokerEpoch is false
+      // No exception to expect under ZK mode.
       replica.updateFetchStateOrThrow(
         followerFetchOffsetMetadata = new LogOffsetMetadata(5L),
         followerStartOffset = 2L,
