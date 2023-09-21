@@ -529,7 +529,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         groupIds.forEach(groupId -> {
             final TopicPartition topicPartition = topicPartitionFor(groupId);
             groupsByTopicPartition
-                .computeIfAbsent(topicPartition, __ -> new ArrayList())
+                .computeIfAbsent(topicPartition, __ -> new ArrayList<>())
                 .add(groupId);
         });
 
