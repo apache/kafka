@@ -832,7 +832,7 @@ public class RemoteLogManager implements Closeable {
                 remainingBreachedSize = retentionSizeData.map(sizeData -> sizeData.remainingBreachedSize).orElse(0L);
             }
 
-            private boolean deleteRetentionSizeBreachedSegments(RemoteLogSegmentMetadata metadata) {
+            private boolean isSegmentBreachedByRetentionSize(RemoteLogSegmentMetadata metadata) {
                 boolean shouldDeleteSegment = false;
                 if (!retentionSizeData.isPresent()) {
                     return shouldDeleteSegment;
@@ -853,7 +853,7 @@ public class RemoteLogManager implements Closeable {
                 return shouldDeleteSegment;
             }
 
-            public boolean deleteRetentionTimeBreachedSegments(RemoteLogSegmentMetadata metadata) {
+            public boolean isSegmentBreachedByRetentionTime(RemoteLogSegmentMetadata metadata) {
                 boolean shouldDeleteSegment = false;
                 if (!retentionTimeData.isPresent()) {
                     return shouldDeleteSegment;
@@ -870,9 +870,9 @@ public class RemoteLogManager implements Closeable {
                 return shouldDeleteSegment;
             }
 
-            private boolean deleteLogStartOffsetBreachedSegments(RemoteLogSegmentMetadata metadata,
-                                                                 long logStartOffset,
-                                                                 NavigableMap<Integer, Long> leaderEpochEntries) {
+            private boolean isSegmentBreachByLogStartOffset(RemoteLogSegmentMetadata metadata,
+                                                            long logStartOffset,
+                                                            NavigableMap<Integer, Long> leaderEpochEntries) {
                 boolean shouldDeleteSegment = false;
                 if (!leaderEpochEntries.isEmpty()) {
                     // Note that `logStartOffset` and `leaderEpochEntries.firstEntry().getValue()` should be same
@@ -996,7 +996,7 @@ public class RemoteLogManager implements Closeable {
                     // remote log segments won't be removed. The `isRemoteSegmentWithinLeaderEpoch` validates whether
                     // the epochs present in the segment lies in the checkpoint file. It will always return false
                     // since the checkpoint file was already truncated.
-                    boolean shouldDeleteSegment = remoteLogRetentionHandler.deleteLogStartOffsetBreachedSegments(
+                    boolean shouldDeleteSegment = remoteLogRetentionHandler.isSegmentBreachByLogStartOffset(
                             metadata, logStartOffset, epochWithOffsets);
                     boolean isValidSegment = false;
                     if (!shouldDeleteSegment) {
@@ -1004,8 +1004,8 @@ public class RemoteLogManager implements Closeable {
                         isValidSegment = isRemoteSegmentWithinLeaderEpochs(metadata, logEndOffset, epochWithOffsets);
                         if (isValidSegment) {
                             shouldDeleteSegment =
-                                    remoteLogRetentionHandler.deleteRetentionTimeBreachedSegments(metadata) ||
-                                            remoteLogRetentionHandler.deleteRetentionSizeBreachedSegments(metadata);
+                                    remoteLogRetentionHandler.isSegmentBreachedByRetentionTime(metadata) ||
+                                            remoteLogRetentionHandler.isSegmentBreachedByRetentionSize(metadata);
                         }
                     }
                     if (shouldDeleteSegment) {
