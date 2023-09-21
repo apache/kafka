@@ -199,7 +199,7 @@ public class HeartbeatRequestManagerTest {
             verify(errorEventHandler).handle(any());
             assertEquals(retryBackoffMs, heartbeatRequestState.nextHeartbeatMs(mockTime.milliseconds()));
             if (errorCode == Errors.UNRELEASED_INSTANCE_ID.code()) {
-                verify(mockMembershipManager).failMember();
+                verify(mockMembershipManager).transitionToFailure();
             } else if (errorCode == Errors.FENCED_MEMBER_EPOCH.code() ||
                 errorCode == Errors.UNKNOWN_MEMBER_ID.code()) {
                 verify(mockMembershipManager).fenceMember();

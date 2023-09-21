@@ -68,9 +68,8 @@ public interface MembershipManager {
 
     /**
      * Transition the member to the FAILED state.  This is invoked when the heartbeat returns a non-retriable error.
-     * error code.
      */
-    void failMember();
+    void transitionToFailure();
 
     /**
      * Return true if the member should send heartbeat to the coordinator

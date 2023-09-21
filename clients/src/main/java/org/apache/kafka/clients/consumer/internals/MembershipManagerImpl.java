@@ -139,7 +139,7 @@ public class MembershipManagerImpl implements MembershipManager {
     }
 
     @Override
-    public void failMember() {
+    public void transitionToFailure() {
         transitionTo(MemberState.FAILED);
     }
 

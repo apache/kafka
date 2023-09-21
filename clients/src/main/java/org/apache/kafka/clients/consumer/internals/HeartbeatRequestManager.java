@@ -151,11 +151,12 @@ public class HeartbeatRequestManager implements RequestManager {
 
     private void onFailure(final Throwable exception, final long responseTimeMs) {
         this.heartbeatRequestState.onFailedAttempt(responseTimeMs);
-        logger.debug("failed sending heartbeat due to {}", exception.getMessage());
+        logger.warn("Failed to send heartbeat to coordinator node {} due to error: {}",
+                coordinatorRequestManager.coordinator(), exception.getMessage());
     }
 
     private void onResponse(final ConsumerGroupHeartbeatResponse response, long currentTimeMs) {
-        if (response.data().errorCode() == Errors.NONE.code()) {
+        if (Errors.forCode(response.data().errorCode()) == Errors.NONE) {
             this.heartbeatRequestState.updateHeartbeatIntervalMs(response.data().heartbeatIntervalMs());
             this.heartbeatRequestState.onSuccessfulAttempt(currentTimeMs);
             this.heartbeatRequestState.reset();
@@ -173,48 +174,52 @@ public class HeartbeatRequestManager implements RequestManager {
     private void onErrorResponse(final ConsumerGroupHeartbeatResponse response,
                                  final long currentTimeMs) {
         this.heartbeatRequestState.onFailedAttempt(currentTimeMs);
-        short errorCode = response.data().errorCode();
-        if (errorCode == Errors.NOT_COORDINATOR.code() || errorCode == Errors.COORDINATOR_NOT_AVAILABLE.code()) {
-            logInfo("Coordinator is either not started or not valid. Retrying", response, currentTimeMs);
+        Errors error = Errors.forCode(response.data().errorCode());
+        if (error == Errors.NOT_COORDINATOR || error == Errors.COORDINATOR_NOT_AVAILABLE) {
+            String errorMessage = String.format("Coordinator node {} is either not started or not valid. Retrying",
+                    coordinatorRequestManager);
+            logInfo(errorMessage, response, currentTimeMs);
             coordinatorRequestManager.markCoordinatorUnknown(response.data().errorMessage(), currentTimeMs);
-        } else if (errorCode == Errors.COORDINATOR_LOAD_IN_PROGRESS.code()) {
+        } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS) {
             // retry
-            logInfo("Coordinator {} is loading. Retrying", response, currentTimeMs);
+            String errorMessage = String.format("Heartbeat was not successful because the coordinator node {} is loading. Retrying",
+                    coordinatorRequestManager.coordinator());
+            logInfo(errorMessage, response, currentTimeMs);
         } else {
             onFatalErrorResponse(response);
         }
     }
 
     private void onFatalErrorResponse(final ConsumerGroupHeartbeatResponse response) {
-        final short errorCode = response.data().errorCode();
-        if (errorCode == Errors.GROUP_AUTHORIZATION_FAILED.code()) {
+        final Errors responseError = Errors.forCode(response.data().errorCode());
+        if (responseError == Errors.GROUP_AUTHORIZATION_FAILED) {
             GroupAuthorizationException error = GroupAuthorizationException.forGroupId(membershipManager.groupId());
             logger.error("GroupHeartbeatRequest failed due to group authorization failure: {}", error.getMessage());
             nonRetriableErrorHandler.handle(error);
-        } else if (errorCode == Errors.INVALID_REQUEST.code()) {
+        } else if (responseError == Errors.INVALID_REQUEST) {
             logger.error("GroupHeartbeatRequest failed due to fatal error: {}", response.data().errorMessage());
             nonRetriableErrorHandler.handle(Errors.INVALID_REQUEST.exception());
-        } else if (errorCode == Errors.GROUP_MAX_SIZE_REACHED.code()) {
+        } else if (responseError == Errors.GROUP_MAX_SIZE_REACHED) {
             logger.error("GroupHeartbeatRequest failed due to the max group size limit: {}",
                 response.data().errorMessage());
             nonRetriableErrorHandler.handle(Errors.GROUP_MAX_SIZE_REACHED.exception());
-        } else if (errorCode == Errors.UNSUPPORTED_ASSIGNOR.code()) {
+        } else if (responseError == Errors.UNSUPPORTED_ASSIGNOR) {
             logger.error("GroupHeartbeatRequest failed due to unsupported assignor {}: {}",
                 membershipManager.assignorSelection(), response.data().errorMessage());
             nonRetriableErrorHandler.handle(Errors.UNSUPPORTED_ASSIGNOR.exception());
-        } else if (errorCode == Errors.UNRELEASED_INSTANCE_ID.code()) {
+        } else if (responseError == Errors.UNRELEASED_INSTANCE_ID) {
             logger.error("GroupHeartbeatRequest failed due to the instance id {} was not released: {}",
                 membershipManager.groupInstanceId().orElse("null"),
                 response.data().errorMessage());
             nonRetriableErrorHandler.handle(Errors.UNRELEASED_INSTANCE_ID.exception());
-            membershipManager.failMember();
-        } else if (errorCode == Errors.FENCED_MEMBER_EPOCH.code() ||
-            errorCode == Errors.UNKNOWN_MEMBER_ID.code()) {
+            membershipManager.transitionToFailure();
+        } else if (responseError == Errors.FENCED_MEMBER_EPOCH ||
+                responseError == Errors.UNKNOWN_MEMBER_ID) {
             membershipManager.fenceMember();
         } else {
             // If the manager receives an unknown error - there could be a bug in the code or a new error code
-            logger.error("GroupHeartbeatRequest failed due to unexpected error: {}", Errors.forCode(errorCode));
-            membershipManager.failMember();
+            logger.error("GroupHeartbeatRequest failed due to unexpected error: {}", responseError);
+            membershipManager.transitionToFailure();
         }
     }
 
