@@ -38,8 +38,8 @@ import java.util.Optional;
  * Whether there is an existing coordinator.
  * Whether there is an inflight request.
  * Whether the backoff timer has expired.
- * The {@link org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult} contains either a wait timer
- * or a singleton list of {@link org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.UnsentRequest}.
+ * The {@link NetworkClientDelegate.PollResult} contains either a wait timer
+ * or a singleton list of {@link NetworkClientDelegate.UnsentRequest}.
  * <p/>
  * The {@link FindCoordinatorRequest} will be handled by the {@link #onResponse(long, FindCoordinatorResponse)}  callback, which
  * subsequently invokes {@code onResponse} to handle the exception and response. Note that the coordinator node will be
@@ -86,7 +86,7 @@ public class CoordinatorRequestManager implements RequestManager {
      * Note that this method does not involve any actual network IO, and it only determines if we need to send a new request or not.
      *
      * @param currentTimeMs current time in ms.
-     * @return {@link org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult}. This will not be {@code null}.
+     * @return {@link NetworkClientDelegate.PollResult}. This will not be {@code null}.
      */
     @Override
     public NetworkClientDelegate.PollResult poll(final long currentTimeMs) {
