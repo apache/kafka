@@ -270,8 +270,8 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
     /**
      * Handles a GroupDelete request.
      *
-     * @param context The request context.
-     * @param groupIds The groupIds of the groups to be deleted
+     * @param context   The request context.
+     * @param groupIds  The groupIds of the groups to be deleted
      * @return A Result containing the DeleteGroupsResponseData.DeletableGroupResultCollection response and
      *         a list of records to update the state machine.
      */
@@ -286,13 +286,13 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
         groupIds.forEach(groupId -> {
             try {
                 groupMetadataManager.validateGroupDelete(groupId);
+                offsetMetadataManager.deleteAllOffsets(groupId, records);
+                groupMetadataManager.deleteGroup(groupId, records);
 
-                offsetMetadataManager.populateRecordListToDeleteAllOffsets(context, groupId, records);
-                final CoordinatorResult<DeleteGroupsResponseData.DeletableGroupResult, Record> deleteGroupCoordinatorResult =
-                    groupMetadataManager.groupDelete(context, groupId);
-                records.addAll(deleteGroupCoordinatorResult.records());
-
-                resultCollection.add(deleteGroupCoordinatorResult.response());
+                resultCollection.add(
+                    new DeleteGroupsResponseData.DeletableGroupResult()
+                        .setGroupId(groupId)
+                );
             } catch (ApiException exception) {
                 resultCollection.add(
                     new DeleteGroupsResponseData.DeletableGroupResult()
@@ -303,7 +303,6 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
         });
 
         return new CoordinatorResult<>(records, resultCollection);
-
     }
 
     /**
@@ -398,7 +397,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
         RequestContext context,
         OffsetDeleteRequestData request
     ) throws ApiException {
-        return offsetMetadataManager.deleteOffsets(context, request);
+        return offsetMetadataManager.deleteOffsets(request);
     }
 
     /**

@@ -525,20 +525,21 @@ public class GroupCoordinatorService implements GroupCoordinator {
             return FutureUtils.failedFuture(Errors.COORDINATOR_NOT_AVAILABLE.exception());
         }
 
-        final Map<Integer, List<String>> groupsByPartition = new HashMap<>();
+        final Map<TopicPartition, List<String>> groupsByTopicPartition = new HashMap<>();
         groupIds.forEach(groupId -> {
-            final int partition = partitionFor(groupId);
-            final List<String> groupList = groupsByPartition.getOrDefault(partition, new ArrayList<>());
-            groupList.add(groupId);
-            groupsByPartition.put(partition, groupList);
+            final TopicPartition topicPartition = topicPartitionFor(groupId);
+            groupsByTopicPartition
+                .computeIfAbsent(topicPartition, __ -> new ArrayList())
+                .add(groupId);
         });
 
-        final List<CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection>> futures = new ArrayList<>();
-        groupsByPartition.forEach((partition, groupList) -> {
+        final List<CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection>> futures =
+            new ArrayList<>(groupIds.size());
+        groupsByTopicPartition.forEach((topicPartition, groupList) -> {
             CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> future =
                 runtime.scheduleWriteOperation(
                     "delete-group",
-                    new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, partition),
+                    topicPartition,
                     coordinator -> coordinator.deleteGroups(context, groupList)
                 ).exceptionally(exception -> {
                     DeleteGroupsResponseData.DeletableGroupResultCollection resultCollection =
@@ -559,10 +560,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         final CompletableFuture<Void> allFutures = CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]));
         return allFutures.thenApply(v -> {
             final DeleteGroupsResponseData.DeletableGroupResultCollection res = new DeleteGroupsResponseData.DeletableGroupResultCollection();
-            for (CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> future : futures) {
-                DeleteGroupsResponseData.DeletableGroupResultCollection result = future.join();
-                res.addAll(result);
-            }
+            futures.forEach(future -> res.addAll(future.join()));
             return res;
         });
     }

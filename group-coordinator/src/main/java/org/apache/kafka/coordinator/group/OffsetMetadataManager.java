@@ -250,7 +250,7 @@ public class OffsetMetadataManager {
      * @param request The actual request.
      */
     private Group validateOffsetDelete(
-            OffsetDeleteRequestData request
+        OffsetDeleteRequestData request
     ) throws GroupIdNotFoundException {
         Group group = groupMetadataManager.group(request.groupId());
         group.validateOffsetDelete();
@@ -351,51 +351,49 @@ public class OffsetMetadataManager {
     /**
      * Handles an OffsetDelete request.
      *
-     * @param context The request context.
      * @param request The OffsetDelete request.
      *
      * @return A Result containing the OffsetDeleteResponseData response and
      *         a list of records to update the state machine.
      */
     public CoordinatorResult<OffsetDeleteResponseData, Record> deleteOffsets(
-        RequestContext context,
         OffsetDeleteRequestData request
     ) throws ApiException {
+        final Group group = validateOffsetDelete(request);
         final List<Record> records = new ArrayList<>();
         final OffsetDeleteResponseData.OffsetDeleteResponseTopicCollection responseTopicCollection =
             new OffsetDeleteResponseData.OffsetDeleteResponseTopicCollection();
-        OffsetDeleteResponseData response = new OffsetDeleteResponseData();
-        try {
-            Group group = validateOffsetDelete(request);
+        final OffsetDeleteResponseData response = new OffsetDeleteResponseData();
+        final TimelineHashMap<String, TimelineHashMap<Integer, OffsetAndMetadata>> offsetsByTopic =
+            offsetsByGroup.get(request.groupId());
 
-            request.topics().forEach(topic -> {
-                final OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection responsePartitionCollection =
-                    new OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection();
-                final boolean subscribedToTopic = group.isSubscribedToTopic(topic.name());
+        request.topics().forEach(topic -> {
+            final OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection responsePartitionCollection =
+                new OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection();
+            final boolean subscribedToTopic = group.isSubscribedToTopic(topic.name());
+            final TimelineHashMap<Integer, OffsetAndMetadata> offsetsByPartition = offsetsByTopic.get(topic);
 
-                topic.partitions().forEach(partition -> {
-                    OffsetDeleteResponseData.OffsetDeleteResponsePartition responsePartition =
-                        new OffsetDeleteResponseData.OffsetDeleteResponsePartition().setPartitionIndex(partition.partitionIndex());
-                    if (subscribedToTopic) {
-                        responsePartition = responsePartition.setErrorCode(Errors.GROUP_SUBSCRIBED_TO_TOPIC.code());
-                    } else {
-                        records.add(RecordHelpers.newOffsetCommitTombstoneRecord(
-                            request.groupId(),
-                            topic.name(),
-                            partition.partitionIndex()
-                        ));
-                    }
-                    responsePartitionCollection.add(responsePartition);
-                });
-
-                final OffsetDeleteResponseData.OffsetDeleteResponseTopic responseTopic =
-                    new OffsetDeleteResponseData.OffsetDeleteResponseTopic().setPartitions(responsePartitionCollection);
-                responseTopicCollection.add(responseTopic);
+            topic.partitions().forEach(partition -> {
+                final OffsetDeleteResponseData.OffsetDeleteResponsePartition responsePartition =
+                    new OffsetDeleteResponseData.OffsetDeleteResponsePartition().setPartitionIndex(partition.partitionIndex());
+                if (subscribedToTopic) {
+                    responsePartition.setErrorCode(Errors.GROUP_SUBSCRIBED_TO_TOPIC.code());
+                } else if (offsetsByPartition != null && offsetsByPartition.containsKey(partition)) {
+                    records.add(RecordHelpers.newOffsetCommitTombstoneRecord(
+                        request.groupId(),
+                        topic.name(),
+                        partition.partitionIndex()
+                    ));
+                }
+                responsePartitionCollection.add(responsePartition);
             });
-            response = response.setTopics(responseTopicCollection);
-        } catch (ApiException ex) {
-            response = response.setErrorCode(Errors.forException(ex).code());
-        }
+
+            final OffsetDeleteResponseData.OffsetDeleteResponseTopic responseTopic =
+                new OffsetDeleteResponseData.OffsetDeleteResponseTopic().setPartitions(responsePartitionCollection);
+            responseTopicCollection.add(responseTopic);
+        });
+        response.setTopics(responseTopicCollection);
+
         return new CoordinatorResult<>(records, response);
     }
 
@@ -404,12 +402,10 @@ public class OffsetMetadataManager {
      * Populates the record list passed in with records to update the state machine.
      * Validations are done in deleteGroups method in GroupCoordinatorShard.
      *
-     * @param context The request context.
      * @param groupId The group id of the given group.
      * @param records The record list to populate.
      */
-    public void populateRecordListToDeleteAllOffsets(
-        RequestContext context,
+    public void deleteAllOffsets(
         String groupId,
         List<Record> records
     ) throws ApiException {

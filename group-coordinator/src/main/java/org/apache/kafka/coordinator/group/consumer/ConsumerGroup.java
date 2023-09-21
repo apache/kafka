@@ -35,9 +35,11 @@ import org.apache.kafka.timeline.TimelineHashMap;
 import org.apache.kafka.timeline.TimelineInteger;
 import org.apache.kafka.timeline.TimelineObject;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -349,8 +351,8 @@ public class ConsumerGroup implements Group {
     /**
      * Returns true if the consumer group is actively subscribed to the topic.
      *
-     * @param topic the topic name.
-     * @return a boolean indicating whether the group is subscribed to the topic.
+     * @param topic The topic name.
+     * @return whether the group is subscribed to the topic.
      */
     public boolean isSubscribedToTopic(String topic) {
         return subscribedTopicNames.containsKey(topic);
@@ -611,39 +613,33 @@ public class ConsumerGroup implements Group {
      * Validates the OffsetDelete request.
      */
     @Override
-    public void validateOffsetDelete() throws GroupIdNotFoundException {
-        if (state() == ConsumerGroupState.DEAD) {
-            throw new GroupIdNotFoundException(String.format("Group %s is in dead state.", groupId));
-        }
-    }
+    public void validateOffsetDelete() {}
 
     /**
      * Validates the GroupDelete request.
      */
     @Override
     public void validateGroupDelete() throws ApiException {
-        if (state() == ConsumerGroupState.DEAD) {
-            throw new GroupIdNotFoundException(String.format("Group %s is in dead state.", groupId));
-        } else if (state() == ConsumerGroupState.STABLE
-            || state() == ConsumerGroupState.ASSIGNING
-            || state() == ConsumerGroupState.RECONCILING) {
-            throw Errors.NON_EMPTY_GROUP.exception();
-        }
-
-        // We avoid writing the tombstone when the generationId is 0, since this group is only using
-        // Kafka for offset storage.
-        if (groupEpoch() <= 0) {
-            throw Errors.UNKNOWN_SERVER_ERROR.exception();
+        switch (state()) {
+            case STABLE:
+            case ASSIGNING:
+            case RECONCILING:
+                throw Errors.NON_EMPTY_GROUP.exception();
+            default:
         }
     }
 
     /**
-     * Creates a GroupMetadata tombstone.
+     * Creates tombstone(s) for deleting the group.
      *
-     * @return The record.
+     * @return The list of tombstone record(s).
      */
-    public Record createMetadataTombstoneRecord() {
-        return RecordHelpers.newGroupEpochTombstoneRecord(groupId());
+    public List<Record> createMetadataTombstoneRecords() {
+        return Arrays.asList(
+            RecordHelpers.newTargetAssignmentEpochTombstoneRecord(groupId()),
+            RecordHelpers.newGroupSubscriptionMetadataTombstoneRecord(groupId()),
+            RecordHelpers.newGroupEpochTombstoneRecord(groupId())
+        );
     }
 
     /**

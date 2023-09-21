@@ -38,6 +38,7 @@ import org.apache.kafka.coordinator.group.RecordHelpers;
 import org.slf4j.Logger;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
@@ -875,22 +876,15 @@ public class GenericGroup implements Group {
             || isInState(COMPLETING_REBALANCE)) {
             throw Errors.NON_EMPTY_GROUP.exception();
         }
-
-        // We avoid writing the tombstone when the generationId is 0, since this group is only using
-        // Kafka for offset storage.
-        if (generationId() <= 0) {
-            throw Errors.UNKNOWN_SERVER_ERROR.exception();
-        }
     }
 
-
     /**
-     * Creates a GroupMetadata tombstone.
+     * Creates tombstone(s) for deleting the group.
      *
-     * @return The record.
+     * @return The list of tombstone record(s).
      */
-    public Record createMetadataTombstoneRecord() {
-        return RecordHelpers.newGroupMetadataTombstoneRecord(groupId());
+    public List<Record> createMetadataTombstoneRecords() {
+        return Arrays.asList(RecordHelpers.newGroupMetadataTombstoneRecord(groupId()));
     }
 
     /**
@@ -1062,7 +1056,7 @@ public class GenericGroup implements Group {
      * group does not know, because the information is not available yet or because it has
      * failed to parse the Consumer Protocol, it returns true to be safe.
      *
-     * @param topic the topic name.
+     * @param topic The topic name.
      * @return whether the group is subscribed to the topic.
      */
     public boolean isSubscribedToTopic(String topic) {

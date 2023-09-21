@@ -3074,25 +3074,24 @@ public class GroupMetadataManager {
 
     /**
      * Handles a GroupDelete request.
+     * Populates the record list passed in with record to update the state machine.
+     * Validations are done in deleteGroups method in GroupCoordinatorShard.
      *
-     * @param context The request context.
      * @param groupId The group id of the group to be deleted.
-     * @return A Result containing the DeleteGroupsResponseData.DeletableGroupResult response and
-     *         a list of records to update the state machine.
+     * @param records The record list to populate.
      */
-    public CoordinatorResult<DeleteGroupsResponseData.DeletableGroupResult, Record> groupDelete(
-            RequestContext context,
-            String groupId
+    public void deleteGroup(
+        String groupId,
+        List<Record> records
     ) throws ApiException {
-        DeleteGroupsResponseData.DeletableGroupResult result =
-            new DeleteGroupsResponseData.DeletableGroupResult().setGroupId(groupId);
-
-        final List<Record> records = new ArrayList<>();
-        records.add(group(groupId).createMetadataTombstoneRecord());
-
-        return new CoordinatorResult<>(records, result);
+        records.addAll(group(groupId).createMetadataTombstoneRecords());
     }
 
+    /**
+     * Validates the GroupDelete request.
+     *
+     * @param groupId The group id of the group to be deleted.
+     */
     void validateGroupDelete(String groupId) throws ApiException {
 
         // For backwards compatibility, we support group delete for the empty groupId.
@@ -3103,7 +3102,6 @@ public class GroupMetadataManager {
         Group group = group(groupId);
         group.validateGroupDelete();
     }
-
 
     /**
      * Checks whether the given protocol type or name in the request is inconsistent with the group's.
