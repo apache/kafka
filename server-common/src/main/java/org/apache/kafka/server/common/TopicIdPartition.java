@@ -14,43 +14,62 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.server.common;
 
-package org.apache.kafka.controller;
-
-import java.util.Objects;
 import org.apache.kafka.common.Uuid;
 
-final class TopicIdPartition {
+/**
+ * Represents a partition using its unique topic Id and partition number.
+ */
+public final class TopicIdPartition {
     private final Uuid topicId;
-    private final int partitionId;
+    private final Integer partitionId;
 
-    TopicIdPartition(Uuid topicId, int partitionId) {
+    public TopicIdPartition(Uuid topicId, int partitionId) {
         this.topicId = topicId;
         this.partitionId = partitionId;
     }
 
+    /**
+     * @return Universally unique Id representing this topic partition.
+     */
     public Uuid topicId() {
         return topicId;
     }
 
+    /**
+     * @return The partition Id.
+     */
     public int partitionId() {
         return partitionId;
     }
 
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof TopicIdPartition)) return false;
-        TopicIdPartition other = (TopicIdPartition) o;
-        return other.topicId.equals(topicId) && other.partitionId == partitionId;
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+        TopicIdPartition that = (TopicIdPartition) o;
+        return topicId.equals(that.topicId) &&
+            partitionId.equals(that.partitionId);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(topicId, partitionId);
+        final int prime = 31;
+        int result = prime + topicId.hashCode();
+        result = prime * result + partitionId.hashCode();
+        return result;
     }
 
     @Override
     public String toString() {
-        return topicId + ":" + partitionId;
+        return "TopicIdPartition(" +
+            "topicId=" + topicId +
+            ", partition=" + partitionId +
+            ')';
     }
 }
