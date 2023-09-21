@@ -73,3 +73,4 @@ public final class TopicIdPartition {
             ')';
     }
 }
+
