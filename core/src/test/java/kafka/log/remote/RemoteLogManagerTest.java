@@ -1526,195 +1526,128 @@ public class RemoteLogManagerTest {
     }
 
     @Test
-    public void testDeleteRetentionSizeBreachingSegments() throws RemoteStorageException, IOException {
-        AtomicLong logStartOffset = new AtomicLong(0);
-        try (RemoteLogManager remoteLogManager = new RemoteLogManager(remoteLogManagerConfig, brokerId, logDir, clusterId, time,
-                tp -> Optional.of(mockLog),
-                (topicPartition, offset) ->  logStartOffset.set(offset),
-                brokerTopicStats) {
-            public RemoteStorageManager createRemoteStorageManager() {
-                return remoteStorageManager;
-            }
-            public RemoteLogMetadataManager createRemoteLogMetadataManager() {
-                return remoteLogMetadataManager;
-            }
-        }) {
-            RemoteLogManager.RLMTask task = remoteLogManager.new RLMTask(leaderTopicIdPartition, 128);
-            task.convertToLeader(0);
-
-            when(mockLog.topicPartition()).thenReturn(leaderTopicIdPartition.topicPartition());
-            when(mockLog.logEndOffset()).thenReturn(200L);
-
-            List<EpochEntry> epochEntries = Collections.singletonList(epochEntry0);
-
-            List<RemoteLogSegmentMetadata> remoteLogSegmentMetadatas = listRemoteLogSegmentMetadata(leaderTopicIdPartition, 2, 100, 1024, epochEntries);
-
-            when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition))
-                    .thenReturn(remoteLogSegmentMetadatas.iterator());
-            when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition, 0))
-                    .thenReturn(remoteLogSegmentMetadatas.iterator())
-                    .thenReturn(remoteLogSegmentMetadatas.iterator())
-                    .thenReturn(remoteLogSegmentMetadatas.iterator());
-
-            checkpoint.write(epochEntries);
-            LeaderEpochFileCache cache = new LeaderEpochFileCache(tp, checkpoint);
-            when(mockLog.leaderEpochCache()).thenReturn(Option.apply(cache));
-
-            Map<String, Long> logProps = new HashMap<>();
-            logProps.put("retention.bytes", 0L);
-            logProps.put("retention.ms", -1L);
-            LogConfig mockLogConfig = new LogConfig(logProps);
-            when(mockLog.config()).thenReturn(mockLogConfig);
-
-            when(remoteLogMetadataManager.updateRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadataUpdate.class)))
-                    .thenAnswer(answer -> CompletableFuture.runAsync(() -> { }));
-
-            task.run();
-
-            assertEquals(200L, logStartOffset.get());
-            verify(remoteStorageManager).deleteLogSegmentData(remoteLogSegmentMetadatas.get(0));
-            verify(remoteStorageManager).deleteLogSegmentData(remoteLogSegmentMetadatas.get(1));
-        }
+    public void testDeleteRetentionSizeBreachingSegments() throws RemoteStorageException {
+        verifyBreachedRemoteLogSegmentDeletion(0L, -1L);
     }
 
     @Test
-    public void testDeleteRetentionMsBreachingSegments() throws RemoteStorageException, IOException {
-        AtomicLong logStartOffset = new AtomicLong(0);
-        try (RemoteLogManager remoteLogManager = new RemoteLogManager(remoteLogManagerConfig, brokerId, logDir, clusterId, time,
-                tp -> Optional.of(mockLog),
-                (topicPartition, offset) ->  logStartOffset.set(offset),
-                brokerTopicStats) {
-            public RemoteStorageManager createRemoteStorageManager() {
-                return remoteStorageManager;
-            }
-            public RemoteLogMetadataManager createRemoteLogMetadataManager() {
-                return remoteLogMetadataManager;
-            }
-        }) {
-            RemoteLogManager.RLMTask task = remoteLogManager.new RLMTask(leaderTopicIdPartition, 128);
-            task.convertToLeader(0);
-
-            when(mockLog.topicPartition()).thenReturn(leaderTopicIdPartition.topicPartition());
-            when(mockLog.logEndOffset()).thenReturn(200L);
-
-            List<EpochEntry> epochEntries = Collections.singletonList(epochEntry0);
-
-            List<RemoteLogSegmentMetadata> remoteLogSegmentMetadatas = listRemoteLogSegmentMetadata(leaderTopicIdPartition, 2, 100, 1024, epochEntries);
-
-            when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition))
-                    .thenReturn(remoteLogSegmentMetadatas.iterator());
-            when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition, 0))
-                    .thenReturn(remoteLogSegmentMetadatas.iterator())
-                    .thenReturn(remoteLogSegmentMetadatas.iterator());
-
-            checkpoint.write(epochEntries);
-            LeaderEpochFileCache cache = new LeaderEpochFileCache(tp, checkpoint);
-            when(mockLog.leaderEpochCache()).thenReturn(Option.apply(cache));
-
-            Map<String, Long> logProps = new HashMap<>();
-            logProps.put("retention.bytes", -1L);
-            logProps.put("retention.ms", 0L);
-            LogConfig mockLogConfig = new LogConfig(logProps);
-            when(mockLog.config()).thenReturn(mockLogConfig);
-
-            when(remoteLogMetadataManager.updateRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadataUpdate.class)))
-                    .thenAnswer(answer -> CompletableFuture.runAsync(() -> { }));
-
-            task.run();
-
-            assertEquals(200L, logStartOffset.get());
-            verify(remoteStorageManager).deleteLogSegmentData(remoteLogSegmentMetadatas.get(0));
-            verify(remoteStorageManager).deleteLogSegmentData(remoteLogSegmentMetadatas.get(1));
-        }
+    public void testDeleteRetentionMsBreachingSegments() throws RemoteStorageException {
+        verifyBreachedRemoteLogSegmentDeletion(-1L, 0L);
     }
 
     @Test
     public void testDeleteRetentionMsBeingCancelledBeforeSecondDelete() throws RemoteStorageException, IOException {
-        AtomicLong logStartOffset = new AtomicLong(0);
-        try (RemoteLogManager remoteLogManager = new RemoteLogManager(remoteLogManagerConfig, brokerId, logDir, clusterId, time,
-                tp -> Optional.of(mockLog),
-                (topicPartition, offset) ->  logStartOffset.set(offset),
-                brokerTopicStats) {
-            public RemoteStorageManager createRemoteStorageManager() {
-                return remoteStorageManager;
-            }
-            public RemoteLogMetadataManager createRemoteLogMetadataManager() {
-                return remoteLogMetadataManager;
-            }
-        }) {
-            RemoteLogManager.RLMTask leaderTask = remoteLogManager.new RLMTask(leaderTopicIdPartition, 128);
-            leaderTask.convertToLeader(0);
+        RemoteLogManager.RLMTask leaderTask = remoteLogManager.new RLMTask(leaderTopicIdPartition, 128);
+        leaderTask.convertToLeader(0);
 
-            when(mockLog.topicPartition()).thenReturn(leaderTopicIdPartition.topicPartition());
-            when(mockLog.logEndOffset()).thenReturn(200L);
+        when(mockLog.topicPartition()).thenReturn(leaderTopicIdPartition.topicPartition());
+        when(mockLog.logEndOffset()).thenReturn(200L);
 
-            List<EpochEntry> epochEntries = Collections.singletonList(epochEntry0);
+        List<EpochEntry> epochEntries = Collections.singletonList(epochEntry0);
 
-            List<RemoteLogSegmentMetadata> remoteLogSegmentMetadatas = listRemoteLogSegmentMetadata(leaderTopicIdPartition, 2, 100, 1024, epochEntries);
+        List<RemoteLogSegmentMetadata> remoteLogSegmentMetadatas = listRemoteLogSegmentMetadata(leaderTopicIdPartition, 2, 100, 1024, epochEntries);
 
-            when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition))
-                    .thenReturn(remoteLogSegmentMetadatas.iterator());
-            when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition, 0))
-                    .thenReturn(remoteLogSegmentMetadatas.iterator())
-                    .thenReturn(remoteLogSegmentMetadatas.iterator());
+        when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition))
+                .thenReturn(remoteLogSegmentMetadatas.iterator());
+        when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition, 0))
+                .thenReturn(remoteLogSegmentMetadatas.iterator())
+                .thenReturn(remoteLogSegmentMetadatas.iterator());
 
-            checkpoint.write(epochEntries);
-            LeaderEpochFileCache cache = new LeaderEpochFileCache(tp, checkpoint);
-            when(mockLog.leaderEpochCache()).thenReturn(Option.apply(cache));
+        checkpoint.write(epochEntries);
+        LeaderEpochFileCache cache = new LeaderEpochFileCache(tp, checkpoint);
+        when(mockLog.leaderEpochCache()).thenReturn(Option.apply(cache));
 
-            Map<String, Long> logProps = new HashMap<>();
-            logProps.put("retention.bytes", -1L);
-            logProps.put("retention.ms", 0L);
-            LogConfig mockLogConfig = new LogConfig(logProps);
-            when(mockLog.config()).thenReturn(mockLogConfig);
+        Map<String, Long> logProps = new HashMap<>();
+        logProps.put("retention.bytes", -1L);
+        logProps.put("retention.ms", 0L);
+        LogConfig mockLogConfig = new LogConfig(logProps);
+        when(mockLog.config()).thenReturn(mockLogConfig);
 
-            when(remoteLogMetadataManager.updateRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadataUpdate.class)))
-                    .thenAnswer(answer -> {
-                        // cancel the task so that we don't delete the second segment
-                        leaderTask.cancel();
-                        return CompletableFuture.runAsync(() -> {
-                        });
+        when(remoteLogMetadataManager.updateRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadataUpdate.class)))
+                .thenAnswer(answer -> {
+                    // cancel the task so that we don't delete the second segment
+                    leaderTask.cancel();
+                    return CompletableFuture.runAsync(() -> {
                     });
+                });
 
-            leaderTask.run();
+        leaderTask.run();
 
-            assertEquals(200L, logStartOffset.get());
-            verify(remoteStorageManager).deleteLogSegmentData(remoteLogSegmentMetadatas.get(0));
-            verify(remoteStorageManager, never()).deleteLogSegmentData(remoteLogSegmentMetadatas.get(1));
+        assertEquals(200L, currentLogStartOffset.get());
+        verify(remoteStorageManager).deleteLogSegmentData(remoteLogSegmentMetadatas.get(0));
+        verify(remoteStorageManager, never()).deleteLogSegmentData(remoteLogSegmentMetadatas.get(1));
 
-            // test that the 2nd log segment will be deleted by the new leader
-            RemoteLogManager.RLMTask newLeaderTask = remoteLogManager.new RLMTask(followerTopicIdPartition, 128);
-            newLeaderTask.convertToLeader(1);
+        // test that the 2nd log segment will be deleted by the new leader
+        RemoteLogManager.RLMTask newLeaderTask = remoteLogManager.new RLMTask(followerTopicIdPartition, 128);
+        newLeaderTask.convertToLeader(1);
 
-            Iterator<RemoteLogSegmentMetadata> firstIterator = remoteLogSegmentMetadatas.iterator();
-            firstIterator.next();
-            Iterator<RemoteLogSegmentMetadata> secondIterator = remoteLogSegmentMetadatas.iterator();
-            secondIterator.next();
-            Iterator<RemoteLogSegmentMetadata> thirdIterator = remoteLogSegmentMetadatas.iterator();
-            thirdIterator.next();
+        Iterator<RemoteLogSegmentMetadata> firstIterator = remoteLogSegmentMetadatas.iterator();
+        firstIterator.next();
+        Iterator<RemoteLogSegmentMetadata> secondIterator = remoteLogSegmentMetadatas.iterator();
+        secondIterator.next();
+        Iterator<RemoteLogSegmentMetadata> thirdIterator = remoteLogSegmentMetadatas.iterator();
+        thirdIterator.next();
 
-            when(remoteLogMetadataManager.listRemoteLogSegments(followerTopicIdPartition))
-                    .thenReturn(firstIterator);
-            when(remoteLogMetadataManager.listRemoteLogSegments(followerTopicIdPartition, 0))
-                    .thenReturn(secondIterator)
-                    .thenReturn(thirdIterator);
+        when(remoteLogMetadataManager.listRemoteLogSegments(followerTopicIdPartition))
+                .thenReturn(firstIterator);
+        when(remoteLogMetadataManager.listRemoteLogSegments(followerTopicIdPartition, 0))
+                .thenReturn(secondIterator)
+                .thenReturn(thirdIterator);
 
-            when(remoteLogMetadataManager.updateRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadataUpdate.class)))
-                    .thenAnswer(answer -> CompletableFuture.runAsync(() -> { }));
+        when(remoteLogMetadataManager.updateRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadataUpdate.class)))
+                .thenAnswer(answer -> CompletableFuture.runAsync(() -> { }));
 
-            newLeaderTask.run();
+        newLeaderTask.run();
 
-            assertEquals(200L, logStartOffset.get());
-            verify(remoteStorageManager).deleteLogSegmentData(remoteLogSegmentMetadatas.get(0));
-            verify(remoteStorageManager).deleteLogSegmentData(remoteLogSegmentMetadatas.get(1));
-        }
+        assertEquals(200L, currentLogStartOffset.get());
+        verify(remoteStorageManager).deleteLogSegmentData(remoteLogSegmentMetadatas.get(0));
+        verify(remoteStorageManager).deleteLogSegmentData(remoteLogSegmentMetadatas.get(1));
+    }
+
+    private void verifyBreachedRemoteLogSegmentDeletion(long retentionSize,
+                                                        long retentionMs) throws RemoteStorageException {
+        RemoteLogManager.RLMTask task = remoteLogManager.new RLMTask(leaderTopicIdPartition, 128);
+        task.convertToLeader(0);
+
+        when(mockLog.topicPartition()).thenReturn(leaderTopicIdPartition.topicPartition());
+        when(mockLog.logEndOffset()).thenReturn(200L);
+
+        List<EpochEntry> epochEntries = Collections.singletonList(epochEntry0);
+
+        List<RemoteLogSegmentMetadata> remoteLogSegmentMetadatas =
+                listRemoteLogSegmentMetadata(leaderTopicIdPartition, 2, 100, 1024, epochEntries);
+
+        when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition))
+                .thenReturn(remoteLogSegmentMetadatas.iterator());
+        when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition, 0))
+                .thenReturn(remoteLogSegmentMetadatas.iterator())
+                .thenReturn(remoteLogSegmentMetadatas.iterator());
+
+        checkpoint.write(epochEntries);
+        LeaderEpochFileCache cache = new LeaderEpochFileCache(tp, checkpoint);
+        when(mockLog.leaderEpochCache()).thenReturn(Option.apply(cache));
+
+        Map<String, Long> logProps = new HashMap<>();
+        logProps.put("retention.bytes", retentionSize);
+        logProps.put("retention.ms", retentionMs);
+        LogConfig mockLogConfig = new LogConfig(logProps);
+        when(mockLog.config()).thenReturn(mockLogConfig);
+
+        when(remoteLogMetadataManager.updateRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadataUpdate.class)))
+                .thenAnswer(answer -> CompletableFuture.runAsync(() -> { }));
+
+        task.run();
+
+        assertEquals(200L, currentLogStartOffset.get());
+        verify(remoteStorageManager).deleteLogSegmentData(remoteLogSegmentMetadatas.get(0));
+        verify(remoteStorageManager).deleteLogSegmentData(remoteLogSegmentMetadatas.get(1));
     }
 
     @ParameterizedTest
     @CsvSource(value = {"50, 0", "50, 1", "50, 23", "50, 50"})
     public void testDeleteLogSegmentDueToRetentionSizeBreach(int segmentCount,
                                                              int deletableSegmentCount)
-            throws RemoteStorageException, ExecutionException, InterruptedException, IOException {
+            throws RemoteStorageException, ExecutionException, InterruptedException {
         int recordsPerSegment = 100;
         int segmentSize = 1024;
         List<EpochEntry> epochEntries = Arrays.asList(
@@ -1735,7 +1668,6 @@ public class RemoteLogManagerTest {
         LogConfig mockLogConfig = new LogConfig(logProps);
         when(mockLog.config()).thenReturn(mockLogConfig);
 
-        int logStartOffset = 0;
         long localLogStartOffset = (long) segmentCount * recordsPerSegment;
         long logEndOffset = ((long) segmentCount * recordsPerSegment) + 1;
         when(mockLog.leaderEpochCache()).thenReturn(Option.apply(cache));
@@ -1745,14 +1677,14 @@ public class RemoteLogManagerTest {
 
         List<RemoteLogSegmentMetadata> segmentMetadataList = listRemoteLogSegmentMetadata(
                 leaderTopicIdPartition, segmentCount, recordsPerSegment, segmentSize, epochEntries);
-        verifyDeleteLogSegment(segmentMetadataList, deletableSegmentCount, currentLeaderEpoch, logStartOffset, mockLog);
+        verifyDeleteLogSegment(segmentMetadataList, deletableSegmentCount, currentLeaderEpoch);
     }
 
     @ParameterizedTest
     @CsvSource(value = {"50, 0", "50, 1", "50, 23", "50, 50"})
     public void testDeleteLogSegmentDueToRetentionTimeBreach(int segmentCount,
                                                              int deletableSegmentCount)
-            throws RemoteStorageException, ExecutionException, InterruptedException, IOException {
+            throws RemoteStorageException, ExecutionException, InterruptedException {
         int recordsPerSegment = 100;
         int segmentSize = 1024;
         List<EpochEntry> epochEntries = Arrays.asList(
@@ -1773,7 +1705,6 @@ public class RemoteLogManagerTest {
         LogConfig mockLogConfig = new LogConfig(logProps);
         when(mockLog.config()).thenReturn(mockLogConfig);
 
-        int logStartOffset = 0;
         long localLogStartOffset = (long) segmentCount * recordsPerSegment;
         long logEndOffset = ((long) segmentCount * recordsPerSegment) + 1;
         when(mockLog.leaderEpochCache()).thenReturn(Option.apply(cache));
@@ -1783,16 +1714,13 @@ public class RemoteLogManagerTest {
 
         List<RemoteLogSegmentMetadata> segmentMetadataList = listRemoteLogSegmentMetadataByTime(
                 leaderTopicIdPartition, segmentCount, deletableSegmentCount, recordsPerSegment, segmentSize, epochEntries);
-        verifyDeleteLogSegment(segmentMetadataList, deletableSegmentCount, currentLeaderEpoch, logStartOffset, mockLog);
+        verifyDeleteLogSegment(segmentMetadataList, deletableSegmentCount, currentLeaderEpoch);
     }
 
     private void verifyDeleteLogSegment(List<RemoteLogSegmentMetadata> segmentMetadataList,
                                         int deletableSegmentCount,
-                                        int currentLeaderEpoch,
-                                        long logStartOffset,
-                                        UnifiedLog mockLog)
+                                        int currentLeaderEpoch)
             throws RemoteStorageException, ExecutionException, InterruptedException {
-        when(mockLog.logStartOffset()).thenReturn(logStartOffset);
         when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition))
                 .thenReturn(segmentMetadataList.iterator());
         when(remoteLogMetadataManager.listRemoteLogSegments(eq(leaderTopicIdPartition), anyInt()))
