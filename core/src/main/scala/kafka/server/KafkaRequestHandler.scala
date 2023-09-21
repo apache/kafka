@@ -68,9 +68,14 @@ object KafkaRequestHandler {
       T => fun(T)
     } else {
       T => {
-        // The requestChannel and request are captured in this lambda, so when it's executed on the callback thread
-        // we can re-schedule the original callback on a request thread and update the metrics accordingly.
-        requestChannel.sendCallbackRequest(RequestChannel.CallbackRequest(() => fun(T), currentRequest))
+        val currentRequestChannel = threadRequestChannel.get()
+        if (currentRequestChannel == requestChannel) {
+          fun(T)
+        } else {
+          // The requestChannel and request are captured in this lambda, so when it's executed on the callback thread
+          // we can re-schedule the original callback on a request thread and update the metrics accordingly.
+          requestChannel.sendCallbackRequest(RequestChannel.CallbackRequest(() => fun(T), currentRequest))
+        }
       }
     }
   }
