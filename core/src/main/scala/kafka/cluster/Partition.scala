@@ -935,8 +935,6 @@ class Partition(val topicPartition: TopicPartition,
 
       // Due to code paths accessing remoteReplicasMap without a lock,
       // first add the new replicas and then remove the old ones.
-      // Also, if the ZK migration is ongoing, the broker epoch can move backwards, so we should turn off the broker
-      // Epoch check.
       followers.foreach(id => remoteReplicasMap.getAndMaybePut(id, new Replica(id, topicPartition, metadataCache)))
       remoteReplicasMap.removeAll(removedReplicas)
     } else {
