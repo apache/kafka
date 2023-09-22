@@ -685,7 +685,7 @@ subprojects {
   }
 
   checkstyle {
-    configFile = new File(rootDir, "checkstyle/checkstyle.xml")
+    configDirectory = rootProject.layout.projectDirectory.dir("checkstyle")
     configProperties = checkstyleConfigProperties("import-control.xml")
     toolVersion = versions.checkstyle
   }
@@ -789,9 +789,7 @@ def fineTuneEclipseClasspathFile(eclipse, project) {
 }
 
 def checkstyleConfigProperties(configFileName) {
-  [importControlFile: "$rootDir/checkstyle/$configFileName",
-   suppressionsFile: "$rootDir/checkstyle/suppressions.xml",
-   headerFile: "$rootDir/checkstyle/java.header"]
+  [importControlFile: "$configFileName"]
 }
 
 // Aggregates all jacoco results into the root project directory
