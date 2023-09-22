@@ -103,7 +103,7 @@ public class ReassignPartitionsUnitTest {
     @Test
     public void testCompareTopicPartitions() {
         assertTrue(compareTopicPartitions(new TopicPartition("abc", 0),
-            new TopicPartition("abc", 1)) > 0);
+            new TopicPartition("abc", 1)) < 0);
         assertFalse(compareTopicPartitions(new TopicPartition("def", 0),
             new TopicPartition("abc", 1)) < 0);
     }
@@ -111,7 +111,7 @@ public class ReassignPartitionsUnitTest {
     @Test
     public void testCompareTopicPartitionReplicas() {
         assertTrue(compareTopicPartitionReplicas(new TopicPartitionReplica("def", 0, 0),
-            new TopicPartitionReplica("abc", 0, 1)) > 0);
+            new TopicPartitionReplica("abc", 0, 1)) < 0);
         assertFalse(compareTopicPartitionReplicas(new TopicPartitionReplica("def", 0, 0),
             new TopicPartitionReplica("cde", 0, 0)) < 0);
     }
@@ -504,16 +504,16 @@ public class ReassignPartitionsUnitTest {
 
         Map<Integer, PartitionMove> fooMoves = new HashMap<>();
 
-        fooMoves.put(0, new PartitionMove(mutableSet(1, 2, 3), mutableSet(5)));
-        fooMoves.put(1, new PartitionMove(mutableSet(4, 5, 6), mutableSet(7, 8)));
-        fooMoves.put(2, new PartitionMove(mutableSet(1, 2), mutableSet(3, 4)));
-        fooMoves.put(3, new PartitionMove(mutableSet(1, 2), mutableSet(5, 6)));
-        fooMoves.put(4, new PartitionMove(mutableSet(1, 2), mutableSet(3)));
-        fooMoves.put(5, new PartitionMove(mutableSet(1, 2), mutableSet(3, 4, 5, 6)));
+        fooMoves.put(0, new PartitionMove(set(1, 2, 3), set(5)));
+        fooMoves.put(1, new PartitionMove(set(4, 5, 6), set(7, 8)));
+        fooMoves.put(2, new PartitionMove(set(1, 2), set(3, 4)));
+        fooMoves.put(3, new PartitionMove(set(1, 2), set(5, 6)));
+        fooMoves.put(4, new PartitionMove(set(1, 2), set(3)));
+        fooMoves.put(5, new PartitionMove(set(1, 2), set(3, 4, 5, 6)));
 
         Map<Integer, PartitionMove> barMoves = new HashMap<>();
 
-        barMoves.put(0, new PartitionMove(mutableSet(2, 3, 4), mutableSet(1)));
+        barMoves.put(0, new PartitionMove(set(2, 3, 4), set(1)));
 
         assertEquals(fooMoves, moveMap.get("foo"));
         assertEquals(barMoves, moveMap.get("bar"));
@@ -761,14 +761,12 @@ public class ReassignPartitionsUnitTest {
         }
     }
 
+    @SuppressWarnings("unchecked")
     private static <T> Set<T> set(final T... set) {
         return new HashSet<>(Arrays.asList(set));
     }
 
-    private static <T> Set<T> mutableSet(final T...set) {
-        return new HashSet<>(Arrays.asList(set));
-    }
-
+    @SuppressWarnings("unchecked")
     private static <T> List<T> seq(T... seq) {
         return Arrays.asList(seq);
     }
