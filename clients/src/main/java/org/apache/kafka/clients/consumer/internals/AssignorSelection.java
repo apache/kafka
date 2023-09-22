@@ -81,8 +81,8 @@ public class AssignorSelection {
     @Override
     public String toString() {
         return "AssignorSelection(" +
-                "type=" + type +
-                ", serverAssignor='" + serverAssignor + '\'' +
+                "type=" + type + ", " +
+                "serverAssignor='" + serverAssignor + '\'' +
                 ')';
     }
 }

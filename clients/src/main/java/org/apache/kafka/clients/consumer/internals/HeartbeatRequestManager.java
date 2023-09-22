@@ -105,6 +105,8 @@ public class HeartbeatRequestManager implements RequestManager {
                 Long.MAX_VALUE, Collections.emptyList());
         }
 
+        // TODO: We will need to send a heartbeat response after partitions being revoke.  This needs to be
+        //  implemented either with or after the partition reconciliation logic.
         if (!heartbeatRequestState.canSendRequest(currentTimeMs)) {
             return new NetworkClientDelegate.PollResult(
                 heartbeatRequestState.nextHeartbeatMs(currentTimeMs),
