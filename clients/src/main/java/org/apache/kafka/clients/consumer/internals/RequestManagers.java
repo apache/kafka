@@ -98,7 +98,6 @@ public class RequestManagers implements Closeable {
                     log.debug("RequestManagers has been closed");
                 },
                 () -> log.debug("RequestManagers was already closed"));
-
     }
 
     /**

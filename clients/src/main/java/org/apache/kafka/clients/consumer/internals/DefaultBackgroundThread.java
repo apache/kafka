@@ -62,7 +62,6 @@ public class DefaultBackgroundThread extends KafkaThread implements Closeable {
     private volatile boolean running;
     private final IdempotentCloser closer = new IdempotentCloser();
 
-    // Visible for testing
     public DefaultBackgroundThread(Time time,
                                    LogContext logContext,
                                    BlockingQueue<ApplicationEvent> applicationEventQueue,
