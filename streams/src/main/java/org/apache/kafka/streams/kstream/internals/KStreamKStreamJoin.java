@@ -52,6 +52,7 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
     private final long joinGraceMs;
     private final boolean enableSpuriousResultFix;
     private final long joinSpuriousLookBackTimeMs;
+	private final long windowsAfterIntervalMs;
 
     private final boolean outer;
     private final boolean isLeftSide;
@@ -72,12 +73,13 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
         if (isLeftSide) {
             this.joinBeforeMs = windows.beforeMs;
             this.joinAfterMs = windows.afterMs;
-            this.joinSpuriousLookBackTimeMs = windows.beforeMs;
+            this.joinSpuriousLookBackTimeMs = windows.afterMs;
         } else {
             this.joinBeforeMs = windows.afterMs;
             this.joinAfterMs = windows.beforeMs;
-            this.joinSpuriousLookBackTimeMs = windows.afterMs;
+            this.joinSpuriousLookBackTimeMs = windows.beforeMs;
         }
+        this.windowsAfterIntervalMs = windows.afterMs;
         this.joinGraceMs = windows.gracePeriodMs();
         this.enableSpuriousResultFix = windows.spuriousResultFixEnabled();
         this.joiner = joiner;
@@ -135,10 +137,6 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
 
             sharedTimeTracker.advanceStreamTime(inputRecordTimestamp);
 
-            // Emit all non-joined records which window has closed
-            if (inputRecordTimestamp == sharedTimeTracker.streamTime) {
-                outerJoinStore.ifPresent(store -> emitNonJoinedOuterRecords(store, record));
-            }
             try (final WindowStoreIterator<V2> iter = otherWindowStore.fetch(record.key(), timeFrom, timeTo)) {
                 while (iter.hasNext()) {
                     needOuterJoin = false;
@@ -187,6 +185,11 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
                     }
                 }
             }
+            
+            // Emit all non-joined records which window has closed
+            if (inputRecordTimestamp == sharedTimeTracker.streamTime) {
+                outerJoinStore.ifPresent(store -> emitNonJoinedOuterRecords(store, record));
+            }
         }
 
         @SuppressWarnings("unchecked")
@@ -228,7 +231,7 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
                     sharedTimeTracker.minTime = timestamp;
 
                     // Skip next records if window has not closed
-                    if (timestamp + joinAfterMs + joinGraceMs >= sharedTimeTracker.streamTime) {
+                    if (timestamp + windowsAfterIntervalMs  + joinGraceMs >= sharedTimeTracker.streamTime) {
                         break;
                     }
 
