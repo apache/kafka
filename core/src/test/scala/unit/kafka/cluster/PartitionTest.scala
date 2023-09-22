@@ -1334,7 +1334,7 @@ class PartitionTest extends AbstractPartitionTest {
 
   @Test
   def testIsReplicaIsrEligibleWithEmptyReplicaMap(): Unit = {
-    val mockMetadataCache = mock(classOf[KRaftMetadataCache])
+    val mockMetadataCache: KRaftMetadataCache = mock(classOf[KRaftMetadataCache])
     val partition = spy(new Partition(topicPartition,
       replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
       interBrokerProtocolVersion = interBrokerProtocolVersion,
@@ -1355,7 +1355,8 @@ class PartitionTest extends AbstractPartitionTest {
     val controllerEpoch = 0
     val leaderEpoch = 5
     val remoteBrokerId = brokerId + 1
-    val replicas = List[Integer](brokerId, remoteBrokerId).asJava
+    val replicas = List(brokerId, remoteBrokerId)
+    addBrokerEpochToMockMetadataCache(mockMetadataCache, replicas)
 
     partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
 
@@ -1367,17 +1368,15 @@ class PartitionTest extends AbstractPartitionTest {
         .setLeaderEpoch(leaderEpoch)
         .setIsr(List[Integer](brokerId).asJava)
         .setPartitionEpoch(1)
-        .setReplicas(replicas)
+        .setReplicas(replicas.map(Int.box).asJava)
         .setIsNew(true),
       offsetCheckpoints, None), "Expected become leader transition to succeed")
 
     doAnswer(_ => {
       // simulate topic is deleted at the moment
       partition.delete()
-      val metadataCache = mock(classOf[KRaftMetadataCache])
-      when(metadataCache.getAliveBrokerEpoch(brokerId)).thenReturn(Option(defaultBrokerEpoch(brokerId)))
-      val replica = new Replica(remoteBrokerId, topicPartition, metadataCache)
-      partition.updateFollowerFetchState(replica, mock(classOf[LogOffsetMetadata]), 0, initializeTimeMs, 0, 0)
+      val replica = new Replica(remoteBrokerId, topicPartition, mockMetadataCache)
+      partition.updateFollowerFetchState(replica, mock(classOf[LogOffsetMetadata]), 0, initializeTimeMs, 0, defaultBrokerEpoch(remoteBrokerId))
       mock(classOf[LogReadInfo])
     }).when(partition).fetchRecords(any(), any(), anyLong(), anyInt(), anyBoolean(), anyBoolean())
 
