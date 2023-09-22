@@ -48,10 +48,6 @@ object KafkaRequestHandler {
   def setBypassThreadCheck(bypassCheck: Boolean): Unit = {
     bypassThreadCheck = bypassCheck
   }
-  
-  def currentRequestOnThread(): RequestChannel.Request = {
-    threadCurrentRequest.get()
-  }
 
   /**
    * Wrap callback to schedule it on a request thread.
