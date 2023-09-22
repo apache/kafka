@@ -52,7 +52,7 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
     private final long joinGraceMs;
     private final boolean enableSpuriousResultFix;
     private final long joinSpuriousLookBackTimeMs;
-	private final long windowsAfterIntervalMs;
+    private final long windowsAfterIntervalMs;
 
     private final boolean outer;
     private final boolean isLeftSide;
