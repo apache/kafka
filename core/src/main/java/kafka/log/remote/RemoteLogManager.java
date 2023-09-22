@@ -70,6 +70,7 @@ import org.apache.kafka.storage.internals.log.RemoteStorageFetchInfo;
 import org.apache.kafka.storage.internals.log.RemoteStorageThreadPool;
 import org.apache.kafka.storage.internals.log.TransactionIndex;
 import org.apache.kafka.storage.internals.log.TxnIndexSearchResult;
+import org.apache.kafka.storage.internals.log.CorruptIndexException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -120,6 +121,7 @@ import java.util.stream.Stream;
 
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX;
 import static org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics.REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT_METRIC;
+import static org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics.FAILED_REMOTE_COPY_PER_SEC_METRIC;
 
 /**
  * This class is responsible for
@@ -160,6 +162,7 @@ public class RemoteLogManager implements Closeable {
     // The endpoint for remote log metadata manager to connect to
     private Optional<EndPoint> endpoint = Optional.empty();
     private boolean closed = false;
+    private int segmentCopyFailures;
 
     private KafkaMetricsGroup metricsGroup = new KafkaMetricsGroup(this.getClass());
 
@@ -210,6 +213,16 @@ public class RemoteLogManager implements Closeable {
                 rlmConfig.remoteLogReaderThreads(),
                 rlmConfig.remoteLogReaderMaxPendingTasks()
         );
+
+        this.segmentCopyFailures = 0;
+    }
+
+    public int getSegmentCopyFailures() {
+        return this.segmentCopyFailures;
+    }
+
+    public void setSegmentCopyFailures(int segmentCopyFailures) {
+        this.segmentCopyFailures = segmentCopyFailures;
     }
 
     private void removeMetrics() {
@@ -685,6 +698,7 @@ public class RemoteLogManager implements Closeable {
                                 return;
                             }
                             copyLogSegment(log, candidateLogSegment.logSegment, candidateLogSegment.nextSegmentOffset);
+                            setSegmentCopyFailures(0);
                         }
                     }
                 } else {
@@ -697,12 +711,22 @@ public class RemoteLogManager implements Closeable {
                 this.cancel();
             } catch (InterruptedException | RetriableException ex) {
                 throw ex;
+            } catch (CorruptIndexException ex) {
+                logger.error("Error occurred while copying log segments. Index appeared to be corrupted for partition: {} ", topicIdPartition, ex);
+                segmentCopyFailures++;
             } catch (Exception ex) {
                 if (!isCancelled()) {
                     brokerTopicStats.topicStats(log.topicPartition().topic()).failedRemoteCopyRequestRate().mark();
                     brokerTopicStats.allTopicsStats().failedRemoteCopyRequestRate().mark();
                     logger.error("Error occurred while copying log segments of partition: {}", topicIdPartition, ex);
                 }
+            } finally {
+                metricsGroup.newGauge(FAILED_REMOTE_COPY_PER_SEC_METRIC.getName(), new Gauge<Integer>() {
+                    @Override
+                    public Integer value() {
+                        return getSegmentCopyFailures();
+                    }
+                });
             }
         }
 
@@ -710,6 +734,13 @@ public class RemoteLogManager implements Closeable {
                 CustomMetadataSizeLimitExceededException {
             File logFile = segment.log().file();
             String logFileName = logFile.getName();
+
+            // Corrupted indexes should not be uploaded to remote storage
+            // Example case: Local storage was filled, what caused index corruption
+            // We should avoid uploading such segments
+            segment.timeIndex().sanityCheck();
+            segment.offsetIndex().sanityCheck();
+            segment.txnIndex().sanityCheck();
 
             logger.info("Copying {} to remote storage.", logFileName);
             RemoteLogSegmentId id = RemoteLogSegmentId.generateNew(topicIdPartition);
