@@ -18,12 +18,14 @@ package org.apache.kafka.server.common;
 
 import org.apache.kafka.common.Uuid;
 
+import java.util.Objects;
+
 /**
  * Represents a partition using its unique topic Id and partition number.
  */
 public final class TopicIdPartition {
     private final Uuid topicId;
-    private final Integer partitionId;
+    private final int partitionId;
 
     public TopicIdPartition(Uuid topicId, int partitionId) {
         this.topicId = topicId;
@@ -46,31 +48,21 @@ public final class TopicIdPartition {
 
     @Override
     public boolean equals(Object o) {
-        if (this == o) {
-            return true;
-        }
-        if (o == null || getClass() != o.getClass()) {
-            return false;
-        }
-        TopicIdPartition that = (TopicIdPartition) o;
-        return topicId.equals(that.topicId) &&
-            partitionId.equals(that.partitionId);
+        if (!(o instanceof TopicIdPartition)) return false;
+        TopicIdPartition other = (TopicIdPartition) o;
+        return other.topicId.equals(topicId) && other.partitionId == partitionId;
     }
 
     @Override
     public int hashCode() {
-        final int prime = 31;
-        int result = prime + topicId.hashCode();
-        result = prime * result + partitionId.hashCode();
-        return result;
+        return Objects.hash(topicId, partitionId);
     }
 
     @Override
     public String toString() {
-        return "TopicIdPartition(" +
-            "topicId=" + topicId +
-            ", partition=" + partitionId +
-            ')';
+        return topicId + ":" + partitionId;
     }
 }
+
+
 
