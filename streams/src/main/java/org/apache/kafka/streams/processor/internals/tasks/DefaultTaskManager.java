@@ -72,6 +72,7 @@ public class DefaultTaskManager implements TaskManager {
         }
     }
 
+    @SuppressWarnings("this-escape")
     public DefaultTaskManager(final Time time,
                               final String clientId,
                               final TasksRegistry tasks,

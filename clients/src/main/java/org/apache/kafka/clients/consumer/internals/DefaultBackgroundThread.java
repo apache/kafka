@@ -266,11 +266,11 @@ public class DefaultBackgroundThread extends KafkaThread {
         return this.running;
     }
 
-    public void wakeup() {
+    public final void wakeup() {
         networkClientDelegate.wakeup();
     }
 
-    public void close() {
+    public final void close() {
         this.running = false;
         this.wakeup();
         Utils.closeQuietly(networkClientDelegate, "network client utils");

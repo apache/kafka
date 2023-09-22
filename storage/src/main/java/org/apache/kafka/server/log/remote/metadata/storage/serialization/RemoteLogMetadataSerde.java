@@ -50,6 +50,7 @@ public class RemoteLogMetadataSerde {
     private final Map<Short, RemoteLogMetadataTransform> keyToTransform;
     private final BytesApiMessageSerde bytesApiMessageSerde;
 
+    @SuppressWarnings("this-escape")
     public RemoteLogMetadataSerde() {
         remoteLogStorageClassToApiKey = createRemoteLogStorageClassToApiKeyMap();
         keyToTransform = createRemoteLogMetadataTransforms();

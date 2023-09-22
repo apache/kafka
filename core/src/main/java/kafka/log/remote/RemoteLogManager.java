@@ -83,7 +83,6 @@ import java.io.InputStream;
 import java.lang.reflect.InvocationTargetException;
 import java.nio.ByteBuffer;
 import java.nio.file.Path;
-import java.security.AccessController;
 import java.security.PrivilegedAction;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -227,8 +226,9 @@ public class RemoteLogManager implements Closeable {
         }
     }
 
+    @SuppressWarnings("removal")
     RemoteStorageManager createRemoteStorageManager() {
-        return AccessController.doPrivileged(new PrivilegedAction<RemoteStorageManager>() {
+        return java.security.AccessController.doPrivileged(new PrivilegedAction<RemoteStorageManager>() {
             private final String classPath = rlmConfig.remoteStorageManagerClassPath();
 
             public RemoteStorageManager run() {
@@ -249,8 +249,9 @@ public class RemoteLogManager implements Closeable {
         remoteLogStorageManager.configure(rsmProps);
     }
 
+    @SuppressWarnings("removal")
     RemoteLogMetadataManager createRemoteLogMetadataManager() {
-        return AccessController.doPrivileged(new PrivilegedAction<RemoteLogMetadataManager>() {
+        return java.security.AccessController.doPrivileged(new PrivilegedAction<RemoteLogMetadataManager>() {
             private final String classPath = rlmConfig.remoteLogMetadataManagerClassPath();
 
             public RemoteLogMetadataManager run() {

@@ -133,7 +133,7 @@ public class MockAdminClient extends AdminClient {
             return this;
         }
 
-        public Builder numBrokers(int numBrokers) {
+        public final Builder numBrokers(int numBrokers) {
             if (brokers.size() >= numBrokers) {
                 brokers = brokers.subList(0, numBrokers);
                 brokerLogDirs = brokerLogDirs.subList(0, numBrokers);
@@ -146,7 +146,7 @@ public class MockAdminClient extends AdminClient {
             return this;
         }
 
-        public Builder controller(int index) {
+        public final Builder controller(int index) {
             this.controller = brokers.get(index);
             return this;
         }
@@ -250,7 +250,7 @@ public class MockAdminClient extends AdminClient {
         this.maxSupportedFeatureLevels = new HashMap<>(maxSupportedFeatureLevels);
     }
 
-    synchronized public void controller(Node controller) {
+    public final synchronized void controller(Node controller) {
         if (!brokers.contains(controller))
             throw new IllegalArgumentException("The controller node must be in the list of brokers");
         this.controller = controller;
