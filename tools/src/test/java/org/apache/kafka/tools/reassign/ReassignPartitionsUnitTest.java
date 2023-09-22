@@ -424,8 +424,8 @@ public class ReassignPartitionsUnitTest {
             // The proposed assignment should only span the provided brokers
             proposedCurrent.v1.values().forEach(replicas ->
                 assertTrue(goalBrokers.containsAll(replicas),
-                    "Proposed assignment " + proposedCurrent.v1 + " puts replicas on brokers other than " + goalBrokers));
-
+                    "Proposed assignment " + proposedCurrent.v1 + " puts replicas on brokers other than " + goalBrokers)
+            );
         }
     }
 
