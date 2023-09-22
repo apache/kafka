@@ -30,7 +30,10 @@ import org.apache.kafka.common.utils.Timer;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * Manages the request creation and response handling for the heartbeat. The module creates a {@link ConsumerGroupHeartbeatRequest}
@@ -38,18 +41,26 @@ import java.util.Collections;
  * the response is received, the module will update the state in the {@link MembershipManager} and handle any errors.
  *
  * The manager only emits heartbeat when the member is in a group, tries to join a group, or tries rejoin the group.
- * If the member does not have groupId configured, left the group, or encountering fatal exceptions, the heartbeat will
- * not be sent. If the coordinator not is not found, we will skip sending the heartbeat and tries to find a coordinator first.
+ * If the member does not have groupId configured, got kicked out of the group, or encountering fatal exceptions, the
+ * heartbeat will not be sent.
+ *
+ * If the coordinator not is not found, we will skip sending the heartbeat and tries to find a coordinator first.
  *
  * If the heartbeat failed due to retriable errors, such as, TimeoutException.  The subsequent attempt will be backoff
  * exponentially.
  *
- * If the member completes the partition revocation process, a heartbeat request will be sent in the next event loop.
- *
+ * If the member completes the assignment changes, i.e. revocation and assignment, a heartbeat request will be sent in
+ * the next event loop.
  * {@link HeartbeatRequestState} for more details.
  */
 public class HeartbeatRequestManager implements RequestManager {
     private final Logger logger;
+    private final Set<Errors> fatalErrors = new HashSet<>(Arrays.asList(
+        Errors.GROUP_AUTHORIZATION_FAILED,
+        Errors.INVALID_REQUEST,
+        Errors.GROUP_MAX_SIZE_REACHED,
+        Errors.UNSUPPORTED_ASSIGNOR,
+        Errors.UNRELEASED_INSTANCE_ID));
 
     private final int rebalanceTimeoutMs;
 
@@ -81,7 +92,6 @@ public class HeartbeatRequestManager implements RequestManager {
 
     // Visible for testing
     HeartbeatRequestManager(
-        final Time time,
         final LogContext logContext,
         final ConsumerConfig config,
         final CoordinatorRequestManager coordinatorRequestManager,
@@ -98,6 +108,18 @@ public class HeartbeatRequestManager implements RequestManager {
         this.nonRetriableErrorHandler = nonRetriableErrorHandler;
     }
 
+    /**
+     * Determines the maximum wait time until the next poll based on the member's state.
+     * 1. If the member is without a coordinator or is in a failed state, the timer is set to Long.MAX_VALUE, as
+     * there's no need to send a heartbeat
+     *
+     * 2. If the member cannot send a heartbeat due to either exponential backoff, it will return the remaining time
+     * left on the backoff timer.
+     *
+     * 3. If the member's heartbeat timer has not expired. It will return the remaining time left on the heartbeat timer.
+     *
+     * 4. If the member can send a heartbeat, the timer is set to the current heartbeat interval.
+     */
     @Override
     public NetworkClientDelegate.PollResult poll(long currentTimeMs) {
         if (!coordinatorRequestManager.coordinator().isPresent() || !membershipManager.shouldSendHeartbeat()) {
@@ -114,8 +136,7 @@ public class HeartbeatRequestManager implements RequestManager {
         }
         this.heartbeatRequestState.onSendAttempt(currentTimeMs);
         NetworkClientDelegate.UnsentRequest request = makeHeartbeatRequest();
-        // return Long.MAX_VALUE because we will update the timer when the response is received
-        return new NetworkClientDelegate.PollResult(Long.MAX_VALUE, Collections.singletonList(request));
+        return new NetworkClientDelegate.PollResult(heartbeatRequestState.heartbeatIntervalMs, Collections.singletonList(request));
     }
 
     private NetworkClientDelegate.UnsentRequest makeHeartbeatRequest() {
@@ -194,17 +215,20 @@ public class HeartbeatRequestManager implements RequestManager {
 
     private void onFatalErrorResponse(final ConsumerGroupHeartbeatResponse response) {
         final Errors responseError = Errors.forCode(response.data().errorCode());
+        maybeTransitionToFailureState(responseError);
+
         if (responseError == Errors.GROUP_AUTHORIZATION_FAILED) {
             GroupAuthorizationException error = GroupAuthorizationException.forGroupId(membershipManager.groupId());
             logger.error("GroupHeartbeatRequest failed due to group authorization failure: {}", error.getMessage());
             nonRetriableErrorHandler.handle(error);
         } else if (responseError == Errors.INVALID_REQUEST) {
-            logger.error("GroupHeartbeatRequest failed due to fatal error: {}", response.data().errorMessage());
+            logger.error("GroupHeartbeatRequest failed due to invalid request error: {}",
+                response.data().errorMessage());
             nonRetriableErrorHandler.handle(Errors.INVALID_REQUEST.exception());
         } else if (responseError == Errors.GROUP_MAX_SIZE_REACHED) {
             logger.error("GroupHeartbeatRequest failed due to the max group size limit: {}",
                 response.data().errorMessage());
-            nonRetriableErrorHandler.handle(Errors.GROUP_MAX_SIZE_REACHED.exception());
+            nonRetriableErrorHandler.handle(responseError.exception());
         } else if (responseError == Errors.UNSUPPORTED_ASSIGNOR) {
             logger.error("GroupHeartbeatRequest failed due to unsupported assignor {}: {}",
                 membershipManager.assignorSelection(), response.data().errorMessage());
@@ -214,13 +238,18 @@ public class HeartbeatRequestManager implements RequestManager {
                 membershipManager.groupInstanceId().orElse("null"),
                 response.data().errorMessage());
             nonRetriableErrorHandler.handle(Errors.UNRELEASED_INSTANCE_ID.exception());
-            membershipManager.transitionToFailure();
         } else if (responseError == Errors.FENCED_MEMBER_EPOCH ||
                 responseError == Errors.UNKNOWN_MEMBER_ID) {
             membershipManager.fenceMember();
         } else {
             // If the manager receives an unknown error - there could be a bug in the code or a new error code
             logger.error("GroupHeartbeatRequest failed due to unexpected error: {}", responseError);
+            membershipManager.transitionToFailure();
+        }
+    }
+
+    private void maybeTransitionToFailureState(Errors error) {
+        if (fatalErrors.contains(error)) {
             membershipManager.transitionToFailure();
         }
     }
@@ -237,6 +266,7 @@ public class HeartbeatRequestManager implements RequestManager {
     static class HeartbeatRequestState extends RequestState {
         long heartbeatIntervalMs;
         final Timer heartbeatTimer;
+        // TODO: Add an inflight request tracker and test sending multiple heartbeat concurrently
 
         public HeartbeatRequestState(
             final LogContext logContext,

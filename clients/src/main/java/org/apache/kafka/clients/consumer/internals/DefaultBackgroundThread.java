@@ -194,14 +194,14 @@ public class DefaultBackgroundThread extends KafkaThread {
                         config,
                         coordinatorRequestManager,
                         groupState);
-                MembershipManager membershipManaber = new MembershipManagerImpl(groupState.groupId);
+                MembershipManager membershipManager = new MembershipManagerImpl(groupState.groupId);
                 heartbeatRequestManager = new HeartbeatRequestManager(
                         this.time,
                         logContext,
                         config,
                         coordinatorRequestManager,
                         subscriptionState,
-                        membershipManaber,
+                        membershipManager,
                         errorEventHandler);
             }
 
