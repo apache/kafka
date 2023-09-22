@@ -32,8 +32,8 @@ import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.common.AdminCommandFailedException;
 import org.apache.kafka.server.common.AdminOperationException;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import scala.Tuple2;
@@ -91,15 +91,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(60)
 public class ReassignPartitionsUnitTest {
-    @BeforeEach
-    public void setUp() {
+    @BeforeAll
+    public static void setUp() {
         Exit.setExitProcedure((statusCode, message) -> {
             throw new IllegalArgumentException(message);
         });
     }
 
-    @AfterEach
-    public void tearDown() {
+    @AfterAll
+    public static void tearDown() {
         Exit.resetExitProcedure();
     }
 
@@ -186,7 +186,7 @@ public class ReassignPartitionsUnitTest {
                 ));
 
             assertEquals(asScala(expStates), actual._1);
-            assertEquals(true, actual._2);
+            assertTrue((Boolean) actual._2);
 
             // Cancel the reassignment and test findPartitionReassignmentStates again.
             scala.collection.Map<TopicPartition, Throwable> cancelResult = cancelPartitionReassignments(adminClient,
@@ -208,7 +208,7 @@ public class ReassignPartitionsUnitTest {
             ));
 
             assertEquals(asScala(expStates), actual._1);
-            assertEquals(false, actual._2);
+            assertFalse((Boolean) actual._2);
         }
     }
 
@@ -510,16 +510,16 @@ public class ReassignPartitionsUnitTest {
 
         Map<Integer, ReassignPartitionsCommand.PartitionMove> fooMoves = new HashMap<>();
 
-        fooMoves.put(0, new ReassignPartitionsCommand.PartitionMove(mset(1, 2, 3), mset(5)));
-        fooMoves.put(1, new ReassignPartitionsCommand.PartitionMove(mset(4, 5, 6), mset(7, 8)));
-        fooMoves.put(2, new ReassignPartitionsCommand.PartitionMove(mset(1, 2), mset(3, 4)));
-        fooMoves.put(3, new ReassignPartitionsCommand.PartitionMove(mset(1, 2), mset(5, 6)));
-        fooMoves.put(4, new ReassignPartitionsCommand.PartitionMove(mset(1, 2), mset(3)));
-        fooMoves.put(5, new ReassignPartitionsCommand.PartitionMove(mset(1, 2), mset(3, 4, 5, 6)));
+        fooMoves.put(0, new ReassignPartitionsCommand.PartitionMove(mutableSet(1, 2, 3), mutableSet(5)));
+        fooMoves.put(1, new ReassignPartitionsCommand.PartitionMove(mutableSet(4, 5, 6), mutableSet(7, 8)));
+        fooMoves.put(2, new ReassignPartitionsCommand.PartitionMove(mutableSet(1, 2), mutableSet(3, 4)));
+        fooMoves.put(3, new ReassignPartitionsCommand.PartitionMove(mutableSet(1, 2), mutableSet(5, 6)));
+        fooMoves.put(4, new ReassignPartitionsCommand.PartitionMove(mutableSet(1, 2), mutableSet(3)));
+        fooMoves.put(5, new ReassignPartitionsCommand.PartitionMove(mutableSet(1, 2), mutableSet(3, 4, 5, 6)));
 
         Map<Integer, ReassignPartitionsCommand.PartitionMove> barMoves = new HashMap<>();
 
-        barMoves.put(0, new ReassignPartitionsCommand.PartitionMove(mset(2, 3, 4), mset(1)));
+        barMoves.put(0, new ReassignPartitionsCommand.PartitionMove(mutableSet(2, 3, 4), mutableSet(1)));
 
         assertEquals(asScala(fooMoves), moveMap.get("foo").get());
         assertEquals(asScala(barMoves), moveMap.get("bar").get());
@@ -770,11 +770,11 @@ public class ReassignPartitionsUnitTest {
 
     @SuppressWarnings("unchecked")
     private static <T> scala.collection.immutable.Set<T> set(final T... set) {
-        return mset(set).toSet();
+        return mutableSet(set).toSet();
     }
 
     @SuppressWarnings({"deprecation", "unchecked"})
-    private static <T> scala.collection.mutable.Set<T> mset(final T...set) {
+    private static <T> scala.collection.mutable.Set<T> mutableSet(final T...set) {
         return JavaConverters.asScalaSet(new HashSet<>(Arrays.asList(set)));
     }
 
