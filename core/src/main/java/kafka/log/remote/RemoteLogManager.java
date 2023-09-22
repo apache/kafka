@@ -1314,7 +1314,8 @@ public class RemoteLogManager implements Closeable {
         }
     }
 
-    private int lookupPositionForOffset(RemoteLogSegmentMetadata remoteLogSegmentMetadata, long offset) {
+    // Visible for testing
+    int lookupPositionForOffset(RemoteLogSegmentMetadata remoteLogSegmentMetadata, long offset) {
         return indexCache.lookupOffset(remoteLogSegmentMetadata, offset);
     }
 
@@ -1398,7 +1399,8 @@ public class RemoteLogManager implements Closeable {
                 : Optional.empty();
     }
 
-    private RecordBatch findFirstBatch(RemoteLogInputStream remoteLogInputStream, long offset) throws IOException {
+    // Visible for testing
+    RecordBatch findFirstBatch(RemoteLogInputStream remoteLogInputStream, long offset) throws IOException {
         RecordBatch nextBatch;
         // Look for the batch which has the desired offset
         // We will always have a batch in that segment as it is a non-compacted topic.

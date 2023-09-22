@@ -26,12 +26,11 @@ import kafka.server.KafkaConfig.{AlterConfigPolicyClassNameProp, CreateTopicPoli
 import kafka.server.QuotaFactory.QuotaManagers
 
 import scala.collection.immutable
-import kafka.server.metadata.{AclPublisher, ClientQuotaMetadataManager, DynamicClientQuotaPublisher,
-DynamicConfigPublisher, ScramPublisher, DelegationTokenPublisher}
+import kafka.server.metadata.{AclPublisher, ClientQuotaMetadataManager, DelegationTokenPublisher, DynamicClientQuotaPublisher, DynamicConfigPublisher, ScramPublisher}
 import kafka.utils.{CoreUtils, Logging, PasswordEncoder}
 import kafka.zk.{KafkaZkClient, ZkMigrationClient}
-import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
+import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.utils.LogContext
@@ -39,7 +38,7 @@ import org.apache.kafka.common.{ClusterResource, Endpoint, Uuid}
 import org.apache.kafka.controller.metrics.{ControllerMetadataMetricsPublisher, QuorumControllerMetrics}
 import org.apache.kafka.controller.{Controller, QuorumController, QuorumFeatures}
 import org.apache.kafka.image.publisher.{ControllerRegistrationsPublisher, MetadataPublisher}
-import org.apache.kafka.metadata.KafkaConfigSchema
+import org.apache.kafka.metadata.{KafkaConfigSchema, ListenerInfo}
 import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata
 import org.apache.kafka.metadata.migration.{KRaftMigrationDriver, LegacyPropagator}
@@ -157,20 +156,8 @@ class ControllerServer(
         metricsGroup.newGauge("linux-disk-write-bytes", () => linuxIoMetricsCollector.writeBytes())
       }
 
-      val javaListeners = config.controllerListeners.map(_.toJava).asJava
       authorizer = config.createNewAuthorizer()
       authorizer.foreach(_.configure(config.originals))
-
-      val endpointReadyFutures = {
-        val builder = new EndpointReadyFutures.Builder()
-        builder.build(authorizer.asJava,
-          new KafkaAuthorizerServerInfo(
-            new ClusterResource(clusterId),
-            config.nodeId,
-            javaListeners,
-            javaListeners.get(0),
-            config.earlyStartListeners.map(_.value()).asJava))
-      }
 
       featuresPublisher = new FeaturesPublisher(logContext)
 
@@ -193,11 +180,20 @@ class ControllerServer(
         credentialProvider,
         apiVersionManager)
 
-      if (config.controllerListeners.nonEmpty) {
-        socketServerFirstBoundPortFuture.complete(socketServer.boundPort(
-          config.controllerListeners.head.listenerName))
-      } else {
-        throw new ConfigException("No controller.listener.names defined for controller")
+      val listenerInfo = ListenerInfo.create(config.controllerListeners.map(_.toJava).asJava).
+        withWildcardHostnamesResolved().
+        withEphemeralPortsCorrected(name => socketServer.boundPort(new ListenerName(name)))
+      socketServerFirstBoundPortFuture.complete(listenerInfo.firstListener().port())
+
+      val endpointReadyFutures = {
+        val builder = new EndpointReadyFutures.Builder()
+        builder.build(authorizer.asJava,
+          new KafkaAuthorizerServerInfo(
+            new ClusterResource(clusterId),
+            config.nodeId,
+            listenerInfo.listeners().values(),
+            listenerInfo.firstListener(),
+            config.earlyStartListeners.map(_.value()).asJava))
       }
 
       sharedServer.startForController()
@@ -333,18 +329,13 @@ class ControllerServer(
       metadataPublishers.add(registrationsPublisher)
 
       // Create the registration manager, which handles sending KIP-919 controller registrations.
-      registrationManager = new ControllerRegistrationManager(config,
+      registrationManager = new ControllerRegistrationManager(config.nodeId,
         clusterId,
         time,
         s"controller-${config.nodeId}-",
         QuorumFeatures.defaultFeatureMap(),
         incarnationId,
-        // We special-case the first controller listener, using the port value obtained from
-        // SocketServer directly. This is to handle the case where we are using an ephemeral port
-        // (aka binding to port 0) in unit tests. In this case, we need to register with the true
-        // port number which we obtained after binding, not with a literal 0.
-        Map[String, Int](config.controllerListeners.head.listenerName.value() ->
-          socketServerFirstBoundPortFuture.get()))
+        listenerInfo)
 
       // Add the registration manager to the list of metadata publishers, so that it receives
       // callbacks when the cluster registrations change.
