@@ -199,17 +199,17 @@ public class ReassignPartitionsCommand {
      * @return                      A result that is useful for testing.
      */
     static VerifyAssignmentResult verifyAssignment(Admin adminClient, String jsonString, Boolean preserveThrottles) throws ExecutionException, InterruptedException, JsonProcessingException {
-        Tuple<List<Tuple<TopicPartition, List<Integer>>>, Map<TopicPartitionReplica, String>> t0 = parsePartitionReassignmentData(jsonString);
+        Tuple2<List<Tuple2<TopicPartition, List<Integer>>>, Map<TopicPartitionReplica, String>> t0 = parsePartitionReassignmentData(jsonString);
 
-        List<Tuple<TopicPartition, List<Integer>>> targetParts = t0.v1;
+        List<Tuple2<TopicPartition, List<Integer>>> targetParts = t0.v1;
         Map<TopicPartitionReplica, String> targetLogDirs = t0.v2;
 
-        Tuple<Map<TopicPartition, PartitionReassignmentState>, Boolean> t1 = verifyPartitionAssignments(adminClient, targetParts);
+        Tuple2<Map<TopicPartition, PartitionReassignmentState>, Boolean> t1 = verifyPartitionAssignments(adminClient, targetParts);
 
         Map<TopicPartition, PartitionReassignmentState> partStates = t1.v1;
         Boolean partsOngoing = t1.v2;
 
-        Tuple<Map<TopicPartitionReplica, LogDirMoveState>, Boolean> t2 = verifyReplicaMoves(adminClient, targetLogDirs);
+        Tuple2<Map<TopicPartitionReplica, LogDirMoveState>, Boolean> t2 = verifyReplicaMoves(adminClient, targetLogDirs);
 
         Map<TopicPartitionReplica, LogDirMoveState> moveStates = t2.v1;
         Boolean movesOngoing = t2.v2;
@@ -236,15 +236,15 @@ public class ReassignPartitionsCommand {
      *                              reassignments (including reassignments not described
      *                              in the JSON file.)
      */
-    private static Tuple<Map<TopicPartition, PartitionReassignmentState>, Boolean> verifyPartitionAssignments(Admin adminClient,
-                                                                                                              List<Tuple<TopicPartition, List<Integer>>> targets) throws ExecutionException, InterruptedException {
-        Tuple<Map<TopicPartition, PartitionReassignmentState>, Boolean> t0 = findPartitionReassignmentStates(adminClient, targets);
+    private static Tuple2<Map<TopicPartition, PartitionReassignmentState>, Boolean> verifyPartitionAssignments(Admin adminClient,
+                                                                                                               List<Tuple2<TopicPartition, List<Integer>>> targets) throws ExecutionException, InterruptedException {
+        Tuple2<Map<TopicPartition, PartitionReassignmentState>, Boolean> t0 = findPartitionReassignmentStates(adminClient, targets);
 
         Map<TopicPartition, PartitionReassignmentState> partStates = t0.v1;
         Boolean partsOngoing = t0.v2;
 
         System.out.println(partitionReassignmentStatesToString(partStates));
-        return new Tuple<>(partStates, partsOngoing);
+        return new Tuple2<>(partStates, partsOngoing);
     }
 
     static int compareTopicPartitions(TopicPartition a, TopicPartition b) {
@@ -300,13 +300,13 @@ public class ReassignPartitionsCommand {
      * @return                     A tuple containing the reassignment states for each topic
      *                             partition, plus whether there are any ongoing reassignments.
      */
-    static Tuple<Map<TopicPartition, PartitionReassignmentState>, Boolean> findPartitionReassignmentStates(Admin adminClient,
-                                                                                                           List<Tuple<TopicPartition, List<Integer>>> targetReassignments) throws ExecutionException, InterruptedException {
+    static Tuple2<Map<TopicPartition, PartitionReassignmentState>, Boolean> findPartitionReassignmentStates(Admin adminClient,
+                                                                                                            List<Tuple2<TopicPartition, List<Integer>>> targetReassignments) throws ExecutionException, InterruptedException {
         Map<TopicPartition, PartitionReassignment> currentReassignments = adminClient.
             listPartitionReassignments().reassignments().get();
 
-        List<Tuple<TopicPartition, List<Integer>>> foundReassignments = new ArrayList<>();
-        List<Tuple<TopicPartition, List<Integer>>> notFoundReassignments = new ArrayList<>();
+        List<Tuple2<TopicPartition, List<Integer>>> foundReassignments = new ArrayList<>();
+        List<Tuple2<TopicPartition, List<Integer>>> notFoundReassignments = new ArrayList<>();
 
         targetReassignments.forEach(reassignment -> {
             if (currentReassignments.containsKey(reassignment.v1))
@@ -315,10 +315,10 @@ public class ReassignPartitionsCommand {
                 notFoundReassignments.add(reassignment);
         });
 
-        List<Tuple<TopicPartition, PartitionReassignmentState>> foundResults = foundReassignments.stream().map(e -> {
+        List<Tuple2<TopicPartition, PartitionReassignmentState>> foundResults = foundReassignments.stream().map(e -> {
             TopicPartition part = e.v1;
             List<Integer> targetReplicas = e.v2;
-            return new Tuple<>(part,
+            return new Tuple2<>(part,
                 new PartitionReassignmentState(
                     currentReassignments.get(part).replicas(),
                     targetReplicas,
@@ -335,19 +335,19 @@ public class ReassignPartitionsCommand {
         Map<String, KafkaFuture<TopicDescription>> topicDescriptions = adminClient.
             describeTopics(topicNamesToLookUp).topicNameValues();
 
-        List<Tuple<TopicPartition, PartitionReassignmentState>> notFoundResults = new ArrayList<>();
-        for (Tuple<TopicPartition, List<Integer>> e : notFoundReassignments) {
+        List<Tuple2<TopicPartition, PartitionReassignmentState>> notFoundResults = new ArrayList<>();
+        for (Tuple2<TopicPartition, List<Integer>> e : notFoundReassignments) {
             TopicPartition part = e.v1;
             List<Integer> targetReplicas = e.v2;
 
             if (currentReassignments.containsKey(part)) {
                 PartitionReassignment reassignment = currentReassignments.get(part);
-                notFoundResults.add(new Tuple<>(part, new PartitionReassignmentState(
+                notFoundResults.add(new Tuple2<>(part, new PartitionReassignmentState(
                     reassignment.replicas(),
                     targetReplicas,
                     false)));
             } else {
-                notFoundResults.add(new Tuple<>(part, topicDescriptionFutureToState(part.partition(),
+                notFoundResults.add(new Tuple2<>(part, topicDescriptionFutureToState(part.partition(),
                     topicDescriptions.get(part.topic()), targetReplicas)));
             }
         }
@@ -356,7 +356,7 @@ public class ReassignPartitionsCommand {
         foundResults.forEach(e -> allResults.put(e.v1, e.v2));
         notFoundResults.forEach(e -> allResults.put(e.v1, e.v2));
 
-        return new Tuple<>(allResults, currentReassignments.size() > 0);
+        return new Tuple2<>(allResults, currentReassignments.size() > 0);
     }
 
     private static PartitionReassignmentState topicDescriptionFutureToState(int partition,
@@ -393,11 +393,11 @@ public class ReassignPartitionsCommand {
      *                              reassignments. (We don't have an efficient API that
      *                              returns all ongoing replica reassignments.)
      */
-    private static Tuple<Map<TopicPartitionReplica, LogDirMoveState>, Boolean> verifyReplicaMoves(Admin adminClient,
-                                                                                                  Map<TopicPartitionReplica, String> targetReassignments) throws ExecutionException, InterruptedException {
+    private static Tuple2<Map<TopicPartitionReplica, LogDirMoveState>, Boolean> verifyReplicaMoves(Admin adminClient,
+                                                                                                   Map<TopicPartitionReplica, String> targetReassignments) throws ExecutionException, InterruptedException {
         Map<TopicPartitionReplica, LogDirMoveState> moveStates = findLogDirMoveStates(adminClient, targetReassignments);
         System.out.println(replicaMoveStatesToString(moveStates));
-        return new Tuple<>(moveStates, !moveStates.values().stream().allMatch(LogDirMoveState::done));
+        return new Tuple2<>(moveStates, !moveStates.values().stream().allMatch(LogDirMoveState::done));
     }
 
     /**
@@ -495,7 +495,7 @@ public class ReassignPartitionsCommand {
      * @param adminClient     The AdminClient to use.
      * @param targetParts     The target partitions loaded from the JSON file.
      */
-    private static void clearAllThrottles(Admin adminClient, List<Tuple<TopicPartition, List<Integer>>> targetParts) throws ExecutionException, InterruptedException {
+    private static void clearAllThrottles(Admin adminClient, List<Tuple2<TopicPartition, List<Integer>>> targetParts) throws ExecutionException, InterruptedException {
         Set<Integer> activeBrokers = adminClient.describeCluster().nodes().get().stream().map(Node::id).collect(Collectors.toSet());
         Set<Integer> brokers = new HashSet<>(activeBrokers);
         targetParts.forEach(t -> brokers.addAll(t.v2));
@@ -554,11 +554,11 @@ public class ReassignPartitionsCommand {
      * @return                      A tuple containing the proposed assignment and the
      *                              current assignment.
      */
-    static Tuple<Map<TopicPartition, List<Integer>>, Map<TopicPartition, List<Integer>>> generateAssignment(Admin adminClient,
-                                                                                                            String reassignmentJson,
-                                                                                                            String brokerListString,
-                                                                                                            Boolean enableRackAwareness) throws ExecutionException, InterruptedException, JsonProcessingException {
-        Tuple<List<Integer>, List<String>> t0 = parseGenerateAssignmentArgs(reassignmentJson, brokerListString);
+    static Tuple2<Map<TopicPartition, List<Integer>>, Map<TopicPartition, List<Integer>>> generateAssignment(Admin adminClient,
+                                                                                                             String reassignmentJson,
+                                                                                                             String brokerListString,
+                                                                                                             Boolean enableRackAwareness) throws ExecutionException, InterruptedException, JsonProcessingException {
+        Tuple2<List<Integer>, List<String>> t0 = parseGenerateAssignmentArgs(reassignmentJson, brokerListString);
 
         List<Integer> brokersToReassign = t0.v1;
         List<String> topicsToReassign = t0.v2;
@@ -570,7 +570,7 @@ public class ReassignPartitionsCommand {
             formatAsReassignmentJson(currentAssignments, Collections.emptyMap()));
         System.out.printf("Proposed partition reassignment configuration%n%s%n",
             formatAsReassignmentJson(proposedAssignments, Collections.emptyMap()));
-        return new Tuple<>(proposedAssignments, currentAssignments);
+        return new Tuple2<>(proposedAssignments, currentAssignments);
     }
 
     /**
@@ -696,8 +696,8 @@ public class ReassignPartitionsCommand {
      *
      * @return                       A tuple of brokers to reassign, topics to reassign
      */
-    static Tuple<List<Integer>, List<String>> parseGenerateAssignmentArgs(String reassignmentJson,
-                                                                          String brokerList) throws JsonMappingException {
+    static Tuple2<List<Integer>, List<String>> parseGenerateAssignmentArgs(String reassignmentJson,
+                                                                           String brokerList) throws JsonMappingException {
         List<Integer> brokerListToReassign = Arrays.stream(brokerList.split(",")).map(Integer::parseInt).collect(Collectors.toList());
         Set<Integer> duplicateReassignments = ToolsUtils.duplicates(brokerListToReassign);
         if (!duplicateReassignments.isEmpty())
@@ -707,7 +707,7 @@ public class ReassignPartitionsCommand {
         if (!duplicateTopicsToReassign.isEmpty())
             throw new AdminCommandFailedException(String.format("List of topics to reassign contains duplicate entries: %s",
                 duplicateTopicsToReassign));
-        return new Tuple<>(brokerListToReassign, topicsToReassign);
+        return new Tuple2<>(brokerListToReassign, topicsToReassign);
     }
 
     /**
@@ -731,7 +731,7 @@ public class ReassignPartitionsCommand {
                                   Long logDirThrottle,
                                   Long timeoutMs,
                                   Time time) throws ExecutionException, InterruptedException, JsonProcessingException, TerseException {
-        Tuple<Map<TopicPartition, List<Integer>>, Map<TopicPartitionReplica, String>> t0 = parseExecuteAssignmentArgs(reassignmentJson);
+        Tuple2<Map<TopicPartition, List<Integer>>, Map<TopicPartitionReplica, String>> t0 = parseExecuteAssignmentArgs(reassignmentJson);
 
         Map<TopicPartition, List<Integer>> proposedParts = t0.v1;
         Map<TopicPartitionReplica, String> proposedReplicas = t0.v2;
@@ -1186,10 +1186,10 @@ public class ReassignPartitionsCommand {
      * @return                  A tuple of the partitions to be reassigned and the replicas
      *                          to be reassigned.
      */
-    static Tuple<Map<TopicPartition, List<Integer>>, Map<TopicPartitionReplica, String>> parseExecuteAssignmentArgs(String reassignmentJson) throws JsonProcessingException {
-        Tuple<List<Tuple<TopicPartition, List<Integer>>>, Map<TopicPartitionReplica, String>> t0 = parsePartitionReassignmentData(reassignmentJson);
+    static Tuple2<Map<TopicPartition, List<Integer>>, Map<TopicPartitionReplica, String>> parseExecuteAssignmentArgs(String reassignmentJson) throws JsonProcessingException {
+        Tuple2<List<Tuple2<TopicPartition, List<Integer>>>, Map<TopicPartitionReplica, String>> t0 = parsePartitionReassignmentData(reassignmentJson);
 
-        List<Tuple<TopicPartition, List<Integer>>> partitionsToBeReassigned = t0.v1;
+        List<Tuple2<TopicPartition, List<Integer>>> partitionsToBeReassigned = t0.v1;
         Map<TopicPartitionReplica, String> replicaAssignment = t0.v2;
 
         if (partitionsToBeReassigned.isEmpty())
@@ -1204,8 +1204,8 @@ public class ReassignPartitionsCommand {
                 duplicateReassignedPartitions.stream().map(Object::toString).collect(Collectors.joining(",")))
             );
         }
-        List<Tuple<TopicPartition, Set<Integer>>> duplicateEntries = partitionsToBeReassigned.stream()
-            .map(t -> new Tuple<>(t.v1, ToolsUtils.duplicates(t.v2)))
+        List<Tuple2<TopicPartition, Set<Integer>>> duplicateEntries = partitionsToBeReassigned.stream()
+            .map(t -> new Tuple2<>(t.v1, ToolsUtils.duplicates(t.v2)))
             .filter(t -> !t.v2.isEmpty())
             .collect(Collectors.toList());
         if (!duplicateEntries.isEmpty()) {
@@ -1216,7 +1216,7 @@ public class ReassignPartitionsCommand {
             ).collect(Collectors.joining(". "));
             throw new AdminCommandFailedException(String.format("Partition replica lists may not contain duplicate entries: %s", duplicatesMsg));
         }
-        return new Tuple<>(partitionsToBeReassigned.stream().collect(Collectors.toMap(t -> t.v1, t -> t.v2)), replicaAssignment);
+        return new Tuple2<>(partitionsToBeReassigned.stream().collect(Collectors.toMap(t -> t.v1, t -> t.v2)), replicaAssignment);
     }
 
     /**
@@ -1232,14 +1232,14 @@ public class ReassignPartitionsCommand {
      * @return                      A tuple of the partition reassignments that were cancelled,
      *                              and the replica movements that were cancelled.
      */
-    static Tuple<Set<TopicPartition>, Set<TopicPartitionReplica>> cancelAssignment(Admin adminClient,
-                                                                                   String jsonString,
-                                                                                   Boolean preserveThrottles,
-                                                                                   Long timeoutMs,
-                                                                                   Time time) throws ExecutionException, InterruptedException, JsonProcessingException, TerseException {
-        Tuple<List<Tuple<TopicPartition, List<Integer>>>, Map<TopicPartitionReplica, String>> t0 = parsePartitionReassignmentData(jsonString);
+    static Tuple2<Set<TopicPartition>, Set<TopicPartitionReplica>> cancelAssignment(Admin adminClient,
+                                                                                    String jsonString,
+                                                                                    Boolean preserveThrottles,
+                                                                                    Long timeoutMs,
+                                                                                    Time time) throws ExecutionException, InterruptedException, JsonProcessingException, TerseException {
+        Tuple2<List<Tuple2<TopicPartition, List<Integer>>>, Map<TopicPartitionReplica, String>> t0 = parsePartitionReassignmentData(jsonString);
 
-        List<Tuple<TopicPartition, List<Integer>>> targetParts = t0.v1;
+        List<Tuple2<TopicPartition, List<Integer>>> targetParts = t0.v1;
         Map<TopicPartitionReplica, String> targetReplicas = t0.v2;
         Set<TopicPartition> targetPartsSet = targetParts.stream().map(t -> t.v1).collect(Collectors.toSet());
         Set<TopicPartition> curReassigningParts = new HashSet<>();
@@ -1278,7 +1278,7 @@ public class ReassignPartitionsCommand {
         if (!preserveThrottles) {
             clearAllThrottles(adminClient, targetParts);
         }
-        return new Tuple<>(curReassigningParts, curMovingParts.keySet());
+        return new Tuple2<>(curReassigningParts, curMovingParts.keySet());
     }
 
     private static String formatAsReassignmentJson(Map<TopicPartition, List<Integer>> partitionsToBeReassigned,
@@ -1335,7 +1335,7 @@ public class ReassignPartitionsCommand {
         }
     }
 
-    private static Tuple<List<Tuple<TopicPartition, List<Integer>>>, Map<TopicPartitionReplica, String>> parsePartitionReassignmentData(String jsonData) throws JsonProcessingException {
+    private static Tuple2<List<Tuple2<TopicPartition, List<Integer>>>, Map<TopicPartitionReplica, String>> parsePartitionReassignmentData(String jsonData) throws JsonProcessingException {
         JsonValue js;
         try {
             js = Json.tryParseFull(jsonData);
@@ -1347,10 +1347,10 @@ public class ReassignPartitionsCommand {
     }
 
     // Parses without deduplicating keys so the data can be checked before allowing reassignment to proceed
-    private static Tuple<List<Tuple<TopicPartition, List<Integer>>>, Map<TopicPartitionReplica, String>> parsePartitionReassignmentData(int version, JsonValue jsonData) throws JsonMappingException {
+    private static Tuple2<List<Tuple2<TopicPartition, List<Integer>>>, Map<TopicPartitionReplica, String>> parsePartitionReassignmentData(int version, JsonValue jsonData) throws JsonMappingException {
         switch (version) {
             case 1:
-                List<Tuple<TopicPartition, List<Integer>>> partitionAssignment = new ArrayList<>();
+                List<Tuple2<TopicPartition, List<Integer>>> partitionAssignment = new ArrayList<>();
                 Map<TopicPartitionReplica, String> replicaAssignment = new HashMap<>();
 
                 Optional<JsonValue> partitionsSeq = jsonData.asJsonObject().get("partitions");
@@ -1370,7 +1370,7 @@ public class ReassignPartitionsCommand {
                         if (newReplicas.size() != newLogDirs.size())
                             throw new AdminCommandFailedException("Size of replicas list " + newReplicas + " is different from " +
                                 "size of log dirs list " + newLogDirs + " for partition " + new TopicPartition(topic, partition));
-                        partitionAssignment.add(new Tuple<>(new TopicPartition(topic, partition), newReplicas));
+                        partitionAssignment.add(new Tuple2<>(new TopicPartition(topic, partition), newReplicas));
                         for (int i = 0; i < newLogDirs.size(); i++) {
                             Integer replica = newReplicas.get(i);
                             String logDir = newLogDirs.get(i);
@@ -1383,7 +1383,7 @@ public class ReassignPartitionsCommand {
                     }
                 }
 
-                return new Tuple<>(partitionAssignment, replicaAssignment);
+                return new Tuple2<>(partitionAssignment, replicaAssignment);
 
             default:
                 throw new AdminOperationException("Not supported version field value " + version);
