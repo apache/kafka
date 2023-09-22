@@ -1998,7 +1998,7 @@ These metrics are reported on both Controllers and Brokers in a KRaft Cluster
   </tr>
   <tr>
     <td>Latest Metadata Snapshot Age</td>
-    <td>The interval in miliseconds since the latest snapshot that the node has generated. 
+    <td>The interval in milliseconds since the latest snapshot that the node has generated. 
     If none have been generated yet, this is approximately the time delta since the process was started.</td>
     <td>kafka.server:type=SnapshotEmitter,name=LatestSnapshotGeneratedAgeMs</td>
   </tr>
@@ -2082,6 +2082,22 @@ These metrics are reported on both Controllers and Brokers in a KRaft Cluster
     <td>The difference between now and the timestamp of the last record from the cluster metadata partition that was applied by the controller.
     For active Controllers the value of this lag is always zero.</td>
     <td>kafka.controller:type=KafkaController,name=LastAppliedRecordLagMs</td>
+  </tr>
+  <tr>
+    <td>ZooKeeper Write Behind Lag</td>
+    <td>The amount of lag in records that ZooKeeper is behind relative to the highest committed record in the metadata log. 
+    This metric will only be reported by the active KRaft controller.</td>
+    <td>kafka.controller:type=KafkaController,name=ZkWriteBehindLag</td>
+  </tr>
+  <tr>
+    <td>ZooKeeper Metadata Snapshot Write Time</td>
+    <td>The number of milliseconds the KRaft controller took reconciling a snapshot into ZooKeeper.</td>
+    <td>kafka.controller:type=KafkaController,name=ZkWriteSnapshotTimeMs</td>
+  </tr>
+  <tr>
+    <td>ZooKeeper Metadata Delta Write Time</td>
+    <td>The number of milliseconds the KRaft controller took writing a delta into ZK.</td>
+    <td>kafka.controller:type=KafkaController,name=ZkWriteDeltaTimeMs</td>
   </tr>
   <tr>
     <td>Timed-out Broker Heartbeat Count</td>
