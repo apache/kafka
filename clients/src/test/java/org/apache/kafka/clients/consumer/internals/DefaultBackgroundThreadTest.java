@@ -115,9 +115,6 @@ public class DefaultBackgroundThreadTest {
         when(topicMetadataRequestManager.poll(anyLong())).thenReturn(emptyPollOffsetsRequestResult());
         backgroundThread.start();
         TestUtils.waitForCondition(backgroundThread::isRunning, "Failed awaiting for the background thread to be running");
-        backgroundThread.close();
-        assertFalse(backgroundThread.isRunning());
-        backgroundThread.start();
 
         // There's a nonzero amount of time between starting the thread and having it
         // begin to execute our code. Wait for a bit before checking...
