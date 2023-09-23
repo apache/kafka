@@ -1236,9 +1236,22 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      */
     @Override
     public List<PartitionInfo> partitionsFor(String topic) {
+        return getCluster(topic, this.maxBlockTimeMs).partitionsForTopic(topic);
+    }
+
+    /**
+     * Get the cluster info for the given topic. This can also be used for producer's warmup to accelerate first record's sending.
+     * @throws AuthenticationException if authentication fails. See the exception for more details
+     * @throws AuthorizationException if not authorized to the specified topic. See the exception for more details
+     * @throws InterruptException if the thread is interrupted while blocked
+     * @throws TimeoutException if metadata could not be refreshed within {@code maxBlockTimeMs}
+     * @throws KafkaException for all Kafka-related exceptions, including the case where this method is called after producer close
+     */
+    @Override
+    public Cluster getCluster(String topic, long maxBlockTimeMs) {
         Objects.requireNonNull(topic, "topic cannot be null");
         try {
-            return waitOnMetadata(topic, null, time.milliseconds(), maxBlockTimeMs).cluster.partitionsForTopic(topic);
+            return waitOnMetadata(topic, null, time.milliseconds(), maxBlockTimeMs).cluster;
         } catch (InterruptedException e) {
             throw new InterruptException(e);
         }
