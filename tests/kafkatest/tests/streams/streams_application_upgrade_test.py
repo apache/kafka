@@ -27,7 +27,8 @@ from kafkatest.version import LATEST_2_2, LATEST_2_3, LATEST_2_4, LATEST_2_5, LA
 smoke_test_versions = [str(LATEST_2_2), str(LATEST_2_3), str(LATEST_2_4),
                        str(LATEST_2_5), str(LATEST_2_6), str(LATEST_2_7),
                        str(LATEST_2_8), str(LATEST_3_0), str(LATEST_3_1),
-                       str(LATEST_3_2), str(LATEST_3_3)]
+                       str(LATEST_3_2), str(LATEST_3_3), str(LATEST_3_4),
+                       str(LATEST_3_5)]
 dev_version = [str(DEV_VERSION)]
 
 class StreamsUpgradeTest(Test):
