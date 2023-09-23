@@ -51,7 +51,6 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Stream;
 
-import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createFetchConfig;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createFetchMetricsManager;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createMetrics;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createSubscriptionState;
@@ -432,7 +431,7 @@ public class FetchCollectorTest {
         deserializers = new Deserializers<>(new StringDeserializer(), new StringDeserializer());
 
         subscriptions = createSubscriptionState(config, logContext);
-        fetchConfig = createFetchConfig(config);
+        fetchConfig = new FetchConfig(config);
 
         Metrics metrics = createMetrics(config, time);
         metricsManager = createFetchMetricsManager(metrics);

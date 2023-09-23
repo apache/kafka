@@ -123,7 +123,7 @@ public class ErrorEventHandlerTest {
         errorEventHandler.handle(error2);
         errorEventHandler.handle(error3);
 
-        assertThrows(new RuntimeException(error1));
+        assertThrows(new KafkaException(error1));
     }
 
     @Test
@@ -140,7 +140,7 @@ public class ErrorEventHandlerTest {
         errorEventHandler.handle(error3);
         backgroundEventQueue.add(new NoopBackgroundEvent("D"));
 
-        assertThrows(new RuntimeException(error1));
+        assertThrows(new KafkaException(error1));
     }
 
     private void assertPeeked(BackgroundEvent event) {

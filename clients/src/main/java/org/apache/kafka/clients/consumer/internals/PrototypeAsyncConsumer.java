@@ -97,13 +97,11 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_JMX_PREFIX;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP_PREFIX;
-import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createFetchConfig;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createFetchMetricsManager;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createLogContext;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createMetrics;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createSubscriptionState;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.configuredConsumerInterceptors;
-import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.configuredIsolationLevel;
 import static org.apache.kafka.common.utils.Utils.closeQuietly;
 import static org.apache.kafka.common.utils.Utils.isBlank;
 import static org.apache.kafka.common.utils.Utils.join;
@@ -152,9 +150,11 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     }
 
     public PrototypeAsyncConsumer(final Map<String, Object> configs,
-                                  final Deserializer<K> keyDeser,
-                                  final Deserializer<V> valDeser) {
-        this(new ConsumerConfig(appendDeserializerToConfig(configs, keyDeser, valDeser)), keyDeser, valDeser);
+                                  final Deserializer<K> keyDeserializer,
+                                  final Deserializer<V> valueDeserializer) {
+        this(new ConsumerConfig(appendDeserializerToConfig(configs, keyDeserializer, valueDeserializer)),
+                keyDeserializer,
+                valueDeserializer);
     }
 
     public PrototypeAsyncConsumer(final ConsumerConfig config,
@@ -200,7 +200,8 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
             metadata.bootstrap(addresses);
 
             FetchMetricsManager fetchMetricsManager = createFetchMetricsManager(metrics);
-            this.isolationLevel = configuredIsolationLevel(config);
+            FetchConfig fetchConfig = new FetchConfig(config);
+            this.isolationLevel = fetchConfig.isolationLevel;
 
             ApiVersions apiVersions = new ApiVersions();
             final BlockingQueue<ApplicationEvent> applicationEventQueue = new LinkedBlockingQueue<>();
@@ -244,7 +245,6 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
                 //config.ignore(ConsumerConfig.THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED);
             }
             // These are specific to the foreground thread
-            FetchConfig fetchConfig = createFetchConfig(config);
             this.fetchBuffer = new FetchBuffer(logContext);
             this.fetchCollector = new FetchCollector<>(logContext,
                     metadata,
@@ -444,7 +444,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         if (partitions == null)
             throw new IllegalArgumentException("Partitions collection cannot be null");
 
-        Collection<TopicPartition> parts = partitions.size() == 0 ? this.subscriptions.assignedPartitions() : partitions;
+        Collection<TopicPartition> parts = partitions.isEmpty() ? this.subscriptions.assignedPartitions() : partitions;
         subscriptions.requestOffsetReset(parts, OffsetResetStrategy.EARLIEST);
     }
 
@@ -453,7 +453,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         if (partitions == null)
             throw new IllegalArgumentException("Partitions collection cannot be null");
 
-        Collection<TopicPartition> parts = partitions.size() == 0 ? this.subscriptions.assignedPartitions() : partitions;
+        Collection<TopicPartition> parts = partitions.isEmpty() ? this.subscriptions.assignedPartitions() : partitions;
         subscriptions.requestOffsetReset(parts, OffsetResetStrategy.LATEST);
     }
 
@@ -623,15 +623,21 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         if (partitions.isEmpty()) {
             return Collections.emptyMap();
         }
-        Map<TopicPartition, Long> timestampToSearch =
-                partitions.stream().collect(Collectors.toMap(Function.identity(), tp -> timestamp));
+        Map<TopicPartition, Long> timestampToSearch = partitions
+                .stream()
+                .collect(Collectors.toMap(Function.identity(), tp -> timestamp));
         final ListOffsetsApplicationEvent listOffsetsEvent = new ListOffsetsApplicationEvent(
                 timestampToSearch,
-                false);
-        Map<TopicPartition, OffsetAndTimestamp> offsetAndTimestampMap =
-                eventHandler.addAndGet(listOffsetsEvent, time.timer(timeout));
-        return offsetAndTimestampMap.entrySet().stream().collect(Collectors.toMap(e -> e.getKey(),
-                e -> e.getValue().offset()));
+                false
+        );
+        Map<TopicPartition, OffsetAndTimestamp> offsetAndTimestampMap = eventHandler.addAndGet(
+                listOffsetsEvent,
+                time.timer(timeout)
+        );
+        return offsetAndTimestampMap
+                .entrySet()
+                .stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().offset()));
     }
 
     @Override
@@ -796,7 +802,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
             throw new IllegalArgumentException("Topic collection to subscribe to cannot be null");
         if (topics.isEmpty()) {
             // treat subscribing to empty topic list as the same as unsubscribing
-            this.unsubscribe();
+            unsubscribe();
         } else {
             for (String topic : topics) {
                 if (isBlank(topic))
@@ -859,7 +865,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     @Override
     public void subscribe(Pattern pattern, ConsumerRebalanceListener listener) {
         maybeThrowInvalidGroupIdException();
-        if (pattern == null || pattern.toString().equals(""))
+        if (pattern == null || pattern.toString().isEmpty())
             throw new IllegalArgumentException("Topic pattern to subscribe to cannot be " + (pattern == null ?
                     "null" : "empty"));
 
@@ -921,9 +927,6 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         });
     }
 
-    /**
-     * @throws KafkaException if the rebalance callback throws exception
-     */
     private Fetch<K, V> pollForFetches(Timer timer) {
         long pollTimeout = timer.remainingMs();
 
@@ -949,7 +952,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
 
         Timer pollTimer = time.timer(pollTimeout);
 
-        // Attempt to fetch any data. It's OK if we time out here; it's a best case effort. The
+        // Attempt to fetch any data. It's OK if we time out here; it's a 'best case' effort. The
         // data may not be immediately available, but the calling method (poll) will correctly
         // handle the overall timeout.
         try {

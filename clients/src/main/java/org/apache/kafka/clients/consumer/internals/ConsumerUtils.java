@@ -142,11 +142,6 @@ public final class ConsumerUtils {
         return new FetchMetricsManager(metrics, metricsRegistry);
     }
 
-    public static FetchConfig createFetchConfig(ConsumerConfig config) {
-        IsolationLevel isolationLevel = configuredIsolationLevel(config);
-        return new FetchConfig(config, isolationLevel);
-    }
-
     @SuppressWarnings("unchecked")
     public static <K, V> List<ConsumerInterceptor<K, V>> configuredConsumerInterceptors(ConsumerConfig config) {
         return (List<ConsumerInterceptor<K, V>>) ClientUtils.configuredInterceptors(config, ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, ConsumerInterceptor.class);

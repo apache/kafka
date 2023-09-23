@@ -35,6 +35,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
 
 /**
@@ -55,7 +56,6 @@ public class DefaultBackgroundThread extends KafkaThread implements Closeable {
     private final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier;
     private final Supplier<NetworkClientDelegate> networkClientDelegateSupplier;
     private final Supplier<RequestManagers> requestManagersSupplier;
-    // empty if groupId is null
     private ApplicationEventProcessor applicationEventProcessor;
     private NetworkClientDelegate networkClientDelegate;
     private RequestManagers requestManagers;
@@ -155,7 +155,7 @@ public class DefaultBackgroundThread extends KafkaThread implements Closeable {
     @Override
     public void close() {
         closer.close(() -> {
-            log.debug("Closing the consumer background thread");
+            log.trace("Closing the consumer background thread");
             running = false;
             wakeup();
             Utils.closeQuietly(requestManagers, "Request managers client");
@@ -168,17 +168,17 @@ public class DefaultBackgroundThread extends KafkaThread implements Closeable {
 
     /**
      * It is possible for the background thread to close before complete processing all the events in the queue. In
-     * this case, we need throw an exception to notify the user the consumer is closed.
+     * this case, we need to throw an exception to notify the user the consumer is closed.
      */
     private void drainAndComplete() {
-        List<ApplicationEvent> incompletedEvents = new ArrayList<>();
-        applicationEventQueue.drainTo(incompletedEvents);
-        incompletedEvents.forEach(event -> {
+        List<ApplicationEvent> incompleteEvents = new ArrayList<>();
+        applicationEventQueue.drainTo(incompleteEvents);
+        incompleteEvents.forEach(event -> {
             if (event instanceof CompletableApplicationEvent) {
-                ((CompletableApplicationEvent<?>) event).future().completeExceptionally(
-                        new KafkaException("The consumer is closed"));
+                CompletableFuture<?> future = ((CompletableApplicationEvent<?>) event).future();
+                future.completeExceptionally(new KafkaException("The consumer is closed"));
             }
         });
-        log.debug("Discarding {} events because the consumer is closed", incompletedEvents.size());
+        log.debug("Discarding {} events because the consumer is closed", incompleteEvents.size());
     }
 }

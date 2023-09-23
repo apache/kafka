@@ -48,11 +48,9 @@ import java.util.concurrent.LinkedBlockingQueue;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
-import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createFetchConfig;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createFetchMetricsManager;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createMetrics;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createSubscriptionState;
-import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.configuredIsolationLevel;
 import static org.mockito.Mockito.spy;
 
 public class ConsumerTestBuilder implements Closeable {
@@ -106,14 +104,13 @@ public class ConsumerTestBuilder implements Closeable {
         properties.put(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG, REQUEST_TIMEOUT_MS);
 
         this.config = new ConsumerConfig(properties);
-        IsolationLevel isolationLevel = configuredIsolationLevel(config);
+        this.fetchConfig = new FetchConfig(config);
         this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
         final long requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
         this.metrics = createMetrics(config, time);
 
         this.subscriptions = spy(createSubscriptionState(config, logContext));
         this.metadata = spy(new ConsumerMetadata(config, subscriptions, logContext, new ClusterResourceListeners()));
-        this.fetchConfig = createFetchConfig(config);
         this.metricsManager = createFetchMetricsManager(metrics);
 
         this.client = new MockClient(time, metadata);
@@ -133,7 +130,7 @@ public class ConsumerTestBuilder implements Closeable {
                 client));
         this.offsetsRequestManager = spy(new OffsetsRequestManager(subscriptions,
                 metadata,
-                isolationLevel,
+                fetchConfig.isolationLevel,
                 time,
                 retryBackoffMs,
                 requestTimeoutMs,

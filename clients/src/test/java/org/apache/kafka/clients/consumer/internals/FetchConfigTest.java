@@ -42,7 +42,7 @@ public class FetchConfigTest {
         p.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
         p.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
         ConsumerConfig config = new ConsumerConfig(p);
-        new FetchConfig(config, IsolationLevel.READ_UNCOMMITTED);
+        new FetchConfig(config);
     }
 
     private void newFetchConfigFromValues() {

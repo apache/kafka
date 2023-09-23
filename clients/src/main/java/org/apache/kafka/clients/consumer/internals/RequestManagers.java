@@ -35,8 +35,6 @@ import java.util.concurrent.BlockingQueue;
 import java.util.function.Supplier;
 
 import static java.util.Objects.requireNonNull;
-import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createFetchConfig;
-import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.configuredIsolationLevel;
 
 /**
  * {@code RequestManagers} provides a means to pass around the set of {@link RequestManager} instances in the system.
@@ -119,14 +117,13 @@ public class RequestManagers implements Closeable {
             protected RequestManagers create() {
                 final NetworkClientDelegate networkClientDelegate = networkClientDelegateSupplier.get();
                 final ErrorEventHandler errorEventHandler = new ErrorEventHandler(backgroundEventQueue);
-                final IsolationLevel isolationLevel = configuredIsolationLevel(config);
-                final FetchConfig fetchConfig = createFetchConfig(config);
+                final FetchConfig fetchConfig = new FetchConfig(config);
                 long retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
                 long retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
                 final int requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
                 final OffsetsRequestManager listOffsets = new OffsetsRequestManager(subscriptions,
                         metadata,
-                        isolationLevel,
+                        fetchConfig.isolationLevel,
                         time,
                         retryBackoffMs,
                         requestTimeoutMs,

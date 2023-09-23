@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
+import org.apache.kafka.common.KafkaException;
 
 import java.util.Queue;
 
@@ -34,6 +35,6 @@ public class ErrorEventHandler {
     }
 
     public void handle(Throwable e) {
-        handle(new RuntimeException(e));
+        handle(new KafkaException(e));
     }
 }
