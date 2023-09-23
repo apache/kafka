@@ -20,6 +20,7 @@ package kafka.network
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.{BooleanNode, DoubleNode, JsonNodeFactory, LongNode, ObjectNode, TextNode}
 import kafka.network.RequestChannel.Session
+import kafka.server.EnvelopeUtils
 import org.apache.kafka.common.message._
 import org.apache.kafka.common.network.ClientInformation
 import org.apache.kafka.common.requests._
@@ -60,7 +61,16 @@ object RequestConvertToJson {
       case req: ElectLeadersRequest => ElectLeadersRequestDataJsonConverter.write(req.data, request.version)
       case req: EndTxnRequest => EndTxnRequestDataJsonConverter.write(req.data, request.version)
       case req: EndQuorumEpochRequest => EndQuorumEpochRequestDataJsonConverter.write(req.data, request.version)
-      case req: EnvelopeRequest => EnvelopeRequestDataJsonConverter.write(req.data, request.version)
+      case req: EnvelopeRequest => {
+        val envelopeRequestData = req.data()
+        val envelopeData = envelopeRequestData.requestData().duplicate()
+        val envelopeHeader = EnvelopeUtils.parseForwardedRequestHeader(envelopeData)
+        val requestJson = RequestConvertToJson.request(AbstractRequest.parseRequest(envelopeHeader.apiKey(), envelopeHeader.apiVersion(), envelopeData).request)
+        val envelopJSON = new ObjectNode(JsonNodeFactory.instance)
+        envelopJSON.set("envelopeRequestHeader", requestHeaderNode(envelopeHeader))
+        envelopJSON.set("envelopeRequest", requestJson)
+        envelopJSON
+      }
       case req: ExpireDelegationTokenRequest => ExpireDelegationTokenRequestDataJsonConverter.write(req.data, request.version)
       case req: FetchRequest => FetchRequestDataJsonConverter.write(req.data, request.version)
       case req: FindCoordinatorRequest => FindCoordinatorRequestDataJsonConverter.write(req.data, request.version)
