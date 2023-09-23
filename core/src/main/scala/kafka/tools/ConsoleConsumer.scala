@@ -425,7 +425,7 @@ object ConsoleConsumer extends Logging {
     time: Time = Time.SYSTEM
   ) {
     consumerInit()
-    var recordIter = Collections.emptyList[ConsumerRecord[Array[Byte], Array[Byte]]]().iterator()
+    var recordIter = consumer.poll(Duration.ofMillis(0L), false).iterator
 
     def consumerInit(): Unit = {
       (topic, partitionId, offset, includedTopics) match {

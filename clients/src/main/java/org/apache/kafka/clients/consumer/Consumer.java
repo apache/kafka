@@ -88,6 +88,11 @@ public interface Consumer<K, V> extends Closeable {
     ConsumerRecords<K, V> poll(Duration timeout);
 
     /**
+     * @see KafkaConsumer#poll(Duration, boolean)
+     */
+    ConsumerRecords<K, V> poll(Duration timeout, boolean includeMetadataInTimeout);
+
+    /**
      * @see KafkaConsumer#commitSync()
      */
     void commitSync();
