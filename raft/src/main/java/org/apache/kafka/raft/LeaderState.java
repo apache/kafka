@@ -112,7 +112,7 @@ public class LeaderState<T> implements EpochState {
         }
     }
 
-    public void updateFetchedVoters(int id) {
+    private void updateFetchedVoters(int id) {
         if (isVoter(id)) {
             fetchedVoters.add(id);
         }

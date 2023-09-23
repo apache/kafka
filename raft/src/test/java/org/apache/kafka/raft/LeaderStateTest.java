@@ -45,8 +45,9 @@ public class LeaderStateTest {
     private final int localId = 0;
     private final int epoch = 5;
     private final LogContext logContext = new LogContext();
-
     private final BatchAccumulator<?> accumulator = Mockito.mock(BatchAccumulator.class);
+    private final MockTime time = new MockTime();
+    private final int fetchTimeoutMs = 2000;
 
     private LeaderState<?> newLeaderState(
         Set<Integer> voters,
@@ -60,8 +61,8 @@ public class LeaderStateTest {
             voters,
             accumulator,
             logContext,
-            new MockTime(),
-            2000
+            time,
+            fetchTimeoutMs
         );
     }
 
@@ -76,7 +77,7 @@ public class LeaderStateTest {
             null,
             logContext,
             new MockTime(),
-            2000
+            fetchTimeoutMs
         ));
     }
 
@@ -449,6 +450,37 @@ public class LeaderStateTest {
                 .setLastFetchTimestamp(observerFetchTimeMs)
                 .setLastCaughtUpTimestamp(observerFetchTimeMs),
             observerState);
+    }
+
+    @Test
+    public void testMajorityFollowerFetchTimeoutExpiration() {
+        int node1 = 1;
+        int node2 = 2;
+        int node3 = 3;
+        int node4 = 4;
+        int observer5 = 5;
+        LeaderState<?> state = newLeaderState(mkSet(localId, node1, node2, node3, node4), 0L);
+        assertFalse(state.hasMajorityFollowerFetchTimeoutExpired(time.milliseconds()));
+
+        // fetch timeout not exceeded, should not expire the timer
+        time.sleep(fetchTimeoutMs / 2);
+        assertFalse(state.hasMajorityFollowerFetchTimeoutExpired(time.milliseconds()));
+
+        // received fetch requests from 2 voter nodes, the timer should be reset
+        state.maybeResetMajorityFollowerFetchTimeout(node1, time.milliseconds());
+        state.maybeResetMajorityFollowerFetchTimeout(node2, time.milliseconds());
+
+        // Since the timer was reset, it won't expire this time.
+        time.sleep(fetchTimeoutMs / 2);
+        assertFalse(state.hasMajorityFollowerFetchTimeoutExpired(time.milliseconds()));
+
+        // received fetch requests from 1 voter and 1 observer nodes, the timer should not be reset.
+        state.maybeResetMajorityFollowerFetchTimeout(node3, time.milliseconds());
+        state.maybeResetMajorityFollowerFetchTimeout(observer5, time.milliseconds());
+
+        // This time, the fetch timer will be expired
+        time.sleep(fetchTimeoutMs / 2);
+        assertTrue(state.hasMajorityFollowerFetchTimeoutExpired(time.milliseconds()));
     }
 
     @Test
