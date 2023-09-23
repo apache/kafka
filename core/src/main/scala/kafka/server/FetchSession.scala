@@ -728,10 +728,7 @@ class FetchSessionCache(private val maxEntries: Int,
   }
 
   def remove(sessionId: Int): Option[FetchSession] = synchronized {
-    get(sessionId) match {
-      case None => None
-      case Some(session) => remove(session)
-    }
+    get(sessionId).flatMap(session => remove(session))
   }
 
   /**

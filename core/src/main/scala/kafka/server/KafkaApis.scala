@@ -726,8 +726,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       forgottenTopics,
       topicNames)
 
-    val erroneous = mutable.ArrayBuffer[(TopicIdPartition, FetchResponseData.PartitionData)]()
-    val interesting = mutable.ArrayBuffer[(TopicIdPartition, FetchRequest.PartitionData)]()
+    val erroneous = mutable.ListBuffer[(TopicIdPartition, FetchResponseData.PartitionData)]()
+    val interesting = mutable.ListBuffer[(TopicIdPartition, FetchRequest.PartitionData)]()
     if (fetchRequest.isFromFollower) {
       // The follower must have ClusterAction on ClusterResource in order to fetch partition data.
       if (authHelper.authorize(request.context, CLUSTER_ACTION, CLUSTER, CLUSTER_NAME)) {
@@ -746,7 +746,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     } else {
       // Regular Kafka consumers need READ permission on each partition they are fetching.
-      val partitionDatas = new mutable.ArrayBuffer[(TopicIdPartition, FetchRequest.PartitionData)]
+      val partitionDatas = new mutable.ListBuffer[(TopicIdPartition, FetchRequest.PartitionData)]
       fetchContext.foreachPartition { (topicIdPartition, partitionData) =>
         if (topicIdPartition.topic == null)
           erroneous += topicIdPartition -> FetchResponse.partitionResponse(topicIdPartition, Errors.UNKNOWN_TOPIC_ID)
@@ -2353,7 +2353,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     var skippedMarkers = 0
     for (marker <- markers.asScala) {
       val producerId = marker.producerId
-      val partitionsWithCompatibleMessageFormat = new mutable.ArrayBuffer[TopicPartition]
+      val partitionsWithCompatibleMessageFormat = new mutable.ListBuffer[TopicPartition]
 
       val currentErrors = new ConcurrentHashMap[TopicPartition, Errors]()
       marker.partitions.forEach { partition =>
