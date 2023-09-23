@@ -185,11 +185,9 @@ do
 done
 
 # classpath addition for release
-for file in "$base_dir"/libs/*;
+for file in "$base_dir"/libs/kafka_${SCALA_BINARY_VERSION}-classpath*.jar;
 do
-  if should_include_file "$file"; then
-    CLASSPATH="$CLASSPATH":"$file"
-  fi
+  CLASSPATH="$CLASSPATH":"$file"
 done
 
 for file in "$base_dir"/core/build/libs/kafka_${SCALA_BINARY_VERSION}*.jar;

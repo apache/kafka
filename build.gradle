@@ -1081,6 +1081,11 @@ project(':core') {
     duplicatesStrategy 'exclude'
   }
 
+  task launcherJar(type: Jar) {
+    description = 'Create a Class-Path only Jar for launcher scripts and the application'
+    appendix = 'classpath'
+  }
+
   tasks.create(name: "releaseTarGz", dependsOn: configurations.archives.artifacts, type: Tar) {
     into "kafka_${versions.baseScala}-${archiveVersion.get()}"
     compression = Compression.GZIP
@@ -1091,6 +1096,7 @@ project(':core') {
     from "$rootDir/NOTICE-binary" rename {String filename -> filename.replace("-binary", "")}
     from(configurations.runtimeClasspath) { into("libs/") }
     from(configurations.archives.artifacts.files) { into("libs/") }
+    from(launcherJar.outputs.files) { into("libs/") }
     from(project.siteDocsTar) { into("site-docs/") }
     from(project(':tools').jar) { into("libs/") }
     from(project(':tools').configurations.runtimeClasspath) { into("libs/") }
@@ -1125,6 +1131,33 @@ project(':core') {
     from(project(':tools:tools-api').jar) { into("libs/") }
     from(project(':tools:tools-api').configurations.runtimeClasspath) { into("libs/") }
     duplicatesStrategy 'exclude'
+  }
+
+  project.gradle.taskGraph.whenReady { taskGraph ->
+    if (taskGraph.hasTask(launcherJar)) {
+      def jars = configurations.runtime +
+          configurations.archives.artifacts.files +
+          project(':tools').configurations.archives.artifacts.files +
+          project(':tools').configurations.runtime +
+          project(':connect:api').configurations.archives.artifacts.files +
+          project(':connect:api').configurations.runtime +
+          project(':connect:runtime').configurations.archives.artifacts.files +
+          project(':connect:runtime').configurations.runtime +
+          project(':connect:transforms').configurations.archives.artifacts.files +
+          project(':connect:transforms').configurations.runtime +
+          project(':connect:json').configurations.archives.artifacts.files +
+          project(':connect:json').configurations.runtime +
+          project(':connect:file').configurations.archives.artifacts.files +
+          project(':connect:file').configurations.runtime +
+          project(':streams').configurations.archives.artifacts.files +
+          project(':streams').configurations.runtime +
+          project(':streams:examples').configurations.archives.artifacts.files +
+          project(':streams:examples').configurations.runtime as Set
+
+      launcherJar.manifest.attributes("Class-Path": jars*.name.findAll { name ->
+        !(name =~ '(-(test|sources|test-sources|scaladoc|javadoc).jar|jar.asc)$')
+      }.join(' '))
+    }
   }
 
   jar {
