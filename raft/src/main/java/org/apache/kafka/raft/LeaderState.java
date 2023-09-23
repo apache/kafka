@@ -22,6 +22,8 @@ import org.apache.kafka.common.message.LeaderChangeMessage.Voter;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.ControlRecordUtils;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.raft.internals.BatchAccumulator;
 import org.slf4j.Logger;
 
@@ -55,6 +57,11 @@ public class LeaderState<T> implements EpochState {
     private final Map<Integer, ReplicaState> observerStates = new HashMap<>();
     private final Logger log;
     private final BatchAccumulator<T> accumulator;
+    private final Set<Integer> fetchedVoters = new HashSet<>();
+    private final Timer fetchTimer;
+    private final int fetchTimeoutMs;
+    // The majority number of the voters excluding the leader. Ex: 3 voters, the value will be 1
+    private final int majority;
 
     // This is volatile because resignation can be requested from an external thread.
     private volatile boolean resignRequested = false;
@@ -66,7 +73,9 @@ public class LeaderState<T> implements EpochState {
         Set<Integer> voters,
         Set<Integer> grantingVoters,
         BatchAccumulator<T> accumulator,
-        LogContext logContext
+        LogContext logContext,
+        Time time,
+        int fetchTimeoutMs
     ) {
         this.localId = localId;
         this.epoch = epoch;
@@ -76,9 +85,37 @@ public class LeaderState<T> implements EpochState {
             boolean hasAcknowledgedLeader = voterId == localId;
             this.voterStates.put(voterId, new ReplicaState(voterId, hasAcknowledgedLeader));
         }
+        this.majority = voters.size() / 2;
         this.grantingVoters = Collections.unmodifiableSet(new HashSet<>(grantingVoters));
         this.log = logContext.logger(LeaderState.class);
         this.accumulator = Objects.requireNonNull(accumulator, "accumulator must be non-null");
+        this.fetchTimeoutMs = fetchTimeoutMs;
+        this.fetchTimer = time.timer(fetchTimeoutMs);
+    }
+
+    public boolean hasMajorityFollowerFetchTimeoutExpired(long currentTimeMs) {
+        fetchTimer.update(currentTimeMs);
+        boolean isExpired = fetchTimer.isExpired();
+        if (isExpired) {
+            log.info("Did not receive fetch request from the majority of the voters within {}ms. Current fetched voters are {}.",
+                    fetchTimeoutMs, fetchedVoters);
+        }
+        return isExpired;
+    }
+
+    public void maybeResetMajorityFollowerFetchTimeout(int id, long currentTimeMs) {
+        updateFetchedVoters(id);
+        if (fetchedVoters.size() >= majority) {
+            fetchedVoters.clear();
+            fetchTimer.update(currentTimeMs);
+            fetchTimer.reset(fetchTimeoutMs);
+        }
+    }
+
+    public void updateFetchedVoters(int id) {
+        if (isVoter(id)) {
+            fetchedVoters.add(id);
+        }
     }
 
     public BatchAccumulator<T> accumulator() {

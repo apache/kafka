@@ -459,7 +459,9 @@ public class QuorumState {
             voters,
             candidateState.grantingVoters(),
             accumulator,
-            logContext
+            logContext,
+            time,
+            fetchTimeoutMs
         );
         durableTransitionTo(state);
         return state;
