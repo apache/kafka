@@ -255,9 +255,9 @@ reflections-0.10.2
 reload4j-1.2.25
 rocksdbjni-7.9.2
 scala-collection-compat_2.13-2.10.0
-scala-library-2.13.11
+scala-library-2.13.12
 scala-logging_2.13-3.9.4
-scala-reflect-2.13.11
+scala-reflect-2.13.12
 scala-java8-compat_2.13-1.0.2
 snappy-java-1.1.10.3
 swagger-annotations-2.2.8
