@@ -329,12 +329,11 @@ public class MirrorCheckpointTask extends SourceTask {
                 }
 
                 // if translated offset from upstream is smaller than the current consumer offset
-                // in the target, skip updating the offset for that partition
+                // in the target, do logging and keep syncing offsets,so that downstream offsets can keep up with upstream ones
                 long latestDownstreamOffset = targetConsumerOffset.get(topicPartition).offset();
                 if (latestDownstreamOffset >= convertedOffset.offset()) {
                     log.trace("latestDownstreamOffset {} is larger than or equal to convertedUpstreamOffset {} for "
                         + "TopicPartition {}", latestDownstreamOffset, convertedOffset.offset(), topicPartition);
-                    continue;
                 }
                 offsetToSync.put(topicPartition, convertedOffset);
             }
