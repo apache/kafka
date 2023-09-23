@@ -163,13 +163,13 @@ class LogSegment private[log] (val log: FileRecords,
       if (largestTimestamp > maxTimestampSoFar) {
         maxTimestampAndOffsetSoFar = new TimestampOffset(largestTimestamp, shallowOffsetOfMaxTimestamp)
       }
+      bytesSinceLastIndexEntry += records.sizeInBytes
       // append an entry to the index (if needed)
       if (bytesSinceLastIndexEntry > indexIntervalBytes) {
         offsetIndex.append(largestOffset, physicalPosition)
         timeIndex.maybeAppend(maxTimestampSoFar, offsetOfMaxTimestampSoFar)
         bytesSinceLastIndexEntry = 0
       }
-      bytesSinceLastIndexEntry += records.sizeInBytes
     }
   }
 
