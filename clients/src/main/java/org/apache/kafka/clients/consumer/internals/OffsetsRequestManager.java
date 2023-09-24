@@ -84,6 +84,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
     private final ApiVersions apiVersions;
     private final NetworkClientDelegate networkClientDelegate;
 
+    @SuppressWarnings("this-escape")
     public OffsetsRequestManager(final SubscriptionState subscriptionState,
                                  final ConsumerMetadata metadata,
                                  final IsolationLevel isolationLevel,

@@ -91,6 +91,7 @@ import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 @RunWith(Parameterized.class)
+@SuppressWarnings("this-escape")
 public class StoreChangelogReaderTest extends EasyMockSupport {
 
     @Rule
