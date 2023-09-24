@@ -1830,6 +1830,11 @@ $ bin/kafka-acls.sh \
         <td>The number of log segments in a partition.</td>
       </tr>
       <tr>
+        <td>Detailed log segments info in a partition</td>
+        <td>kafka.log:type=Log,name=LogSegments,topic=([-.\w]+),partition=([0-9]+)</td>
+        <td>The detailed metrics of log segments in a partition.</td>
+      </tr>
+      <tr>
         <td>First offset in a partition</td>
         <td>kafka.log:type=Log,name=LogStartOffset,topic=([-.\w]+),partition=([0-9]+)</td>
         <td>The first offset in a partition.</td>

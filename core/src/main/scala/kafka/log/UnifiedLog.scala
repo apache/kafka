@@ -47,6 +47,7 @@ import java.nio.file.Files
 import java.util
 import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap}
 import java.util.{Collections, Optional, OptionalInt, OptionalLong}
+import java.util.{List => JList, ArrayList => JArrayList}
 import scala.annotation.nowarn
 import scala.collection.mutable.ListBuffer
 import scala.collection.{Seq, immutable, mutable}
@@ -454,10 +455,12 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     val tags = (Map("topic" -> topicPartition.topic, "partition" -> topicPartition.partition.toString) ++
       (if (isFuture) Map("is-future" -> "true") else Map.empty)).asJava
     metricsGroup.newGauge(LogMetricNames.NumLogSegments, () => numberOfSegments, tags)
+    metricsGroup.newGauge(LogMetricNames.LogSegments, () => logSegmentsDetail, tags)
     metricsGroup.newGauge(LogMetricNames.LogStartOffset, () => logStartOffset, tags)
     metricsGroup.newGauge(LogMetricNames.LogEndOffset, () => logEndOffset, tags)
     metricsGroup.newGauge(LogMetricNames.Size, () => size, tags)
     metricNames = Map(LogMetricNames.NumLogSegments -> tags,
+      LogMetricNames.LogSegments -> tags,
       LogMetricNames.LogStartOffset -> tags,
       LogMetricNames.LogEndOffset -> tags,
       LogMetricNames.Size -> tags)
@@ -638,6 +641,16 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    * Take care! this is an O(n) operation.
    */
   def numberOfSegments: Int = localLog.segments.numberOfSegments
+
+  /**
+   * The detailed metrics for log segments
+   */
+  def logSegmentsDetail: JList[String] = {
+    val list = logSegments.toSeq.map { seg =>
+      s"baseOffset=${seg.baseOffset}; created=${seg.createdMs}; logSize=${seg.size}; indexSize=${seg.indexSize}"
+    }
+    new JArrayList[String](list.asJava)
+  }
 
   /**
    * Close this log.
@@ -2256,12 +2269,13 @@ object UnifiedLog extends Logging {
 
 object LogMetricNames {
   val NumLogSegments: String = "NumLogSegments"
+  val LogSegments: String = "LogSegments"
   val LogStartOffset: String = "LogStartOffset"
   val LogEndOffset: String = "LogEndOffset"
   val Size: String = "Size"
 
   def allMetricNames: List[String] = {
-    List(NumLogSegments, LogStartOffset, LogEndOffset, Size)
+    List(NumLogSegments, LogSegments, LogStartOffset, LogEndOffset, Size)
   }
 }
 
