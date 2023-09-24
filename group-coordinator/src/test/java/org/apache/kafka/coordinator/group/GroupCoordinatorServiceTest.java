@@ -961,19 +961,16 @@ public class GroupCoordinatorServiceTest {
         OffsetDeleteRequestData request = new OffsetDeleteRequestData().setGroupId("group")
             .setTopics(requestTopicCollection);
 
-
         OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection responsePartitionCollection =
             new OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection();
         responsePartitionCollection.add(
             new OffsetDeleteResponseData.OffsetDeleteResponsePartition().setPartitionIndex(0)
         );
-
         OffsetDeleteResponseData.OffsetDeleteResponseTopicCollection responseTopicCollection =
             new OffsetDeleteResponseData.OffsetDeleteResponseTopicCollection();
         responseTopicCollection.add(
             new OffsetDeleteResponseData.OffsetDeleteResponseTopic().setPartitions(responsePartitionCollection)
         );
-
         OffsetDeleteResponseData response = new OffsetDeleteResponseData()
             .setTopics(responseTopicCollection);
 
@@ -1076,8 +1073,34 @@ public class GroupCoordinatorServiceTest {
         assertEquals(response, future.get());
     }
 
-    // TODO: test invalid state?
-
-    @Test
-    public void testDeleteGroups() throws Exception {}
+//    @Test
+//    public void testDeleteGroups() throws Exception {
+//        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
+//        GroupCoordinatorService service = new GroupCoordinatorService(
+//            new LogContext(),
+//            createConfig(),
+//            runtime
+//        );
+//        service.startup(() -> 1);
+//
+//        List<String> groupIds = Collections.singletonList("foo");
+//        DeleteGroupsResponseData.DeletableGroupResultCollection resultCollection =
+//            new DeleteGroupsResponseData.DeletableGroupResultCollection();
+//        resultCollection.add(new DeleteGroupsResponseData.DeletableGroupResult().setGroupId("foo"));
+//
+//        when(runtime.scheduleWriteOperation(
+//            ArgumentMatchers.eq("delete-group"),
+//            ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
+//            ArgumentMatchers.any()
+//        )).thenReturn(CompletableFuture.completedFuture(resultCollection));
+//
+//        CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> future = service.deleteGroups(
+//            requestContext(ApiKeys.DELETE_GROUPS),
+//            groupIds,
+//            BufferSupplier.NO_CACHING
+//        );
+//
+//        assertTrue(future.isDone());
+//        assertEquals(resultCollection, future.get());
+//    }
 }
