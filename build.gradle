@@ -31,15 +31,15 @@ buildscript {
 }
 
 plugins {
-  id 'com.github.ben-manes.versions' version '0.47.0'
+  id 'com.github.ben-manes.versions' version '0.48.0'
   id 'idea'
   id 'jacoco'
   id 'java-library'
   id 'org.owasp.dependencycheck' version '8.2.1'
-  id 'org.nosphere.apache.rat' version "0.8.0"
-  id "io.swagger.core.v3.swagger-gradle-plugin" version "2.2.8"
+  id 'org.nosphere.apache.rat' version "0.8.1"
+  id "io.swagger.core.v3.swagger-gradle-plugin" version "2.2.16"
 
-  id "com.github.spotbugs" version '5.0.13' apply false
+  id "com.github.spotbugs" version '5.1.3' apply false
   id 'org.scoverage' version '7.0.1' apply false
   id 'com.github.johnrengelman.shadow' version '8.1.1' apply false
   id 'com.diffplug.spotless' version '6.14.0' apply false // 6.14.1 and newer require Java 11 at compile time, so we can't upgrade until AK 4.0
@@ -909,7 +909,6 @@ project(':core') {
     testImplementation project(':storage:api').sourceSets.test.output
     testImplementation libs.bcpkix
     testImplementation libs.mockitoCore
-    testImplementation libs.mockitoInline // supports mocking static methods, final classes, etc.
     testImplementation(libs.apacheda) {
       exclude group: 'xml-apis', module: 'xml-apis'
       // `mina-core` is a transitive dependency for `apacheds` and `apacheda`.
@@ -1194,7 +1193,6 @@ project(':metadata') {
     testImplementation libs.jqwik
     testImplementation libs.hamcrest
     testImplementation libs.mockitoCore
-    testImplementation libs.mockitoInline
     testImplementation libs.slf4jlog4j
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':raft').sourceSets.test.output
@@ -1354,7 +1352,7 @@ project(':clients') {
     testImplementation libs.jose4j
     testImplementation libs.junitJupiter
     testImplementation libs.log4j
-    testImplementation libs.mockitoInline
+    testImplementation libs.mockitoCore
 
     testRuntimeOnly libs.slf4jlog4j
     testRuntimeOnly libs.jacksonDatabind
@@ -1579,7 +1577,6 @@ project(':server-common') {
     testImplementation project(':clients').sourceSets.test.output
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
-    testImplementation libs.mockitoInline // supports mocking static methods, final classes, etc.
     testImplementation libs.hamcrest
 
     testRuntimeOnly libs.slf4jlog4j
@@ -1906,7 +1903,7 @@ project(':tools') {
     testImplementation project(':connect:runtime')
     testImplementation project(':connect:runtime').sourceSets.test.output
     testImplementation libs.junitJupiter
-    testImplementation libs.mockitoInline // supports mocking static methods, final classes, etc.
+    testImplementation libs.mockitoCore
     testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
     testImplementation libs.bcpkix // required by the clients test module, but we have to specify it explicitly as gradle does not include the transitive test dependency automatically
     testRuntimeOnly libs.slf4jlog4j
@@ -1957,7 +1954,7 @@ project(':trogdor') {
     testImplementation project(':clients')
     testImplementation libs.junitJupiter
     testImplementation project(':clients').sourceSets.test.output
-    testImplementation libs.mockitoInline // supports mocking static methods, final classes, etc.
+    testImplementation libs.mockitoCore
 
     testRuntimeOnly libs.slf4jlog4j
   }
@@ -2061,7 +2058,7 @@ project(':streams') {
     testImplementation libs.powermockEasymock
     testImplementation libs.bcpkix
     testImplementation libs.hamcrest
-    testImplementation libs.mockitoInline // supports mocking static methods, final classes, etc.
+    testImplementation libs.mockitoCore
     testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
 
     testRuntimeOnly project(':streams:test-utils')
@@ -2808,7 +2805,7 @@ project(':connect:runtime') {
     testImplementation libs.junitVintageEngine
     testImplementation libs.powermockJunit4
     testImplementation libs.powermockEasymock
-    testImplementation libs.mockitoInline
+    testImplementation libs.mockitoCore
     testImplementation libs.httpclient
 
     testRuntimeOnly libs.slf4jlog4j

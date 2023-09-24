@@ -53,20 +53,34 @@ if ( !versions.scala.contains('-') ) {
   versions["baseScala"] = versions.scala
 }
 
-// We use Mockito 4.11 with Scala 2.13+ for Java 20 support and Mockito 4.9 with Scala 2.12
-// to workaround ambiguous reference to `Mockito.spy` compiler errors. Since Scala 2.12 support
-// is going away soon, this is simpler than adjusting the code.
+// mockito 5.5 is required for Java 21 and mockito 5.x requires at least Java 11
+// mockito 4.9 is required for Scala 2.12 as a workaround for compiler errors due to ambiguous reference to `Mockito.spy`
+// since Scala 2.12 support is going away soon, this is simpler than adjusting the code.
+// mockito 4.11 is used with Java 8 and Scala 2.13
 String mockitoVersion
 if (scalaVersion == "2.12")
   mockitoVersion = "4.9.0"
+else if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_11))
+  mockitoVersion = "5.5.0"
 else
   mockitoVersion = "4.11.0"
 
-// easymock 5.1 is required for Java 20 support, but it breaks tests using powermock
-// powermock doesn't work with Java 16 or newer and hence it's safe to use easymock 5.1 in this case only
+// mockito 4.x has two mocking strategies: subclass (mockito-core) and inline (mockito-inline).
+// mockito 5.x has two mocking strategies: inline (mockito-core) and subclass (mockito-subclass).
+// The default strategy (i.e. what `mockito-core` uses) changed to `inline` in 5.x because it works better with newer
+// Java versions.
+// We always use the `inline` strategy.
+String mockitoArtifactName
+if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_11))
+  mockitoArtifactName = "mockito-core"
+else
+  mockitoArtifactName = "mockito-inline"
+
+// easymock 5.2 is required for Java 21 support, but it breaks tests using powermock
+// powermock doesn't work with Java 16 or newer and hence it's safe to use the newer version in this case only
 String easymockVersion
 if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_16))
-  easymockVersion = "5.1.0"
+  easymockVersion = "5.2.0"
 else
   easymockVersion = "4.3"
 
@@ -83,7 +97,7 @@ versions += [
   commonsCli: "1.4",
   commonsValidator: "1.7",
   dropwizardMetrics: "4.1.12.1",
-  gradle: "8.2.1",
+  gradle: "8.3",
   grgit: "4.1.1",
   httpclient: "4.5.14",
   jackson: "2.13.5",
@@ -93,7 +107,7 @@ versions += [
   jetty: "9.4.51.v20230217",
   jersey: "2.39.1",
   jline: "3.22.0",
-  jmh: "1.36",
+  jmh: "1.37",
   hamcrest: "2.2",
   scalaLogging: "3.9.4",
   jaxAnnotation: "1.3.2",
@@ -102,7 +116,7 @@ versions += [
   jfreechart: "1.0.0",
   jopt: "5.0.4",
   jose4j: "0.9.3",
-  junit: "5.9.3",
+  junit: "5.10.0",
   jqwik: "1.7.4",
   kafka_0100: "0.10.0.1",
   kafka_0101: "0.10.1.1",
@@ -221,8 +235,7 @@ libs += [
   lz4: "org.lz4:lz4-java:$versions.lz4",
   metrics: "com.yammer.metrics:metrics-core:$versions.metrics",
   dropwizardMetrics: "io.dropwizard.metrics:metrics-core:$versions.dropwizardMetrics",
-  mockitoCore: "org.mockito:mockito-core:$mockitoVersion",
-  mockitoInline: "org.mockito:mockito-inline:$mockitoVersion",
+  mockitoCore: "org.mockito:$mockitoArtifactName:$mockitoVersion",
   mockitoJunitJupiter: "org.mockito:mockito-junit-jupiter:$mockitoVersion",
   nettyHandler: "io.netty:netty-handler:$versions.netty",
   nettyTransportNativeEpoll: "io.netty:netty-transport-native-epoll:$versions.netty",
