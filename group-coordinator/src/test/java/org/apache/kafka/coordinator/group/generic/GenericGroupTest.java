@@ -63,24 +63,24 @@ public class GenericGroupTest {
     private final int sessionTimeoutMs = 10000;
 
     private GenericGroup group = null;
-
+    
     @BeforeEach
     public void initialize() {
         group = new GenericGroup(new LogContext(), "groupId", EMPTY, Time.SYSTEM);
     }
-
+    
     @Test
     public void testCanRebalanceWhenStable() {
         assertTrue(group.canRebalance());
     }
-
+    
     @Test
     public void testCanRebalanceWhenCompletingRebalance() {
         group.transitionTo(PREPARING_REBALANCE);
         group.transitionTo(COMPLETING_REBALANCE);
-        assertTrue(group.canRebalance());
+        assertTrue(group.canRebalance()); 
     }
-
+    
     @Test
     public void testCannotRebalanceWhenPreparingRebalance() {
         group.transitionTo(PREPARING_REBALANCE);
@@ -311,6 +311,7 @@ public class GenericGroupTest {
         member2Protocols.add(new JoinGroupRequestProtocol()
             .setName("foo")
             .setMetadata(new byte[0]));
+
 
         GenericGroupMember member2 = new GenericGroupMember(
             "member2",
@@ -777,7 +778,7 @@ public class GenericGroupTest {
             protocolType,
             protocols
         );
-
+        
         group.add(member);
         assertTrue(group.hasMemberId(memberId));
         assertTrue(group.hasStaticMember(groupInstanceId));
@@ -815,7 +816,7 @@ public class GenericGroupTest {
             protocolType,
             protocols
         );
-
+        
         group.add(member);
         assertTrue(group.addPendingSyncMember(memberId));
         assertEquals(Collections.singleton(memberId), group.allPendingSyncMembers());
