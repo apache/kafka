@@ -28,7 +28,7 @@ ext {
 
 // Add Scala version
 def defaultScala212Version = '2.12.18'
-def defaultScala213Version = '2.13.11'
+def defaultScala213Version = '2.13.12'
 if (hasProperty('scalaVersion')) {
   if (scalaVersion == '2.12') {
     versions["scala"] = defaultScala212Version
@@ -152,7 +152,7 @@ versions += [
   // When updating the scalafmt version please also update the version field in checkstyle/.scalafmt.conf. scalafmt now
   // has the version field as mandatory in its configuration, see
   // https://github.com/scalameta/scalafmt/releases/tag/v3.1.0.
-  scalafmt: "3.5.9",
+  scalafmt: "3.7.14",
   scalaJava8Compat : "1.0.2",
   scoverage: "1.9.3",
   slf4j: "1.7.36",
