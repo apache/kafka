@@ -581,6 +581,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
         return allFutures.thenApply(v -> {
             final DeleteGroupsResponseData.DeletableGroupResultCollection res = new DeleteGroupsResponseData.DeletableGroupResultCollection();
             futures.forEach(future -> res.addAll(future.join()));
+            // TODO: res.addAll(future.join()) returns false
+            // res.addAll(new DeleteGroupsResponseData.DeletableGroupResult()) returns true
             return res;
         });
     }

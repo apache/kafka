@@ -38,7 +38,6 @@ import org.apache.kafka.coordinator.group.RecordHelpers;
 import org.slf4j.Logger;
 
 import java.nio.ByteBuffer;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
@@ -884,7 +883,7 @@ public class GenericGroup implements Group {
      * @return The list of tombstone record(s).
      */
     public List<Record> createMetadataTombstoneRecords() {
-        return Arrays.asList(RecordHelpers.newGroupMetadataTombstoneRecord(groupId()));
+        return Collections.singletonList(RecordHelpers.newGroupMetadataTombstoneRecord(groupId()));
     }
 
     /**

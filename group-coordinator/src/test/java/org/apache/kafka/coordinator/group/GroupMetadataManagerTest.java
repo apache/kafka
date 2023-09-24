@@ -26,6 +26,7 @@ import org.apache.kafka.common.errors.FencedMemberEpochException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.GroupMaxSizeReachedException;
 import org.apache.kafka.common.errors.IllegalGenerationException;
+import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnknownServerException;
@@ -738,7 +739,7 @@ public class GroupMetadataManagerTest {
                 request,
                 responseFuture
             );
-            
+
             return new SyncResult(responseFuture, coordinatorResult);
         }
 
@@ -9403,6 +9404,41 @@ public class GroupMetadataManagerTest {
                     .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code())));
 
         assertEquals(expectedResponse, leaveResult.response());
+    }
+
+    @Test
+    public void testGenericGroupDelete() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+        GenericGroup group = context.createGenericGroup("group-id");
+
+        List<Record> expectedRecords = Collections.singletonList(RecordHelpers.newGroupMetadataTombstoneRecord("group-id"));
+        List<Record> records = new ArrayList<>();
+        context.groupMetadataManager.deleteGroup("group-id", records);
+        assertEquals(expectedRecords, records);
+    }
+
+    @Test
+    public void testConsumerGroupDelete() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+        ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreateConsumerGroup("group-id", true);
+
+        List<Record> expectedRecords = Arrays.asList(
+            RecordHelpers.newTargetAssignmentEpochTombstoneRecord("group-id"),
+            RecordHelpers.newGroupSubscriptionMetadataTombstoneRecord("group-id"),
+            RecordHelpers.newGroupEpochTombstoneRecord("group-id")
+        );
+        List<Record> records = new ArrayList<>();
+        context.groupMetadataManager.deleteGroup("group-id", records);
+        assertEquals(expectedRecords, records);
+    }
+
+    @Test
+    public void testValidateGroupDelete() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+        assertThrows(InvalidGroupIdException.class, () -> context.groupMetadataManager.validateGroupDelete(null));
     }
 
     private static void assertNoOrEmptyResult(List<ExpiredTimeout<Void, Record>> timeouts) {

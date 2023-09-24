@@ -371,14 +371,15 @@ public class OffsetMetadataManager {
             final OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection responsePartitionCollection =
                 new OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection();
             final boolean subscribedToTopic = group.isSubscribedToTopic(topic.name());
-            final TimelineHashMap<Integer, OffsetAndMetadata> offsetsByPartition = offsetsByTopic.get(topic);
+            final TimelineHashMap<Integer, OffsetAndMetadata> offsetsByPartition = offsetsByTopic == null ?
+                null : offsetsByTopic.get(topic.name());
 
             topic.partitions().forEach(partition -> {
                 final OffsetDeleteResponseData.OffsetDeleteResponsePartition responsePartition =
                     new OffsetDeleteResponseData.OffsetDeleteResponsePartition().setPartitionIndex(partition.partitionIndex());
                 if (subscribedToTopic) {
                     responsePartition.setErrorCode(Errors.GROUP_SUBSCRIBED_TO_TOPIC.code());
-                } else if (offsetsByPartition != null && offsetsByPartition.containsKey(partition)) {
+                } else if (offsetsByPartition != null && offsetsByPartition.containsKey(partition.partitionIndex())) {
                     records.add(RecordHelpers.newOffsetCommitTombstoneRecord(
                         request.groupId(),
                         topic.name(),
@@ -389,7 +390,9 @@ public class OffsetMetadataManager {
             });
 
             final OffsetDeleteResponseData.OffsetDeleteResponseTopic responseTopic =
-                new OffsetDeleteResponseData.OffsetDeleteResponseTopic().setPartitions(responsePartitionCollection);
+                new OffsetDeleteResponseData.OffsetDeleteResponseTopic()
+                    .setName(topic.name())
+                    .setPartitions(responsePartitionCollection);
             responseTopicCollection.add(responseTopic);
         });
         response.setTopics(responseTopicCollection);
@@ -398,7 +401,7 @@ public class OffsetMetadataManager {
     }
 
     /**
-     * Handles an GroupDelete request.
+     * Handles a GroupDelete request.
      * Populates the record list passed in with records to update the state machine.
      * Validations are done in deleteGroups method in GroupCoordinatorShard.
      *
@@ -411,11 +414,13 @@ public class OffsetMetadataManager {
     ) throws ApiException {
         TimelineHashMap<String, TimelineHashMap<Integer, OffsetAndMetadata>> offsetsByTopic = offsetsByGroup.get(groupId);
 
-        offsetsByTopic.forEach((topic, offsetsByPartition) -> {
-            offsetsByPartition.forEach((partition, offsetAndMetadata) -> {
-                records.add(RecordHelpers.newOffsetCommitTombstoneRecord(groupId, topic, partition));
+        if (offsetsByTopic != null) {
+            offsetsByTopic.forEach((topic, offsetsByPartition) -> {
+                offsetsByPartition.forEach((partition, __) -> {
+                    records.add(RecordHelpers.newOffsetCommitTombstoneRecord(groupId, topic, partition));
+                });
             });
-        });
+        }
     }
 
     /**

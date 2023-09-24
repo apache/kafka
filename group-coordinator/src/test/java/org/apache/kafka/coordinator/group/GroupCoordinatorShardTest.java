@@ -18,6 +18,7 @@ package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.DeleteGroupsResponseData;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -42,14 +43,19 @@ import org.apache.kafka.coordinator.group.runtime.CoordinatorResult;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
 
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 
 import static org.apache.kafka.coordinator.group.TestUtil.requestContext;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -103,6 +109,42 @@ public class GroupCoordinatorShardTest {
         )).thenReturn(result);
 
         assertEquals(result, coordinator.commitOffset(context, request));
+    }
+
+    @Test
+    public void testDeleteGroup() {
+        GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
+        OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
+        GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
+            groupMetadataManager,
+            offsetMetadataManager
+        );
+
+        RequestContext context = requestContext(ApiKeys.DELETE_GROUPS);
+        List<String> groupIds = Collections.singletonList("group-id");
+        DeleteGroupsResponseData.DeletableGroupResultCollection expectedResultCollection = new DeleteGroupsResponseData.DeletableGroupResultCollection();
+        expectedResultCollection.add(new DeleteGroupsResponseData.DeletableGroupResult().setGroupId("group-id"));
+        List<Record> expectedRecords = Arrays.asList(
+            RecordHelpers.newOffsetCommitTombstoneRecord("group-id", "topic-name", 0),
+            RecordHelpers.newGroupMetadataTombstoneRecord("group-id")
+        );
+        CoordinatorResult<DeleteGroupsResponseData.DeletableGroupResultCollection, Record> expectedResult = new CoordinatorResult<>(
+            expectedRecords,
+            expectedResultCollection
+        );
+
+        doAnswer(invocation -> {
+            List<Record> records = invocation.getArgument(1);
+            records.add(RecordHelpers.newOffsetCommitTombstoneRecord("group-id", "topic-name", 0));
+            return null;
+        }).when(offsetMetadataManager).deleteAllOffsets(ArgumentMatchers.eq("group-id"), anyList());
+        doAnswer(invocation -> {
+            List<Record> records = invocation.getArgument(1);
+            records.add(RecordHelpers.newGroupMetadataTombstoneRecord("group-id"));
+            return null;
+        }).when(groupMetadataManager).deleteGroup(ArgumentMatchers.eq("group-id"), anyList());
+
+        assertEquals(expectedResult, coordinator.deleteGroups(context, groupIds));
     }
 
     @Test

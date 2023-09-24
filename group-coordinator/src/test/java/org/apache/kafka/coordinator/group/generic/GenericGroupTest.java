@@ -20,6 +20,8 @@ import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
+import org.apache.kafka.common.errors.GroupIdNotFoundException;
+import org.apache.kafka.common.errors.GroupNotEmptyException;
 import org.apache.kafka.common.errors.IllegalGenerationException;
 import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
@@ -61,24 +63,24 @@ public class GenericGroupTest {
     private final int sessionTimeoutMs = 10000;
 
     private GenericGroup group = null;
-    
+
     @BeforeEach
     public void initialize() {
         group = new GenericGroup(new LogContext(), "groupId", EMPTY, Time.SYSTEM);
     }
-    
+
     @Test
     public void testCanRebalanceWhenStable() {
         assertTrue(group.canRebalance());
     }
-    
+
     @Test
     public void testCanRebalanceWhenCompletingRebalance() {
         group.transitionTo(PREPARING_REBALANCE);
         group.transitionTo(COMPLETING_REBALANCE);
-        assertTrue(group.canRebalance()); 
+        assertTrue(group.canRebalance());
     }
-    
+
     @Test
     public void testCannotRebalanceWhenPreparingRebalance() {
         group.transitionTo(PREPARING_REBALANCE);
@@ -309,7 +311,6 @@ public class GenericGroupTest {
         member2Protocols.add(new JoinGroupRequestProtocol()
             .setName("foo")
             .setMetadata(new byte[0]));
-
 
         GenericGroupMember member2 = new GenericGroupMember(
             "member2",
@@ -776,7 +777,7 @@ public class GenericGroupTest {
             protocolType,
             protocols
         );
-        
+
         group.add(member);
         assertTrue(group.hasMemberId(memberId));
         assertTrue(group.hasStaticMember(groupInstanceId));
@@ -814,7 +815,7 @@ public class GenericGroupTest {
             protocolType,
             protocols
         );
-        
+
         group.add(member);
         assertTrue(group.addPendingSyncMember(memberId));
         assertEquals(Collections.singleton(memberId), group.allPendingSyncMembers());
@@ -1024,6 +1025,24 @@ public class GenericGroupTest {
         // This should fail with CoordinatorNotAvailableException.
         assertThrows(CoordinatorNotAvailableException.class,
             () -> group.validateOffsetCommit("member-id", "new-instance-id", 1));
+    }
+
+    @Test
+    public void testValidateOffsetDelete() {
+        group.transitionTo(DEAD);
+        assertThrows(GroupIdNotFoundException.class, () -> group.validateOffsetDelete());
+    }
+
+    @Test
+    public void testValidateGroupDelete() {
+        group.transitionTo(PREPARING_REBALANCE);
+        assertThrows(GroupNotEmptyException.class, () -> group.validateGroupDelete());
+        group.transitionTo(COMPLETING_REBALANCE);
+        assertThrows(GroupNotEmptyException.class, () -> group.validateGroupDelete());
+        group.transitionTo(STABLE);
+        assertThrows(GroupNotEmptyException.class, () -> group.validateGroupDelete());
+        group.transitionTo(DEAD);
+        assertThrows(GroupIdNotFoundException.class, () -> group.validateGroupDelete());
     }
 
     private void assertState(GenericGroup group, GenericGroupState targetState) {
