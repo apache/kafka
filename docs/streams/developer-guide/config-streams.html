@@ -300,7 +300,7 @@ streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);</code></pre>
               set by the user or all serdes must be passed in explicitly (see also default.key.serde).</td>
             <td><code class="docutils literal"><span class="pre">null</span></code></td>
           </tr>
-          <tr class="row-even"><td>default.windowed.key.serde.inner (Deprecated.)</td>
+          <tr class="row-even"><td>default.windowed.key.serde.inner (Deprecated. Use windowed.inner.class.serde instead.)</td>
             <td>Medium</td>
 <<<<<<< HEAD
             <td colspan="2">Default serializer/deserializer for the inner class of windowed keys, implementing the <code class="docutils literal"><span class="pre">Serde</span></code> interface. Deprecated.</td>
@@ -310,7 +310,7 @@ streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);</code></pre>
             <td>null</td>
 >>>>>>> 6229325673 (move note re deprecation to headline)
           </tr>
-          <tr class="row-odd"><td>default.windowed.value.serde.inner (Deprecated.)</td>
+          <tr class="row-odd"><td>default.windowed.value.serde.inner (Deprecated. Use windowed.inner.class.serde instead.)</td>
             <td>Medium</td>
 <<<<<<< HEAD
             <td colspan="2">Default serializer/deserializer for the inner class of windowed values, implementing the <code class="docutils literal"><span class="pre">Serde</span></code> interface. Deprecated.</td>
@@ -690,7 +690,7 @@ streamsConfiguration.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
             </div></blockquote>
         </div>
         <div class="section" id="default-windowed-key-serde-inner">
-          <h4><a class="toc-backref" href="#id32">default.windowed.key.serde.inner</a><a class="headerlink" href="#default-windowed-key-serde-inner" title="Permalink to this headline"></a> (Deprecated.)</h4>
+          <h4><a class="toc-backref" href="#id32">default.windowed.key.serde.inner</a><a class="headerlink" href="#default-windowed-key-serde-inner" title="Permalink to this headline"></a> (Deprecated. Use windowed.inner.class.serde instead.)</h4>
           <blockquote>
             <div><p>The default Serializer/Deserializer class for the inner class of windowed keys. Serialization and deserialization in Kafka Streams happens
               whenever data needs to be materialized, for example:</p>
@@ -703,7 +703,7 @@ streamsConfiguration.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
             </div></blockquote>
         </div>
         <div class="section" id="default-windowed-value-serde-inner">
-          <h4><a class="toc-backref" href="#id33">default.windowed.value.serde.inner</a><a class="headerlink" href="#default-windowed-value-serde-inner" title="Permalink to this headline"></a>(Deprecated.)</h4>
+          <h4><a class="toc-backref" href="#id33">default.windowed.value.serde.inner</a><a class="headerlink" href="#default-windowed-value-serde-inner" title="Permalink to this headline"></a>(Deprecated. Use windowed.inner.class.serde instead.)</h4>
           <blockquote>
             <div><p>The default Serializer/Deserializer class for the inner class of windowed values. Serialization and deserialization in Kafka Streams happens
               happens whenever data needs to be materialized, for example:</p>
