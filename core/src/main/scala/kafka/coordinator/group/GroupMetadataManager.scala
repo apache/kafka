@@ -328,8 +328,7 @@ class GroupMetadataManager(brokerId: Int,
                              records: Map[TopicPartition, MemoryRecords],
                              requestLocal: RequestLocal,
                              callback: Map[TopicPartition, PartitionResponse] => Unit,
-                             transactionalId: String = null,
-                             transactionStatePartition: Option[Int] = None): Unit = {
+                             transactionalId: String = null): Unit = {
     // call replica manager to append the group message
     replicaManager.appendRecords(
       timeout = config.offsetCommitTimeoutMs.toLong,
@@ -340,8 +339,7 @@ class GroupMetadataManager(brokerId: Int,
       delayedProduceLock = Some(group.lock),
       responseCallback = callback,
       requestLocal = requestLocal,
-      transactionalId = transactionalId,
-      transactionStatePartition = transactionStatePartition)
+      transactionalId = transactionalId)
   }
 
   /**
@@ -354,8 +352,7 @@ class GroupMetadataManager(brokerId: Int,
                    producerId: Long = RecordBatch.NO_PRODUCER_ID,
                    producerEpoch: Short = RecordBatch.NO_PRODUCER_EPOCH,
                    requestLocal: RequestLocal = RequestLocal.NoCaching,
-                   transactionalId: String = null,
-                   transactionStatePartition: Option[Int] = None): Unit = {
+                   transactionalId: String = null): Unit = {
     // first filter out partitions with offset metadata size exceeding limit
     val filteredOffsetMetadata = offsetMetadata.filter { case (_, offsetAndMetadata) =>
       validateOffsetMetadataLength(offsetAndMetadata.metadata)
@@ -487,7 +484,7 @@ class GroupMetadataManager(brokerId: Int,
             }
           }
 
-          appendForGroup(group, entries, requestLocal, putCacheCallback, transactionalId, transactionStatePartition)
+          appendForGroup(group, entries, requestLocal, putCacheCallback, transactionalId)
 
         case None =>
           val commitStatus = offsetMetadata.map { case (topicIdPartition, _) =>

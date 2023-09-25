@@ -902,7 +902,6 @@ private[group] class GroupCoordinator(
                              offsetMetadata: immutable.Map[TopicIdPartition, OffsetAndMetadata],
                              responseCallback: immutable.Map[TopicIdPartition, Errors] => Unit,
                              transactionalId: String,
-                             transactionalStatePartition: Int,
                              requestLocal: RequestLocal = RequestLocal.NoCaching): Unit = {
     validateGroupStatus(groupId, ApiKeys.TXN_OFFSET_COMMIT) match {
       case Some(error) => responseCallback(offsetMetadata.map { case (k, _) => k -> error })
@@ -911,7 +910,7 @@ private[group] class GroupCoordinator(
           groupManager.addGroup(new GroupMetadata(groupId, Empty, time))
         }
         doTxnCommitOffsets(group, memberId, groupInstanceId, generationId, producerId, producerEpoch,
-          offsetMetadata, requestLocal, responseCallback, transactionalId, transactionalStatePartition)
+          offsetMetadata, requestLocal, responseCallback, transactionalId)
     }
   }
 
@@ -961,8 +960,7 @@ private[group] class GroupCoordinator(
                                  offsetMetadata: immutable.Map[TopicIdPartition, OffsetAndMetadata],
                                  requestLocal: RequestLocal,
                                  responseCallback: immutable.Map[TopicIdPartition, Errors] => Unit,
-                                 transactionalId: String,
-                                 transactionStatePartition: Int): Unit = {
+                                 transactionalId: String): Unit = {
     group.inLock {
       val validationErrorOpt = validateOffsetCommit(
         group,
@@ -976,7 +974,7 @@ private[group] class GroupCoordinator(
         responseCallback(offsetMetadata.map { case (k, _) => k -> validationErrorOpt.get })
       } else {
         groupManager.storeOffsets(group, memberId, offsetMetadata, responseCallback, producerId,
-          producerEpoch, requestLocal, transactionalId, Some(transactionStatePartition))
+          producerEpoch, requestLocal, transactionalId)
       }
     }
   }

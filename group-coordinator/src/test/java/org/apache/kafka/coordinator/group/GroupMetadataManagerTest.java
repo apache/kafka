@@ -41,6 +41,7 @@ import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMe
 import org.apache.kafka.common.message.LeaveGroupRequestData;
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
+import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupRequestData.SyncGroupRequestAssignment;
 import org.apache.kafka.common.message.SyncGroupResponseData;
@@ -115,8 +116,10 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol;
@@ -455,8 +458,6 @@ public class GroupMetadataManagerTest {
         public CoordinatorResult<ConsumerGroupHeartbeatResponseData, Record> consumerGroupHeartbeat(
             ConsumerGroupHeartbeatRequestData request
         ) {
-            snapshotRegistry.getOrCreateSnapshot(lastCommittedOffset);
-
             RequestContext context = new RequestContext(
                 new RequestHeader(
                     ApiKeys.CONSUMER_GROUP_HEARTBEAT,
@@ -1023,6 +1024,10 @@ public class GroupMetadataManagerTest {
             );
         }
 
+        public List<ListGroupsResponseData.ListedGroup> sendListGroups(List<String> statesFilter) {
+            return groupMetadataManager.listGroups(statesFilter, lastCommittedOffset);
+        }
+
         public void verifyHeartbeat(
             String groupId,
             JoinGroupResponseData joinResponse,
@@ -1202,6 +1207,7 @@ public class GroupMetadataManagerTest {
             }
 
             lastWrittenOffset++;
+            snapshotRegistry.getOrCreateSnapshot(lastWrittenOffset);
         }
     }
 
@@ -8601,6 +8607,83 @@ public class GroupMetadataManagerTest {
 
         HeartbeatResponseData heartbeatResponse = context.sendGenericGroupHeartbeat(heartbeatRequest);
         assertEquals(Errors.REBALANCE_IN_PROGRESS.code(), heartbeatResponse.errorCode());
+    }
+
+    @Test
+    public void testListGroups() {
+        String consumerGroupId = "consumer-group-id";
+        String genericGroupId = "generic-group-id";
+        String memberId1 = Uuid.randomUuid().toString();
+        String genericGroupType = "generic";
+        Uuid fooTopicId = Uuid.randomUuid();
+        String fooTopicName = "foo";
+
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroup(new ConsumerGroupBuilder(consumerGroupId, 10))
+            .build();
+        context.replay(newGroupMetadataRecord(
+            genericGroupId,
+            new GroupMetadataValue()
+                .setMembers(Collections.emptyList())
+                .setGeneration(2)
+                .setLeader(null)
+                .setProtocolType(genericGroupType)
+                .setProtocol("range")
+                .setCurrentStateTimestamp(context.time.milliseconds()),
+            MetadataVersion.latest()));
+        context.commit();
+        GenericGroup genericGroup = context.groupMetadataManager.getOrMaybeCreateGenericGroup(genericGroupId, false);
+        context.replay(RecordHelpers.newMemberSubscriptionRecord(consumerGroupId, new ConsumerGroupMember.Builder(memberId1)
+            .setSubscribedTopicNames(Collections.singletonList(fooTopicName))
+            .build()));
+        context.replay(RecordHelpers.newGroupEpochRecord(consumerGroupId, 11));
+
+        Map<String, ListGroupsResponseData.ListedGroup> actualAllGroupMap =
+            context.sendListGroups(Collections.emptyList())
+                .stream().collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
+        Map<String, ListGroupsResponseData.ListedGroup> expectAllGroupMap =
+            Stream.of(
+                new ListGroupsResponseData.ListedGroup()
+                    .setGroupId(genericGroup.groupId())
+                    .setProtocolType(genericGroupType)
+                    .setGroupState(EMPTY.toString()),
+                new ListGroupsResponseData.ListedGroup()
+                    .setGroupId(consumerGroupId)
+                    .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
+                    .setGroupState(ConsumerGroup.ConsumerGroupState.EMPTY.toString())
+            ).collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
+
+        assertEquals(expectAllGroupMap, actualAllGroupMap);
+
+        context.commit();
+        actualAllGroupMap = context.sendListGroups(Collections.emptyList()).stream()
+            .collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
+        expectAllGroupMap =
+            Stream.of(
+                new ListGroupsResponseData.ListedGroup()
+                    .setGroupId(genericGroup.groupId())
+                    .setProtocolType(genericGroupType)
+                    .setGroupState(EMPTY.toString()),
+                new ListGroupsResponseData.ListedGroup()
+                    .setGroupId(consumerGroupId)
+                    .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
+                    .setGroupState(ConsumerGroup.ConsumerGroupState.ASSIGNING.toString())
+            ).collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
+
+        assertEquals(expectAllGroupMap, actualAllGroupMap);
+
+        actualAllGroupMap = context.sendListGroups(Collections.singletonList("Empty")).stream()
+            .collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
+        expectAllGroupMap = Stream.of(
+            new ListGroupsResponseData.ListedGroup()
+                .setGroupId(genericGroup.groupId())
+                .setProtocolType(genericGroupType)
+                .setGroupState(EMPTY.toString())
+        ).collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
+
+        assertEquals(expectAllGroupMap, actualAllGroupMap);
     }
 
     public static <T> void assertUnorderedListEquals(

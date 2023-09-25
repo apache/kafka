@@ -1187,7 +1187,6 @@ class GroupMetadataManagerTest {
       any(),
       any(),
       any(),
-      any(),
       any())
     verify(replicaManager).getMagic(any())
   }
@@ -1223,7 +1222,6 @@ class GroupMetadataManagerTest {
       any(),
       any(),
       any[Option[ReentrantLock]],
-      any(),
       any(),
       any(),
       any(),
@@ -1303,7 +1301,6 @@ class GroupMetadataManagerTest {
       any(),
       any(),
       any(),
-      any(),
       any())
     // Will update sensor after commit
     assertEquals(1, TestUtils.totalMetricValue(metrics, "offset-commit-count"))
@@ -1317,7 +1314,6 @@ class GroupMetadataManagerTest {
     val producerId = 232L
     val producerEpoch = 0.toShort
     val transactionalId = "txnId"
-    val transactionStatePartition = 0
 
     groupMetadataManager.addOwnedPartition(groupPartitionId)
 
@@ -1334,8 +1330,7 @@ class GroupMetadataManagerTest {
       commitErrors = Some(errors)
     }
 
-    groupMetadataManager.storeOffsets(group, memberId, offsets, callback, producerId, producerEpoch,
-      transactionalId = transactionalId, transactionStatePartition = Some(transactionStatePartition))
+    groupMetadataManager.storeOffsets(group, memberId, offsets, callback, producerId, producerEpoch, transactionalId = transactionalId)
     assertTrue(group.hasOffsets)
     assertTrue(group.allOffsets.isEmpty)
 
@@ -1349,7 +1344,6 @@ class GroupMetadataManagerTest {
       any(),
       any(),
       ArgumentMatchers.eq(transactionalId),
-      ArgumentMatchers.eq(Some(transactionStatePartition)),
       any())
     verify(replicaManager).getMagic(any())
     capturedResponseCallback.getValue.apply(Map(groupTopicPartition ->
@@ -1372,7 +1366,6 @@ class GroupMetadataManagerTest {
     val producerId = 232L
     val producerEpoch = 0.toShort
     val transactionalId = "txnId"
-    val transactionStatePartition = 0
 
     groupMetadataManager.addOwnedPartition(groupPartitionId)
 
@@ -1388,8 +1381,7 @@ class GroupMetadataManagerTest {
       commitErrors = Some(errors)
     }
 
-    groupMetadataManager.storeOffsets(group, memberId, offsets, callback, producerId, producerEpoch,
-      transactionalId = transactionalId, transactionStatePartition = Some(transactionStatePartition))
+    groupMetadataManager.storeOffsets(group, memberId, offsets, callback, producerId, producerEpoch, transactionalId = transactionalId)
     assertTrue(group.hasOffsets)
     assertTrue(group.allOffsets.isEmpty)
     val capturedResponseCallback = verifyAppendAndCaptureCallback()
@@ -1413,7 +1405,6 @@ class GroupMetadataManagerTest {
       any(),
       any(),
       ArgumentMatchers.eq(transactionalId),
-      ArgumentMatchers.eq(Some(transactionStatePartition)),
       any())
     verify(replicaManager).getMagic(any())
   }
@@ -1426,7 +1417,6 @@ class GroupMetadataManagerTest {
     val producerId = 232L
     val producerEpoch = 0.toShort
     val transactionalId = "txnId"
-    val transactionStatePartition = 0
 
     groupMetadataManager.addOwnedPartition(groupPartitionId)
 
@@ -1442,8 +1432,7 @@ class GroupMetadataManagerTest {
       commitErrors = Some(errors)
     }
 
-    groupMetadataManager.storeOffsets(group, memberId, offsets, callback, producerId, producerEpoch,
-      transactionalId = transactionalId, transactionStatePartition = Some(transactionStatePartition))
+    groupMetadataManager.storeOffsets(group, memberId, offsets, callback, producerId, producerEpoch, transactionalId = transactionalId)
     assertTrue(group.hasOffsets)
     assertTrue(group.allOffsets.isEmpty)
     val capturedResponseCallback = verifyAppendAndCaptureCallback()
@@ -1467,7 +1456,6 @@ class GroupMetadataManagerTest {
       any(),
       any(),
       ArgumentMatchers.eq(transactionalId),
-      ArgumentMatchers.eq(Some(transactionStatePartition)),
       any())
     verify(replicaManager).getMagic(any())
   }
@@ -1481,7 +1469,6 @@ class GroupMetadataManagerTest {
     val producerId = 232L
     val producerEpoch = 0.toShort
     val transactionalId = "txnId"
-    val transactionStatePartition = 0
 
     groupMetadataManager.addOwnedPartition(groupPartitionId)
 
@@ -1497,8 +1484,7 @@ class GroupMetadataManagerTest {
       commitErrors = Some(errors)
     }
 
-    groupMetadataManager.storeOffsets(group, memberId, offsets, callback, producerId, producerEpoch,
-      transactionalId = transactionalId, transactionStatePartition = Some(transactionStatePartition))
+    groupMetadataManager.storeOffsets(group, memberId, offsets, callback, producerId, producerEpoch, transactionalId = transactionalId)
     assertTrue(group.hasOffsets)
     assertTrue(group.allOffsets.isEmpty)
     val capturedResponseCallback = verifyAppendAndCaptureCallback()
@@ -1524,7 +1510,6 @@ class GroupMetadataManagerTest {
       any(),
       any(),
       ArgumentMatchers.eq(transactionalId),
-      ArgumentMatchers.eq(Some(transactionStatePartition)),
       any())
     verify(replicaManager).getMagic(any())
   }
@@ -1677,7 +1662,6 @@ class GroupMetadataManagerTest {
       any(),
       any(),
       any(),
-      any(),
       any())
     verify(replicaManager).getMagic(any())
     assertEquals(1, TestUtils.totalMetricValue(metrics, "offset-commit-count"))
@@ -1782,7 +1766,6 @@ class GroupMetadataManagerTest {
       any(),
       any(),
       any[Option[ReentrantLock]],
-      any(),
       any(),
       any(),
       any(),
@@ -2893,7 +2876,6 @@ class GroupMetadataManagerTest {
       any(),
       any(),
       any(),
-      any(),
       any())
     capturedArgument
   }
@@ -2911,9 +2893,8 @@ class GroupMetadataManagerTest {
       any(),
       any(),
       any(),
-      any(),
-      any())
-    ).thenAnswer(_ => {
+      any()
+    )).thenAnswer(_ => {
       capturedCallback.getValue.apply(
         Map(groupTopicPartition ->
           new PartitionResponse(error, 0L, RecordBatch.NO_TIMESTAMP, 0L)

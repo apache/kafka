@@ -3865,7 +3865,6 @@ class GroupCoordinatorTest {
       any(),
       any(),
       any(),
-      any(),
       any()
     )).thenAnswer(_ => {
       capturedArgument.getValue.apply(
@@ -3901,7 +3900,6 @@ class GroupCoordinatorTest {
       any[Option[ReentrantLock]],
       any(),
       any(), 
-      any(),
       any(),
       any())).thenAnswer(_ => {
         capturedArgument.getValue.apply(
@@ -4049,9 +4047,8 @@ class GroupCoordinatorTest {
       any(),
       any(),
       any(),
-      any(),
-      any())
-    ).thenAnswer(_ => {
+      any()
+    )).thenAnswer(_ => {
       capturedArgument.getValue.apply(
         Map(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId) ->
           new PartitionResponse(Errors.NONE, 0L, RecordBatch.NO_TIMESTAMP, 0L)
@@ -4075,9 +4072,8 @@ class GroupCoordinatorTest {
 
     val capturedArgument: ArgumentCaptor[scala.collection.Map[TopicPartition, PartitionResponse] => Unit] = ArgumentCaptor.forClass(classOf[scala.collection.Map[TopicPartition, PartitionResponse] => Unit])
 
-    // Since these values are only used in appendRecords, we can use dummy values. Ensure they pass through.
+    // Since transactional ID is only used in appendRecords, we can use a dummy value. Ensure it passes through.
     val transactionalId = producerId.toString
-    val transactionalStatePartition = 0
     when(replicaManager.appendRecords(anyLong,
       anyShort(),
       internalTopicsAllowed = ArgumentMatchers.eq(true),
@@ -4088,9 +4084,8 @@ class GroupCoordinatorTest {
       any(),
       any(),
       ArgumentMatchers.eq(transactionalId),
-      ArgumentMatchers.eq(Some(transactionalStatePartition)),
-      any())
-    ).thenAnswer(_ => {
+      any()
+    )).thenAnswer(_ => {
       capturedArgument.getValue.apply(
         Map(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupCoordinator.partitionFor(groupId)) ->
           new PartitionResponse(Errors.NONE, 0L, RecordBatch.NO_TIMESTAMP, 0L)
@@ -4099,7 +4094,7 @@ class GroupCoordinatorTest {
     })
     when(replicaManager.getMagic(any[TopicPartition])).thenReturn(Some(RecordBatch.MAGIC_VALUE_V2))
     groupCoordinator.handleTxnCommitOffsets(groupId, producerId, producerEpoch,
-      memberId, groupInstanceId, generationId, offsets, responseCallback, transactionalId, transactionalStatePartition)
+      memberId, groupInstanceId, generationId, offsets, responseCallback, transactionalId)
     val result = Await.result(responseFuture, Duration(40, TimeUnit.MILLISECONDS))
     result
   }

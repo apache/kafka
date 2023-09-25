@@ -77,7 +77,7 @@ public class MembershipManagerImpl implements MembershipManager {
      * @param assignorSelection New assignor selection
      * @throws IllegalArgumentException If the provided assignor selection is null
      */
-    public void setAssignorSelection(AssignorSelection assignorSelection) {
+    public final void setAssignorSelection(AssignorSelection assignorSelection) {
         if (assignorSelection == null) {
             throw new IllegalArgumentException("Assignor selection cannot be null");
         }

@@ -26,8 +26,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInfo;
 import scala.collection.JavaConverters;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.stream.Collectors;
@@ -68,7 +70,8 @@ public class TransactionsWithTieredStoreTest extends TransactionsTest {
     }
 
     @SuppressWarnings("deprecation")
-    public void maybeWaitForAtLeastOneSegmentUpload(scala.collection.immutable.Seq<TopicPartition> topicPartitions) {
+    @Override
+    public void maybeWaitForAtLeastOneSegmentUpload(scala.collection.Seq<TopicPartition> topicPartitions) {
         JavaConverters.seqAsJavaList(topicPartitions).forEach(topicPartition -> {
             List<BrokerLocalStorage> localStorages = JavaConverters.bufferAsJavaList(brokers()).stream()
                     .map(b -> new BrokerLocalStorage(b.config().brokerId(), b.config().logDirs().head(), STORAGE_WAIT_TIMEOUT_SEC))
@@ -84,6 +87,21 @@ public class TransactionsWithTieredStoreTest extends TransactionsTest {
                             // Wait until the brokers local storage have been cleared from the inactive log segments.
                             localStorage.waitForAtLeastEarliestLocalOffset(topicPartition, 1L));
         });
+    }
+
+    @SuppressWarnings("deprecation")
+    @Override
+    public void maybeVerifyLocalLogStartOffsets(scala.collection.immutable.Map<TopicPartition, Long> partitionLocalStartOffsets) throws InterruptedException {
+        Map<Integer, Long> offsets = new HashMap<>();
+        TestUtils.waitForCondition(() ->
+                JavaConverters.seqAsJavaList(brokers()).stream().allMatch(broker ->
+                        JavaConverters.mapAsJavaMapConverter(partitionLocalStartOffsets).asJava()
+                                .entrySet().stream().allMatch(entry -> {
+                                    long offset = broker.replicaManager().localLog(entry.getKey()).get().localLogStartOffset();
+                                    offsets.put(broker.config().brokerId(), offset);
+                                    return entry.getValue() == offset;
+                                })
+                ), () -> "local log start offset doesn't change to the expected position:" + partitionLocalStartOffsets + ", current position:" + offsets);
     }
 
     @SuppressWarnings("deprecation")
