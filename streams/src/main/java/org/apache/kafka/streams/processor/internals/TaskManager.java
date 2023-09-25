@@ -1226,7 +1226,9 @@ public class TaskManager {
         final Iterator<TaskId> taskIdIterator = lockedTaskDirectories.iterator();
         while (taskIdIterator.hasNext()) {
             final TaskId id = taskIdIterator.next();
-            if (!tasks.contains(id)) {
+            final Set<TaskId> tasksInStateUpdater = stateUpdater != null
+                ? stateUpdater.getTasks().stream().map(Task::id).collect(Collectors.toSet()) : new HashSet<>();
+            if (!tasks.contains(id) && !tasksInStateUpdater.contains(id)) {
                 stateDirectory.unlock(id);
                 taskIdIterator.remove();
             }
