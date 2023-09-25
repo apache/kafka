@@ -423,11 +423,11 @@ public class SslFactory implements Reconfigurable, Closeable {
                         switch (handshakeResult.getStatus()) {
                             case OK: break;
                             case BUFFER_OVERFLOW:
+                                if (netBuffer.position() != 0) // Wait for peer to consume previously wrapped data
+                                    return;
                                 netBuffer.compact();
                                 netBuffer = Utils.ensureCapacity(netBuffer, sslEngine.getSession().getPacketBufferSize());
                                 netBuffer.flip();
-                                if (netBuffer.position() != 0) // Wait for peer to consume previously wrapped data
-                                    return;
                                 break;
                             case BUFFER_UNDERFLOW:
                             case CLOSED:
