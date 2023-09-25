@@ -857,7 +857,7 @@ public class GenericGroup implements Group {
      * Validates the OffsetDelete request.
      */
     @Override
-    public void validateOffsetDelete() throws GroupIdNotFoundException {
+    public void validateOffsetDelete() throws ApiException {
         if (isInState(DEAD)) {
             throw new GroupIdNotFoundException(String.format("Group %s is in dead state.", groupId));
         } else if (isInState(STABLE)
