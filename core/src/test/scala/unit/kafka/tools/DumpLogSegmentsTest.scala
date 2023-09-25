@@ -105,7 +105,9 @@ class DumpLogSegmentsTest {
 
   @AfterEach
   def tearDown(): Unit = {
-    log.close()
+    if (log != null) {
+      log.close()
+    }
     Utils.delete(tmpDir)
   }
 
@@ -236,7 +238,7 @@ class DumpLogSegmentsTest {
   def testDumpMetadataRecords(): Unit = {
     val mockTime = new MockTime
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024)
-    val log = LogTestUtils.createLog(logDir, logConfig, new BrokerTopicStats, mockTime.scheduler, mockTime)
+    log = LogTestUtils.createLog(logDir, logConfig, new BrokerTopicStats, mockTime.scheduler, mockTime)
 
     val metadataRecords = Seq(
       new ApiMessageAndVersion(
