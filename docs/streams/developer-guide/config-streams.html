@@ -90,7 +90,7 @@ settings.put(... , ...);</code></pre>
               <li><a class="reference internal" href="#replication-factor" id="id13">replication.factor</a></li>
               <li><a class="reference internal" href="#rocksdb-config-setter" id="id20">rocksdb.config.setter</a></li>
               <li><a class="reference internal" href="#state-dir" id="id14">state.dir</a></li>
-              <li><a class="reference internal" href="#topology-optimization" id="id31">topology.optimization (deprecated) </a></li>
+              <li><a class="reference internal" href="#topology-optimization" id="id31">topology.optimization</a></li>
             </ul>
           </li>
           <li><a class="reference internal" href="#kafka-consumers-and-producer-configuration-parameters" id="id16">Kafka consumers and producer configuration parameters</a>
@@ -446,7 +446,7 @@ streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);</code></pre>
             <td colspan="2">The maximum amount of time in milliseconds a task might stall due to internal errors and retries until an error is raised. For a timeout of <code>0 ms</code>, a task would raise an error for the first internal error. For any timeout larger than <code>0 ms</code>, a task will retry at least once before an error is raised.</td>
             <td>300000 milliseconds (5 minutes)</td>
           </tr>
-          <tr class="row-even"><td>topology.optimization (Deprecated.)</td>
+          <tr class="row-even"><td>topology.optimization</td>
             <td>Medium</td>
 <<<<<<< HEAD
             <td colspan="2">A configuration telling Kafka Streams if it should optimize the topology and what optimizations to apply. Acceptable values are: <code>StreamsConfig.NO_OPTIMIZATION</code> (<code>none</code>), <code>StreamsConfig.OPTIMIZE</code> (<code>all</code>) or a comma separated list of specific optimizations: (<code>StreamsConfig.REUSE_KTABLE_SOURCE_TOPICS</code> (<code>reuse.ktable.source.topics</code>), <code>StreamsConfig.MERGE_REPARTITION_TOPICS</code> (<code>merge.repartition.topics</code>)). Deprecated. </td>
@@ -1024,7 +1024,7 @@ streamsConfig.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, CustomRocksD
       </blockquote>
     </div>
     <div class="section" id="topology-optimization">
-      <h4><a class="toc-backref" href="#id31">topology.optimization</a><a class="headerlink" href="#topology-optimization" title="Permalink to this headline"></a>(Deprecated.)</h4>
+      <h4><a class="toc-backref" href="#id31">topology.optimization</a><a class="headerlink" href="#topology-optimization" title="Permalink to this headline"></a></h4>
       <blockquote>
         <div>
           <p>
