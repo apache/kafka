@@ -1369,7 +1369,7 @@ public class KStreamKStreamLeftJoinTest {
             new KeyValueTimestamp<>(3, "K3+b3", 1003L)
         );
 
-        // push a dummy record that should expire non-joined items; it should produce only the dummy+null record because
+        // Push a dummy record that should expire non-joined items; it should produce only the dummy+null record because
         // all previous late records were emitted immediately
         inputTopic1.pipeInput(0, "dummy", time + 300L);
         processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "dummy+null", 1203L));

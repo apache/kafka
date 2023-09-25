@@ -201,7 +201,7 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
             // to reduce runtime cost, we try to avoid paying those cost
 
             // only try to emit left/outer join results if there _might_ be any result records
-            if (sharedTimeTracker.minTime >= sharedTimeTracker.streamTime - joinSpuriousLookBackTimeMs - joinGraceMs) {
+            if (sharedTimeTracker.minTime + joinSpuriousLookBackTimeMs + joinGraceMs >= sharedTimeTracker.streamTime) {
                 return;
             }
             // throttle the emit frequency to a (configurable) interval;
@@ -231,7 +231,7 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
                     sharedTimeTracker.minTime = timestamp;
 
                     // Skip next records if window has not closed
-                    if (timestamp + windowsAfterIntervalMs  + joinGraceMs >= sharedTimeTracker.streamTime) {
+                    if (sharedTimeTracker.minTime + windowsAfterIntervalMs  + joinGraceMs >= sharedTimeTracker.streamTime) {
                         break;
                     }
 
