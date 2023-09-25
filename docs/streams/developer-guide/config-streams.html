@@ -91,6 +91,7 @@ settings.put(... , ...);</code></pre>
               <li><a class="reference internal" href="#rocksdb-config-setter" id="id20">rocksdb.config.setter</a></li>
               <li><a class="reference internal" href="#state-dir" id="id14">state.dir</a></li>
               <li><a class="reference internal" href="#topology-optimization" id="id31">topology.optimization</a></li>
+              <li><a class="reference internal" href="#windowed-inner-class-serde" id="id38">windowed.inner.class.serde</a></li>
             </ul>
           </li>
           <li><a class="reference internal" href="#kafka-consumers-and-producer-configuration-parameters" id="id16">Kafka consumers and producer configuration parameters</a>
@@ -1048,6 +1049,18 @@ streamsConfig.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, CustomRocksD
             Note that as of 2.3, you need to do two things to enable optimizations. In addition to setting this config to <code>StreamsConfig.OPTIMIZE</code>, you'll need to pass in your
             configuration properties when building your topology by using the overloaded <code>StreamsBuilder.build(Properties)</code> method.
             For example <code>KafkaStreams myStream = new KafkaStreams(streamsBuilder.build(properties), properties)</code>.
+          </p>
+        </div></blockquote>
+    </div>
+    <div class="section" id="windowed.inner.class.serde">
+      <h4><a class="toc-backref" href="#id31">windowed.inner.class.serde</a><a class="headerlink" href="#windowed.inner.class.serde" title="Permalink to this headline"></a></h4>
+      <blockquote>
+        <div>
+          <p>
+            Serde for the inner class of a windowed record. Must implement the org.apache.kafka.common.serialization.Serde interface.
+          </p>
+          <p>
+            Note that setting this config in KafkaStreams application would result in an error as it is meant to be used only from Plain consumer client.
           </p>
         </div></blockquote>
     </div>
