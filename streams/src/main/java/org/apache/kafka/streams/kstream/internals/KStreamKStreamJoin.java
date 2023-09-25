@@ -144,7 +144,7 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
                     final long otherRecordTimestamp = otherRecord.key;
 
                     outerJoinStore.ifPresent(store -> {
-                        // use putIfAbsent to first read and see if there's any values for the key,
+                        // Use putIfAbsent to first read and see if there's any values for the key,
                         // if yes delete the key, otherwise do not issue a put;
                         // we may delete some values with the same key early but since we are going
                         // range over all values of the same key even after failure, since the other window-store
