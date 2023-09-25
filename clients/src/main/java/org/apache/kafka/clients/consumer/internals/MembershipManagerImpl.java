@@ -144,8 +144,7 @@ public class MembershipManagerImpl implements MembershipManager {
 
     @Override
     public boolean shouldSendHeartbeat() {
-        return state() != MemberState.UNJOINED &&
-            state() != MemberState.FAILED;
+        return state() != MemberState.FAILED;
     }
 
     /**

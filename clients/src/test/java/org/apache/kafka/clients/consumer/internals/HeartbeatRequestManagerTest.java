@@ -45,6 +45,7 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.BOOTSTRAP_SERVERS
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.RETRY_BACKOFF_MS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
+import static org.apache.kafka.clients.consumer.internals.MemberState.FAILED;
 import static org.apache.kafka.clients.consumer.internals.MemberState.STABLE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
@@ -58,7 +59,7 @@ import static org.mockito.Mockito.when;
 
 public class HeartbeatRequestManagerTest {
 
-    private final int heartbeatInterval = 1000;
+    private final int heartbeatIntervalMs = 1000;
     private final long retryBackoffMaxMs = 3000;
     private final long retryBackoffMs = 100;
     private final String groupId = "group-id";
@@ -115,6 +116,26 @@ public class HeartbeatRequestManagerTest {
             errorEventHandler);
     }
 
+    @Test
+    public void testHeartbeatOnStartup() {
+        // The initial heartbeatInterval is set to 0
+        heartbeatRequestState = new HeartbeatRequestManager.HeartbeatRequestState(
+            mockLogContext,
+            mockTime,
+            0,
+            retryBackoffMs,
+            retryBackoffMaxMs,
+            0);
+        heartbeatRequestManager = createManager();
+        NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(mockTime.milliseconds());
+        assertEquals(1, result.unsentRequests.size());
+
+        // Ensure we do not resend the request without the first request being completed
+        NetworkClientDelegate.PollResult result2 = heartbeatRequestManager.poll(mockTime.milliseconds());
+        assertEquals(0, result2.unsentRequests.size());
+
+    }
+
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     public void testSendHeartbeatOnMemberState(boolean shouldSendHeartbeat) {
@@ -141,7 +162,7 @@ public class HeartbeatRequestManagerTest {
         this.heartbeatRequestState = new HeartbeatRequestManager.HeartbeatRequestState(
             mockLogContext,
             mockTime,
-            heartbeatInterval,
+            heartbeatIntervalMs,
             retryBackoffMs,
             retryBackoffMaxMs);
         heartbeatRequestManager = createManager();
@@ -152,7 +173,7 @@ public class HeartbeatRequestManagerTest {
         assertEquals(0, result.unsentRequests.size());
 
         if (mockMembershipManager.shouldSendHeartbeat()) {
-            assertEquals(heartbeatInterval - 100, result.timeUntilNextPollMs);
+            assertEquals(heartbeatIntervalMs - 100, result.timeUntilNextPollMs);
         } else {
             assertEquals(Long.MAX_VALUE, result.timeUntilNextPollMs);
         }
@@ -173,24 +194,22 @@ public class HeartbeatRequestManagerTest {
         heartbeatRequestState = new HeartbeatRequestManager.HeartbeatRequestState(
             mockLogContext,
             mockTime,
-            heartbeatInterval,
+            heartbeatIntervalMs,
             retryBackoffMs,
             retryBackoffMaxMs,
             0);
-        when(mockMembershipManager.state()).thenReturn(STABLE);
         heartbeatRequestManager = createManager();
 
-        // Sending first heartbeat to set the state to STABLE
+        // Sending first heartbeat w/o assignment to set the state to STABLE
         ConsumerGroupHeartbeatResponse rs1 = new ConsumerGroupHeartbeatResponse(new ConsumerGroupHeartbeatResponseData()
-            .setHeartbeatIntervalMs(heartbeatInterval)
+            .setHeartbeatIntervalMs(heartbeatIntervalMs)
             .setMemberId(memberId)
-            .setMemberEpoch(memberEpoch)
-            .setAssignment(memberAssignment));
+            .setMemberEpoch(memberEpoch));
         mockMembershipManager.updateState(rs1.data());
         assertEquals(STABLE, mockMembershipManager.state());
 
         // Handling errors on the second heartbeat
-        mockTime.sleep(1001);
+        mockTime.sleep(heartbeatIntervalMs);
         NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(mockTime.milliseconds());
         assertEquals(1, result.unsentRequests.size());
 
@@ -205,25 +224,29 @@ public class HeartbeatRequestManagerTest {
         if (errorCode == Errors.NONE.code()) {
             verify(errorEventHandler, never()).handle(any());
             verify(mockMembershipManager, times(2)).updateState(mockResponse.data());
-            assertEquals(heartbeatInterval, heartbeatRequestState.nextHeartbeatMs(mockTime.milliseconds()));
+            assertEquals(heartbeatIntervalMs, heartbeatRequestState.nextHeartbeatMs(mockTime.milliseconds()));
         } else if (isFatal) {
-            assertEquals(retryBackoffMs, heartbeatRequestState.nextHeartbeatMs(mockTime.milliseconds()));
-            if (errorCode == Errors.UNRELEASED_INSTANCE_ID.code()) {
-                verify(mockMembershipManager).transitionToFailure();
-            } else if (errorCode == Errors.FENCED_MEMBER_EPOCH.code() ||
-                errorCode == Errors.UNKNOWN_MEMBER_ID.code()) {
-                verify(mockMembershipManager).fenceMember();
-            } else {
-                verify(mockMembershipManager).transitionToFailure();
-                verify(errorEventHandler).handle(any());
-            }
             // The memberStateManager should have stopped heartbeat at this point
+            ensureFatalError();
         } else {
             // NOT_COORDINATOR/COORDINATOR_LOAD_IN_PROGRESS/COORDINATOR_NOT_AVAILABLE
             // should be automatically retried
             verify(errorEventHandler, never()).handle(any());
             assertEquals(retryBackoffMs, heartbeatRequestState.nextHeartbeatMs(mockTime.milliseconds()));
         }
+    }
+
+    private void ensureFatalError() {
+        verify(mockMembershipManager).transitionToFailure();
+        verify(errorEventHandler).handle(any());
+        ensureHeartbeatStopped();
+    }
+
+    private void ensureHeartbeatStopped() {
+        mockTime.sleep(heartbeatIntervalMs);
+        assertEquals(FAILED, mockMembershipManager.state());
+        NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(mockTime.milliseconds());
+        assertEquals(0, result.unsentRequests.size());
     }
 
     // error, isFatal
@@ -256,10 +279,9 @@ public class HeartbeatRequestManagerTest {
         final Errors error) {
         ConsumerGroupHeartbeatResponse response = new ConsumerGroupHeartbeatResponse(new ConsumerGroupHeartbeatResponseData()
             .setErrorCode(error.code())
-            .setHeartbeatIntervalMs(heartbeatInterval)
+            .setHeartbeatIntervalMs(heartbeatIntervalMs)
             .setMemberId(memberId)
-            .setMemberEpoch(memberEpoch)
-            .setAssignment(memberAssignment));
+            .setMemberEpoch(memberEpoch));
 
         return new ClientResponse(
             new RequestHeader(ApiKeys.CONSUMER_GROUP_HEARTBEAT, ApiKeys.CONSUMER_GROUP_HEARTBEAT.latestVersion(), "client-id", 1),
