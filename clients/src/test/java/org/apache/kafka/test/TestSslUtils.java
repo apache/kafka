@@ -399,10 +399,14 @@ public class TestSslUtils {
         }
 
         public CertificateBuilder sanDnsNames(String... hostNames) throws IOException {
-            GeneralName[] altNames = new GeneralName[hostNames.length];
-            for (int i = 0; i < hostNames.length; i++)
-                altNames[i] = new GeneralName(GeneralName.dNSName, hostNames[i]);
-            subjectAltName = GeneralNames.getInstance(new DERSequence(altNames)).getEncoded();
+            if (hostNames.length > 0) {
+                GeneralName[] altNames = new GeneralName[hostNames.length];
+                for (int i = 0; i < hostNames.length; i++)
+                    altNames[i] = new GeneralName(GeneralName.dNSName, hostNames[i]);
+                subjectAltName = GeneralNames.getInstance(new DERSequence(altNames)).getEncoded();
+            } else {
+                subjectAltName = null;
+            }
             return this;
         }
 
