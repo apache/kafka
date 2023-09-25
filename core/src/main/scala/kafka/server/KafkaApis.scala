@@ -49,6 +49,7 @@ import org.apache.kafka.common.message.ListOffsetsResponseData.{ListOffsetsParti
 import org.apache.kafka.common.message.MetadataResponseData.{MetadataResponsePartition, MetadataResponseTopic}
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopic
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.{EpochEndOffset, OffsetForLeaderTopicResult, OffsetForLeaderTopicResultCollection}
+import org.apache.kafka.common.message.ProduceResponseData.LeaderIdAndEpoch
 import org.apache.kafka.common.message._
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ListenerName, NetworkSend, Send}
@@ -561,6 +562,30 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
   }
 
+  case class LeaderNode(leaderId: Int, leaderEpoch: Int, node: Node)
+
+  private def getCurrentLeader(tp: TopicPartition): LeaderNode = {
+    val partitionInfoOrError = replicaManager.getPartitionOrError(tp)
+    var leaderId = -1
+    var leaderEpoch = -1
+    partitionInfoOrError match {
+      case Right(x) =>
+          leaderId = x.leaderReplicaIdOpt.getOrElse(-1)
+          leaderEpoch = x.getLeaderEpoch
+      case Left(x) =>
+        debug(s"Unable to retrieve local leaderId and Epoch with error $x, falling back to metadata cache")
+        val partitionInfo = metadataCache.getPartitionInfo(tp.topic, tp.partition)
+        partitionInfo.foreach { info =>
+            leaderId = info.leader()
+            leaderEpoch = info.leaderEpoch()
+        }
+    }
+    val leaderNode: Node = metadataCache.getAliveBrokerNode(leaderId, config.interBrokerListenerName).getOrElse({
+      Node.noNode()
+    })
+    LeaderNode(leaderId, leaderEpoch, leaderNode)
+  }
+
   /**
    * Handle a produce request
    */
@@ -613,6 +638,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       val mergedResponseStatus = responseStatus ++ unauthorizedTopicResponses ++ nonExistingTopicResponses ++ invalidRequestResponses
       var errorInResponse = false
 
+      val nodeEndpoints = new mutable.HashMap[Int, Node]
       mergedResponseStatus.forKeyValue { (topicPartition, status) =>
         if (status.error != Errors.NONE) {
           errorInResponse = true
@@ -621,6 +647,21 @@ class KafkaApis(val requestChannel: RequestChannel,
             request.header.clientId,
             topicPartition,
             status.error.exceptionName))
+        }
+
+        if (request.header.apiVersion >= 10) {
+          status.currentLeader = {
+            status.error match {
+              case Errors.NOT_LEADER_OR_FOLLOWER | Errors.FENCED_LEADER_EPOCH =>
+                val leaderNode = getCurrentLeader(topicPartition)
+                nodeEndpoints.put(leaderNode.node.id(), leaderNode.node)
+                new LeaderIdAndEpoch()
+                  .setLeaderId(leaderNode.leaderId)
+                  .setLeaderEpoch(leaderNode.leaderEpoch)
+              case _ =>
+                null
+            }
+          }
         }
       }
 
@@ -664,7 +705,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           requestHelper.sendNoOpResponseExemptThrottle(request)
         }
       } else {
-        requestChannel.sendResponse(request, new ProduceResponse(mergedResponseStatus.asJava, maxThrottleTimeMs), None)
+        requestChannel.sendResponse(request, new ProduceResponse(mergedResponseStatus.asJava, maxThrottleTimeMs, nodeEndpoints.values.toList.asJava), None)
       }
     }
 
@@ -842,6 +883,7 @@ class KafkaApis(val requestChannel: RequestChannel,
               .setRecords(unconvertedRecords)
               .setPreferredReadReplica(partitionData.preferredReadReplica)
               .setDivergingEpoch(partitionData.divergingEpoch)
+              .setCurrentLeader(partitionData.currentLeader())
         }
       }
     }
@@ -850,6 +892,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     def processResponseCallback(responsePartitionData: Seq[(TopicIdPartition, FetchPartitionData)]): Unit = {
       val partitions = new util.LinkedHashMap[TopicIdPartition, FetchResponseData.PartitionData]
       val reassigningPartitions = mutable.Set[TopicIdPartition]()
+      val nodeEndpoints = new mutable.HashMap[Int, Node]
       responsePartitionData.foreach { case (tp, data) =>
         val abortedTransactions = data.abortedTransactions.orElse(null)
         val lastStableOffset: Long = data.lastStableOffset.orElse(FetchResponse.INVALID_LAST_STABLE_OFFSET)
@@ -863,6 +906,19 @@ class KafkaApis(val requestChannel: RequestChannel,
           .setAbortedTransactions(abortedTransactions)
           .setRecords(data.records)
           .setPreferredReadReplica(data.preferredReadReplica.orElse(FetchResponse.INVALID_PREFERRED_REPLICA_ID))
+
+        if (versionId >= 16) {
+          data.error match {
+            case Errors.NOT_LEADER_OR_FOLLOWER | Errors.FENCED_LEADER_EPOCH =>
+              val leaderNode = getCurrentLeader(tp.topicPartition())
+              nodeEndpoints.put(leaderNode.node.id(), leaderNode.node)
+              partitionData.currentLeader()
+                .setLeaderId(leaderNode.leaderId)
+                .setLeaderEpoch(leaderNode.leaderEpoch)
+            case _ =>
+          }
+        }
+
         data.divergingEpoch.ifPresent(partitionData.setDivergingEpoch(_))
         partitions.put(tp, partitionData)
       }
@@ -886,7 +942,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
         // Prepare fetch response from converted data
         val response =
-          FetchResponse.of(unconvertedFetchResponse.error, throttleTimeMs, unconvertedFetchResponse.sessionId, convertedData)
+          FetchResponse.of(unconvertedFetchResponse.error, throttleTimeMs, unconvertedFetchResponse.sessionId, convertedData, nodeEndpoints.values.toList.asJava)
         // record the bytes out metrics only when the response is being sent
         response.data.responses.forEach { topicResponse =>
           topicResponse.partitions.forEach { data =>
