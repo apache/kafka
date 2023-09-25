@@ -4155,7 +4155,7 @@ public class TaskManagerTest {
         replay(consumer);
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(TaskManager.class)) {
-            LogCaptureAppender.setClassLoggerToDebug(TaskManager.class);
+            appender.setClassLoggerToDebug(TaskManager.class);
             taskManager.handleAssignment(taskId00Assignment, emptyMap());
             assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
             assertThat(task00.state(), is(Task.State.RUNNING));
