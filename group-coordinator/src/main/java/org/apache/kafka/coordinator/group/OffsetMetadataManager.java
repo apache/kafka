@@ -401,7 +401,7 @@ public class OffsetMetadataManager {
     }
 
     /**
-     * Handles a GroupDelete request.
+     * Deletes offsets as part of a DeleteGroups request.
      * Populates the record list passed in with records to update the state machine.
      * Validations are done in deleteGroups method in GroupCoordinatorShard.
      *
