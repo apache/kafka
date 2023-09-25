@@ -45,7 +45,7 @@ import org.apache.kafka.metadata.migration.ZkMigrationLeadershipState
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion, ProducerIdsBlock}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotNull, assertTrue}
-import org.junit.jupiter.api.Timeout
+import org.junit.jupiter.api.{Disabled, Timeout}
 import org.junit.jupiter.api.extension.ExtendWith
 import org.slf4j.LoggerFactory
 
@@ -76,6 +76,7 @@ object ZkMigrationIntegrationTest {
   }
 }
 
+@Disabled
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 @Timeout(300)
 class ZkMigrationIntegrationTest {

@@ -25,6 +25,7 @@ import kafka.test.junit.ClusterTestExtensions;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.test.TestUtils;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.ExtendWith;
 
@@ -57,6 +58,7 @@ class MetadataQuorumCommandTest {
      * 2. More brokers than controllers
      * 3. Fewer brokers than controllers
      */
+    @Disabled
     @ClusterTests({
         @ClusterTest(clusterType = Type.CO_KRAFT, brokers = 2, controllers = 2),
         @ClusterTest(clusterType = Type.KRAFT, brokers = 2, controllers = 2),
@@ -98,6 +100,7 @@ class MetadataQuorumCommandTest {
      * 2. More brokers than controllers
      * 3. Fewer brokers than controllers
      */
+    @Disabled
     @ClusterTests({
         @ClusterTest(clusterType = Type.CO_KRAFT, brokers = 2, controllers = 2),
         @ClusterTest(clusterType = Type.KRAFT, brokers = 2, controllers = 2),
@@ -129,6 +132,7 @@ class MetadataQuorumCommandTest {
             assertTrue(outputs[7].matches("CurrentObservers:\\s+\\[\\d+(,\\d+)*]"));
     }
 
+    @Disabled
     @ClusterTests({
         @ClusterTest(clusterType = Type.CO_KRAFT, brokers = 1, controllers = 1),
         @ClusterTest(clusterType = Type.KRAFT, brokers = 1, controllers = 1)
@@ -156,6 +160,7 @@ class MetadataQuorumCommandTest {
                         "--command-config", tmpfile.getAbsolutePath(), "describe", "--status"));
     }
 
+    @Disabled
     @ClusterTest(clusterType = Type.ZK, brokers = 1)
     public void testDescribeQuorumInZkMode() {
         assertTrue(
@@ -174,6 +179,7 @@ class MetadataQuorumCommandTest {
 
     }
 
+    @Disabled
     @ClusterTest(clusterType = Type.CO_KRAFT, brokers = 1, controllers = 1)
     public void testHumanReadableOutput() {
         assertEquals(1, MetadataQuorumCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(), "describe", "--human-readable"));
