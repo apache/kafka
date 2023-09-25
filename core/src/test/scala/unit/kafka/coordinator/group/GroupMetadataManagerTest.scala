@@ -1185,7 +1185,6 @@ class GroupMetadataManagerTest {
       any(),
       any(),
       any(),
-      any(),
       any())
     verify(replicaManager).getMagic(any())
   }
@@ -1221,7 +1220,6 @@ class GroupMetadataManagerTest {
       any(),
       any(),
       any[Option[ReentrantLock]],
-      any(),
       any(),
       any(),
       any(),
@@ -1301,7 +1299,6 @@ class GroupMetadataManagerTest {
       any(),
       any(),
       any(),
-      any(),
       any())
     // Will update sensor after commit
     assertEquals(1, TestUtils.totalMetricValue(metrics, "offset-commit-count"))
@@ -1341,7 +1338,6 @@ class GroupMetadataManagerTest {
       any[Map[TopicPartition, MemoryRecords]],
       capturedResponseCallback.capture(),
       any[Option[ReentrantLock]],
-      any(),
       any(),
       any(),
       any(),
@@ -1405,7 +1401,6 @@ class GroupMetadataManagerTest {
       any(),
       any(),
       any(),
-      any(),
       any())
     verify(replicaManager).getMagic(any())
   }
@@ -1453,7 +1448,6 @@ class GroupMetadataManagerTest {
       any[Map[TopicPartition, MemoryRecords]],
       any(),
       any[Option[ReentrantLock]],
-      any(),
       any(),
       any(),
       any(),
@@ -1609,7 +1603,6 @@ class GroupMetadataManagerTest {
       any(),
       any(),
       any(),
-      any(),
       any())
     verify(replicaManager).getMagic(any())
     assertEquals(1, TestUtils.totalMetricValue(metrics, "offset-commit-count"))
@@ -1714,7 +1707,6 @@ class GroupMetadataManagerTest {
       any(),
       any(),
       any[Option[ReentrantLock]],
-      any(),
       any(),
       any(),
       any(),
@@ -2825,7 +2817,6 @@ class GroupMetadataManagerTest {
       any(),
       any(),
       any(),
-      any(),
       any())
     capturedArgument
   }
@@ -2843,9 +2834,8 @@ class GroupMetadataManagerTest {
       any(),
       any(),
       any(),
-      any(),
-      any())
-    ).thenAnswer(_ => {
+      any()
+    )).thenAnswer(_ => {
       capturedCallback.getValue.apply(
         Map(groupTopicPartition ->
           new PartitionResponse(error, 0L, RecordBatch.NO_TIMESTAMP, 0L)
