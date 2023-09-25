@@ -991,6 +991,7 @@ public class GroupCoordinatorServiceTest {
         assertTrue(future.isDone());
         assertEquals(response, future.get());
     }
+
     @Test
     public void testDeleteOffsetsInvalidGroupId() throws Exception {
         CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
@@ -1031,6 +1032,7 @@ public class GroupCoordinatorServiceTest {
         assertTrue(future.isDone());
         assertEquals(response, future.get());
     }
+
     @Test
     public void testDeleteOffsetsCoordinatorNotAvailableException() throws Exception {
         CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
@@ -1104,6 +1106,7 @@ public class GroupCoordinatorServiceTest {
         assertTrue(future.isDone());
         assertEquals(resultCollection, future.get());
     }
+
     @Test
     public void testDeleteGroupsCoordinatorNotAvailableException() throws Exception {
         CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();

@@ -3082,7 +3082,7 @@ public class GroupMetadataManager {
     public void deleteGroup(
         String groupId,
         List<Record> records
-    ) throws ApiException {
+    ) {
         records.addAll(group(groupId).createMetadataTombstoneRecords());
     }
 

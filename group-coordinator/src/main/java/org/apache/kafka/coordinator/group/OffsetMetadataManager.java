@@ -411,7 +411,7 @@ public class OffsetMetadataManager {
     public void deleteAllOffsets(
         String groupId,
         List<Record> records
-    ) throws ApiException {
+    ) {
         TimelineHashMap<String, TimelineHashMap<Integer, OffsetAndMetadata>> offsetsByTopic = offsetsByGroup.get(groupId);
 
         if (offsetsByTopic != null) {

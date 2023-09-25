@@ -860,6 +860,10 @@ public class GenericGroup implements Group {
     public void validateOffsetDelete() throws GroupIdNotFoundException {
         if (isInState(DEAD)) {
             throw new GroupIdNotFoundException(String.format("Group %s is in dead state.", groupId));
+        } else if (isInState(STABLE)
+            || isInState(PREPARING_REBALANCE)
+            || isInState(COMPLETING_REBALANCE)) {
+            throw Errors.NON_EMPTY_GROUP.exception();
         }
     }
 
