@@ -1,0 +1,47 @@
+archivesBaseName = "trogdor"
+
+dependencies {
+    implementation project(':clients')
+    implementation project(':log4j-appender')
+    implementation libs.argparse4j
+    implementation libs.jacksonDatabind
+    implementation libs.jacksonJDK8Datatypes
+    implementation libs.slf4jApi
+    implementation libs.log4j
+
+    implementation libs.jacksonJaxrsJsonProvider
+    implementation libs.jerseyContainerServlet
+    implementation libs.jerseyHk2
+    implementation libs.jaxbApi // Jersey dependency that was available in the JDK before Java 9
+    implementation libs.activation // Jersey dependency that was available in the JDK before Java 9
+    implementation libs.jettyServer
+    implementation libs.jettyServlet
+    implementation libs.jettyServlets
+
+    testImplementation project(':clients')
+    testImplementation libs.junitJupiter
+    testImplementation project(':clients').sourceSets.test.output
+    testImplementation libs.mockitoCore
+
+    testRuntimeOnly libs.slf4jlog4j
+}
+
+javadoc {
+    enabled = false
+}
+
+tasks.create(name: "copyDependantLibs", type: Copy) {
+    from (configurations.testRuntimeClasspath) {
+        include('slf4j-log4j12*')
+        include('reload4j*jar')
+    }
+    from (configurations.runtimeClasspath) {
+        exclude('kafka-clients*')
+    }
+    into "$buildDir/dependant-libs-${versions.scala}"
+    duplicatesStrategy 'exclude'
+}
+
+jar {
+    dependsOn 'copyDependantLibs'
+}

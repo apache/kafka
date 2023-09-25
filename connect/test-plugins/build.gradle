@@ -1,0 +1,9 @@
+archivesBaseName = "connect-test-plugins"
+
+dependencies {
+    api project(':connect:api')
+
+    implementation project(':server-common')
+    implementation libs.slf4jApi
+    implementation libs.jacksonDatabind
+}

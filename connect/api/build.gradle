@@ -1,0 +1,32 @@
+archivesBaseName = "connect-api"
+
+dependencies {
+    api project(':clients')
+    implementation libs.slf4jApi
+    implementation libs.jaxrsApi
+
+    testImplementation libs.junitJupiter
+    testRuntimeOnly libs.slf4jlog4j
+    testImplementation project(':clients').sourceSets.test.output
+}
+
+javadoc {
+    include "**/org/apache/kafka/connect/**" // needed for the `aggregatedJavadoc` task
+}
+
+tasks.create(name: "copyDependantLibs", type: Copy) {
+    from (configurations.testRuntimeClasspath) {
+        include('slf4j-log4j12*')
+        include('reload4j*jar')
+    }
+    from (configurations.runtimeClasspath) {
+        exclude('kafka-clients*')
+        exclude('connect-*')
+    }
+    into "$buildDir/dependant-libs"
+    duplicatesStrategy 'exclude'
+}
+
+jar {
+    dependsOn copyDependantLibs
+}

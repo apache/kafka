@@ -1,0 +1,65 @@
+archivesBaseName = "kafka-storage-api"
+
+dependencies {
+    implementation project(':clients')
+    implementation project(':server-common')
+    implementation libs.metrics
+    implementation libs.slf4jApi
+
+    testImplementation project(':clients')
+    testImplementation project(':clients').sourceSets.test.output
+    testImplementation libs.junitJupiter
+    testImplementation libs.mockitoCore
+
+    testRuntimeOnly libs.slf4jlog4j
+}
+
+task createVersionFile() {
+    def receiptFile = file("$buildDir/kafka/$buildVersionFileName")
+    inputs.property "commitId", commitId
+    inputs.property "version", version
+    outputs.file receiptFile
+
+    doLast {
+        def data = [
+                commitId: commitId,
+                version: version,
+        ]
+
+        receiptFile.parentFile.mkdirs()
+        def content = data.entrySet().collect { "$it.key=$it.value" }.sort().join("\n")
+        receiptFile.setText(content, "ISO-8859-1")
+    }
+}
+
+sourceSets {
+    main {
+        java {
+            srcDirs = ["src/main/java"]
+        }
+    }
+    test {
+        java {
+            srcDirs = ["src/test/java"]
+        }
+    }
+}
+
+jar {
+    dependsOn createVersionFile
+    from("$buildDir") {
+        include "kafka/$buildVersionFileName"
+    }
+}
+
+clean.doFirst {
+    delete "$buildDir/kafka/"
+}
+
+javadoc {
+    include "**/org/apache/kafka/server/log/remote/storage/*"
+}
+
+checkstyle {
+    configProperties = checkstyleConfigProperties("import-control-storage.xml")
+}

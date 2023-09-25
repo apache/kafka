@@ -1,0 +1,118 @@
+archivesBaseName = "kafka-storage"
+
+configurations {
+    generator
+}
+
+dependencies {
+    implementation project(':storage:api')
+    implementation project(':server-common')
+    implementation project(':clients')
+    implementation libs.caffeine
+    implementation libs.slf4jApi
+    implementation libs.jacksonDatabind
+    implementation libs.metrics
+
+    testImplementation project(':clients')
+    testImplementation project(':clients').sourceSets.test.output
+    testImplementation project(':core')
+    testImplementation project(':core').sourceSets.test.output
+    testImplementation project(':server-common')
+    testImplementation project(':server-common').sourceSets.test.output
+    testImplementation libs.hamcrest
+    testImplementation libs.junitJupiter
+    testImplementation libs.mockitoCore
+    testImplementation libs.bcpkix
+
+    testRuntimeOnly libs.slf4jlog4j
+
+    generator project(':generator')
+}
+
+task createVersionFile() {
+    def receiptFile = file("$buildDir/kafka/$buildVersionFileName")
+    inputs.property "commitId", commitId
+    inputs.property "version", version
+    outputs.file receiptFile
+
+    doLast {
+        def data = [
+                commitId: commitId,
+                version: version,
+        ]
+
+        receiptFile.parentFile.mkdirs()
+        def content = data.entrySet().collect { "$it.key=$it.value" }.sort().join("\n")
+        receiptFile.setText(content, "ISO-8859-1")
+    }
+}
+
+task processMessages(type:JavaExec) {
+    mainClass = "org.apache.kafka.message.MessageGenerator"
+    classpath = configurations.generator
+    args = [ "-p", " org.apache.kafka.server.log.remote.metadata.storage.generated",
+             "-o", "src/generated/java/org/apache/kafka/server/log/remote/metadata/storage/generated",
+             "-i", "src/main/resources/message",
+             "-m", "MessageDataGenerator", "JsonConverterGenerator",
+             "-t", "MetadataRecordTypeGenerator", "MetadataJsonConvertersGenerator" ]
+    inputs.dir("src/main/resources/message")
+            .withPropertyName("messages")
+            .withPathSensitivity(PathSensitivity.RELATIVE)
+    outputs.cacheIf { true }
+    outputs.dir("src/generated/java/org/apache/kafka/server/log/remote/metadata/storage/generated")
+}
+
+task genRemoteLogManagerConfigDoc(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig'
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    standardOutput = new File(generatedDocsDir, "remote_log_manager_config.html").newOutputStream()
+}
+
+task genRemoteLogMetadataManagerConfigDoc(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig'
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    standardOutput = new File(generatedDocsDir, "remote_log_metadata_manager_config.html").newOutputStream()
+}
+
+sourceSets {
+    main {
+        java {
+            srcDirs = ["src/generated/java", "src/main/java"]
+        }
+    }
+    test {
+        java {
+            srcDirs = ["src/generated/java", "src/test/java"]
+        }
+    }
+}
+
+compileJava.dependsOn 'processMessages'
+srcJar.dependsOn 'processMessages'
+
+jar {
+    dependsOn createVersionFile
+    from("$buildDir") {
+        include "kafka/$buildVersionFileName"
+    }
+}
+
+test {
+    useJUnitPlatform {
+        includeEngines 'junit-jupiter'
+    }
+}
+
+clean.doFirst {
+    delete "$buildDir/kafka/"
+}
+
+javadoc {
+    enabled = false
+}
+
+checkstyle {
+    configProperties = checkstyleConfigProperties("import-control-storage.xml")
+}

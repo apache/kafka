@@ -1,0 +1,31 @@
+archivesBaseName = "kafka-streams-test-utils"
+
+dependencies {
+    api project(':streams')
+    api project(':clients')
+
+    implementation libs.slf4jApi
+
+    testImplementation project(':clients').sourceSets.test.output
+    testImplementation libs.junitJupiter
+    testImplementation libs.mockitoCore
+    testImplementation libs.hamcrest
+
+    testRuntimeOnly libs.slf4jlog4j
+}
+
+javadoc {
+    include "**/org/apache/kafka/streams/test/**"
+}
+
+tasks.create(name: "copyDependantLibs", type: Copy) {
+    from (configurations.runtimeClasspath) {
+        exclude('kafka-streams*')
+    }
+    into "$buildDir/dependant-libs-${versions.scala}"
+    duplicatesStrategy 'exclude'
+}
+
+jar {
+    dependsOn 'copyDependantLibs'
+}

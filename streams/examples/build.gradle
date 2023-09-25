@@ -1,0 +1,34 @@
+archivesBaseName = "kafka-streams-examples"
+
+dependencies {
+    // this dependency should be removed after we unify data API
+    implementation(project(':connect:json')) {
+        // this transitive dependency is not used in Streams, and it breaks SBT builds
+        exclude module: 'javax.ws.rs-api'
+    }
+
+    implementation project(':streams')
+
+    implementation libs.slf4jlog4j
+
+    testImplementation project(':streams:test-utils')
+    testImplementation project(':clients').sourceSets.test.output // for org.apache.kafka.test.IntegrationTest
+    testImplementation libs.junitJupiter
+    testImplementation libs.hamcrest
+}
+
+javadoc {
+    enabled = false
+}
+
+tasks.create(name: "copyDependantLibs", type: Copy) {
+    from (configurations.runtimeClasspath) {
+        exclude('kafka-streams*')
+    }
+    into "$buildDir/dependant-libs-${versions.scala}"
+    duplicatesStrategy 'exclude'
+}
+
+jar {
+    dependsOn 'copyDependantLibs'
+}

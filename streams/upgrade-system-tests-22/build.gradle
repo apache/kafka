@@ -1,0 +1,10 @@
+archivesBaseName = "kafka-streams-upgrade-system-tests-22"
+
+dependencies {
+    testImplementation libs.kafkaStreams_22
+    testRuntimeOnly libs.junitJupiter
+}
+
+systemTestLibs {
+    dependsOn testJar
+}

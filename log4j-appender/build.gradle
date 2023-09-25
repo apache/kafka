@@ -1,0 +1,15 @@
+archivesBaseName = "kafka-log4j-appender"
+
+dependencies {
+    implementation project(':clients')
+    implementation libs.slf4jlog4j
+
+    testImplementation project(':clients').sourceSets.test.output
+    testImplementation libs.junitJupiter
+    testImplementation libs.hamcrest
+    testImplementation libs.mockitoCore
+}
+
+javadoc {
+    enabled = false
+}

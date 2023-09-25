@@ -1,0 +1,32 @@
+archivesBaseName = "connect-mirror-client"
+
+dependencies {
+    implementation project(':clients')
+    implementation libs.slf4jApi
+
+    testImplementation libs.junitJupiter
+    testImplementation project(':clients').sourceSets.test.output
+
+    testRuntimeOnly libs.slf4jlog4j
+}
+
+javadoc {
+    enabled = true
+}
+
+tasks.create(name: "copyDependantLibs", type: Copy) {
+    from (configurations.testRuntimeClasspath) {
+        include('slf4j-log4j12*')
+        include('reload4j*jar')
+    }
+    from (configurations.runtimeClasspath) {
+        exclude('kafka-clients*')
+        exclude('connect-*')
+    }
+    into "$buildDir/dependant-libs"
+    duplicatesStrategy 'exclude'
+}
+
+jar {
+    dependsOn copyDependantLibs
+}

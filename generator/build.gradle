@@ -1,0 +1,11 @@
+dependencies {
+    implementation libs.argparse4j
+    implementation libs.jacksonDatabind
+    implementation libs.jacksonJDK8Datatypes
+    implementation libs.jacksonJaxrsJsonProvider
+    testImplementation libs.junitJupiter
+}
+
+javadoc {
+    enabled = false
+}

@@ -1,0 +1,37 @@
+archivesBaseName = "connect-basic-auth-extension"
+
+dependencies {
+    implementation project(':connect:api')
+    implementation libs.slf4jApi
+    implementation libs.jaxrsApi
+    implementation libs.jaxAnnotationApi
+
+    testImplementation libs.bcpkix
+    testImplementation libs.mockitoCore
+    testImplementation libs.junitJupiter
+    testImplementation project(':clients').sourceSets.test.output
+
+    testRuntimeOnly libs.slf4jlog4j
+    testRuntimeOnly libs.jerseyContainerServlet
+}
+
+javadoc {
+    enabled = false
+}
+
+tasks.create(name: "copyDependantLibs", type: Copy) {
+    from (configurations.testRuntimeClasspath) {
+        include('slf4j-log4j12*')
+        include('reload4j*jar')
+    }
+    from (configurations.runtimeClasspath) {
+        exclude('kafka-clients*')
+        exclude('connect-*')
+    }
+    into "$buildDir/dependant-libs"
+    duplicatesStrategy 'exclude'
+}
+
+jar {
+    dependsOn copyDependantLibs
+}

@@ -1,0 +1,42 @@
+archivesBaseName = "kafka-shell"
+
+dependencies {
+    implementation libs.argparse4j
+    implementation libs.jacksonDatabind
+    implementation libs.jacksonJDK8Datatypes
+    implementation libs.jline
+    implementation libs.slf4jApi
+    implementation project(':server-common')
+    implementation project(':clients')
+    implementation project(':core')
+    implementation project(':log4j-appender')
+    implementation project(':metadata')
+    implementation project(':raft')
+
+    implementation libs.jose4j                    // for SASL/OAUTHBEARER JWT validation
+    implementation libs.jacksonJaxrsJsonProvider
+
+    testImplementation project(':clients')
+    testImplementation libs.junitJupiter
+
+    testRuntimeOnly libs.slf4jlog4j
+}
+
+javadoc {
+    enabled = false
+}
+
+tasks.create(name: "copyDependantLibs", type: Copy) {
+    from (configurations.testRuntimeClasspath) {
+        include('jline-*jar')
+    }
+    from (configurations.runtimeClasspath) {
+        include('jline-*jar')
+    }
+    into "$buildDir/dependant-libs-${versions.scala}"
+    duplicatesStrategy 'exclude'
+}
+
+jar {
+    dependsOn 'copyDependantLibs'
+}

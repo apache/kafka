@@ -1,0 +1,13 @@
+archivesBaseName = "kafka-examples"
+
+dependencies {
+    implementation project(':clients')
+}
+
+javadoc {
+    enabled = false
+}
+
+checkstyle {
+    configProperties = checkstyleConfigProperties("import-control-core.xml")
+}

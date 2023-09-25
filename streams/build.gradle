@@ -1,0 +1,149 @@
+archivesBaseName = "kafka-streams"
+ext.buildStreamsVersionFileName = "kafka-streams-version.properties"
+
+configurations {
+    generator
+}
+
+dependencies {
+    api project(':clients')
+    // `org.rocksdb.Options` is part of Kafka Streams public api via `RocksDBConfigSetter`
+    api libs.rocksDBJni
+
+    implementation libs.slf4jApi
+    implementation libs.jacksonAnnotations
+    implementation libs.jacksonDatabind
+
+    // testCompileOnly prevents streams from exporting a dependency on test-utils, which would cause a dependency cycle
+    testCompileOnly project(':streams:test-utils')
+
+    testImplementation project(':clients').sourceSets.test.output
+    testImplementation project(':core')
+    testImplementation project(':tools')
+    testImplementation project(':core').sourceSets.test.output
+    testImplementation project(':server-common').sourceSets.test.output
+    testImplementation libs.log4j
+    testImplementation libs.junitJupiter
+    testImplementation libs.junitVintageEngine
+    testImplementation libs.easymock
+    testImplementation libs.powermockJunit4
+    testImplementation libs.powermockEasymock
+    testImplementation libs.bcpkix
+    testImplementation libs.hamcrest
+    testImplementation libs.mockitoCore
+    testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
+
+    testRuntimeOnly project(':streams:test-utils')
+    testRuntimeOnly libs.slf4jlog4j
+
+    generator project(':generator')
+}
+
+task processMessages(type:JavaExec) {
+    mainClass = "org.apache.kafka.message.MessageGenerator"
+    classpath = configurations.generator
+    args = [ "-p", "org.apache.kafka.streams.internals.generated",
+             "-o", "src/generated/java/org/apache/kafka/streams/internals/generated",
+             "-i", "src/main/resources/common/message",
+             "-m", "MessageDataGenerator"
+    ]
+    inputs.dir("src/main/resources/common/message")
+            .withPropertyName("messages")
+            .withPathSensitivity(PathSensitivity.RELATIVE)
+    outputs.cacheIf { true }
+    outputs.dir("src/generated/java/org/apache/kafka/streams/internals/generated")
+}
+
+sourceSets {
+    main {
+        java {
+            srcDirs = ["src/generated/java", "src/main/java"]
+        }
+    }
+    test {
+        java {
+            srcDirs = ["src/generated/java", "src/test/java"]
+        }
+    }
+}
+
+compileJava.dependsOn 'processMessages'
+srcJar.dependsOn 'processMessages'
+
+javadoc {
+    include "**/org/apache/kafka/streams/**"
+    exclude "**/org/apache/kafka/streams/internals/**", "**/org/apache/kafka/streams/**/internals/**"
+}
+
+tasks.create(name: "copyDependantLibs", type: Copy) {
+    from (configurations.runtimeClasspath) {
+        exclude('kafka-clients*')
+    }
+    into "$buildDir/dependant-libs-${versions.scala}"
+    duplicatesStrategy 'exclude'
+}
+
+task createStreamsVersionFile() {
+    def receiptFile = file("$buildDir/kafka/$buildStreamsVersionFileName")
+    inputs.property "commitId", commitId
+    inputs.property "version", version
+    outputs.file receiptFile
+
+    doLast {
+        def data = [
+                commitId: commitId,
+                version: version,
+        ]
+
+        receiptFile.parentFile.mkdirs()
+        def content = data.entrySet().collect { "$it.key=$it.value" }.sort().join("\n")
+        receiptFile.setText(content, "ISO-8859-1")
+    }
+}
+
+jar {
+    dependsOn 'createStreamsVersionFile'
+    from("$buildDir") {
+        include "kafka/$buildStreamsVersionFileName"
+    }
+    dependsOn 'copyDependantLibs'
+}
+
+systemTestLibs {
+    dependsOn testJar
+}
+
+task genStreamsConfigDocs(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'org.apache.kafka.streams.StreamsConfig'
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    standardOutput = new File(generatedDocsDir, "streams_config.html").newOutputStream()
+}
+
+task testAll(
+        dependsOn: [
+                ':streams:test',
+                ':streams:test-utils:test',
+                ':streams:streams-scala:test',
+                ':streams:upgrade-system-tests-0100:test',
+                ':streams:upgrade-system-tests-0101:test',
+                ':streams:upgrade-system-tests-0102:test',
+                ':streams:upgrade-system-tests-0110:test',
+                ':streams:upgrade-system-tests-10:test',
+                ':streams:upgrade-system-tests-11:test',
+                ':streams:upgrade-system-tests-20:test',
+                ':streams:upgrade-system-tests-21:test',
+                ':streams:upgrade-system-tests-22:test',
+                ':streams:upgrade-system-tests-23:test',
+                ':streams:upgrade-system-tests-24:test',
+                ':streams:upgrade-system-tests-25:test',
+                ':streams:upgrade-system-tests-26:test',
+                ':streams:upgrade-system-tests-27:test',
+                ':streams:upgrade-system-tests-28:test',
+                ':streams:upgrade-system-tests-30:test',
+                ':streams:upgrade-system-tests-31:test',
+                ':streams:upgrade-system-tests-32:test',
+                ':streams:upgrade-system-tests-33:test',
+                ':streams:examples:test'
+        ]
+)
