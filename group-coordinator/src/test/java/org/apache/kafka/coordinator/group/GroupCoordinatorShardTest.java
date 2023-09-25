@@ -22,6 +22,7 @@ import org.apache.kafka.common.message.DeleteGroupsResponseData;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
@@ -56,6 +57,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -133,6 +136,7 @@ public class GroupCoordinatorShardTest {
             expectedResultCollection
         );
 
+        doNothing().when(groupMetadataManager).validateGroupDelete(ArgumentMatchers.eq("group-id"));
         doAnswer(invocation -> {
             List<Record> records = invocation.getArgument(1);
             records.add(RecordHelpers.newOffsetCommitTombstoneRecord("group-id", "topic-name", 0));
@@ -143,6 +147,33 @@ public class GroupCoordinatorShardTest {
             records.add(RecordHelpers.newGroupMetadataTombstoneRecord("group-id"));
             return null;
         }).when(groupMetadataManager).deleteGroup(ArgumentMatchers.eq("group-id"), anyList());
+
+        assertEquals(expectedResult, coordinator.deleteGroups(context, groupIds));
+    }
+
+    @Test
+    public void testDeleteInvalidGroup() {
+        GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
+        OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
+        GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
+            groupMetadataManager,
+            offsetMetadataManager
+        );
+
+        RequestContext context = requestContext(ApiKeys.DELETE_GROUPS);
+        List<String> groupIds = Collections.singletonList("group-id");
+        DeleteGroupsResponseData.DeletableGroupResultCollection expectedResultCollection = new DeleteGroupsResponseData.DeletableGroupResultCollection();
+        expectedResultCollection.add(new DeleteGroupsResponseData.DeletableGroupResult()
+            .setGroupId("group-id")
+            .setErrorCode(Errors.INVALID_GROUP_ID.code())
+        );
+        CoordinatorResult<DeleteGroupsResponseData.DeletableGroupResultCollection, Record> expectedResult = new CoordinatorResult<>(
+            Collections.emptyList(),
+            expectedResultCollection
+        );
+
+        doThrow(Errors.INVALID_GROUP_ID.exception())
+            .when(groupMetadataManager).validateGroupDelete(ArgumentMatchers.eq("group-id"));
 
         assertEquals(expectedResult, coordinator.deleteGroups(context, groupIds));
     }
