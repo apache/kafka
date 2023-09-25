@@ -258,7 +258,12 @@ streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);</code></pre>
             <td colspan="2">The maximum number of records to buffer per partition.</td>
             <td><code class="docutils literal"><span class="pre">1000</span></code></td>
           </tr>
-          <tr class="row-even"><td>cache.max.bytes.buffering (Deprecated.)</td>
+          <tr class="row-even"><td>cache.max.bytes</td>
+            <td>Medium</td>
+            <td colspan="2">Maximum number of memory bytes to be used for record caches across all threads. Note that at the debug level you can use cache.size to monitor the actual size of the Kafka Streams cache.</td>
+            <td>10485760 bytes</td>
+          </tr>
+          <tr class="row-even"><td>cache.max.bytes.buffering (Deprecated. Use cache.max.bytes instead.)</td>
             <td>Medium</td>
             <td colspan="2">Maximum number of memory bytes to be used for record caches across all threads.</td>
             <td>10485760 bytes</td>
