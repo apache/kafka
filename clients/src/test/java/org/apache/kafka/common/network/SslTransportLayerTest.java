@@ -195,7 +195,7 @@ public class SslTransportLayerTest {
      */
     @ParameterizedTest
     @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
-    @DisabledOnJre(value = JRE.JAVA_20, disabledReason = "KAFKA-15117")
+    @DisabledOnJre(value = {JRE.JAVA_20, JRE.JAVA_21}, disabledReason = "KAFKA-15117")
     public void testValidEndpointIdentificationCN(Args args) throws Exception {
         args.serverCertStores = certBuilder(true, "localhost", args.useInlinePem).build();
         args.clientCertStores = certBuilder(false, "localhost", args.useInlinePem).build();
