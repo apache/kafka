@@ -404,6 +404,8 @@ public class TestSslUtils {
                 for (int i = 0; i < hostNames.length; i++)
                     altNames[i] = new GeneralName(GeneralName.dNSName, hostNames[i]);
                 subjectAltName = GeneralNames.getInstance(new DERSequence(altNames)).getEncoded();
+            } else {
+                subjectAltName = null;
             }
             return this;
         }
