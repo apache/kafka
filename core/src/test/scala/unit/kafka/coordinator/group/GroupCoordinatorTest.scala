@@ -4093,6 +4093,7 @@ class GroupCoordinatorTest {
       )
     })
     when(replicaManager.getMagic(any[TopicPartition])).thenReturn(Some(RecordBatch.MAGIC_VALUE_V2))
+
     groupCoordinator.handleTxnCommitOffsets(groupId, producerId, producerEpoch,
       memberId, groupInstanceId, generationId, offsets, responseCallback, transactionalId)
     val result = Await.result(responseFuture, Duration(40, TimeUnit.MILLISECONDS))

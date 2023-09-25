@@ -1599,7 +1599,7 @@ class KafkaApisTest {
     when(groupCoordinator.commitTransactionalOffsets(
       requestChannelRequest.context,
       txnOffsetCommitRequest,
-      RequestLocal.NoCaching.bufferSupplier,
+      RequestLocal.NoCaching.bufferSupplier
     )).thenReturn(future)
 
     createKafkaApis().handle(
@@ -1644,7 +1644,7 @@ class KafkaApisTest {
     when(groupCoordinator.commitTransactionalOffsets(
       requestChannelRequest.context,
       txnOffsetCommitRequest,
-      RequestLocal.NoCaching.bufferSupplier,
+      RequestLocal.NoCaching.bufferSupplier
     )).thenReturn(future)
 
     createKafkaApis().handle(
@@ -1741,7 +1741,7 @@ class KafkaApisTest {
     when(groupCoordinator.commitTransactionalOffsets(
       requestChannelRequest.context,
       expectedTxnOffsetCommitRequest,
-      RequestLocal.NoCaching.bufferSupplier,
+      RequestLocal.NoCaching.bufferSupplier
     )).thenReturn(future)
 
     createKafkaApis().handle(
@@ -1843,7 +1843,7 @@ class KafkaApisTest {
     when(groupCoordinator.commitTransactionalOffsets(
       request.context,
       offsetCommitRequest.data,
-      requestLocal.bufferSupplier,
+      requestLocal.bufferSupplier
     )).thenReturn(future)
 
     future.complete(new TxnOffsetCommitResponseData()

@@ -2651,7 +2651,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         groupCoordinator.commitTransactionalOffsets(
           request.context,
           txnOffsetCommitRequestData,
-          requestLocal.bufferSupplier,
+          requestLocal.bufferSupplier
         ).handle[Unit] { (response, exception) =>
           if (exception != null) {
             sendResponse(txnOffsetCommitRequest.getErrorResponse(exception))
