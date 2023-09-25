@@ -34,6 +34,7 @@ import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.DeleteGroupsResponseData;
 import org.apache.kafka.common.message.HeartbeatRequestData;
 import org.apache.kafka.common.message.HeartbeatResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
@@ -1073,34 +1074,69 @@ public class GroupCoordinatorServiceTest {
         assertEquals(response, future.get());
     }
 
-//    @Test
-//    public void testDeleteGroups() throws Exception {
-//        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
-//        GroupCoordinatorService service = new GroupCoordinatorService(
-//            new LogContext(),
-//            createConfig(),
-//            runtime
-//        );
-//        service.startup(() -> 1);
-//
-//        List<String> groupIds = Collections.singletonList("foo");
-//        DeleteGroupsResponseData.DeletableGroupResultCollection resultCollection =
-//            new DeleteGroupsResponseData.DeletableGroupResultCollection();
-//        resultCollection.add(new DeleteGroupsResponseData.DeletableGroupResult().setGroupId("foo"));
-//
-//        when(runtime.scheduleWriteOperation(
-//            ArgumentMatchers.eq("delete-group"),
-//            ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
-//            ArgumentMatchers.any()
-//        )).thenReturn(CompletableFuture.completedFuture(resultCollection));
-//
-//        CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> future = service.deleteGroups(
-//            requestContext(ApiKeys.DELETE_GROUPS),
-//            groupIds,
-//            BufferSupplier.NO_CACHING
-//        );
-//
-//        assertTrue(future.isDone());
-//        assertEquals(resultCollection, future.get());
-//    }
+    @Test
+    public void testDeleteGroups() throws Exception {
+        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorService(
+            new LogContext(),
+            createConfig(),
+            runtime
+        );
+        service.startup(() -> 1);
+
+        List<String> groupIds = Collections.singletonList("foo");
+        DeleteGroupsResponseData.DeletableGroupResultCollection resultCollection =
+            new DeleteGroupsResponseData.DeletableGroupResultCollection();
+        resultCollection.add(new DeleteGroupsResponseData.DeletableGroupResult().setGroupId("foo"));
+
+        when(runtime.scheduleWriteOperation(
+            ArgumentMatchers.eq("delete-group"),
+            ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
+            ArgumentMatchers.any()
+        )).thenReturn(CompletableFuture.completedFuture(resultCollection));
+
+        CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> future = service.deleteGroups(
+            requestContext(ApiKeys.DELETE_GROUPS),
+            groupIds,
+            BufferSupplier.NO_CACHING
+        );
+
+        assertTrue(future.isDone());
+        assertEquals(resultCollection, future.get());
+    }
+    @Test
+    public void testDeleteGroupsCoordinatorNotAvailableException() throws Exception {
+        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorService(
+            new LogContext(),
+            createConfig(),
+            runtime
+        );
+        service.startup(() -> 1);
+
+        List<String> groupIds = Collections.singletonList("foo");
+        DeleteGroupsResponseData.DeletableGroupResultCollection resultCollection =
+            new DeleteGroupsResponseData.DeletableGroupResultCollection();
+        resultCollection.add(new DeleteGroupsResponseData.DeletableGroupResult()
+            .setGroupId("foo")
+            .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code())
+        );
+
+        when(runtime.scheduleWriteOperation(
+            ArgumentMatchers.eq("delete-group"),
+            ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
+            ArgumentMatchers.any()
+        )).thenReturn(FutureUtils.failedFuture(
+            new CoordinatorLoadInProgressException(null)
+        ));
+
+        CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> future = service.deleteGroups(
+            requestContext(ApiKeys.DELETE_GROUPS),
+            groupIds,
+            BufferSupplier.NO_CACHING
+        );
+
+        assertTrue(future.isDone());
+        assertEquals(resultCollection, future.get());
+    }
 }

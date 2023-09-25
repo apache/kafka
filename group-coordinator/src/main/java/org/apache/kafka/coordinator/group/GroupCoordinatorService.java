@@ -580,9 +580,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
         final CompletableFuture<Void> allFutures = CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]));
         return allFutures.thenApply(v -> {
             final DeleteGroupsResponseData.DeletableGroupResultCollection res = new DeleteGroupsResponseData.DeletableGroupResultCollection();
-            futures.forEach(future -> res.addAll(future.join()));
-            // TODO: res.addAll(future.join()) returns false
-            // res.addAll(new DeleteGroupsResponseData.DeletableGroupResult()) returns true
+            futures.forEach(future ->
+                future.join().forEach(result ->
+                    res.add(result.duplicate())
+                )
+            );
             return res;
         });
     }
