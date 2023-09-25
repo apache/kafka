@@ -581,6 +581,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
         return allFutures.thenApply(v -> {
             final DeleteGroupsResponseData.DeletableGroupResultCollection res = new DeleteGroupsResponseData.DeletableGroupResultCollection();
             futures.forEach(future ->
+                // We don't use res.addAll(future.join()) because DeletableGroupResultCollection is an ImplicitLinkedHashMultiCollection,
+                // which has requirements for adding elements (see org/apache/kafka/common/utils/ImplicitLinkedHashCollection.java#add).
                 future.join().forEach(result ->
                     res.add(result.duplicate())
                 )
