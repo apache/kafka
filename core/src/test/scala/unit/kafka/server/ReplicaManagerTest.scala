@@ -2800,16 +2800,16 @@ class ReplicaManagerTest {
                                                          threadNamePrefix: Option[String],
                                                          replicationQuotaManager: ReplicationQuotaManager): ReplicaFetcherManager = {
         val rm = this
-        new ReplicaFetcherManager(config, rm, metrics, time, threadNamePrefix, replicationQuotaManager, () => metadataCache.metadataVersion(), () => 1) {
+        new ReplicaFetcherManager(this.config, rm, metrics, time, threadNamePrefix, replicationQuotaManager, () => this.metadataCache.metadataVersion(), () => 1) {
 
           override def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): ReplicaFetcherThread = {
-            val logContext = new LogContext(s"[ReplicaFetcher replicaId=${config.brokerId}, leaderId=${sourceBroker.id}, " +
+            val logContext = new LogContext(s"[ReplicaFetcher replicaId=${rm.config.brokerId}, leaderId=${sourceBroker.id}, " +
               s"fetcherId=$fetcherId] ")
             val fetchSessionHandler = new FetchSessionHandler(logContext, sourceBroker.id)
-            val leader = new RemoteLeaderEndPoint(logContext.logPrefix, blockingSend, fetchSessionHandler, config,
-              rm, quotaManager.follower, () => config.interBrokerProtocolVersion, () => 1)
-            new ReplicaFetcherThread(s"ReplicaFetcherThread-$fetcherId", leader, config, failedPartitions, rm,
-              quotaManager.follower, logContext.logPrefix, () => config.interBrokerProtocolVersion) {
+            val leader = new RemoteLeaderEndPoint(logContext.logPrefix, blockingSend, fetchSessionHandler, rm.config,
+              rm, quotaManager.follower, () => rm.config.interBrokerProtocolVersion, () => 1)
+            new ReplicaFetcherThread(s"ReplicaFetcherThread-$fetcherId", leader, rm.config, failedPartitions, rm,
+              quotaManager.follower, logContext.logPrefix, () => rm.config.interBrokerProtocolVersion) {
               override def doWork(): Unit = {
                 // In case the thread starts before the partition is added by AbstractFetcherManager,
                 // add it here (it's a no-op if already added)

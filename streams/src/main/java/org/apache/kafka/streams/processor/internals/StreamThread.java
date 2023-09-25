@@ -465,6 +465,7 @@ public class StreamThread extends Thread {
         }
     }
 
+    @SuppressWarnings("this-escape")
     public StreamThread(final Time time,
                         final StreamsConfig config,
                         final Admin adminClient,

@@ -110,7 +110,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     private boolean hasPendingTxCommit = false;
     private Optional<Long> timeCurrentIdlingStarted;
 
-    @SuppressWarnings("rawtypes")
+    @SuppressWarnings({"rawtypes", "this-escape"})
     public StreamTask(final TaskId id,
                       final Set<TopicPartition> inputPartitions,
                       final ProcessorTopology topology,

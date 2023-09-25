@@ -1346,6 +1346,7 @@ public class StreamsConfig extends AbstractConfig {
         this(props, true);
     }
 
+    @SuppressWarnings("this-escape")
     protected StreamsConfig(final Map<?, ?> props,
                             final boolean doLog) {
         super(CONFIG, props, doLog);
