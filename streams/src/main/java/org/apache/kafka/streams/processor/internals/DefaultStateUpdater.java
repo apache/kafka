@@ -307,7 +307,7 @@ public class DefaultStateUpdater implements StateUpdater {
             tasksAndActionsLock.lock();
             try {
                 while (isRunning.get() &&
-                    changelogReader.allChangelogsCompleted() &&
+                    (changelogReader.allChangelogsCompleted() || updatingTasks.isEmpty()) &&
                     tasksAndActions.isEmpty() &&
                     !isTopologyResumed.get()) {
 

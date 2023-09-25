@@ -63,14 +63,17 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.Mockito.atLeast;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -1041,6 +1044,28 @@ class DefaultStateUpdaterTest {
         final StreamTask task = statefulTask(TASK_0_0, mkSet(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
         shouldResumeStatefulTask(task);
         verify(changelogReader, times(2)).enforceRestoreActive();
+    }
+
+    @Test
+    public void shouldAwaitWhenAllTasksPaused() throws Exception {
+        final StreamTask task = statefulTask(TASK_0_0, mkSet(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
+        stateUpdater.start();
+        stateUpdater.add(task);
+
+        when(topologyMetadata.isPaused(null)).thenReturn(true);
+
+        verifyPausedTasks(task);
+
+        reset(changelogReader);
+        Thread.sleep(100);
+        verify(changelogReader, never()).restore(any());
+
+        when(topologyMetadata.isPaused(null)).thenReturn(false);
+        stateUpdater.signalResume();
+
+        verifyPausedTasks();
+        verifyUpdatingTasks(task);
+        verify(changelogReader, atLeastOnce()).restore(any());
     }
 
     @Test
