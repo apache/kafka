@@ -975,7 +975,6 @@ public class GroupCoordinatorServiceTest {
         OffsetDeleteResponseData response = new OffsetDeleteResponseData()
             .setTopics(responseTopicCollection);
 
-
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("delete-offset"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
