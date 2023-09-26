@@ -75,7 +75,6 @@ public class HeartbeatRequestManagerTest {
 
     private String memberId = "member-id";
     private int memberEpoch = 1;
-    private ConsumerGroupHeartbeatResponseData.Assignment memberAssignment = mockAssignment();
     private ErrorEventHandler errorEventHandler;
 
     private ConsumerGroupHeartbeatResponseData.Assignment mockAssignment() {
@@ -133,7 +132,6 @@ public class HeartbeatRequestManagerTest {
         // Ensure we do not resend the request without the first request being completed
         NetworkClientDelegate.PollResult result2 = heartbeatRequestManager.poll(mockTime.milliseconds());
         assertEquals(0, result2.unsentRequests.size());
-
     }
 
     @ParameterizedTest

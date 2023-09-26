@@ -40,13 +40,13 @@ import java.util.Set;
  * using the state stored in the {@link MembershipManager} and enqueue it to the network queue to be sent out. Once
  * the response is received, the module will update the state in the {@link MembershipManager} and handle any errors.
  *
- * The manager only emits heartbeat when the member is in a group, tries to join a group, or tries rejoin the group.
+ * The manager only emits heartbeat when the member is in a group, tries to join or rejoin a group.
  * If the member does not have groupId configured, got kicked out of the group, or encountering fatal exceptions, the
  * heartbeat will not be sent.
  *
- * If the coordinator not is not found, we will skip sending the heartbeat and tries to find a coordinator first.
+ * If the coordinator not is not found, we will skip sending the heartbeat and try to find a coordinator first.
  *
- * If the heartbeat failed due to retriable errors, such as, TimeoutException.  The subsequent attempt will be backoff
+ * If the heartbeat failed due to retriable errors, such as, TimeoutException. The subsequent attempt will be backoff
  * exponentially.
  *
  * If the member completes the assignment changes, i.e. revocation and assignment, a heartbeat request will be sent in
@@ -109,16 +109,15 @@ public class HeartbeatRequestManager implements RequestManager {
     }
 
     /**
-     * Determines the maximum wait time until the next poll based on the member's state.
-     * 1. If the member is without a coordinator or is in a failed state, the timer is set to Long.MAX_VALUE, as
-     * there's no need to send a heartbeat
-     *
-     * 2. If the member cannot send a heartbeat due to either exponential backoff, it will return the remaining time
-     * left on the backoff timer.
-     *
-     * 3. If the member's heartbeat timer has not expired. It will return the remaining time left on the heartbeat timer.
-     *
-     * 4. If the member can send a heartbeat, the timer is set to the current heartbeat interval.
+     * Determines the maximum wait time until the next poll based on the member's state, and creates a heartbeat
+     * request.
+     * <ol>
+     *     <li>If the member is without a coordinator or is in a failed state, the timer is set to Long.MAX_VALUE, as there's no need to send a heartbeat.</li>
+     *     <li>If the member cannot send a heartbeat due to either exponential backoff, it will return the remaining time left on the backoff timer.</li>
+     *     <li>If the member's heartbeat timer has not expired, It will return the remaining time left on the
+     *     heartbeat timer.</li>
+     *     <li>If the member can send a heartbeat, the timer is set to the current heartbeat interval.</li>
+     * </ol>
      */
     @Override
     public NetworkClientDelegate.PollResult poll(long currentTimeMs) {
@@ -127,7 +126,7 @@ public class HeartbeatRequestManager implements RequestManager {
                 Long.MAX_VALUE, Collections.emptyList());
         }
 
-        // TODO: We will need to send a heartbeat response after partitions being revoke.  This needs to be
+        // TODO: We will need to send a heartbeat response after partitions being revoke. This needs to be
         //  implemented either with or after the partition reconciliation logic.
         if (!heartbeatRequestState.canSendRequest(currentTimeMs)) {
             return new NetworkClientDelegate.PollResult(
@@ -200,7 +199,7 @@ public class HeartbeatRequestManager implements RequestManager {
         Errors error = Errors.forCode(response.data().errorCode());
         if (error == Errors.NOT_COORDINATOR || error == Errors.COORDINATOR_NOT_AVAILABLE) {
             String errorMessage = String.format("Coordinator node {} is either not started or not valid. Retrying",
-                    coordinatorRequestManager);
+                    coordinatorRequestManager.coordinator());
             logInfo(errorMessage, response, currentTimeMs);
             coordinatorRequestManager.markCoordinatorUnknown(response.data().errorMessage(), currentTimeMs);
         } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS) {
@@ -266,7 +265,6 @@ public class HeartbeatRequestManager implements RequestManager {
     static class HeartbeatRequestState extends RequestState {
         long heartbeatIntervalMs;
         final Timer heartbeatTimer;
-        // TODO: Add an inflight request tracker and test sending multiple heartbeat concurrently
 
         public HeartbeatRequestState(
             final LogContext logContext,
