@@ -247,6 +247,7 @@ public class SourceConnectorConfig extends ConnectorConfig {
         return newDef;
     }
 
+    @SuppressWarnings("this-escape")
     public SourceConnectorConfig(Plugins plugins, Map<String, String> props, boolean createTopics) {
         super(plugins, configDef(), props);
         if (createTopics && props.entrySet().stream().anyMatch(e -> e.getKey().startsWith(TOPIC_CREATION_PREFIX))) {

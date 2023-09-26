@@ -543,6 +543,95 @@ public class StreamThreadTest {
     }
 
     @Test
+    public void shouldNotProcessWhenPartitionRevoked() {
+        final Properties props = configProps(false);
+
+        final StreamsConfig config = new StreamsConfig(props);
+        when(mainConsumer.poll(Mockito.any())).thenReturn(ConsumerRecords.empty());
+        final ConsumerGroupMetadata consumerGroupMetadata = Mockito.mock(ConsumerGroupMetadata.class);
+        when(mainConsumer.groupMetadata()).thenReturn(consumerGroupMetadata);
+        when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
+        final TaskManager taskManager = Mockito.mock(TaskManager.class);
+
+        final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
+        topologyMetadata.buildAndRewriteTopology();
+        final StreamThread thread = buildStreamThread(mainConsumer, taskManager, config, topologyMetadata);
+        thread.setState(State.STARTING);
+        thread.setState(State.PARTITIONS_REVOKED);
+        thread.runOnce();
+
+        Mockito.verify(taskManager, Mockito.never()).process(Mockito.anyInt(), Mockito.any());
+    }
+
+    @Test
+    public void shouldProcessWhenRunning() {
+        final Properties props = configProps(false);
+
+        final StreamsConfig config = new StreamsConfig(props);
+        when(mainConsumer.poll(Mockito.any())).thenReturn(ConsumerRecords.empty());
+        final ConsumerGroupMetadata consumerGroupMetadata = Mockito.mock(ConsumerGroupMetadata.class);
+        when(mainConsumer.groupMetadata()).thenReturn(consumerGroupMetadata);
+        when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
+        final TaskManager taskManager = Mockito.mock(TaskManager.class);
+
+        final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
+        topologyMetadata.buildAndRewriteTopology();
+        final StreamThread thread = buildStreamThread(mainConsumer, taskManager, config, topologyMetadata);
+        thread.updateThreadMetadata("admin");
+        thread.setState(State.STARTING);
+        thread.setState(State.PARTITIONS_ASSIGNED);
+        thread.setState(State.RUNNING);
+        thread.runOnce();
+
+        Mockito.verify(taskManager).process(Mockito.anyInt(), Mockito.any());
+    }
+
+    @Test
+    public void shouldProcessWhenPartitionAssigned() {
+        final Properties props = configProps(false);
+        props.setProperty(InternalConfig.STATE_UPDATER_ENABLED, Boolean.toString(true));
+
+        final StreamsConfig config = new StreamsConfig(props);
+        when(mainConsumer.poll(Mockito.any())).thenReturn(ConsumerRecords.empty());
+        final ConsumerGroupMetadata consumerGroupMetadata = Mockito.mock(ConsumerGroupMetadata.class);
+        when(mainConsumer.groupMetadata()).thenReturn(consumerGroupMetadata);
+        when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
+        final TaskManager taskManager = Mockito.mock(TaskManager.class);
+
+        final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
+        topologyMetadata.buildAndRewriteTopology();
+        final StreamThread thread = buildStreamThread(mainConsumer, taskManager, config, topologyMetadata);
+        thread.updateThreadMetadata("admin");
+        thread.setState(State.STARTING);
+        thread.setState(State.PARTITIONS_ASSIGNED);
+        thread.runOnce();
+
+        Mockito.verify(taskManager).process(Mockito.anyInt(), Mockito.any());
+    }
+
+    @Test
+    public void shouldProcessWhenStarting() {
+        final Properties props = configProps(false);
+        props.setProperty(InternalConfig.STATE_UPDATER_ENABLED, Boolean.toString(true));
+
+        final StreamsConfig config = new StreamsConfig(props);
+        when(mainConsumer.poll(Mockito.any())).thenReturn(ConsumerRecords.empty());
+        final ConsumerGroupMetadata consumerGroupMetadata = Mockito.mock(ConsumerGroupMetadata.class);
+        when(mainConsumer.groupMetadata()).thenReturn(consumerGroupMetadata);
+        when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
+        final TaskManager taskManager = Mockito.mock(TaskManager.class);
+
+        final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
+        topologyMetadata.buildAndRewriteTopology();
+        final StreamThread thread = buildStreamThread(mainConsumer, taskManager, config, topologyMetadata);
+        thread.updateThreadMetadata("admin");
+        thread.setState(State.STARTING);
+        thread.runOnce();
+
+        Mockito.verify(taskManager).process(Mockito.anyInt(), Mockito.any());
+    }
+
+    @Test
     public void shouldEnforceRebalanceWhenScheduledAndNotCurrentlyRebalancing() throws InterruptedException {
         final StreamsConfig config = new StreamsConfig(configProps(false));
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(

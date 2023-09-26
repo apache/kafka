@@ -14,25 +14,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.security.scram.internals;
+package org.apache.kafka.connect.converters;
 
-import java.security.Provider;
-import java.security.Security;
+import java.util.Map;
+import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.connect.storage.ConverterConfig;
 
-import org.apache.kafka.common.security.scram.internals.ScramSaslClient.ScramSaslClientFactory;
+/**
+ * Configuration options for {@link BooleanConverter} instances.
+ */
+public class BooleanConverterConfig extends ConverterConfig {
 
-public class ScramSaslClientProvider extends Provider {
+    private static final ConfigDef CONFIG = ConverterConfig.newConfigDef();
 
-    private static final long serialVersionUID = 1L;
-
-    @SuppressWarnings({"deprecation", "this-escape"})
-    protected ScramSaslClientProvider() {
-        super("SASL/SCRAM Client Provider", 1.0, "SASL/SCRAM Client Provider for Kafka");
-        for (ScramMechanism mechanism : ScramMechanism.values())
-            put("SaslClientFactory." + mechanism.mechanismName(), ScramSaslClientFactory.class.getName());
+    public static ConfigDef configDef() {
+        return CONFIG;
     }
 
-    public static void initialize() {
-        Security.addProvider(new ScramSaslClientProvider());
+    public BooleanConverterConfig(Map<String, ?> props) {
+        super(CONFIG, props);
     }
 }

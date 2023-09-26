@@ -564,7 +564,7 @@ public class PartitionGroupTest {
 
         assertThat(group.allPartitionsBufferedLocally(), is(false));
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(PartitionGroup.class)) {
-            LogCaptureAppender.setClassLoggerToTrace(PartitionGroup.class);
+            appender.setClassLoggerToTrace(PartitionGroup.class);
             assertThat(group.readyToProcess(0L), is(true));
             assertThat(
                 appender.getEvents(),
@@ -607,7 +607,7 @@ public class PartitionGroupTest {
 
         assertThat(group.allPartitionsBufferedLocally(), is(true));
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(PartitionGroup.class)) {
-            LogCaptureAppender.setClassLoggerToTrace(PartitionGroup.class);
+            appender.setClassLoggerToTrace(PartitionGroup.class);
             assertThat(group.readyToProcess(0L), is(true));
             assertThat(
                 appender.getEvents(),
@@ -641,7 +641,7 @@ public class PartitionGroupTest {
 
         assertThat(group.allPartitionsBufferedLocally(), is(false));
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(PartitionGroup.class)) {
-            LogCaptureAppender.setClassLoggerToTrace(PartitionGroup.class);
+            appender.setClassLoggerToTrace(PartitionGroup.class);
             assertThat(group.readyToProcess(0L), is(false));
             assertThat(
                 appender.getEvents(),
@@ -680,7 +680,7 @@ public class PartitionGroupTest {
         assertThat(group.allPartitionsBufferedLocally(), is(false));
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(PartitionGroup.class)) {
-            LogCaptureAppender.setClassLoggerToTrace(PartitionGroup.class);
+            appender.setClassLoggerToTrace(PartitionGroup.class);
             assertThat(group.readyToProcess(0L), is(false));
             assertThat(
                 appender.getEvents(),
@@ -714,7 +714,7 @@ public class PartitionGroupTest {
         assertThat(group.allPartitionsBufferedLocally(), is(false));
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(PartitionGroup.class)) {
-            LogCaptureAppender.setClassLoggerToTrace(PartitionGroup.class);
+            appender.setClassLoggerToTrace(PartitionGroup.class);
             assertThat(group.readyToProcess(0L), is(false));
             assertThat(
                 appender.getEvents(),
@@ -726,7 +726,7 @@ public class PartitionGroupTest {
         }
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(PartitionGroup.class)) {
-            LogCaptureAppender.setClassLoggerToTrace(PartitionGroup.class);
+            appender.setClassLoggerToTrace(PartitionGroup.class);
             assertThat(group.readyToProcess(1L), is(true));
             assertThat(
                 appender.getEvents(),
@@ -745,7 +745,7 @@ public class PartitionGroupTest {
         }
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(PartitionGroup.class)) {
-            LogCaptureAppender.setClassLoggerToTrace(PartitionGroup.class);
+            appender.setClassLoggerToTrace(PartitionGroup.class);
             assertThat(group.readyToProcess(2L), is(true));
             assertThat(
                 appender.getEvents(),
