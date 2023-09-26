@@ -314,12 +314,12 @@ public class DefaultStateUpdater implements StateUpdater {
                     isIdle.set(true);
                     tasksAndActionsCondition.await();
                 }
-                isIdle.set(false);
             } catch (final InterruptedException ignored) {
                 // we never interrupt the thread, but only signal the condition
                 // and hence this exception should never be thrown
             } finally {
                 tasksAndActionsLock.unlock();
+                isIdle.set(false);
             }
         }
 
