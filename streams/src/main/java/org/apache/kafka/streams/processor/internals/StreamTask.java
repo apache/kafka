@@ -84,6 +84,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     private final Map<TopicPartition, Long> committedOffsets;
     private final Map<TopicPartition, Long> highWatermark;
     private final Set<TopicPartition> resetOffsetsForPartitions;
+    private final Set<TopicPartition> partitionsToResume;
     private final PunctuationQueue streamTimePunctuationQueue;
     private final PunctuationQueue systemTimePunctuationQueue;
     private final StreamsMetricsImpl streamsMetrics;
@@ -176,6 +177,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         // initialize the consumed and committed offset cache
         consumedOffsets = new HashMap<>();
         resetOffsetsForPartitions = new HashSet<>();
+        partitionsToResume = new HashSet<>();
 
         recordQueueCreator = new RecordQueueCreator(this.logContext, config.timestampExtractor, config.deserializationExceptionHandler);
 
@@ -590,6 +592,21 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         log.info("Closed and recycled state");
     }
 
+    @Override
+    public void resumePollingForPartitionsWithAvailableSpace() {
+        if (!partitionsToResume.isEmpty()) {
+            mainConsumer.resume(partitionsToResume);
+            partitionsToResume.clear();
+        }
+    }
+
+    @Override
+    public void updateLags() {
+        if (state() == State.RUNNING) {
+            partitionGroup.updateLags();
+        }
+    }
+
     /**
      * The following exceptions maybe thrown from the state manager flushing call
      *
@@ -678,6 +695,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
         record = null;
         closeTaskSensor.record();
+        partitionsToResume.clear();
 
         transitionTo(State.CLOSED);
     }
@@ -748,7 +766,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             // after processing this record, if its partition queue's buffered size has been
             // decreased to the threshold, we can then resume the consumption on this partition
             if (recordInfo.queue().size() == maxBufferedSize) {
-                mainConsumer.resume(singleton(partition));
+                partitionsToResume.add(partition);
             }
 
             record = null;

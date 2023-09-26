@@ -232,7 +232,10 @@ subprojects {
 
   apply plugin: 'java-library'
   apply plugin: 'checkstyle'
-  apply plugin: "com.github.spotbugs"
+
+  // spotbugs doesn't support Java 21 yet
+  if (!JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_21))
+    apply plugin: "com.github.spotbugs"
 
   // We use the shadow plugin for the jmh-benchmarks module and the `-all` jar can get pretty large, so
   // don't publish it
@@ -702,12 +705,15 @@ subprojects {
 
   test.dependsOn('checkstyleMain', 'checkstyleTest')
 
-  spotbugs {
-    toolVersion = versions.spotbugs
-    excludeFilter = file("$rootDir/gradle/spotbugs-exclude.xml")
-    ignoreFailures = false
+  // spotbugs doesn't support Java 21 yet
+  if (!JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_21)) {
+    spotbugs {
+      toolVersion = versions.spotbugs
+      excludeFilter = file("$rootDir/gradle/spotbugs-exclude.xml")
+      ignoreFailures = false
+    }
+    test.dependsOn('spotbugsMain')
   }
-  test.dependsOn('spotbugsMain')
 
   tasks.withType(com.github.spotbugs.snom.SpotBugsTask) {
     reports {
