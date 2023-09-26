@@ -142,6 +142,14 @@ public class TestSslUtils {
                 daysBeforeNow, daysAfterNow, issuer, parentKeyPair, isCA, isServerCert, isClientCert);
     }
 
+    public static X509Certificate generateSignedCertificate(String dn, KeyPair keyPair,
+                                                            int daysBeforeNow, int daysAfterNow, String issuer, KeyPair parentKeyPair,
+                                                            String algorithm, boolean isCA, boolean isServerCert, boolean isClientCert,
+                                                            String[] hostNames) throws CertificateException, IOException {
+        return new CertificateBuilder(0, algorithm).sanDnsNames(hostNames).generateSignedCertificate(dn, keyPair,
+                daysBeforeNow, daysAfterNow, issuer, parentKeyPair, isCA, isServerCert, isClientCert);
+    }
+
     public static KeyPair generateKeyPair(String algorithm) throws NoSuchAlgorithmException {
         KeyPairGenerator keyGen = KeyPairGenerator.getInstance(algorithm);
         keyGen.initialize(algorithm.equals("EC") ? 256 : 2048);
@@ -758,4 +766,79 @@ public class TestSslUtils {
             defaultSslEngineFactory.configure(configs);
         }
     }
+
+    /**
+     * method to generate ssl configs for keystore with large number of entries. This is used to verify large key stores and
+     * post-handshake messages in SslEngineValidator with TLSv3/JDK17+
+     * @param tlsProtocol
+     * @return ssl configs
+     * @throws Exception
+     */
+    public static Map<String, Object> generateConfigsWithCertificateChains(String tlsProtocol) throws Exception {
+        int nrOfCerts = 10;
+        KeyPair[] keyPairs = new KeyPair[nrOfCerts];
+        for (int i = 0; i < nrOfCerts; i++) {
+            keyPairs[i] = TestSslUtils.generateKeyPair("RSA");
+        }
+
+        //add a bunch of hostNames to keystore to increase the keystore size
+        String[] hostNames = new String[150];
+        for (int i = 0; i < hostNames.length; i++) {
+            hostNames[i] = "hostName" + i;
+        }
+
+        X509Certificate[] certs = new X509Certificate[nrOfCerts];
+        // Generate root CA
+        int caIndex = nrOfCerts - 1;
+        certs[caIndex] = TestSslUtils.generateSignedCertificate("CN=CA", keyPairs[caIndex], 365,
+                365, null, null, "SHA512withRSA", true, false, false, hostNames);
+
+        //Generate Intermediate certificates
+        for (int intermediateCertIndex = caIndex - 1; intermediateCertIndex > 0; intermediateCertIndex--) {
+            certs[intermediateCertIndex] = TestSslUtils.generateSignedCertificate("CN=Intermediate CA" +  intermediateCertIndex,
+                    keyPairs[intermediateCertIndex], 365, 365, certs[intermediateCertIndex + 1].getSubjectX500Principal().getName(),
+                    keyPairs[intermediateCertIndex + 1], "SHA512withRSA", true, false, false, hostNames);
+        }
+
+        // Generate a valid end certificate
+        certs[0] = TestSslUtils.generateSignedCertificate("CN=kafka", keyPairs[0], 1, 1,
+                certs[1].getSubjectX500Principal().getName(), keyPairs[1], "SHA512withRSA", false, true, true, hostNames);
+
+        File keystoreStoreFile = TestUtils.tempFile("keystore", ".jks");
+        Password keyStorePassword =  new Password("password");
+        KeyStore keyStore = KeyStore.getInstance("PKCS12");
+        keyStore.load(null, null);
+        keyStore.setKeyEntry("issued-cert", keyPairs[0].getPrivate(), keyStorePassword.value().toCharArray(), certs);
+        saveKeyStore(keyStore, keystoreStoreFile.getPath(), keyStorePassword);
+
+        File trustStoreFile = TestUtils.tempFile("truststore", ".jks");
+        Password trustStorePassword =  new Password("password");
+        KeyStore trustStore = KeyStore.getInstance("PKCS12");
+        trustStore.load(null, null);
+        for (X509Certificate cert : certs) {
+            trustStore.setCertificateEntry(cert.getSubjectX500Principal().getName(), cert);
+        }
+        saveKeyStore(trustStore, trustStoreFile.getPath(), trustStorePassword);
+
+        Map<String, Object> sslConfigs = new HashMap<>();
+
+        sslConfigs.put(SslConfigs.SSL_PROTOCOL_CONFIG, tlsProtocol); // protocol to create SSLContext
+        sslConfigs.put(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, keystoreStoreFile.getPath());
+        sslConfigs.put(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG, "JKS");
+        sslConfigs.put(SslConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG, TrustManagerFactory.getDefaultAlgorithm());
+        sslConfigs.put(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, keyStorePassword);
+        sslConfigs.put(SslConfigs.SSL_KEY_PASSWORD_CONFIG, keyStorePassword);
+
+        sslConfigs.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, trustStoreFile.getPath());
+        sslConfigs.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, trustStorePassword);
+        sslConfigs.put(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, "JKS");
+        sslConfigs.put(SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG, TrustManagerFactory.getDefaultAlgorithm());
+
+        List<String> enabledProtocols  = new ArrayList<>();
+        enabledProtocols.add(tlsProtocol);
+        sslConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, enabledProtocols);
+
+        return sslConfigs;
+    }
+
 }
