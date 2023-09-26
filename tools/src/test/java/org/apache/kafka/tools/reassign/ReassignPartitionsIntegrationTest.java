@@ -57,6 +57,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import scala.None$;
 import scala.Option;
 import scala.Tuple2;
+import scala.collection.JavaConverters;
+import scala.collection.Seq;
 
 import java.util.Arrays;
 import java.util.Collection;
@@ -81,12 +83,11 @@ import static org.apache.kafka.clients.CommonClientConfigs.BOOTSTRAP_SERVERS_CON
 import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.server.common.MetadataVersion.IBP_2_7_IV1;
-import static org.apache.kafka.tools.reassign.ReassignPartitionsUnitTest.seq;
-import static org.apache.kafka.tools.reassign.ReassignPartitionsUnitTest.set;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@SuppressWarnings({"ClassDataAbstractionCoupling", "ClassFanOutComplexity"})
 @ExtendWith(value = ClusterTestExtensions.class)
 @ClusterTestDefaults(brokers = 5)
 @Tag("integration")
@@ -837,19 +838,14 @@ public class ReassignPartitionsIntegrationTest {
         Map<TopicPartitionReplica, ReassignPartitionsCommand.LogDirMoveState> moveStates = new HashMap<>();
         res.moveStates.forEach((tpr, state) -> moveStates.put(tpr, asScala(state)));
 
-        return new ReassignPartitionsCommand.VerifyAssignmentResult(
-            ReassignPartitionsUnitTest.asScala(partStates),
-            res.partsOngoing,
-            ReassignPartitionsUnitTest.asScala(moveStates),
-            res.movesOngoing
-        );
+        return new ReassignPartitionsCommand.VerifyAssignmentResult(asScala(partStates), res.partsOngoing, asScala(moveStates), res.movesOngoing);
     }
 
     @SuppressWarnings("unchecked")
     private ReassignPartitionsCommand.PartitionReassignmentState asScala(PartitionReassignmentState state) {
         return new ReassignPartitionsCommand.PartitionReassignmentState(
-            seq((List)state.currentReplicas),
-            seq((List)state.targetReplicas),
+            seq((List) state.currentReplicas),
+            seq((List) state.targetReplicas),
             state.done
         );
     }
@@ -873,5 +869,30 @@ public class ReassignPartitionsIntegrationTest {
         }
 
         throw new IllegalArgumentException("Unknown state " + state);
+    }
+
+    @SuppressWarnings("unchecked")
+    static <T> scala.collection.immutable.Set<T> set(final T... set) {
+        return mutableSet(set).toSet();
+    }
+
+    @SuppressWarnings({"deprecation", "unchecked"})
+    private static <T> scala.collection.mutable.Set<T> mutableSet(final T...set) {
+        return JavaConverters.asScalaSet(new HashSet<>(Arrays.asList(set)));
+    }
+
+    @SuppressWarnings({"unchecked"})
+    private static <T> Seq<T> seq(T... seq) {
+        return seq(Arrays.asList(seq));
+    }
+
+    @SuppressWarnings({"deprecation"})
+    private static <T> Seq<T> seq(Collection<T> seq) {
+        return JavaConverters.asScalaIteratorConverter(seq.iterator()).asScala().toSeq();
+    }
+
+    @SuppressWarnings("deprecation")
+    private static <K, V> scala.collection.Map<K, V> asScala(Map<K, V> jmap) {
+        return JavaConverters.mapAsScalaMap(jmap);
     }
 }
