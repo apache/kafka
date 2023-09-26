@@ -52,6 +52,18 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         this.metadata = metadata;
     }
 
+    /**
+     * Process the events—if any—that were produced by the application thread. It is possible that when processing
+     * an event generates an error. In such cases, the processor will immediately throw an exception, and not
+     * process the remaining events.
+     */
+    @Override
+    public void process() {
+        process(error -> {
+            throw error;
+        });
+    }
+
     @Override
     public void process(ApplicationEvent event) {
         switch (event.type()) {

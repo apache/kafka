@@ -46,11 +46,27 @@ public abstract class EventProcessor<T> implements Closeable {
         this.closer = new IdempotentCloser();
     }
 
+    public abstract void process();
+
+    public abstract void process(T event);
+
+    @Override
+    public void close() {
+        closer.close(this::closeInternal, () -> log.warn("Already closed"));
+    }
+
+    protected abstract Class<T> getEventClass();
+
+    protected interface ProcessErrorHandler {
+
+        void onError(KafkaException error);
+    }
+
     /**
      * Drains all available events from the queue, and then processes them in order. If any errors are thrown while
      * processing the individual events, these are submitted to the given {@link ProcessErrorHandler}.
      */
-    public void process(ProcessErrorHandler processErrorHandler) {
+    protected void process(ProcessErrorHandler processErrorHandler) {
         String eventClassName = getEventClass().getSimpleName();
         closer.assertOpen(() -> String.format("The processor was previously closed, so no further %s processing can occur", eventClassName));
 
@@ -73,17 +89,12 @@ public abstract class EventProcessor<T> implements Closeable {
                     else
                         error = new KafkaException(t);
 
-                    processErrorHandler.onProcessingError(error);
+                    processErrorHandler.onError(error);
                 }
             }
         } finally {
             log.debug("Completed processing of {}s", eventClassName);
         }
-    }
-
-    @Override
-    public void close() {
-        closer.close(this::closeInternal, () -> log.warn("Already closed"));
     }
 
     /**
@@ -115,10 +126,6 @@ public abstract class EventProcessor<T> implements Closeable {
                 eventClassName);
     }
 
-    public abstract void process(T event);
-
-    protected abstract Class<T> getEventClass();
-
     /**
      * Moves all the events from the queue to the returned list.
      */
@@ -126,10 +133,5 @@ public abstract class EventProcessor<T> implements Closeable {
         LinkedList<T> events = new LinkedList<>();
         eventQueue.drainTo(events);
         return events;
-    }
-
-    public interface ProcessErrorHandler {
-
-        void onProcessingError(KafkaException error);
     }
 }

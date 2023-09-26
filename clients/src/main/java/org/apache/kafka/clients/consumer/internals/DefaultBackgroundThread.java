@@ -108,11 +108,9 @@ public class DefaultBackgroundThread extends KafkaThread implements Closeable {
      * 3. Poll the networkClient to send and retrieve the response.
      */
     void runOnce() {
-        // If there are errors processing any events, we want to throw the error immediately. This will have
+        // If there are errors processing any events, the error will be thrown immediately. This will have
         // the effect of closing the background thread.
-        applicationEventProcessor.process(error -> {
-            throw error;
-        });
+        applicationEventProcessor.process();
 
         final long currentTimeMs = time.milliseconds();
         final long pollWaitTimeMs = requestManagers.entries().stream()

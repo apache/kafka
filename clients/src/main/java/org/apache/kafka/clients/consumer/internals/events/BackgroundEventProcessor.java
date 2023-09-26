@@ -18,9 +18,11 @@ package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.DefaultBackgroundThread;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.utils.LogContext;
 
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * An {@link EventProcessor} that is created and executes in the application thread for the purpose of processing
@@ -39,9 +41,21 @@ public class BackgroundEventProcessor extends EventProcessor<BackgroundEvent> {
         super(logContext, backgroundEventQueue);
     }
 
+    /**
+     * Process the events—if any—that were produced by the {@link DefaultBackgroundThread background thread}.
+     * It is possible that when processing the events that a given event will
+     * {@link ErrorBackgroundEvent represent an error directly}, or it could be that processing an event generates
+     * an error. In such cases, the processor will continue to process the remaining events. In this case, we
+     * provide the caller to provide a callback handler that "collects" the errors. We grab the first error that
+     * occurred and throw it.
+     */
     @Override
-    protected Class<BackgroundEvent> getEventClass() {
-        return BackgroundEvent.class;
+    public void process() {
+        AtomicReference<KafkaException> error = new AtomicReference<>();
+        process(t -> error.compareAndSet(null, t));
+
+        if (error.get() != null)
+            throw error.get();
     }
 
     @Override
@@ -50,6 +64,11 @@ public class BackgroundEventProcessor extends EventProcessor<BackgroundEvent> {
             process((ErrorBackgroundEvent) event);
         else
             throw new IllegalArgumentException("Background event type " + event.type() + " was not expected");
+    }
+
+    @Override
+    protected Class<BackgroundEvent> getEventClass() {
+        return BackgroundEvent.class;
     }
 
     private void process(final ErrorBackgroundEvent event) {

@@ -129,9 +129,7 @@ public class BackgroundEventHandlerTest {
         assertFalse(backgroundEventQueue.isEmpty());
 
         try {
-            TestProcessHandler processHandler = new TestProcessHandler();
-            backgroundEventProcessor.process(processHandler);
-            processHandler.maybeThrow();
+            backgroundEventProcessor.process();
             fail("Should have thrown error: " + error);
         } catch (Throwable t) {
             assertEquals(error.getClass(), t.getClass());
@@ -139,21 +137,5 @@ public class BackgroundEventHandlerTest {
         }
 
         assertTrue(backgroundEventQueue.isEmpty());
-    }
-
-    private static class TestProcessHandler implements EventProcessor.ProcessErrorHandler {
-
-        private KafkaException first;
-
-        @Override
-        public void onProcessingError(KafkaException error) {
-            if (first == null)
-                first = error;
-        }
-
-        void maybeThrow() {
-            if (first != null)
-                throw first;
-        }
     }
 }
