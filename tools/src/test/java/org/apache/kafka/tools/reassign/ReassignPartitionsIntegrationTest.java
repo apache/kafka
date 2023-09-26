@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.tools.reassign;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import kafka.admin.ReassignPartitionsCommand;
 import kafka.cluster.Partition;
 import kafka.log.UnifiedLog;
@@ -71,7 +70,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -176,7 +174,7 @@ public class ReassignPartitionsIntegrationTest {
         executeAndVerifyReassignment();
     }
 
-    private void executeAndVerifyReassignment() throws ExecutionException, InterruptedException, JsonProcessingException {
+    private void executeAndVerifyReassignment() throws Exception {
         String assignment = "{\"version\":1,\"partitions\":" +
             "[{\"topic\":\"foo\",\"partition\":0,\"replicas\":[0,1,3],\"log_dirs\":[\"any\",\"any\",\"any\"]}," +
             "{\"topic\":\"bar\",\"partition\":0,\"replicas\":[3,2,0],\"log_dirs\":[\"any\",\"any\",\"any\"]}" +
@@ -315,25 +313,21 @@ public class ReassignPartitionsIntegrationTest {
         // Wait for the assignment to complete
         TestUtils.waitUntilTrue(
             () -> {
-                try {
-                    // Check the reassignment status.
-                    ReassignPartitionsCommand.VerifyAssignmentResult result = runVerifyAssignment(adminClient, assignment, true);
+                // Check the reassignment status.
+                ReassignPartitionsCommand.VerifyAssignmentResult result = runVerifyAssignment(adminClient, assignment, true);
 
-                    if (!result.partsOngoing()) {
-                        return true;
-                    } else {
-                        assertFalse(
-                            result.partStates().values().forall(ReassignPartitionsCommand.PartitionReassignmentState::done),
-                            "Expected at least one partition reassignment to be ongoing when result = " + result
-                        );
-                        assertEquals(seq(0, 3, 2), result.partStates().get(new TopicPartition("foo", 0)).get().targetReplicas());
-                        assertEquals(seq(3, 2, 1), result.partStates().get(new TopicPartition("baz", 2)).get().targetReplicas());
-                        System.out.println("Current result: " + result);
-                        waitForInterBrokerThrottle(Arrays.asList(0, 1, 2, 3), interBrokerThrottle);
-                        return false;
-                    }
-                } catch (ExecutionException | InterruptedException | JsonProcessingException e) {
-                    throw new RuntimeException(e);
+                if (!result.partsOngoing()) {
+                    return true;
+                } else {
+                    assertFalse(
+                        result.partStates().values().forall(ReassignPartitionsCommand.PartitionReassignmentState::done),
+                        "Expected at least one partition reassignment to be ongoing when result = " + result
+                    );
+                    assertEquals(seq(0, 3, 2), result.partStates().get(new TopicPartition("foo", 0)).get().targetReplicas());
+                    assertEquals(seq(3, 2, 1), result.partStates().get(new TopicPartition("baz", 2)).get().targetReplicas());
+                    System.out.println("Current result: " + result);
+                    waitForInterBrokerThrottle(Arrays.asList(0, 1, 2, 3), interBrokerThrottle);
+                    return false;
                 }
             }, () -> "Expected reassignment to complete.", org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS, 100L);
         waitForVerifyAssignment(adminClient, assignment, true,
@@ -516,7 +510,7 @@ public class ReassignPartitionsIntegrationTest {
             try {
                 curThrottles.set(describeBrokerLevelThrottles(targetThrottles.keySet()));
                 return targetThrottles.equals(curThrottles.get());
-            } catch (ExecutionException | InterruptedException e) {
+            } catch (Exception e) {
                 throw new RuntimeException(e);
             }
         }, () -> "timed out waiting for broker throttle to become " + targetThrottles + ".  " +
@@ -529,7 +523,7 @@ public class ReassignPartitionsIntegrationTest {
      * @return                A map whose keys are broker IDs and whose values are throttle
      *                        information.  The nested maps are keyed on throttle name.
      */
-    private Map<Integer, Map<String, Long>> describeBrokerLevelThrottles(Collection<Integer> brokerIds) throws ExecutionException, InterruptedException {
+    private Map<Integer, Map<String, Long>> describeBrokerLevelThrottles(Collection<Integer> brokerIds) throws Exception {
         Map<Integer, Map<String, Long>> results = new HashMap<>();
         for (Integer brokerId : brokerIds) {
             ConfigResource brokerResource = new ConfigResource(ConfigResource.Type.BROKER, brokerId.toString());
@@ -649,7 +643,7 @@ public class ReassignPartitionsIntegrationTest {
 
     private LogDirReassignment buildLogDirReassignment(TopicPartition topicPartition,
                                                        int brokerId,
-                                                       List<Integer> replicas) throws ExecutionException, InterruptedException {
+                                                       List<Integer> replicas) throws Exception {
 
         DescribeLogDirsResult describeLogDirsResult = adminClient.describeLogDirs(
             IntStream.range(0, 5).boxed().collect(Collectors.toList()));
@@ -683,7 +677,7 @@ public class ReassignPartitionsIntegrationTest {
     }
 
     private ReassignPartitionsCommand.VerifyAssignmentResult runVerifyAssignment(Admin adminClient, String jsonString,
-                                                                                 boolean preserveThrottles) throws ExecutionException, InterruptedException, JsonProcessingException {
+                                                                                 boolean preserveThrottles) {
         System.out.println("==> verifyAssignment(adminClient, jsonString=" + jsonString);
         return ReassignPartitionsCommand.verifyAssignment(adminClient, jsonString, preserveThrottles);
     }
@@ -697,11 +691,7 @@ public class ReassignPartitionsIntegrationTest {
         final ReassignPartitionsCommand.VerifyAssignmentResult[] latestResult = {null};
         TestUtils.waitUntilTrue(
             () -> {
-                try {
-                    latestResult[0] = runVerifyAssignment(adminClient, jsonString, preserveThrottles);
-                } catch (ExecutionException | InterruptedException | JsonProcessingException e) {
-                    throw new RuntimeException(e);
-                }
+                latestResult[0] = runVerifyAssignment(adminClient, jsonString, preserveThrottles);
                 return expectedResult0.equals(latestResult[0]);
             }, () -> "Timed out waiting for verifyAssignment result " + expectedResult + ".  " +
                 "The latest result was " + latestResult[0], org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS, 10L);
@@ -733,7 +723,7 @@ public class ReassignPartitionsIntegrationTest {
         final Map<TopicPartition, String> curLogDirs = new HashMap<>();
         final Map<TopicPartition, String> futureLogDirs = new HashMap<>();
 
-        public BrokerDirs(DescribeLogDirsResult result, int brokerId) throws ExecutionException, InterruptedException {
+        public BrokerDirs(DescribeLogDirsResult result, int brokerId) throws Exception {
             this.result = result;
             this.brokerId = brokerId;
 
@@ -750,9 +740,7 @@ public class ReassignPartitionsIntegrationTest {
         }
     }
 
-    private void createTopics() throws InterruptedException, ExecutionException {
-        cluster.waitForReadyBrokers();
-
+    private void createTopics() throws Exception {
         adminClient = cluster.createAdminClient();
 
         adminClient.createTopics(topics.entrySet().stream().map(e -> {
