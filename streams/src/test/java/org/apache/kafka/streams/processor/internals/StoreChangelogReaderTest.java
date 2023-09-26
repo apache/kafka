@@ -1303,8 +1303,8 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
 
     @Test
     public void shouldNotThrowOnUnknownRevokedPartition() {
-        LogCaptureAppender.setClassLoggerToDebug(StoreChangelogReader.class);
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StoreChangelogReader.class)) {
+            appender.setClassLoggerToDebug(StoreChangelogReader.class);
             changelogReader.unregister(Collections.singletonList(new TopicPartition("unknown", 0)));
 
             assertThat(
