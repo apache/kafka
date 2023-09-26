@@ -1567,7 +1567,7 @@ public class OffsetMetadataManagerTest {
             () -> context.fetchAllOffsets("group", "member", 10, Long.MAX_VALUE));
     }
 
-    private void testOffsetDeleteWith(
+    static private void testOffsetDeleteWith(
         OffsetMetadataManagerTestContext context,
         String groupId,
         String topic,

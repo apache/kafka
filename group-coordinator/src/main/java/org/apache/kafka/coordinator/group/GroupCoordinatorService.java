@@ -546,7 +546,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     if (exception instanceof UnknownTopicOrPartitionException ||
                         exception instanceof NotEnoughReplicasException) {
                         return DeleteGroupsRequest.getErrorResultCollection(
-                            groupIds,
+                            groupList,
                             Errors.COORDINATOR_NOT_AVAILABLE
                         );
                     }
@@ -554,7 +554,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     if (exception instanceof NotLeaderOrFollowerException ||
                         exception instanceof KafkaStorageException) {
                         return DeleteGroupsRequest.getErrorResultCollection(
-                            groupIds,
+                            groupList,
                             Errors.NOT_COORDINATOR
                         );
                     }
@@ -563,13 +563,13 @@ public class GroupCoordinatorService implements GroupCoordinator {
                         exception instanceof RecordBatchTooLargeException ||
                         exception instanceof InvalidFetchSizeException) {
                         return DeleteGroupsRequest.getErrorResultCollection(
-                            groupIds,
+                            groupList,
                             Errors.UNKNOWN_SERVER_ERROR
                         );
                     }
 
                     return DeleteGroupsRequest.getErrorResultCollection(
-                        groupIds,
+                        groupList,
                         Errors.forException(exception)
                     );
                 });

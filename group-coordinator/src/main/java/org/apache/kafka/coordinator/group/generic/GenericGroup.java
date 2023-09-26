@@ -886,7 +886,7 @@ public class GenericGroup implements Group {
      *
      * @return The list of tombstone record(s).
      */
-    public List<Record> createMetadataTombstoneRecords() {
+    public List<Record> createGroupTombstoneRecords() {
         return Collections.singletonList(RecordHelpers.newGroupMetadataTombstoneRecord(groupId()));
     }
 

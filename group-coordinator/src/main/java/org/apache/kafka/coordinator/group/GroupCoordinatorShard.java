@@ -268,7 +268,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
     }
 
     /**
-     * Handles a GroupDelete request.
+     * Handles a DeleteGroups request.
      *
      * @param context   The request context.
      * @param groupIds  The groupIds of the groups to be deleted

@@ -502,7 +502,6 @@ public class GroupCoordinatorServiceTest {
             .setGroupId(null)
             .setMemberId(UNKNOWN_MEMBER_ID);
 
-
         CompletableFuture<SyncGroupResponseData> response = service.syncGroup(
             requestContext(ApiKeys.SYNC_GROUP),
             request,
@@ -1083,62 +1082,64 @@ public class GroupCoordinatorServiceTest {
             createConfig(),
             runtime
         );
-        service.startup(() -> 1);
+        service.startup(() -> 3);
 
-        List<String> groupIds = Collections.singletonList("foo");
-        DeleteGroupsResponseData.DeletableGroupResultCollection resultCollection =
+        DeleteGroupsResponseData.DeletableGroupResultCollection resultCollection1 =
             new DeleteGroupsResponseData.DeletableGroupResultCollection();
-        resultCollection.add(new DeleteGroupsResponseData.DeletableGroupResult().setGroupId("foo"));
+        DeleteGroupsResponseData.DeletableGroupResult result1 =
+            new DeleteGroupsResponseData.DeletableGroupResult().setGroupId("group-id-1");
+        resultCollection1.add(result1);
 
-        when(runtime.scheduleWriteOperation(
-            ArgumentMatchers.eq("delete-group"),
-            ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
-            ArgumentMatchers.any()
-        )).thenReturn(CompletableFuture.completedFuture(resultCollection));
-
-        CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> future = service.deleteGroups(
-            requestContext(ApiKeys.DELETE_GROUPS),
-            groupIds,
-            BufferSupplier.NO_CACHING
-        );
-
-        assertTrue(future.isDone());
-        assertEquals(resultCollection, future.get());
-    }
-
-    @Test
-    public void testDeleteGroupsCoordinatorNotAvailableException() throws Exception {
-        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
-        GroupCoordinatorService service = new GroupCoordinatorService(
-            new LogContext(),
-            createConfig(),
-            runtime
-        );
-        service.startup(() -> 1);
-
-        List<String> groupIds = Collections.singletonList("foo");
-        DeleteGroupsResponseData.DeletableGroupResultCollection resultCollection =
+        DeleteGroupsResponseData.DeletableGroupResultCollection resultCollection2 =
             new DeleteGroupsResponseData.DeletableGroupResultCollection();
-        resultCollection.add(new DeleteGroupsResponseData.DeletableGroupResult()
-            .setGroupId("foo")
-            .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code())
-        );
+        DeleteGroupsResponseData.DeletableGroupResult result2 =
+            new DeleteGroupsResponseData.DeletableGroupResult().setGroupId("group-id-2");
+        resultCollection2.add(result2);
 
-        when(runtime.scheduleWriteOperation(
-            ArgumentMatchers.eq("delete-group"),
-            ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
-            ArgumentMatchers.any()
-        )).thenReturn(FutureUtils.failedFuture(
-            new CoordinatorLoadInProgressException(null)
+        DeleteGroupsResponseData.DeletableGroupResultCollection resultCollection3 =
+            new DeleteGroupsResponseData.DeletableGroupResultCollection();
+        DeleteGroupsResponseData.DeletableGroupResult result3 = new DeleteGroupsResponseData.DeletableGroupResult()
+            .setGroupId("group-id-3")
+            .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code());
+        resultCollection3.add(result3);
+
+        DeleteGroupsResponseData.DeletableGroupResultCollection expectedResultCollection =
+            new DeleteGroupsResponseData.DeletableGroupResultCollection();
+        expectedResultCollection.addAll(Arrays.asList(result1.duplicate(), result2.duplicate(), result3.duplicate()));
+
+        when(runtime.partitions()).thenReturn(Sets.newSet(
+            new TopicPartition("__consumer_offsets", 0),
+            new TopicPartition("__consumer_offsets", 1),
+            new TopicPartition("__consumer_offsets", 2)
         ));
 
-        CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> future = service.deleteGroups(
-            requestContext(ApiKeys.DELETE_GROUPS),
-            groupIds,
-            BufferSupplier.NO_CACHING
-        );
+        when(runtime.scheduleWriteOperation(
+            ArgumentMatchers.eq("delete-group"),
+            ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 2)),
+            ArgumentMatchers.any()
+        )).thenReturn(CompletableFuture.completedFuture(resultCollection1));
+
+        when(runtime.scheduleWriteOperation(
+            ArgumentMatchers.eq("delete-group"),
+            ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
+            ArgumentMatchers.any()
+        )).thenAnswer(invocation -> {
+            Thread.sleep(1000);
+            return CompletableFuture.completedFuture(resultCollection2);
+        });
+
+        when(runtime.scheduleWriteOperation(
+            ArgumentMatchers.eq("delete-group"),
+            ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 1)),
+            ArgumentMatchers.any()
+        )).thenReturn(FutureUtils.failedFuture(new CoordinatorLoadInProgressException(null)));
+
+        List<String> groupIds = Arrays.asList("group-id-1", "group-id-2", "group-id-3");
+        CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> future =
+            service.deleteGroups(requestContext(ApiKeys.DELETE_GROUPS), groupIds, BufferSupplier.NO_CACHING);
 
         assertTrue(future.isDone());
-        assertEquals(resultCollection, future.get());
+        assertTrue(expectedResultCollection.containsAll(future.get()));
+        assertTrue(future.get().containsAll(expectedResultCollection));
     }
 }

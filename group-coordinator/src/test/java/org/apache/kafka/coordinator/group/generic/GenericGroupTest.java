@@ -47,6 +47,7 @@ import static org.apache.kafka.coordinator.group.generic.GenericGroupState.DEAD;
 import static org.apache.kafka.coordinator.group.generic.GenericGroupState.EMPTY;
 import static org.apache.kafka.coordinator.group.generic.GenericGroupState.PREPARING_REBALANCE;
 import static org.apache.kafka.coordinator.group.generic.GenericGroupState.STABLE;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -311,7 +312,6 @@ public class GenericGroupTest {
         member2Protocols.add(new JoinGroupRequestProtocol()
             .setName("foo")
             .setMetadata(new byte[0]));
-
 
         GenericGroupMember member2 = new GenericGroupMember(
             "member2",
@@ -778,7 +778,7 @@ public class GenericGroupTest {
             protocolType,
             protocols
         );
-        
+
         group.add(member);
         assertTrue(group.hasMemberId(memberId));
         assertTrue(group.hasStaticMember(groupInstanceId));
@@ -1036,6 +1036,9 @@ public class GenericGroupTest {
         assertThrows(GroupNotEmptyException.class, () -> group.validateOffsetDelete());
         group.transitionTo(STABLE);
         assertThrows(GroupNotEmptyException.class, () -> group.validateOffsetDelete());
+        group.transitionTo(PREPARING_REBALANCE);
+        group.transitionTo(EMPTY);
+        assertDoesNotThrow(() -> group.validateOffsetDelete());
         group.transitionTo(DEAD);
         assertThrows(GroupIdNotFoundException.class, () -> group.validateOffsetDelete());
     }
@@ -1048,6 +1051,9 @@ public class GenericGroupTest {
         assertThrows(GroupNotEmptyException.class, () -> group.validateGroupDelete());
         group.transitionTo(STABLE);
         assertThrows(GroupNotEmptyException.class, () -> group.validateGroupDelete());
+        group.transitionTo(PREPARING_REBALANCE);
+        group.transitionTo(EMPTY);
+        assertDoesNotThrow(() -> group.validateGroupDelete());
         group.transitionTo(DEAD);
         assertThrows(GroupIdNotFoundException.class, () -> group.validateGroupDelete());
     }

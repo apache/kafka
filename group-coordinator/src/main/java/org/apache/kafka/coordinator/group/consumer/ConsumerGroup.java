@@ -633,7 +633,7 @@ public class ConsumerGroup implements Group {
      *
      * @return The list of tombstone record(s).
      */
-    public List<Record> createMetadataTombstoneRecords() {
+    public List<Record> createGroupTombstoneRecords() {
         return Arrays.asList(
             RecordHelpers.newTargetAssignmentEpochTombstoneRecord(groupId()),
             RecordHelpers.newGroupSubscriptionMetadataTombstoneRecord(groupId()),

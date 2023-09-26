@@ -3083,7 +3083,7 @@ public class GroupMetadataManager {
         String groupId,
         List<Record> records
     ) {
-        records.addAll(group(groupId).createMetadataTombstoneRecords());
+        records.addAll(group(groupId).createGroupTombstoneRecords());
     }
 
     /**

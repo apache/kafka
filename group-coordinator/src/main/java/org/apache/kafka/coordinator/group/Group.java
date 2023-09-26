@@ -116,5 +116,5 @@ public interface Group {
      *
      * @return The list of tombstone record(s).
      */
-    List<Record> createMetadataTombstoneRecords();
+    List<Record> createGroupTombstoneRecords();
 }

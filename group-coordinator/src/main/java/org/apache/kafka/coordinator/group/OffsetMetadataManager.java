@@ -370,14 +370,13 @@ public class OffsetMetadataManager {
         request.topics().forEach(topic -> {
             final OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection responsePartitionCollection =
                 new OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection();
-            final boolean subscribedToTopic = group.isSubscribedToTopic(topic.name());
             final TimelineHashMap<Integer, OffsetAndMetadata> offsetsByPartition = offsetsByTopic == null ?
                 null : offsetsByTopic.get(topic.name());
 
             topic.partitions().forEach(partition -> {
                 final OffsetDeleteResponseData.OffsetDeleteResponsePartition responsePartition =
                     new OffsetDeleteResponseData.OffsetDeleteResponsePartition().setPartitionIndex(partition.partitionIndex());
-                if (subscribedToTopic) {
+                if (group.isSubscribedToTopic(topic.name())) {
                     responsePartition.setErrorCode(Errors.GROUP_SUBSCRIBED_TO_TOPIC.code());
                 } else if (offsetsByPartition != null && offsetsByPartition.containsKey(partition.partitionIndex())) {
                     records.add(RecordHelpers.newOffsetCommitTombstoneRecord(
