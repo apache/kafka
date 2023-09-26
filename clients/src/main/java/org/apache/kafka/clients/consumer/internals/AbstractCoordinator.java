@@ -1291,7 +1291,7 @@ public abstract class AbstractCoordinator implements Closeable {
         }
     }
 
-    protected Meter createMeter(Metrics metrics, String groupName, String baseName, String descriptiveName) {
+    protected final Meter createMeter(Metrics metrics, String groupName, String baseName, String descriptiveName) {
         return new Meter(new WindowedCount(),
                 metrics.metricName(baseName + "-rate", groupName,
                         String.format("The number of %s per second", descriptiveName)),

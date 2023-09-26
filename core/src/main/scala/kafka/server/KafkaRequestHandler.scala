@@ -48,10 +48,6 @@ object KafkaRequestHandler {
   def setBypassThreadCheck(bypassCheck: Boolean): Unit = {
     bypassThreadCheck = bypassCheck
   }
-  
-  def currentRequestOnThread(): RequestChannel.Request = {
-    threadCurrentRequest.get()
-  }
 
   /**
    * Wrap callback to schedule it on a request thread.
@@ -68,9 +64,15 @@ object KafkaRequestHandler {
       T => fun(T)
     } else {
       T => {
-        // The requestChannel and request are captured in this lambda, so when it's executed on the callback thread
-        // we can re-schedule the original callback on a request thread and update the metrics accordingly.
-        requestChannel.sendCallbackRequest(RequestChannel.CallbackRequest(() => fun(T), currentRequest))
+        if (threadCurrentRequest.get() != null) {
+          // If the callback is actually executed on a request thread, we can directly execute
+          // it without re-scheduling it.
+          fun(T)
+        } else {
+          // The requestChannel and request are captured in this lambda, so when it's executed on the callback thread
+          // we can re-schedule the original callback on a request thread and update the metrics accordingly.
+          requestChannel.sendCallbackRequest(RequestChannel.CallbackRequest(() => fun(T), currentRequest))
+        }
       }
     }
   }
