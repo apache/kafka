@@ -38,10 +38,10 @@ import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProces
 import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventProcessor;
+import org.apache.kafka.clients.consumer.internals.events.ApplicationEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.EventProcessor.ProcessErrorHandler;
 import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
-import org.apache.kafka.clients.consumer.internals.events.EventHandler;
 import org.apache.kafka.clients.consumer.internals.events.FetchEvent;
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
@@ -117,7 +117,7 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
 public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     static final long DEFAULT_CLOSE_TIMEOUT_MS = 30 * 1000;
 
-    private final EventHandler eventHandler;
+    private final ApplicationEventHandler applicationEventHandler;
     private final Time time;
     private final Optional<String> groupId;
     private final KafkaConsumerMetrics kafkaConsumerMetrics;
@@ -233,7 +233,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
                     metadata,
                     applicationEventQueue,
                     requestManagersSupplier);
-            this.eventHandler = new DefaultEventHandler(time,
+            this.applicationEventHandler = new ApplicationEventHandler(time,
                     logContext,
                     applicationEventQueue,
                     applicationEventProcessorSupplier,
@@ -283,7 +283,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
                                   FetchCollector<K, V> fetchCollector,
                                   ConsumerInterceptors<K, V> interceptors,
                                   Time time,
-                                  EventHandler eventHandler,
+                                  ApplicationEventHandler applicationEventHandler,
                                   BlockingQueue<BackgroundEvent> backgroundEventQueue,
                                   Metrics metrics,
                                   SubscriptionState subscriptions,
@@ -307,13 +307,13 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         this.retryBackoffMs = retryBackoffMs;
         this.defaultApiTimeoutMs = defaultApiTimeoutMs;
         this.deserializers = deserializers;
-        this.eventHandler = eventHandler;
+        this.applicationEventHandler = applicationEventHandler;
         this.assignors = assignors;
         this.kafkaConsumerMetrics = new KafkaConsumerMetrics(metrics, "consumer");
     }
 
     /**
-     * poll implementation using {@link EventHandler}.
+     * poll implementation using {@link ApplicationEventHandler}.
      *  1. Poll for background events. If there's a fetch response event, process the record and return it. If it is
      *  another type of event, process it.
      *  2. Send fetches if needed.
@@ -402,7 +402,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
             // the task can only be woken up if the top level API call is commitSync
             wakeupTrigger.setActiveTask(commitEvent.future());
         }
-        eventHandler.add(commitEvent);
+        applicationEventHandler.add(commitEvent);
         return commitEvent.future();
     }
 
@@ -510,7 +510,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         final OffsetFetchApplicationEvent event = new OffsetFetchApplicationEvent(partitions);
         wakeupTrigger.setActiveTask(event.future());
         try {
-            return eventHandler.addAndGet(event, time.timer(timeout));
+            return applicationEventHandler.addAndGet(event, time.timer(timeout));
         } finally {
             wakeupTrigger.clearActiveTask();
         }
@@ -592,7 +592,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         if (timeout.toMillis() == 0L)
             return listOffsetsEvent.emptyResult();
 
-        return eventHandler.addAndGet(listOffsetsEvent, time.timer(timeout));
+        return applicationEventHandler.addAndGet(listOffsetsEvent, time.timer(timeout));
     }
 
     @Override
@@ -632,7 +632,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
                 timestampToSearch,
                 false
         );
-        Map<TopicPartition, OffsetAndTimestamp> offsetAndTimestampMap = eventHandler.addAndGet(
+        Map<TopicPartition, OffsetAndTimestamp> offsetAndTimestampMap = applicationEventHandler.addAndGet(
                 listOffsetsEvent,
                 time.timer(timeout)
         );
@@ -708,7 +708,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         closeQuietly(interceptors, "consumer interceptors", firstException);
         closeQuietly(kafkaConsumerMetrics, "kafka consumer metrics", firstException);
         closeQuietly(metrics, "consumer metrics", firstException);
-        closeQuietly(eventHandler, "event handler", firstException);
+        closeQuietly(applicationEventHandler, "event handler", firstException);
         closeQuietly(deserializers, "consumer deserializers", firstException);
 
         AppInfoParser.unregisterAppInfo(CONSUMER_JMX_PREFIX, clientId, metrics);
@@ -836,11 +836,11 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
 
         // make sure the offsets of topic partitions the consumer is unsubscribing from
         // are committed since there will be no following rebalance
-        eventHandler.add(new AssignmentChangeApplicationEvent(this.subscriptions.allConsumed(), time.milliseconds()));
+        applicationEventHandler.add(new AssignmentChangeApplicationEvent(this.subscriptions.allConsumed(), time.milliseconds()));
 
         log.info("Assigned to partition(s): {}", join(partitions, ", "));
         if (this.subscriptions.assignFromUser(new HashSet<>(partitions)))
-            eventHandler.add(new NewTopicsMetadataUpdateRequestEvent());
+            applicationEventHandler.add(new NewTopicsMetadataUpdateRequestEvent());
     }
 
     @Override
@@ -903,7 +903,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
      */
     private void sendFetches() {
         FetchEvent event = new FetchEvent();
-        eventHandler.add(event);
+        applicationEventHandler.add(event);
 
         event.future().whenComplete((completedFetches, error) -> {
             if (error != null)
@@ -970,7 +970,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
      */
     private boolean updateFetchPositions(final Timer timer) {
         // If any partitions have been truncated due to a leader change, we need to validate the offsets
-        eventHandler.add(new ValidatePositionsApplicationEvent());
+        applicationEventHandler.add(new ValidatePositionsApplicationEvent());
 
         cachedSubscriptionHasAllFetchPositions = subscriptions.hasAllFetchPositions();
         if (cachedSubscriptionHasAllFetchPositions) return true;
@@ -990,7 +990,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
 
         // Finally send an asynchronous request to look up and update the positions of any
         // partitions which are awaiting reset.
-        eventHandler.add(new ResetPositionsApplicationEvent());
+        applicationEventHandler.add(new ResetPositionsApplicationEvent());
         return true;
     }
 
@@ -1014,7 +1014,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
 
         log.debug("Refreshing committed offsets for partitions {}", initializingPartitions);
         try {
-            final Map<TopicPartition, OffsetAndMetadata> offsets = eventHandler.addAndGet(new OffsetFetchApplicationEvent(initializingPartitions), timer);
+            final Map<TopicPartition, OffsetAndMetadata> offsets = applicationEventHandler.addAndGet(new OffsetFetchApplicationEvent(initializingPartitions), timer);
             return ConsumerUtils.refreshCommittedOffsets(offsets, this.metadata, this.subscriptions);
         } catch (org.apache.kafka.common.errors.TimeoutException e) {
             log.error("Couldn't refresh committed offsets before timeout expired");

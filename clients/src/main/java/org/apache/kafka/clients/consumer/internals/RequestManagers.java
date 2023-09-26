@@ -20,6 +20,7 @@ import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.common.internals.IdempotentCloser;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -115,7 +116,7 @@ public class RequestManagers implements Closeable {
             @Override
             protected RequestManagers create() {
                 final NetworkClientDelegate networkClientDelegate = networkClientDelegateSupplier.get();
-                final ErrorEventHandler errorEventHandler = new ErrorEventHandler(backgroundEventQueue);
+                final BackgroundEventHandler backgroundEventHandler = new BackgroundEventHandler(logContext, backgroundEventQueue);
                 final FetchConfig fetchConfig = new FetchConfig(config);
                 long retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
                 long retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
@@ -131,7 +132,7 @@ public class RequestManagers implements Closeable {
                         logContext);
                 final FetchRequestManager fetch = new FetchRequestManager(logContext,
                         time,
-                        errorEventHandler,
+                        backgroundEventHandler,
                         metadata,
                         subscriptions,
                         fetchConfig,
@@ -149,7 +150,7 @@ public class RequestManagers implements Closeable {
                             logContext,
                             retryBackoffMs,
                             retryBackoffMaxMs,
-                            errorEventHandler,
+                            backgroundEventHandler,
                             groupState.groupId);
                     commit = new CommitRequestManager(time, logContext, subscriptions, config, coordinator, groupState);
                 }

@@ -14,11 +14,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.consumer.internals;
+package org.apache.kafka.clients.consumer.internals.events;
 
-import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
-import org.apache.kafka.clients.consumer.internals.events.EventHandler;
-import org.apache.kafka.clients.consumer.internals.events.FetchEvent;
+import org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -27,17 +25,17 @@ import java.util.concurrent.BlockingQueue;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class DefaultEventHandlerTest {
+public class ApplicationEventHandlerTest {
 
-    private ConsumerTestBuilder.DefaultEventHandlerTestBuilder testBuilder;
-    private EventHandler handler;
-    private BlockingQueue<ApplicationEvent> aq;
+    private ConsumerTestBuilder.ApplicationEventHandlerTestBuilder testBuilder;
+    private ApplicationEventHandler applicationEventHandler;
+    private BlockingQueue<ApplicationEvent> applicationEventQueue;
 
     @BeforeEach
     public void setup() {
-        testBuilder = new ConsumerTestBuilder.DefaultEventHandlerTestBuilder();
-        handler = testBuilder.eventHandler;
-        aq = testBuilder.applicationEventQueue;
+        testBuilder = new ConsumerTestBuilder.ApplicationEventHandlerTestBuilder();
+        applicationEventHandler = testBuilder.applicationEventHandler;
+        applicationEventQueue = testBuilder.applicationEventQueue;
     }
 
     @AfterEach
@@ -48,7 +46,7 @@ public class DefaultEventHandlerTest {
 
     @Test
     public void testBasicHandlerOps() {
-        handler.add(new FetchEvent());
-        assertEquals(1, aq.size());
+        applicationEventHandler.add(new FetchEvent());
+        assertEquals(1, applicationEventQueue.size());
     }
 }

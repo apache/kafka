@@ -23,7 +23,6 @@ import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent;
-import org.apache.kafka.clients.consumer.internals.events.CompletableApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.FetchEvent;
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
@@ -47,6 +46,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Queue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 
@@ -58,7 +58,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -261,11 +261,10 @@ public class DefaultBackgroundThreadTest {
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     void testEnsureEventsAreCompleted() {
-        CompletableApplicationEvent<Object> event = (CompletableApplicationEvent<Object>) mock(CompletableApplicationEvent.class);
-        ApplicationEvent e  = mock(ApplicationEvent.class);
-        CompletableFuture<Object> future = new CompletableFuture<>();
+        FetchEvent event = spy(new FetchEvent());
+        ApplicationEvent e = new CommitApplicationEvent(Collections.emptyMap());
+        CompletableFuture<Queue<CompletedFetch>> future = new CompletableFuture<>();
         when(event.future()).thenReturn(future);
         applicationEventsQueue.add(event);
         applicationEventsQueue.add(e);

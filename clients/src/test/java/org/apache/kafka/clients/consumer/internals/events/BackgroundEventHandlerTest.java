@@ -14,12 +14,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.consumer.internals;
+package org.apache.kafka.clients.consumer.internals.events;
 
-import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
-import org.apache.kafka.clients.consumer.internals.events.BackgroundEventProcessor;
-import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
-import org.apache.kafka.clients.consumer.internals.events.EventProcessor;
+import org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder;
 import org.apache.kafka.common.KafkaException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -33,19 +30,19 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
-public class ErrorEventHandlerTest {
+public class BackgroundEventHandlerTest {
 
-    private ConsumerTestBuilder.DefaultEventHandlerTestBuilder testBuilder;
+    private ConsumerTestBuilder testBuilder;
     private BlockingQueue<BackgroundEvent> backgroundEventQueue;
-    private ErrorEventHandler errorEventHandler;
+    private BackgroundEventHandler backgroundEventHandler;
     private BackgroundEventProcessor backgroundEventProcessor;
 
     @BeforeEach
     public void setup() {
-        testBuilder = new ConsumerTestBuilder.DefaultEventHandlerTestBuilder();
+        testBuilder = new ConsumerTestBuilder();
         backgroundEventQueue = testBuilder.backgroundEventQueue;
-        errorEventHandler = new ErrorEventHandler(backgroundEventQueue);
-        backgroundEventProcessor = new BackgroundEventProcessor(testBuilder.logContext, backgroundEventQueue);
+        backgroundEventHandler = testBuilder.backgroundEventHandler;
+        backgroundEventProcessor = testBuilder.backgroundEventProcessor;
     }
 
     @AfterEach
@@ -74,7 +71,7 @@ public class ErrorEventHandlerTest {
     public void testSingleErrorEvent() {
         KafkaException error = new KafkaException("error");
         BackgroundEvent event = new ErrorBackgroundEvent(error);
-        errorEventHandler.handle(error);
+        backgroundEventHandler.add(new ErrorBackgroundEvent(error));
         assertPeeked(event);
         assertProcessThrows(error);
     }
@@ -97,9 +94,9 @@ public class ErrorEventHandlerTest {
         KafkaException error2 = new KafkaException("error2");
         KafkaException error3 = new KafkaException("error3");
 
-        errorEventHandler.handle(error1);
-        errorEventHandler.handle(error2);
-        errorEventHandler.handle(error3);
+        backgroundEventHandler.add(new ErrorBackgroundEvent(error1));
+        backgroundEventHandler.add(new ErrorBackgroundEvent(error2));
+        backgroundEventHandler.add(new ErrorBackgroundEvent(error3));
 
         assertProcessThrows(new KafkaException(error1));
     }
@@ -112,11 +109,11 @@ public class ErrorEventHandlerTest {
 
         RuntimeException errorToCheck = new RuntimeException("A");
         backgroundEventQueue.add(new ErrorBackgroundEvent(errorToCheck));
-        errorEventHandler.handle(error1);
+        backgroundEventHandler.add(new ErrorBackgroundEvent(error1));
         backgroundEventQueue.add(new ErrorBackgroundEvent(new RuntimeException("B")));
-        errorEventHandler.handle(error2);
+        backgroundEventHandler.add(new ErrorBackgroundEvent(error2));
         backgroundEventQueue.add(new ErrorBackgroundEvent(new RuntimeException("C")));
-        errorEventHandler.handle(error3);
+        backgroundEventHandler.add(new ErrorBackgroundEvent(error3));
         backgroundEventQueue.add(new ErrorBackgroundEvent(new RuntimeException("D")));
 
         assertProcessThrows(new KafkaException(errorToCheck));

@@ -23,10 +23,11 @@ import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.ApplicationEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventProcessor;
-import org.apache.kafka.clients.consumer.internals.events.EventHandler;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.requests.MetadataResponse;
@@ -50,6 +51,7 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZE
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createFetchMetricsManager;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createMetrics;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createSubscriptionState;
+import static org.apache.kafka.common.utils.Utils.closeQuietly;
 import static org.mockito.Mockito.spy;
 
 public class ConsumerTestBuilder implements Closeable {
@@ -60,8 +62,8 @@ public class ConsumerTestBuilder implements Closeable {
 
     final LogContext logContext = new LogContext();
     final Time time = new MockTime(0);
-    final BlockingQueue<ApplicationEvent> applicationEventQueue;
-    final LinkedBlockingQueue<BackgroundEvent> backgroundEventQueue;
+    public final BlockingQueue<ApplicationEvent> applicationEventQueue;
+    public final BlockingQueue<BackgroundEvent> backgroundEventQueue;
     final ConsumerConfig config;
     final long retryBackoffMs;
     final SubscriptionState subscriptions;
@@ -76,14 +78,15 @@ public class ConsumerTestBuilder implements Closeable {
     final TopicMetadataRequestManager topicMetadataRequestManager;
     final FetchRequestManager fetchRequestManager;
     final RequestManagers requestManagers;
-    final ApplicationEventProcessor applicationEventProcessor;
-    final BackgroundEventProcessor backgroundEventProcessor;
+    public final ApplicationEventProcessor applicationEventProcessor;
+    public final BackgroundEventProcessor backgroundEventProcessor;
+    public final BackgroundEventHandler backgroundEventHandler;
     final MockClient client;
 
     public ConsumerTestBuilder() {
         this.applicationEventQueue = new LinkedBlockingQueue<>();
         this.backgroundEventQueue = new LinkedBlockingQueue<>();
-        ErrorEventHandler errorEventHandler = new ErrorEventHandler(backgroundEventQueue);
+        this.backgroundEventHandler = new BackgroundEventHandler(logContext, backgroundEventQueue);
         GroupRebalanceConfig groupRebalanceConfig = new GroupRebalanceConfig(
                 100,
                 100,
@@ -140,7 +143,7 @@ public class ConsumerTestBuilder implements Closeable {
                 logContext,
                 RETRY_BACKOFF_MS,
                 RETRY_BACKOFF_MAX_MS,
-                errorEventHandler,
+                backgroundEventHandler,
                 "group_id"));
         this.commitRequestManager = spy(new CommitRequestManager(time,
                 logContext,
@@ -150,7 +153,7 @@ public class ConsumerTestBuilder implements Closeable {
                 groupState));
         this.fetchRequestManager = spy(new FetchRequestManager(logContext,
                 time,
-                errorEventHandler,
+                backgroundEventHandler,
                 metadata,
                 subscriptions,
                 fetchConfig,
@@ -175,6 +178,9 @@ public class ConsumerTestBuilder implements Closeable {
 
     @Override
     public void close() {
+        closeQuietly(requestManagers, RequestManagers.class.getSimpleName());
+        closeQuietly(applicationEventProcessor, ApplicationEventProcessor.class.getSimpleName());
+        closeQuietly(backgroundEventProcessor, BackgroundEventProcessor.class.getSimpleName());
         requestManagers.close();
     }
 
@@ -194,16 +200,16 @@ public class ConsumerTestBuilder implements Closeable {
 
         @Override
         public void close() {
-            backgroundThread.close();
+            closeQuietly(backgroundThread, DefaultBackgroundThread.class.getSimpleName());
         }
     }
 
-    public static class DefaultEventHandlerTestBuilder extends ConsumerTestBuilder {
+    public static class ApplicationEventHandlerTestBuilder extends ConsumerTestBuilder {
 
-        final EventHandler eventHandler;
+        public final ApplicationEventHandler applicationEventHandler;
 
-        public DefaultEventHandlerTestBuilder() {
-            this.eventHandler = spy(new DefaultEventHandler(
+        public ApplicationEventHandlerTestBuilder() {
+            this.applicationEventHandler = spy(new ApplicationEventHandler(
                     time,
                     logContext,
                     applicationEventQueue,
@@ -214,11 +220,11 @@ public class ConsumerTestBuilder implements Closeable {
 
         @Override
         public void close() {
-            eventHandler.close();
+            closeQuietly(applicationEventHandler, ApplicationEventHandler.class.getSimpleName());
         }
     }
 
-    public static class PrototypeAsyncConsumerTestBuilder extends DefaultEventHandlerTestBuilder {
+    public static class PrototypeAsyncConsumerTestBuilder extends ApplicationEventHandlerTestBuilder {
 
         final PrototypeAsyncConsumer<String, String> consumer;
 
@@ -244,7 +250,7 @@ public class ConsumerTestBuilder implements Closeable {
                     fetchCollector,
                     new ConsumerInterceptors<>(Collections.emptyList()),
                     time,
-                    eventHandler,
+                    applicationEventHandler,
                     backgroundEventQueue,
                     metrics,
                     subscriptions,

@@ -29,6 +29,7 @@ import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetOutOfRangeException;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaException;
@@ -3383,7 +3384,7 @@ public class FetchRequestManagerTest {
         fetcher = spy(new TestableFetchRequestManager<>(
                 logContext,
                 time,
-                new ErrorEventHandler(new LinkedBlockingQueue<>()),
+                new BackgroundEventHandler(logContext, new LinkedBlockingQueue<>()),
                 metadata,
                 subscriptionState,
                 fetchConfig,
@@ -3435,14 +3436,14 @@ public class FetchRequestManagerTest {
 
         public TestableFetchRequestManager(LogContext logContext,
                                            Time time,
-                                           ErrorEventHandler errorEventHandler,
+                                           BackgroundEventHandler backgroundEventHandler,
                                            ConsumerMetadata metadata,
                                            SubscriptionState subscriptions,
                                            FetchConfig fetchConfig,
                                            FetchMetricsManager metricsManager,
                                            NetworkClientDelegate networkClientDelegate,
                                            FetchCollector<K, V> fetchCollector) {
-            super(logContext, time, errorEventHandler, metadata, subscriptions, fetchConfig, metricsManager, networkClientDelegate);
+            super(logContext, time, backgroundEventHandler, metadata, subscriptions, fetchConfig, metricsManager, networkClientDelegate);
             this.fetchCollector = fetchCollector;
         }
 
