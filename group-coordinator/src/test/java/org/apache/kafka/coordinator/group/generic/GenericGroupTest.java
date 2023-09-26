@@ -1047,16 +1047,16 @@ public class GenericGroupTest {
     @Test
     public void testValidateGroupDelete() {
         group.transitionTo(PREPARING_REBALANCE);
-        assertThrows(GroupNotEmptyException.class, () -> group.validateGroupDelete());
+        assertThrows(GroupNotEmptyException.class, group::validateGroupDelete);
         group.transitionTo(COMPLETING_REBALANCE);
-        assertThrows(GroupNotEmptyException.class, () -> group.validateGroupDelete());
+        assertThrows(GroupNotEmptyException.class, group::validateGroupDelete);
         group.transitionTo(STABLE);
-        assertThrows(GroupNotEmptyException.class, () -> group.validateGroupDelete());
+        assertThrows(GroupNotEmptyException.class, group::validateGroupDelete);
         group.transitionTo(PREPARING_REBALANCE);
         group.transitionTo(EMPTY);
-        assertDoesNotThrow(() -> group.validateGroupDelete());
+        assertDoesNotThrow(group::validateGroupDelete);
         group.transitionTo(DEAD);
-        assertThrows(GroupIdNotFoundException.class, () -> group.validateGroupDelete());
+        assertThrows(GroupIdNotFoundException.class, group::validateGroupDelete);
     }
 
     private void assertState(GenericGroup group, GenericGroupState targetState) {
