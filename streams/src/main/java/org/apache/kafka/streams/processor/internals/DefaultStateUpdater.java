@@ -73,6 +73,7 @@ public class DefaultStateUpdater implements StateUpdater {
         private final ChangelogReader changelogReader;
         private final StateUpdaterMetrics updaterMetrics;
         private final AtomicBoolean isRunning = new AtomicBoolean(true);
+        private final AtomicBoolean isIdle = new AtomicBoolean(false);
         private final Map<TaskId, Task> updatingTasks = new ConcurrentHashMap<>();
         private final Map<TaskId, Task> pausedTasks = new ConcurrentHashMap<>();
 
@@ -310,9 +311,10 @@ public class DefaultStateUpdater implements StateUpdater {
                     (changelogReader.allChangelogsCompleted() || updatingTasks.isEmpty()) &&
                     tasksAndActions.isEmpty() &&
                     !isTopologyResumed.get()) {
-
+                    isIdle.set(true);
                     tasksAndActionsCondition.await();
                 }
+                isIdle.set(false);
             } catch (final InterruptedException ignored) {
                 // we never interrupt the thread, but only signal the condition
                 // and hence this exception should never be thrown
@@ -766,6 +768,14 @@ public class DefaultStateUpdater implements StateUpdater {
         return executeWithQueuesLocked(
             () -> getStreamOfTasks().filter(t -> !t.isActive()).map(t -> (StandbyTask) t).collect(Collectors.toSet())
         );
+    }
+
+    // used for testing
+    protected boolean isIdle() {
+        if (stateUpdaterThread != null) {
+            return stateUpdaterThread.isIdle.get();
+        }
+        return false;
     }
 
     private <T> Set<T> executeWithQueuesLocked(final Supplier<Set<T>> action) {

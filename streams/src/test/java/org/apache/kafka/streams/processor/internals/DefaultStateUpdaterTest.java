@@ -63,17 +63,14 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.Mockito.atLeast;
-import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -1047,7 +1044,7 @@ class DefaultStateUpdaterTest {
     }
 
     @Test
-    public void shouldAwaitWhenAllTasksPaused() throws Exception {
+    public void shouldIdleWhenAllTasksPaused() throws Exception {
         final StreamTask task = statefulTask(TASK_0_0, mkSet(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
         stateUpdater.start();
         stateUpdater.add(task);
@@ -1055,17 +1052,13 @@ class DefaultStateUpdaterTest {
         when(topologyMetadata.isPaused(null)).thenReturn(true);
 
         verifyPausedTasks(task);
-
-        reset(changelogReader);
-        Thread.sleep(100);
-        verify(changelogReader, never()).restore(any());
+        verifyIdle();
 
         when(topologyMetadata.isPaused(null)).thenReturn(false);
         stateUpdater.signalResume();
 
         verifyPausedTasks();
         verifyUpdatingTasks(task);
-        verify(changelogReader, atLeastOnce()).restore(any());
     }
 
     @Test
@@ -1790,6 +1783,14 @@ class DefaultStateUpdaterTest {
                 "Did not get all removed task within the given timeout!"
             );
         }
+    }
+
+    private void verifyIdle() throws Exception {
+        waitForCondition(
+            () -> stateUpdater.isIdle(),
+            VERIFICATION_TIMEOUT,
+            "State updater did not enter an idling state!"
+        );
     }
 
     private void verifyPausedTasks(final Task... tasks) throws Exception {
