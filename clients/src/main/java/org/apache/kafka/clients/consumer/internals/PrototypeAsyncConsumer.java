@@ -82,11 +82,11 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Properties;
-import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -141,6 +141,14 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     // to keep from repeatedly scanning subscriptions in poll(), cache the result during metadata updates
     private boolean cachedSubscriptionHasAllFetchPositions;
     private final WakeupTrigger wakeupTrigger = new WakeupTrigger();
+
+    /**
+     * A thread-safe {@link BlockingQueue queue} for the results that are populated in the background thread
+     * when the fetch results are available. Because the {@link #fetchBuffer fetch buffer} is not thread-safe, we
+     * need to separate the results collection that we provide to the background thread from the collection that
+     * we read from on the application thread.
+     */
+    private final BlockingQueue<CompletedFetch> fetchResults = new LinkedBlockingQueue<>();
 
     public PrototypeAsyncConsumer(final Properties properties,
                                   final Deserializer<K> keyDeserializer,
@@ -889,14 +897,19 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         return wakeupTrigger;
     }
 
+    /**
+     * Send the requests for fetch data to the background thread and set up to collect the results in
+     * {@link #fetchResults}.
+     */
     private void sendFetches() {
         FetchEvent event = new FetchEvent();
         eventHandler.add(event);
 
         event.future().whenComplete((completedFetches, error) -> {
-            if (completedFetches != null && !completedFetches.isEmpty()) {
-                fetchBuffer.addAll(completedFetches);
-            }
+            if (error != null)
+                log.warn("An error occurred during poll: {}", error.getMessage(), error);
+            else
+                fetchResults.addAll(completedFetches);
         });
     }
 
@@ -925,15 +938,19 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
 
         Timer pollTimer = time.timer(pollTimeout);
 
-        // Attempt to fetch any data. It's OK if we time out here; it's a 'best case' effort. The
+        // Attempt to fetch any data. It's OK if we don't have any waiting data here; it's a 'best case' effort. The
         // data may not be immediately available, but the calling method (poll) will correctly
         // handle the overall timeout.
         try {
-            Queue<CompletedFetch> completedFetches = eventHandler.addAndGet(new FetchEvent(), pollTimer);
-            if (completedFetches != null && !completedFetches.isEmpty()) {
-                fetchBuffer.addAll(completedFetches);
+            while (pollTimer.notExpired()) {
+                CompletedFetch completedFetch = fetchResults.poll(pollTimer.remainingMs(), TimeUnit.MILLISECONDS);
+
+                if (completedFetch != null)
+                    fetchBuffer.add(completedFetch);
+
+                pollTimer.update();
             }
-        } catch (TimeoutException e) {
+        } catch (InterruptedException e) {
             log.trace("Timeout during fetch", e);
         } finally {
             timer.update(pollTimer.currentTimeMs());

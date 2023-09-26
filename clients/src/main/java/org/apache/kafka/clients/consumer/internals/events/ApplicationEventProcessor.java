@@ -174,10 +174,7 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
     }
 
     private void process(final FetchEvent event) {
-        // The request manager keeps track of the completed fetches, so we pull any that are ready off, and return
-        // them to the application.
-        Queue<CompletedFetch> completedFetches = requestManagers.fetchRequestManager.drain();
-        event.future().complete(completedFetches);
+        requestManagers.fetchRequestManager.requestFetch(event.future());
     }
 
     /**
