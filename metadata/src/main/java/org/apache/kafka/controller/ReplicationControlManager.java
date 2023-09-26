@@ -102,6 +102,7 @@ import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -227,6 +228,30 @@ public class ReplicationControlManager {
         @Override
         public Iterator<UsableBroker> usableBrokers() {
             return clusterControl.usableBrokers();
+        }
+
+        @Override
+        public List<PartitionAssignment> replicasForTopicName(String topicName) {
+            Uuid id = topicsByName.get(topicName);
+            if (id == null) {
+                return Collections.emptyList();
+            }
+            TopicControlInfo topicInfo = topics.get(id);
+            if (topicInfo == null) {
+                return Collections.emptyList();
+            }
+            List<Entry<Integer, List<Integer>>> partInfo = new ArrayList<>();
+            for (Entry<Integer, PartitionRegistration> entry : topicInfo.parts.entrySet()) {
+                PartitionRegistration registration = entry.getValue();
+                partInfo.add(new SimpleImmutableEntry<>(entry.getKey(),
+                    Replicas.toList(registration.replicas)));
+            }
+            partInfo.sort(Comparator.comparingInt(Entry::getKey));
+            List<List<Integer>> results = new ArrayList<>();
+            for (Entry<Integer, List<Integer>> entry : partInfo) {
+                results.add(entry.getValue());
+            }
+            return results.stream().map(PartitionAssignment::new).collect(Collectors.toList());
         }
     }
 
@@ -686,6 +711,7 @@ public class ReplicationControlManager {
                 defaultReplicationFactor : topic.replicationFactor();
             try {
                 TopicAssignment topicAssignment = clusterControl.replicaPlacer().place(new PlacementSpec(
+                    topic.name(),
                     0,
                     numPartitions,
                     replicationFactor
@@ -1635,7 +1661,7 @@ public class ReplicationControlManager {
             }
         } else {
             partitionAssignments = clusterControl.replicaPlacer().place(
-                new PlacementSpec(startPartitionId, additional, replicationFactor),
+                new PlacementSpec(topic.name(), startPartitionId, additional, replicationFactor),
                 clusterDescriber
             ).assignments();
             isrs = partitionAssignments.stream().map(PartitionAssignment::replicas).collect(Collectors.toList());
