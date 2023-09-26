@@ -782,7 +782,7 @@ public class PartitionGroupTest {
 
     private void hasNoFetchedLag(final PartitionGroup group, final TopicPartition partition) {
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(PartitionGroup.class)) {
-            LogCaptureAppender.setClassLoggerToTrace(PartitionGroup.class);
+            appender.setClassLoggerToTrace(PartitionGroup.class);
             assertFalse(group.readyToProcess(0L));
             assertThat(appender.getEvents(), hasItem(Matchers.hasProperty("message",
                 equalTo(String.format("[test] Waiting to fetch data for %s", partition)))));
@@ -791,7 +791,7 @@ public class PartitionGroupTest {
 
     private void hasZeroFetchedLag(final PartitionGroup group, final TopicPartition partition) {
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(PartitionGroup.class)) {
-            LogCaptureAppender.setClassLoggerToTrace(PartitionGroup.class);
+            appender.setClassLoggerToTrace(PartitionGroup.class);
             assertFalse(group.readyToProcess(0L));
             assertThat(appender.getEvents(), hasItem(Matchers.hasProperty("message",
                 startsWith(String.format("[test] Lag for %s is currently 0 and current time is %d. "
@@ -802,7 +802,7 @@ public class PartitionGroupTest {
     @SuppressWarnings("SameParameterValue")
     private void hasNonZeroFetchedLag(final PartitionGroup group, final TopicPartition partition, final long lag) {
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(PartitionGroup.class)) {
-            LogCaptureAppender.setClassLoggerToTrace(PartitionGroup.class);
+            appender.setClassLoggerToTrace(PartitionGroup.class);
             assertFalse(group.readyToProcess(0L));
             assertThat(appender.getEvents(), hasItem(Matchers.hasProperty("message",
                 equalTo(String.format("[test] Lag for %s is currently %d, but no data is buffered locally. "
