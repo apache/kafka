@@ -1636,6 +1636,25 @@ public class TaskManager {
     }
 
     /**
+     * Resumes polling in the main consumer for all partitions for which
+     * the corresponding record queues have capacity (again).
+     */
+    public void resumePollingForPartitionsWithAvailableSpace() {
+        for (final Task t: tasks.activeTasks()) {
+            t.resumePollingForPartitionsWithAvailableSpace();
+        }
+    }
+
+    /**
+     * Fetches up-to-date lag information from the consumer.
+     */
+    public void updateLags() {
+        for (final Task t: tasks.activeTasks()) {
+            t.updateLags();
+        }
+    }
+
+    /**
      * Take records and add them to each respective task
      *
      * @param records Records, can be null
@@ -1901,9 +1920,5 @@ public class TaskManager {
     // for testing only
     void addTask(final Task task) {
         tasks.addTask(task);
-    }
-
-    TasksRegistry tasks() {
-        return tasks;
     }
 }

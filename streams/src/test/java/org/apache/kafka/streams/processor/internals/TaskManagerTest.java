@@ -287,6 +287,42 @@ public class TaskManagerTest {
     }
 
     @Test
+    public void shouldResumePollingForPartitionsWithAvailableSpaceForAllActiveTasks() {
+        final StreamTask activeTask1 = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .inState(State.RUNNING)
+            .withInputPartitions(taskId00Partitions).build();
+        final StreamTask activeTask2 = statefulTask(taskId01, taskId01ChangelogPartitions)
+            .inState(State.RUNNING)
+            .withInputPartitions(taskId01Partitions).build();
+        final TasksRegistry tasks = Mockito.mock(TasksRegistry.class);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
+        when(tasks.activeTasks()).thenReturn(mkSet(activeTask1, activeTask2));
+
+        taskManager.resumePollingForPartitionsWithAvailableSpace();
+
+        Mockito.verify(activeTask1).resumePollingForPartitionsWithAvailableSpace();
+        Mockito.verify(activeTask2).resumePollingForPartitionsWithAvailableSpace();
+    }
+
+    @Test
+    public void shouldUpdateLagForAllActiveTasks() {
+        final StreamTask activeTask1 = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .inState(State.RUNNING)
+            .withInputPartitions(taskId00Partitions).build();
+        final StreamTask activeTask2 = statefulTask(taskId01, taskId01ChangelogPartitions)
+            .inState(State.RUNNING)
+            .withInputPartitions(taskId01Partitions).build();
+        final TasksRegistry tasks = Mockito.mock(TasksRegistry.class);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
+        when(tasks.activeTasks()).thenReturn(mkSet(activeTask1, activeTask2));
+
+        taskManager.updateLags();
+
+        Mockito.verify(activeTask1).updateLags();
+        Mockito.verify(activeTask2).updateLags();
+    }
+
+    @Test
     public void shouldPrepareActiveTaskInStateUpdaterToBeRecycled() {
         final StreamTask activeTaskToRecycle = statefulTask(taskId03, taskId03ChangelogPartitions)
             .inState(State.RESTORING)
@@ -4833,6 +4869,16 @@ public class TaskManagerTest {
         @Override
         public void prepareRecycle() {
             transitionTo(State.CLOSED);
+        }
+
+        @Override
+        public void resumePollingForPartitionsWithAvailableSpace() {
+            // noop
+        }
+
+        @Override
+        public void updateLags() {
+            // noop
         }
 
         @Override
