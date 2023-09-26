@@ -679,6 +679,7 @@ public class ConsumerGroupTest {
     @Test
     public void testValidateGroupDelete() {
         ConsumerGroup consumerGroup = createConsumerGroup("foo");
+
         assertEquals(ConsumerGroup.ConsumerGroupState.EMPTY, consumerGroup.state());
         assertDoesNotThrow(() -> consumerGroup.validateGroupDelete());
 
