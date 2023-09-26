@@ -45,6 +45,11 @@ should_include_file() {
   fi
 }
 
+ISKAFKASERVER="false"
+if [[ "$*" =~ "kafka.Kafka" ]]; then
+    ISKAFKASERVER="true"
+fi
+
 base_dir=$(dirname $0)/..
 
 if [ -z "$SCALA_VERSION" ]; then
@@ -56,6 +61,12 @@ fi
 
 if [ -z "$SCALA_BINARY_VERSION" ]; then
   SCALA_BINARY_VERSION=$(echo $SCALA_VERSION | cut -f 1-2 -d '.')
+fi
+
+# run kafka-env.sh
+KAFKA_ENV=$base_dir/config/kafka-env.sh
+if [ -f $KAFKA_ENV ]; then
+    . $KAFKA_ENV
 fi
 
 # run ./gradlew copyDependantLibs to get all dependant jars in a local dir
@@ -199,8 +210,14 @@ if [ -z "$KAFKA_JMX_OPTS" ]; then
 fi
 
 # JMX port to use
-if [  $JMX_PORT ]; then
-  KAFKA_JMX_OPTS="$KAFKA_JMX_OPTS -Dcom.sun.management.jmxremote.port=$JMX_PORT "
+if [ $ISKAFKASERVER = "true" ]; then
+    JMX_REMOTE_PORT=$JMX_PORT
+else
+    JMX_REMOTE_PORT=$CLIENT_JMX_PORT
+fi
+# JMX port to use
+if [  $JMX_REMOTE_PORT ]; then
+  KAFKA_JMX_OPTS="$KAFKA_JMX_OPTS -Dcom.sun.management.jmxremote.port=$JMX_REMOTE_PORT "
 fi
 
 # Log directory to use
