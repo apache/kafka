@@ -250,7 +250,6 @@ public class ConsumerTestBuilder implements Closeable {
                     subscriptions,
                     metadata,
                     retryBackoffMs,
-                    REQUEST_TIMEOUT_MS,
                     60000,
                     assignors,
                     groupIdOpt.orElse(null)));

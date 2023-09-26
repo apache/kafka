@@ -21,7 +21,6 @@ import org.apache.kafka.common.internals.IdempotentCloser;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
-import java.io.Closeable;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
@@ -37,7 +36,7 @@ import java.util.function.Predicate;
  *
  * <em>Note</em>: this class is not thread-safe and is intended to only be used from a single thread.
  */
-public class FetchBuffer implements Closeable {
+public class FetchBuffer implements AutoCloseable {
 
     private final Logger log;
     private final ConcurrentLinkedQueue<CompletedFetch> completedFetches;

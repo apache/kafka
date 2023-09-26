@@ -68,7 +68,6 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.slf4j.Logger;
-import org.slf4j.event.Level;
 
 import java.net.InetSocketAddress;
 import java.time.Duration;
@@ -108,7 +107,6 @@ import static org.apache.kafka.common.utils.Utils.closeQuietly;
 import static org.apache.kafka.common.utils.Utils.isBlank;
 import static org.apache.kafka.common.utils.Utils.join;
 import static org.apache.kafka.common.utils.Utils.propsToMap;
-import static org.apache.kafka.common.utils.Utils.swallow;
 
 /**
  * This prototype consumer uses the EventHandler to process application
@@ -136,7 +134,6 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     private final ConsumerMetadata metadata;
     private final Metrics metrics;
     private final long retryBackoffMs;
-    private final long requestTimeoutMs;
     private final long defaultApiTimeoutMs;
     private volatile boolean closed = false;
     private final List<ConsumerPartitionAssignor> assignors;
@@ -184,7 +181,6 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
             });
 
             log.debug("Initializing the Kafka consumer");
-            this.requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
             this.defaultApiTimeoutMs = config.getInt(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
             this.time = time;
             this.metrics = createMetrics(config, time);
@@ -265,7 +261,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
             // call close methods if internal objects are already constructed; this is to prevent resource leak. see KAFKA-2121
             // we do not need to call `close` at all when `log` is null, which means no internal objects were initialized.
             if (this.log != null) {
-                close(Duration.ZERO, true);
+                close(true);
             }
             // now propagate the exception
             throw new KafkaException("Failed to construct kafka consumer", t);
@@ -285,7 +281,6 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
                                   SubscriptionState subscriptions,
                                   ConsumerMetadata metadata,
                                   long retryBackoffMs,
-                                  long requestTimeoutMs,
                                   int defaultApiTimeoutMs,
                                   List<ConsumerPartitionAssignor> assignors,
                                   String groupId) {
@@ -302,7 +297,6 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         this.groupId = Optional.ofNullable(groupId);
         this.metadata = metadata;
         this.retryBackoffMs = retryBackoffMs;
-        this.requestTimeoutMs = requestTimeoutMs;
         this.defaultApiTimeoutMs = defaultApiTimeoutMs;
         this.deserializers = deserializers;
         this.eventHandler = eventHandler;
@@ -683,12 +677,6 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         close(Duration.ofMillis(DEFAULT_CLOSE_TIMEOUT_MS));
     }
 
-    private Timer createTimerForRequest(final Duration timeout) {
-        // this.time could be null if an exception occurs in constructor prior to setting the this.time field
-        final Time localTime = (time == null) ? Time.SYSTEM : time;
-        return localTime.timer(Math.min(timeout.toMillis(), requestTimeoutMs));
-    }
-
     @Override
     public void close(Duration timeout) {
         if (timeout.toMillis() < 0)
@@ -698,36 +686,21 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
             if (!closed) {
                 // need to close before setting the flag since the close function
                 // itself may trigger rebalance callback that needs the consumer to be open still
-                close(timeout, false);
+                close(false);
             }
         } finally {
             closed = true;
         }
     }
 
-    private void close(Duration timeout, boolean swallowException) {
+    private void close(boolean swallowException) {
         log.trace("Closing the Kafka consumer");
         AtomicReference<Throwable> firstException = new AtomicReference<>();
-
-        final Timer closeTimer = createTimerForRequest(timeout);
-        if (fetchBuffer != null) {
-            // the timeout for the session close is at-most the requestTimeoutMs
-            long remainingDurationInTimeout = Math.max(0, timeout.toMillis() - closeTimer.elapsedMs());
-            if (remainingDurationInTimeout > 0) {
-                remainingDurationInTimeout = Math.min(requestTimeoutMs, remainingDurationInTimeout);
-            }
-
-            closeTimer.reset(remainingDurationInTimeout);
-
-            // This is a blocking call bound by the time remaining in closeTimer
-            swallow(log, Level.ERROR, "Failed to close fetcher", fetchBuffer::close, firstException);
-        }
-
-
+        closeQuietly(fetchBuffer, "Failed to close fetcher", firstException);
         closeQuietly(interceptors, "consumer interceptors", firstException);
         closeQuietly(kafkaConsumerMetrics, "kafka consumer metrics", firstException);
         closeQuietly(metrics, "consumer metrics", firstException);
-        closeQuietly(this.eventHandler, "event handler", firstException);
+        closeQuietly(eventHandler, "event handler", firstException);
         closeQuietly(deserializers, "consumer deserializers", firstException);
 
         AppInfoParser.unregisterAppInfo(CONSUMER_JMX_PREFIX, clientId, metrics);
@@ -1014,7 +987,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * Refresh the committed offsets for provided partitions.
+     * Refresh the committed offsets for partitions that require initialization.
      *
      * @param timer Timer bounding how long this method can block
      * @return true iff the operation completed within the timeout
