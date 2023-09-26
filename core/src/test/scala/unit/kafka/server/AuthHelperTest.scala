@@ -220,7 +220,8 @@ class AuthHelperTest {
     assertEquals(new DescribeClusterResponseData().
       setClusterId("ltCWoi9wRhmHSQCIgAznEg").
       setControllerId(-1).
-      setClusterAuthorizedOperations(Int.MinValue), responseData)
+      setClusterAuthorizedOperations(Int.MinValue).
+      setEndpointType(2.toByte), responseData)
   }
 
   @Test
@@ -240,6 +241,7 @@ class AuthHelperTest {
       setClusterId("ltCWoi9wRhmHSQCIgAznEg").
       setControllerId(1).
       setClusterAuthorizedOperations(Int.MinValue).
-      setBrokers(nodes), responseData)
+      setBrokers(nodes).
+      setEndpointType(2.toByte), responseData)
   }
 }
