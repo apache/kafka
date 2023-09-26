@@ -313,6 +313,7 @@ public class GenericGroupTest {
             .setName("foo")
             .setMetadata(new byte[0]));
 
+
         GenericGroupMember member2 = new GenericGroupMember(
             "member2",
             Optional.empty(),
