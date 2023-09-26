@@ -91,15 +91,23 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @ClusterTestDefaults(brokers = 5)
 @Tag("integration")
 public class ReassignPartitionsIntegrationTest {
-    private static final Map<Integer, String> BROKERS = new HashMap<>(); static {
+    private static final Map<Integer, String> BROKERS = new HashMap<>();
+
+    private static final Map<String, List<List<Integer>>> TOPICS = new HashMap<>();
+
+    private static final Map<Integer, Map<String, Long>> UNTHROTTLED_BROKER_CONFIGS = new HashMap<>();
+
+    static {
         BROKERS.put(0, "rack0");
         BROKERS.put(1, "rack0");
         BROKERS.put(2, "rack1");
         BROKERS.put(3, "rack1");
         BROKERS.put(4, "rack1");
-    }
 
-    private final Map<Integer, Map<String, Long>> unthrottledBrokerConfigs = new HashMap<>(); {
+        TOPICS.put("foo", Arrays.asList(Arrays.asList(0, 1, 2), Arrays.asList(1, 2, 3)));
+        TOPICS.put("bar", Arrays.asList(Arrays.asList(3, 2, 1)));
+        TOPICS.put("baz", Arrays.asList(Arrays.asList(1, 0, 2), Arrays.asList(2, 0, 1), Arrays.asList(0, 2, 1)));
+
         Map<String, Long> brokerConfig = new HashMap<>();
 
         ReassignPartitionsCommand.brokerLevelThrottles().foreach(throttle -> {
@@ -107,13 +115,7 @@ public class ReassignPartitionsIntegrationTest {
             return null;
         });
 
-        IntStream.range(0, 5).forEach(brokerId -> unthrottledBrokerConfigs.put(brokerId, brokerConfig));
-    }
-
-    private final Map<String, List<List<Integer>>> topics = new HashMap<>(); {
-        topics.put("foo", Arrays.asList(Arrays.asList(0, 1, 2), Arrays.asList(1, 2, 3)));
-        topics.put("bar", Arrays.asList(Arrays.asList(3, 2, 1)));
-        topics.put("baz", Arrays.asList(Arrays.asList(1, 0, 2), Arrays.asList(2, 0, 1), Arrays.asList(0, 2, 1)));
+        IntStream.range(0, 5).forEach(brokerId -> UNTHROTTLED_BROKER_CONFIGS.put(brokerId, brokerConfig));
     }
 
     private ClusterInstance cluster;
@@ -194,7 +196,7 @@ public class ReassignPartitionsIntegrationTest {
 
         // Execute the assignment
         runExecuteAssignment(adminClient, false, assignment, -1L, -1L);
-        assertEquals(unthrottledBrokerConfigs, describeBrokerLevelThrottles(unthrottledBrokerConfigs.keySet()));
+        assertEquals(UNTHROTTLED_BROKER_CONFIGS, describeBrokerLevelThrottles(UNTHROTTLED_BROKER_CONFIGS.keySet()));
         Map<TopicPartition, PartitionReassignmentState> finalAssignment = new HashMap<>();
         finalAssignment.put(foo0, new PartitionReassignmentState(Arrays.asList(0, 1, 3), Arrays.asList(0, 1, 3), true));
         finalAssignment.put(bar0, new PartitionReassignmentState(Arrays.asList(3, 2, 0), Arrays.asList(3, 2, 0), true));
@@ -206,8 +208,8 @@ public class ReassignPartitionsIntegrationTest {
         waitForVerifyAssignment(adminClient, assignment, false,
             new VerifyAssignmentResult(finalAssignment));
 
-        assertEquals(unthrottledBrokerConfigs,
-            describeBrokerLevelThrottles(unthrottledBrokerConfigs.keySet()));
+        assertEquals(UNTHROTTLED_BROKER_CONFIGS,
+            describeBrokerLevelThrottles(UNTHROTTLED_BROKER_CONFIGS.keySet()));
 
         // Verify that partitions are removed from brokers no longer assigned
         verifyReplicaDeleted(foo0, 2);
@@ -273,7 +275,7 @@ public class ReassignPartitionsIntegrationTest {
         // Now remove the throttles.
         waitForVerifyAssignment(adminClient, assignment, false,
             new VerifyAssignmentResult(finalAssignment));
-        waitForBrokerLevelThrottles(unthrottledBrokerConfigs);
+        waitForBrokerLevelThrottles(UNTHROTTLED_BROKER_CONFIGS);
     }
 
     /**
@@ -297,7 +299,7 @@ public class ReassignPartitionsIntegrationTest {
         initialAssignment.put(new TopicPartition("baz", 2),
             new PartitionReassignmentState(Arrays.asList(0, 2, 1), Arrays.asList(3, 2, 1), true));
         assertEquals(asScala(new VerifyAssignmentResult(initialAssignment)), runVerifyAssignment(adminClient, assignment, false));
-        assertEquals(unthrottledBrokerConfigs, describeBrokerLevelThrottles(unthrottledBrokerConfigs.keySet()));
+        assertEquals(UNTHROTTLED_BROKER_CONFIGS, describeBrokerLevelThrottles(UNTHROTTLED_BROKER_CONFIGS.keySet()));
 
         // Execute the assignment
         long interBrokerThrottle = 300000L;
@@ -337,7 +339,7 @@ public class ReassignPartitionsIntegrationTest {
         // Now remove the throttles.
         waitForVerifyAssignment(adminClient, assignment, false,
             new VerifyAssignmentResult(finalAssignment));
-        waitForBrokerLevelThrottles(unthrottledBrokerConfigs);
+        waitForBrokerLevelThrottles(UNTHROTTLED_BROKER_CONFIGS);
     }
 
     @ClusterTemplate("zkAndKRaft")
@@ -393,8 +395,8 @@ public class ReassignPartitionsIntegrationTest {
             "[{\"topic\":\"foo\",\"partition\":0,\"replicas\":[0,1,3],\"log_dirs\":[\"any\",\"any\",\"any\"]}," +
             "{\"topic\":\"baz\",\"partition\":1,\"replicas\":[0,2,3],\"log_dirs\":[\"any\",\"any\",\"any\"]}" +
             "]}";
-        assertEquals(unthrottledBrokerConfigs,
-            describeBrokerLevelThrottles(unthrottledBrokerConfigs.keySet()));
+        assertEquals(UNTHROTTLED_BROKER_CONFIGS,
+            describeBrokerLevelThrottles(UNTHROTTLED_BROKER_CONFIGS.keySet()));
         long interBrokerThrottle = 1L;
         runExecuteAssignment(adminClient, false, assignment, interBrokerThrottle, -1L);
         waitForInterBrokerThrottle(Arrays.asList(0, 1, 2, 3), interBrokerThrottle);
@@ -415,7 +417,7 @@ public class ReassignPartitionsIntegrationTest {
         // Cancelling the reassignment again should reveal nothing to cancel.
         assertEquals(new Tuple2<>(set(), set()), runCancelAssignment(adminClient, assignment, false));
         // This time, the broker throttles were removed.
-        waitForBrokerLevelThrottles(unthrottledBrokerConfigs);
+        waitForBrokerLevelThrottles(UNTHROTTLED_BROKER_CONFIGS);
         // Verify that there are no ongoing reassignments.
         assertFalse(runVerifyAssignment(adminClient, assignment, false).partsOngoing());
         // Verify that the partition is removed from cancelled replicas
@@ -495,7 +497,7 @@ public class ReassignPartitionsIntegrationTest {
 
     private void waitForBrokerThrottles(Collection<Integer> throttledBrokers, Map<String, Long> throttleConfig) {
         Map<Integer, Map<String, Long>> throttledBrokerConfigs = new HashMap<>();
-        unthrottledBrokerConfigs.forEach((brokerId, unthrottledConfig) -> {
+        UNTHROTTLED_BROKER_CONFIGS.forEach((brokerId, unthrottledConfig) -> {
             Map<String, Long> expectedThrottleConfig = throttledBrokers.contains(brokerId)
                 ? throttleConfig
                 : unthrottledConfig;
@@ -580,7 +582,7 @@ public class ReassignPartitionsIntegrationTest {
                 Collections.singletonList(new AlterConfigOp(
                     new ConfigEntry(ReassignPartitionsCommand.brokerLevelLogDirThrottle(), ""), AlterConfigOp.OpType.DELETE))))
             .all().get();
-        waitForBrokerLevelThrottles(unthrottledBrokerConfigs);
+        waitForBrokerLevelThrottles(UNTHROTTLED_BROKER_CONFIGS);
 
         // Wait for the directory movement to complete.
         waitForVerifyAssignment(adminClient, reassignment.json, true,
@@ -743,7 +745,7 @@ public class ReassignPartitionsIntegrationTest {
     private void createTopics() throws Exception {
         adminClient = cluster.createAdminClient();
 
-        adminClient.createTopics(topics.entrySet().stream().map(e -> {
+        adminClient.createTopics(TOPICS.entrySet().stream().map(e -> {
             Map<Integer, List<Integer>> partMap = new HashMap<>();
 
             Iterator<List<Integer>> partsIter = e.getValue().iterator();
@@ -755,7 +757,7 @@ public class ReassignPartitionsIntegrationTest {
             return new NewTopic(e.getKey(), partMap);
         }).collect(Collectors.toList())).all().get();
 
-        topics.forEach((topicName, parts) ->
+        TOPICS.forEach((topicName, parts) ->
             TestUtils.waitForAllPartitionsMetadata(seq(servers()), topicName, parts.size()));
 
         if (cluster.isKRaftTest()) {
