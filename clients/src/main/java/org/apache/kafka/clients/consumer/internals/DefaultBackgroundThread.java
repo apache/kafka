@@ -133,6 +133,7 @@ public class DefaultBackgroundThread extends KafkaThread implements Closeable {
     }
 
     public void wakeup() {
+        // The network client can be null if the initializeResources method has not yet been called.
         if (networkClientDelegate != null)
             networkClientDelegate.wakeup();
     }
