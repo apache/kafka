@@ -81,6 +81,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     private final RecordCollector recordCollector;
     private final PartitionGroup.RecordInfo recordInfo;
     private final Map<TopicPartition, Long> consumedOffsets;
+    private final Map<TopicPartition, Optional<Integer>> consumedLeaderEpochs;
     private final Map<TopicPartition, Long> committedOffsets;
     private final Map<TopicPartition, Long> highWatermark;
     private final Set<TopicPartition> resetOffsetsForPartitions;
@@ -175,6 +176,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
         // initialize the consumed and committed offset cache
         consumedOffsets = new HashMap<>();
+        consumedLeaderEpochs = new HashMap<>();
         resetOffsetsForPartitions = new HashSet<>();
 
         recordQueueCreator = new RecordQueueCreator(this.logContext, config.timestampExtractor, config.deserializationExceptionHandler);
@@ -431,11 +433,20 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         }
     }
 
-    private Long findOffset(final TopicPartition partition) {
+    private OffsetAndMetadata findOffsetAndMetadata(final TopicPartition partition) {
         Long offset = partitionGroup.headRecordOffset(partition);
+        Optional<Integer> leaderEpoch = partitionGroup.headRecordLeaderEpoch(partition);
+        final long partitionTime = partitionGroup.partitionTimestamp(partition);
         if (offset == null) {
             try {
                 offset = mainConsumer.position(partition);
+                // If we happen to commit the next offset after the last consumed record, use it's
+                // leader epoch. Otherwise, we do not know the leader epoch.
+                if (consumedOffsets.containsKey(partition) && offset == consumedOffsets.get(partition) + 1) {
+                    leaderEpoch = consumedLeaderEpochs.get(partition);
+                } else {
+                    leaderEpoch = Optional.empty();
+                }
             } catch (final TimeoutException error) {
                 // the `consumer.position()` call should never block, because we know that we did process data
                 // for the requested partition and thus the consumer should have a valid local position
@@ -447,7 +458,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 throw new StreamsException(fatal);
             }
         }
-        return offset;
+        return new OffsetAndMetadata(offset,
+            leaderEpoch,
+            new TopicPartitionMetadata(partitionTime, processorContext.getProcessorMetadata()).encode());
     }
 
     private Map<TopicPartition, OffsetAndMetadata> committableOffsetsAndMetadata() {
@@ -462,8 +475,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
             case RUNNING:
             case SUSPENDED:
-                final Map<TopicPartition, Long> partitionTimes = extractPartitionTimes();
-
                 // If there's processor metadata to be committed. We need to commit them to all
                 // input partitions
                 final Set<TopicPartition> partitionsNeedCommit = processorContext.getProcessorMetadata().needsCommit() ?
@@ -471,10 +482,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 committableOffsets = new HashMap<>(partitionsNeedCommit.size());
 
                 for (final TopicPartition partition : partitionsNeedCommit) {
-                    final Long offset = findOffset(partition);
-                    final long partitionTime = partitionTimes.get(partition);
-                    committableOffsets.put(partition, new OffsetAndMetadata(offset,
-                        new TopicPartitionMetadata(partitionTime, processorContext.getProcessorMetadata()).encode()));
+                    committableOffsets.put(partition, findOffsetAndMetadata(partition));
                 }
                 break;
 
@@ -528,14 +536,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         commitRequested = false;
         hasPendingTxCommit = false;
         processorContext.getProcessorMetadata().setNeedsCommit(false);
-    }
-
-    private Map<TopicPartition, Long> extractPartitionTimes() {
-        final Map<TopicPartition, Long> partitionTimes = new HashMap<>();
-        for (final TopicPartition partition : partitionGroup.partitions()) {
-            partitionTimes.put(partition, partitionGroup.partitionTimestamp(partition));
-        }
-        return partitionTimes;
     }
 
     @Override
@@ -743,6 +743,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
             // update the consumed offset map after processing is done
             consumedOffsets.put(partition, record.offset());
+            consumedLeaderEpochs.put(partition, record.leaderEpoch());
             commitNeeded = true;
 
             // after processing this record, if its partition queue's buffered size has been
