@@ -42,6 +42,7 @@ import scala.collection.Seq;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -769,7 +770,7 @@ public class ReassignPartitionsUnitTest {
     }
 
     @SuppressWarnings("unchecked")
-    private static <T> scala.collection.immutable.Set<T> set(final T... set) {
+    static <T> scala.collection.immutable.Set<T> set(final T... set) {
         return mutableSet(set).toSet();
     }
 
@@ -778,13 +779,18 @@ public class ReassignPartitionsUnitTest {
         return JavaConverters.asScalaSet(new HashSet<>(Arrays.asList(set)));
     }
 
-    @SuppressWarnings({"deprecation", "unchecked"})
-    private static <T> Seq<T> seq(T... seq) {
-        return JavaConverters.asScalaIteratorConverter(Arrays.asList(seq).iterator()).asScala().toSeq();
+    @SuppressWarnings({"unchecked"})
+    static <T> Seq<T> seq(T... seq) {
+        return seq(Arrays.asList(seq));
+    }
+
+    @SuppressWarnings({"deprecation"})
+    static <T> Seq<T> seq(Collection<T> seq) {
+        return JavaConverters.asScalaIteratorConverter(seq.iterator()).asScala().toSeq();
     }
 
     @SuppressWarnings("deprecation")
-    private static <K, V> scala.collection.Map<K, V> asScala(Map<K, V> jmap) {
+    static <K, V> scala.collection.Map<K, V> asScala(Map<K, V> jmap) {
         return JavaConverters.mapAsScalaMap(jmap);
     }
 }
