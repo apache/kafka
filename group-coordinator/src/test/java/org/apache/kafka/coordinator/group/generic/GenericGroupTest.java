@@ -1032,16 +1032,16 @@ public class GenericGroupTest {
     @Test
     public void testValidateOffsetDelete() {
         group.transitionTo(PREPARING_REBALANCE);
-        assertThrows(GroupNotEmptyException.class, () -> group.validateOffsetDelete());
+        assertThrows(GroupNotEmptyException.class, group::validateOffsetDelete);
         group.transitionTo(COMPLETING_REBALANCE);
-        assertThrows(GroupNotEmptyException.class, () -> group.validateOffsetDelete());
+        assertThrows(GroupNotEmptyException.class, group::validateOffsetDelete);
         group.transitionTo(STABLE);
-        assertThrows(GroupNotEmptyException.class, () -> group.validateOffsetDelete());
+        assertThrows(GroupNotEmptyException.class, group::validateOffsetDelete);
         group.transitionTo(PREPARING_REBALANCE);
         group.transitionTo(EMPTY);
-        assertDoesNotThrow(() -> group.validateOffsetDelete());
+        assertDoesNotThrow(group::validateOffsetDelete);
         group.transitionTo(DEAD);
-        assertThrows(GroupIdNotFoundException.class, () -> group.validateOffsetDelete());
+        assertThrows(GroupIdNotFoundException.class, group::validateOffsetDelete);
     }
 
     @Test
