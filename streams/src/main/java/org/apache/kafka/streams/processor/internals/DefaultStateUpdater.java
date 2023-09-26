@@ -771,7 +771,7 @@ public class DefaultStateUpdater implements StateUpdater {
     }
 
     // used for testing
-    protected boolean isIdle() {
+    boolean isIdle() {
         if (stateUpdaterThread != null) {
             return stateUpdaterThread.isIdle.get();
         }
