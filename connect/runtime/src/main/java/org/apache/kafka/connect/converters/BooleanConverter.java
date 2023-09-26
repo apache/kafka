@@ -22,7 +22,9 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.serialization.BooleanDeserializer;
 import org.apache.kafka.common.serialization.BooleanSerializer;
+import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.Schema.Type;
 import org.apache.kafka.connect.data.SchemaAndValue;
@@ -39,16 +41,14 @@ import org.apache.kafka.connect.storage.HeaderConverter;
  * When converting from bytes to Kafka Connect format, the converter will always return an optional
  * BOOLEAN schema.
  */
-public class BooleanConverter implements Converter, HeaderConverter {
-
-    private static final ConfigDef CONFIG_DEF = ConverterConfig.newConfigDef();
+public class BooleanConverter implements Converter, HeaderConverter, Versioned {
 
     private final BooleanSerializer serializer = new BooleanSerializer();
     private final BooleanDeserializer deserializer = new BooleanDeserializer();
 
     @Override
     public ConfigDef config() {
-        return CONFIG_DEF;
+        return BooleanConverterConfig.configDef();
     }
 
     @Override
@@ -103,5 +103,10 @@ public class BooleanConverter implements Converter, HeaderConverter {
     public void close() {
         Utils.closeQuietly(this.serializer, "boolean converter serializer");
         Utils.closeQuietly(this.deserializer, "boolean converter deserializer");
+    }
+
+    @Override
+    public String version() {
+        return AppInfoParser.getVersion();
     }
 }
