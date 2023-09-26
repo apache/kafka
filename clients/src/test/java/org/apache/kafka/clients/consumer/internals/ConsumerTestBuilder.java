@@ -27,7 +27,6 @@ import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProces
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.EventHandler;
-import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.requests.MetadataResponse;
@@ -166,10 +165,11 @@ public class ConsumerTestBuilder implements Closeable {
                 Optional.of(coordinatorRequestManager),
                 Optional.of(commitRequestManager));
         this.applicationEventProcessor = spy(new ApplicationEventProcessor(
-                backgroundEventQueue,
+                logContext,
+                applicationEventQueue,
                 requestManagers,
-                metadata,
-                logContext));
+                metadata)
+        );
         this.backgroundEventProcessor = spy(new BackgroundEventProcessor(logContext, backgroundEventQueue));
     }
 
@@ -186,10 +186,10 @@ public class ConsumerTestBuilder implements Closeable {
             this.backgroundThread = new DefaultBackgroundThread(
                     time,
                     logContext,
-                    applicationEventQueue,
                     () -> applicationEventProcessor,
                     () -> networkClientDelegate,
-                    () -> requestManagers);
+                    () -> requestManagers
+            );
         }
 
         @Override

@@ -38,7 +38,9 @@ import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProces
 import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventProcessor;
+import org.apache.kafka.clients.consumer.internals.events.EventProcessor.ProcessErrorHandler;
 import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventHandler;
 import org.apache.kafka.clients.consumer.internals.events.FetchEvent;
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsApplicationEvent;
@@ -225,7 +227,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
                     networkClientDelegateSupplier);
             final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(logContext,
                     metadata,
-                    backgroundEventQueue,
+                    applicationEventQueue,
                     requestManagersSupplier);
             this.eventHandler = new DefaultEventHandler(time,
                     logContext,
@@ -323,8 +325,6 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         Timer timer = time.timer(timeout);
 
         try {
-            backgroundEventProcessor.process();
-
             this.kafkaConsumerMetrics.recordPollStart(timer.currentTimeMs());
 
             if (this.subscriptions.hasNoSubscriptionOrUserAssignment()) {
@@ -1069,9 +1069,44 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     }
 
     boolean updateAssignmentMetadataIfNeeded(Timer timer) {
+        processBackgroundEvents();
+
         // Keeping this updateAssignmentMetadataIfNeeded wrapping up the updateFetchPositions as
         // in the previous implementation, because it will eventually involve group coordination
         // logic
         return updateFetchPositions(timer);
+    }
+
+    /**
+     * {@link BackgroundEventProcessor Process the events}—if any—that were produced by the
+     * {@link DefaultBackgroundThread background thread}. It is possible that when processing the events that a
+     * given event will {@link ErrorBackgroundEvent represent an error directly}, or it could be that processing
+     * an event generates an error. In such cases, the processor will continue to process the remaining events. In
+     * this case, we provide the caller to provide a callback handler that "collects" the errors. We grab the first
+     * error that occurred and throw it.
+     */
+    private void processBackgroundEvents() {
+        BackgroundEventProcessHandler handler = new BackgroundEventProcessHandler();
+        backgroundEventProcessor.process(handler);
+        if (handler.first != null)
+            throw handler.first;
+    }
+
+    private class BackgroundEventProcessHandler implements ProcessErrorHandler {
+
+        private KafkaException first;
+        private int errorCount;
+
+        @Override
+        public void onProcessingError(KafkaException error) {
+            errorCount++;
+
+            if (first == null) {
+                first = error;
+                log.warn("Error #{} from background thread (will be logged and thrown): {}", errorCount, error.getMessage(), error);
+            } else {
+                log.warn("Error #{} from background thread (will be logged only): {}", errorCount, error.getMessage(), error);
+            }
+        }
     }
 }

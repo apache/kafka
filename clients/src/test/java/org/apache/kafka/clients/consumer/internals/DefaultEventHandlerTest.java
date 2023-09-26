@@ -18,7 +18,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventHandler;
-import org.apache.kafka.clients.consumer.internals.events.NoopApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.FetchEvent;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -48,7 +48,7 @@ public class DefaultEventHandlerTest {
 
     @Test
     public void testBasicHandlerOps() {
-        handler.add(new NoopApplicationEvent("test"));
+        handler.add(new FetchEvent());
         assertEquals(1, aq.size());
     }
 }

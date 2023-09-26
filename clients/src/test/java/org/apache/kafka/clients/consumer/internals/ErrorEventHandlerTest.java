@@ -19,7 +19,7 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
-import org.apache.kafka.clients.consumer.internals.events.NoopBackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.events.EventProcessor;
 import org.apache.kafka.common.KafkaException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -57,16 +57,16 @@ public class ErrorEventHandlerTest {
     @Test
     public void testNoEvents() {
         assertTrue(backgroundEventQueue.isEmpty());
-        backgroundEventProcessor.process();
+        backgroundEventProcessor.process(ignored -> { });
         assertTrue(backgroundEventQueue.isEmpty());
     }
 
     @Test
     public void testSingleEvent() {
-        BackgroundEvent event = new NoopBackgroundEvent("A");
+        BackgroundEvent event = new ErrorBackgroundEvent(new RuntimeException("A"));
         backgroundEventQueue.add(event);
         assertPeeked(event);
-        backgroundEventProcessor.process();
+        backgroundEventProcessor.process(ignored -> { });
         assertTrue(backgroundEventQueue.isEmpty());
     }
 
@@ -76,40 +76,18 @@ public class ErrorEventHandlerTest {
         BackgroundEvent event = new ErrorBackgroundEvent(error);
         errorEventHandler.handle(error);
         assertPeeked(event);
-        assertThrows(error);
-    }
-
-    @Test
-    public void testInvalidEvent() {
-        String message = "I'm a naughty error!";
-        BackgroundEvent event = new BackgroundEvent(BackgroundEvent.Type.NOOP) {
-            @Override
-            public Type type() {
-                return null;
-            }
-
-            @Override
-            public String toString() {
-                return message;
-            }
-        };
-
-        backgroundEventQueue.add(event);
-        assertPeeked(event);
-
-        Exception error = new NullPointerException(String.format("Attempt to process BackgroundEvent with null type: %s", message));
-        assertThrows(error);
+        assertProcessThrows(error);
     }
 
     @Test
     public void testMultipleEvents() {
-        BackgroundEvent event1 = new NoopBackgroundEvent("A");
+        BackgroundEvent event1 = new ErrorBackgroundEvent(new RuntimeException("A"));
         backgroundEventQueue.add(event1);
-        backgroundEventQueue.add(new NoopBackgroundEvent("B"));
-        backgroundEventQueue.add(new NoopBackgroundEvent("C"));
+        backgroundEventQueue.add(new ErrorBackgroundEvent(new RuntimeException("B")));
+        backgroundEventQueue.add(new ErrorBackgroundEvent(new RuntimeException("C")));
 
         assertPeeked(event1);
-        backgroundEventProcessor.process();
+        backgroundEventProcessor.process(ignored -> { });
         assertTrue(backgroundEventQueue.isEmpty());
     }
 
@@ -123,7 +101,7 @@ public class ErrorEventHandlerTest {
         errorEventHandler.handle(error2);
         errorEventHandler.handle(error3);
 
-        assertThrows(new KafkaException(error1));
+        assertProcessThrows(new KafkaException(error1));
     }
 
     @Test
@@ -132,15 +110,16 @@ public class ErrorEventHandlerTest {
         KafkaException error2 = new KafkaException("error2");
         KafkaException error3 = new KafkaException("error3");
 
-        backgroundEventQueue.add(new NoopBackgroundEvent("A"));
+        RuntimeException errorToCheck = new RuntimeException("A");
+        backgroundEventQueue.add(new ErrorBackgroundEvent(errorToCheck));
         errorEventHandler.handle(error1);
-        backgroundEventQueue.add(new NoopBackgroundEvent("B"));
+        backgroundEventQueue.add(new ErrorBackgroundEvent(new RuntimeException("B")));
         errorEventHandler.handle(error2);
-        backgroundEventQueue.add(new NoopBackgroundEvent("C"));
+        backgroundEventQueue.add(new ErrorBackgroundEvent(new RuntimeException("C")));
         errorEventHandler.handle(error3);
-        backgroundEventQueue.add(new NoopBackgroundEvent("D"));
+        backgroundEventQueue.add(new ErrorBackgroundEvent(new RuntimeException("D")));
 
-        assertThrows(new KafkaException(error1));
+        assertProcessThrows(new KafkaException(errorToCheck));
     }
 
     private void assertPeeked(BackgroundEvent event) {
@@ -149,11 +128,13 @@ public class ErrorEventHandlerTest {
         assertEquals(event, peekEvent);
     }
 
-    private void assertThrows(Throwable error) {
+    private void assertProcessThrows(Throwable error) {
         assertFalse(backgroundEventQueue.isEmpty());
 
         try {
-            backgroundEventProcessor.process();
+            TestProcessHandler processHandler = new TestProcessHandler();
+            backgroundEventProcessor.process(processHandler);
+            processHandler.maybeThrow();
             fail("Should have thrown error: " + error);
         } catch (Throwable t) {
             assertEquals(error.getClass(), t.getClass());
@@ -161,5 +142,21 @@ public class ErrorEventHandlerTest {
         }
 
         assertTrue(backgroundEventQueue.isEmpty());
+    }
+
+    private static class TestProcessHandler implements EventProcessor.ProcessErrorHandler {
+
+        private KafkaException first;
+
+        @Override
+        public void onProcessingError(KafkaException error) {
+            if (first == null)
+                first = error;
+        }
+
+        void maybeThrow() {
+            if (first != null)
+                throw first;
+        }
     }
 }

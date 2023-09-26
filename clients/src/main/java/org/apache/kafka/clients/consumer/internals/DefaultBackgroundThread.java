@@ -18,7 +18,6 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
-import org.apache.kafka.clients.consumer.internals.events.CompletableApplicationEvent;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.internals.IdempotentCloser;
@@ -29,13 +28,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
 import java.io.Closeable;
-import java.util.ArrayList;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Objects;
 import java.util.Optional;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
 
 /**
@@ -44,7 +37,7 @@ import java.util.function.Supplier;
  * produce events, and poll the network client to handle network IO.
  * <p>
  * It holds a reference to the {@link SubscriptionState}, which is
- * initialized by the polling thread.
+ * initialized by the application thread.
  */
 public class DefaultBackgroundThread extends KafkaThread implements Closeable {
 
@@ -52,7 +45,6 @@ public class DefaultBackgroundThread extends KafkaThread implements Closeable {
     private static final String BACKGROUND_THREAD_NAME = "consumer_background_thread";
     private final Time time;
     private final Logger log;
-    private final BlockingQueue<ApplicationEvent> applicationEventQueue;
     private final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier;
     private final Supplier<NetworkClientDelegate> networkClientDelegateSupplier;
     private final Supplier<RequestManagers> requestManagersSupplier;
@@ -64,14 +56,12 @@ public class DefaultBackgroundThread extends KafkaThread implements Closeable {
 
     public DefaultBackgroundThread(Time time,
                                    LogContext logContext,
-                                   BlockingQueue<ApplicationEvent> applicationEventQueue,
                                    Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier,
                                    Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
                                    Supplier<RequestManagers> requestManagersSupplier) {
         super(BACKGROUND_THREAD_NAME, true);
         this.time = time;
         this.log = logContext.logger(getClass());
-        this.applicationEventQueue = applicationEventQueue;
         this.applicationEventProcessorSupplier = applicationEventProcessorSupplier;
         this.networkClientDelegateSupplier = networkClientDelegateSupplier;
         this.requestManagersSupplier = requestManagersSupplier;
@@ -118,14 +108,11 @@ public class DefaultBackgroundThread extends KafkaThread implements Closeable {
      * 3. Poll the networkClient to send and retrieve the response.
      */
     void runOnce() {
-        LinkedList<ApplicationEvent> events = new LinkedList<>();
-        applicationEventQueue.drainTo(events);
-
-        for (ApplicationEvent event : events) {
-            log.trace("Dequeued event: {}", event);
-            Objects.requireNonNull(event);
-            applicationEventProcessor.process(event);
-        }
+        // If there are errors processing any events, we want to throw the error immediately. This will have
+        // the effect of closing the background thread.
+        applicationEventProcessor.process(error -> {
+            throw error;
+        });
 
         final long currentTimeMs = time.milliseconds();
         final long pollWaitTimeMs = requestManagers.entries().stream()
@@ -160,25 +147,8 @@ public class DefaultBackgroundThread extends KafkaThread implements Closeable {
             wakeup();
             Utils.closeQuietly(requestManagers, "Request managers client");
             Utils.closeQuietly(networkClientDelegate, "network client utils");
+            Utils.closeQuietly(applicationEventProcessor, "application event processor");
             log.debug("Closed the consumer background thread");
-            drainAndComplete();
         }, () -> log.warn("The consumer background thread was previously closed"));
-    }
-
-
-    /**
-     * It is possible for the background thread to close before complete processing all the events in the queue. In
-     * this case, we need to throw an exception to notify the user the consumer is closed.
-     */
-    private void drainAndComplete() {
-        List<ApplicationEvent> incompleteEvents = new ArrayList<>();
-        applicationEventQueue.drainTo(incompleteEvents);
-        incompleteEvents.forEach(event -> {
-            if (event instanceof CompletableApplicationEvent) {
-                CompletableFuture<?> future = ((CompletableApplicationEvent<?>) event).future();
-                future.completeExceptionally(new KafkaException("The consumer is closed"));
-            }
-        });
-        log.debug("Discarding {} events because the consumer is closed", incompleteEvents.size());
     }
 }

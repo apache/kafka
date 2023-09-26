@@ -54,7 +54,6 @@ public class DefaultEventHandler implements EventHandler {
         this.applicationEventQueue = applicationEventQueue;
         this.backgroundThread = new DefaultBackgroundThread(time,
                 logContext,
-                applicationEventQueue,
                 applicationEventProcessorSupplier,
                 networkClientDelegateSupplier,
                 requestManagersSupplier);

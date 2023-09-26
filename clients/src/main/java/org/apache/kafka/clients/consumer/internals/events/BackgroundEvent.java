@@ -24,7 +24,7 @@ import java.util.Objects;
 public abstract class BackgroundEvent {
 
     public enum Type {
-        NOOP, ERROR,
+        ERROR,
     }
 
     protected final Type type;
