@@ -14,49 +14,52 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.tools.reassign;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import kafka.cluster.Partition;
 import kafka.log.UnifiedLog;
+import kafka.server.ControllerServer;
 import kafka.server.HostedPartition;
 import kafka.server.IsrChangePropagationConfig;
 import kafka.server.KafkaBroker;
 import kafka.server.KafkaConfig;
-import kafka.server.QuorumTestHarness;
 import kafka.server.ZkAlterPartitionManager;
+import kafka.test.ClusterConfig;
+import kafka.test.ClusterGenerator;
+import kafka.test.ClusterInstance;
+import kafka.test.annotation.ClusterTemplate;
+import kafka.test.annotation.ClusterTest;
+import kafka.test.annotation.ClusterTestDefaults;
+import kafka.test.annotation.Type;
+import kafka.test.junit.ClusterTestExtensions;
+import kafka.test.junit.RaftClusterInvocationContext.RaftClusterInstance;
+import kafka.test.junit.ZkClusterInvocationContext;
 import kafka.utils.TestUtils;
 import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.DescribeLogDirsResult;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionReplica;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
+import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.tools.TerseException;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Timeout;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.extension.ExtendWith;
 import scala.None$;
 import scala.Option;
-import scala.Some$;
 import scala.collection.JavaConverters;
 import scala.collection.Seq;
 
-import java.io.Closeable;
-import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -73,7 +76,13 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
+import static kafka.test.annotation.Type.KRAFT;
+import static kafka.test.annotation.Type.ZK;
+import static org.apache.kafka.clients.CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
+import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
+import static org.apache.kafka.clients.producer.ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.server.common.MetadataVersion.IBP_2_7_IV1;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.BROKER_LEVEL_THROTTLES;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.cancelAssignment;
@@ -83,15 +92,16 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@Timeout(300)
-public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
-    ReassignPartitionsTestCluster cluster;
-
-    @AfterEach
-    @Override
-    public void tearDown() {
-        Utils.closeQuietly(cluster, "ReassignPartitionsTestCluster");
-        super.tearDown();
+@ExtendWith(value = ClusterTestExtensions.class)
+@ClusterTestDefaults(brokers = 5)
+@Tag("integration")
+public class ReassignPartitionsIntegrationTest {
+    private static final Map<Integer, String> BROKERS = new HashMap<>(); static {
+        BROKERS.put(0, "rack0");
+        BROKERS.put(1, "rack0");
+        BROKERS.put(2, "rack1");
+        BROKERS.put(3, "rack1");
+        BROKERS.put(4, "rack1");
     }
 
     private final Map<Integer, Map<String, Long>> unthrottledBrokerConfigs = new HashMap<>(); {
@@ -100,50 +110,67 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
                 .collect(Collectors.toMap(throttle -> throttle, throttle -> -1L))));
     }
 
-    @ParameterizedTest(name = "{displayName}.quorum={0}")
-    @ValueSource(strings = {"zk", "kraft"})
-    public void testReassignment(String quorum) throws Exception {
-        cluster = new ReassignPartitionsTestCluster(Collections.emptyMap(), Collections.emptyMap());
-        cluster.setup();
+    private final Map<String, List<List<Integer>>> topics = new HashMap<>(); {
+        topics.put("foo", Arrays.asList(Arrays.asList(0, 1, 2), Arrays.asList(1, 2, 3)));
+        topics.put("bar", Arrays.asList(Arrays.asList(3, 2, 1)));
+        topics.put("baz", Arrays.asList(Arrays.asList(1, 0, 2), Arrays.asList(2, 0, 1), Arrays.asList(0, 2, 1)));
+    }
+
+    private ClusterInstance cluster;
+
+    private Admin adminClient;
+
+    @ClusterTemplate("zkAndKRaft")
+    public void testReassignment(ClusterInstance cluster) throws Exception {
+        this.cluster = cluster;
+        createTopics();
         executeAndVerifyReassignment();
     }
 
-    @ParameterizedTest(name = "{displayName}.quorum={0}")
-    @ValueSource(strings = "zk") // Note: KRaft requires AlterPartition
-    public void testReassignmentWithAlterPartitionDisabled(String quorum) throws Exception {
+    public static void zkAlterPartitionDisabled(ClusterGenerator generator) {
+        ClusterConfig cfg = clusterConfig(ZK);
+
+        BROKERS.forEach((brokerId, rack) -> {
+            cfg.brokerServerProperties(brokerId).put(KafkaConfig.InterBrokerProtocolVersionProp(), IBP_2_7_IV1.version());
+        });
+
+        generator.accept(cfg);
+    }
+
+    @ClusterTemplate("zkAlterPartitionDisabled")
+    public void testReassignmentWithAlterPartitionDisabled(ClusterInstance cluster) throws Exception {
+        this.cluster = cluster;
         // Test reassignment when the IBP is on an older version which does not use
         // the `AlterPartition` API. In this case, the controller will register individual
         // watches for each reassigning partition so that the reassignment can be
         // completed as soon as the ISR is expanded.
-        Map<String, String> configOverrides = Collections.singletonMap(KafkaConfig.InterBrokerProtocolVersionProp(), IBP_2_7_IV1.version());
-        cluster = new ReassignPartitionsTestCluster(configOverrides, Collections.emptyMap());
-        cluster.setup();
+        createTopics();
         executeAndVerifyReassignment();
     }
 
-    @ParameterizedTest(name = "{displayName}.quorum={0}")
-    @ValueSource(strings = "zk") // Note: KRaft requires AlterPartition
-    public void testReassignmentCompletionDuringPartialUpgrade(String quorum) throws Exception {
+    public static void zkPartialUpgrade(ClusterGenerator generator) {
+        // Override change notification settings so that test is not delayed by ISR
+        // change notification delay
+        ZkAlterPartitionManager.DefaultIsrPropagationConfig_$eq(new IsrChangePropagationConfig(500, 100, 500));
+        ClusterConfig cfg = clusterConfig(ZK);
+
+        for (int brokerId = 1; brokerId < 4; brokerId++)
+            cfg.brokerServerProperties(brokerId).put(KafkaConfig.InterBrokerProtocolVersionProp(), IBP_2_7_IV1.version());
+
+        generator.accept(cfg);
+    }
+
+    @ClusterTest(clusterType = ZK)  // Note: KRaft requires AlterPartition
+    @ClusterTemplate("zkPartialUpgrade")
+    public void testReassignmentCompletionDuringPartialUpgrade(ClusterInstance cluster) throws Exception {
+        this.cluster = cluster;
         // Test reassignment during a partial upgrade when some brokers are relying on
         // `AlterPartition` and some rely on the old notification logic through Zookeeper.
         // In this test case, broker 0 starts up first on the latest IBP and is typically
         // elected as controller. The three remaining brokers start up on the older IBP.
         // We want to ensure that reassignment can still complete through the ISR change
         // notification path even though the controller expects `AlterPartition`.
-
-        // Override change notification settings so that test is not delayed by ISR
-        // change notification delay
-        ZkAlterPartitionManager.DefaultIsrPropagationConfig_$eq(new IsrChangePropagationConfig(500, 100, 500));
-
-        Map<String, String> oldIbpConfig = Collections.singletonMap(KafkaConfig.InterBrokerProtocolVersionProp(), IBP_2_7_IV1.version());
-        Map<Integer, Map<String, String>> brokerConfigOverrides = new HashMap<>();
-        brokerConfigOverrides.put(1, oldIbpConfig);
-        brokerConfigOverrides.put(2, oldIbpConfig);
-        brokerConfigOverrides.put(3, oldIbpConfig);
-
-        cluster = new ReassignPartitionsTestCluster(Collections.emptyMap(), brokerConfigOverrides);
-        cluster.setup();
-
+        createTopics();
         executeAndVerifyReassignment();
     }
 
@@ -162,21 +189,21 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
         initialAssignment.put(foo0, new PartitionReassignmentState(Arrays.asList(0, 1, 2), Arrays.asList(0, 1, 3), true));
         initialAssignment.put(bar0, new PartitionReassignmentState(Arrays.asList(3, 2, 1), Arrays.asList(3, 2, 0), true));
 
-        waitForVerifyAssignment(cluster.adminClient, assignment, false,
+        waitForVerifyAssignment(adminClient, assignment, false,
             new VerifyAssignmentResult(initialAssignment));
 
         // Execute the assignment
-        runExecuteAssignment(cluster.adminClient, false, assignment, -1L, -1L);
+        runExecuteAssignment(adminClient, false, assignment, -1L, -1L);
         assertEquals(unthrottledBrokerConfigs, describeBrokerLevelThrottles(unthrottledBrokerConfigs.keySet()));
         Map<TopicPartition, PartitionReassignmentState> finalAssignment = new HashMap<>();
         finalAssignment.put(foo0, new PartitionReassignmentState(Arrays.asList(0, 1, 3), Arrays.asList(0, 1, 3), true));
         finalAssignment.put(bar0, new PartitionReassignmentState(Arrays.asList(3, 2, 0), Arrays.asList(3, 2, 0), true));
 
-        VerifyAssignmentResult verifyAssignmentResult = runVerifyAssignment(cluster.adminClient, assignment, false);
+        VerifyAssignmentResult verifyAssignmentResult = runVerifyAssignment(adminClient, assignment, false);
         assertFalse(verifyAssignmentResult.movesOngoing);
 
         // Wait for the assignment to complete
-        waitForVerifyAssignment(cluster.adminClient, assignment, false,
+        waitForVerifyAssignment(adminClient, assignment, false,
             new VerifyAssignmentResult(finalAssignment));
 
         assertEquals(unthrottledBrokerConfigs,
@@ -187,43 +214,41 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
         verifyReplicaDeleted(bar0, 1);
     }
 
-    @ParameterizedTest(name = "{displayName}.quorum={0}")
-    @ValueSource(strings = {"zk", "kraft"})
-    public void testHighWaterMarkAfterPartitionReassignment(String quorum) throws Exception {
-        cluster = new ReassignPartitionsTestCluster(Collections.emptyMap(), Collections.emptyMap());
-        cluster.setup();
+    @ClusterTemplate("zkAndKRaft")
+    public void testHighWaterMarkAfterPartitionReassignment(ClusterInstance cluster) throws Exception {
+        this.cluster = cluster;
+        createTopics();
         String assignment = "{\"version\":1,\"partitions\":" +
             "[{\"topic\":\"foo\",\"partition\":0,\"replicas\":[3,1,2],\"log_dirs\":[\"any\",\"any\",\"any\"]}" +
             "]}";
 
         // Set the high water mark of foo-0 to 123 on its leader.
         TopicPartition part = new TopicPartition("foo", 0);
-        cluster.servers.get(0).replicaManager().logManager().truncateFullyAndStartAt(part, 123L, false, None$.empty());
+        servers().get(0).replicaManager().logManager().truncateFullyAndStartAt(part, 123L, false, None$.empty());
 
         // Execute the assignment
-        runExecuteAssignment(cluster.adminClient, false, assignment, -1L, -1L);
+        runExecuteAssignment(cluster.createAdminClient(), false, assignment, -1L, -1L);
         Map<TopicPartition, PartitionReassignmentState> finalAssignment = Collections.singletonMap(part,
             new PartitionReassignmentState(Arrays.asList(3, 1, 2), Arrays.asList(3, 1, 2), true));
 
         // Wait for the assignment to complete
-        waitForVerifyAssignment(cluster.adminClient, assignment, false,
+        waitForVerifyAssignment(adminClient, assignment, false,
             new VerifyAssignmentResult(finalAssignment));
 
         TestUtils.waitUntilTrue(() ->
-            cluster.servers.get(3).replicaManager().onlinePartition(part).
-                map(Partition::leaderLogIfLocal).isDefined(),
+                servers().get(3).replicaManager().onlinePartition(part).
+                    map(Partition::leaderLogIfLocal).isDefined(),
             () -> "broker 3 should be the new leader", org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS, 10L);
-        assertEquals(123L, cluster.servers.get(3).replicaManager().localLogOrException(part).highWatermark(),
+        assertEquals(123L, servers().get(3).replicaManager().localLogOrException(part).highWatermark(),
             "Expected broker 3 to have the correct high water mark for the partition.");
     }
 
-    @ParameterizedTest(name = "{displayName}.quorum={0}")
-    @ValueSource(strings = {"zk", "kraft"})
-    public void testAlterReassignmentThrottle(String quorum) throws Exception {
-        cluster = new ReassignPartitionsTestCluster(Collections.emptyMap(), Collections.emptyMap());
-        cluster.setup();
-        cluster.produceMessages("foo", 0, 50);
-        cluster.produceMessages("baz", 2, 60);
+    @ClusterTemplate("zkAndKRaft")
+    public void testAlterReassignmentThrottle(ClusterInstance cluster) throws Exception {
+        this.cluster = cluster;
+        createTopics();
+        produceMessages("foo", 0, 50);
+        produceMessages("baz", 2, 60);
         String assignment = "{\"version\":1,\"partitions\":" +
             "[{\"topic\":\"foo\",\"partition\":0,\"replicas\":[0,3,2],\"log_dirs\":[\"any\",\"any\",\"any\"]}," +
             "{\"topic\":\"baz\",\"partition\":2,\"replicas\":[3,2,1],\"log_dirs\":[\"any\",\"any\",\"any\"]}" +
@@ -231,12 +256,12 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
 
         // Execute the assignment with a low throttle
         long initialThrottle = 1L;
-        runExecuteAssignment(cluster.adminClient, false, assignment, initialThrottle, -1L);
+        runExecuteAssignment(adminClient, false, assignment, initialThrottle, -1L);
         waitForInterBrokerThrottle(Arrays.asList(0, 1, 2, 3), initialThrottle);
 
         // Now update the throttle and verify the reassignment completes
         long updatedThrottle = 300000L;
-        runExecuteAssignment(cluster.adminClient, true, assignment, updatedThrottle, -1L);
+        runExecuteAssignment(adminClient, true, assignment, updatedThrottle, -1L);
         waitForInterBrokerThrottle(Arrays.asList(0, 1, 2, 3), updatedThrottle);
 
         Map<TopicPartition, PartitionReassignmentState> finalAssignment = new HashMap<>();
@@ -246,7 +271,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
             new PartitionReassignmentState(Arrays.asList(3, 2, 1), Arrays.asList(3, 2, 1), true));
 
         // Now remove the throttles.
-        waitForVerifyAssignment(cluster.adminClient, assignment, false,
+        waitForVerifyAssignment(adminClient, assignment, false,
             new VerifyAssignmentResult(finalAssignment));
         waitForBrokerLevelThrottles(unthrottledBrokerConfigs);
     }
@@ -254,13 +279,12 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
     /**
      * Test running a reassignment with the interBrokerThrottle set.
      */
-    @ParameterizedTest(name = "{displayName}.quorum={0}")
-    @ValueSource(strings = {"zk", "kraft"})
-    public void testThrottledReassignment(String quorum) throws Exception {
-        cluster = new ReassignPartitionsTestCluster(Collections.emptyMap(), Collections.emptyMap());
-        cluster.setup();
-        cluster.produceMessages("foo", 0, 50);
-        cluster.produceMessages("baz", 2, 60);
+    @ClusterTemplate("zk")
+    public void testThrottledReassignment(ClusterInstance cluster) throws Exception {
+        this.cluster = cluster;
+        createTopics();
+        produceMessages("foo", 0, 50);
+        produceMessages("baz", 2, 60);
         String assignment = "{\"version\":1,\"partitions\":" +
             "[{\"topic\":\"foo\",\"partition\":0,\"replicas\":[0,3,2],\"log_dirs\":[\"any\",\"any\",\"any\"]}," +
             "{\"topic\":\"baz\",\"partition\":2,\"replicas\":[3,2,1],\"log_dirs\":[\"any\",\"any\",\"any\"]}" +
@@ -272,12 +296,12 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
             new PartitionReassignmentState(Arrays.asList(0, 1, 2), Arrays.asList(0, 3, 2), true));
         initialAssignment.put(new TopicPartition("baz", 2),
             new PartitionReassignmentState(Arrays.asList(0, 2, 1), Arrays.asList(3, 2, 1), true));
-        assertEquals(new VerifyAssignmentResult(initialAssignment), runVerifyAssignment(cluster.adminClient, assignment, false));
+        assertEquals(new VerifyAssignmentResult(initialAssignment), runVerifyAssignment(adminClient, assignment, false));
         assertEquals(unthrottledBrokerConfigs, describeBrokerLevelThrottles(unthrottledBrokerConfigs.keySet()));
 
         // Execute the assignment
         long interBrokerThrottle = 300000L;
-        runExecuteAssignment(cluster.adminClient, false, assignment, interBrokerThrottle, -1L);
+        runExecuteAssignment(adminClient, false, assignment, interBrokerThrottle, -1L);
         waitForInterBrokerThrottle(Arrays.asList(0, 1, 2, 3), interBrokerThrottle);
 
         Map<TopicPartition, PartitionReassignmentState> finalAssignment = new HashMap<>();
@@ -291,7 +315,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
             () -> {
                 try {
                     // Check the reassignment status.
-                    VerifyAssignmentResult result = runVerifyAssignment(cluster.adminClient, assignment, true);
+                    VerifyAssignmentResult result = runVerifyAssignment(adminClient, assignment, true);
 
                     if (!result.partsOngoing) {
                         return true;
@@ -307,28 +331,27 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
                     throw new RuntimeException(e);
                 }
             }, () -> "Expected reassignment to complete.", org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS, 100L);
-        waitForVerifyAssignment(cluster.adminClient, assignment, true,
+        waitForVerifyAssignment(adminClient, assignment, true,
             new VerifyAssignmentResult(finalAssignment));
         // The throttles should still have been preserved, since we ran with --preserve-throttles
         waitForInterBrokerThrottle(Arrays.asList(0, 1, 2, 3), interBrokerThrottle);
         // Now remove the throttles.
-        waitForVerifyAssignment(cluster.adminClient, assignment, false,
+        waitForVerifyAssignment(adminClient, assignment, false,
             new VerifyAssignmentResult(finalAssignment));
         waitForBrokerLevelThrottles(unthrottledBrokerConfigs);
     }
 
-    @ParameterizedTest(name = "{displayName}.quorum={0}")
-    @ValueSource(strings = {"zk", "kraft"})
-    public void testProduceAndConsumeWithReassignmentInProgress(String quorum) throws Exception {
-        cluster = new ReassignPartitionsTestCluster(Collections.emptyMap(), Collections.emptyMap());
-        cluster.setup();
-        cluster.produceMessages("baz", 2, 60);
+    @ClusterTemplate("zkAndKRaft")
+    public void testProduceAndConsumeWithReassignmentInProgress(ClusterInstance cluster) throws Exception {
+        this.cluster = cluster;
+        createTopics();
+        produceMessages("baz", 2, 60);
         String assignment = "{\"version\":1,\"partitions\":" +
             "[{\"topic\":\"baz\",\"partition\":2,\"replicas\":[3,2,1],\"log_dirs\":[\"any\",\"any\",\"any\"]}" +
             "]}";
-        runExecuteAssignment(cluster.adminClient, false, assignment, 300L, -1L);
-        cluster.produceMessages("baz", 2, 100);
-        Consumer<byte[], byte[]> consumer = TestUtils.createConsumer(cluster.brokerList,
+        runExecuteAssignment(adminClient, false, assignment, 300L, -1L);
+        produceMessages("baz", 2, 100);
+        Consumer<byte[], byte[]> consumer = TestUtils.createConsumer(cluster.bootstrapServers(),
             "group",
             "earliest",
             true,
@@ -348,26 +371,25 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
         } finally {
             consumer.close();
         }
-        TestUtils.removeReplicationThrottleForPartitions(cluster.adminClient, toSeq(Arrays.asList(0, 1, 2, 3)), toSet(Collections.singleton(part)));
+        TestUtils.removeReplicationThrottleForPartitions(adminClient, toSeq(Arrays.asList(0, 1, 2, 3)), toSet(Collections.singleton(part)));
         Map<TopicPartition, PartitionReassignmentState> finalAssignment = Collections.singletonMap(part,
             new PartitionReassignmentState(Arrays.asList(3, 2, 1), Arrays.asList(3, 2, 1), true));
-        waitForVerifyAssignment(cluster.adminClient, assignment, false,
+        waitForVerifyAssignment(adminClient, assignment, false,
             new VerifyAssignmentResult(finalAssignment));
     }
 
     /**
      * Test running a reassignment and then cancelling it.
      */
-    @ParameterizedTest(name = "{displayName}.quorum={0}")
-    @ValueSource(strings = {"zk", "kraft"})
-    public void testCancellation(String quorum) throws Exception {
+    @ClusterTemplate("zkAndKRaft")
+    public void testCancellation(ClusterInstance cluster) throws Exception {
+        this.cluster = cluster;
         TopicPartition foo0 = new TopicPartition("foo", 0);
         TopicPartition baz1 = new TopicPartition("baz", 1);
 
-        cluster = new ReassignPartitionsTestCluster(Collections.emptyMap(), Collections.emptyMap());
-        cluster.setup();
-        cluster.produceMessages(foo0.topic(), foo0.partition(), 200);
-        cluster.produceMessages(baz1.topic(), baz1.partition(), 200);
+        createTopics();
+        produceMessages(foo0.topic(), foo0.partition(), 200);
+        produceMessages(baz1.topic(), baz1.partition(), 200);
         String assignment = "{\"version\":1,\"partitions\":" +
             "[{\"topic\":\"foo\",\"partition\":0,\"replicas\":[0,1,3],\"log_dirs\":[\"any\",\"any\",\"any\"]}," +
             "{\"topic\":\"baz\",\"partition\":1,\"replicas\":[0,2,3],\"log_dirs\":[\"any\",\"any\",\"any\"]}" +
@@ -375,7 +397,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
         assertEquals(unthrottledBrokerConfigs,
             describeBrokerLevelThrottles(unthrottledBrokerConfigs.keySet()));
         long interBrokerThrottle = 1L;
-        runExecuteAssignment(cluster.adminClient, false, assignment, interBrokerThrottle, -1L);
+        runExecuteAssignment(adminClient, false, assignment, interBrokerThrottle, -1L);
         waitForInterBrokerThrottle(Arrays.asList(0, 1, 2, 3), interBrokerThrottle);
 
         Map<TopicPartition, PartitionReassignmentState> partStates = new HashMap<>();
@@ -385,31 +407,30 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
 
         // Verify that the reassignment is running.  The very low throttle should keep it
         // from completing before this runs.
-        waitForVerifyAssignment(cluster.adminClient, assignment, true,
+        waitForVerifyAssignment(adminClient, assignment, true,
             new VerifyAssignmentResult(partStates, true, Collections.emptyMap(), false));
         // Cancel the reassignment.
-        assertEquals(new Tuple2<>(new HashSet<>(Arrays.asList(foo0, baz1)), Collections.emptySet()), runCancelAssignment(cluster.adminClient, assignment, true));
+        assertEquals(new Tuple2<>(new HashSet<>(Arrays.asList(foo0, baz1)), Collections.emptySet()), runCancelAssignment(adminClient, assignment, true));
         // Broker throttles are still active because we passed --preserve-throttles
         waitForInterBrokerThrottle(Arrays.asList(0, 1, 2, 3), interBrokerThrottle);
         // Cancelling the reassignment again should reveal nothing to cancel.
-        assertEquals(new Tuple2<>(Collections.emptySet(), Collections.emptySet()), runCancelAssignment(cluster.adminClient, assignment, false));
+        assertEquals(new Tuple2<>(Collections.emptySet(), Collections.emptySet()), runCancelAssignment(adminClient, assignment, false));
         // This time, the broker throttles were removed.
         waitForBrokerLevelThrottles(unthrottledBrokerConfigs);
         // Verify that there are no ongoing reassignments.
-        assertFalse(runVerifyAssignment(cluster.adminClient, assignment, false).partsOngoing);
+        assertFalse(runVerifyAssignment(adminClient, assignment, false).partsOngoing);
         // Verify that the partition is removed from cancelled replicas
         verifyReplicaDeleted(foo0, 3);
         verifyReplicaDeleted(baz1, 3);
     }
 
-    @ParameterizedTest(name = "{displayName}.quorum={0}")
-    @ValueSource(strings = {"zk", "kraft"})
-    public void testCancellationWithAddingReplicaInIsr(String quorum) throws Exception {
+    @ClusterTemplate("zkAndKRaft")
+    public void testCancellationWithAddingReplicaInIsr(ClusterInstance cluster) throws Exception {
+        this.cluster = cluster;
         TopicPartition foo0 = new TopicPartition("foo", 0);
 
-        cluster = new ReassignPartitionsTestCluster(Collections.emptyMap(), Collections.emptyMap());
-        cluster.setup();
-        cluster.produceMessages(foo0.topic(), foo0.partition(), 200);
+        createTopics();
+        produceMessages(foo0.topic(), foo0.partition(), 200);
 
         // The reassignment will bring replicas 3 and 4 into the replica set and remove 1 and 2.
         String assignment = "{\"version\":1,\"partitions\":" +
@@ -418,7 +439,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
 
         // We will throttle replica 4 so that only replica 3 joins the ISR
         TestUtils.setReplicationThrottleForPartitions(
-            cluster.adminClient,
+            adminClient,
             toSeq(Collections.singleton(4)),
             toSet(Collections.singleton(foo0)),
             1
@@ -426,20 +447,20 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
 
         // Execute the assignment and wait for replica 3 (only) to join the ISR
         runExecuteAssignment(
-            cluster.adminClient,
+            adminClient,
             false,
             assignment,
             -1L,
             -1L
         );
         TestUtils.waitUntilTrue(
-            () -> Objects.equals(TestUtils.currentIsr(cluster.adminClient, foo0), toSet(Arrays.asList(0, 1, 2, 3))),
+            () -> Objects.equals(TestUtils.currentIsr(adminClient, foo0), toSet(Arrays.asList(0, 1, 2, 3))),
             () -> "Timed out while waiting for replica 3 to join the ISR",
             org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS, 100L
         );
 
         // Now cancel the assignment and verify that the partition is removed from cancelled replicas
-        assertEquals(new Tuple2<>(Collections.singleton(foo0), Collections.emptySet()), runCancelAssignment(cluster.adminClient, assignment, true));
+        assertEquals(new Tuple2<>(Collections.singleton(foo0), Collections.emptySet()), runCancelAssignment(adminClient, assignment, true));
         verifyReplicaDeleted(foo0, 3);
         verifyReplicaDeleted(foo0, 4);
     }
@@ -449,7 +470,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
         Integer replicaId
     ) {
         TestUtils.waitUntilTrue(() -> {
-            KafkaBroker server = cluster.servers.get(replicaId);
+            KafkaBroker server = servers().get(replicaId);
             HostedPartition partition = server.replicaManager().getPartition(topicPartition);
             Option<UnifiedLog> log = server.logManager().getLog(topicPartition, false);
             return partition == HostedPartition.None$.MODULE$ && log.isEmpty();
@@ -507,12 +528,12 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
         Map<Integer, Map<String, Long>> results = new HashMap<>();
         for (Integer brokerId : brokerIds) {
             ConfigResource brokerResource = new ConfigResource(ConfigResource.Type.BROKER, brokerId.toString());
-            Config brokerConfigs = cluster.adminClient.describeConfigs(Collections.singleton(brokerResource)).values()
+            Config brokerConfigs = adminClient.describeConfigs(Collections.singleton(brokerResource)).values()
                 .get(brokerResource)
                 .get();
 
             Map<String, Long> throttles = new HashMap<>();
-            BROKER_LEVEL_THROTTLES.stream().forEach(throttleName -> {
+            BROKER_LEVEL_THROTTLES.forEach(throttleName -> {
                 String configValue = Optional.ofNullable(brokerConfigs.get(throttleName)).map(ConfigEntry::value).orElse("-1");
                 throttles.put(throttleName, Long.parseLong(configValue));
             });
@@ -524,14 +545,14 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
     /**
      * Test moving partitions between directories.
      */
-    @ParameterizedTest(name = "{displayName}.quorum={0}")
-    @ValueSource(strings = "zk") // JBOD not yet implemented for KRaft
-    public void testLogDirReassignment(String quorum) throws Exception {
+    @ClusterTemplate("zk") // JBOD not yet implemented for KRaft
+    public void testLogDirReassignment(ClusterInstance cluster) throws Exception {
+        this.cluster = cluster;
+
         TopicPartition topicPartition = new TopicPartition("foo", 0);
 
-        cluster = new ReassignPartitionsTestCluster(Collections.emptyMap(), Collections.emptyMap());
-        cluster.setup();
-        cluster.produceMessages(topicPartition.topic(), topicPartition.partition(), 700);
+        createTopics();
+        produceMessages(topicPartition.topic(), topicPartition.partition(), 700);
 
         int targetBrokerId = 0;
         List<Integer> replicas = Arrays.asList(0, 1, 2);
@@ -540,11 +561,11 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
         // Start the replica move, but throttle it to be very slow so that it can't complete
         // before our next checks happen.
         long logDirThrottle = 1L;
-        runExecuteAssignment(cluster.adminClient, false, reassignment.json,
+        runExecuteAssignment(adminClient, false, reassignment.json,
             -1L, logDirThrottle);
 
         // Check the output of --verify
-        waitForVerifyAssignment(cluster.adminClient, reassignment.json, true,
+        waitForVerifyAssignment(adminClient, reassignment.json, true,
             new VerifyAssignmentResult(Collections.singletonMap(
                 topicPartition, new PartitionReassignmentState(Arrays.asList(0, 1, 2), Arrays.asList(0, 1, 2), true)
             ), false, Collections.singletonMap(
@@ -554,7 +575,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
         waitForLogDirThrottle(Collections.singleton(0), logDirThrottle);
 
         // Remove the throttle
-        cluster.adminClient.incrementalAlterConfigs(Collections.singletonMap(
+        adminClient.incrementalAlterConfigs(Collections.singletonMap(
                 new ConfigResource(ConfigResource.Type.BROKER, "0"),
                 Collections.singletonList(new AlterConfigOp(
                     new ConfigEntry(ReassignPartitionsCommand.BROKER_LEVEL_LOG_DIR_THROTTLE, ""), AlterConfigOp.OpType.DELETE))))
@@ -562,7 +583,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
         waitForBrokerLevelThrottles(unthrottledBrokerConfigs);
 
         // Wait for the directory movement to complete.
-        waitForVerifyAssignment(cluster.adminClient, reassignment.json, true,
+        waitForVerifyAssignment(adminClient, reassignment.json, true,
             new VerifyAssignmentResult(Collections.singletonMap(
                 topicPartition, new PartitionReassignmentState(Arrays.asList(0, 1, 2), Arrays.asList(0, 1, 2), true)
             ), false, Collections.singletonMap(
@@ -570,18 +591,18 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
                 new CompletedMoveState(reassignment.targetDir)
             ), false));
 
-        BrokerDirs info1 = new BrokerDirs(cluster.adminClient.describeLogDirs(IntStream.range(0, 4).boxed().collect(Collectors.toList())), 0);
+        BrokerDirs info1 = new BrokerDirs(adminClient.describeLogDirs(IntStream.range(0, 4).boxed().collect(Collectors.toList())), 0);
         assertEquals(reassignment.targetDir, info1.curLogDirs.getOrDefault(topicPartition, ""));
     }
 
-    @ParameterizedTest(name = "{displayName}.quorum={0}")
-    @ValueSource(strings = "zk") // JBOD not yet implemented for KRaft
-    public void testAlterLogDirReassignmentThrottle(String quorum) throws Exception {
+    @ClusterTemplate("zk") // JBOD not yet implemented for KRaft
+    public void testAlterLogDirReassignmentThrottle(ClusterInstance cluster) throws Exception {
+        this.cluster = cluster;
+
         TopicPartition topicPartition = new TopicPartition("foo", 0);
 
-        cluster = new ReassignPartitionsTestCluster(Collections.emptyMap(), Collections.emptyMap());
-        cluster.setup();
-        cluster.produceMessages(topicPartition.topic(), topicPartition.partition(), 700);
+        createTopics();
+        produceMessages(topicPartition.topic(), topicPartition.partition(), 700);
 
         int targetBrokerId = 0;
         List<Integer> replicas = Arrays.asList(0, 1, 2);
@@ -589,17 +610,17 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
 
         // Start the replica move with a low throttle so it does not complete
         long initialLogDirThrottle = 1L;
-        runExecuteAssignment(cluster.adminClient, false, reassignment.json,
+        runExecuteAssignment(adminClient, false, reassignment.json,
             -1L, initialLogDirThrottle);
         waitForLogDirThrottle(new HashSet<>(Collections.singletonList(0)), initialLogDirThrottle);
 
         // Now increase the throttle and verify that the log dir movement completes
         long updatedLogDirThrottle = 3000000L;
-        runExecuteAssignment(cluster.adminClient, true, reassignment.json,
+        runExecuteAssignment(adminClient, true, reassignment.json,
             -1L, updatedLogDirThrottle);
         waitForLogDirThrottle(Collections.singleton(0), updatedLogDirThrottle);
 
-        waitForVerifyAssignment(cluster.adminClient, reassignment.json, true,
+        waitForVerifyAssignment(adminClient, reassignment.json, true,
             new VerifyAssignmentResult(Collections.singletonMap(
                 topicPartition, new PartitionReassignmentState(Arrays.asList(0, 1, 2), Arrays.asList(0, 1, 2), true)
             ), false, Collections.singletonMap(
@@ -608,7 +629,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
             ), false));
     }
 
-    class LogDirReassignment {
+    static class LogDirReassignment {
         final String json;
         final String currentDir;
         final String targetDir;
@@ -624,7 +645,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
                                                        int brokerId,
                                                        List<Integer> replicas) throws ExecutionException, InterruptedException {
 
-        DescribeLogDirsResult describeLogDirsResult = cluster.adminClient.describeLogDirs(
+        DescribeLogDirsResult describeLogDirsResult = adminClient.describeLogDirs(
             IntStream.range(0, 4).boxed().collect(Collectors.toList()));
 
         BrokerDirs logDirInfo = new BrokerDirs(describeLogDirsResult, brokerId);
@@ -655,8 +676,6 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
         return new LogDirReassignment(reassignmentJson, currentDir, newDir);
     }
 
-
-
     private VerifyAssignmentResult runVerifyAssignment(Admin adminClient, String jsonString,
                                                        Boolean preserveThrottles) throws ExecutionException, InterruptedException, JsonProcessingException {
         System.out.println("==> verifyAssignment(adminClient, jsonString=" + jsonString);
@@ -664,9 +683,9 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
     }
 
     private void waitForVerifyAssignment(Admin adminClient,
-                                        String jsonString,
-                                        Boolean preserveThrottles,
-                                        VerifyAssignmentResult expectedResult) {
+                                         String jsonString,
+                                         Boolean preserveThrottles,
+                                         VerifyAssignmentResult expectedResult) {
         final VerifyAssignmentResult[] latestResult = {null};
         TestUtils.waitUntilTrue(
             () -> {
@@ -698,7 +717,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
         return cancelAssignment(adminClient, jsonString, preserveThrottles, 10000L, Time.SYSTEM);
     }
 
-    class BrokerDirs {
+    static class BrokerDirs {
         final DescribeLogDirsResult result;
         final int brokerId;
 
@@ -723,131 +742,99 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
         }
     }
 
-    class ReassignPartitionsTestCluster implements Closeable {
-        private final Map<String, String> configOverrides;
+    private void createTopics() throws InterruptedException, ExecutionException {
+        cluster.waitForReadyBrokers();
 
-        private final Map<Integer, Map<String, String>> brokerConfigOverrides;
+        adminClient = cluster.createAdminClient();
 
-        private final List<KafkaConfig> brokerConfigs = new ArrayList<>();
+        adminClient.createTopics(topics.entrySet().stream().map(e -> {
+            Map<Integer, List<Integer>> partMap = new HashMap<>();
 
-        private final Map<Integer, String> brokers = new HashMap<>(); {
-            brokers.put(0, "rack0");
-            brokers.put(1, "rack0");
-            brokers.put(2, "rack1");
-            brokers.put(3, "rack1");
-            brokers.put(4, "rack1");
-        }
+            Iterator<List<Integer>> partsIter = e.getValue().iterator();
+            int index = 0;
+            while (partsIter.hasNext()) {
+                partMap.put(index, partsIter.next());
+                index++;
+            }
+            return new NewTopic(e.getKey(), partMap);
+        }).collect(Collectors.toList())).all().get();
 
-        private final Map<String, List<List<Integer>>> topics = new HashMap<>(); {
-            topics.put("foo", Arrays.asList(Arrays.asList(0, 1, 2), Arrays.asList(1, 2, 3)));
-            topics.put("bar", Arrays.asList(Arrays.asList(3, 2, 1)));
-            topics.put("baz", Arrays.asList(Arrays.asList(1, 0, 2), Arrays.asList(2, 0, 1), Arrays.asList(0, 2, 1)));
-        }
+        topics.forEach((topicName, parts) ->
+            TestUtils.waitForAllPartitionsMetadata(toSeq(servers()), topicName, parts.size()));
 
-        private List<KafkaBroker> servers = new ArrayList<>();
-
-        private String brokerList;
-
-        private Admin adminClient;
-
-        public ReassignPartitionsTestCluster(Map<String, String> configOverrides, Map<Integer, Map<String, String>> brokerConfigOverrides) {
-            this.configOverrides = configOverrides;
-            this.brokerConfigOverrides = brokerConfigOverrides;
-
-            brokers.forEach((brokerId, rack) -> {
-                Properties config = TestUtils.createBrokerConfig(
-                    brokerId,
-                    zkConnectOrNull(),
-                    false, // shorten test time
-                    true,
-                    TestUtils.RandomPort(),
-                    scala.None$.empty(),
-                    scala.None$.empty(),
-                    scala.None$.empty(),
-                    true,
-                    false,
-                    TestUtils.RandomPort(),
-                    false,
-                    TestUtils.RandomPort(),
-                    false,
-                    TestUtils.RandomPort(),
-                    Some$.MODULE$.apply(rack),
-                    3,
-                    false,
-                    1,
-                    (short) 1,
-                    false);
-                // shorter backoff to reduce test durations when no active partitions are eligible for fetching due to throttling
-                config.setProperty(KafkaConfig.ReplicaFetchBackoffMsProp(), "100");
-                // Don't move partition leaders automatically.
-                config.setProperty(KafkaConfig.AutoLeaderRebalanceEnableProp(), "false");
-                config.setProperty(KafkaConfig.ReplicaLagTimeMaxMsProp(), "1000");
-                configOverrides.forEach(config::setProperty);
-                brokerConfigOverrides.getOrDefault(brokerId, Collections.emptyMap()).forEach(config::setProperty);
-
-                brokerConfigs.add(new KafkaConfig(config));
-            });
-        }
-
-        public void setup() throws ExecutionException, InterruptedException {
-            createServers();
-            createTopics();
-        }
-
-        public void createServers() {
-            brokers.keySet().forEach(brokerId ->
-                servers.add(createBroker(brokerConfigs.get(brokerId), Time.SYSTEM, true, scala.None$.empty()))
+        if (cluster.isKRaftTest()) {
+            TestUtils.ensureConsistentKRaftMetadata(
+                toSeq(servers()),
+                controllerServer(),
+                "Timeout waiting for controller metadata propagating to brokers"
             );
         }
+    }
 
-        public void createTopics() throws ExecutionException, InterruptedException {
-            TestUtils.waitUntilBrokerMetadataIsPropagated(toSeq(servers), org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS);
-            brokerList = TestUtils.plaintextBootstrapServers(toSeq(servers));
+    public void produceMessages(String topic, int partition, int numMessages) {
+        Properties props = new Properties();
+        props.put(BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
+        props.put(KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
+        props.put(VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
 
-            adminClient = Admin.create(Collections.singletonMap(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList));
-
-            adminClient.createTopics(topics.entrySet().stream().map(e -> {
-                Map<Integer, List<Integer>> partMap = new HashMap<>();
-
-                Iterator<List<Integer>> partsIter = e.getValue().iterator();
-                int index = 0;
-                while (partsIter.hasNext()) {
-                    partMap.put(index, partsIter.next());
-                    index++;
-                }
-                return new NewTopic(e.getKey(), partMap);
-            }).collect(Collectors.toList())).all().get();
-            topics.forEach((topicName, parts) -> {
-                TestUtils.waitForAllPartitionsMetadata(toSeq(servers), topicName, parts.size());
-            });
-
-            if (isKRaftTest()) {
-                TestUtils.ensureConsistentKRaftMetadata(
-                    toSeq(cluster.servers),
-                    controllerServer(),
-                    "Timeout waiting for controller metadata propagating to brokers"
-                );
-            }
+        try (KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(props)) {
+            IntStream.range(0, numMessages).forEach(i ->
+                producer.send(new ProducerRecord<>(topic, partition, null, new byte[10000])));
         }
+    }
 
-        public void produceMessages(String topic, int partition, int numMessages) {
-            List<ProducerRecord<byte[], byte[]>> records = IntStream.range(0, numMessages).mapToObj(i ->
-                new ProducerRecord<byte[], byte[]>(topic, partition,
-                    null, new byte[10000])).collect(Collectors.toList());
-            TestUtils.produceMessages(toSeq(servers), toSeq(records), -1);
-        }
+    public List<KafkaBroker> servers() {
+        Stream<? extends KafkaBroker> brokers = cluster.isKRaftTest()
+            ? ((RaftClusterInstance) cluster).brokers()
+            : ((ZkClusterInvocationContext.ZkClusterInstance) cluster).servers();
 
-        @Override
-        public void close() throws IOException {
-            brokerList = null;
-            Utils.closeQuietly(adminClient, "adminClient");
-            adminClient = null;
-            try {
-                TestUtils.shutdownServers(toSeq(servers), true);
-            } finally {
-                servers.clear();
-            }
-        }
+        return brokers.collect(Collectors.toList());
+    }
+
+    public ControllerServer controllerServer() {
+        return ((RaftClusterInstance) cluster).controllerServers().iterator().next();
+    }
+
+    public static void zkAndKRaft(ClusterGenerator generator) {
+        generator.accept(clusterConfig(ZK));
+        generator.accept(clusterConfig(KRAFT));
+    }
+
+    public static void zk(ClusterGenerator generator) {
+        generator.accept(clusterConfig(ZK));
+    }
+
+    private static ClusterConfig clusterConfig(Type type) {
+        ClusterConfig clusterConfig = ClusterConfig.defaultClusterBuilder()
+            .type(type)
+            .brokers(5)
+            .build();
+
+        BROKERS.forEach((brokerId, rack) -> {
+            Properties config = clusterConfig.brokerServerProperties(brokerId);
+            config.put(KafkaConfig.RackProp(), rack);
+            config.put(KafkaConfig.ControlledShutdownEnableProp(), false); // shorten test time
+            String logDirs = IntStream.range(1, 4).mapToObj(i -> {
+                // We would like to allow user to specify both relative path and absolute path as log directory for backward-compatibility reason
+                // We can verify this by using a mixture of relative path and absolute path as log directories in the test
+                return (i % 2 == 0
+                    ? TestUtils.tempDir()
+                    : TestUtils.tempRelativeDir("data")).getAbsolutePath();
+            }).collect(Collectors.joining(","));
+            config.put(KafkaConfig.LogDirsProp(), logDirs);
+            // shorter backoff to reduce test durations when no active partitions are eligible for fetching due to throttling
+            config.setProperty(KafkaConfig.ReplicaFetchBackoffMsProp(), "100");
+            // Don't move partition leaders automatically.
+            config.setProperty(KafkaConfig.AutoLeaderRebalanceEnableProp(), "false");
+            config.setProperty(KafkaConfig.ReplicaLagTimeMaxMsProp(), "1000");
+/*
+            configOverrides.forEach(config::setProperty);
+
+            brokerConfigOverrides.getOrDefault(brokerId, Collections.emptyMap()).forEach(config::setProperty);
+*/
+        });
+
+        return clusterConfig;
     }
 
     private static <T> Seq<T> toSeq(Collection<T> col) {
