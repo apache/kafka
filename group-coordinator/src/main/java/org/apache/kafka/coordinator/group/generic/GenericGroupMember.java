@@ -356,7 +356,7 @@ public class GenericGroupMember {
     public DescribeGroupsResponseData.DescribedGroupMember describeNoMetadata() {
         return new DescribeGroupsResponseData.DescribedGroupMember()
             .setMemberId(memberId())
-            .setGroupInstanceId(groupInstanceId().orElse("")) // TODO: what if groupInstanceId is null?
+            .setGroupInstanceId(groupInstanceId().orElse(null))
             .setClientId(clientId())
             .setClientHost(clientHost())
             .setMemberAssignment(assignment());

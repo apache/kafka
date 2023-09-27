@@ -33,6 +33,7 @@ import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnsupportedAssignorException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.HeartbeatRequestData;
 import org.apache.kafka.common.message.HeartbeatResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
@@ -8684,6 +8685,71 @@ public class GroupMetadataManagerTest {
         ).collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
 
         assertEquals(expectAllGroupMap, actualAllGroupMap);
+    }
+
+    @Test
+    public void testDescribeGroupStableForDynamicMember() throws Exception {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+        JoinGroupResponseData responseData = context.joinGenericGroupAsDynamicMemberAndCompleteRebalance("group-id");
+
+        List<DescribeGroupsResponseData.DescribedGroup> describedGroups =
+            context.groupMetadataManager.describeGroups(Collections.singletonList("group-id"));
+
+        assertEquals(responseData.protocolType(), describedGroups.get(0).protocolType());
+        assertEquals(responseData.protocolName(), describedGroups.get(0).protocolData());
+        assertEquals(responseData.members().stream().map(member -> member.memberId()).collect(Collectors.toList()),
+            describedGroups.get(0).members().stream().map(member -> member.memberId()).collect(Collectors.toList())
+        );
+    }
+
+    @Test
+    public void testDescribeGroupStableForStaticMember() throws Exception {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+        context.staticMembersJoinAndRebalance(
+            "group-id",
+            "leader-instance-id",
+            "follower-instance-id"
+        );
+        GenericGroup group = context.groupMetadataManager.getOrMaybeCreateGenericGroup("group-id", false);
+
+        List<DescribeGroupsResponseData.DescribedGroup> describedGroups =
+            context.groupMetadataManager.describeGroups(Collections.singletonList("group-id"));
+
+        assertEquals("consumer", describedGroups.get(0).protocolType());
+        assertEquals("range", describedGroups.get(0).protocolData());
+        assertEquals(group.allMembers().stream().map(member -> member.memberId()).collect(Collectors.toList()),
+            describedGroups.get(0).members().stream().map(member -> member.memberId()).collect(Collectors.toList())
+        );
+        assertEquals(group.allMembers().stream().map(member -> member.groupInstanceId().get()).collect(Collectors.toList()),
+            describedGroups.get(0).members().stream().map(member -> member.groupInstanceId()).collect(Collectors.toList())
+        );
+    }
+
+    @Test
+    public void testDescribeGroupRebalancing() throws Exception {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+        GenericGroup group = context.createGenericGroup("group-id");
+        JoinGroupResponseData responseData = context.joinGenericGroupAsDynamicMemberAndCompleteJoin(
+            new JoinGroupRequestBuilder()
+                .withGroupId("group-id")
+                .withMemberId(UNKNOWN_MEMBER_ID)
+                .withDefaultProtocolTypeAndProtocols()
+                .build()
+        );
+
+        List<DescribeGroupsResponseData.DescribedGroup> describedGroups =
+            context.groupMetadataManager.describeGroups(Collections.singletonList("group-id"));
+
+        assertTrue(group.isInState(COMPLETING_REBALANCE));
+        assertEquals(responseData.protocolType(), describedGroups.get(0).protocolType());
+        assertEquals("", describedGroups.get(0).protocolData());
+        assertTrue(describedGroups.get(0).members().stream().map(member -> member.memberId()).collect(Collectors.toList())
+            .contains(responseData.memberId()));
+        describedGroups.get(0).members().forEach(member -> assertTrue(member.memberMetadata().length == 0));
+        describedGroups.get(0).members().forEach(member -> assertTrue(member.memberAssignment().length == 0));
     }
 
     public static <T> void assertUnorderedListEquals(

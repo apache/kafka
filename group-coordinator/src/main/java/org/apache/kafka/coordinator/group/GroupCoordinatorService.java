@@ -489,7 +489,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 }
                 if (cnt.decrementAndGet() == 0) {
                     future.complete(new ListGroupsResponseData().setGroups(results));
-                    // TODO: call future.complete multiple times(?)
                 }
                 return null;
             });
