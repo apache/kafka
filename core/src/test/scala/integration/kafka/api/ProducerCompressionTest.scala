@@ -111,9 +111,9 @@ class ProducerCompressionTest extends QuorumTestHarness {
         // 1. send message without key and header
         responses += producer.send(new ProducerRecord(topic, null, now, null, message.getBytes))
         // 2. send message with key, without header
-        responses += producer.send(new ProducerRecord(topic, null, now, message.size.toString.getBytes, message.getBytes))
+        responses += producer.send(new ProducerRecord(topic, null, now, message.length.toString.getBytes, message.getBytes))
         // 3. send message with key and header
-        responses += producer.send(new ProducerRecord(topic, null, now, message.size.toString.getBytes, message.getBytes, headers))
+        responses += producer.send(new ProducerRecord(topic, null, now, message.length.toString.getBytes, message.getBytes, headers))
       }
       for ((future, offset) <- responses.zipWithIndex) {
         assertEquals(offset.toLong, future.get.offset)
@@ -126,10 +126,10 @@ class ProducerCompressionTest extends QuorumTestHarness {
       val records = TestUtils.consumeRecords(consumer, numRecords*3)
 
       for (i <- 0 until numRecords) {
-        val messageValue = messageValues.apply(i)
+        val messageValue = messageValues(i)
         // 1. verify message without key and header
         var offset = i * 3
-        var record = records.apply(offset)
+        var record = records(offset)
         assertNull(record.key())
         assertEquals(messageValue, new String(record.value))
         assertEquals(0, record.headers().toArray.length)
@@ -138,8 +138,8 @@ class ProducerCompressionTest extends QuorumTestHarness {
 
         // 2. verify message with key, without header
         offset = i * 3 + 1
-        record = records.apply(offset)
-        assertEquals(messageValue.size.toString, new String(record.key()))
+        record = records(offset)
+        assertEquals(messageValue.length.toString, new String(record.key()))
         assertEquals(messageValue, new String(record.value))
         assertEquals(0, record.headers().toArray.length)
         assertEquals(now, record.timestamp)
@@ -147,8 +147,8 @@ class ProducerCompressionTest extends QuorumTestHarness {
 
         // 3. verify message with key and header
         offset = i * 3 + 2
-        record = records.apply(offset)
-        assertEquals(messageValue.size.toString, new String(record.key()))
+        record = records(offset)
+        assertEquals(messageValue.length.toString, new String(record.key()))
         assertEquals(messageValue, new String(record.value))
         assertEquals(1, record.headers().toArray.length)
         assertEquals(headerArr.apply(0), record.headers().toArray.apply(0))
