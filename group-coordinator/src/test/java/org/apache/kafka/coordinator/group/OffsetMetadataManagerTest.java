@@ -183,6 +183,29 @@ public class OffsetMetadataManagerTest {
             return result;
         }
 
+        public CoordinatorResult<OffsetDeleteResponseData, Record> deleteOffsets(
+            OffsetDeleteRequestData request
+        ) {
+            snapshotRegistry.getOrCreateSnapshot(lastWrittenOffset); // TODO: lastCommitedOffset or lastWrittenOffset?
+
+            CoordinatorResult<OffsetDeleteResponseData, Record> result = offsetMetadataManager.deleteOffsets(request);
+            result.records().forEach(this::replay);
+            return result;
+        }
+
+        public void deleteAllOffsets(
+            String groupId,
+            List<Record> records
+        ) {
+            snapshotRegistry.getOrCreateSnapshot(lastWrittenOffset); // TODO: lastCommitedOffset or lastWrittenOffset?
+
+            List<Record> addedRecords = new ArrayList<>();
+            offsetMetadataManager.deleteAllOffsets(groupId, addedRecords);
+            addedRecords.forEach(this::replay);
+
+            records.addAll(addedRecords);
+        }
+
         public List<OffsetFetchResponseData.OffsetFetchResponseTopics> fetchOffsets(
             String groupId,
             List<OffsetFetchRequestData.OffsetFetchRequestTopics> topics,
@@ -277,6 +300,20 @@ public class OffsetMetadataManagerTest {
                     OptionalLong.empty()
                 ),
                 MetadataVersion.latest()
+            ));
+        }
+
+        public void deleteOffset(
+            String groupId,
+            String topic,
+            int partition
+        ) {
+            snapshotRegistry.getOrCreateSnapshot(lastWrittenOffset); // TODO: lastCommitedOffset or lastWrittenOffset?
+
+            replay(RecordHelpers.newOffsetCommitTombstoneRecord(
+                    groupId,
+                    topic,
+                    partition
             ));
         }
 
@@ -1606,7 +1643,7 @@ public class OffsetMetadataManagerTest {
             ) :
             Collections.emptyList();
 
-        CoordinatorResult<OffsetDeleteResponseData, Record> coordinatorResult = context.offsetMetadataManager.deleteOffsets(
+        CoordinatorResult<OffsetDeleteResponseData, Record> coordinatorResult = context.deleteOffsets(
             new OffsetDeleteRequestData()
                 .setGroupId(groupId)
                 .setTopics(requestTopicCollection)
@@ -1712,7 +1749,7 @@ public class OffsetMetadataManagerTest {
             RecordHelpers.newOffsetCommitTombstoneRecord("foo", "bar-1", 0)
         );
         List<Record> records = new ArrayList<>();
-        context.offsetMetadataManager.deleteAllOffsets("foo", records);
+        context.deleteAllOffsets("foo", records);
 
         assertTrue(expectedRecords.containsAll(records) && records.containsAll(expectedRecords));
     }
