@@ -26,7 +26,6 @@ import org.apache.kafka.common.errors.FencedMemberEpochException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.GroupMaxSizeReachedException;
 import org.apache.kafka.common.errors.IllegalGenerationException;
-import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnknownServerException;
@@ -9432,13 +9431,6 @@ public class GroupMetadataManagerTest {
         List<Record> records = new ArrayList<>();
         context.groupMetadataManager.deleteGroup("group-id", records);
         assertEquals(expectedRecords, records);
-    }
-
-    @Test
-    public void testValidateGroupDelete() {
-        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .build();
-        assertThrows(InvalidGroupIdException.class, () -> context.groupMetadataManager.validateGroupDelete(null));
     }
 
     private static void assertNoOrEmptyResult(List<ExpiredTimeout<Void, Record>> timeouts) {

@@ -1105,7 +1105,12 @@ public class GroupCoordinatorServiceTest {
 
         DeleteGroupsResponseData.DeletableGroupResultCollection expectedResultCollection =
             new DeleteGroupsResponseData.DeletableGroupResultCollection();
-        expectedResultCollection.addAll(Arrays.asList(result1.duplicate(), result2.duplicate(), result3.duplicate()));
+        expectedResultCollection.addAll(Arrays.asList(
+            new DeleteGroupsResponseData.DeletableGroupResult().setGroupId(null).setErrorCode(Errors.INVALID_GROUP_ID.code()),
+            result1.duplicate(),
+            result2.duplicate(),
+            result3.duplicate()
+        ));
 
         when(runtime.partitions()).thenReturn(Sets.newSet(
             new TopicPartition("__consumer_offsets", 0),
@@ -1134,7 +1139,7 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.any()
         )).thenReturn(FutureUtils.failedFuture(new CoordinatorLoadInProgressException(null)));
 
-        List<String> groupIds = Arrays.asList("group-id-1", "group-id-2", "group-id-3");
+        List<String> groupIds = Arrays.asList("group-id-1", "group-id-2", "group-id-3", null);
         CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> future =
             service.deleteGroups(requestContext(ApiKeys.DELETE_GROUPS), groupIds, BufferSupplier.NO_CACHING);
 

@@ -3092,12 +3092,6 @@ public class GroupMetadataManager {
      * @param groupId The group id of the group to be deleted.
      */
     void validateGroupDelete(String groupId) throws ApiException {
-
-        // For backwards compatibility, we support group delete for the empty groupId.
-        if (groupId == null) {
-            throw Errors.INVALID_GROUP_ID.exception();
-        }
-
         Group group = group(groupId);
         group.validateGroupDelete();
     }

@@ -526,16 +526,25 @@ public class GroupCoordinatorService implements GroupCoordinator {
             return FutureUtils.failedFuture(Errors.COORDINATOR_NOT_AVAILABLE.exception());
         }
 
-        final Map<TopicPartition, List<String>> groupsByTopicPartition = new HashMap<>();
-        groupIds.forEach(groupId -> {
-            final TopicPartition topicPartition = topicPartitionFor(groupId);
-            groupsByTopicPartition
-                .computeIfAbsent(topicPartition, __ -> new ArrayList<>())
-                .add(groupId);
-        });
-
         final List<CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection>> futures =
             new ArrayList<>(groupIds.size());
+
+        final Map<TopicPartition, List<String>> groupsByTopicPartition = new HashMap<>();
+        groupIds.forEach(groupId -> {
+            // For backwards compatibility, we support fetch commits for the empty group id.
+            if (groupId == null) {
+                futures.add(CompletableFuture.completedFuture(DeleteGroupsRequest.getErrorResultCollection(
+                    Collections.singletonList(null),
+                    Errors.INVALID_GROUP_ID
+                )));
+            } else {
+                final TopicPartition topicPartition = topicPartitionFor(groupId);
+                groupsByTopicPartition
+                    .computeIfAbsent(topicPartition, __ -> new ArrayList<>())
+                    .add(groupId);
+            }
+        });
+
         groupsByTopicPartition.forEach((topicPartition, groupList) -> {
             CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> future =
                 runtime.scheduleWriteOperation(
