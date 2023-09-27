@@ -143,9 +143,9 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
       case _ =>
         // the broker assigns absolute offsets for message format 0 which potentially causes the compressed size to
         // increase because the broker offsets are larger than the ones assigned by the client
-        // adding `5` to the message set size is good enough for this test: it covers the increased message size while
+        // adding `6` to the message set size is good enough for this test: it covers the increased message size while
         // still being less than the overhead introduced by the conversion from message format version 0 to 1
-        largeMessageSet.sizeInBytes + 5
+        largeMessageSet.sizeInBytes + 6
     }
 
     cleaner = makeCleaner(partitions = topicPartitions, maxMessageSize = maxMessageSize)

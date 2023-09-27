@@ -122,7 +122,7 @@ versions += [
   scalaJava8Compat : "1.0.2",
   scoverage: "1.9.3",
   slf4j: "1.7.36",
-  snappy: "1.1.10.1",
+  snappy: "1.1.10.4",
   spotbugs: "4.7.3",
   // New version of Swagger 2.2.14 requires minimum JDK 11.
   swaggerAnnotations: "2.2.8",
