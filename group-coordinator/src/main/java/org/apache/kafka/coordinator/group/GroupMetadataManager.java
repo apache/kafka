@@ -454,7 +454,7 @@ public class GroupMetadataManager {
     public List<DescribeGroupsResponseData.DescribedGroup> describeGroups(
         List<String> groupIds
     ) {
-        List<DescribeGroupsResponseData.DescribedGroup> describedGroups = new ArrayList<>();
+        final List<DescribeGroupsResponseData.DescribedGroup> describedGroups = new ArrayList<>();
         groupIds.forEach(groupId -> {
             try {
                 GenericGroup group = getOrMaybeCreateGenericGroup(groupId, false);
