@@ -127,6 +127,7 @@ import static org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequ
 import static org.apache.kafka.common.requests.JoinGroupRequest.UNKNOWN_MEMBER_ID;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
+import static org.apache.kafka.coordinator.group.GroupMetadataManager.LEAVE_GROUP_EPOCH;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.appendGroupMetadataErrorToResponseError;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.consumerGroupRevocationTimeoutKey;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.consumerGroupSessionTimeoutKey;
@@ -1867,7 +1868,7 @@ public class GroupMetadataManagerTest {
             new ConsumerGroupHeartbeatRequestData()
                 .setGroupId(groupId)
                 .setMemberId(memberId2)
-                .setMemberEpoch(-1)
+                .setMemberEpoch(LEAVE_GROUP_EPOCH)
                 .setRebalanceTimeoutMs(5000)
                 .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
                 .setTopicPartitions(Collections.emptyList()));
@@ -1875,7 +1876,7 @@ public class GroupMetadataManagerTest {
         assertResponseEquals(
             new ConsumerGroupHeartbeatResponseData()
                 .setMemberId(memberId2)
-                .setMemberEpoch(-1),
+                .setMemberEpoch(LEAVE_GROUP_EPOCH),
             result.response()
         );
 
@@ -3259,8 +3260,8 @@ public class GroupMetadataManagerTest {
             new ConsumerGroupHeartbeatRequestData()
                 .setGroupId(groupId)
                 .setMemberId(memberId)
-                .setMemberEpoch(-1));
-        assertEquals(-1, result.response().memberEpoch());
+                .setMemberEpoch(LEAVE_GROUP_EPOCH));
+        assertEquals(LEAVE_GROUP_EPOCH, result.response().memberEpoch());
 
         // Verify that there are no timers.
         context.assertNoSessionTimeout(groupId, memberId);
