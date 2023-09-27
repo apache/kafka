@@ -165,7 +165,7 @@ public class GroupCoordinatorShardTest {
     }
 
     @Test
-    public void testDeleteInvalidGroup() {
+    public void testDeleteGroupsInvalidGroupId() {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(

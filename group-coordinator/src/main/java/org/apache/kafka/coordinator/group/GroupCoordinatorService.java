@@ -531,7 +531,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
 
         final Map<TopicPartition, List<String>> groupsByTopicPartition = new HashMap<>();
         groupIds.forEach(groupId -> {
-            // For backwards compatibility, we support fetch commits for the empty group id.
+            // For backwards compatibility, we support DeleteGroups for the empty group id.
             if (groupId == null) {
                 futures.add(CompletableFuture.completedFuture(DeleteGroupsRequest.getErrorResultCollection(
                     Collections.singletonList(null),
