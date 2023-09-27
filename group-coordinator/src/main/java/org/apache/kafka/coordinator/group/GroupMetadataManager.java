@@ -644,6 +644,22 @@ public class GroupMetadataManager {
     }
 
     /**
+     * Throws an InvalidRequestException if the value is null.
+     *
+     * @param value The value.
+     * @param error The error message.
+     * @throws InvalidRequestException
+     */
+    private void throwIfNull(
+            Object value,
+            String error
+    ) throws InvalidRequestException {
+        if (value == null) {
+            throw new InvalidRequestException(error);
+        }
+    }
+
+    /**
      * Validates the request.
      *
      * @param request The request to validate.
@@ -671,6 +687,9 @@ public class GroupMetadataManager {
             if (request.subscribedTopicNames() == null || request.subscribedTopicNames().isEmpty()) {
                 throw new InvalidRequestException("SubscribedTopicNames must be set in first request.");
             }
+        } else if (request.memberEpoch() == -2) {
+            throwIfEmptyString(request.memberId(), "MemberId can't be empty.");
+            throwIfNull(request.instanceId(), "InstanceId can't be empty for Static Member.");
         } else {
             throw new InvalidRequestException("MemberEpoch is invalid.");
         }
@@ -987,13 +1006,15 @@ public class GroupMetadataManager {
      * Handles leave request from a consumer group member.
      * @param groupId       The group id from the request.
      * @param memberId      The member id from the request.
+     * @param memberEpoch   The member epoch from the request.
      *
      * @return A Result containing the ConsumerGroupHeartbeat response and
      *         a list of records to update the state machine.
      */
     private CoordinatorResult<ConsumerGroupHeartbeatResponseData, Record> consumerGroupLeave(
         String groupId,
-        String memberId
+        String memberId,
+        int memberEpoch
     ) throws ApiException {
         ConsumerGroup group = getOrMaybeCreateConsumerGroup(groupId, false);
         ConsumerGroupMember member = group.getOrMaybeCreateMember(memberId, false);
@@ -1001,15 +1022,12 @@ public class GroupMetadataManager {
         List<Record> records = new ArrayList<>();
         // The departing member is a static one. We don't need to fence this member because it is
         // expected to come back within session timeout
-        if (member.instanceId() != null) {
+        if (memberEpoch == -2) {
             log.info("Member {} with instance id {} is a static member and will not be fenced from the group", memberId, member.instanceId());
         } else {
             log.info("[GroupId {}] Member {} left the consumer group.", groupId, memberId);
             records.addAll(consumerGroupFenceMember(group, member));
         }
-        // It should be ok to return -1 as the member epoch for a member even if it's a static member because it will
-        // join back with member id 0 and the heartbeat thread handler should be able to detect if it's a re-joining
-        // static member with the same instance id
         return new CoordinatorResult<>(records, new ConsumerGroupHeartbeatResponseData()
             .setMemberId(memberId)
             .setMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH));
@@ -1172,10 +1190,13 @@ public class GroupMetadataManager {
     ) throws ApiException {
         throwIfConsumerGroupHeartbeatRequestIsInvalid(request);
 
-        if (request.memberEpoch() == LEAVE_GROUP_MEMBER_EPOCH) {
+        if (request.memberEpoch() == LEAVE_GROUP_MEMBER_EPOCH || request.memberEpoch() == -2) {
+            // -1 means that the member wants to leave the group.
+            // -2 means that a static member wants to leave the group.
             return consumerGroupLeave(
                 request.groupId(),
-                request.memberId()
+                request.memberId(),
+                request.memberEpoch()
             );
         } else {
             // Otherwise, it is a regular heartbeat.
