@@ -310,7 +310,7 @@ public class RemoteIndexCache implements Closeable {
         if (Files.exists(indexFile.toPath())) {
             try {
                 index = readIndex.apply(indexFile);
-            } catch (CorruptRecordException ex) {
+            } catch (CorruptIndexException ex) {
                 log.info("Error occurred while loading the stored index file {}", indexFile.getPath(), ex);
             }
         }

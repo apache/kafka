@@ -32,7 +32,7 @@ import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito._
 import org.slf4j.{Logger, LoggerFactory}
 
-import java.io.{File, FileInputStream, IOException}
+import java.io.{File, FileInputStream, IOException, PrintWriter}
 import java.nio.file.Files
 import java.util
 import java.util.Collections
@@ -524,6 +524,23 @@ class RemoteIndexCacheTest {
     }
   }
 
+  @Test
+  def testCorruptOffsetIndexFileExistsButNotInCache(): Unit = {
+    // create Corrupt Offset Index File
+    createCorruptRemoteIndexCacheOffsetFile()
+    val entry = cache.getIndexEntry(rlsMetadata)
+    // Test would fail if it throws corrupt Exception
+    val expectedOffsetIndexFileName: String = remoteOffsetIndexFileName(rlsMetadata)
+    val offsetIndexFile = entry.offsetIndex.file().toPath
+
+    assertEquals(expectedOffsetIndexFileName, offsetIndexFile.getFileName.toString)
+    // assert that parent directory for the index files is correct
+    assertEquals(RemoteIndexCache.DIR_NAME, offsetIndexFile.getParent.getFileName.toString,
+      s"offsetIndex=$offsetIndexFile is not overwrite under incorrect parent")
+    // file is corrupted it should fetch from remote storage again
+    verifyFetchIndexInvocation(count = 1)
+  }
+
   private def generateSpyCacheEntry(remoteLogSegmentId: RemoteLogSegmentId
                                     = RemoteLogSegmentId.generateNew(idPartition)): RemoteIndexCache.Entry = {
     val rlsMetadata = new RemoteLogSegmentMetadata(remoteLogSegmentId, baseOffset, lastOffset,
@@ -598,4 +615,11 @@ class RemoteIndexCacheTest {
       timeIndex.flush()
     }
   }
+
+  private def createCorruptRemoteIndexCacheOffsetFile(): Unit = {
+    val pw =  new PrintWriter((remoteOffsetIndexFile(new File(tpDir,RemoteIndexCache.DIR_NAME),rlsMetadata)))
+    pw.write("Hello, world")
+    pw.close()
+  }
+
 }
