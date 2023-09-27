@@ -517,6 +517,48 @@ public class EmbeddedConnectClusterAssertions {
     }
 
     /**
+     * Assert that a connector and its tasks are deleted.
+     *
+     * @param connectorName the connector name
+     * @param detailMessage the assertion message
+     * @throws InterruptedException
+     */
+    public void assertConnectorAndTasksAreDeleted(String connectorName, String detailMessage)
+            throws InterruptedException {
+        try {
+            waitForCondition(
+                () -> checkConnectorAndTasksAreDeleted(connectorName),
+                CONNECTOR_SETUP_DURATION_MS,
+                "At least the connector or one of its tasks still exists.");
+        } catch (AssertionError e) {
+            throw new AssertionError(detailMessage, e);
+        }
+    }
+
+    /**
+     * Check whether the connector or any of its tasks still exist.
+     *
+     * @param connectorName the connector
+     * @return true if the connector and all the tasks are not in RUNNING state; false otherwise
+     */
+    protected boolean checkConnectorAndTasksAreDeleted(String connectorName) {
+        ConnectorStateInfo info;
+        try {
+            info = connect.connectorStatus(connectorName);
+        } catch (ConnectRestException e) {
+            return e.statusCode() == Response.Status.NOT_FOUND.getStatusCode();
+        } catch (Exception e) {
+            log.error("Could not check connector state info.", e);
+            return false;
+        }
+        if (info == null) {
+            return true;
+        }
+        return false;
+    }
+
+ 
+    /**
      * Check whether the given connector state matches the current state of the connector and
      * whether it has at least the given number of tasks, with all the tasks matching the given
      * task state.

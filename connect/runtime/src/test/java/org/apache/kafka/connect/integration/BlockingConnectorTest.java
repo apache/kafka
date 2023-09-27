@@ -22,6 +22,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.Config;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.ConnectorContext;
 import org.apache.kafka.connect.connector.Task;
@@ -197,6 +198,7 @@ public class BlockingConnectorTest {
         waitForConnectorStart(BLOCKING_CONNECTOR_NAME);
         connect.deleteConnector(BLOCKING_CONNECTOR_NAME);
         Block.waitForBlock();
+        waitForConnectorDeleted(BLOCKING_CONNECTOR_NAME);
 
         createNormalConnector();
         verifyNormalConnector();
@@ -219,6 +221,7 @@ public class BlockingConnectorTest {
         waitForConnectorStart(BLOCKING_CONNECTOR_NAME);
         connect.deleteConnector(BLOCKING_CONNECTOR_NAME);
         Block.waitForBlock();
+        waitForConnectorDeleted(BLOCKING_CONNECTOR_NAME);
 
         createNormalConnector();
         verifyNormalConnector();
@@ -241,6 +244,7 @@ public class BlockingConnectorTest {
         waitForConnectorStart(BLOCKING_CONNECTOR_NAME);
         connect.deleteConnector(BLOCKING_CONNECTOR_NAME);
         Block.waitForBlock();
+        waitForConnectorDeleted(BLOCKING_CONNECTOR_NAME);
 
         createNormalConnector();
         verifyNormalConnector();
@@ -260,6 +264,10 @@ public class BlockingConnectorTest {
         // connector should be created and we can ensure that it blocks again
         Block.waitForBlock();
         verifyNormalConnector();
+
+        // ensure the Tasks are actually cleaned up
+        connect.deleteConnector(BLOCKING_CONNECTOR_NAME);
+        waitForConnectorDeleted(BLOCKING_CONNECTOR_NAME);
     }
 
     @Test
@@ -275,6 +283,49 @@ public class BlockingConnectorTest {
         connect.addWorker();
         waitForConnectorStart(BLOCKING_CONNECTOR_NAME);
         verifyNormalConnector();
+
+        // ensure the Tasks are actually cleaned up
+        connect.deleteConnector(BLOCKING_CONNECTOR_NAME);
+        waitForConnectorDeleted(BLOCKING_CONNECTOR_NAME);
+    }
+
+    @Test
+    public void testWorkerRestartWithBlockInTaskStart() throws Exception {
+        log.info("Starting test testWorkerRestartWithBlockInTaskStart");
+        createConnectorWithBlock(BlockingSourceConnector.class, TASK_START);
+        // First instance of the connector should block on startup
+        Block.waitForBlock();
+        createNormalConnector();
+        connect.removeWorker();
+
+        connect.addWorker();
+        // After stopping the only worker and restarting it, a new instance of the blocking
+        // connector should be created and we can ensure that it blocks again
+        Block.waitForBlock();
+        verifyNormalConnector();
+
+        // ensure the Tasks are actually cleaned up
+        connect.deleteConnector(BLOCKING_CONNECTOR_NAME);
+        waitForConnectorDeleted(BLOCKING_CONNECTOR_NAME);
+    }
+
+    @Test
+    public void testWorkerRestartWithBlockInTaskStop() throws Exception {
+        log.info("Starting test testWorkerRestartWithBlockInTaskStop");
+        createConnectorWithBlock(BlockingSinkConnector.class, TASK_STOP);
+        waitForTaskStart(BLOCKING_CONNECTOR_NAME);
+        createNormalConnector();
+        waitForTaskStart(NORMAL_CONNECTOR_NAME);
+        connect.removeWorker();
+        Block.waitForBlock();
+
+        connect.addWorker();
+        waitForTaskStart(BLOCKING_CONNECTOR_NAME);
+        verifyNormalConnector();
+
+        // ensure the Tasks are actually cleaned up
+        connect.deleteConnector(BLOCKING_CONNECTOR_NAME);
+        waitForConnectorDeleted(BLOCKING_CONNECTOR_NAME);
     }
 
     private void createConnectorWithBlock(Class<? extends Connector> connectorClass, String block) {
@@ -321,6 +372,21 @@ public class BlockingConnectorTest {
                 connector
             )
         );
+    }
+
+    private void waitForTaskStart(String connector) throws InterruptedException {
+        connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(
+            connector,
+            1,
+            String.format(
+                "Failed to observe a running Task in connector '%s' in time",
+                connector
+            )
+        );
+    }
+
+    private void waitForConnectorDeleted(String connector) throws InterruptedException {
+        connect.assertions().assertConnectorAndTasksAreDeleted(connector, "Connector " + connector + " still exists.");
     }
 
     private void verifyNormalConnector() throws InterruptedException {
@@ -606,6 +672,8 @@ public class BlockingConnectorTest {
             @Override
             public List<SourceRecord> poll() {
                 block.maybeBlockOn(SOURCE_TASK_POLL);
+                // even when not blocking, pause to prevent a tight loop
+                Utils.sleep(1000);
                 return null;
             }
 
