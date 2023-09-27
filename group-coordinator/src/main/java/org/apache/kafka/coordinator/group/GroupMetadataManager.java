@@ -31,6 +31,7 @@ import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnsupportedAssignorException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.HeartbeatRequestData;
 import org.apache.kafka.common.message.HeartbeatResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol;
@@ -442,6 +443,55 @@ public class GroupMetadataManager {
             groupStream = groupStream.filter(group -> statesFilter.contains(group.stateAsString(committedOffset)));
         }
         return groupStream.map(group -> group.asListedGroup(committedOffset)).collect(Collectors.toList());
+    }
+
+    /**
+     * Handles a DescribeGroup request.
+     *
+     * @param groupIds The IDs of the groups to describe.
+     * @return A list containing the DescribeGroupsResponseData.DescribedGroup.
+     */
+    public List<DescribeGroupsResponseData.DescribedGroup> describeGroups(
+        List<String> groupIds
+    ) {
+        List<DescribeGroupsResponseData.DescribedGroup> describedGroups = new ArrayList<>();
+        groupIds.forEach(groupId -> {
+            try {
+                GenericGroup group = getOrMaybeCreateGenericGroup(groupId, false);
+                if (group.isInState(STABLE)) {
+                    if (!group.protocolName().isPresent()) {
+                        throw new IllegalStateException("Invalid null group protocol for stable group");
+                    }
+
+                    describedGroups.add(new DescribeGroupsResponseData.DescribedGroup()
+                        .setGroupId(groupId)
+                        .setGroupState(group.stateAsString())
+                        .setProtocolType(group.protocolType().orElse(""))
+                        .setProtocolData(group.protocolName().get())
+                        .setMembers(group.allMembers().stream()
+                            .map(member -> member.describe(group.protocolName().get()))
+                            .collect(Collectors.toList())
+                        )
+                    );
+                } else {
+                    describedGroups.add(new DescribeGroupsResponseData.DescribedGroup()
+                        .setGroupId(groupId)
+                        .setGroupState(group.stateAsString())
+                        .setProtocolType(group.protocolType().orElse(""))
+                        .setMembers(group.allMembers().stream()
+                            .map(member -> member.describeNoMetadata())
+                            .collect(Collectors.toList())
+                        )
+                    );
+                }
+            } catch (ApiException exception) {
+                describedGroups.add(new DescribeGroupsResponseData.DescribedGroup()
+                    .setGroupId(groupId)
+                    .setErrorCode(Errors.forException(exception).code())
+                );
+            }
+        });
+        return describedGroups;
     }
 
     /**
