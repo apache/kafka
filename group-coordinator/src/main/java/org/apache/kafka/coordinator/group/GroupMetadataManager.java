@@ -688,8 +688,9 @@ public class GroupMetadataManager {
                 throw new InvalidRequestException("SubscribedTopicNames must be set in first request.");
             }
         } else if (request.memberEpoch() == -2) {
-            throwIfEmptyString(request.memberId(), "MemberId can't be empty.");
-            throwIfNull(request.instanceId(), "InstanceId can't be null for Static Member.");
+            throwIfEmptyString(request.memberId(), "MemberId can't be empty. GroupId: " + request.groupId());
+            throwIfNull(request.instanceId(), "InstanceId can't be null for Static Member. GroupId: "
+                    + request.groupId() + " MemberId: " + request.memberId());
         } else {
             throw new InvalidRequestException("MemberEpoch is invalid.");
         }
@@ -1023,7 +1024,8 @@ public class GroupMetadataManager {
         // The departing member is a static one. We don't need to fence this member because it is
         // expected to come back within session timeout
         if (memberEpoch == -2) {
-            log.info("Member {} with instance id {} is a static member and will not be fenced from the group", memberId, member.instanceId());
+            log.info("[GroupId {}] Member {} with instance id {} is a static member and will not be fenced from the group",
+                    groupId, memberId, member.instanceId());
         } else {
             log.info("[GroupId {}] Member {} left the consumer group.", groupId, memberId);
             records.addAll(consumerGroupFenceMember(group, member));
