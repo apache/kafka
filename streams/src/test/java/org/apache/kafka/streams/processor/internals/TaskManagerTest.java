@@ -1625,12 +1625,9 @@ public class TaskManagerTest {
             .withInputPartitions(taskId03Partitions).build();
         final TasksRegistry tasks = Mockito.mock(TasksRegistry.class);
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
-        when(tasks.contains(taskId00)).thenReturn(true);
-        when(tasks.contains(taskId01)).thenReturn(false);
-        when(tasks.contains(taskId02)).thenReturn(false);
-        when(tasks.contains(taskId03)).thenReturn(false);
-        when(tasks.allTasks()).thenReturn(mkSet(runningStatefulTask));
+        when(tasks.allTasksPerId()).thenReturn(mkMap(mkEntry(taskId00, runningStatefulTask)));
         when(stateUpdater.getTasks()).thenReturn(mkSet(standbyTask, restoringStatefulTask));
+        when(tasks.allTasks()).thenReturn(mkSet(runningStatefulTask));
         expectLockObtainedFor(taskId00, taskId01, taskId02, taskId03);
         expectUnlockFor(taskId03);
         makeTaskFolders(

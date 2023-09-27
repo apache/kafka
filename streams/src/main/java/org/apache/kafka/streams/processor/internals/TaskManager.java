@@ -1224,11 +1224,10 @@ public class TaskManager {
      */
     private void releaseLockedUnassignedTaskDirectories() {
         final Iterator<TaskId> taskIdIterator = lockedTaskDirectories.iterator();
-        final Set<TaskId> tasksInStateUpdater = stateUpdater != null
-            ? stateUpdater.getTasks().stream().map(Task::id).collect(Collectors.toSet()) : new HashSet<>();
+        final Map<TaskId, Task> allTasks = allTasks();
         while (taskIdIterator.hasNext()) {
             final TaskId id = taskIdIterator.next();
-            if (!tasks.contains(id) && !tasksInStateUpdater.contains(id)) {
+            if (!allTasks.containsKey(id)) {
                 stateDirectory.unlock(id);
                 taskIdIterator.remove();
             }
