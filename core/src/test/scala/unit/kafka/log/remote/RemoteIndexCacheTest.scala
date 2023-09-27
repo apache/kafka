@@ -617,9 +617,10 @@ class RemoteIndexCacheTest {
   }
 
   private def createCorruptRemoteIndexCacheOffsetFile(): Unit = {
-    val pw =  new PrintWriter((remoteOffsetIndexFile(new File(tpDir, RemoteIndexCache.DIR_NAME), rlsMetadata)))
-    // The size of the string is (ENTRY_SIZE + 1) bytes but it should be multiple of EntrySIZE which is equal to 8.
-    // OffsetIndex File Sanity Check fails
+    val pw =  new PrintWriter((remoteOffsetIndexFile(new File(tpDir, RemoteIndexCache.DIR_NAME),rlsMetadata)))
+    pw.write("Hello, world")
+    // The size of the string written in the file is 12 bytes,
+    // but it should be multiple of Offset Index EntrySIZE which is equal to 8.
     pw.close()
   }
 
