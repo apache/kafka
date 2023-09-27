@@ -36,22 +36,24 @@ import java.util.HashSet;
 import java.util.Set;
 
 /**
- * Manages the request creation and response handling for the heartbeat. The module creates a {@link ConsumerGroupHeartbeatRequest}
- * using the state stored in the {@link MembershipManager} and enqueue it to the network queue to be sent out. Once
- * the response is received, the module will update the state in the {@link MembershipManager} and handle any errors.
+ * <p>Manages the request creation and response handling for the heartbeat. The module creates a
+ * {@link ConsumerGroupHeartbeatRequest} using the state stored in the {@link MembershipManager} and enqueue it to
+ * the network queue to be sent out. Once the response is received, the module will update the state in the
+ * {@link MembershipManager} and handle any errors.</p>
  *
- * The manager only emits heartbeat when the member is in a group, tries to join or rejoin a group.
+ * <p>The manager only emits heartbeat when the member is in a group, tries to join or rejoin a group.
  * If the member does not have groupId configured, got kicked out of the group, or encountering fatal exceptions, the
- * heartbeat will not be sent.
+ * heartbeat will not be sent.</p>
  *
- * If the coordinator not is not found, we will skip sending the heartbeat and try to find a coordinator first.
+ * <p>If the coordinator not is not found, we will skip sending the heartbeat and try to find a coordinator first.</p>
  *
- * If the heartbeat failed due to retriable errors, such as, TimeoutException. The subsequent attempt will be backoff
- * exponentially.
+ * <p>If the heartbeat failed due to retriable errors, such as, TimeoutException. The subsequent attempt will be
+ * backoff exponentially.</p>
  *
- * If the member completes the assignment changes, i.e. revocation and assignment, a heartbeat request will be sent in
- * the next event loop.
- * {@link HeartbeatRequestState} for more details.
+ * <p>If the member completes the assignment changes, i.e. revocation and assignment, a heartbeat request will be
+ * sent in the next event loop.</p>
+ *
+ * <p>See {@link HeartbeatRequestState} for more details.</p>
  */
 public class HeartbeatRequestManager implements RequestManager {
     private final Logger logger;
