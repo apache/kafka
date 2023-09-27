@@ -134,7 +134,7 @@ public class CommitRequestManagerTest {
         offsets2.put(new TopicPartition("test", 4), new OffsetAndMetadata(20L));
 
         // Add the requests to the CommitRequestManager and store their futures
-        ArrayList<CompletableFuture<ClientResponse>> commitFutures = new ArrayList<>();
+        ArrayList<CompletableFuture<Void>> commitFutures = new ArrayList<>();
         ArrayList<CompletableFuture<Map<TopicPartition, OffsetAndMetadata>>> fetchFutures = new ArrayList<>();
         commitFutures.add(commitManager.addOffsetCommitRequest(offsets1));
         fetchFutures.add(commitManager.addOffsetFetchRequest(Collections.singleton(new TopicPartition("test", 0))));

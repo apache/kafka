@@ -149,7 +149,7 @@ class LogLoaderTest {
           val segments = new LogSegments(topicPartition)
           val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(logDir, topicPartition, logDirFailureChannel, config.recordVersion, "")
           val producerStateManager = new ProducerStateManager(topicPartition, logDir,
-            maxTransactionTimeoutMs, producerStateManagerConfig, time)
+            this.maxTransactionTimeoutMs, this.producerStateManagerConfig, time)
           val logLoader = new LogLoader(logDir, topicPartition, config, time.scheduler, time,
             logDirFailureChannel, hadCleanShutdown, segments, logStartOffset, logRecoveryPoint,
             leaderEpochCache, producerStateManager)
@@ -158,7 +158,7 @@ class LogLoaderTest {
             offsets.nextOffsetMetadata, mockTime.scheduler, mockTime, topicPartition,
             logDirFailureChannel)
           new UnifiedLog(offsets.logStartOffset, localLog, brokerTopicStats,
-            producerIdExpirationCheckIntervalMs, leaderEpochCache,
+            this.producerIdExpirationCheckIntervalMs, leaderEpochCache,
             producerStateManager, None, true)
         }
       }

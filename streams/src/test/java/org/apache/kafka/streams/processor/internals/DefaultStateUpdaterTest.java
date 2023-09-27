@@ -1044,6 +1044,24 @@ class DefaultStateUpdaterTest {
     }
 
     @Test
+    public void shouldIdleWhenAllTasksPaused() throws Exception {
+        final StreamTask task = statefulTask(TASK_0_0, mkSet(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
+        stateUpdater.start();
+        stateUpdater.add(task);
+
+        when(topologyMetadata.isPaused(null)).thenReturn(true);
+
+        verifyPausedTasks(task);
+        verifyIdle();
+
+        when(topologyMetadata.isPaused(null)).thenReturn(false);
+        stateUpdater.signalResume();
+
+        verifyPausedTasks();
+        verifyUpdatingTasks(task);
+    }
+
+    @Test
     public void shouldResumeStandbyTask() throws Exception {
         final StandbyTask task = standbyTask(TASK_0_0, mkSet(TOPIC_PARTITION_A_0)).inState(State.RUNNING).build();
         shouldResumeStatefulTask(task);
@@ -1765,6 +1783,14 @@ class DefaultStateUpdaterTest {
                 "Did not get all removed task within the given timeout!"
             );
         }
+    }
+
+    private void verifyIdle() throws Exception {
+        waitForCondition(
+            () -> stateUpdater.isIdle(),
+            VERIFICATION_TIMEOUT,
+            "State updater did not enter an idling state!"
+        );
     }
 
     private void verifyPausedTasks(final Task... tasks) throws Exception {

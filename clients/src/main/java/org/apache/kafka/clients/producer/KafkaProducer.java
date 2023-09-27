@@ -333,7 +333,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     }
 
     // visible for testing
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "this-escape"})
     KafkaProducer(ProducerConfig config,
                   Serializer<K> keySerializer,
                   Serializer<V> valueSerializer,

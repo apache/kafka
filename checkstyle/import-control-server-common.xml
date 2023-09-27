@@ -85,10 +85,12 @@
         <subpackage name="util">
             <!-- InterBrokerSendThread uses some clients classes that are not part of the public -->
             <!-- API but are still relatively common -->
+            <allow class="org.apache.kafka.clients.admin.AdminClientConfig" />
             <allow class="org.apache.kafka.clients.ClientRequest" />
             <allow class="org.apache.kafka.clients.ClientResponse" />
             <allow class="org.apache.kafka.clients.KafkaClient" />
             <allow class="org.apache.kafka.clients.RequestCompletionHandler" />
+            <allow class="org.apache.kafka.clients.CommonClientConfigs" />
             <allow pkg="com.fasterxml.jackson" />
             <allow pkg="org.apache.kafka.server.util.json" />
 

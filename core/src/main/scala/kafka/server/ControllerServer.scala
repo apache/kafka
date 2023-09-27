@@ -26,7 +26,7 @@ import kafka.server.KafkaConfig.{AlterConfigPolicyClassNameProp, CreateTopicPoli
 import kafka.server.QuotaFactory.QuotaManagers
 
 import scala.collection.immutable
-import kafka.server.metadata.{AclPublisher, ClientQuotaMetadataManager, DelegationTokenPublisher, DynamicClientQuotaPublisher, DynamicConfigPublisher, ScramPublisher}
+import kafka.server.metadata.{AclPublisher, ClientQuotaMetadataManager, DelegationTokenPublisher, DynamicClientQuotaPublisher, DynamicConfigPublisher, KRaftMetadataCache, KRaftMetadataCachePublisher, ScramPublisher}
 import kafka.utils.{CoreUtils, Logging, PasswordEncoder}
 import kafka.zk.{KafkaZkClient, ZkMigrationClient}
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
@@ -117,6 +117,8 @@ class ControllerServer(
   var migrationSupport: Option[ControllerMigrationSupport] = None
   def kafkaYammerMetrics: KafkaYammerMetrics = KafkaYammerMetrics.INSTANCE
   val metadataPublishers: util.List[MetadataPublisher] = new util.ArrayList[MetadataPublisher]()
+  @volatile var metadataCache : KRaftMetadataCache = _
+  @volatile var metadataCachePublisher: KRaftMetadataCachePublisher = _
   @volatile var featuresPublisher: FeaturesPublisher = _
   @volatile var registrationsPublisher: ControllerRegistrationsPublisher = _
   @volatile var incarnationId: Uuid = _
@@ -158,6 +160,10 @@ class ControllerServer(
 
       authorizer = config.createNewAuthorizer()
       authorizer.foreach(_.configure(config.originals))
+
+      metadataCache = MetadataCache.kRaftMetadataCache(config.nodeId)
+
+      metadataCachePublisher = new KRaftMetadataCachePublisher(metadataCache)
 
       featuresPublisher = new FeaturesPublisher(logContext)
 
@@ -313,14 +319,19 @@ class ControllerServer(
         config,
         sharedServer.metaProps,
         registrationsPublisher,
-        apiVersionManager)
+        apiVersionManager,
+        metadataCache)
       controllerApisHandlerPool = new KafkaRequestHandlerPool(config.nodeId,
         socketServer.dataPlaneRequestChannel,
         controllerApis,
         time,
         config.numIoThreads,
         s"${DataPlaneAcceptor.MetricPrefix}RequestHandlerAvgIdlePercent",
-        DataPlaneAcceptor.ThreadPrefix)
+        DataPlaneAcceptor.ThreadPrefix,
+        "controller")
+
+      // Set up the metadata cache publisher.
+      metadataPublishers.add(metadataCachePublisher)
 
       // Set up the metadata features publisher.
       metadataPublishers.add(featuresPublisher)
@@ -453,14 +464,6 @@ class ControllerServer(
       // Ensure that we're not the Raft leader prior to shutting down our socket server, for a
       // smoother transition.
       sharedServer.ensureNotRaftLeader()
-      if (featuresPublisher != null) {
-        featuresPublisher.close()
-        featuresPublisher = null
-      }
-      if (registrationsPublisher != null) {
-        registrationsPublisher.close()
-        registrationsPublisher = null
-      }
       incarnationId = null
       if (registrationManager != null) {
         CoreUtils.swallow(registrationManager.close(), this)
@@ -472,6 +475,21 @@ class ControllerServer(
       }
       metadataPublishers.forEach(p => sharedServer.loader.removeAndClosePublisher(p).get())
       metadataPublishers.clear()
+      if (metadataCache != null) {
+        metadataCache = null
+      }
+      if (metadataCachePublisher != null) {
+        metadataCachePublisher.close()
+        metadataCachePublisher = null
+      }
+      if (featuresPublisher != null) {
+        featuresPublisher.close()
+        featuresPublisher = null
+      }
+      if (registrationsPublisher != null) {
+        registrationsPublisher.close()
+        registrationsPublisher = null
+      }
       if (socketServer != null)
         CoreUtils.swallow(socketServer.stopProcessingRequests(), this)
       migrationSupport.foreach(_.shutdown(this))
