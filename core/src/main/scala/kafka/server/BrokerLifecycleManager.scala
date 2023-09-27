@@ -188,6 +188,11 @@ class BrokerLifecycleManager(
   private var _channelManager: NodeToControllerChannelManager = _
 
   /**
+   * The broker epoch from the previous run, or -1 if the epoch is not able to be found.
+   */
+  private var previousBrokerEpoch: Long = -1L
+
+  /**
    * The event queue.
    */
   private[server] val eventQueue = new KafkaEventQueue(time,
@@ -206,7 +211,9 @@ class BrokerLifecycleManager(
             channelManager: NodeToControllerChannelManager,
             clusterId: String,
             advertisedListeners: ListenerCollection,
-            supportedFeatures: util.Map[String, VersionRange]): Unit = {
+            supportedFeatures: util.Map[String, VersionRange],
+            brokerEpoch: Long): Unit = {
+    previousBrokerEpoch = brokerEpoch
     eventQueue.append(new StartupEvent(highestMetadataOffsetProvider,
       channelManager, clusterId, advertisedListeners, supportedFeatures))
   }
@@ -310,7 +317,8 @@ class BrokerLifecycleManager(
         setFeatures(features).
         setIncarnationId(incarnationId).
         setListeners(_advertisedListeners).
-        setRack(rack.orNull)
+        setRack(rack.orNull).
+        setPreviousBrokerEpoch(previousBrokerEpoch)
     if (isDebugEnabled) {
       debug(s"Sending broker registration $data")
     }

@@ -43,6 +43,7 @@ import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.Scheduler
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig, RemoteIndexCache}
 
+import java.nio.charset.StandardCharsets
 import scala.annotation.nowarn
 
 /**
@@ -625,7 +626,7 @@ class LogManager(logDirs: Seq[File],
   /**
    * Close all the logs
    */
-  def shutdown(): Unit = {
+  def shutdown(brokerEpoch: Long = -1): Unit = {
     info("Shutting down.")
 
     metricsGroup.removeMetric("OfflineLogDirectoryCount")
@@ -684,8 +685,8 @@ class LogManager(logDirs: Seq[File],
           val logDirAbsolutePath = dir.getAbsolutePath
           if (hadCleanShutdownFlags.getOrDefault(logDirAbsolutePath, false) ||
               loadLogsCompletedFlags.getOrDefault(logDirAbsolutePath, false)) {
-            debug(s"Writing clean shutdown marker at $dir")
-            CoreUtils.swallow(Files.createFile(new File(dir, LogLoader.CleanShutdownFile).toPath), this)
+            debug(s"Writing clean shutdown marker at $dir with broker epoch=$brokerEpoch")
+            CoreUtils.swallow(Files.createFile(writeBrokerEpochToCleanShutdownFile(dir, brokerEpoch).toPath), this)
           }
         }
       }
@@ -696,6 +697,15 @@ class LogManager(logDirs: Seq[File],
     }
 
     info("Shutdown complete.")
+  }
+
+  private def writeBrokerEpochToCleanShutdownFile(dir: File, brokerEpoch: Long): File = {
+    val shutdownFile = new File(dir, LogLoader.CleanShutdownFile)
+    val os = new FileOutputStream(shutdownFile)
+    val writer = new PrintWriter(new OutputStreamWriter(os, StandardCharsets.UTF_8))
+    writer.write(brokerEpoch.toString)
+    writer.close()
+    shutdownFile
   }
 
   /**
@@ -1408,6 +1418,36 @@ class LogManager(logDirs: Seq[File],
     } else {
       None
     }
+  }
+
+  def readBrokerEpochFromCleanShutdownFiles(): Long = {
+    // Verify whether all the log dirs have the same broker epoch in their clean shutdown files. If there are dir is not
+    // live, fail the broker epoch check.
+    if (liveLogDirs.size < logDirs.size) {
+      return -1L
+    }
+    var brokerEpoch = -1L
+    for (dir <- liveLogDirs) {
+      try {
+        val cleanShutdownFile = new File(dir, LogLoader.CleanShutdownFile)
+        if (!cleanShutdownFile.exists || !cleanShutdownFile.canRead) {
+          throw new Exception(s"CleanShutDown file is not able to read.")
+        }
+        // Read the broker epoch from the shutdown file. If there are different broker epochs in the shutdown files,
+        // fail the broker epoch check.
+        val text = scala.io.Source.fromFile(cleanShutdownFile, "UTF-8").getLines().mkString
+        val textBrokerEpoch = text.toLong
+        if (brokerEpoch != -1 && textBrokerEpoch != brokerEpoch) {
+          throw new Exception(s"Found different broker epochs a=$brokerEpoch vs b=$textBrokerEpoch")
+        }
+        brokerEpoch = textBrokerEpoch
+      } catch {
+        case e: Throwable =>
+          info(s"loading broker epoch from ${dir.toPath} with exception ${e.toString}")
+          return -1L
+      }
+    }
+    brokerEpoch
   }
 }
 
