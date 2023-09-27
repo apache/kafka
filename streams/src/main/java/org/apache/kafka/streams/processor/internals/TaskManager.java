@@ -1229,9 +1229,10 @@ public class TaskManager {
      */
     private void releaseLockedUnassignedTaskDirectories() {
         final Iterator<TaskId> taskIdIterator = lockedTaskDirectories.iterator();
+        final Map<TaskId, Task> allTasks = allTasks();
         while (taskIdIterator.hasNext()) {
             final TaskId id = taskIdIterator.next();
-            if (!tasks.contains(id)) {
+            if (!allTasks.containsKey(id)) {
                 stateDirectory.unlock(id);
                 taskIdIterator.remove();
             }

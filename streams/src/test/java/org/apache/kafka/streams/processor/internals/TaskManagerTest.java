@@ -1685,6 +1685,48 @@ public class TaskManagerTest {
     }
 
     @Test
+    public void shouldReleaseLockForUnassignedTasksAfterRebalanceWithStateUpdater() throws Exception {
+        final StreamTask runningStatefulTask = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .inState(State.RUNNING)
+            .withInputPartitions(taskId00Partitions).build();
+        final StreamTask restoringStatefulTask = statefulTask(taskId01, taskId01ChangelogPartitions)
+            .inState(State.RESTORING)
+            .withInputPartitions(taskId01Partitions).build();
+        final StandbyTask standbyTask = standbyTask(taskId02, taskId02ChangelogPartitions)
+            .inState(State.RUNNING)
+            .withInputPartitions(taskId02Partitions).build();
+        final StandbyTask unassignedStandbyTask = standbyTask(taskId03, taskId03ChangelogPartitions)
+            .inState(State.CREATED)
+            .withInputPartitions(taskId03Partitions).build();
+        final TasksRegistry tasks = Mockito.mock(TasksRegistry.class);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
+        when(tasks.allTasksPerId()).thenReturn(mkMap(mkEntry(taskId00, runningStatefulTask)));
+        when(stateUpdater.getTasks()).thenReturn(mkSet(standbyTask, restoringStatefulTask));
+        when(tasks.allTasks()).thenReturn(mkSet(runningStatefulTask));
+        expectLockObtainedFor(taskId00, taskId01, taskId02, taskId03);
+        expectUnlockFor(taskId03);
+        makeTaskFolders(
+            taskId00.toString(),
+            taskId01.toString(),
+            taskId02.toString(),
+            taskId03.toString()
+        );
+        replay(stateDirectory);
+
+        final Set<TopicPartition> assigned = mkSet(t1p0, t1p1, t1p2);
+        expect(consumer.assignment()).andReturn(assigned);
+        consumer.pause(mkSet(t1p1, t1p2));
+        replay(consumer);
+
+        taskManager.handleRebalanceStart(singleton("topic"));
+        taskManager.handleRebalanceComplete();
+
+        verify(consumer);
+        verify(stateDirectory);
+        assertThat(taskManager.lockedTaskDirectories(), is(mkSet(taskId00, taskId01, taskId02)));
+    }
+
+    @Test
     public void shouldReportLatestOffsetAsOffsetSumForRunningTask() throws Exception {
         final Map<TopicPartition, Long> changelogOffsets = mkMap(
             mkEntry(new TopicPartition("changelog", 0), Task.LATEST_OFFSET),
