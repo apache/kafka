@@ -460,7 +460,7 @@ public class GroupMetadataManager {
                 GenericGroup group = getOrMaybeCreateGenericGroup(groupId, false);
                 if (group.isInState(STABLE)) {
                     if (!group.protocolName().isPresent()) {
-                        throw new IllegalStateException("Invalid null group protocol for stable group");
+                        throw new IllegalStateException("Invalid null group protocol for stable group"); // TODO: throw which Exception?
                     }
 
                     describedGroups.add(new DescribeGroupsResponseData.DescribedGroup()
