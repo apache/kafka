@@ -689,7 +689,7 @@ public class GroupMetadataManager {
             }
         } else if (request.memberEpoch() == -2) {
             throwIfEmptyString(request.memberId(), "MemberId can't be empty.");
-            throwIfNull(request.instanceId(), "InstanceId can't be empty for Static Member.");
+            throwIfNull(request.instanceId(), "InstanceId can't be null for Static Member.");
         } else {
             throw new InvalidRequestException("MemberEpoch is invalid.");
         }
