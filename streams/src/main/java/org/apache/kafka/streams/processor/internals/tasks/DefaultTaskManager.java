@@ -180,7 +180,7 @@ public class DefaultTaskManager implements TaskManager {
     }
 
     @Override
-    public KafkaFuture<Void> lockTasks(final Collection<TaskId> taskIds) {
+    public KafkaFuture<Void> lockTasks(final Set<TaskId> taskIds) {
         final KafkaFutureImpl<Void> result = new KafkaFutureImpl<>();
 
         if (taskIds.isEmpty()) {
@@ -242,7 +242,7 @@ public class DefaultTaskManager implements TaskManager {
     }
 
     @Override
-    public void unlockTasks(final Collection<TaskId> taskIds) {
+    public void unlockTasks(final Set<TaskId> taskIds) {
 
         if (taskIds.isEmpty()) {
             return;

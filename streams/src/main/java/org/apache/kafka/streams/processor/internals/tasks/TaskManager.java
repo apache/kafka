@@ -58,10 +58,10 @@ public interface TaskManager {
      *
      * This method does not block, instead a future is returned.
      */
-    KafkaFuture<Void> lockTasks(final Collection<TaskId> taskIds);
+    KafkaFuture<Void> lockTasks(final Set<TaskId> taskIds);
 
     /**
-     * Lock all the managed active tasks from the task manager. Similar to {@link #lockTasks(Collection)}.
+     * Lock all the managed active tasks from the task manager. Similar to {@link #lockTasks(Set)}.
      *
      * This method does not block, instead a future is returned.
      */
@@ -70,10 +70,10 @@ public interface TaskManager {
     /**
      * Unlock the tasks so that they can be assigned to executors
      */
-    void unlockTasks(final Collection<TaskId> taskIds);
+    void unlockTasks(final Set<TaskId> taskIds);
 
     /**
-     * Unlock all the managed active tasks from the task manager. Similar to {@link #unlockTasks(Collection)}.
+     * Unlock all the managed active tasks from the task manager. Similar to {@link #unlockTasks(Set)}.
      */
     void unlockAllTasks();
 

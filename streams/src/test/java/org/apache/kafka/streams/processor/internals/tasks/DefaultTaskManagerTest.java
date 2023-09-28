@@ -242,7 +242,7 @@ public class DefaultTaskManagerTest {
         when(tasks.activeTasks()).thenReturn(Collections.singleton(task));
         ensureTaskMakesProgress();
         taskManager.assignNextTask(taskExecutor);
-        taskManager.setUncaughtException(mock(StreamsException.class), taskId);
+        taskManager.setUncaughtException(new StreamsException("Exception"), taskId);
         taskManager.unassignTask(task, taskExecutor);
 
         assertNull(taskManager.assignNextTask(taskExecutor));
