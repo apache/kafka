@@ -382,16 +382,16 @@ public class OffsetMetadataManager {
                 );
             } else {
                 topic.partitions().forEach(partition -> {
-                    final OffsetDeleteResponseData.OffsetDeleteResponsePartition responsePartition =
-                        new OffsetDeleteResponseData.OffsetDeleteResponsePartition().setPartitionIndex(partition.partitionIndex());
                     if (offsetsByPartition != null && offsetsByPartition.containsKey(partition.partitionIndex())) {
+                        responsePartitionCollection.add(new OffsetDeleteResponseData.OffsetDeleteResponsePartition()
+                            .setPartitionIndex(partition.partitionIndex())
+                        );
                         records.add(RecordHelpers.newOffsetCommitTombstoneRecord(
                             request.groupId(),
                             topic.name(),
                             partition.partitionIndex()
                         ));
                     }
-                    responsePartitionCollection.add(responsePartition);
                 });
             }
 
