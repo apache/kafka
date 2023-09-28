@@ -351,7 +351,7 @@ public class GenericGroupMember {
     }
 
     /**
-     * @return the described group member without metadata.
+     * @return The described group member without metadata.
      */
     public DescribeGroupsResponseData.DescribedGroupMember describeNoMetadata() {
         return new DescribeGroupsResponseData.DescribedGroupMember()
@@ -363,7 +363,7 @@ public class GenericGroupMember {
     }
 
     /**
-     * @return the described group member with metadata corresponding to the provided protocol.
+     * @return The described group member with metadata corresponding to the provided protocol.
      */
     public DescribeGroupsResponseData.DescribedGroupMember describe(String protocolName) {
         return describeNoMetadata().setMemberMetadata(metadata(protocolName));
