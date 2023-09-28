@@ -548,7 +548,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         groupsByTopicPartition.forEach((topicPartition, groupList) -> {
             CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> future =
                 runtime.scheduleWriteOperation(
-                    "delete-group",
+                    "delete-groups",
                     topicPartition,
                     coordinator -> coordinator.deleteGroups(context, groupList)
                 ).exceptionally(exception -> {
@@ -784,7 +784,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         }
 
         return runtime.scheduleWriteOperation(
-            "delete-offset",
+            "delete-offsets",
             topicPartitionFor(request.groupId()),
             coordinator -> coordinator.deleteOffsets(context, request)
         ).exceptionally(exception -> {

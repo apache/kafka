@@ -977,7 +977,7 @@ public class GroupCoordinatorServiceTest {
             .setTopics(responseTopicCollection);
 
         when(runtime.scheduleWriteOperation(
-            ArgumentMatchers.eq("delete-offset"),
+            ArgumentMatchers.eq("delete-offsets"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(response));
@@ -1018,7 +1018,7 @@ public class GroupCoordinatorServiceTest {
             .setErrorCode(Errors.INVALID_GROUP_ID.code());
 
         when(runtime.scheduleWriteOperation(
-            ArgumentMatchers.eq("delete-offset"),
+            ArgumentMatchers.eq("delete-offsets"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(response));
@@ -1059,7 +1059,7 @@ public class GroupCoordinatorServiceTest {
             .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code());
 
         when(runtime.scheduleWriteOperation(
-            ArgumentMatchers.eq("delete-offset"),
+            ArgumentMatchers.eq("delete-offsets"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
             ArgumentMatchers.any()
         )).thenReturn(FutureUtils.failedFuture(
@@ -1119,13 +1119,13 @@ public class GroupCoordinatorServiceTest {
         ));
 
         when(runtime.scheduleWriteOperation(
-            ArgumentMatchers.eq("delete-group"),
+            ArgumentMatchers.eq("delete-groups"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 2)),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(resultCollection1));
 
         when(runtime.scheduleWriteOperation(
-            ArgumentMatchers.eq("delete-group"),
+            ArgumentMatchers.eq("delete-groups"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
             ArgumentMatchers.any()
         )).thenAnswer(invocation -> CompletableFuture.supplyAsync(() -> {
@@ -1136,7 +1136,7 @@ public class GroupCoordinatorServiceTest {
         }));
 
         when(runtime.scheduleWriteOperation(
-            ArgumentMatchers.eq("delete-group"),
+            ArgumentMatchers.eq("delete-groups"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 1)),
             ArgumentMatchers.any()
         )).thenReturn(FutureUtils.failedFuture(new CoordinatorLoadInProgressException(null)));
