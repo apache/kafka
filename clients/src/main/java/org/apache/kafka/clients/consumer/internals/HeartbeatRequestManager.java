@@ -200,14 +200,14 @@ public class HeartbeatRequestManager implements RequestManager {
         this.heartbeatRequestState.onFailedAttempt(currentTimeMs);
         Errors error = Errors.forCode(response.data().errorCode());
         if (error == Errors.NOT_COORDINATOR || error == Errors.COORDINATOR_NOT_AVAILABLE) {
-            String errorMessage = String.format("Coordinator node {} is either not started or not valid. Retrying",
+            String errorMessage = String.format("Coordinator node %s is either not started or not valid. Retrying",
                     coordinatorRequestManager.coordinator());
             logInfo(errorMessage, response, currentTimeMs);
             coordinatorRequestManager.markCoordinatorUnknown(response.data().errorMessage(), currentTimeMs);
         } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS) {
             // retry
-            String errorMessage = String.format("Heartbeat was not successful because the coordinator node {} is loading. Retrying",
-                    coordinatorRequestManager.coordinator());
+            String errorMessage = String.format("Heartbeat was not successful because the coordinator node %s is loading." +
+                    "Retrying", coordinatorRequestManager.coordinator());
             logInfo(errorMessage, response, currentTimeMs);
         } else {
             onFatalErrorResponse(response);
