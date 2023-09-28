@@ -42,21 +42,21 @@ public abstract class AbstractUniformAssignmentBuilder {
     /**
      * Determines if rack-aware assignment is appropriate based on the provided rack information.
      *
-     * @param memberRacks           Racks where members are located.
-     * @param partitionRacks        Racks where partitions are located.
-     * @param racksPerPartition     Map of partitions to their associated racks.
+     * @param memberRacks               Racks where members are located.
+     * @param allPartitionRacks         Racks where partitions are located.
+     * @param racksPerPartition         Map of partitions to their associated racks.
      *
      * @return {@code true} if rack-aware assignment should be applied; {@code false} otherwise.
      */
     protected static boolean useRackAwareAssignment(
         Set<String> memberRacks,
-        Set<String> partitionRacks,
+        Set<String> allPartitionRacks,
         Map<TopicIdPartition, Set<String>> racksPerPartition
     ) {
-        if (memberRacks.isEmpty() || Collections.disjoint(memberRacks, partitionRacks))
+        if (memberRacks.isEmpty() || Collections.disjoint(memberRacks, allPartitionRacks))
             return false;
         else {
-            return !racksPerPartition.values().stream().allMatch(partitionRacks::equals);
+            return !racksPerPartition.values().stream().allMatch(allPartitionRacks::equals);
         }
     }
 
@@ -64,12 +64,12 @@ public abstract class AbstractUniformAssignmentBuilder {
      * Adds the topic's partition to the member's target assignment.
      */
     protected static void addPartitionToAssignment(
-        Map<String, MemberAssignment> memberAssignment,
+        Map<String, MemberAssignment> memberAssignments,
         String memberId,
         Uuid topicId,
         int partition
     ) {
-        memberAssignment.get(memberId)
+        memberAssignments.get(memberId)
             .targetPartitions()
             .computeIfAbsent(topicId, __ -> new HashSet<>())
             .add(partition);
@@ -113,7 +113,7 @@ public abstract class AbstractUniformAssignmentBuilder {
         protected final Map<TopicIdPartition, Set<String>> partitionRacks;
 
         /**
-         * Number of members with the same rack as the partition.
+         * List of members with the same rack as the partition.
          */
         protected final Map<TopicIdPartition, List<String>> membersWithSameRackAsPartition;
 
@@ -143,26 +143,26 @@ public abstract class AbstractUniformAssignmentBuilder {
             );
 
             Set<String> allPartitionRacks;
-            Map<TopicIdPartition, Set<String>> partitionRacks;
+            Map<TopicIdPartition, Set<String>> racksPerPartition;
             List<TopicIdPartition> topicIdPartitions = allTopicIdPartitions(topicIds, subscribedTopicDescriber);
 
             if (membersByRack.isEmpty()) {
                 allPartitionRacks = Collections.emptySet();
-                partitionRacks = Collections.emptyMap();
+                racksPerPartition = Collections.emptyMap();
             } else {
-                partitionRacks = new HashMap<>();
+                racksPerPartition = new HashMap<>();
                 allPartitionRacks = new HashSet<>();
                 topicIdPartitions.forEach(tp -> {
                     Set<String> racks = subscribedTopicDescriber.racksForPartition(tp.topicId(), tp.partition());
-                    partitionRacks.put(tp, racks);
+                    racksPerPartition.put(tp, racks);
                     if (!racks.isEmpty()) allPartitionRacks.addAll(racks);
                 });
             }
 
-            if (useRackAwareAssignment(membersByRack.keySet(), allPartitionRacks, partitionRacks)) {
+            if (useRackAwareAssignment(membersByRack.keySet(), allPartitionRacks, racksPerPartition)) {
                 this.memberRacks = new HashMap<>(assignmentSpec.members().size());
                 membersByRack.forEach((rack, rackMembers) -> rackMembers.forEach(c -> memberRacks.put(c, rack)));
-                this.partitionRacks = partitionRacks;
+                this.partitionRacks = racksPerPartition;
                 useRackStrategy = true;
             } else {
                 this.memberRacks = Collections.emptyMap();
@@ -170,7 +170,7 @@ public abstract class AbstractUniformAssignmentBuilder {
                 useRackStrategy = false;
             }
 
-            this.membersWithSameRackAsPartition = partitionRacks.entrySet().stream()
+            this.membersWithSameRackAsPartition = racksPerPartition.entrySet().stream()
                 .collect(Collectors.toMap(
                     Map.Entry::getKey,
                     entry -> entry.getValue().stream()
@@ -203,22 +203,26 @@ public abstract class AbstractUniformAssignmentBuilder {
         /**
          * Sort partitions in ascending order by number of members with matching racks.
          *
-         * @param partitions    The list of partitions to be sorted.
+         * @param topicIdPartitions    The partitions to be sorted.
          * @return A sorted list of partitions with potential members in the same rack.
          */
-        protected List<TopicIdPartition> sortPartitionsByRackMembers(List<TopicIdPartition> partitions) {
-            if (membersWithSameRackAsPartition.isEmpty())
-                return partitions;
+        protected List<TopicIdPartition> sortPartitionsByRackMembers(Collection<TopicIdPartition> topicIdPartitions) {
 
-            return partitions.stream()
+            List<TopicIdPartition> sortedPartitionsList = topicIdPartitions.stream()
+                .sorted(Comparator.comparing(TopicIdPartition::topicId).thenComparing(TopicIdPartition::partition))
+                .collect(Collectors.toList());
+
+            if (membersWithSameRackAsPartition.isEmpty())
+                return sortedPartitionsList;
+
+            return sortedPartitionsList.parallelStream()
                 .filter(tp -> {
                     int count = membersWithSameRackAsPartition.get(tp).size();
                     return count > 0;
                 })
                 .sorted(Comparator.comparing(tp ->
                     membersWithSameRackAsPartition.getOrDefault(tp, Collections.emptyList()).size()
-                ))
-                .collect(Collectors.toList());
+                )).collect(Collectors.toList());
         }
 
         /**
