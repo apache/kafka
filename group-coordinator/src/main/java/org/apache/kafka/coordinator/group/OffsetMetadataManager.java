@@ -373,20 +373,27 @@ public class OffsetMetadataManager {
             final TimelineHashMap<Integer, OffsetAndMetadata> offsetsByPartition = offsetsByTopic == null ?
                 null : offsetsByTopic.get(topic.name());
 
-            topic.partitions().forEach(partition -> {
-                final OffsetDeleteResponseData.OffsetDeleteResponsePartition responsePartition =
-                    new OffsetDeleteResponseData.OffsetDeleteResponsePartition().setPartitionIndex(partition.partitionIndex());
-                if (group.isSubscribedToTopic(topic.name())) {
-                    responsePartition.setErrorCode(Errors.GROUP_SUBSCRIBED_TO_TOPIC.code());
-                } else if (offsetsByPartition != null && offsetsByPartition.containsKey(partition.partitionIndex())) {
-                    records.add(RecordHelpers.newOffsetCommitTombstoneRecord(
-                        request.groupId(),
-                        topic.name(),
-                        partition.partitionIndex()
-                    ));
-                }
-                responsePartitionCollection.add(responsePartition);
-            });
+            if (group.isSubscribedToTopic(topic.name())) {
+                topic.partitions().forEach(partition ->
+                    responsePartitionCollection.add(new OffsetDeleteResponseData.OffsetDeleteResponsePartition()
+                        .setPartitionIndex(partition.partitionIndex())
+                        .setErrorCode(Errors.GROUP_SUBSCRIBED_TO_TOPIC.code())
+                    )
+                );
+            } else {
+                topic.partitions().forEach(partition -> {
+                    final OffsetDeleteResponseData.OffsetDeleteResponsePartition responsePartition =
+                        new OffsetDeleteResponseData.OffsetDeleteResponsePartition().setPartitionIndex(partition.partitionIndex());
+                    if (offsetsByPartition != null && offsetsByPartition.containsKey(partition.partitionIndex())) {
+                        records.add(RecordHelpers.newOffsetCommitTombstoneRecord(
+                            request.groupId(),
+                            topic.name(),
+                            partition.partitionIndex()
+                        ));
+                    }
+                    responsePartitionCollection.add(responsePartition);
+                });
+            }
 
             final OffsetDeleteResponseData.OffsetDeleteResponseTopic responseTopic =
                 new OffsetDeleteResponseData.OffsetDeleteResponseTopic()
@@ -402,9 +409,9 @@ public class OffsetMetadataManager {
     /**
      * Deletes offsets as part of a DeleteGroups request.
      * Populates the record list passed in with records to update the state machine.
-     * Validations are done in deleteGroups method in GroupCoordinatorShard.
+     * Validations are done in {@link GroupCoordinatorShard#deleteGroups(RequestContext, List)}
      *
-     * @param groupId The group id of the given group.
+     * @param groupId The ID of the given group.
      * @param records The record list to populate.
      */
     public void deleteAllOffsets(
@@ -414,11 +421,11 @@ public class OffsetMetadataManager {
         TimelineHashMap<String, TimelineHashMap<Integer, OffsetAndMetadata>> offsetsByTopic = offsetsByGroup.get(groupId);
 
         if (offsetsByTopic != null) {
-            offsetsByTopic.forEach((topic, offsetsByPartition) -> {
-                offsetsByPartition.forEach((partition, __) -> {
-                    records.add(RecordHelpers.newOffsetCommitTombstoneRecord(groupId, topic, partition));
-                });
-            });
+            offsetsByTopic.forEach((topic, offsetsByPartition) ->
+                offsetsByPartition.forEach((partition, __) ->
+                    records.add(RecordHelpers.newOffsetCommitTombstoneRecord(groupId, topic, partition))
+                )
+            );
         }
     }
 

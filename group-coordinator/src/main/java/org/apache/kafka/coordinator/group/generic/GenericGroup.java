@@ -860,18 +860,17 @@ public class GenericGroup implements Group {
     public void validateOffsetDelete() throws ApiException {
         if (isInState(DEAD)) {
             throw new GroupIdNotFoundException(String.format("Group %s is in dead state.", groupId));
-        } else if (isInState(STABLE)
-            || isInState(PREPARING_REBALANCE)
-            || isInState(COMPLETING_REBALANCE)) {
+        } else if (!usesConsumerGroupProtocol()
+            && (isInState(STABLE) || isInState(PREPARING_REBALANCE) || isInState(COMPLETING_REBALANCE))) {
             throw Errors.NON_EMPTY_GROUP.exception();
         }
     }
 
     /**
-     * Validates the GroupDelete request.
+     * Validates the DeleteGroups request.
      */
     @Override
-    public void validateGroupDelete() throws ApiException {
+    public void validateDeleteGroup() throws ApiException {
         if (isInState(DEAD)) {
             throw new GroupIdNotFoundException(String.format("Group %s is in dead state.", groupId));
         } else if (isInState(STABLE)

@@ -64,6 +64,7 @@ import org.apache.kafka.coordinator.group.assignor.RangeAssignor;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorRuntime;
 import org.apache.kafka.server.record.BrokerCompressionType;
 import org.apache.kafka.server.util.FutureUtils;
+import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -79,6 +80,7 @@ import java.util.List;
 import java.util.OptionalInt;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -1083,25 +1085,23 @@ public class GroupCoordinatorServiceTest {
             runtime
         );
         service.startup(() -> 3);
+        CountDownLatch latch = new CountDownLatch(1);
 
         DeleteGroupsResponseData.DeletableGroupResultCollection resultCollection1 =
             new DeleteGroupsResponseData.DeletableGroupResultCollection();
-        DeleteGroupsResponseData.DeletableGroupResult result1 =
-            new DeleteGroupsResponseData.DeletableGroupResult().setGroupId("group-id-1");
+        DeleteGroupsResponseData.DeletableGroupResult result1 = new DeleteGroupsResponseData.DeletableGroupResult()
+            .setGroupId("group-id-1");
         resultCollection1.add(result1);
 
         DeleteGroupsResponseData.DeletableGroupResultCollection resultCollection2 =
             new DeleteGroupsResponseData.DeletableGroupResultCollection();
-        DeleteGroupsResponseData.DeletableGroupResult result2 =
-            new DeleteGroupsResponseData.DeletableGroupResult().setGroupId("group-id-2");
+        DeleteGroupsResponseData.DeletableGroupResult result2 = new DeleteGroupsResponseData.DeletableGroupResult()
+            .setGroupId("group-id-2");
         resultCollection2.add(result2);
 
-        DeleteGroupsResponseData.DeletableGroupResultCollection resultCollection3 =
-            new DeleteGroupsResponseData.DeletableGroupResultCollection();
         DeleteGroupsResponseData.DeletableGroupResult result3 = new DeleteGroupsResponseData.DeletableGroupResult()
             .setGroupId("group-id-3")
             .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code());
-        resultCollection3.add(result3);
 
         DeleteGroupsResponseData.DeletableGroupResultCollection expectedResultCollection =
             new DeleteGroupsResponseData.DeletableGroupResultCollection();
@@ -1128,10 +1128,12 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.eq("delete-group"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
             ArgumentMatchers.any()
-        )).thenAnswer(invocation -> {
-            Thread.sleep(1000);
-            return CompletableFuture.completedFuture(resultCollection2);
-        });
+        )).thenAnswer(invocation -> CompletableFuture.supplyAsync(() -> {
+            try {
+                assertTrue(latch.await(5, TimeUnit.SECONDS));
+            } catch (InterruptedException ignored) {}
+            return resultCollection2;
+        }));
 
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("delete-group"),
@@ -1143,7 +1145,10 @@ public class GroupCoordinatorServiceTest {
         CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> future =
             service.deleteGroups(requestContext(ApiKeys.DELETE_GROUPS), groupIds, BufferSupplier.NO_CACHING);
 
-        assertTrue(future.isDone());
+        assertFalse(future.isDone());
+        latch.countDown();
+
+        TestUtils.waitForCondition(future::isDone, "The future did not complete.");
         assertTrue(expectedResultCollection.containsAll(future.get()));
         assertTrue(future.get().containsAll(expectedResultCollection));
     }

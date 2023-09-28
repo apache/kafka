@@ -140,7 +140,7 @@ public class GroupCoordinatorShardTest {
             expectedResultCollection
         );
 
-        doNothing().when(groupMetadataManager).validateGroupDelete(ArgumentMatchers.anyString());
+        doNothing().when(groupMetadataManager).validateDeleteGroup(ArgumentMatchers.anyString());
         doAnswer(invocation -> {
             String groupId = invocation.getArgument(0);
             List<Record> records = invocation.getArgument(1);
@@ -157,7 +157,7 @@ public class GroupCoordinatorShardTest {
             coordinator.deleteGroups(context, groupIds);
 
         for (String groupId : groupIds) {
-            verify(groupMetadataManager, times(1)).validateGroupDelete(ArgumentMatchers.eq(groupId));
+            verify(groupMetadataManager, times(1)).validateDeleteGroup(ArgumentMatchers.eq(groupId));
             verify(groupMetadataManager, times(1)).deleteGroup(ArgumentMatchers.eq(groupId), anyList());
             verify(offsetMetadataManager, times(1)).deleteAllOffsets(ArgumentMatchers.eq(groupId), anyList());
         }
@@ -194,7 +194,7 @@ public class GroupCoordinatorShardTest {
         );
 
         doThrow(Errors.INVALID_GROUP_ID.exception())
-            .when(groupMetadataManager).validateGroupDelete(ArgumentMatchers.eq("group-id-2"));
+            .when(groupMetadataManager).validateDeleteGroup(ArgumentMatchers.eq("group-id-2"));
         doAnswer(invocation -> {
             String groupId = invocation.getArgument(0);
             List<Record> records = invocation.getArgument(1);
@@ -210,7 +210,7 @@ public class GroupCoordinatorShardTest {
         CoordinatorResult<DeleteGroupsResponseData.DeletableGroupResultCollection, Record> coordinatorResult =
             coordinator.deleteGroups(context, groupIds);
 
-        verify(groupMetadataManager, times(3)).validateGroupDelete(anyString());
+        verify(groupMetadataManager, times(3)).validateDeleteGroup(anyString());
         verify(groupMetadataManager, times(2)).deleteGroup(anyString(), anyList());
         verify(offsetMetadataManager, times(2)).deleteAllOffsets(anyString(), anyList());
         assertEquals(expectedResult, coordinatorResult);

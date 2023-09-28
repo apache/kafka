@@ -1725,7 +1725,7 @@ public class OffsetMetadataManagerTest {
 
     @ParameterizedTest
     @ValueSource(classes = {GenericGroup.class, ConsumerGroup.class})
-    public void testGroupDeleteAllOffsets(Class groupClass) {
+    public void testDeleteGroupAllOffsets(Class groupClass) {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
         Group group = null;
         if (groupClass == GenericGroup.class) {

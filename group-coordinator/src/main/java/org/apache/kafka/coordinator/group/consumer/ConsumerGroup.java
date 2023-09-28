@@ -615,10 +615,10 @@ public class ConsumerGroup implements Group {
     public void validateOffsetDelete() {}
 
     /**
-     * Validates the GroupDelete request.
+     * Validates the DeleteGroups request.
      */
     @Override
-    public void validateGroupDelete() throws ApiException {
+    public void validateDeleteGroup() throws ApiException {
         switch (state()) {
             case STABLE:
             case ASSIGNING:

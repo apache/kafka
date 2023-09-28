@@ -677,11 +677,11 @@ public class ConsumerGroupTest {
     }
 
     @Test
-    public void testValidateGroupDelete() {
+    public void testValidateDeleteGroup() {
         ConsumerGroup consumerGroup = createConsumerGroup("foo");
 
         assertEquals(ConsumerGroup.ConsumerGroupState.EMPTY, consumerGroup.state());
-        assertDoesNotThrow(consumerGroup::validateGroupDelete);
+        assertDoesNotThrow(consumerGroup::validateDeleteGroup);
 
         ConsumerGroupMember member1 = new ConsumerGroupMember.Builder("member1")
             .setMemberEpoch(1)
@@ -691,16 +691,16 @@ public class ConsumerGroupTest {
         consumerGroup.updateMember(member1);
 
         assertEquals(ConsumerGroup.ConsumerGroupState.RECONCILING, consumerGroup.state());
-        assertThrows(GroupNotEmptyException.class, consumerGroup::validateGroupDelete);
+        assertThrows(GroupNotEmptyException.class, consumerGroup::validateDeleteGroup);
 
         consumerGroup.setGroupEpoch(1);
 
         assertEquals(ConsumerGroup.ConsumerGroupState.ASSIGNING, consumerGroup.state());
-        assertThrows(GroupNotEmptyException.class, consumerGroup::validateGroupDelete);
+        assertThrows(GroupNotEmptyException.class, consumerGroup::validateDeleteGroup);
 
         consumerGroup.setTargetAssignmentEpoch(1);
 
         assertEquals(ConsumerGroup.ConsumerGroupState.STABLE, consumerGroup.state());
-        assertThrows(GroupNotEmptyException.class, consumerGroup::validateGroupDelete);
+        assertThrows(GroupNotEmptyException.class, consumerGroup::validateDeleteGroup);
     }
 }

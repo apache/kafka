@@ -1031,12 +1031,38 @@ public class GenericGroupTest {
 
     @Test
     public void testValidateOffsetDelete() {
+        assertFalse(group.usesConsumerGroupProtocol());
         group.transitionTo(PREPARING_REBALANCE);
         assertThrows(GroupNotEmptyException.class, group::validateOffsetDelete);
         group.transitionTo(COMPLETING_REBALANCE);
         assertThrows(GroupNotEmptyException.class, group::validateOffsetDelete);
         group.transitionTo(STABLE);
         assertThrows(GroupNotEmptyException.class, group::validateOffsetDelete);
+
+        JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestProtocolCollection();
+        protocols.add(new JoinGroupRequestProtocol()
+            .setName("roundrobin")
+            .setMetadata(new byte[0]));
+        GenericGroupMember member = new GenericGroupMember(
+            memberId,
+            Optional.of(groupInstanceId),
+            clientId,
+            clientHost,
+            rebalanceTimeoutMs,
+            sessionTimeoutMs,
+            protocolType,
+            protocols
+        );
+        group.add(member);
+
+        assertTrue(group.usesConsumerGroupProtocol());
+        group.transitionTo(PREPARING_REBALANCE);
+        assertDoesNotThrow(group::validateOffsetDelete);
+        group.transitionTo(COMPLETING_REBALANCE);
+        assertDoesNotThrow(group::validateOffsetDelete);
+        group.transitionTo(STABLE);
+        assertDoesNotThrow(group::validateOffsetDelete);
+
         group.transitionTo(PREPARING_REBALANCE);
         group.transitionTo(EMPTY);
         assertDoesNotThrow(group::validateOffsetDelete);
@@ -1045,18 +1071,18 @@ public class GenericGroupTest {
     }
 
     @Test
-    public void testValidateGroupDelete() {
+    public void testValidateDeleteGroup() {
         group.transitionTo(PREPARING_REBALANCE);
-        assertThrows(GroupNotEmptyException.class, group::validateGroupDelete);
+        assertThrows(GroupNotEmptyException.class, group::validateDeleteGroup);
         group.transitionTo(COMPLETING_REBALANCE);
-        assertThrows(GroupNotEmptyException.class, group::validateGroupDelete);
+        assertThrows(GroupNotEmptyException.class, group::validateDeleteGroup);
         group.transitionTo(STABLE);
-        assertThrows(GroupNotEmptyException.class, group::validateGroupDelete);
+        assertThrows(GroupNotEmptyException.class, group::validateDeleteGroup);
         group.transitionTo(PREPARING_REBALANCE);
         group.transitionTo(EMPTY);
-        assertDoesNotThrow(group::validateGroupDelete);
+        assertDoesNotThrow(group::validateDeleteGroup);
         group.transitionTo(DEAD);
-        assertThrows(GroupIdNotFoundException.class, group::validateGroupDelete);
+        assertThrows(GroupIdNotFoundException.class, group::validateDeleteGroup);
     }
 
     private void assertState(GenericGroup group, GenericGroupState targetState) {

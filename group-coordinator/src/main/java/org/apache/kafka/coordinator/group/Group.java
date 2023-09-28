@@ -99,15 +99,15 @@ public interface Group {
     void validateOffsetDelete() throws KafkaException;
 
     /**
-     * Validates the GroupDelete request.
+     * Validates the DeleteGroups request.
      */
-    void validateGroupDelete() throws KafkaException;
+    void validateDeleteGroup() throws KafkaException;
 
     /**
      * Returns true if the group is actively subscribed to the topic.
      *
      * @param topic The topic name.
-     * @return whether the group is subscribed to the topic.
+     * @return Whether the group is subscribed to the topic.
      */
     boolean isSubscribedToTopic(String topic);
 

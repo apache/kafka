@@ -285,7 +285,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
 
         groupIds.forEach(groupId -> {
             try {
-                groupMetadataManager.validateGroupDelete(groupId);
+                groupMetadataManager.validateDeleteGroup(groupId);
                 offsetMetadataManager.deleteAllOffsets(groupId, records);
                 groupMetadataManager.deleteGroup(groupId, records);
 
