@@ -143,6 +143,6 @@ public class FetchBuffer implements AutoCloseable {
 
             completedFetches.forEach(CompletedFetch::drain);
             completedFetches.clear();
-        }, () -> log.warn("The fetch buffer was previously closed"));
+        }, () -> log.warn("The fetch buffer was already closed"));
     }
 }

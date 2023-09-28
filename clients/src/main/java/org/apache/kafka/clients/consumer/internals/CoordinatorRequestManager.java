@@ -31,9 +31,10 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 
-import java.util.Collections;
 import java.util.Objects;
 import java.util.Optional;
+
+import static org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult.EMPTY;
 
 /**
  * This is responsible for timing to send the next {@link FindCoordinatorRequest} based on the following criteria:
@@ -93,18 +94,15 @@ public class CoordinatorRequestManager implements RequestManager {
      */
     @Override
     public NetworkClientDelegate.PollResult poll(final long currentTimeMs) {
-        if (this.coordinator != null) {
-            return new NetworkClientDelegate.PollResult(Long.MAX_VALUE, Collections.emptyList());
-        }
+        if (this.coordinator != null)
+            return EMPTY;
 
         if (coordinatorRequestState.canSendRequest(currentTimeMs)) {
             NetworkClientDelegate.UnsentRequest request = makeFindCoordinatorRequest(currentTimeMs);
-            return new NetworkClientDelegate.PollResult(Long.MAX_VALUE, Collections.singletonList(request));
+            return new NetworkClientDelegate.PollResult(request);
         }
 
-        return new NetworkClientDelegate.PollResult(
-                coordinatorRequestState.remainingBackoffMs(currentTimeMs),
-                Collections.emptyList());
+        return new NetworkClientDelegate.PollResult(coordinatorRequestState.remainingBackoffMs(currentTimeMs));
     }
 
     private NetworkClientDelegate.UnsentRequest makeFindCoordinatorRequest(final long currentTimeMs) {

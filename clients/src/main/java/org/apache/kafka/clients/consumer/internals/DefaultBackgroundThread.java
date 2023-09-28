@@ -16,20 +16,30 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.internals.IdempotentCloser;
+import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.Timer;
 import org.slf4j.Logger;
 
 import java.io.Closeable;
+import java.time.Duration;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.Future;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
+
+import static org.apache.kafka.common.utils.Utils.closeQuietly;
 
 /**
  * Background thread runnable that consumes {@code ApplicationEvent} and
@@ -54,8 +64,8 @@ public class DefaultBackgroundThread extends KafkaThread implements Closeable {
     private volatile boolean running;
     private final IdempotentCloser closer = new IdempotentCloser();
 
-    public DefaultBackgroundThread(Time time,
-                                   LogContext logContext,
+    public DefaultBackgroundThread(LogContext logContext,
+                                   Time time,
                                    Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier,
                                    Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
                                    Supplier<RequestManagers> requestManagersSupplier) {
@@ -89,9 +99,6 @@ public class DefaultBackgroundThread extends KafkaThread implements Closeable {
         } catch (final Throwable t) {
             log.error("The background thread failed due to unexpected error", t);
             throw new KafkaException(t);
-        } finally {
-            close();
-            log.debug("Background thread closed");
         }
     }
 
@@ -102,10 +109,26 @@ public class DefaultBackgroundThread extends KafkaThread implements Closeable {
     }
 
     /**
-     * Poll and process an {@link ApplicationEvent}. It performs the following tasks:
-     * 1. Drains and try to process all the requests in the queue.
-     * 2. Iterate through the registry, poll, and get the next poll time for the network poll
-     * 3. Poll the networkClient to send and retrieve the response.
+     * Poll and process the {@link ApplicationEvent application events}. It performs the following tasks:
+     *
+     * <ol>
+     *     <li>
+     *         Drains and processes all the events from the application thread's application event queue via
+     *         {@link ApplicationEventProcessor}
+     *     </li>
+     *     <li>
+     *         Iterate through the {@link RequestManager} list and invoke {@link RequestManager#poll(long)} to get
+     *         the {@link NetworkClientDelegate.UnsentRequest} list and the poll time for the network poll
+     *     </li>
+     *     <li>
+     *         Stage each {@link AbstractRequest.Builder request} to be sent via
+     *         {@link NetworkClientDelegate#addAll(List)}
+     *     </li>
+     *     <li>
+     *         Poll the client via {@link KafkaClient#poll(long, long)} to send the requests, as well as
+     *         retrieve any available responses
+     *     </li>
+     * </ol>
      */
     void runOnce() {
         // If there are errors processing any events, the error will be thrown immediately. This will have
@@ -115,17 +138,66 @@ public class DefaultBackgroundThread extends KafkaThread implements Closeable {
         final long currentTimeMs = time.milliseconds();
         final long pollWaitTimeMs = requestManagers.entries().stream()
                 .filter(Optional::isPresent)
-                .map(m -> m.get().poll(currentTimeMs))
-                .map(this::handlePollResult)
+                .map(Optional::get)
+                .map(rm -> rm.poll(currentTimeMs))
+                .map(networkClientDelegate::addAll)
                 .reduce(MAX_POLL_TIMEOUT_MS, Math::min);
         networkClientDelegate.poll(pollWaitTimeMs, currentTimeMs);
     }
 
-    long handlePollResult(NetworkClientDelegate.PollResult res) {
-        if (!res.unsentRequests.isEmpty()) {
-            networkClientDelegate.addAll(res.unsentRequests);
+    /**
+     * Performs any network I/O that is needed at the time of close for the consumer:
+     *
+     * <ol>
+     *     <li>
+     *         Iterate through the {@link RequestManager} list and invoke {@link RequestManager#pollOnClose()}
+     *         to get the {@link NetworkClientDelegate.UnsentRequest} list and the poll time for the network poll
+     *     </li>
+     *     <li>
+     *         Stage each {@link AbstractRequest.Builder request} to be sent via
+     *         {@link NetworkClientDelegate#addAll(List)}
+     *     </li>
+     *     <li>
+     *         {@link KafkaClient#poll(long, long) Poll the client} to send the requests, as well as
+     *         retrieve any available responses
+     *     </li>
+     *     <li>
+     *         Continuously {@link KafkaClient#poll(long, long) poll the client} as long as the
+     *         {@link Timer#notExpired() timer hasn't expired} to retrieve the responses
+     *     </li>
+     * </ol>
+     */
+    // Visible for testing
+    static void runAtClose(final Time time,
+                           final Collection<Optional<? extends RequestManager>> requestManagers,
+                           final NetworkClientDelegate networkClientDelegate,
+                           final Timer timer) {
+        long currentTimeMs = time.milliseconds();
+
+        // These are the optional outgoing requests at the
+        List<NetworkClientDelegate.PollResult> pollResults = requestManagers.stream()
+                .filter(Optional::isPresent)
+                .map(Optional::get)
+                .map(RequestManager::pollOnClose)
+                .collect(Collectors.toList());
+        long pollWaitTimeMs = pollResults.stream()
+                .map(networkClientDelegate::addAll)
+                .reduce(MAX_POLL_TIMEOUT_MS, Math::min);
+        pollWaitTimeMs = Math.min(pollWaitTimeMs, timer.remainingMs());
+        networkClientDelegate.poll(pollWaitTimeMs, currentTimeMs);
+        timer.update();
+
+        List<Future<?>> requestFutures = pollResults.stream()
+                .flatMap(fads -> fads.unsentRequests.stream())
+                .map(NetworkClientDelegate.UnsentRequest::future)
+                .collect(Collectors.toList());
+
+        // Poll to ensure that request has been written to the socket. Wait until either the timer has expired or until
+        // all requests have received a response.
+        while (timer.notExpired() && !requestFutures.stream().allMatch(Future::isDone)) {
+            networkClientDelegate.poll(timer.remainingMs(), currentTimeMs);
+            timer.update();
         }
-        return res.timeUntilNextPollMs;
     }
 
     public boolean isRunning() {
@@ -140,14 +212,45 @@ public class DefaultBackgroundThread extends KafkaThread implements Closeable {
 
     @Override
     public void close() {
-        closer.close(() -> {
-            log.trace("Closing the consumer background thread");
-            running = false;
-            wakeup();
-            Utils.closeQuietly(requestManagers, "Request managers client");
-            Utils.closeQuietly(networkClientDelegate, "network client utils");
-            Utils.closeQuietly(applicationEventProcessor, "application event processor");
-            log.debug("Closed the consumer background thread");
-        }, () -> log.warn("The consumer background thread was previously closed"));
+        close(Duration.ZERO);
+    }
+
+    public void close(final Duration timeout) {
+        closer.close(
+                () -> closeInternal(timeout),
+                () -> log.warn("The consumer background thread was already closed")
+        );
+    }
+
+    void closeInternal(final Duration timeout) {
+        log.trace("Closing the consumer background thread");
+        boolean hadStarted = running;
+        running = false;
+        wakeup();
+
+        Timer timer = time.timer(timeout);
+
+        if (hadStarted && timer.remainingMs() > 0) {
+            // If the thread had started, we need to wait for the run method to exit. It may take a little time
+            // for the thread to check the status of the running flag.
+            //
+            // We check the value of remainingMs because this method can be called with a duration of 0, which for
+            // the Thread.join method means "wait forever" which isn't what we want.
+            try {
+                long remainingMs = timer.remainingMs();
+                log.warn("Waiting up to {} ms for the thread to complete", remainingMs);
+                join(remainingMs);
+            } catch (InterruptedException e) {
+                throw new InterruptException(e);
+            } finally {
+                timer.update();
+            }
+        }
+
+        runAtClose(time, requestManagers.entries(), networkClientDelegate, timer);
+        closeQuietly(requestManagers, "request managers");
+        closeQuietly(networkClientDelegate, "network client delegate");
+        closeQuietly(applicationEventProcessor, "application event processor");
+        log.debug("Closed the consumer background thread");
     }
 }

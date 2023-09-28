@@ -34,6 +34,8 @@ import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
 import java.util.function.Supplier;
 
+import static org.apache.kafka.common.utils.Utils.closeQuietly;
+
 import static java.util.Objects.requireNonNull;
 
 /**
@@ -84,15 +86,12 @@ public class RequestManagers implements Closeable {
                 () -> {
                     log.debug("Closing RequestManagers");
 
-                    entries.forEach(rm -> {
-                        rm.ifPresent(requestManager -> {
-                            try {
-                                requestManager.close();
-                            } catch (Throwable t) {
-                                log.debug("Error closing request manager {}", requestManager.getClass().getSimpleName(), t);
-                            }
-                        });
-                    });
+                    entries.stream()
+                            .filter(Optional::isPresent)
+                            .map(Optional::get)
+                            .filter(rm -> rm instanceof Closeable)
+                            .map(rm -> (Closeable) rm)
+                            .forEach(c -> closeQuietly(c, c.getClass().getSimpleName()));
                     log.debug("RequestManagers has been closed");
                 },
                 () -> log.debug("RequestManagers was already closed"));

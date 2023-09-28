@@ -19,11 +19,11 @@ package org.apache.kafka.clients.consumer.internals.events;
 import org.apache.kafka.clients.consumer.internals.DefaultBackgroundThread;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate;
 import org.apache.kafka.clients.consumer.internals.RequestManagers;
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.internals.IdempotentCloser;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
 import java.io.Closeable;
@@ -45,16 +45,16 @@ public class ApplicationEventHandler implements Closeable {
     private final DefaultBackgroundThread backgroundThread;
     private final IdempotentCloser closer = new IdempotentCloser();
 
-    public ApplicationEventHandler(final Time time,
-                                   final LogContext logContext,
+    public ApplicationEventHandler(final LogContext logContext,
+                                   final Time time,
                                    final BlockingQueue<ApplicationEvent> applicationEventQueue,
                                    final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier,
                                    final Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
                                    final Supplier<RequestManagers> requestManagersSupplier) {
         this.log = logContext.logger(ApplicationEventHandler.class);
         this.applicationEventQueue = applicationEventQueue;
-        this.backgroundThread = new DefaultBackgroundThread(time,
-                logContext,
+        this.backgroundThread = new DefaultBackgroundThread(logContext,
+                time,
                 applicationEventProcessorSupplier,
                 networkClientDelegateSupplier,
                 requestManagersSupplier);
@@ -95,28 +95,13 @@ public class ApplicationEventHandler implements Closeable {
 
     @Override
     public void close() {
-        close(Duration.ofMillis(Long.MAX_VALUE));
+        close(Duration.ZERO);
     }
 
     public void close(final Duration timeout) {
-        Objects.requireNonNull(timeout, "Duration provided to close must be non-null");
-
         closer.close(
-                () ->  {
-                    log.info("Closing the consumer application event handler");
-
-                    try {
-                        long timeoutMs = timeout.toMillis();
-
-                        if (timeoutMs < 0)
-                            throw new IllegalArgumentException("The timeout cannot be negative.");
-
-                        backgroundThread.close();
-                        log.info("The consumer application event handler was closed");
-                    } catch (final Exception e) {
-                        throw new KafkaException(e);
-                    }
-                },
-                () -> log.info("The consumer application event handler was already closed"));
+                () -> Utils.closeQuietly(() -> backgroundThread.close(timeout), "application event handler"),
+                () -> log.warn("The application event handler was already closed")
+        );
     }
 }

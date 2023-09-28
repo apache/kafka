@@ -127,10 +127,10 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
      */
     @Override
     public NetworkClientDelegate.PollResult poll(final long currentTimeMs) {
-        NetworkClientDelegate.PollResult pollResult =
-                new NetworkClientDelegate.PollResult(Long.MAX_VALUE, new ArrayList<>(requestsToSend));
-        this.requestsToSend.clear();
-        return pollResult;
+        // Copy the outgoing request list and clear it.
+        List<NetworkClientDelegate.UnsentRequest> unsentRequests = new ArrayList<>(requestsToSend);
+        requestsToSend.clear();
+        return new NetworkClientDelegate.PollResult(unsentRequests);
     }
 
     /**

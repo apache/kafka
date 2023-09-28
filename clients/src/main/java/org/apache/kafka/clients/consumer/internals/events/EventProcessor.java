@@ -52,7 +52,7 @@ public abstract class EventProcessor<T> implements Closeable {
 
     @Override
     public void close() {
-        closer.close(this::closeInternal, () -> log.warn("Already closed"));
+        closer.close(this::closeInternal, () -> log.warn("The event processor was already closed"));
     }
 
     protected abstract Class<T> getEventClass();

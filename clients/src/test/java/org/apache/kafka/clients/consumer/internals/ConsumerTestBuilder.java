@@ -181,7 +181,6 @@ public class ConsumerTestBuilder implements Closeable {
         closeQuietly(requestManagers, RequestManagers.class.getSimpleName());
         closeQuietly(applicationEventProcessor, ApplicationEventProcessor.class.getSimpleName());
         closeQuietly(backgroundEventProcessor, BackgroundEventProcessor.class.getSimpleName());
-        requestManagers.close();
     }
 
     public static class DefaultBackgroundThreadTestBuilder extends ConsumerTestBuilder {
@@ -190,8 +189,8 @@ public class ConsumerTestBuilder implements Closeable {
 
         public DefaultBackgroundThreadTestBuilder() {
             this.backgroundThread = new DefaultBackgroundThread(
-                    time,
                     logContext,
+                    time,
                     () -> applicationEventProcessor,
                     () -> networkClientDelegate,
                     () -> requestManagers
@@ -210,8 +209,8 @@ public class ConsumerTestBuilder implements Closeable {
 
         public ApplicationEventHandlerTestBuilder() {
             this.applicationEventHandler = spy(new ApplicationEventHandler(
-                    time,
                     logContext,
+                    time,
                     applicationEventQueue,
                     () -> applicationEventProcessor,
                     () -> networkClientDelegate,

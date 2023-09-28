@@ -40,6 +40,7 @@ import org.slf4j.Logger;
 import org.slf4j.helpers.MessageFormatter;
 
 import java.io.Closeable;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -56,6 +57,7 @@ import static org.apache.kafka.clients.consumer.internals.FetchUtils.requestMeta
 public abstract class AbstractFetch implements Closeable {
 
     private final Logger log;
+    private final IdempotentCloser idempotentCloser = new IdempotentCloser();
     protected final LogContext logContext;
     protected final ConsumerMetadata metadata;
     protected final SubscriptionState subscriptions;
@@ -65,7 +67,6 @@ public abstract class AbstractFetch implements Closeable {
     protected final FetchBuffer fetchBuffer;
     protected final BufferSupplier decompressionBufferSupplier;
     protected final Set<Integer> nodesWithPendingFetchRequests;
-    protected final IdempotentCloser idempotentCloser = new IdempotentCloser();
 
     private final Map<Integer, FetchSessionHandler> sessionHandlers;
 
@@ -445,13 +446,11 @@ public abstract class AbstractFetch implements Closeable {
     }
 
     public void close(final Timer timer) {
-        idempotentCloser.close(() -> {
-            closeInternal(timer);
-        });
+        idempotentCloser.close(() -> closeInternal(timer));
     }
 
     @Override
     public void close() {
-        close(time.timer(0));
+        close(time.timer(Duration.ZERO));
     }
 }

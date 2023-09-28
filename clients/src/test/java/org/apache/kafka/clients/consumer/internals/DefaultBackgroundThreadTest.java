@@ -41,6 +41,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -111,7 +112,7 @@ public class DefaultBackgroundThreadTest {
         TestUtils.waitForCondition(backgroundThread::isRunning,
                 maxWaitMs,
                 "Thread did not start within " + maxWaitMs + " ms");
-        backgroundThread.close();
+        backgroundThread.close(Duration.ofMillis(maxWaitMs));
         TestUtils.waitForCondition(() -> !backgroundThread.isRunning(),
                 maxWaitMs,
                 "Thread did not stop within " + maxWaitMs + " ms");
@@ -236,12 +237,12 @@ public class DefaultBackgroundThreadTest {
         NetworkClientDelegate.PollResult success = new NetworkClientDelegate.PollResult(
                 10,
                 Collections.singletonList(req));
-        assertEquals(10, backgroundThread.handlePollResult(success));
+        assertEquals(10, networkClient.addAll(success));
 
         NetworkClientDelegate.PollResult failure = new NetworkClientDelegate.PollResult(
                 10,
                 new ArrayList<>());
-        assertEquals(10, backgroundThread.handlePollResult(failure));
+        assertEquals(10, networkClient.addAll(failure));
     }
 
     @Test

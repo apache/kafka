@@ -89,47 +89,47 @@ public class FetchRequestManager extends AbstractFetch implements RequestManager
 
     @Override
     public PollResult poll(long currentTimeMs) {
-        List<UnsentRequest> requests;
+        List<UnsentRequest> requests = prepareFetchRequests().entrySet().stream().map(entry -> {
+            final Node fetchTarget = entry.getKey();
+            final FetchSessionHandler.FetchRequestData data = entry.getValue();
+            final FetchRequest.Builder request = createFetchRequest(fetchTarget, data);
+            final BiConsumer<ClientResponse, Throwable> responseHandler = (clientResponse, t) -> {
+                if (t != null) {
+                    handleFetchResponse(fetchTarget, t);
+                    log.debug("Attempt to fetch data from node {} failed due to fatal exception", fetchTarget, t);
+                    backgroundEventHandler.add(new ErrorBackgroundEvent(t));
+                } else {
+                    handleFetchResponse(fetchTarget, data, clientResponse);
+                    forwardResults();
+                }
+            };
 
-        if (!idempotentCloser.isClosed()) {
-            // If the fetcher is open (i.e. not closed), we will issue the normal fetch requests
-            requests = prepareFetchRequests().entrySet().stream().map(entry -> {
-                final Node fetchTarget = entry.getKey();
-                final FetchSessionHandler.FetchRequestData data = entry.getValue();
-                final FetchRequest.Builder request = createFetchRequest(fetchTarget, data);
-                final BiConsumer<ClientResponse, Throwable> responseHandler = (clientResponse, t) -> {
-                    if (t != null) {
-                        handleFetchResponse(fetchTarget, t);
-                        log.debug("Attempt to fetch data from node {} failed due to fatal exception", fetchTarget, t);
-                        backgroundEventHandler.add(new ErrorBackgroundEvent(t));
-                    } else {
-                        handleFetchResponse(fetchTarget, data, clientResponse);
-                        forwardResults();
-                    }
-                };
+            return new UnsentRequest(request, fetchTarget, responseHandler);
+        }).collect(Collectors.toList());
 
-                return new UnsentRequest(request, fetchTarget, responseHandler);
-            }).collect(Collectors.toList());
-        } else {
-            requests = prepareCloseFetchSessionRequests().entrySet().stream().map(entry -> {
-                final Node fetchTarget = entry.getKey();
-                final FetchSessionHandler.FetchRequestData data = entry.getValue();
-                final FetchRequest.Builder request = createFetchRequest(fetchTarget, data);
-                final BiConsumer<ClientResponse, Throwable> responseHandler = (clientResponse, t) -> {
-                    if (t != null) {
-                        handleCloseFetchSessionResponse(fetchTarget, data, t);
-                        log.warn("Attempt to close fetch session on node {} failed due to fatal exception", fetchTarget, t);
-                        backgroundEventHandler.add(new ErrorBackgroundEvent(t));
-                    } else {
-                        handleCloseFetchSessionResponse(fetchTarget, data);
-                    }
-                };
+        return new PollResult(requests);
+    }
 
-                return new UnsentRequest(request, fetchTarget, responseHandler);
-            }).collect(Collectors.toList());
-        }
+    @Override
+    public PollResult pollOnClose() {
+        List<UnsentRequest> requests = prepareCloseFetchSessionRequests().entrySet().stream().map(entry -> {
+            final Node fetchTarget = entry.getKey();
+            final FetchSessionHandler.FetchRequestData data = entry.getValue();
+            final FetchRequest.Builder request = createFetchRequest(fetchTarget, data);
+            final BiConsumer<ClientResponse, Throwable> responseHandler = (clientResponse, t) -> {
+                if (t != null) {
+                    handleCloseFetchSessionResponse(fetchTarget, data, t);
+                    log.warn("Attempt to close fetch session on node {} failed due to fatal exception", fetchTarget, t);
+                    backgroundEventHandler.add(new ErrorBackgroundEvent(t));
+                } else {
+                    handleCloseFetchSessionResponse(fetchTarget, data);
+                }
+            };
 
-        return new PollResult(Long.MAX_VALUE, requests);
+            return new UnsentRequest(request, fetchTarget, responseHandler);
+        }).collect(Collectors.toList());
+
+        return new PollResult(requests);
     }
 
     /**

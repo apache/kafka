@@ -224,22 +224,43 @@ public class NetworkClientDelegate implements AutoCloseable {
         this.client.close();
     }
 
+    public long addAll(PollResult pollResult) {
+        addAll(pollResult.unsentRequests);
+        return pollResult.timeUntilNextPollMs;
+    }
+
     public void addAll(final List<UnsentRequest> requests) {
-        requests.forEach(u -> {
-            u.setTimer(this.time, this.requestTimeoutMs);
-        });
-        this.unsentRequests.addAll(requests);
+        if (!requests.isEmpty()) {
+            requests.forEach(ur -> ur.setTimer(time, requestTimeoutMs));
+            unsentRequests.addAll(requests);
+        }
     }
 
     public static class PollResult {
+
+        public static final long WAIT_FOREVER = Long.MAX_VALUE;
+        public static final PollResult EMPTY = new PollResult(WAIT_FOREVER);
         public final long timeUntilNextPollMs;
         public final List<UnsentRequest> unsentRequests;
 
-        public PollResult(final long timeMsTillNextPoll, final List<UnsentRequest> unsentRequests) {
-            this.timeUntilNextPollMs = timeMsTillNextPoll;
+        public PollResult(final long timeUntilNextPollMs, final List<UnsentRequest> unsentRequests) {
+            this.timeUntilNextPollMs = timeUntilNextPollMs;
             this.unsentRequests = Collections.unmodifiableList(unsentRequests);
         }
+
+        public PollResult(final List<UnsentRequest> unsentRequests) {
+            this(WAIT_FOREVER, unsentRequests);
+        }
+
+        public PollResult(final UnsentRequest unsentRequest) {
+            this(Collections.singletonList(unsentRequest));
+        }
+
+        public PollResult(final long timeUntilNextPollMs) {
+            this(timeUntilNextPollMs, Collections.emptyList());
+        }
     }
+
     public static class UnsentRequest {
         private final AbstractRequest.Builder<?> requestBuilder;
         private final FutureCompletionHandler handler;

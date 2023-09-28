@@ -16,20 +16,24 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult;
 
-import java.io.Closeable;
+import static org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult.EMPTY;
 
 /**
  * {@code PollResult} consist of {@code UnsentRequest} if there are requests to send; otherwise, return the time till
  * the next poll event.
  */
-public interface RequestManager extends Closeable {
+public interface RequestManager {
 
     PollResult poll(long currentTimeMs);
 
-    @Override
-    default void close() {
-        // Do nothing...
+    /**
+     * On shutdown of the {@link Consumer}, a request manager may want/need to send out some requests. If so,
+     * implementations can signal that by returning the close requests here.
+     */
+    default PollResult pollOnClose() {
+        return EMPTY;
     }
 }

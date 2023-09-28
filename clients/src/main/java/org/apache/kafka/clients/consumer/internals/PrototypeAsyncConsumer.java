@@ -96,11 +96,11 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_JMX_PREFIX;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP_PREFIX;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.configuredConsumerInterceptors;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createFetchMetricsManager;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createLogContext;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createMetrics;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createSubscriptionState;
-import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.configuredConsumerInterceptors;
 import static org.apache.kafka.common.utils.Utils.closeQuietly;
 import static org.apache.kafka.common.utils.Utils.isBlank;
 import static org.apache.kafka.common.utils.Utils.join;
@@ -231,8 +231,8 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
                     metadata,
                     applicationEventQueue,
                     requestManagersSupplier);
-            this.applicationEventHandler = new ApplicationEventHandler(time,
-                    logContext,
+            this.applicationEventHandler = new ApplicationEventHandler(logContext,
+                    time,
                     applicationEventQueue,
                     applicationEventProcessorSupplier,
                     networkClientDelegateSupplier,
@@ -267,7 +267,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
             // call close methods if internal objects are already constructed; this is to prevent resource leak. see KAFKA-2121
             // we do not need to call `close` at all when `log` is null, which means no internal objects were initialized.
             if (this.log != null) {
-                close(true);
+                close(Duration.ZERO, true);
             }
             // now propagate the exception
             throw new KafkaException("Failed to construct kafka consumer", t);
@@ -692,21 +692,24 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
             if (!closed) {
                 // need to close before setting the flag since the close function
                 // itself may trigger rebalance callback that needs the consumer to be open still
-                close(false);
+                close(timeout, false);
             }
         } finally {
             closed = true;
         }
     }
 
-    private void close(boolean swallowException) {
+    private void close(Duration timeout, boolean swallowException) {
         log.trace("Closing the Kafka consumer");
         AtomicReference<Throwable> firstException = new AtomicReference<>();
+
+        if (applicationEventHandler != null)
+            closeQuietly(() -> applicationEventHandler.close(timeout), "Failed to close application event handler with a timeout(ms)=" + timeout, firstException);
+
         closeQuietly(fetchBuffer, "Failed to close fetcher", firstException);
         closeQuietly(interceptors, "consumer interceptors", firstException);
         closeQuietly(kafkaConsumerMetrics, "kafka consumer metrics", firstException);
         closeQuietly(metrics, "consumer metrics", firstException);
-        closeQuietly(applicationEventHandler, "event handler", firstException);
         closeQuietly(deserializers, "consumer deserializers", firstException);
 
         AppInfoParser.unregisterAppInfo(CONSUMER_JMX_PREFIX, clientId, metrics);
