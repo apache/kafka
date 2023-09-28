@@ -1131,7 +1131,7 @@ public class GroupCoordinatorServiceTest {
         )).thenAnswer(invocation -> CompletableFuture.supplyAsync(() -> {
             try {
                 assertTrue(latch.await(5, TimeUnit.SECONDS));
-            } catch (InterruptedException ignored) {}
+            } catch (InterruptedException ignored) { }
             return resultCollection2;
         }));
 
