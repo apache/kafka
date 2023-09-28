@@ -260,6 +260,7 @@ public final class KafkaEventQueue implements EventQueue {
                         if (deadlineMap.isEmpty() && (shuttingDown || interrupted)) {
                             // If there are no more entries to process, and the queue is
                             // closing, exit the thread.
+                            lock.unlock();
                             return;
                         }
                     } else {
