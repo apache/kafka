@@ -530,7 +530,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         groupsByTopicPartition.forEach((topicPartition, groupList) -> {
             CompletableFuture<List<DescribeGroupsResponseData.DescribedGroup>> future =
                 runtime.scheduleReadOperation(
-                    "describe-group",
+                    "describe-groups",
                     topicPartition,
                     (coordinator, __) -> coordinator.describeGroups(context, groupList)
                 ).exceptionally(exception -> {
