@@ -105,9 +105,7 @@ class DumpLogSegmentsTest {
 
   @AfterEach
   def tearDown(): Unit = {
-    if (log != null) {
-      log.close()
-    }
+    Utils.closeQuietly(log, "UnifiedLog")
     Utils.delete(tmpDir)
   }
 

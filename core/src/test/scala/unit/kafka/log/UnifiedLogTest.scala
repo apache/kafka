@@ -72,14 +72,7 @@ class UnifiedLogTest {
   @AfterEach
   def tearDown(): Unit = {
     brokerTopicStats.close()
-    logsToClose.foreach(l =>
-      try {
-        l.close()
-        l.delete()
-      } catch {
-        case _: KafkaStorageException =>
-      }
-    )
+    logsToClose.foreach(l => Utils.closeQuietly(l, "UnifiedLog"))
     Utils.delete(tmpDir)
   }
 
