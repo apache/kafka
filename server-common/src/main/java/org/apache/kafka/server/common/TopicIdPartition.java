@@ -63,6 +63,3 @@ public final class TopicIdPartition {
         return topicId + ":" + partitionId;
     }
 }
-
-
-
