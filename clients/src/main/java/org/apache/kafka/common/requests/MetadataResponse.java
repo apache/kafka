@@ -172,7 +172,6 @@ public class MetadataResponse extends AbstractResponse {
         return new PartitionInfo(metadata.topic(),
                 metadata.partition(),
                 metadata.leaderId.map(nodesById::get).orElse(null),
-                metadata.leaderEpoch.orElse(PartitionInfo.UNKNOWN_LEADER_EPOCH),
                 convertToNodeArray(metadata.replicaIds, nodesById),
                 convertToNodeArray(metadata.inSyncReplicaIds, nodesById),
                 convertToNodeArray(metadata.offlineReplicaIds, nodesById));
