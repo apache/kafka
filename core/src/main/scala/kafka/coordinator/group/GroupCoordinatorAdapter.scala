@@ -465,6 +465,7 @@ private[group] class GroupCoordinatorAdapter(
 
     coordinator.handleTxnCommitOffsets(
       request.groupId,
+      request.transactionalId,
       request.producerId,
       request.producerEpoch,
       request.memberId,
@@ -472,7 +473,6 @@ private[group] class GroupCoordinatorAdapter(
       request.generationId,
       partitions.toMap,
       callback,
-      request.transactionalId,
       RequestLocal(bufferSupplier)
     )
 

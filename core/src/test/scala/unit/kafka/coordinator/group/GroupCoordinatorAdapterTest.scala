@@ -739,6 +739,7 @@ class GroupCoordinatorAdapterTest {
 
     verify(groupCoordinator).handleTxnCommitOffsets(
       ArgumentMatchers.eq(data.groupId),
+      ArgumentMatchers.eq(data.transactionalId),
       ArgumentMatchers.eq(data.producerId),
       ArgumentMatchers.eq(data.producerEpoch),
       ArgumentMatchers.eq(data.memberId),
@@ -754,7 +755,6 @@ class GroupCoordinatorAdapterTest {
         )
       )),
       capturedCallback.capture(),
-      ArgumentMatchers.eq(data.transactionalId),
       ArgumentMatchers.eq(RequestLocal(bufferSupplier))
     )
 

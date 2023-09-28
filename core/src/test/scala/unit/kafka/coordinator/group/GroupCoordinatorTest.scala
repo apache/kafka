@@ -4073,7 +4073,7 @@ class GroupCoordinatorTest {
     val capturedArgument: ArgumentCaptor[scala.collection.Map[TopicPartition, PartitionResponse] => Unit] = ArgumentCaptor.forClass(classOf[scala.collection.Map[TopicPartition, PartitionResponse] => Unit])
 
     // Since transactional ID is only used in appendRecords, we can use a dummy value. Ensure it passes through.
-    val transactionalId = producerId.toString
+    val transactionalId = "dummy-txn-id"
     when(replicaManager.appendRecords(anyLong,
       anyShort(),
       internalTopicsAllowed = ArgumentMatchers.eq(true),
@@ -4094,8 +4094,8 @@ class GroupCoordinatorTest {
     })
     when(replicaManager.getMagic(any[TopicPartition])).thenReturn(Some(RecordBatch.MAGIC_VALUE_V2))
 
-    groupCoordinator.handleTxnCommitOffsets(groupId, producerId, producerEpoch,
-      memberId, groupInstanceId, generationId, offsets, responseCallback, transactionalId)
+    groupCoordinator.handleTxnCommitOffsets(groupId, transactionalId, producerId, producerEpoch,
+      memberId, groupInstanceId, generationId, offsets, responseCallback)
     val result = Await.result(responseFuture, Duration(40, TimeUnit.MILLISECONDS))
     result
   }

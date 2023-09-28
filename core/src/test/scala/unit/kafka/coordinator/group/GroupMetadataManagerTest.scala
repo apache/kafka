@@ -1330,7 +1330,7 @@ class GroupMetadataManagerTest {
       commitErrors = Some(errors)
     }
 
-    groupMetadataManager.storeOffsets(group, memberId, offsets, callback, producerId, producerEpoch, transactionalId = transactionalId)
+    groupMetadataManager.storeOffsets(group, memberId, offsets, callback, transactionalId, producerId, producerEpoch)
     assertTrue(group.hasOffsets)
     assertTrue(group.allOffsets.isEmpty)
 
@@ -1381,7 +1381,7 @@ class GroupMetadataManagerTest {
       commitErrors = Some(errors)
     }
 
-    groupMetadataManager.storeOffsets(group, memberId, offsets, callback, producerId, producerEpoch, transactionalId = transactionalId)
+    groupMetadataManager.storeOffsets(group, memberId, offsets, callback, transactionalId, producerId, producerEpoch)
     assertTrue(group.hasOffsets)
     assertTrue(group.allOffsets.isEmpty)
     val capturedResponseCallback = verifyAppendAndCaptureCallback()
@@ -1432,7 +1432,7 @@ class GroupMetadataManagerTest {
       commitErrors = Some(errors)
     }
 
-    groupMetadataManager.storeOffsets(group, memberId, offsets, callback, producerId, producerEpoch, transactionalId = transactionalId)
+    groupMetadataManager.storeOffsets(group, memberId, offsets, callback, transactionalId, producerId, producerEpoch)
     assertTrue(group.hasOffsets)
     assertTrue(group.allOffsets.isEmpty)
     val capturedResponseCallback = verifyAppendAndCaptureCallback()
@@ -1462,7 +1462,7 @@ class GroupMetadataManagerTest {
 
   @ParameterizedTest
   @EnumSource(value = classOf[Errors], names = Array("INVALID_TXN_STATE", "INVALID_PRODUCER_ID_MAPPING"))
-  def testTransactionalCommitOffsetTransformedErrors(error: Errors): Unit = {
+  def testTransactionalCommitOffsetTransactionalErrors(error: Errors): Unit = {
     val memberId = ""
     val topicIdPartition = new TopicIdPartition(Uuid.randomUuid(), 0, "foo")
     val offset = 37
@@ -1484,7 +1484,7 @@ class GroupMetadataManagerTest {
       commitErrors = Some(errors)
     }
 
-    groupMetadataManager.storeOffsets(group, memberId, offsets, callback, producerId, producerEpoch, transactionalId = transactionalId)
+    groupMetadataManager.storeOffsets(group, memberId, offsets, callback, transactionalId, producerId, producerEpoch)
     assertTrue(group.hasOffsets)
     assertTrue(group.allOffsets.isEmpty)
     val capturedResponseCallback = verifyAppendAndCaptureCallback()
@@ -1498,7 +1498,7 @@ class GroupMetadataManagerTest {
     assertFalse(group.hasOffsets)
     assertTrue(group.allOffsets.isEmpty)
     assertFalse(commitErrors.contains(topicIdPartition))
-    assertEquals(Errors.UNKNOWN_MEMBER_ID, commitErrors.get(topicIdPartition))
+    assertEquals(error, commitErrors.get(topicIdPartition))
 
     verify(replicaManager).appendRecords(anyLong(),
       anyShort(),

@@ -349,10 +349,10 @@ class GroupMetadataManager(brokerId: Int,
                    consumerId: String,
                    offsetMetadata: immutable.Map[TopicIdPartition, OffsetAndMetadata],
                    responseCallback: immutable.Map[TopicIdPartition, Errors] => Unit,
+                   transactionalId: String = null,
                    producerId: Long = RecordBatch.NO_PRODUCER_ID,
                    producerEpoch: Short = RecordBatch.NO_PRODUCER_EPOCH,
-                   requestLocal: RequestLocal = RequestLocal.NoCaching,
-                   transactionalId: String = null): Unit = {
+                   requestLocal: RequestLocal = RequestLocal.NoCaching): Unit = {
     // first filter out partitions with offset metadata size exceeding limit
     val filteredOffsetMetadata = offsetMetadata.filter { case (_, offsetAndMetadata) =>
       validateOffsetMetadataLength(offsetAndMetadata.metadata)
@@ -451,10 +451,6 @@ class GroupMetadataManager(brokerId: Int,
                        | Errors.RECORD_LIST_TOO_LARGE
                        | Errors.INVALID_FETCH_SIZE =>
                     Errors.INVALID_COMMIT_OFFSET_SIZE
-
-                  case Errors.INVALID_PRODUCER_ID_MAPPING
-                       | Errors.INVALID_TXN_STATE =>
-                    Errors.UNKNOWN_MEMBER_ID
 
                   case other => other
                 }
