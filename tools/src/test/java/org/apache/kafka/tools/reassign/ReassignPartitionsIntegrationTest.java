@@ -78,6 +78,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@SuppressWarnings("ClassFanOutComplexity")
 @Timeout(300)
 public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
     ReassignPartitionsTestCluster cluster;
@@ -453,13 +454,17 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
         TopicPartition topicPartition,
         Integer replicaId
     ) {
-        TestUtils.waitUntilTrue(() -> {
+        TestUtils.waitUntilTrue(
+            () -> {
                 KafkaBroker server = cluster.servers.get(replicaId);
                 HostedPartition partition = server.replicaManager().getPartition(topicPartition);
                 Option<UnifiedLog> log = server.logManager().getLog(topicPartition, false);
                 return partition == HostedPartition.None$.MODULE$ && log.isEmpty();
-            }, () -> "Timed out waiting for replica " + replicaId + " of " + topicPartition + " to be deleted",
-            org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS, 100L);
+            },
+            () -> "Timed out waiting for replica " + replicaId + " of " + topicPartition + " to be deleted",
+            org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS,
+            100L
+        );
     }
 
     private void waitForLogDirThrottle(Set<Integer> throttledBrokers, Long logDirThrottle) {
