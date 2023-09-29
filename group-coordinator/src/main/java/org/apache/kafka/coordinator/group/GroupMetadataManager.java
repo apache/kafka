@@ -3077,7 +3077,7 @@ public class GroupMetadataManager {
      * Validations are done in {@link GroupCoordinatorShard#deleteGroups(RequestContext, List)} by
      * calling {@link GroupMetadataManager#validateDeleteGroup(String)}.
      *
-     * @param groupId The ID of the group to be deleted. It has been checked in GroupMetadataManager#validateDeleteGroup.
+     * @param groupId The ID of the group to be deleted. It has been checked in {@link GroupMetadataManager#validateDeleteGroup}.
      * @param records The record list to populate.
      */
     public void deleteGroup(
