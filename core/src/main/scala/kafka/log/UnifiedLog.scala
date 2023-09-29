@@ -104,7 +104,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
                  @volatile private var _topicId: Option[Uuid],
                  val keepPartitionMetadataFile: Boolean,
                  val remoteStorageSystemEnable: Boolean = false,
-                 @volatile private var logOffsetsListener: LogOffsetsListener = LogOffsetsListener.NO_OP_OFFSETS_LISTENER) extends Logging {
+                 @volatile private var logOffsetsListener: LogOffsetsListener = LogOffsetsListener.NO_OP_OFFSETS_LISTENER) extends Logging with AutoCloseable {
 
   import kafka.log.UnifiedLog._
 
@@ -643,7 +643,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    * Close this log.
    * The memory mapped buffer for index files of this log will be left open until the log is deleted.
    */
-  def close(): Unit = {
+  override def close(): Unit = {
     debug("Closing log")
     lock synchronized {
       logOffsetsListener = LogOffsetsListener.NO_OP_OFFSETS_LISTENER
