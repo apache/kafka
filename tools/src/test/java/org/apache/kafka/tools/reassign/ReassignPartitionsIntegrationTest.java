@@ -72,6 +72,7 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -95,7 +96,7 @@ public class ReassignPartitionsIntegrationTest {
 
     private static final Map<String, List<List<Integer>>> TOPICS = new HashMap<>();
 
-    private static final Map<Integer, Map<String, Long>> UNTHROTTLED_BROKER_CONFIGS = new HashMap<>();
+    private static final Map<Integer, Map<String, Long>> UNTHROTTLED_BROKER_CONFIGS;
 
     static {
         BROKERS.put(0, "rack0");
@@ -115,7 +116,7 @@ public class ReassignPartitionsIntegrationTest {
             return null;
         });
 
-        IntStream.range(0, 5).forEach(brokerId -> UNTHROTTLED_BROKER_CONFIGS.put(brokerId, brokerConfig));
+        UNTHROTTLED_BROKER_CONFIGS = IntStream.range(0, 5).boxed().collect(Collectors.toMap(Function.identity(), brokerId -> brokerConfig));
     }
 
     private ClusterInstance cluster;
@@ -768,7 +769,7 @@ public class ReassignPartitionsIntegrationTest {
         }
     }
 
-    public void produceMessages(String topic, int partition, int numMessages) {
+    private void produceMessages(String topic, int partition, int numMessages) {
         Properties props = new Properties();
         props.put(BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
         props.put(KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
@@ -780,7 +781,7 @@ public class ReassignPartitionsIntegrationTest {
         }
     }
 
-    public List<KafkaBroker> servers() {
+    private List<KafkaBroker> servers() {
         Stream<? extends KafkaBroker> brokers = cluster.isKRaftTest()
             ? ((RaftClusterInstance) cluster).brokers()
             : ((ZkClusterInvocationContext.ZkClusterInstance) cluster).servers();
@@ -788,7 +789,7 @@ public class ReassignPartitionsIntegrationTest {
         return brokers.collect(Collectors.toList());
     }
 
-    public ControllerServer controllerServer() {
+    private ControllerServer controllerServer() {
         return ((RaftClusterInstance) cluster).controllerServers().iterator().next();
     }
 
