@@ -69,6 +69,7 @@ import org.slf4j.Logger;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 
 /**
  * The group coordinator shard is a replicated state machine that manages the metadata of all
@@ -164,11 +165,14 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
             return new GroupCoordinatorShard(
                 logContext,
                 groupMetadataManager,
-                offsetMetadataManager
+                offsetMetadataManager,
+                timer,
+                config
             );
         }
     }
 
+    private static final String GROUP_EXPIRATION_KEY = "expire-group-metadata";
     /**
      * The logger.
      */
@@ -185,6 +189,16 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
     private final OffsetMetadataManager offsetMetadataManager;
 
     /**
+     * The coordinator timer.
+     */
+    private final CoordinatorTimer<Void, Record> timer;
+
+    /**
+     * The group coordinator config.
+     */
+    private final GroupCoordinatorConfig config;
+
+    /**
      * Constructor.
      *
      * @param logContext            The log context.
@@ -194,11 +208,15 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
     GroupCoordinatorShard(
         LogContext logContext,
         GroupMetadataManager groupMetadataManager,
-        OffsetMetadataManager offsetMetadataManager
+        OffsetMetadataManager offsetMetadataManager,
+        CoordinatorTimer<Void, Record> timer,
+        GroupCoordinatorConfig config
     ) {
         this.log = logContext.logger(GroupCoordinatorShard.class);
         this.groupMetadataManager = groupMetadataManager;
         this.offsetMetadataManager = offsetMetadataManager;
+        this.timer = timer;
+        this.config = config;
     }
 
     /**
@@ -417,6 +435,29 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
         return offsetMetadataManager.deleteOffsets(request);
     }
 
+    public CoordinatorResult<Void, Record> cleanupGroupMetadata() {
+        List<Record> records = new ArrayList<>();
+        offsetMetadataManager.cleanupOffsetMetadata(records, config.offsetsRetentionMs);
+
+        // Reschedule the next cycle.
+        scheduleGroupMetadataExpiration();
+        return new CoordinatorResult<>(records, null);
+    }
+
+    /**
+     * Schedule the cleanup. If any exceptions are thrown above, the timer will retry.
+     */
+    private void scheduleGroupMetadataExpiration() {
+        timer.schedule(
+            GROUP_EXPIRATION_KEY,
+            config.offsetsRetentionCheckIntervalMs,
+            TimeUnit.MILLISECONDS,
+            true,
+            this::cleanupGroupMetadata
+        );
+    }
+
+
     /**
      * The coordinator has been loaded. This is used to apply any
      * post loading operations (e.g. registering timers).
@@ -430,6 +471,12 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
         offsetMetadataManager.onNewMetadataImage(newImage, emptyDelta);
 
         groupMetadataManager.onLoaded();
+        scheduleGroupMetadataExpiration();
+    }
+
+    @Override
+    public void onUnloaded() {
+        timer.cancel(GROUP_EXPIRATION_KEY);
     }
 
     /**

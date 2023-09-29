@@ -75,7 +75,8 @@ public class GroupCoordinatorShardTest {
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
-            offsetMetadataManager
+            offsetMetadataManager,
+            mock(GroupCoordinatorConfig.class)
         );
 
         RequestContext context = requestContext(ApiKeys.CONSUMER_GROUP_HEARTBEAT);
@@ -100,7 +101,8 @@ public class GroupCoordinatorShardTest {
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
-            offsetMetadataManager
+            offsetMetadataManager,
+            mock(GroupCoordinatorConfig.class)
         );
 
         RequestContext context = requestContext(ApiKeys.OFFSET_COMMIT);
@@ -125,7 +127,8 @@ public class GroupCoordinatorShardTest {
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
-            offsetMetadataManager
+            offsetMetadataManager,
+            mock(GroupCoordinatorConfig.class)
         );
 
         RequestContext context = requestContext(ApiKeys.DELETE_GROUPS);
@@ -177,7 +180,8 @@ public class GroupCoordinatorShardTest {
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
-            offsetMetadataManager
+            offsetMetadataManager,
+            mock(GroupCoordinatorConfig.class)
         );
 
         RequestContext context = requestContext(ApiKeys.DELETE_GROUPS);
@@ -240,7 +244,8 @@ public class GroupCoordinatorShardTest {
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
-            offsetMetadataManager
+            offsetMetadataManager,
+            mock(GroupCoordinatorConfig.class)
         );
 
         OffsetCommitKey key = new OffsetCommitKey();
@@ -266,7 +271,8 @@ public class GroupCoordinatorShardTest {
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
-            offsetMetadataManager
+            offsetMetadataManager,
+            mock(GroupCoordinatorConfig.class)
         );
 
         OffsetCommitKey key = new OffsetCommitKey();
@@ -291,7 +297,8 @@ public class GroupCoordinatorShardTest {
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
-            offsetMetadataManager
+            offsetMetadataManager,
+            mock(GroupCoordinatorConfig.class)
         );
 
         ConsumerGroupMetadataKey key = new ConsumerGroupMetadataKey();
@@ -312,7 +319,8 @@ public class GroupCoordinatorShardTest {
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
-            offsetMetadataManager
+            offsetMetadataManager,
+            mock(GroupCoordinatorConfig.class)
         );
 
         ConsumerGroupMetadataKey key = new ConsumerGroupMetadataKey();
@@ -332,7 +340,8 @@ public class GroupCoordinatorShardTest {
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
-            offsetMetadataManager
+            offsetMetadataManager,
+            mock(GroupCoordinatorConfig.class)
         );
 
         ConsumerGroupPartitionMetadataKey key = new ConsumerGroupPartitionMetadataKey();
@@ -353,7 +362,8 @@ public class GroupCoordinatorShardTest {
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
-            offsetMetadataManager
+            offsetMetadataManager,
+            mock(GroupCoordinatorConfig.class)
         );
 
         ConsumerGroupPartitionMetadataKey key = new ConsumerGroupPartitionMetadataKey();
@@ -373,7 +383,8 @@ public class GroupCoordinatorShardTest {
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
-            offsetMetadataManager
+            offsetMetadataManager,
+            mock(GroupCoordinatorConfig.class)
         );
 
         ConsumerGroupMemberMetadataKey key = new ConsumerGroupMemberMetadataKey();
@@ -394,7 +405,8 @@ public class GroupCoordinatorShardTest {
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
-            offsetMetadataManager
+            offsetMetadataManager,
+            mock(GroupCoordinatorConfig.class)
         );
 
         ConsumerGroupMemberMetadataKey key = new ConsumerGroupMemberMetadataKey();
@@ -414,7 +426,8 @@ public class GroupCoordinatorShardTest {
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
-            offsetMetadataManager
+            offsetMetadataManager,
+            mock(GroupCoordinatorConfig.class)
         );
 
         ConsumerGroupTargetAssignmentMetadataKey key = new ConsumerGroupTargetAssignmentMetadataKey();
@@ -435,7 +448,8 @@ public class GroupCoordinatorShardTest {
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
-            offsetMetadataManager
+            offsetMetadataManager,
+            mock(GroupCoordinatorConfig.class)
         );
 
         ConsumerGroupTargetAssignmentMetadataKey key = new ConsumerGroupTargetAssignmentMetadataKey();
@@ -455,7 +469,8 @@ public class GroupCoordinatorShardTest {
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
-            offsetMetadataManager
+            offsetMetadataManager,
+            mock(GroupCoordinatorConfig.class)
         );
 
         ConsumerGroupTargetAssignmentMemberKey key = new ConsumerGroupTargetAssignmentMemberKey();
@@ -476,7 +491,8 @@ public class GroupCoordinatorShardTest {
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
-            offsetMetadataManager
+            offsetMetadataManager,
+            mock(GroupCoordinatorConfig.class)
         );
 
         ConsumerGroupTargetAssignmentMemberKey key = new ConsumerGroupTargetAssignmentMemberKey();
@@ -496,7 +512,8 @@ public class GroupCoordinatorShardTest {
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
-            offsetMetadataManager
+            offsetMetadataManager,
+            mock(GroupCoordinatorConfig.class)
         );
 
         ConsumerGroupCurrentMemberAssignmentKey key = new ConsumerGroupCurrentMemberAssignmentKey();
@@ -517,7 +534,8 @@ public class GroupCoordinatorShardTest {
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
-            offsetMetadataManager
+            offsetMetadataManager,
+            mock(GroupCoordinatorConfig.class)
         );
 
         ConsumerGroupCurrentMemberAssignmentKey key = new ConsumerGroupCurrentMemberAssignmentKey();
@@ -537,7 +555,8 @@ public class GroupCoordinatorShardTest {
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
-            offsetMetadataManager
+            offsetMetadataManager,
+            mock(GroupCoordinatorConfig.class)
         );
 
         assertThrows(NullPointerException.class, () -> coordinator.replay(new Record(null, null)));
@@ -550,7 +569,8 @@ public class GroupCoordinatorShardTest {
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
-            offsetMetadataManager
+            offsetMetadataManager,
+            mock(GroupCoordinatorConfig.class)
         );
 
         ConsumerGroupCurrentMemberAssignmentKey key = new ConsumerGroupCurrentMemberAssignmentKey();
@@ -570,7 +590,8 @@ public class GroupCoordinatorShardTest {
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
-            offsetMetadataManager
+            offsetMetadataManager,
+            mock(GroupCoordinatorConfig.class)
         );
 
         coordinator.onLoaded(image);
@@ -590,7 +611,8 @@ public class GroupCoordinatorShardTest {
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
-            offsetMetadataManager
+            offsetMetadataManager,
+            mock(GroupCoordinatorConfig.class)
         );
 
         GroupMetadataKey key = new GroupMetadataKey();
@@ -611,7 +633,8 @@ public class GroupCoordinatorShardTest {
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
-            offsetMetadataManager
+            offsetMetadataManager,
+            mock(GroupCoordinatorConfig.class)
         );
 
         GroupMetadataKey key = new GroupMetadataKey();

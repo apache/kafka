@@ -330,5 +330,5 @@ public interface GroupCoordinator {
     /**
      * Shutdown the group coordinator.
      */
-    void shutdown();
+    void shutdown() throws InterruptedException;
 }

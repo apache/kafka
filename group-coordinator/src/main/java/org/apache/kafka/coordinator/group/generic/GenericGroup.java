@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group.generic;
 
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
@@ -33,8 +34,11 @@ import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.Group;
+import org.apache.kafka.coordinator.group.OffsetAndMetadata;
+import org.apache.kafka.coordinator.group.OffsetMetadataManager;
 import org.apache.kafka.coordinator.group.Record;
 import org.apache.kafka.coordinator.group.RecordHelpers;
+import org.apache.kafka.timeline.TimelineHashMap;
 import org.slf4j.Logger;
 
 import java.nio.ByteBuffer;
@@ -48,9 +52,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.coordinator.group.generic.GenericGroupState.COMPLETING_REBALANCE;
@@ -898,6 +904,39 @@ public class GenericGroup implements Group {
         records.add(RecordHelpers.newGroupMetadataTombstoneRecord(groupId()));
     }
 
+    @Override
+    public OffsetMetadataManager.ExpiredOffsetChecker expiredOffsets() {
+        if (protocolType.isPresent()) {
+            if (isInState(EMPTY)) {
+                // no consumer exists in the group =>
+                // - if current state timestamp exists and retention period has passed since group became Empty,
+                //   expire all offsets with no pending offset commit;
+                // - if there is no current state timestamp (old group metadata schema) and retention period has passed
+                //   since the last commit timestamp, expire the offset
+                return new OffsetMetadataManager.ExpiredOffsetChecker(
+                    offsetAndMetadata -> currentStateTimestamp.orElse(offsetAndMetadata.commitTimestampMs),
+                    Collections.emptySet());
+            } else if (ConsumerProtocol.PROTOCOL_TYPE.equals(protocolType.get()) && subscribedTopics.isPresent() && isInState(STABLE)) {
+                // consumers exist in the group and group is Stable =>
+                // - if the group is aware of the subscribed topics and retention period had passed since the
+                //   last commit timestamp, expire the offset. offset with pending offset commit are not
+                //   expired
+                return new OffsetMetadataManager.ExpiredOffsetChecker(
+                    offsetAndMetadata -> offsetAndMetadata.commitTimestampMs,
+                    subscribedTopics.orElse(Collections.emptySet()));
+            }
+        } else {
+            // protocolType is None => standalone (simple) consumer, that uses Kafka for offset storage only
+            // expire offsets with no pending offset commit that retention period has passed since their last commit
+            return new OffsetMetadataManager.ExpiredOffsetChecker(
+                offsetAndMetadata -> offsetAndMetadata.commitTimestampMs,
+                Collections.emptySet());
+        }
+
+        return new OffsetMetadataManager.ExpiredOffsetChecker(offsetAndMetadata -> -1L, Collections.emptySet());
+
+    }
+
     /**
      * Verify the member id is up to date for static members. Return true if both conditions met:
      *   1. given member is a known static member to group
@@ -1063,7 +1102,7 @@ public class GenericGroup implements Group {
     }
 
     /**
-     * Returns true if the consumer group is actively subscribed to the topic. When the consumer
+     * Returns true if the consumer group is actively subscribed to the topic. When the generic
      * group does not know, because the information is not available yet or because it has
      * failed to parse the Consumer Protocol, it returns true to be safe.
      *

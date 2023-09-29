@@ -21,7 +21,7 @@ import kafka.server.{ActionQueue, ReplicaManager}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.RecordTooLargeException
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.record.{CompressionType, MemoryRecords, TimestampType}
+import org.apache.kafka.common.record.{CompressionType, MemoryRecords, MemoryRecordsBuilder, TimestampType}
 import org.apache.kafka.common.record.Record.EMPTY_HEADERS
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.Time
@@ -31,6 +31,7 @@ import org.apache.kafka.storage.internals.log.AppendOrigin
 import java.nio.ByteBuffer
 import java.util
 import scala.collection.Map
+import scala.jdk.CollectionConverters.IteratorHasAsScala
 
 /**
  * ListenerAdapter adapts the PartitionListener interface to the
@@ -123,50 +124,79 @@ class CoordinatorPartitionWriter[T](
         val maxBatchSize = logConfig.maxMessageSize
         val currentTimeMs = time.milliseconds()
 
-        val recordsBuilder = MemoryRecords.builder(
-          ByteBuffer.allocate(math.min(16384, maxBatchSize)),
-          magic,
-          compressionType,
-          TimestampType.CREATE_TIME,
-          0L,
-          maxBatchSize
-        )
+        var recordsBuilder: MemoryRecordsBuilder = null
+        var isFullBatch = false
+        var lastOffset = 0L
 
-        records.forEach { record =>
+        def flushRecordsBuilder(): Long = {
+          var appendResults: Map[TopicPartition, PartitionResponse] = Map.empty
+          replicaManager.appendRecords(
+            timeout = 0L,
+            requiredAcks = 1,
+            internalTopicsAllowed = true,
+            origin = AppendOrigin.COORDINATOR,
+            entriesPerPartition = Map(tp -> recordsBuilder.build()),
+            responseCallback = results => appendResults = results,
+            // We can directly complete the purgatories here because we don't hold
+            // any conflicting locks.
+            actionQueue = directActionQueue
+          )
+
+          val partitionResult = appendResults.getOrElse(tp,
+            throw new IllegalStateException(s"Append status $appendResults should have partition $tp."))
+
+          if (partitionResult.error != Errors.NONE) {
+            throw partitionResult.error.exception()
+          }
+
+          // Required offset.
+          partitionResult.lastOffset + 1
+        }
+
+        val recordsIterator = records.iterator().asScala.buffered
+        while (recordsIterator.hasNext) {
+
+          if (recordsBuilder == null) {
+            recordsBuilder = MemoryRecords.builder(
+              ByteBuffer.allocate(math.min(16384, maxBatchSize)),
+              magic,
+              compressionType,
+              TimestampType.CREATE_TIME,
+              0L,
+              maxBatchSize
+            )
+          }
+
+          val record = recordsIterator.head
           val keyBytes = serializer.serializeKey(record)
           val valueBytes = serializer.serializeValue(record)
 
-          if (recordsBuilder.hasRoomFor(currentTimeMs, keyBytes, valueBytes, EMPTY_HEADERS)) recordsBuilder.append(
-            currentTimeMs,
-            keyBytes,
-            valueBytes,
-            EMPTY_HEADERS
-          ) else throw new RecordTooLargeException(s"Message batch size is ${recordsBuilder.estimatedSizeInBytes()} bytes " +
-            s"in append to partition $tp which exceeds the maximum configured size of $maxBatchSize.")
+          if (recordsBuilder.hasRoomFor(currentTimeMs, keyBytes, valueBytes, EMPTY_HEADERS)) {
+            recordsBuilder.append(
+              currentTimeMs,
+              keyBytes,
+              valueBytes,
+              EMPTY_HEADERS
+            )
+          } else {
+            isFullBatch = true
+          }
+
+          if (isFullBatch) {
+            lastOffset = flushRecordsBuilder()
+            // Reset
+            recordsBuilder = null
+            isFullBatch = false
+          } else {
+            // Advance the iterator if we do not need to retry the append
+            recordsIterator.next()
+          }
         }
 
-        var appendResults: Map[TopicPartition, PartitionResponse] = Map.empty
-        replicaManager.appendRecords(
-          timeout = 0L,
-          requiredAcks = 1,
-          internalTopicsAllowed = true,
-          origin = AppendOrigin.COORDINATOR,
-          entriesPerPartition = Map(tp -> recordsBuilder.build()),
-          responseCallback = results => appendResults = results,
-          // We can directly complete the purgatories here because we don't hold
-          // any conflicting locks.
-          actionQueue = directActionQueue
-        )
-
-        val partitionResult = appendResults.getOrElse(tp,
-          throw new IllegalStateException(s"Append status $appendResults should have partition $tp."))
-
-        if (partitionResult.error != Errors.NONE) {
-          throw partitionResult.error.exception()
+        if (recordsBuilder != null) {
+          lastOffset = flushRecordsBuilder()
         }
-
-        // Required offset.
-        partitionResult.lastOffset + 1
+        lastOffset
 
       case None =>
         throw Errors.NOT_LEADER_OR_FOLLOWER.exception()

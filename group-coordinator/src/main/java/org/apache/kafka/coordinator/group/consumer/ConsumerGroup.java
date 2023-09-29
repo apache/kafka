@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group.consumer;
 
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.StaleMemberEpochException;
@@ -24,6 +25,8 @@ import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.coordinator.group.Group;
+import org.apache.kafka.coordinator.group.OffsetAndMetadata;
+import org.apache.kafka.coordinator.group.OffsetMetadataManager;
 import org.apache.kafka.coordinator.group.Record;
 import org.apache.kafka.coordinator.group.RecordHelpers;
 import org.apache.kafka.image.ClusterImage;
@@ -633,6 +636,12 @@ public class ConsumerGroup implements Group {
         records.add(RecordHelpers.newTargetAssignmentEpochTombstoneRecord(groupId()));
         records.add(RecordHelpers.newGroupSubscriptionMetadataTombstoneRecord(groupId()));
         records.add(RecordHelpers.newGroupEpochTombstoneRecord(groupId()));
+    }
+
+    @Override
+    public OffsetMetadataManager.ExpiredOffsetChecker expiredOffsets() {
+        // TODO: implement
+        return null;
     }
 
     /**

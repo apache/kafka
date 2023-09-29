@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.coordinator.group;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.StaleMemberEpochException;
@@ -45,9 +46,13 @@ import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.OptionalLong;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Function;
 
 import static org.apache.kafka.common.requests.OffsetFetchResponse.INVALID_OFFSET;
 
@@ -61,6 +66,28 @@ import static org.apache.kafka.common.requests.OffsetFetchResponse.INVALID_OFFSE
  *    handling as well as during the initial loading of the records from the partitions.
  */
 public class OffsetMetadataManager {
+
+    /**
+     * An offset is considered expired based on different factors, such as the state of the group
+     * and/or the commit offset version. This class is used to check whether an offset should be expired.
+     */
+    public static class ExpiredOffsetChecker {
+        /**
+         * Given an offset metadata, return the expired timestamp.
+         */
+        final Function<OffsetAndMetadata, Long> baseTimestamp;
+
+        /**
+         * The set of subscribed topics a group should check against to be eligible for expiration.
+         */
+        final Set<String> subscribedTopics;
+
+        public ExpiredOffsetChecker(Function<OffsetAndMetadata, Long> baseTimestamp, Set<String> subscribedTopics) {
+            this.baseTimestamp = baseTimestamp;
+            this.subscribedTopics = subscribedTopics;
+        }
+    }
+
     public static class Builder {
         private LogContext logContext = null;
         private SnapshotRegistry snapshotRegistry = null;
@@ -542,6 +569,60 @@ public class OffsetMetadataManager {
         return new OffsetFetchResponseData.OffsetFetchResponseGroup()
             .setGroupId(request.groupId())
             .setTopics(topicResponses);
+    }
+
+    public void cleanupOffsetMetadata(List<Record> records, long offsetsRetentionMs) {
+        offsetsByGroup.forEach((groupId, offsetsByTopic) -> {
+            try {
+                Group group = groupMetadataManager.group(groupId);
+                ExpiredOffsetChecker expiredOffsetChecker = group.expiredOffsets();
+                Set<TopicPartition> expiredPartitions = new HashSet<>();
+                long currentTimestamp = time.milliseconds();
+                AtomicBoolean hasAllOffsetsExpired = new AtomicBoolean(true);
+                offsetsByTopic.forEach((topic, partitions) -> {
+                    if (!expiredOffsetChecker.subscribedTopics.contains(topic)) {
+                        partitions.forEach((partition, offsetAndMetadata) -> {
+                            OptionalLong expireTimestampMs = offsetAndMetadata.expireTimestampMs;
+                            if (expireTimestampMs.isPresent()) {
+                                // Older versions with explicit expire_timestamp field => old expiration semantics is used
+                                if (currentTimestamp >= expireTimestampMs.getAsLong()) {
+                                    addOffsetCommitTombstone(groupId, topic, partition, records, expiredPartitions);
+                                }
+                                // Current version with no per partition retention
+                            } else if (currentTimestamp - expiredOffsetChecker.baseTimestamp.apply(offsetAndMetadata) >= offsetsRetentionMs) {
+                                addOffsetCommitTombstone(groupId, topic, partition, records, expiredPartitions);
+                            } else {
+                                hasAllOffsetsExpired.set(false);
+                            }
+                        });
+                    }
+                });
+                log.debug("[GroupId {}] Expiring offsets: {}", groupId, expiredPartitions);
+
+                if (hasAllOffsetsExpired.get()) {
+                    // All offsets were expired for this group. Remove the group.
+                    groupMetadataManager.deleteGroup(groupId, records);
+                }
+
+            } catch (GroupIdNotFoundException e) {
+                // groups in offsets should exist.
+                log.warn("GroupId {} should exist.", groupId);
+            }
+        });
+    }
+
+    private void addOffsetCommitTombstone(
+        String groupId,
+        String topic,
+        int partition, 
+        List<Record> records,
+        Set<TopicPartition> expiredPartitions
+    ) {
+        records.add(RecordHelpers.newOffsetCommitTombstoneRecord(groupId, topic, partition));
+        TopicPartition tp = new TopicPartition(topic, partition);
+        expiredPartitions.add(tp);
+        log.trace("[GroupId {}] Removing expired offset and metadata for {}", groupId, tp);
+
     }
 
     /**

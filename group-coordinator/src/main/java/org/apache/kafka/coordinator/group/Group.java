@@ -17,9 +17,12 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.ListGroupsResponseData;
+import org.apache.kafka.timeline.TimelineHashMap;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Interface common for all groups.
@@ -117,4 +120,6 @@ public interface Group {
      * @param records The list of records.
      */
     void createGroupTombstoneRecords(List<Record> records);
+
+    OffsetMetadataManager.ExpiredOffsetChecker expiredOffsets();
 }
