@@ -30,6 +30,7 @@ import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.internals.Topic;
+import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.DeleteGroupsResponseData;
@@ -490,6 +491,48 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 return null;
             });
         }
+        return future;
+    }
+
+    /**
+     * See {@link GroupCoordinator#consumerGroupDescribe(RequestContext, List)}.
+     */
+    @Override
+    public CompletableFuture<List<ConsumerGroupDescribeResponseData.DescribedGroup>> consumerGroupDescribe(
+        RequestContext context,
+        List<String> groupIds
+    ) {
+        if (!isActive.get()) {
+            return FutureUtils.failedFuture(Errors.COORDINATOR_NOT_AVAILABLE.exception());
+        }
+        final Set<TopicPartition> existingPartitionSet = runtime.partitions();
+        final List<ConsumerGroupDescribeResponseData.DescribedGroup> results = new ArrayList<>();
+        final CompletableFuture<List<ConsumerGroupDescribeResponseData.DescribedGroup>> future = new CompletableFuture<>();
+        final AtomicInteger cnt = new AtomicInteger(existingPartitionSet.size());
+
+        for (TopicPartition tp: existingPartitionSet) {
+            runtime.scheduleReadOperation(
+                "consumer-group-describe",
+                tp,
+                (coordinator, __) -> coordinator.consumerGroupDescribe(groupIds)
+            ).handle((describedGroups, exception) -> {
+                if (exception == null) {
+                    synchronized (results) {
+                        results.addAll(describedGroups);
+                    }
+                } else {
+                    if (!(exception instanceof NotCoordinatorException)) {
+                        // TODO: set exception error code for each group
+                        future.complete(null);
+                    }
+                }
+                if (cnt.decrementAndGet() == 0) {
+                    future.complete(results);
+                }
+                return null;
+            });
+        }
+
         return future;
     }
 

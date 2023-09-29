@@ -32,6 +32,8 @@ import org.apache.kafka.common.errors.RecordBatchTooLargeException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
+import org.apache.kafka.common.message.ConsumerGroupDescribeRequestData;
+import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.HeartbeatRequestData;
@@ -935,5 +937,31 @@ public class GroupCoordinatorServiceTest {
             ));
 
         assertEquals(expectedResponse, future.get());
+    }
+
+    @Test
+    public void testConsumerGroupDescribe() throws InterruptedException, ExecutionException, TimeoutException {
+        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorService(
+            new LogContext(),
+            createConfig(),
+            runtime
+        );
+        int partitionCount = 3;
+        service.startup(() -> partitionCount);
+
+        ConsumerGroupDescribeRequestData request = new ConsumerGroupDescribeRequestData();
+
+        CompletableFuture<List<ConsumerGroupDescribeResponseData.DescribedGroup>> responseFuture = service.consumerGroupDescribe(
+            requestContext(ApiKeys.CONSUMER_GROUP_DESCRIBE),
+            Collections.singletonList("group0")
+        );
+
+        List<ConsumerGroupDescribeResponseData.DescribedGroup> expectedResults = Arrays.asList(
+            new ConsumerGroupDescribeResponseData.DescribedGroup()
+        );
+
+        List<ConsumerGroupDescribeResponseData.DescribedGroup> actualResults = responseFuture.get(5, TimeUnit.SECONDS);
+        assertEquals(expectedResults, actualResults);
     }
 }

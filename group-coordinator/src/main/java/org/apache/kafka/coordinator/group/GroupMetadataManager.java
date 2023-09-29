@@ -29,6 +29,8 @@ import org.apache.kafka.common.errors.NotCoordinatorException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnsupportedAssignorException;
+import org.apache.kafka.common.message.ConsumerGroupDescribeRequestData;
+import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.HeartbeatRequestData;
@@ -132,6 +134,7 @@ import static org.apache.kafka.coordinator.group.generic.GenericGroupState.STABL
 public class GroupMetadataManager {
 
     public static class Builder {
+
         private LogContext logContext = null;
         private SnapshotRegistry snapshotRegistry = null;
         private Time time = null;
@@ -147,7 +150,6 @@ public class GroupMetadataManager {
         private int genericGroupNewMemberJoinTimeoutMs = 5 * 60 * 1000;
         private int genericGroupMinSessionTimeoutMs;
         private int genericGroupMaxSessionTimeoutMs;
-
         Builder withLogContext(LogContext logContext) {
             this.logContext = logContext;
             return this;
@@ -252,8 +254,8 @@ public class GroupMetadataManager {
                 genericGroupMaxSessionTimeoutMs
             );
         }
-    }
 
+    }
     /**
      * The log context.
      */
@@ -442,6 +444,43 @@ public class GroupMetadataManager {
             groupStream = groupStream.filter(group -> statesFilter.contains(group.stateAsString(committedOffset)));
         }
         return groupStream.map(group -> group.asListedGroup(committedOffset)).collect(Collectors.toList());
+    }
+
+
+    public List<ConsumerGroupDescribeResponseData.DescribedGroup> consumerGroupDescribe(
+        List<String> groupIds
+    ) {
+        List<ConsumerGroupDescribeResponseData.DescribedGroup> response = new ArrayList<>();
+
+        for (String groupId: groupIds) {
+            Group group = groups.get(groupId);
+
+            ConsumerGroupDescribeResponseData.DescribedGroup describedGroup = new ConsumerGroupDescribeResponseData.DescribedGroup()
+                .setGroupId(groupId);
+
+            if (group == null || !CONSUMER.equals(group.type())) {
+                // We don't support upgrading/downgrading between protocols at the moment so
+                // we set an error if a group exists with the wrong type.
+                describedGroup.setErrorMessage(Errors.INVALID_GROUP_ID.message());
+                describedGroup.setErrorCode(Errors.INVALID_GROUP_ID.code());
+            } else {
+                ConsumerGroup consumerGroup = (ConsumerGroup) group;
+                describedGroup.setGroupState(consumerGroup.stateAsString())
+                    .setGroupEpoch(consumerGroup.groupEpoch())
+                    .setAssignmentEpoch(consumerGroup.assignmentEpoch())
+                    .setAssignorName(
+                        consumerGroup.preferredServerAssignor().isPresent() ?
+                            consumerGroup.preferredServerAssignor().get() : null
+                    );
+                consumerGroup.members().forEach(
+                    (id, member) -> describedGroup.members().add(member.asConsumerGroupDescribeMember())
+                );
+            }
+
+            response.add(describedGroup);
+        }
+
+        return response;
     }
 
     /**
@@ -2216,7 +2255,7 @@ public class GroupMetadataManager {
         if (group.isInState(PREPARING_REBALANCE) && group.previousState() == EMPTY) {
             group.setNewMemberAdded(true);
         }
-        
+
         group.add(member, responseFuture);
 
         // The session timeout does not affect new members since they do not have their memberId and
@@ -2358,7 +2397,7 @@ public class GroupMetadataManager {
 
     /**
      * Reset assignment for all members and propagate the error to all members in the group.
-     * 
+     *
      * @param group  The group.
      * @param error  The error to propagate.
      */
