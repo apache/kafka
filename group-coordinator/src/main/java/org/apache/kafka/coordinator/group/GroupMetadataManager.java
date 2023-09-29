@@ -672,9 +672,10 @@ public class GroupMetadataManager {
         List<ConsumerGroupHeartbeatRequestData.TopicPartitions> ownedTopicPartitions
     ) {
         if (receivedMemberEpoch > member.memberEpoch()) {
-            throw new FencedMemberEpochException("The consumer group member has a greater member "
+            throw new NotCoordinatorException("The consumer group member has a greater member "
                 + "epoch (" + receivedMemberEpoch + ") than the one known by the group coordinator ("
-                + member.memberEpoch() + "). The member must abandon all its partitions and rejoin.");
+                + member.memberEpoch() + "). This could be because the member received a higher epoch"
+                + " from another coordinator. The member must abandon all its partitions and rejoin.");
         } else if (receivedMemberEpoch < member.memberEpoch()) {
             // If the member comes with the previous epoch and has a subset of the current assignment partitions,
             // we accept it because the response with the bumped epoch may have been lost.
