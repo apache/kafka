@@ -29,7 +29,6 @@ import kafka.test.ClusterConfig;
 import kafka.test.ClusterGenerator;
 import kafka.test.ClusterInstance;
 import kafka.test.annotation.ClusterTemplate;
-import kafka.test.annotation.ClusterTest;
 import kafka.test.annotation.ClusterTestDefaults;
 import kafka.test.annotation.Type;
 import kafka.test.junit.ClusterTestExtensions;
@@ -163,8 +162,7 @@ public class ReassignPartitionsIntegrationTest {
         generator.accept(cfg);
     }
 
-    @ClusterTest(clusterType = ZK)  // Note: KRaft requires AlterPartition
-    @ClusterTemplate("zkPartialUpgrade")
+    @ClusterTemplate("zkPartialUpgrade") // Note: KRaft requires AlterPartition
     public void testReassignmentCompletionDuringPartialUpgrade(ClusterInstance cluster) throws Exception {
         this.cluster = cluster;
         // Test reassignment during a partial upgrade when some brokers are relying on
@@ -282,7 +280,7 @@ public class ReassignPartitionsIntegrationTest {
     /**
      * Test running a reassignment with the interBrokerThrottle set.
      */
-    @ClusterTemplate("zk")
+    @ClusterTemplate("zkAndKRaft")
     public void testThrottledReassignment(ClusterInstance cluster) throws Exception {
         this.cluster = cluster;
         createTopics();
