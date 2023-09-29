@@ -1478,8 +1478,8 @@ class GroupMetadataManagerTest {
     val offsets = immutable.Map(topicIdPartition -> OffsetAndMetadata(offset, "", time.milliseconds()))
 
     when(replicaManager.getMagic(any())).thenReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
-    var commitErrors: Option[immutable.Map[TopicIdPartition, Errors]] = None
 
+    var commitErrors: Option[immutable.Map[TopicIdPartition, Errors]] = None
     def callback(errors: immutable.Map[TopicIdPartition, Errors]): Unit = {
       commitErrors = Some(errors)
     }
