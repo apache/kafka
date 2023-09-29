@@ -1,0 +1,149 @@
+// Licensed to the Apache Software Foundation (ASF) under one or more
+// contributor license agreements.  See the NOTICE file distributed with
+// this work for additional information regarding copyright ownership.
+// The ASF licenses this file to You under the Apache License, Version 2.0
+// (the "License"); you may not use this file except in compliance with
+// the License.  You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+archivesBaseName = "kafka-clients"
+
+configurations {
+    generator
+}
+
+dependencies {
+    implementation libs.zstd
+    implementation libs.lz4
+    implementation libs.snappy
+    implementation libs.slf4jApi
+
+    compileOnly libs.jacksonDatabind // for SASL/OAUTHBEARER bearer token parsing
+    compileOnly libs.jacksonJDK8Datatypes
+    compileOnly libs.jose4j          // for SASL/OAUTHBEARER JWT validation; only used by broker
+
+    testImplementation libs.bcpkix
+    testImplementation libs.jacksonJaxrsJsonProvider
+    testImplementation libs.jose4j
+    testImplementation libs.junitJupiter
+    testImplementation libs.log4j
+    testImplementation libs.mockitoCore
+
+    testRuntimeOnly libs.slf4jlog4j
+    testRuntimeOnly libs.jacksonDatabind
+    testRuntimeOnly libs.jacksonJDK8Datatypes
+
+    generator project(':generator')
+}
+
+task createVersionFile() {
+    def receiptFile = file("$buildDir/kafka/$buildVersionFileName")
+    inputs.property "commitId", commitId
+    inputs.property "version", version
+    outputs.file receiptFile
+
+    doLast {
+        def data = [
+                commitId: commitId,
+                version: version,
+        ]
+
+        receiptFile.parentFile.mkdirs()
+        def content = data.entrySet().collect { "$it.key=$it.value" }.sort().join("\n")
+        receiptFile.setText(content, "ISO-8859-1")
+    }
+}
+
+jar {
+    dependsOn createVersionFile
+    from("$buildDir") {
+        include "kafka/$buildVersionFileName"
+    }
+}
+
+clean.doFirst {
+    delete "$buildDir/kafka/"
+}
+
+task processMessages(type:JavaExec) {
+    mainClass = "org.apache.kafka.message.MessageGenerator"
+    classpath = configurations.generator
+    args = [ "-p", "org.apache.kafka.common.message",
+             "-o", "src/generated/java/org/apache/kafka/common/message",
+             "-i", "src/main/resources/common/message",
+             "-t", "ApiMessageTypeGenerator",
+             "-m", "MessageDataGenerator", "JsonConverterGenerator"
+    ]
+    inputs.dir("src/main/resources/common/message")
+            .withPropertyName("messages")
+            .withPathSensitivity(PathSensitivity.RELATIVE)
+    outputs.cacheIf { true }
+    outputs.dir("src/generated/java/org/apache/kafka/common/message")
+}
+
+task processTestMessages(type:JavaExec) {
+    mainClass = "org.apache.kafka.message.MessageGenerator"
+    classpath = configurations.generator
+    args = [ "-p", "org.apache.kafka.common.message",
+             "-o", "src/generated-test/java/org/apache/kafka/common/message",
+             "-i", "src/test/resources/common/message",
+             "-m", "MessageDataGenerator", "JsonConverterGenerator"
+    ]
+    inputs.dir("src/test/resources/common/message")
+            .withPropertyName("testMessages")
+            .withPathSensitivity(PathSensitivity.RELATIVE)
+    outputs.cacheIf { true }
+    outputs.dir("src/generated-test/java/org/apache/kafka/common/message")
+}
+
+sourceSets {
+    main {
+        java {
+            srcDirs = ["src/generated/java", "src/main/java"]
+        }
+    }
+    test {
+        java {
+            srcDirs = ["src/generated-test/java", "src/test/java"]
+        }
+    }
+}
+
+compileJava.dependsOn 'processMessages'
+srcJar.dependsOn 'processMessages'
+
+compileTestJava.dependsOn 'processTestMessages'
+
+javadoc {
+    include "**/org/apache/kafka/clients/admin/*"
+    include "**/org/apache/kafka/clients/consumer/*"
+    include "**/org/apache/kafka/clients/producer/*"
+    include "**/org/apache/kafka/common/*"
+    include "**/org/apache/kafka/common/acl/*"
+    include "**/org/apache/kafka/common/annotation/*"
+    include "**/org/apache/kafka/common/errors/*"
+    include "**/org/apache/kafka/common/header/*"
+    include "**/org/apache/kafka/common/metrics/*"
+    include "**/org/apache/kafka/common/metrics/stats/*"
+    include "**/org/apache/kafka/common/quota/*"
+    include "**/org/apache/kafka/common/resource/*"
+    include "**/org/apache/kafka/common/serialization/*"
+    include "**/org/apache/kafka/common/config/*"
+    include "**/org/apache/kafka/common/config/provider/*"
+    include "**/org/apache/kafka/common/security/auth/*"
+    include "**/org/apache/kafka/common/security/plain/*"
+    include "**/org/apache/kafka/common/security/scram/*"
+    include "**/org/apache/kafka/common/security/token/delegation/*"
+    include "**/org/apache/kafka/common/security/oauthbearer/*"
+    include "**/org/apache/kafka/common/security/oauthbearer/secured/*"
+    include "**/org/apache/kafka/server/authorizer/*"
+    include "**/org/apache/kafka/server/policy/*"
+    include "**/org/apache/kafka/server/quota/*"
+}

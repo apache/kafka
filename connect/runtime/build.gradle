@@ -1,0 +1,152 @@
+// Licensed to the Apache Software Foundation (ASF) under one or more
+// contributor license agreements.  See the NOTICE file distributed with
+// this work for additional information regarding copyright ownership.
+// The ASF licenses this file to You under the Apache License, Version 2.0
+// (the "License"); you may not use this file except in compliance with
+// the License.  You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+configurations {
+    swagger
+}
+
+archivesBaseName = "connect-runtime"
+
+dependencies {
+    // connect-runtime is used in tests, use `api` for modules below for backwards compatibility even though
+    // applications should generally not depend on `connect-runtime`
+    api project(':connect:api')
+    api project(':clients')
+    api project(':connect:json')
+    api project(':connect:transforms')
+
+    implementation libs.slf4jApi
+    implementation libs.log4j
+    implementation libs.jose4j                    // for SASL/OAUTHBEARER JWT validation
+    implementation libs.jacksonAnnotations
+    implementation libs.jacksonJaxrsJsonProvider
+    implementation libs.jerseyContainerServlet
+    implementation libs.jerseyHk2
+    implementation libs.jaxbApi // Jersey dependency that was available in the JDK before Java 9
+    implementation libs.activation // Jersey dependency that was available in the JDK before Java 9
+    implementation libs.jettyServer
+    implementation libs.jettyServlet
+    implementation libs.jettyServlets
+    implementation libs.jettyClient
+    implementation libs.reflections
+    implementation libs.mavenArtifact
+    implementation libs.swaggerAnnotations
+
+    // We use this library to generate OpenAPI docs for the REST API, but we don't want or need it at compile
+    // or run time. So, we add it to a separate configuration, which we use later on during docs generation
+    swagger libs.swaggerJaxrs2
+
+    testImplementation project(':clients').sourceSets.test.output
+    testImplementation project(':core')
+    testImplementation project(':metadata')
+    testImplementation project(':core').sourceSets.test.output
+    testImplementation project(':server-common')
+    testImplementation project(':connect:test-plugins')
+
+    testImplementation libs.easymock
+    testImplementation libs.junitJupiterApi
+    testImplementation libs.junitVintageEngine
+    testImplementation libs.powermockJunit4
+    testImplementation libs.powermockEasymock
+    testImplementation libs.mockitoCore
+    testImplementation libs.httpclient
+
+    testRuntimeOnly libs.slf4jlog4j
+    testRuntimeOnly libs.bcpkix
+}
+
+javadoc {
+    enabled = false
+}
+
+tasks.create(name: "copyDependantLibs", type: Copy) {
+    from (configurations.testRuntimeClasspath) {
+        // No need to copy log4j since the module has an explicit dependency on that
+        include('slf4j-log4j12*')
+    }
+    from (configurations.runtimeClasspath) {
+        exclude('kafka-clients*')
+        exclude('connect-*')
+    }
+    into "$buildDir/dependant-libs"
+    duplicatesStrategy 'exclude'
+}
+
+jar {
+    dependsOn copyDependantLibs
+}
+
+task genConnectConfigDocs(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'org.apache.kafka.connect.runtime.distributed.DistributedConfig'
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    standardOutput = new File(generatedDocsDir, "connect_config.html").newOutputStream()
+}
+
+task genSinkConnectorConfigDocs(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'org.apache.kafka.connect.runtime.SinkConnectorConfig'
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    standardOutput = new File(generatedDocsDir, "sink_connector_config.html").newOutputStream()
+}
+
+task genSourceConnectorConfigDocs(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'org.apache.kafka.connect.runtime.SourceConnectorConfig'
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    standardOutput = new File(generatedDocsDir, "source_connector_config.html").newOutputStream()
+}
+
+task genConnectTransformationDocs(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'org.apache.kafka.connect.tools.TransformationDoc'
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    standardOutput = new File(generatedDocsDir, "connect_transforms.html").newOutputStream()
+}
+
+task genConnectPredicateDocs(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'org.apache.kafka.connect.tools.PredicateDoc'
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    standardOutput = new File(generatedDocsDir, "connect_predicates.html").newOutputStream()
+}
+
+task genConnectMetricsDocs(type: JavaExec) {
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'org.apache.kafka.connect.runtime.ConnectMetrics'
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    standardOutput = new File(generatedDocsDir, "connect_metrics.html").newOutputStream()
+}
+
+task setVersionInOpenAPISpec(type: Copy) {
+    from "$rootDir/gradle/openapi.template"
+    into "$buildDir/resources/docs"
+    rename ('openapi.template', 'openapi.yaml')
+    expand(kafkaVersion: "$rootProject.version")
+}
+
+task genConnectOpenAPIDocs(type: io.swagger.v3.plugins.gradle.tasks.ResolveTask, dependsOn: setVersionInOpenAPISpec) {
+    classpath = sourceSets.main.runtimeClasspath
+
+    buildClasspath = classpath + configurations.swagger
+    outputFileName = 'connect_rest'
+    outputFormat = 'YAML'
+    prettyPrint = 'TRUE'
+    sortOutput = 'TRUE'
+    openApiFile = file("$buildDir/resources/docs/openapi.yaml")
+    resourcePackages = ['org.apache.kafka.connect.runtime.rest.resources']
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    outputDir = file(generatedDocsDir)
+}

@@ -1,0 +1,69 @@
+// Licensed to the Apache Software Foundation (ASF) under one or more
+// contributor license agreements.  See the NOTICE file distributed with
+// this work for additional information regarding copyright ownership.
+// The ASF licenses this file to You under the Apache License, Version 2.0
+// (the "License"); you may not use this file except in compliance with
+// the License.  You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+archivesBaseName = "kafka-tools"
+
+dependencies {
+    implementation project(':clients')
+    implementation project(':server-common')
+    implementation project(':connect:api')
+    implementation project(':connect:runtime')
+    implementation project(':log4j-appender')
+    implementation project(':tools:tools-api')
+    implementation libs.argparse4j
+    implementation libs.jacksonDatabind
+    implementation libs.jacksonJDK8Datatypes
+    implementation libs.slf4jApi
+    implementation libs.log4j
+    implementation libs.joptSimple
+
+    implementation libs.jose4j                    // for SASL/OAUTHBEARER JWT validation
+    implementation libs.jacksonJaxrsJsonProvider
+
+    testImplementation project(':clients')
+    testImplementation project(':clients').sourceSets.test.output
+    testImplementation project(':core')
+    testImplementation project(':core').sourceSets.test.output
+    testImplementation project(':server-common')
+    testImplementation project(':server-common').sourceSets.test.output
+    testImplementation project(':connect:api')
+    testImplementation project(':connect:runtime')
+    testImplementation project(':connect:runtime').sourceSets.test.output
+    testImplementation libs.junitJupiter
+    testImplementation libs.mockitoCore
+    testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
+    testImplementation libs.bcpkix // required by the clients test module, but we have to specify it explicitly as gradle does not include the transitive test dependency automatically
+    testRuntimeOnly libs.slf4jlog4j
+}
+
+javadoc {
+    enabled = false
+}
+
+tasks.create(name: "copyDependantLibs", type: Copy) {
+    from (configurations.testRuntimeClasspath) {
+        include('slf4j-log4j12*')
+        include('reload4j*jar')
+    }
+    from (configurations.runtimeClasspath) {
+        exclude('kafka-clients*')
+    }
+    into "$buildDir/dependant-libs-${versions.scala}"
+    duplicatesStrategy 'exclude'
+}
+
+jar {
+    dependsOn 'copyDependantLibs'
+}

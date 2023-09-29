@@ -1,0 +1,49 @@
+// Licensed to the Apache Software Foundation (ASF) under one or more
+// contributor license agreements.  See the NOTICE file distributed with
+// this work for additional information regarding copyright ownership.
+// The ASF licenses this file to You under the Apache License, Version 2.0
+// (the "License"); you may not use this file except in compliance with
+// the License.  You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+archivesBaseName = "kafka-streams-examples"
+
+dependencies {
+    // this dependency should be removed after we unify data API
+    implementation(project(':connect:json')) {
+        // this transitive dependency is not used in Streams, and it breaks SBT builds
+        exclude module: 'javax.ws.rs-api'
+    }
+
+    implementation project(':streams')
+
+    implementation libs.slf4jlog4j
+
+    testImplementation project(':streams:test-utils')
+    testImplementation project(':clients').sourceSets.test.output // for org.apache.kafka.test.IntegrationTest
+    testImplementation libs.junitJupiter
+    testImplementation libs.hamcrest
+}
+
+javadoc {
+    enabled = false
+}
+
+tasks.create(name: "copyDependantLibs", type: Copy) {
+    from (configurations.runtimeClasspath) {
+        exclude('kafka-streams*')
+    }
+    into "$buildDir/dependant-libs-${versions.scala}"
+    duplicatesStrategy 'exclude'
+}
+
+jar {
+    dependsOn 'copyDependantLibs'
+}

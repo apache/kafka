@@ -1,0 +1,349 @@
+// Licensed to the Apache Software Foundation (ASF) under one or more
+// contributor license agreements.  See the NOTICE file distributed with
+// this work for additional information regarding copyright ownership.
+// The ASF licenses this file to You under the Apache License, Version 2.0
+// (the "License"); you may not use this file except in compliance with
+// the License.  You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+apply plugin: 'scala'
+
+// scaladoc generation is configured at the sub-module level with an artifacts
+// block (cf. see streams-scala). If scaladoc generation is invoked explicitly
+// for the `core` module, this ensures the generated jar doesn't include scaladoc
+// files since the `core` module doesn't include public APIs.
+scaladoc {
+    enabled = false
+}
+if (userEnableTestCoverage)
+    apply plugin: "org.scoverage"
+archivesBaseName = "kafka_${versions.baseScala}"
+
+configurations {
+    generator
+}
+
+dependencies {
+    // `core` is often used in users' tests, define the following dependencies as `api` for backwards compatibility
+    // even though the `core` module doesn't expose any public API
+    api project(':clients')
+    api libs.scalaLibrary
+
+    implementation project(':server-common')
+    implementation project(':group-coordinator')
+    implementation project(':metadata')
+    implementation project(':storage:api')
+    implementation project(':tools:tools-api')
+    implementation project(':raft')
+    implementation project(':storage')
+
+
+    implementation libs.argparse4j
+    implementation libs.commonsValidator
+    implementation libs.jacksonDatabind
+    implementation libs.jacksonModuleScala
+    implementation libs.jacksonDataformatCsv
+    implementation libs.jacksonJDK8Datatypes
+    implementation libs.joptSimple
+    implementation libs.jose4j
+    implementation libs.metrics
+    implementation libs.scalaCollectionCompat
+    implementation libs.scalaJava8Compat
+    // only needed transitively, but set it explicitly to ensure it has the same version as scala-library
+    implementation libs.scalaReflect
+    implementation libs.scalaLogging
+    implementation libs.slf4jApi
+    implementation(libs.zookeeper) {
+        // Dropwizard Metrics are required by ZooKeeper as of v3.6.0,
+        // but the library should *not* be used in Kafka code
+        implementation libs.dropwizardMetrics
+        exclude module: 'slf4j-log4j12'
+        exclude module: 'log4j'
+        // Both Kafka and Zookeeper use slf4j. ZooKeeper moved from log4j to logback in v3.8.0, but Kafka relies on reload4j.
+        // We are removing Zookeeper's dependency on logback so we have a singular logging backend.
+        exclude module: 'logback-classic'
+        exclude module: 'logback-core'
+    }
+    // ZooKeeperMain depends on commons-cli but declares the dependency as `provided`
+    implementation libs.commonsCli
+
+    compileOnly libs.log4j
+
+    testImplementation project(':clients').sourceSets.test.output
+    testImplementation project(':group-coordinator').sourceSets.test.output
+    testImplementation project(':metadata').sourceSets.test.output
+    testImplementation project(':raft').sourceSets.test.output
+    testImplementation project(':server-common').sourceSets.test.output
+    testImplementation project(':storage:api').sourceSets.test.output
+    testImplementation libs.bcpkix
+    testImplementation libs.mockitoCore
+    testImplementation(libs.apacheda) {
+        exclude group: 'xml-apis', module: 'xml-apis'
+        // `mina-core` is a transitive dependency for `apacheds` and `apacheda`.
+        // It is safer to use from `apacheds` since that is the implementation.
+        exclude module: 'mina-core'
+    }
+    testImplementation libs.apachedsCoreApi
+    testImplementation libs.apachedsInterceptorKerberos
+    testImplementation libs.apachedsProtocolShared
+    testImplementation libs.apachedsProtocolKerberos
+    testImplementation libs.apachedsProtocolLdap
+    testImplementation libs.apachedsLdifPartition
+    testImplementation libs.apachedsMavibotPartition
+    testImplementation libs.apachedsJdbmPartition
+    testImplementation libs.junitJupiter
+    testImplementation libs.slf4jlog4j
+    testImplementation(libs.jfreechart) {
+        exclude group: 'junit', module: 'junit'
+    }
+    testImplementation libs.caffeine
+
+    generator project(':generator')
+}
+
+if (userEnableTestCoverage) {
+    scoverage {
+        scoverageVersion = versions.scoverage
+        reportDir = file("${rootProject.buildDir}/scoverage")
+        highlighting = false
+        minimumRate = 0.0
+    }
+}
+
+configurations {
+    // manually excludes some unnecessary dependencies
+    implementation.exclude module: 'javax'
+    implementation.exclude module: 'jline'
+    implementation.exclude module: 'jms'
+    implementation.exclude module: 'jmxri'
+    implementation.exclude module: 'jmxtools'
+    implementation.exclude module: 'mail'
+    // To prevent a UniqueResourceException due the same resource existing in both
+    // org.apache.directory.api/api-all and org.apache.directory.api/api-ldap-schema-data
+    testImplementation.exclude module: 'api-ldap-schema-data'
+}
+
+tasks.create(name: "copyDependantLibs", type: Copy) {
+    from (configurations.testRuntimeClasspath) {
+        include('slf4j-log4j12*')
+        include('reload4j*jar')
+    }
+    from (configurations.runtimeClasspath) {
+        exclude('kafka-clients*')
+    }
+    into "$buildDir/dependant-libs-${versions.scala}"
+    duplicatesStrategy 'exclude'
+}
+
+task processMessages(type:JavaExec) {
+    mainClass = "org.apache.kafka.message.MessageGenerator"
+    classpath = configurations.generator
+    args = [ "-p", "kafka.internals.generated",
+             "-o", "src/generated/java/kafka/internals/generated",
+             "-i", "src/main/resources/common/message",
+             "-m", "MessageDataGenerator"
+    ]
+    inputs.dir("src/main/resources/common/message")
+            .withPropertyName("messages")
+            .withPathSensitivity(PathSensitivity.RELATIVE)
+    outputs.cacheIf { true }
+    outputs.dir("src/generated/java/kafka/internals/generated")
+}
+
+compileJava.dependsOn 'processMessages'
+srcJar.dependsOn 'processMessages'
+
+task genProtocolErrorDocs(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'org.apache.kafka.common.protocol.Errors'
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    standardOutput = new File(generatedDocsDir, "protocol_errors.html").newOutputStream()
+}
+
+task genProtocolTypesDocs(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'org.apache.kafka.common.protocol.types.Type'
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    standardOutput = new File(generatedDocsDir, "protocol_types.html").newOutputStream()
+}
+
+task genProtocolApiKeyDocs(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'org.apache.kafka.common.protocol.ApiKeys'
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    standardOutput = new File(generatedDocsDir, "protocol_api_keys.html").newOutputStream()
+}
+
+task genProtocolMessageDocs(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'org.apache.kafka.common.protocol.Protocol'
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    standardOutput = new File(generatedDocsDir, "protocol_messages.html").newOutputStream()
+}
+
+task genAdminClientConfigDocs(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'org.apache.kafka.clients.admin.AdminClientConfig'
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    standardOutput = new File(generatedDocsDir, "admin_client_config.html").newOutputStream()
+}
+
+task genProducerConfigDocs(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'org.apache.kafka.clients.producer.ProducerConfig'
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    standardOutput = new File(generatedDocsDir, "producer_config.html").newOutputStream()
+}
+
+task genConsumerConfigDocs(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'org.apache.kafka.clients.consumer.ConsumerConfig'
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    standardOutput = new File(generatedDocsDir, "consumer_config.html").newOutputStream()
+}
+
+task genKafkaConfigDocs(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'kafka.server.KafkaConfig'
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    standardOutput = new File(generatedDocsDir, "kafka_config.html").newOutputStream()
+}
+
+task genTopicConfigDocs(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'org.apache.kafka.storage.internals.log.LogConfig'
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    standardOutput = new File(generatedDocsDir, "topic_config.html").newOutputStream()
+}
+
+task genConsumerMetricsDocs(type: JavaExec) {
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'org.apache.kafka.clients.consumer.internals.ConsumerMetrics'
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    standardOutput = new File(generatedDocsDir, "consumer_metrics.html").newOutputStream()
+}
+
+task genProducerMetricsDocs(type: JavaExec) {
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'org.apache.kafka.clients.producer.internals.ProducerMetrics'
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    standardOutput = new File(generatedDocsDir, "producer_metrics.html").newOutputStream()
+}
+
+task siteDocsTar(dependsOn: ['genProtocolErrorDocs', 'genProtocolTypesDocs', 'genProtocolApiKeyDocs', 'genProtocolMessageDocs',
+                             'genAdminClientConfigDocs', 'genProducerConfigDocs', 'genConsumerConfigDocs',
+                             'genKafkaConfigDocs', 'genTopicConfigDocs',
+                             ':connect:runtime:genConnectConfigDocs', ':connect:runtime:genConnectTransformationDocs',
+                             ':connect:runtime:genConnectPredicateDocs',
+                             ':connect:runtime:genSinkConnectorConfigDocs', ':connect:runtime:genSourceConnectorConfigDocs',
+                             ':streams:genStreamsConfigDocs', 'genConsumerMetricsDocs', 'genProducerMetricsDocs',
+                             ':connect:runtime:genConnectMetricsDocs', ':connect:runtime:genConnectOpenAPIDocs',
+                             ':connect:mirror:genMirrorSourceConfigDocs', ':connect:mirror:genMirrorCheckpointConfigDocs',
+                             ':connect:mirror:genMirrorHeartbeatConfigDocs', ':connect:mirror:genMirrorConnectorConfigDocs',
+                             ':storage:genRemoteLogManagerConfigDoc', ':storage:genRemoteLogMetadataManagerConfigDoc'], type: Tar) {
+    archiveClassifier = 'site-docs'
+    compression = Compression.GZIP
+    from project.file("$rootDir/docs")
+    into 'site-docs'
+    duplicatesStrategy 'exclude'
+}
+
+tasks.create(name: "releaseTarGz", dependsOn: configurations.archives.artifacts, type: Tar) {
+    into "kafka_${versions.baseScala}-${archiveVersion.get()}"
+    compression = Compression.GZIP
+    from(project.file("$rootDir/bin")) { into "bin/" }
+    from(project.file("$rootDir/config")) { into "config/" }
+    from(project.file("$rootDir/licenses")) { into "licenses/" }
+    from "$rootDir/LICENSE-binary" rename {String filename -> filename.replace("-binary", "")}
+    from "$rootDir/NOTICE-binary" rename {String filename -> filename.replace("-binary", "")}
+    from(configurations.runtimeClasspath) { into("libs/") }
+    from(configurations.archives.artifacts.files) { into("libs/") }
+    from(project.siteDocsTar) { into("site-docs/") }
+    from(project(':tools').jar) { into("libs/") }
+    from(project(':tools').configurations.runtimeClasspath) { into("libs/") }
+    from(project(':trogdor').jar) { into("libs/") }
+    from(project(':trogdor').configurations.runtimeClasspath) { into("libs/") }
+    from(project(':shell').jar) { into("libs/") }
+    from(project(':shell').configurations.runtimeClasspath) { into("libs/") }
+    from(project(':connect:api').jar) { into("libs/") }
+    from(project(':connect:api').configurations.runtimeClasspath) { into("libs/") }
+    from(project(':connect:runtime').jar) { into("libs/") }
+    from(project(':connect:runtime').configurations.runtimeClasspath) { into("libs/") }
+    from(project(':connect:transforms').jar) { into("libs/") }
+    from(project(':connect:transforms').configurations.runtimeClasspath) { into("libs/") }
+    from(project(':connect:json').jar) { into("libs/") }
+    from(project(':connect:json').configurations.runtimeClasspath) { into("libs/") }
+    from(project(':connect:file').jar) { into("libs/") }
+    from(project(':connect:file').configurations.runtimeClasspath) { into("libs/") }
+    from(project(':connect:basic-auth-extension').jar) { into("libs/") }
+    from(project(':connect:basic-auth-extension').configurations.runtimeClasspath) { into("libs/") }
+    from(project(':connect:mirror').jar) { into("libs/") }
+    from(project(':connect:mirror').configurations.runtimeClasspath) { into("libs/") }
+    from(project(':connect:mirror-client').jar) { into("libs/") }
+    from(project(':connect:mirror-client').configurations.runtimeClasspath) { into("libs/") }
+    from(project(':streams').jar) { into("libs/") }
+    from(project(':streams').configurations.runtimeClasspath) { into("libs/") }
+    from(project(':streams:streams-scala').jar) { into("libs/") }
+    from(project(':streams:streams-scala').configurations.runtimeClasspath) { into("libs/") }
+    from(project(':streams:test-utils').jar) { into("libs/") }
+    from(project(':streams:test-utils').configurations.runtimeClasspath) { into("libs/") }
+    from(project(':streams:examples').jar) { into("libs/") }
+    from(project(':streams:examples').configurations.runtimeClasspath) { into("libs/") }
+    from(project(':tools:tools-api').jar) { into("libs/") }
+    from(project(':tools:tools-api').configurations.runtimeClasspath) { into("libs/") }
+    duplicatesStrategy 'exclude'
+}
+
+jar {
+    dependsOn('copyDependantLibs')
+}
+
+jar.manifest {
+    attributes(
+            'Version': "${version}"
+    )
+}
+
+tasks.create(name: "copyDependantTestLibs", type: Copy) {
+    from (configurations.testRuntimeClasspath) {
+        include('*.jar')
+    }
+    into "$buildDir/dependant-testlibs"
+    //By default gradle does not handle test dependencies between the sub-projects
+    //This line is to include clients project test jar to dependant-testlibs
+    from (project(':clients').testJar ) { "$buildDir/dependant-testlibs" }
+    duplicatesStrategy 'exclude'
+}
+
+systemTestLibs.dependsOn('jar', 'testJar', 'copyDependantTestLibs')
+
+checkstyle {
+    configProperties = checkstyleConfigProperties("import-control-core.xml")
+}
+
+sourceSets {
+    // Set java/scala source folders in the `scala` block to enable joint compilation
+    main {
+        java {
+            srcDirs = []
+        }
+        scala {
+            srcDirs = ["src/generated/java", "src/main/java", "src/main/scala"]
+        }
+    }
+    test {
+        java {
+            srcDirs = []
+        }
+        scala {
+            srcDirs = ["src/test/java", "src/test/scala"]
+        }
+    }
+}

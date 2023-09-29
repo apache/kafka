@@ -1,0 +1,107 @@
+// Licensed to the Apache Software Foundation (ASF) under one or more
+// contributor license agreements.  See the NOTICE file distributed with
+// this work for additional information regarding copyright ownership.
+// The ASF licenses this file to You under the Apache License, Version 2.0
+// (the "License"); you may not use this file except in compliance with
+// the License.  You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+archivesBaseName = "kafka-raft"
+
+configurations {
+    generator
+}
+
+dependencies {
+    implementation project(':server-common')
+    implementation project(':clients')
+    implementation libs.slf4jApi
+    implementation libs.jacksonDatabind
+
+    testImplementation project(':server-common')
+    testImplementation project(':clients')
+    testImplementation project(':clients').sourceSets.test.output
+    testImplementation libs.junitJupiter
+    testImplementation libs.mockitoCore
+    testImplementation libs.jqwik
+
+    testRuntimeOnly libs.slf4jlog4j
+
+    generator project(':generator')
+}
+
+task createVersionFile() {
+    def receiptFile = file("$buildDir/kafka/$buildVersionFileName")
+    inputs.property "commitId", commitId
+    inputs.property "version", version
+    outputs.file receiptFile
+
+    doLast {
+        def data = [
+                commitId: commitId,
+                version: version,
+        ]
+
+        receiptFile.parentFile.mkdirs()
+        def content = data.entrySet().collect { "$it.key=$it.value" }.sort().join("\n")
+        receiptFile.setText(content, "ISO-8859-1")
+    }
+}
+
+task processMessages(type:JavaExec) {
+    mainClass = "org.apache.kafka.message.MessageGenerator"
+    classpath = configurations.generator
+    args = [ "-p", "org.apache.kafka.raft.generated",
+             "-o", "src/generated/java/org/apache/kafka/raft/generated",
+             "-i", "src/main/resources/common/message",
+             "-m", "MessageDataGenerator", "JsonConverterGenerator"]
+    inputs.dir("src/main/resources/common/message")
+            .withPropertyName("messages")
+            .withPathSensitivity(PathSensitivity.RELATIVE)
+    outputs.cacheIf { true }
+    outputs.dir("src/generated/java/org/apache/kafka/raft/generated")
+}
+
+sourceSets {
+    main {
+        java {
+            srcDirs = ["src/generated/java", "src/main/java"]
+        }
+    }
+    test {
+        java {
+            srcDirs = ["src/generated/java", "src/test/java"]
+        }
+    }
+}
+
+compileJava.dependsOn 'processMessages'
+srcJar.dependsOn 'processMessages'
+
+jar {
+    dependsOn createVersionFile
+    from("$buildDir") {
+        include "kafka/$buildVersionFileName"
+    }
+}
+
+test {
+    useJUnitPlatform {
+        includeEngines 'jqwik', 'junit-jupiter'
+    }
+}
+
+clean.doFirst {
+    delete "$buildDir/kafka/"
+}
+
+javadoc {
+    enabled = false
+}
