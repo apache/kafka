@@ -52,6 +52,7 @@ import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.utils.Time;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.extension.ExtendWith;
 import scala.None$;
 import scala.Option;
@@ -90,6 +91,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @ExtendWith(value = ClusterTestExtensions.class)
 @ClusterTestDefaults(brokers = 5)
 @Tag("integration")
+@Timeout(300)
 public class ReassignPartitionsIntegrationTest {
     private static final Map<Integer, String> BROKERS = new HashMap<>();
 
