@@ -29,7 +29,6 @@ import kafka.test.ClusterConfig;
 import kafka.test.ClusterGenerator;
 import kafka.test.ClusterInstance;
 import kafka.test.annotation.ClusterTemplate;
-import kafka.test.annotation.ClusterTestDefaults;
 import kafka.test.annotation.Type;
 import kafka.test.junit.ClusterTestExtensions;
 import kafka.test.junit.RaftClusterInvocationContext.RaftClusterInstance;
@@ -89,7 +88,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SuppressWarnings({"ClassDataAbstractionCoupling", "ClassFanOutComplexity"})
 @ExtendWith(value = ClusterTestExtensions.class)
-@ClusterTestDefaults(brokers = 5)
 @Tag("integration")
 @Timeout(300)
 public class ReassignPartitionsIntegrationTest {
