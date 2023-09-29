@@ -46,6 +46,7 @@ import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatchers;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -127,14 +128,15 @@ public class GroupCoordinatorShardTest {
         RequestContext context = requestContext(ApiKeys.DELETE_GROUPS);
         List<String> groupIds = Arrays.asList("group-id-1", "group-id-2");
         DeleteGroupsResponseData.DeletableGroupResultCollection expectedResultCollection = new DeleteGroupsResponseData.DeletableGroupResultCollection();
-        expectedResultCollection.add(new DeleteGroupsResponseData.DeletableGroupResult().setGroupId("group-id-1"));
-        expectedResultCollection.add(new DeleteGroupsResponseData.DeletableGroupResult().setGroupId("group-id-2"));
-        List<Record> expectedRecords = Arrays.asList(
-            RecordHelpers.newOffsetCommitTombstoneRecord("group-id-1", "topic-name", 0),
-            RecordHelpers.newGroupMetadataTombstoneRecord("group-id-1"),
-            RecordHelpers.newOffsetCommitTombstoneRecord("group-id-2", "topic-name", 0),
-            RecordHelpers.newGroupMetadataTombstoneRecord("group-id-2")
-        );
+        List<Record> expectedRecords = new ArrayList<>();
+        for (String groupId : groupIds) {
+            expectedResultCollection.add(new DeleteGroupsResponseData.DeletableGroupResult().setGroupId(groupId));
+            expectedRecords.addAll(Arrays.asList(
+                RecordHelpers.newOffsetCommitTombstoneRecord(groupId, "topic-name", 0),
+                RecordHelpers.newGroupMetadataTombstoneRecord(groupId)
+            ));
+        }
+
         CoordinatorResult<DeleteGroupsResponseData.DeletableGroupResultCollection, Record> expectedResult = new CoordinatorResult<>(
             expectedRecords,
             expectedResultCollection
@@ -153,6 +155,7 @@ public class GroupCoordinatorShardTest {
             records.add(RecordHelpers.newGroupMetadataTombstoneRecord(groupId));
             return null;
         }).when(groupMetadataManager).deleteGroup(anyString(), anyList());
+
         CoordinatorResult<DeleteGroupsResponseData.DeletableGroupResultCollection, Record> coordinatorResult =
             coordinator.deleteGroups(context, groupIds);
 
@@ -175,13 +178,17 @@ public class GroupCoordinatorShardTest {
 
         RequestContext context = requestContext(ApiKeys.DELETE_GROUPS);
         List<String> groupIds = Arrays.asList("group-id-1", "group-id-2", "group-id-3");
-        DeleteGroupsResponseData.DeletableGroupResultCollection expectedResultCollection = new DeleteGroupsResponseData.DeletableGroupResultCollection();
-        expectedResultCollection.add(new DeleteGroupsResponseData.DeletableGroupResult().setGroupId("group-id-1"));
-        expectedResultCollection.add(new DeleteGroupsResponseData.DeletableGroupResult()
-            .setGroupId("group-id-2")
-            .setErrorCode(Errors.INVALID_GROUP_ID.code())
-        );
-        expectedResultCollection.add(new DeleteGroupsResponseData.DeletableGroupResult().setGroupId("group-id-3"));
+
+        DeleteGroupsResponseData.DeletableGroupResultCollection expectedResultCollection =
+            new DeleteGroupsResponseData.DeletableGroupResultCollection(Arrays.asList(
+                new DeleteGroupsResponseData.DeletableGroupResult()
+                    .setGroupId("group-id-1"),
+                new DeleteGroupsResponseData.DeletableGroupResult()
+                    .setGroupId("group-id-2")
+                    .setErrorCode(Errors.INVALID_GROUP_ID.code()),
+                new DeleteGroupsResponseData.DeletableGroupResult()
+                    .setGroupId("group-id-3")
+            ).iterator());
         List<Record> expectedRecords = Arrays.asList(
             RecordHelpers.newOffsetCommitTombstoneRecord("group-id-1", "topic-name", 0),
             RecordHelpers.newGroupMetadataTombstoneRecord("group-id-1"),
@@ -207,12 +214,17 @@ public class GroupCoordinatorShardTest {
             records.add(RecordHelpers.newGroupMetadataTombstoneRecord(groupId));
             return null;
         }).when(groupMetadataManager).deleteGroup(anyString(), anyList());
+
         CoordinatorResult<DeleteGroupsResponseData.DeletableGroupResultCollection, Record> coordinatorResult =
             coordinator.deleteGroups(context, groupIds);
 
-        verify(groupMetadataManager, times(3)).validateDeleteGroup(anyString());
-        verify(groupMetadataManager, times(2)).deleteGroup(anyString(), anyList());
-        verify(offsetMetadataManager, times(2)).deleteAllOffsets(anyString(), anyList());
+        for (String groupId : groupIds) {
+            verify(groupMetadataManager, times(1)).validateDeleteGroup(eq(groupId));
+            if (!groupId.equals("group-id-2")) {
+                verify(groupMetadataManager, times(1)).deleteGroup(eq(groupId), anyList());
+                verify(offsetMetadataManager, times(1)).deleteAllOffsets(eq(groupId), anyList());
+            }
+        }
         assertEquals(expectedResult, coordinatorResult);
     }
 

@@ -18,8 +18,6 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.DeleteGroupsRequestData;
 import org.apache.kafka.common.message.DeleteGroupsResponseData;
-import org.apache.kafka.common.message.DeleteGroupsResponseData.DeletableGroupResult;
-import org.apache.kafka.common.message.DeleteGroupsResponseData.DeletableGroupResultCollection;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
@@ -56,18 +54,9 @@ public class DeleteGroupsRequest extends AbstractRequest {
 
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-        Errors error = Errors.forException(e);
-        DeletableGroupResultCollection groupResults = new DeletableGroupResultCollection();
-        for (String groupId : data.groupsNames()) {
-            groupResults.add(new DeletableGroupResult()
-                                 .setGroupId(groupId)
-                                 .setErrorCode(error.code()));
-        }
-
-        return new DeleteGroupsResponse(
-            new DeleteGroupsResponseData()
-                .setResults(groupResults)
-                .setThrottleTimeMs(throttleTimeMs)
+        return new DeleteGroupsResponse(new DeleteGroupsResponseData()
+            .setResults(getErrorResultCollection(data.groupsNames(), Errors.forException(e)))
+            .setThrottleTimeMs(throttleTimeMs)
         );
     }
 

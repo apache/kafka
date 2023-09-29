@@ -587,17 +587,23 @@ public class GroupCoordinatorService implements GroupCoordinator {
         });
 
         final CompletableFuture<Void> allFutures = CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]));
-        return allFutures.thenApply(v -> {
+        final CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> resFuture = allFutures.thenApply(v -> {
             final DeleteGroupsResponseData.DeletableGroupResultCollection res = new DeleteGroupsResponseData.DeletableGroupResultCollection();
+            final List<String> deletedGroups = new ArrayList<>();
             futures.forEach(future ->
                 // We don't use res.addAll(future.join()) because DeletableGroupResultCollection is an ImplicitLinkedHashMultiCollection,
-                // which has requirements for adding elements (see org/apache/kafka/common/utils/ImplicitLinkedHashCollection.java#add).
-                future.join().forEach(result ->
-                    res.add(result.duplicate())
-                )
+                // which has requirements for adding elements (see ImplicitLinkedHashCollection.java#add).
+                future.join().forEach(result -> {
+                    res.add(result.duplicate());
+                    if (result.errorCode() == Errors.NONE.code()) {
+                        deletedGroups.add(result.groupId());
+                    }
+                })
             );
+            log.info("The following groups were deleted: {}.", String.join(", ", deletedGroups));
             return res;
         });
+        return resFuture;
     }
 
     /**

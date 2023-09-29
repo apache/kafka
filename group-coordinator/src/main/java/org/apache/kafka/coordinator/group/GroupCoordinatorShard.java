@@ -280,7 +280,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
         List<String> groupIds
     ) throws ApiException {
         final DeleteGroupsResponseData.DeletableGroupResultCollection resultCollection =
-            new DeleteGroupsResponseData.DeletableGroupResultCollection();
+            new DeleteGroupsResponseData.DeletableGroupResultCollection(groupIds.size());
         final List<Record> records = new ArrayList<>();
 
         groupIds.forEach(groupId -> {

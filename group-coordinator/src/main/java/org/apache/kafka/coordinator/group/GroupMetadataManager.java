@@ -3077,17 +3077,15 @@ public class GroupMetadataManager {
      * Validations are done in {@link GroupCoordinatorShard#deleteGroups(RequestContext, List)} by
      * calling {@link GroupMetadataManager#validateDeleteGroup(String)}.
      *
-     * @param groupId The ID of the group to be deleted.
+     * @param groupId The ID of the group to be deleted. It has been checked in GroupMetadataManager#validateDeleteGroup.
      * @param records The record list to populate.
      */
     public void deleteGroup(
         String groupId,
         List<Record> records
     ) {
-        // groupId has been checked in GroupMetadataManager#validateDeleteGroup.
         // In this method, we only populate records with tombstone records, so we don't expect an exception to be thrown here.
-
-        records.addAll(group(groupId).createGroupTombstoneRecords());
+        group(groupId).createGroupTombstoneRecords(records);
     }
 
     /**

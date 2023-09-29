@@ -858,11 +858,17 @@ public class GenericGroup implements Group {
      */
     @Override
     public void validateOffsetDelete() throws ApiException {
-        if (isInState(DEAD)) {
-            throw new GroupIdNotFoundException(String.format("Group %s is in dead state.", groupId));
-        } else if (!usesConsumerGroupProtocol()
-            && (isInState(STABLE) || isInState(PREPARING_REBALANCE) || isInState(COMPLETING_REBALANCE))) {
-            throw Errors.NON_EMPTY_GROUP.exception();
+        switch (currentState()) {
+            case DEAD:
+                throw new GroupIdNotFoundException(String.format("Group %s is in dead state.", groupId));
+            case STABLE:
+            case PREPARING_REBALANCE:
+            case COMPLETING_REBALANCE:
+                if (!usesConsumerGroupProtocol()) {
+                    throw Errors.NON_EMPTY_GROUP.exception();
+                }
+                break;
+            default:
         }
     }
 
@@ -871,22 +877,24 @@ public class GenericGroup implements Group {
      */
     @Override
     public void validateDeleteGroup() throws ApiException {
-        if (isInState(DEAD)) {
-            throw new GroupIdNotFoundException(String.format("Group %s is in dead state.", groupId));
-        } else if (isInState(STABLE)
-            || isInState(PREPARING_REBALANCE)
-            || isInState(COMPLETING_REBALANCE)) {
-            throw Errors.NON_EMPTY_GROUP.exception();
+        switch (currentState()) {
+            case DEAD:
+                throw new GroupIdNotFoundException(String.format("Group %s is in dead state.", groupId));
+            case STABLE:
+            case PREPARING_REBALANCE:
+            case COMPLETING_REBALANCE:
+                throw Errors.NON_EMPTY_GROUP.exception();
+            default:
         }
     }
 
     /**
-     * Creates tombstone(s) for deleting the group.
+     * Populates the list of records with tombstone(s) for deleting the group.
      *
-     * @return The list of tombstone record(s).
+     * @param records The list of records.
      */
-    public List<Record> createGroupTombstoneRecords() {
-        return Collections.singletonList(RecordHelpers.newGroupMetadataTombstoneRecord(groupId()));
+    public void createGroupTombstoneRecords(List<Record> records) {
+        records.add(RecordHelpers.newGroupMetadataTombstoneRecord(groupId()));
     }
 
     /**

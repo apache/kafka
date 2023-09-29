@@ -64,7 +64,6 @@ import org.apache.kafka.coordinator.group.assignor.RangeAssignor;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorRuntime;
 import org.apache.kafka.server.record.BrokerCompressionType;
 import org.apache.kafka.server.util.FutureUtils;
-import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -80,7 +79,6 @@ import java.util.List;
 import java.util.OptionalInt;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -952,27 +950,25 @@ public class GroupCoordinatorServiceTest {
         service.startup(() -> 1);
 
         OffsetDeleteRequestData.OffsetDeleteRequestTopicCollection requestTopicCollection =
-            new OffsetDeleteRequestData.OffsetDeleteRequestTopicCollection();
-        requestTopicCollection.add(
-            new OffsetDeleteRequestData.OffsetDeleteRequestTopic()
-                .setName("topic")
-                .setPartitions(Collections.singletonList(
-                    new OffsetDeleteRequestData.OffsetDeleteRequestPartition().setPartitionIndex(0)
-                ))
-        );
-        OffsetDeleteRequestData request = new OffsetDeleteRequestData().setGroupId("group")
+            new OffsetDeleteRequestData.OffsetDeleteRequestTopicCollection(Collections.singletonList(
+                new OffsetDeleteRequestData.OffsetDeleteRequestTopic()
+                    .setName("topic")
+                    .setPartitions(Collections.singletonList(
+                        new OffsetDeleteRequestData.OffsetDeleteRequestPartition().setPartitionIndex(0)
+                    ))
+            ).iterator());
+        OffsetDeleteRequestData request = new OffsetDeleteRequestData()
+            .setGroupId("group")
             .setTopics(requestTopicCollection);
 
         OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection responsePartitionCollection =
-            new OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection();
-        responsePartitionCollection.add(
-            new OffsetDeleteResponseData.OffsetDeleteResponsePartition().setPartitionIndex(0)
-        );
+            new OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection(Collections.singletonList(
+                new OffsetDeleteResponseData.OffsetDeleteResponsePartition().setPartitionIndex(0)
+            ).iterator());
         OffsetDeleteResponseData.OffsetDeleteResponseTopicCollection responseTopicCollection =
-            new OffsetDeleteResponseData.OffsetDeleteResponseTopicCollection();
-        responseTopicCollection.add(
-            new OffsetDeleteResponseData.OffsetDeleteResponseTopic().setPartitions(responsePartitionCollection)
-        );
+            new OffsetDeleteResponseData.OffsetDeleteResponseTopicCollection(Collections.singletonList(
+                new OffsetDeleteResponseData.OffsetDeleteResponseTopic().setPartitions(responsePartitionCollection)
+            ).iterator());
         OffsetDeleteResponseData response = new OffsetDeleteResponseData()
             .setTopics(responseTopicCollection);
 
@@ -1003,14 +999,13 @@ public class GroupCoordinatorServiceTest {
         service.startup(() -> 1);
 
         OffsetDeleteRequestData.OffsetDeleteRequestTopicCollection requestTopicCollection =
-            new OffsetDeleteRequestData.OffsetDeleteRequestTopicCollection();
-        requestTopicCollection.add(
-            new OffsetDeleteRequestData.OffsetDeleteRequestTopic()
-                .setName("topic")
-                .setPartitions(Collections.singletonList(
-                    new OffsetDeleteRequestData.OffsetDeleteRequestPartition().setPartitionIndex(0)
-                ))
-        );
+            new OffsetDeleteRequestData.OffsetDeleteRequestTopicCollection(Collections.singletonList(
+                new OffsetDeleteRequestData.OffsetDeleteRequestTopic()
+                    .setName("topic")
+                    .setPartitions(Collections.singletonList(
+                        new OffsetDeleteRequestData.OffsetDeleteRequestPartition().setPartitionIndex(0)
+                    ))
+            ).iterator());
         OffsetDeleteRequestData request = new OffsetDeleteRequestData().setGroupId("")
             .setTopics(requestTopicCollection);
 
@@ -1044,15 +1039,15 @@ public class GroupCoordinatorServiceTest {
         service.startup(() -> 1);
 
         OffsetDeleteRequestData.OffsetDeleteRequestTopicCollection requestTopicCollection =
-            new OffsetDeleteRequestData.OffsetDeleteRequestTopicCollection();
-        requestTopicCollection.add(
-            new OffsetDeleteRequestData.OffsetDeleteRequestTopic()
-                .setName("topic")
-                .setPartitions(Collections.singletonList(
-                    new OffsetDeleteRequestData.OffsetDeleteRequestPartition().setPartitionIndex(0)
-                ))
-        );
-        OffsetDeleteRequestData request = new OffsetDeleteRequestData().setGroupId("group")
+            new OffsetDeleteRequestData.OffsetDeleteRequestTopicCollection(Collections.singletonList(
+                new OffsetDeleteRequestData.OffsetDeleteRequestTopic()
+                    .setName("topic")
+                    .setPartitions(Collections.singletonList(
+                        new OffsetDeleteRequestData.OffsetDeleteRequestPartition().setPartitionIndex(0)
+                    ))
+            ).iterator());
+        OffsetDeleteRequestData request = new OffsetDeleteRequestData()
+            .setGroupId("group")
             .setTopics(requestTopicCollection);
 
         OffsetDeleteResponseData response = new OffsetDeleteResponseData()
@@ -1063,7 +1058,7 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
             ArgumentMatchers.any()
         )).thenReturn(FutureUtils.failedFuture(
-            new CoordinatorLoadInProgressException(null)
+            Errors.COORDINATOR_LOAD_IN_PROGRESS.exception()
         ));
 
         CompletableFuture<OffsetDeleteResponseData> future = service.deleteOffsets(
@@ -1085,7 +1080,6 @@ public class GroupCoordinatorServiceTest {
             runtime
         );
         service.startup(() -> 3);
-        CountDownLatch latch = new CountDownLatch(1);
 
         DeleteGroupsResponseData.DeletableGroupResultCollection resultCollection1 =
             new DeleteGroupsResponseData.DeletableGroupResultCollection();
@@ -1124,31 +1118,26 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(resultCollection1));
 
+        CompletableFuture<Object> resultCollectionFuture = new CompletableFuture<>();
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("delete-groups"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
             ArgumentMatchers.any()
-        )).thenAnswer(invocation -> CompletableFuture.supplyAsync(() -> {
-            try {
-                assertTrue(latch.await(5, TimeUnit.SECONDS));
-            } catch (InterruptedException ignored) { }
-            return resultCollection2;
-        }));
+        )).thenReturn(resultCollectionFuture);
 
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("delete-groups"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 1)),
             ArgumentMatchers.any()
-        )).thenReturn(FutureUtils.failedFuture(new CoordinatorLoadInProgressException(null)));
+        )).thenReturn(FutureUtils.failedFuture(Errors.COORDINATOR_LOAD_IN_PROGRESS.exception()));
 
         List<String> groupIds = Arrays.asList("group-id-1", "group-id-2", "group-id-3", null);
         CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> future =
             service.deleteGroups(requestContext(ApiKeys.DELETE_GROUPS), groupIds, BufferSupplier.NO_CACHING);
 
         assertFalse(future.isDone());
-        latch.countDown();
+        resultCollectionFuture.complete(resultCollection2);
 
-        TestUtils.waitForCondition(future::isDone, "The future did not complete.");
         assertTrue(expectedResultCollection.containsAll(future.get()));
         assertTrue(future.get().containsAll(expectedResultCollection));
     }

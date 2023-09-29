@@ -34,7 +34,6 @@ import org.apache.kafka.timeline.TimelineHashMap;
 import org.apache.kafka.timeline.TimelineInteger;
 import org.apache.kafka.timeline.TimelineObject;
 
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -629,16 +628,14 @@ public class ConsumerGroup implements Group {
     }
 
     /**
-     * Creates tombstone(s) for deleting the group.
+     * Populates the list of records with tombstone(s) for deleting the group.
      *
-     * @return The list of tombstone record(s).
+     * @param records The list of records.
      */
-    public List<Record> createGroupTombstoneRecords() {
-        return Arrays.asList(
-            RecordHelpers.newTargetAssignmentEpochTombstoneRecord(groupId()),
-            RecordHelpers.newGroupSubscriptionMetadataTombstoneRecord(groupId()),
-            RecordHelpers.newGroupEpochTombstoneRecord(groupId())
-        );
+    public void createGroupTombstoneRecords(List<Record> records) {
+        records.add(RecordHelpers.newTargetAssignmentEpochTombstoneRecord(groupId()));
+        records.add(RecordHelpers.newGroupSubscriptionMetadataTombstoneRecord(groupId()));
+        records.add(RecordHelpers.newGroupEpochTombstoneRecord(groupId()));
     }
 
     /**
