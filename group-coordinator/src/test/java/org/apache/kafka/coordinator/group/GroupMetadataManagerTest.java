@@ -1909,6 +1909,159 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testGroupEpochBumpWhenNewStaticMemberJoins() {
+        String groupId = "fooup";
+        // Use a static member id as it makes the test easier.
+        String memberId1 = Uuid.randomUuid().toString();
+        String memberId2 = Uuid.randomUuid().toString();
+        String memberId3 = Uuid.randomUuid().toString();
+
+        Uuid fooTopicId = Uuid.randomUuid();
+        String fooTopicName = "foo";
+        Uuid barTopicId = Uuid.randomUuid();
+        String barTopicName = "bar";
+
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+
+        // Consumer group with two static members.
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+                .withAssignors(Collections.singletonList(assignor))
+                .withMetadataImage(new MetadataImageBuilder()
+                        .addTopic(fooTopicId, fooTopicName, 6)
+                        .addTopic(barTopicId, barTopicName, 3)
+                        .addRacks()
+                        .build())
+                .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
+                        .withMember(new ConsumerGroupMember.Builder(memberId1)
+                                .setInstanceId(memberId1)
+                                .setMemberEpoch(10)
+                                .setPreviousMemberEpoch(9)
+                                .setTargetMemberEpoch(10)
+                                .setClientId("client")
+                                .setClientHost("localhost/127.0.0.1")
+                                .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+                                .setServerAssignorName("range")
+                                .setAssignedPartitions(mkAssignment(
+                                        mkTopicAssignment(fooTopicId, 0, 1, 2),
+                                        mkTopicAssignment(barTopicId, 0, 1)))
+                                .build())
+                        .withMember(new ConsumerGroupMember.Builder(memberId2)
+                                .setInstanceId(memberId2)
+                                .setMemberEpoch(10)
+                                .setPreviousMemberEpoch(9)
+                                .setTargetMemberEpoch(10)
+                                .setClientId("client")
+                                .setClientHost("localhost/127.0.0.1")
+                                // Use zar only here to ensure that metadata needs to be recomputed.
+                                .setSubscribedTopicNames(Arrays.asList("foo", "bar", "zar"))
+                                .setServerAssignorName("range")
+                                .setAssignedPartitions(mkAssignment(
+                                        mkTopicAssignment(fooTopicId, 3, 4, 5),
+                                        mkTopicAssignment(barTopicId, 2)))
+                                .build())
+                        .withAssignment(memberId1, mkAssignment(
+                                mkTopicAssignment(fooTopicId, 0, 1, 2),
+                                mkTopicAssignment(barTopicId, 0, 1)))
+                        .withAssignment(memberId2, mkAssignment(
+                                mkTopicAssignment(fooTopicId, 3, 4, 5),
+                                mkTopicAssignment(barTopicId, 2)))
+                        .withAssignmentEpoch(10))
+                .build();
+
+        assignor.prepareGroupAssignment(new GroupAssignment(
+                new HashMap<String, MemberAssignment>() {
+                    {
+                        put(memberId1, new MemberAssignment(mkAssignment(
+                                mkTopicAssignment(fooTopicId, 0, 1),
+                                mkTopicAssignment(barTopicId, 0)
+                        )));
+                        put(memberId2, new MemberAssignment(mkAssignment(
+                                mkTopicAssignment(fooTopicId, 2, 3),
+                                mkTopicAssignment(barTopicId, 1)
+                        )));
+                        put(memberId3, new MemberAssignment(mkAssignment(
+                                mkTopicAssignment(fooTopicId, 4, 5),
+                                mkTopicAssignment(barTopicId, 2)
+                        )));
+                    }
+                }
+        ));
+
+        // Member 3 joins the consumer group.
+        CoordinatorResult<ConsumerGroupHeartbeatResponseData, Record> result = context.consumerGroupHeartbeat(
+                new ConsumerGroupHeartbeatRequestData()
+                        .setGroupId(groupId)
+                        .setMemberId(memberId3)
+                        .setInstanceId(memberId3)
+                        .setMemberEpoch(0)
+                        .setRebalanceTimeoutMs(5000)
+                        .setServerAssignor("range")
+                        .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+                        .setTopicPartitions(Collections.emptyList()));
+
+        assertResponseEquals(
+                new ConsumerGroupHeartbeatResponseData()
+                        .setMemberId(memberId3)
+                        .setMemberEpoch(11)
+                        .setHeartbeatIntervalMs(5000)
+                        .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()
+                                .setPendingTopicPartitions(Arrays.asList(
+                                        new ConsumerGroupHeartbeatResponseData.TopicPartitions()
+                                                .setTopicId(fooTopicId)
+                                                .setPartitions(Arrays.asList(4, 5)),
+                                        new ConsumerGroupHeartbeatResponseData.TopicPartitions()
+                                                .setTopicId(barTopicId)
+                                                .setPartitions(Collections.singletonList(2))
+                                ))),
+                result.response()
+        );
+
+        ConsumerGroupMember expectedMember3 = new ConsumerGroupMember.Builder(memberId3)
+                .setMemberEpoch(11)
+                .setInstanceId(memberId3)
+                .setPreviousMemberEpoch(0)
+                .setTargetMemberEpoch(11)
+                .setClientId("client")
+                .setClientHost("localhost/127.0.0.1")
+                .setRebalanceTimeoutMs(5000)
+                .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+                .setServerAssignorName("range")
+                .setPartitionsPendingAssignment(mkAssignment(
+                        mkTopicAssignment(fooTopicId, 4, 5),
+                        mkTopicAssignment(barTopicId, 2)))
+                .build();
+
+        List<Record> expectedRecords = Arrays.asList(
+                RecordHelpers.newMemberSubscriptionRecord(groupId, expectedMember3),
+                RecordHelpers.newGroupSubscriptionMetadataRecord(groupId, new HashMap<String, TopicMetadata>() {
+                    {
+                        put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6, mkMapOfPartitionRacks(6)));
+                        put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 3, mkMapOfPartitionRacks(3)));
+                    }
+                }),
+                RecordHelpers.newGroupEpochRecord(groupId, 11),
+                RecordHelpers.newTargetAssignmentRecord(groupId, memberId1, mkAssignment(
+                        mkTopicAssignment(fooTopicId, 0, 1),
+                        mkTopicAssignment(barTopicId, 0)
+                )),
+                RecordHelpers.newTargetAssignmentRecord(groupId, memberId2, mkAssignment(
+                        mkTopicAssignment(fooTopicId, 2, 3),
+                        mkTopicAssignment(barTopicId, 1)
+                )),
+                RecordHelpers.newTargetAssignmentRecord(groupId, memberId3, mkAssignment(
+                        mkTopicAssignment(fooTopicId, 4, 5),
+                        mkTopicAssignment(barTopicId, 2)
+                )),
+                RecordHelpers.newTargetAssignmentEpochRecord(groupId, 11),
+                RecordHelpers.newCurrentAssignmentRecord(groupId, expectedMember3)
+        );
+
+        assertRecordsEquals(expectedRecords.subList(0, 3), result.records().subList(0, 3));
+        assertUnorderedListEquals(expectedRecords.subList(3, 6), result.records().subList(3, 6));
+        assertRecordsEquals(expectedRecords.subList(6, 8), result.records().subList(6, 8));
+    }
+
+    @Test
     public void testNoGroupEpochBumpWhenStaticMemberLeaves() {
         String groupId = "fooup";
         // Use a static member id as it makes the test easier.
@@ -1989,6 +2142,152 @@ public class GroupMetadataManagerTest {
                 result.response()
         );
         assertTrue(result.records().isEmpty());
+    }
+
+    @Test
+    public void testShouldThrowUnknownMemberIdExceptionWhenUnknownStaticMemberLeaves() {
+        String groupId = "fooup";
+        // Use a static member id as it makes the test easier.
+        String memberId1 = Uuid.randomUuid().toString();
+        String memberId2 = Uuid.randomUuid().toString();
+
+        Uuid fooTopicId = Uuid.randomUuid();
+        String fooTopicName = "foo";
+        Uuid barTopicId = Uuid.randomUuid();
+        String barTopicName = "bar";
+        Uuid zarTopicId = Uuid.randomUuid();
+        String zarTopicName = "zar";
+
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+
+        // Consumer group with two static members.
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+                .withAssignors(Collections.singletonList(assignor))
+                .withMetadataImage(new MetadataImageBuilder()
+                        .addTopic(fooTopicId, fooTopicName, 6)
+                        .addTopic(barTopicId, barTopicName, 3)
+                        .addTopic(zarTopicId, zarTopicName, 1)
+                        .addRacks()
+                        .build())
+                .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
+                        .withMember(new ConsumerGroupMember.Builder(memberId1)
+                                .setInstanceId(memberId1)
+                                .setMemberEpoch(10)
+                                .setPreviousMemberEpoch(9)
+                                .setTargetMemberEpoch(10)
+                                .setClientId("client")
+                                .setClientHost("localhost/127.0.0.1")
+                                .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+                                .setServerAssignorName("range")
+                                .setAssignedPartitions(mkAssignment(
+                                        mkTopicAssignment(fooTopicId, 0, 1, 2),
+                                        mkTopicAssignment(barTopicId, 0, 1)))
+                                .build())
+                        .withMember(new ConsumerGroupMember.Builder(memberId2)
+                                .setInstanceId(memberId2)
+                                .setMemberEpoch(10)
+                                .setPreviousMemberEpoch(9)
+                                .setTargetMemberEpoch(10)
+                                .setClientId("client")
+                                .setClientHost("localhost/127.0.0.1")
+                                // Use zar only here to ensure that metadata needs to be recomputed.
+                                .setSubscribedTopicNames(Arrays.asList("foo", "bar", "zar"))
+                                .setServerAssignorName("range")
+                                .setAssignedPartitions(mkAssignment(
+                                        mkTopicAssignment(fooTopicId, 3, 4, 5),
+                                        mkTopicAssignment(barTopicId, 2)))
+                                .build())
+                        .withAssignment(memberId1, mkAssignment(
+                                mkTopicAssignment(fooTopicId, 0, 1, 2),
+                                mkTopicAssignment(barTopicId, 0, 1)))
+                        .withAssignment(memberId2, mkAssignment(
+                                mkTopicAssignment(fooTopicId, 3, 4, 5),
+                                mkTopicAssignment(barTopicId, 2)))
+                        .withAssignmentEpoch(10))
+                .build();
+
+        assertThrows(UnknownMemberIdException.class, () -> context.consumerGroupHeartbeat(
+                new ConsumerGroupHeartbeatRequestData()
+                        .setGroupId(groupId)
+                        .setMemberId(memberId2)
+                        .setInstanceId("unknown-" + memberId2)
+                        .setMemberEpoch(-2)
+                        .setRebalanceTimeoutMs(5000)
+                        .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+                        .setTopicPartitions(Collections.emptyList())));
+    }
+
+    @Test
+    public void testShouldThrowFencedInstanceIdExceptionWhenStaticMemberWithDifferentMemberIdLeaves() {
+        String groupId = "fooup";
+        // Use a static member id as it makes the test easier.
+        String memberId1 = Uuid.randomUuid().toString();
+        String memberId2 = Uuid.randomUuid().toString();
+
+        Uuid fooTopicId = Uuid.randomUuid();
+        String fooTopicName = "foo";
+        Uuid barTopicId = Uuid.randomUuid();
+        String barTopicName = "bar";
+        Uuid zarTopicId = Uuid.randomUuid();
+        String zarTopicName = "zar";
+
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+
+        // Consumer group with two static members.
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+                .withAssignors(Collections.singletonList(assignor))
+                .withMetadataImage(new MetadataImageBuilder()
+                        .addTopic(fooTopicId, fooTopicName, 6)
+                        .addTopic(barTopicId, barTopicName, 3)
+                        .addTopic(zarTopicId, zarTopicName, 1)
+                        .addRacks()
+                        .build())
+                .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
+                        .withMember(new ConsumerGroupMember.Builder(memberId1)
+                                .setInstanceId(memberId1)
+                                .setMemberEpoch(10)
+                                .setPreviousMemberEpoch(9)
+                                .setTargetMemberEpoch(10)
+                                .setClientId("client")
+                                .setClientHost("localhost/127.0.0.1")
+                                .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+                                .setServerAssignorName("range")
+                                .setAssignedPartitions(mkAssignment(
+                                        mkTopicAssignment(fooTopicId, 0, 1, 2),
+                                        mkTopicAssignment(barTopicId, 0, 1)))
+                                .build())
+                        .withMember(new ConsumerGroupMember.Builder(memberId2)
+                                .setInstanceId(memberId2)
+                                .setMemberEpoch(10)
+                                .setPreviousMemberEpoch(9)
+                                .setTargetMemberEpoch(10)
+                                .setClientId("client")
+                                .setClientHost("localhost/127.0.0.1")
+                                // Use zar only here to ensure that metadata needs to be recomputed.
+                                .setSubscribedTopicNames(Arrays.asList("foo", "bar", "zar"))
+                                .setServerAssignorName("range")
+                                .setAssignedPartitions(mkAssignment(
+                                        mkTopicAssignment(fooTopicId, 3, 4, 5),
+                                        mkTopicAssignment(barTopicId, 2)))
+                                .build())
+                        .withAssignment(memberId1, mkAssignment(
+                                mkTopicAssignment(fooTopicId, 0, 1, 2),
+                                mkTopicAssignment(barTopicId, 0, 1)))
+                        .withAssignment(memberId2, mkAssignment(
+                                mkTopicAssignment(fooTopicId, 3, 4, 5),
+                                mkTopicAssignment(barTopicId, 2)))
+                        .withAssignmentEpoch(10))
+                .build();
+
+        assertThrows(FencedInstanceIdException.class, () -> context.consumerGroupHeartbeat(
+                new ConsumerGroupHeartbeatRequestData()
+                        .setGroupId(groupId)
+                        .setMemberId("unknown-" + memberId2)
+                        .setInstanceId(memberId2)
+                        .setMemberEpoch(-2)
+                        .setRebalanceTimeoutMs(5000)
+                        .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+                        .setTopicPartitions(Collections.emptyList())));
     }
 
     @Test

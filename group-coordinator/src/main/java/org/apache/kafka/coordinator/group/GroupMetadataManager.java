@@ -849,7 +849,9 @@ public class GroupMetadataManager {
 
         // Get or create the member.
         if (memberId.isEmpty()) memberId = Uuid.randomUuid().toString();
-        final ConsumerGroupMember member = group.getOrMaybeCreateMember(memberId, createIfNotExists);
+        final ConsumerGroupMember member = instanceId == null ?
+                group.getOrMaybeCreateMember(memberId, createIfNotExists) :
+                group.getOrMaybeCreateStaticMember(memberId, instanceId, createIfNotExists);
         throwIfMemberEpochIsInvalid(member, memberEpoch, ownedTopicPartitions);
 
         if (memberEpoch == 0) {
@@ -1014,11 +1016,14 @@ public class GroupMetadataManager {
      */
     private CoordinatorResult<ConsumerGroupHeartbeatResponseData, Record> consumerGroupLeave(
         String groupId,
+        String instanceId,
         String memberId,
         int memberEpoch
     ) throws ApiException {
         ConsumerGroup group = getOrMaybeCreateConsumerGroup(groupId, false);
-        ConsumerGroupMember member = group.getOrMaybeCreateMember(memberId, false);
+        ConsumerGroupMember member = memberEpoch == -2 ?
+                group.getOrMaybeCreateStaticMember(memberId, instanceId,false) :
+                group.getOrMaybeCreateMember(memberId,false);
 
         List<Record> records = new ArrayList<>();
         // The departing member is a static one. We don't need to fence this member because it is
@@ -1197,6 +1202,7 @@ public class GroupMetadataManager {
             // -2 means that a static member wants to leave the group.
             return consumerGroupLeave(
                 request.groupId(),
+                request.instanceId(),
                 request.memberId(),
                 request.memberEpoch()
             );
@@ -1238,7 +1244,9 @@ public class GroupMetadataManager {
         Set<String> oldSubscribedTopicNames = new HashSet<>(consumerGroup.subscribedTopicNames());
 
         if (value != null) {
-            ConsumerGroupMember oldMember = consumerGroup.getOrMaybeCreateMember(memberId, true);
+            ConsumerGroupMember oldMember = value.instanceId() != null ?
+                    consumerGroup.getOrMaybeCreateStaticMember(memberId, value.instanceId(), true) :
+                    consumerGroup.getOrMaybeCreateMember(memberId, true);
             consumerGroup.updateMember(new ConsumerGroupMember.Builder(oldMember)
                 .updateWith(value)
                 .build());

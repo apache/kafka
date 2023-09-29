@@ -110,6 +110,11 @@ public class ConsumerGroup implements Group {
     private final TimelineHashMap<String, ConsumerGroupMember> members;
 
     /**
+     * The static group members.
+     */
+    private final Map<String, String> staticMembers;
+
+    /**
      * The number of members supporting each server assignor name.
      */
     private final TimelineHashMap<String, Integer> serverAssignors;
@@ -164,6 +169,7 @@ public class ConsumerGroup implements Group {
         this.state = new TimelineObject<>(snapshotRegistry, ConsumerGroupState.EMPTY);
         this.groupEpoch = new TimelineInteger(snapshotRegistry);
         this.members = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.staticMembers = new HashMap<>();
         this.serverAssignors = new TimelineHashMap<>(snapshotRegistry, 0);
         this.subscribedTopicNames = new TimelineHashMap<>(snapshotRegistry, 0);
         this.subscribedTopicMetadata = new TimelineHashMap<>(snapshotRegistry, 0);
@@ -262,6 +268,17 @@ public class ConsumerGroup implements Group {
     }
 
     /**
+     * Get member id of a static member that matches the given group
+     * instance id.
+     *
+     * @param groupInstanceId the group instance id.
+     * @return the static member if it exists.
+     */
+    public String staticMemberId(String groupInstanceId) {
+        return staticMembers.get(groupInstanceId);
+    }
+
+    /**
      * Gets or creates a member.
      *
      * @param memberId          The member id.
@@ -288,6 +305,43 @@ public class ConsumerGroup implements Group {
     }
 
     /**
+     * Gets or creates a static member.
+     *
+     * @param memberId          The member id.
+     * @param instanceId        The group instance id.
+     * @param createIfNotExists Booleans indicating whether the member must be
+     *                          created if it does not exist.
+     *
+     * @return A ConsumerGroupMember.
+     */
+    public ConsumerGroupMember getOrMaybeCreateStaticMember(
+            String memberId,
+            String instanceId,
+            boolean createIfNotExists
+    ) {
+        ConsumerGroupMember member;
+        String existingMemberId = staticMemberId(instanceId);
+        if (!createIfNotExists) {
+            // The member joined with a non-zero epoch but we haven't registered this static member
+            // This could be an unknown member for the coordinator.
+            if (existingMemberId == null) {
+                throw Errors.UNKNOWN_MEMBER_ID.exception();
+            }
+            // We can't create a member at this point. If the 2 member-ids don't match,
+            // we will throw an error.
+            if (!existingMemberId.equals(memberId)) {
+                throw Errors.FENCED_INSTANCE_ID.exception();
+            }
+            member = getOrMaybeCreateMember(memberId, false);
+        } else {
+            // Static member joined or re-joined
+            member = getOrMaybeCreateMember(memberId, true);
+            staticMembers.put(instanceId, memberId);
+        }
+        return member;
+    }
+
+    /**
      * Updates the member.
      *
      * @param newMember The new member state.
@@ -297,6 +351,7 @@ public class ConsumerGroup implements Group {
             throw new IllegalArgumentException("newMember cannot be null.");
         }
         ConsumerGroupMember oldMember = members.put(newMember.memberId(), newMember);
+        staticMembers.put(newMember.instanceId(), newMember.memberId());
         maybeUpdateSubscribedTopicNames(oldMember, newMember);
         maybeUpdateServerAssignors(oldMember, newMember);
         maybeUpdatePartitionEpoch(oldMember, newMember);
