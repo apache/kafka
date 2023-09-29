@@ -64,12 +64,12 @@ public interface MembershipManager {
      * Transition the member to the FENCED state.  This is only invoked when the heartbeat returns a
      * FENCED_MEMBER_EPOCH or UNKNOWN_MEMBER_ID error code.
      */
-    void fenceMember();
+    void transitionToFenced();
 
     /**
      * Transition the member to the FAILED state.  This is invoked when the heartbeat returns a non-retriable error.
      */
-    void transitionToFailure();
+    void transitionToFailed();
 
     /**
      * Return true if the member should send heartbeat to the coordinator

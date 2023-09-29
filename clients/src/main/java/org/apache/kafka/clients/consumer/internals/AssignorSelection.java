@@ -36,7 +36,7 @@ public class AssignorSelection {
     private AssignorSelection(Type type, String serverAssignor) {
         this.type = type;
         if (type == Type.SERVER) {
-            this.serverAssignor = Optional.of(serverAssignor);
+            this.serverAssignor = Optional.ofNullable(serverAssignor);
         } else {
             throw new IllegalArgumentException("Unsupported assignor type " + type);
         }
@@ -54,7 +54,7 @@ public class AssignorSelection {
 
     public static AssignorSelection defaultAssignor() {
         // TODO: review default selection
-        return new AssignorSelection(Type.SERVER, "uniform");
+        return new AssignorSelection(Type.SERVER, null);
     }
 
     public Optional<String> serverAssignor() {

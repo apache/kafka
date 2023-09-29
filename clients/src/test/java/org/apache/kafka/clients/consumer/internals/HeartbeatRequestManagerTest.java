@@ -235,7 +235,7 @@ public class HeartbeatRequestManagerTest {
     }
 
     private void ensureFatalError() {
-        verify(mockMembershipManager).transitionToFailure();
+        verify(mockMembershipManager).transitionToFailed();
         verify(errorEventHandler).handle(any());
         ensureHeartbeatStopped();
     }

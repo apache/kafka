@@ -132,13 +132,13 @@ public class MembershipManagerImpl implements MembershipManager {
     }
 
     @Override
-    public void fenceMember() {
+    public void transitionToFenced() {
         resetEpoch();
         transitionTo(MemberState.FENCED);
     }
 
     @Override
-    public void transitionToFailure() {
+    public void transitionToFailed() {
         transitionTo(MemberState.FAILED);
     }
 
