@@ -579,7 +579,6 @@ public class GroupMetadataManager {
         throwIfEmptyString(request.instanceId(), "InstanceId can't be empty.");
         throwIfEmptyString(request.rackId(), "RackId can't be empty.");
         throwIfNotNull(request.subscribedTopicRegex(), "SubscribedTopicRegex is not supported yet.");
-        throwIfNotNull(request.clientAssignors(), "Client side assignors are not supported yet.");
 
         if (request.memberEpoch() > 0 || request.memberEpoch() == -1) {
             throwIfEmptyString(request.memberId(), "MemberId can't be empty.");
@@ -689,14 +688,8 @@ public class GroupMetadataManager {
     private ConsumerGroupHeartbeatResponseData.Assignment createResponseAssignment(
         ConsumerGroupMember member
     ) {
-        ConsumerGroupHeartbeatResponseData.Assignment assignment = new ConsumerGroupHeartbeatResponseData.Assignment()
-            .setAssignedTopicPartitions(fromAssignmentMap(member.assignedPartitions()));
-
-        if (member.state() == ConsumerGroupMember.MemberState.ASSIGNING) {
-            assignment.setPendingTopicPartitions(fromAssignmentMap(member.partitionsPendingAssignment()));
-        }
-
-        return assignment;
+        return new ConsumerGroupHeartbeatResponseData.Assignment()
+            .setTopicPartitions(fromAssignmentMap(member.assignedPartitions()));
     }
 
     private List<ConsumerGroupHeartbeatResponseData.TopicPartitions> fromAssignmentMap(
