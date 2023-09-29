@@ -110,6 +110,8 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
+import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX;
 import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_TRACKING_ENABLE_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.CONNECT_PROTOCOL_V0;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocolCompatibility.EAGER;
@@ -906,7 +908,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     @Override
     protected Map<String, ConfigValue> validateSinkConnectorConfig(SinkConnector connector, ConfigDef configDef, Map<String, String> config) {
         Map<String, ConfigValue> result = super.validateSinkConnectorConfig(connector, configDef, config);
-        validateSinkConnectorGroupId(result);
+        validateSinkConnectorGroupId(config, result);
         return result;
     }
 
@@ -919,12 +921,25 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
 
-    private void validateSinkConnectorGroupId(Map<String, ConfigValue> validatedConfig) {
-        ConfigValue validatedName = validatedConfig.get(ConnectorConfig.NAME_CONFIG);
-        String name = (String) validatedName.value();
-        if (workerGroupId.equals(SinkUtils.consumerGroupId(name))) {
-            validatedName.addErrorMessage("Consumer group for sink connector named " + name +
-                    " conflicts with Connect worker group " + workerGroupId);
+    private void validateSinkConnectorGroupId(Map<String, String> config, Map<String, ConfigValue> validatedConfig) {
+        String overriddenConsumerGroupIdConfig = CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX + GROUP_ID_CONFIG;
+        if (config.containsKey(overriddenConsumerGroupIdConfig)) {
+            String consumerGroupId = config.get(overriddenConsumerGroupIdConfig);
+            ConfigValue validatedGroupId = validatedConfig.computeIfAbsent(
+                    overriddenConsumerGroupIdConfig,
+                    p -> new ConfigValue(overriddenConsumerGroupIdConfig, consumerGroupId, Collections.emptyList(), new ArrayList<>())
+            );
+            if (workerGroupId.equals(consumerGroupId)) {
+                validatedGroupId.addErrorMessage("Consumer group " + consumerGroupId +
+                        " conflicts with Connect worker group " + workerGroupId);
+            }
+        } else {
+            ConfigValue validatedName = validatedConfig.get(ConnectorConfig.NAME_CONFIG);
+            String name = (String) validatedName.value();
+            if (workerGroupId.equals(SinkUtils.consumerGroupId(name))) {
+                validatedName.addErrorMessage("Consumer group for sink connector named " + name +
+                        " conflicts with Connect worker group " + workerGroupId);
+            }
         }
     }
 

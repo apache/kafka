@@ -761,6 +761,7 @@ class KafkaConfigTest {
   }
 
   @Test
+  @nowarn("cat=deprecation") // See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for deprecation details
   def testFromPropsInvalid(): Unit = {
     def baseProperties: Properties = {
       val validRequiredProperties = new Properties()
@@ -856,6 +857,8 @@ class KafkaConfigTest {
         case KafkaConfig.LogFlushSchedulerIntervalMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case KafkaConfig.LogFlushIntervalMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case KafkaConfig.LogMessageTimestampDifferenceMaxMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.LogMessageTimestampBeforeMaxMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.LogMessageTimestampAfterMaxMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case KafkaConfig.LogFlushStartOffsetCheckpointIntervalMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case KafkaConfig.NumRecoveryThreadsPerDataDirProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
         case KafkaConfig.AutoCreateTopicsEnableProp => assertPropertyInvalid(baseProperties, name, "not_a_boolean", "0")
@@ -1094,6 +1097,10 @@ class KafkaConfigTest {
           assertDynamic(kafkaConfigProp, false, () => config.logMessageDownConversionEnable)
         case TopicConfig.MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG =>
           assertDynamic(kafkaConfigProp, 10009, () => config.logMessageTimestampDifferenceMaxMs)
+        case TopicConfig.MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG =>
+          assertDynamic(kafkaConfigProp, 10015L, () => config.logMessageTimestampBeforeMaxMs)
+        case TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG =>
+          assertDynamic(kafkaConfigProp, 10016L, () => config.logMessageTimestampAfterMaxMs)
         case TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG =>
           assertDynamic(kafkaConfigProp, "LogAppendTime", () => config.logMessageTimestampType.name)
         case TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG =>
@@ -1735,6 +1742,18 @@ class KafkaConfigTest {
 
     props.remove(KafkaConfig.ControllerListenerNamesProp)
     KafkaConfig.fromProps(props)
+  }
+
+  @Test
+  def testMigrationCannotBeEnabledWithJBOD(): Unit = {
+    val props = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect, port = TestUtils.MockZkPort, logDirCount = 2)
+    props.setProperty(KafkaConfig.MigrationEnabledProp, "true")
+    props.setProperty(KafkaConfig.QuorumVotersProp, "3000@localhost:9093")
+    props.setProperty(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
+
+    assertEquals(
+      "requirement failed: Cannot enable ZooKeeper migration when multiple log directories (aka JBOD) are in use.",
+      assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props)).getMessage)
   }
 
   @Test

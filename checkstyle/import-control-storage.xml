@@ -97,6 +97,7 @@
         <allow pkg="kafka.utils" />
 
         <allow pkg="org.apache.kafka.common.config" />
+        <allow pkg="org.apache.kafka.common.header" />
         <allow pkg="org.apache.kafka.common.record" />
         <allow pkg="org.apache.kafka.common.replica" />
         <allow pkg="org.apache.kafka.common.network" />

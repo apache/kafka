@@ -56,7 +56,7 @@ public final class BrokerLocalStorage {
 
     /**
      * Wait until the first segment offset in Apache Kafka storage for the given topic-partition is
-     * equal or greater to the provided offset.
+     * equal to the provided offset.
      * This ensures segments can be retrieved from the local tiered storage when expected.
      *
      * @param topicPartition The topic-partition to check.

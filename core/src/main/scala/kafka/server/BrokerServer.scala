@@ -25,25 +25,21 @@ import kafka.log.remote.RemoteLogManager
 import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.raft.KafkaRaftManager
 import kafka.security.CredentialProvider
-import kafka.server.metadata.{AclPublisher, BrokerMetadataPublisher, ClientQuotaMetadataManager,
-DynamicClientQuotaPublisher, DynamicConfigPublisher, KRaftMetadataCache, ScramPublisher, DelegationTokenPublisher}
+import kafka.server.metadata.{AclPublisher, BrokerMetadataPublisher, ClientQuotaMetadataManager, DelegationTokenPublisher, DynamicClientQuotaPublisher, DynamicConfigPublisher, KRaftMetadataCache, ScramPublisher}
 import kafka.utils.CoreUtils
-import org.apache.kafka.clients.NetworkClient
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.feature.SupportedVersionRange
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
-import org.apache.kafka.common.message.BrokerRegistrationRequestData.{Listener, ListenerCollection}
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
-import org.apache.kafka.common.utils.{LogContext, Time, Utils}
-import org.apache.kafka.common.{ClusterResource, Endpoint, KafkaException, TopicPartition}
+import org.apache.kafka.common.utils.{LogContext, Time}
+import org.apache.kafka.common.{ClusterResource, KafkaException, TopicPartition}
 import org.apache.kafka.coordinator.group
 import org.apache.kafka.coordinator.group.util.SystemTimerReaper
 import org.apache.kafka.coordinator.group.{GroupCoordinator, GroupCoordinatorConfig, GroupCoordinatorService, RecordSerde}
 import org.apache.kafka.image.publisher.MetadataPublisher
-import org.apache.kafka.metadata.{BrokerState, VersionRange}
+import org.apache.kafka.metadata.{BrokerState, ListenerInfo, VersionRange}
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.ApiMessageAndVersion
@@ -54,8 +50,8 @@ import org.apache.kafka.server.util.timer.SystemTimer
 import org.apache.kafka.server.util.{Deadline, FutureUtils, KafkaScheduler}
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel
 
-import java.net.InetAddress
 import java.util
+import java.util.Optional
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.{CompletableFuture, ExecutionException, TimeUnit, TimeoutException}
@@ -119,7 +115,7 @@ class BrokerServer(
 
   var transactionCoordinator: TransactionCoordinator = _
 
-  var clientToControllerChannelManager: BrokerToControllerChannelManager = _
+  var clientToControllerChannelManager: NodeToControllerChannelManager = _
 
   var forwardingManager: ForwardingManager = _
 
@@ -215,7 +211,7 @@ class BrokerServer(
       val controllerNodes = RaftConfig.voterConnectionsToNodes(voterConnections).asScala
       val controllerNodeProvider = RaftControllerNodeProvider(raftManager, config, controllerNodes)
 
-      clientToControllerChannelManager = BrokerToControllerChannelManager(
+      clientToControllerChannelManager = NodeToControllerChannelManager(
         controllerNodeProvider,
         time,
         metrics,
@@ -243,6 +239,11 @@ class BrokerServer(
 
       clientQuotaMetadataManager = new ClientQuotaMetadataManager(quotaManagers, socketServer.connectionQuotas)
 
+      val listenerInfo = ListenerInfo.create(Optional.of(config.interBrokerListenerName.value()),
+          config.effectiveAdvertisedListeners.map(_.toJava).asJava).
+            withWildcardHostnamesResolved().
+            withEphemeralPortsCorrected(name => socketServer.boundPort(new ListenerName(name)))
+
       alterPartitionManager = AlterPartitionManager(
         config,
         metadataCache,
@@ -256,8 +257,16 @@ class BrokerServer(
       alterPartitionManager.start()
 
       val addPartitionsLogContext = new LogContext(s"[AddPartitionsToTxnManager broker=${config.brokerId}]")
-      val addPartitionsToTxnNetworkClient: NetworkClient = NetworkUtils.buildNetworkClient("AddPartitionsManager", config, metrics, time, addPartitionsLogContext)
-      val addPartitionsToTxnManager: AddPartitionsToTxnManager = new AddPartitionsToTxnManager(config, addPartitionsToTxnNetworkClient, time)
+      val addPartitionsToTxnNetworkClient = NetworkUtils.buildNetworkClient("AddPartitionsManager", config, metrics, time, addPartitionsLogContext)
+      val addPartitionsToTxnManager = new AddPartitionsToTxnManager(
+        config,
+        addPartitionsToTxnNetworkClient,
+        metadataCache,
+        // The transaction coordinator is not created at this point so we must
+        // use a lambda here.
+        transactionalId => transactionCoordinator.partitionFor(transactionalId),
+        time
+      )
 
       this._replicaManager = new ReplicaManager(
         config = config,
@@ -303,24 +312,15 @@ class BrokerServer(
         groupCoordinator, transactionCoordinator)
 
       dynamicConfigHandlers = Map[String, ConfigHandler](
-        ConfigType.Topic -> new TopicConfigHandler(logManager, config, quotaManagers, None),
+        ConfigType.Topic -> new TopicConfigHandler(replicaManager, config, quotaManagers, None),
         ConfigType.Broker -> new BrokerConfigHandler(config, quotaManagers))
-
-      val networkListeners = new ListenerCollection()
-      config.effectiveAdvertisedListeners.foreach { ep =>
-        networkListeners.add(new Listener().
-          setHost(if (Utils.isBlank(ep.host)) InetAddress.getLocalHost.getCanonicalHostName else ep.host).
-          setName(ep.listenerName.value()).
-          setPort(if (ep.port == 0) socketServer.boundPort(ep.listenerName) else ep.port).
-          setSecurityProtocol(ep.securityProtocol.id))
-      }
 
       val featuresRemapped = brokerFeatures.supportedFeatures.features().asScala.map {
         case (k: String, v: SupportedVersionRange) =>
           k -> VersionRange.of(v.min, v.max)
       }.asJava
 
-      val brokerLifecycleChannelManager = BrokerToControllerChannelManager(
+      val brokerLifecycleChannelManager = NodeToControllerChannelManager(
         controllerNodeProvider,
         time,
         metrics,
@@ -333,7 +333,7 @@ class BrokerServer(
         () => sharedServer.loader.lastAppliedOffset(),
         brokerLifecycleChannelManager,
         sharedServer.metaProps.clusterId,
-        networkListeners,
+        listenerInfo.toBrokerRegistrationRequest,
         featuresRemapped
       )
       // If the BrokerLifecycleManager's initial catch-up future fails, it means we timed out
@@ -341,23 +341,6 @@ class BrokerServer(
       lifecycleManager.initialCatchUpFuture.whenComplete((_, e) => {
         if (e != null) brokerMetadataPublisher.firstPublishFuture.completeExceptionally(e)
       })
-
-      val endpoints = new util.ArrayList[Endpoint](networkListeners.size())
-      var interBrokerListener: Endpoint = null
-      networkListeners.iterator().forEachRemaining(listener => {
-        val endPoint = new Endpoint(listener.name(),
-          SecurityProtocol.forId(listener.securityProtocol()),
-          listener.host(), listener.port())
-        endpoints.add(endPoint)
-        if (listener.name().equals(config.interBrokerListenerName.value())) {
-          interBrokerListener = endPoint
-        }
-      })
-      if (interBrokerListener == null) {
-        throw new RuntimeException("Unable to find inter-broker listener " +
-          config.interBrokerListenerName.value() + ". Found listener(s): " +
-          endpoints.asScala.map(ep => ep.listenerName().orElse("(none)")).mkString(", "))
-      }
 
       // Create and initialize an authorizer if one is configured.
       authorizer = config.createNewAuthorizer()
@@ -463,17 +446,21 @@ class BrokerServer(
       new KafkaConfig(config.originals(), true)
 
       // Start RemoteLogManager before broker start serving the requests.
-      remoteLogManagerOpt.foreach(rlm => {
+      remoteLogManagerOpt.foreach { rlm =>
         val listenerName = config.remoteLogManagerConfig.remoteLogMetadataManagerListenerName()
         if (listenerName != null) {
-          val endpoint = endpoints.stream.filter(e => e.listenerName.equals(ListenerName.normalised(listenerName)))
+          val endpoint = listenerInfo.listeners().values().stream
+            .filter(e =>
+              e.listenerName().isPresent &&
+              ListenerName.normalised(e.listenerName().get()).equals(ListenerName.normalised(listenerName))
+            )
             .findFirst()
-            .orElseThrow(() => new ConfigException(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP +
-              " should be set as a listener name within valid broker listener name list."))
+            .orElseThrow(() => new ConfigException(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP,
+              listenerName, "Should be set as a listener name within valid broker listener name list: " + listenerInfo.listeners().values()))
           rlm.onEndPointCreated(EndPoint.fromJava(endpoint))
         }
         rlm.startup()
-      })
+      }
 
       // We're now ready to unfence the broker. This also allows this broker to transition
       // from RECOVERY state to RUNNING state, once the controller unfences the broker.
@@ -489,8 +476,8 @@ class BrokerServer(
           new KafkaAuthorizerServerInfo(
             new ClusterResource(clusterId),
             config.nodeId,
-            endpoints,
-            interBrokerListener,
+            listenerInfo.listeners().values(),
+            listenerInfo.firstListener(),
             config.earlyStartListeners.map(_.value()).asJava))
       }
       val authorizerFutures = endpointReadyFutures.futures().asScala.toMap
@@ -575,7 +562,13 @@ class BrokerServer(
       }
 
       Some(new RemoteLogManager(config.remoteLogManagerConfig, config.brokerId, config.logDirs.head, clusterId, time,
-        (tp: TopicPartition) => logManager.getLog(tp).asJava, brokerTopicStats));
+        (tp: TopicPartition) => logManager.getLog(tp).asJava,
+        (tp: TopicPartition, remoteLogStartOffset: java.lang.Long) => {
+          logManager.getLog(tp).foreach { log =>
+            log.updateLogStartOffsetFromRemoteTier(remoteLogStartOffset)
+          }
+        },
+        brokerTopicStats))
     } else {
       None
     }

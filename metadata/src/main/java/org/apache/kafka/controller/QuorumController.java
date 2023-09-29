@@ -39,6 +39,7 @@ import org.apache.kafka.common.message.AlterUserScramCredentialsRequestData;
 import org.apache.kafka.common.message.AlterUserScramCredentialsResponseData;
 import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData;
+import org.apache.kafka.common.message.ControllerRegistrationRequestData;
 import org.apache.kafka.common.message.CreateDelegationTokenRequestData;
 import org.apache.kafka.common.message.CreateDelegationTokenResponseData;
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic;
@@ -71,6 +72,7 @@ import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.ProducerIdsRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
+import org.apache.kafka.common.metadata.RegisterControllerRecord;
 import org.apache.kafka.common.metadata.RemoveAccessControlEntryRecord;
 import org.apache.kafka.common.metadata.RemoveDelegationTokenRecord;
 import org.apache.kafka.common.metadata.RemoveTopicRecord;
@@ -95,6 +97,7 @@ import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
 import org.apache.kafka.metadata.FinalizedControllerFeatures;
 import org.apache.kafka.metadata.KafkaConfigSchema;
+import org.apache.kafka.metadata.VersionRange;
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
 import org.apache.kafka.metadata.migration.ZkMigrationState;
 import org.apache.kafka.metadata.migration.ZkRecordConsumer;
@@ -130,6 +133,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.Map;
@@ -147,7 +151,6 @@ import java.util.function.Supplier;
 import static java.util.concurrent.TimeUnit.MICROSECONDS;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 import static org.apache.kafka.controller.QuorumController.ControllerOperationFlag.DOES_NOT_UPDATE_QUEUE_TIME;
-import static org.apache.kafka.controller.QuorumController.ControllerOperationFlag.COMPLETES_IN_TRANSACTION;
 import static org.apache.kafka.controller.QuorumController.ControllerOperationFlag.RUNS_IN_PREMIGRATION;
 
 
@@ -469,6 +472,18 @@ public final class QuorumController implements Controller {
         }
     }
 
+    class QuorumClusterFeatureSupportDescriber implements ClusterFeatureSupportDescriber {
+        @Override
+        public Iterator<Entry<Integer, Map<String, VersionRange>>> brokerSupported() {
+            return clusterControl.brokerSupportedFeatures();
+        }
+
+        @Override
+        public Iterator<Entry<Integer, Map<String, VersionRange>>> controllerSupported() {
+            return clusterControl.controllerSupportedFeatures();
+        }
+    }
+
     public static final String CONTROLLER_THREAD_SUFFIX = "QuorumControllerEventHandler";
 
     private OptionalInt latestController() {
@@ -668,21 +683,16 @@ public final class QuorumController implements Controller {
          * Operations without this flag will always return NOT_CONTROLLER when invoked in premigration
          * mode.
          * <p>
-         * In pre-migration mode, we are still waiting to load the metadata from Apache
-         * ZooKeeper into the metadata log. Therefore, the metadata log is mostly empty,
-         * even though the cluster really does have metadata. Very few operations should
-         * use this flag.
+         * In pre-migration mode, we are still waiting to load the metadata from Apache ZooKeeper into
+         * the metadata log. Therefore, the metadata log is mostly empty, even though the cluster really
+         * does have metadata
+         * <p>
+         * Events using this flag will be completed even if a transaction is ongoing. Pre-migration
+         * events will be completed using the unstable (committed) offset rather than the stable offset.
+         * <p>
+         * In practice, very few operations should use this flag.
          */
-        RUNS_IN_PREMIGRATION,
-
-        /**
-         * This flag signifies that an event will be completed even if it is part of an unfinished transaction.
-         * This is needed for metadata transactions so that external callers can add records to a transaction
-         * and still use the returned future. One example usage of this flag is the batches of migrations records.
-         * The migration driver needs to wait on each submitted batch to avoid overwhelming the controller queue
-         * with events, so it needs events to be completed based on the committed (i.e., not stable) offset.
-         */
-        COMPLETES_IN_TRANSACTION
+        RUNS_IN_PREMIGRATION
     }
 
     interface ControllerWriteOperation<T> {
@@ -763,7 +773,14 @@ public final class QuorumController implements Controller {
                 // If the operation did not return any records, then it was actually just
                 // a read after all, and not a read + write.  However, this read was done
                 // from the latest in-memory state, which might contain uncommitted data.
-                OptionalLong maybeOffset = deferredEventQueue.highestPendingOffset();
+                // If the operation can complete within a transaction, let it use the
+                // unstable purgatory so that it can complete sooner.
+                OptionalLong maybeOffset;
+                if (featureControl.inPreMigrationMode() && flags.contains(RUNS_IN_PREMIGRATION)) {
+                    maybeOffset = deferredUnstableEventQueue.highestPendingOffset();
+                } else {
+                    maybeOffset = deferredEventQueue.highestPendingOffset();
+                }
                 if (!maybeOffset.isPresent()) {
                     // If the purgatory is empty, there are no pending operations and no
                     // uncommitted state.  We can complete immediately.
@@ -825,7 +842,7 @@ public final class QuorumController implements Controller {
 
             // Remember the latest offset and future if it is not already completed
             if (!future.isDone()) {
-                if (flags.contains(COMPLETES_IN_TRANSACTION)) {
+                if (featureControl.inPreMigrationMode() && flags.contains(RUNS_IN_PREMIGRATION)) {
                     deferredUnstableEventQueue.add(resultAndOffset.offset(), this);
                 } else {
                     deferredEventQueue.add(resultAndOffset.offset(), this);
@@ -945,9 +962,7 @@ public final class QuorumController implements Controller {
     }
 
     class MigrationRecordConsumer implements ZkRecordConsumer {
-        private final EnumSet<ControllerOperationFlag> eventFlags = EnumSet.of(
-            RUNS_IN_PREMIGRATION, COMPLETES_IN_TRANSACTION
-        );
+        private final EnumSet<ControllerOperationFlag> eventFlags = EnumSet.of(RUNS_IN_PREMIGRATION);
 
         private volatile OffsetAndEpoch highestMigrationRecordOffset;
 
@@ -1297,7 +1312,7 @@ public final class QuorumController implements Controller {
                 rescheduleMaybeFenceStaleBrokers();
                 return result;
             },
-            EnumSet.of(DOES_NOT_UPDATE_QUEUE_TIME, RUNS_IN_PREMIGRATION));
+            EnumSet.of(DOES_NOT_UPDATE_QUEUE_TIME));
     }
 
     private void cancelMaybeFenceReplicas() {
@@ -1404,7 +1419,7 @@ public final class QuorumController implements Controller {
             delegationTokenControlManager.isEnabled()) {
 
             log.debug(
-                "Scheduling write event for {} because DelegationTokens are enabled.", 
+                "Scheduling write event for {} because DelegationTokens are enabled.",
                 SWEEP_EXPIRED_DELEGATION_TOKENS
             );
 
@@ -1419,7 +1434,7 @@ public final class QuorumController implements Controller {
                 EnumSet.of(DOES_NOT_UPDATE_QUEUE_TIME)
             );
 
-            long delayNs = time.nanoseconds() + 
+            long delayNs = time.nanoseconds() +
                 NANOSECONDS.convert(delegationTokenExpiryCheckIntervalMs, TimeUnit.MILLISECONDS);
             queue.scheduleDeferred(SWEEP_EXPIRED_DELEGATION_TOKENS,
                 new EarliestDeadlineFunction(delayNs), event);
@@ -1532,6 +1547,9 @@ public final class QuorumController implements Controller {
             case ABORT_TRANSACTION_RECORD:
                 offsetControl.replay((AbortTransactionRecord) message, offset);
                 break;
+            case REGISTER_CONTROLLER_RECORD:
+                clusterControl.replay((RegisterControllerRecord) message);
+                break;
             default:
                 throw new RuntimeException("Unhandled record type " + type);
         }
@@ -1617,6 +1635,11 @@ public final class QuorumController implements Controller {
      * This must be accessed only by the event queue thread.
      */
     private final ClientQuotaControlManager clientQuotaControlManager;
+
+    /**
+     * Describes the feature versions in the cluster.
+     */
+    private final QuorumClusterFeatureSupportDescriber clusterSupportDescriber;
 
     /**
      * An object which stores the controller's view of the cluster.
@@ -1796,6 +1819,7 @@ public final class QuorumController implements Controller {
             setLogContext(logContext).
             setSnapshotRegistry(snapshotRegistry).
             build();
+        this.clusterSupportDescriber = new QuorumClusterFeatureSupportDescriber();
         this.featureControl = new FeatureControlManager.Builder().
             setLogContext(logContext).
             setQuorumFeatures(quorumFeatures).
@@ -1806,6 +1830,7 @@ public final class QuorumController implements Controller {
             // are all treated as 3.0IV1. In newer versions the metadata.version will be specified
             // by the log.
             setMetadataVersion(MetadataVersion.MINIMUM_KRAFT_VERSION).
+            setClusterFeatureSupportDescriber(clusterSupportDescriber).
             build();
         this.clusterControl = new ClusterControlManager.Builder().
             setLogContext(logContext).
@@ -2184,8 +2209,7 @@ public final class QuorumController implements Controller {
                 upgradeTypes.put(featureName, FeatureUpdate.UpgradeType.fromCode(featureUpdate.upgradeType()));
                 updates.put(featureName, featureUpdate.maxVersionLevel());
             });
-            return featureControl.updateFeatures(updates, upgradeTypes, clusterControl.brokerSupportedVersions(),
-                request.validateOnly());
+            return featureControl.updateFeatures(updates, upgradeTypes, request.validateOnly());
         }).thenApply(result -> {
             UpdateFeaturesResponseData responseData = new UpdateFeaturesResponseData();
             responseData.setResults(new UpdateFeaturesResponseData.UpdatableFeatureResultCollection(result.size()));
@@ -2219,6 +2243,16 @@ public final class QuorumController implements Controller {
                 return result;
             }
         });
+    }
+
+    @Override
+    public CompletableFuture<Void> registerController(
+        ControllerRequestContext context,
+        ControllerRegistrationRequestData request
+    ) {
+        return appendWriteEvent("registerController", context.deadlineNs(),
+            () -> clusterControl.registerController(request),
+            EnumSet.of(RUNS_IN_PREMIGRATION));
     }
 
     @Override

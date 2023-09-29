@@ -1172,10 +1172,11 @@ public class ConfigDef {
                          boolean internalConfig) {
             this.name = name;
             this.type = type;
-            this.defaultValue = NO_DEFAULT_VALUE.equals(defaultValue) ? NO_DEFAULT_VALUE : parseType(name, defaultValue, type);
+            boolean hasDefault = !NO_DEFAULT_VALUE.equals(defaultValue);
+            this.defaultValue = hasDefault ? parseType(name, defaultValue, type) : NO_DEFAULT_VALUE;
             this.validator = validator;
             this.importance = importance;
-            if (this.validator != null && hasDefault())
+            if (this.validator != null && hasDefault)
                 this.validator.ensureValid(name, this.defaultValue);
             this.documentation = documentation;
             this.dependents = dependents;
