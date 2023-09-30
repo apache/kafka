@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group.consumer;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataValue;
 import org.junit.jupiter.api.Test;
@@ -24,6 +25,7 @@ import org.junit.jupiter.api.Test;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 import java.util.OptionalInt;
 
@@ -303,5 +305,55 @@ public class ConsumerGroupMemberTest {
         assertEquals(mkAssignment(mkTopicAssignment(topicId1, 0, 1, 2)), member.assignedPartitions());
         assertEquals(mkAssignment(mkTopicAssignment(topicId2, 3, 4, 5)), member.partitionsPendingRevocation());
         assertEquals(mkAssignment(mkTopicAssignment(topicId3, 6, 7, 8)), member.partitionsPendingAssignment());
+    }
+
+    @Test
+    void testAsConsumerGroupDescribeMember() {
+        Uuid topicId1 = Uuid.randomUuid();
+        Uuid topicId2 = Uuid.randomUuid();
+        Uuid topicId3 = Uuid.randomUuid();
+        List<Integer> assignedPartitions = Arrays.asList(0, 1, 2);
+        ConsumerGroupCurrentMemberAssignmentValue record = new ConsumerGroupCurrentMemberAssignmentValue()
+            .setMemberEpoch(10)
+            .setPreviousMemberEpoch(9)
+            .setTargetMemberEpoch(11)
+            .setAssignedPartitions(Collections.singletonList(new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
+                .setTopicId(topicId1)
+                .setPartitions(assignedPartitions)))
+            .setPartitionsPendingRevocation(Collections.singletonList(new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
+                .setTopicId(topicId2)
+                .setPartitions(Arrays.asList(3, 4, 5))))
+            .setPartitionsPendingAssignment(Collections.singletonList(new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
+                .setTopicId(topicId3)
+                .setPartitions(Arrays.asList(6, 7, 8))));
+        String memberId = Uuid.randomUuid().toString();
+        String clientId = "clientId";
+        String instanceId = "instanceId";
+        String rackId = "rackId";
+        String clientHost = "clientHost";
+        List<String> subscribedTopicNames = Arrays.asList("topic1", "topic2");
+        String subscribedTopicRegex = "topic.*";
+        ConsumerGroupMember member = new ConsumerGroupMember.Builder(memberId)
+            .updateWith(record)
+            .setClientId(clientId)
+            .setInstanceId(instanceId)
+            .setRackId(rackId)
+            .setClientHost(clientHost)
+            .setSubscribedTopicNames(subscribedTopicNames)
+            .setSubscribedTopicRegex(subscribedTopicRegex)
+            .build();
+
+        ConsumerGroupDescribeResponseData.Member consumerGroupDescribeMember = member.asConsumerGroupDescribeMember();
+
+        assertEquals(memberId, consumerGroupDescribeMember.memberId().toString());
+        assertEquals(clientId, consumerGroupDescribeMember.clientId());
+        assertEquals(instanceId, consumerGroupDescribeMember.instanceId());
+        assertEquals(rackId, consumerGroupDescribeMember.rackId());
+        assertEquals(clientHost, consumerGroupDescribeMember.clientHost());
+        assertEquals(subscribedTopicNames, consumerGroupDescribeMember.subscribedTopicNames());
+        assertEquals(subscribedTopicRegex, consumerGroupDescribeMember.subscribedTopicRegex());
+
+        assertEquals(1, consumerGroupDescribeMember.assignment().topicPartitions().size());
+        assertEquals(assignedPartitions, consumerGroupDescribeMember.assignment().topicPartitions().get(0).partitions());
     }
 }
