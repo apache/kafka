@@ -158,17 +158,17 @@ class UnifiedLogTest {
     val records = TestUtils.records(simpleRecords)
 
     val firstAppendInfo = log.appendAsLeader(records, leaderEpoch = 0)
-    assertEquals(new LogOffsetMetadata(0, 0, 0), firstAppendInfo.firstOffset.get)
+    assertEquals(0, firstAppendInfo.firstOffset)
 
     val secondAppendInfo = log.appendAsLeader(
       TestUtils.records(simpleRecords),
       leaderEpoch = 0
     )
-    assertEquals(new LogOffsetMetadata(simpleRecords.size, 0, records.sizeInBytes), secondAppendInfo.firstOffset.get)
+    assertEquals(simpleRecords.size, secondAppendInfo.firstOffset)
 
     log.roll()
     val afterRollAppendInfo =  log.appendAsLeader(TestUtils.records(simpleRecords), leaderEpoch = 0)
-    assertEquals(new LogOffsetMetadata(simpleRecords.size * 2, simpleRecords.size * 2, 0), afterRollAppendInfo.firstOffset.get)
+    assertEquals(simpleRecords.size * 2, afterRollAppendInfo.firstOffset)
   }
 
   @Test
@@ -1258,7 +1258,7 @@ class UnifiedLogTest {
     ), producerId = pid, producerEpoch = epoch, sequence = seq)
     val multiEntryAppendInfo = log.appendAsLeader(createRecords, leaderEpoch = 0)
     assertEquals(
-      multiEntryAppendInfo.lastOffset - multiEntryAppendInfo.firstOffset.get.messageOffset + 1,
+      multiEntryAppendInfo.lastOffset - multiEntryAppendInfo.firstOffset + 1,
       3,
       "should have appended 3 entries"
     )
@@ -1266,8 +1266,8 @@ class UnifiedLogTest {
     // Append a Duplicate of the tail, when the entry at the tail has multiple records.
     val dupMultiEntryAppendInfo = log.appendAsLeader(createRecords, leaderEpoch = 0)
     assertEquals(
-      multiEntryAppendInfo.firstOffset.get.messageOffset,
-      dupMultiEntryAppendInfo.firstOffset.get.messageOffset,
+      multiEntryAppendInfo.firstOffset,
+      dupMultiEntryAppendInfo.firstOffset,
       "Somehow appended a duplicate entry with multiple log records to the tail"
     )
     assertEquals(multiEntryAppendInfo.lastOffset, dupMultiEntryAppendInfo.lastOffset,
@@ -1303,8 +1303,8 @@ class UnifiedLogTest {
     val origAppendInfo = log.appendAsLeader(createRecordsWithDuplicate, leaderEpoch = 0)
     val newAppendInfo = log.appendAsLeader(createRecordsWithDuplicate, leaderEpoch = 0)
     assertEquals(
-      origAppendInfo.firstOffset.get.messageOffset,
-      newAppendInfo.firstOffset.get.messageOffset,
+      origAppendInfo.firstOffset,
+      newAppendInfo.firstOffset,
       "Inserted a duplicate records into the log"
     )
     assertEquals(origAppendInfo.lastOffset, newAppendInfo.lastOffset,
@@ -1784,7 +1784,7 @@ class UnifiedLogTest {
         log.appendAsLeader(
           TestUtils.singletonRecords(value = "hello".getBytes, timestamp = mockTime.milliseconds),
           leaderEpoch = 0
-        ).firstOffset.get.messageOffset,
+        ).firstOffset,
         "Should still be able to append and should get the logEndOffset assigned to the new append")
 
       // cleanup the log
@@ -2938,7 +2938,7 @@ class UnifiedLogTest {
       new SimpleRecord("baz".getBytes))
 
     val firstAppendInfo = log.appendAsLeader(records, leaderEpoch = 0)
-    assertEquals(firstAppendInfo.firstOffset.map[Long](_.messageOffset), log.firstUnstableOffset.asJava)
+    assertEquals(firstAppendInfo.firstOffset, log.firstUnstableOffset.asJava)
 
     // add more transactional records
     seq += 3
@@ -2946,13 +2946,13 @@ class UnifiedLogTest {
       new SimpleRecord("blah".getBytes)), leaderEpoch = 0)
 
     // LSO should not have changed
-    assertEquals(firstAppendInfo.firstOffset.map[Long](_.messageOffset), log.firstUnstableOffset.asJava)
+    assertEquals(firstAppendInfo.firstOffset, log.firstUnstableOffset.asJava)
 
     // now transaction is committed
     val commitAppendInfo = LogTestUtils.appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.COMMIT, mockTime.milliseconds())
 
     // first unstable offset is not updated until the high watermark is advanced
-    assertEquals(firstAppendInfo.firstOffset.map[Long](_.messageOffset), log.firstUnstableOffset.asJava)
+    assertEquals(firstAppendInfo.firstOffset, log.firstUnstableOffset.asJava)
     log.updateHighWatermark(commitAppendInfo.lastOffset + 1)
 
     // now there should be no first unstable offset
@@ -3345,7 +3345,7 @@ class UnifiedLogTest {
       new SimpleRecord("a".getBytes),
       new SimpleRecord("b".getBytes),
       new SimpleRecord("c".getBytes)), leaderEpoch = 0)
-    assertEquals(firstAppendInfo.firstOffset.map[Long](_.messageOffset), log.firstUnstableOffset.asJava)
+    assertEquals(firstAppendInfo.firstOffset, log.firstUnstableOffset.asJava)
 
     // mix in some non-transactional data
     log.appendAsLeader(MemoryRecords.withRecords(CompressionType.NONE,
@@ -3360,14 +3360,14 @@ class UnifiedLogTest {
       new SimpleRecord("f".getBytes)), leaderEpoch = 0)
 
     // LSO should not have changed
-    assertEquals(firstAppendInfo.firstOffset.map[Long](_.messageOffset), log.firstUnstableOffset.asJava)
+    assertEquals(firstAppendInfo.firstOffset, log.firstUnstableOffset.asJava)
 
     // now first producer's transaction is aborted
     val abortAppendInfo = LogTestUtils.appendEndTxnMarkerAsLeader(log, pid1, epoch, ControlRecordType.ABORT, mockTime.milliseconds())
     log.updateHighWatermark(abortAppendInfo.lastOffset + 1)
 
     // LSO should now point to one less than the first offset of the second transaction
-    assertEquals(secondAppendInfo.firstOffset.map[Long](_.messageOffset), log.firstUnstableOffset.asJava)
+    assertEquals(secondAppendInfo.firstOffset, log.firstUnstableOffset.asJava)
 
     // commit the second transaction
     val commitAppendInfo = LogTestUtils.appendEndTxnMarkerAsLeader(log, pid2, epoch, ControlRecordType.COMMIT, mockTime.milliseconds())
@@ -3392,7 +3392,7 @@ class UnifiedLogTest {
     val log = createLog(logDir, logConfig)
 
     val firstAppendInfo = log.appendAsLeader(records, leaderEpoch = 0)
-    assertEquals(firstAppendInfo.firstOffset.map[Long](_.messageOffset), log.firstUnstableOffset.asJava)
+    assertEquals(firstAppendInfo.firstOffset, log.firstUnstableOffset.asJava)
 
     // this write should spill to the second segment
     seq = 3
@@ -3400,7 +3400,7 @@ class UnifiedLogTest {
       new SimpleRecord("d".getBytes),
       new SimpleRecord("e".getBytes),
       new SimpleRecord("f".getBytes)), leaderEpoch = 0)
-    assertEquals(firstAppendInfo.firstOffset.map[Long](_.messageOffset), log.firstUnstableOffset.asJava)
+    assertEquals(firstAppendInfo.firstOffset, log.firstUnstableOffset.asJava)
     assertEquals(3L, log.logEndOffsetMetadata.segmentBaseOffset)
 
     // now abort the transaction

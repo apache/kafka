@@ -750,27 +750,10 @@ class ReplicaManager(val config: KafkaConfig,
         val localProduceResults = appendToLocalLog(internalTopicsAllowed = internalTopicsAllowed,
           origin, verifiedEntries, requiredAcks, requestLocal, verificationGuards.toMap)
         debug("Produce to local log in %d ms".format(time.milliseconds - sTime))
-
-        def produceStatusResult(appendResult: Map[TopicPartition, LogAppendResult],
-                                useCustomMessage: Boolean): Map[TopicPartition, ProducePartitionStatus] = {
-          appendResult.map { case (topicPartition, result) =>
-            topicPartition -> ProducePartitionStatus(
-              result.info.lastOffset + 1, // required offset
-              new PartitionResponse(
-                result.error,
-                result.info.firstOffset.map[Long](_.messageOffset).orElse(-1L),
-                result.info.lastOffset,
-                result.info.logAppendTime,
-                result.info.logStartOffset,
-                result.info.recordErrors,
-                if (useCustomMessage) result.exception.get.getMessage else result.info.errorMessage
-              )
-            ) // response status
-          }
-        }
         
-        val unverifiedResults = unverifiedEntries.map {
+        val errorResults = (unverifiedEntries ++ errorsPerPartition).map {
           case (topicPartition, error) =>
+            // translate transaction coordinator errors to known producer response errors
             val finalException =
               error match {
                 case Errors.INVALID_TXN_STATE => error.exception("Partition was not added to the transaction")
@@ -787,18 +770,21 @@ class ReplicaManager(val config: KafkaConfig,
             )
         }
 
-        val errorResults = errorsPerPartition.map {
-          case (topicPartition, error) =>
-            topicPartition -> LogAppendResult(
-              LogAppendInfo.UNKNOWN_LOG_APPEND_INFO,
-              Some(error.exception())
+        val allResults = localProduceResults ++ errorResults
+        val produceStatus = allResults.map { case (topicPartition, result) =>
+          topicPartition -> ProducePartitionStatus(
+            result.info.lastOffset + 1, // required offset
+            new PartitionResponse(
+              result.error,
+              result.info.firstOffset,
+              result.info.lastOffset,
+              result.info.logAppendTime,
+              result.info.logStartOffset,
+              result.info.recordErrors,
+              result.exception.map(_.getMessage).orNull
             )
+          ) // response status
         }
-
-        val produceStatus = Set((localProduceResults, false), (unverifiedResults, true), (errorResults, false)).flatMap {
-          case (results, useCustomError) => produceStatusResult(results, useCustomError)
-        }.toMap
-        val allResults = localProduceResults ++ unverifiedResults ++ errorResults
 
         actionQueue.add {
           () => allResults.foreach { case (topicPartition, result) =>
@@ -859,7 +845,7 @@ class ReplicaManager(val config: KafkaConfig,
       val responseStatus = entriesPerPartition.map { case (topicPartition, _) =>
         topicPartition -> new PartitionResponse(
           Errors.INVALID_REQUIRED_ACKS,
-          LogAppendInfo.UNKNOWN_LOG_APPEND_INFO.firstOffset.map[Long](_.messageOffset).orElse(-1L),
+          LogAppendInfo.UNKNOWN_LOG_APPEND_INFO.firstOffset,
           RecordBatch.NO_TIMESTAMP,
           LogAppendInfo.UNKNOWN_LOG_APPEND_INFO.logStartOffset
         )
@@ -1197,7 +1183,7 @@ class ReplicaManager(val config: KafkaConfig,
 
           if (traceEnabled)
             trace(s"${records.sizeInBytes} written to log $topicPartition beginning at offset " +
-              s"${info.firstOffset.orElse(new LogOffsetMetadata(-1))} and ending at offset ${info.lastOffset}")
+              s"${info.firstOffset} and ending at offset ${info.lastOffset}")
 
           (topicPartition, LogAppendResult(info))
         } catch {
@@ -1214,7 +1200,7 @@ class ReplicaManager(val config: KafkaConfig,
             val logStartOffset = processFailedRecord(topicPartition, rve.invalidException)
             val recordErrors = rve.recordErrors
             (topicPartition, LogAppendResult(LogAppendInfo.unknownLogAppendInfoWithAdditionalInfo(
-              logStartOffset, recordErrors, rve.invalidException.getMessage), Some(rve.invalidException)))
+              logStartOffset, recordErrors), Some(rve.invalidException)))
           case t: Throwable =>
             val logStartOffset = processFailedRecord(topicPartition, t)
             (topicPartition, LogAppendResult(LogAppendInfo.unknownLogAppendInfoWithLogStartOffset(logStartOffset), Some(t)))
