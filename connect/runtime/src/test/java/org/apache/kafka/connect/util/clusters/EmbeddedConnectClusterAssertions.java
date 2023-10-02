@@ -455,47 +455,41 @@ public class EmbeddedConnectClusterAssertions {
     }
 
     /**
-     * Assert that a connector and its tasks are not running.
+     * Assert that a connector does not exist. This can be used to verify that a connector has been successfully deleted.
      *
      * @param connectorName the connector name
      * @param detailMessage the assertion message
      * @throws InterruptedException
      */
-    public void assertConnectorAndTasksAreNotRunning(String connectorName, String detailMessage)
+    public void assertConnectorDoesNotExist(String connectorName, String detailMessage)
             throws InterruptedException {
         try {
             waitForCondition(
-                () -> checkConnectorAndTasksAreNotRunning(connectorName),
+                () -> checkConnectorDoesNotExist(connectorName),
                 CONNECTOR_SETUP_DURATION_MS,
-                "At least the connector or one of its tasks is still running");
+                "The connector should not exist.");
         } catch (AssertionError e) {
             throw new AssertionError(detailMessage, e);
         }
     }
 
     /**
-     * Check whether the connector or any of its tasks are still in RUNNING state
+     * Check whether a connector exists by querying the <strong><em>GET /connectors/{connector}/status</em></strong> endpoint
      *
-     * @param connectorName the connector
-     * @return true if the connector and all the tasks are not in RUNNING state; false otherwise
+     * @param connectorName the connector name
+     * @return true if the connector does not exist; false otherwise
      */
-    protected boolean checkConnectorAndTasksAreNotRunning(String connectorName) {
-        ConnectorStateInfo info;
+    protected boolean checkConnectorDoesNotExist(String connectorName) {
         try {
-            info = connect.connectorStatus(connectorName);
+            connect.connectorStatus(connectorName);
         } catch (ConnectRestException e) {
             return e.statusCode() == Response.Status.NOT_FOUND.getStatusCode();
         } catch (Exception e) {
             log.error("Could not check connector state info.", e);
             return false;
         }
-        if (info == null) {
-            return true;
-        }
-        return !info.connector().state().equals(AbstractStatus.State.RUNNING.toString())
-                && info.tasks().stream().noneMatch(s -> s.state().equals(AbstractStatus.State.RUNNING.toString()));
+        return false;
     }
-
 
     /**
      * Assert that a connector is in the stopped state and has no tasks.

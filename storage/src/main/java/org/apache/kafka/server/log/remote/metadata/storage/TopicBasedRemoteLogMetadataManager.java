@@ -17,7 +17,6 @@
 package org.apache.kafka.server.log.remote.metadata.storage;
 
 import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.producer.RecordMetadata;
@@ -378,7 +377,7 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
         long startTimeMs = time.milliseconds();
         Admin adminClient = null;
         try {
-            adminClient = AdminClient.create(rlmmConfig.commonProperties());
+            adminClient = Admin.create(rlmmConfig.commonProperties());
             // Stop if it is already initialized or closing.
             while (!(initialized.get() || closing.get())) {
 

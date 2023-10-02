@@ -21,7 +21,6 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.RemovalCause;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
@@ -310,7 +309,7 @@ public class RemoteIndexCache implements Closeable {
         if (Files.exists(indexFile.toPath())) {
             try {
                 index = readIndex.apply(indexFile);
-            } catch (CorruptRecordException ex) {
+            } catch (CorruptIndexException ex) {
                 log.info("Error occurred while loading the stored index file {}", indexFile.getPath(), ex);
             }
         }

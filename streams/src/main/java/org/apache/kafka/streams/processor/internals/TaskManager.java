@@ -779,8 +779,7 @@ public class TaskManager {
             newTask = task.isActive() ?
                 convertActiveToStandby((StreamTask) task, inputPartitions) :
                 convertStandbyToActive((StandbyTask) task, inputPartitions);
-            newTask.initializeIfNeeded();
-            stateUpdater.add(newTask);
+            addTaskToStateUpdater(newTask);
         } catch (final RuntimeException e) {
             final TaskId taskId = task.id();
             final String uncleanMessage = String.format("Failed to recycle task %s cleanly. " +
@@ -843,13 +842,7 @@ public class TaskManager {
         final Map<TaskId, RuntimeException> taskExceptions = new LinkedHashMap<>();
         for (final Task task : tasks.drainPendingTasksToInit()) {
             try {
-                task.initializeIfNeeded();
-                stateUpdater.add(task);
-            } catch (final LockException lockException) {
-                // The state directory may still be locked by another thread, when the rebalance just happened.
-                // Retry in the next iteration.
-                log.info("Encountered lock exception. Reattempting locking the state in the next iteration.", lockException);
-                tasks.addPendingTasksToInit(Collections.singleton(task));
+                addTaskToStateUpdater(task);
             } catch (final RuntimeException e) {
                 // need to add task back to the bookkeeping to be handled by the stream thread
                 tasks.addTask(task);
@@ -858,6 +851,18 @@ public class TaskManager {
         }
 
         maybeThrowTaskExceptions(taskExceptions);
+    }
+
+    private void addTaskToStateUpdater(final Task task) {
+        try {
+            task.initializeIfNeeded();
+            stateUpdater.add(task);
+        } catch (final LockException lockException) {
+            // The state directory may still be locked by another thread, when the rebalance just happened.
+            // Retry in the next iteration.
+            log.info("Encountered lock exception. Reattempting locking the state in the next iteration.", lockException);
+            tasks.addPendingTasksToInit(Collections.singleton(task));
+        }
     }
 
     public void handleExceptionsFromStateUpdater() {
@@ -1224,9 +1229,10 @@ public class TaskManager {
      */
     private void releaseLockedUnassignedTaskDirectories() {
         final Iterator<TaskId> taskIdIterator = lockedTaskDirectories.iterator();
+        final Map<TaskId, Task> allTasks = allTasks();
         while (taskIdIterator.hasNext()) {
             final TaskId id = taskIdIterator.next();
-            if (!tasks.contains(id)) {
+            if (!allTasks.containsKey(id)) {
                 stateDirectory.unlock(id);
                 taskIdIterator.remove();
             }
@@ -1631,6 +1637,25 @@ public class TaskManager {
     }
 
     /**
+     * Resumes polling in the main consumer for all partitions for which
+     * the corresponding record queues have capacity (again).
+     */
+    public void resumePollingForPartitionsWithAvailableSpace() {
+        for (final Task t: tasks.activeTasks()) {
+            t.resumePollingForPartitionsWithAvailableSpace();
+        }
+    }
+
+    /**
+     * Fetches up-to-date lag information from the consumer.
+     */
+    public void updateLags() {
+        for (final Task t: tasks.activeTasks()) {
+            t.updateLags();
+        }
+    }
+
+    /**
      * Take records and add them to each respective task
      *
      * @param records Records, can be null
@@ -1896,9 +1921,5 @@ public class TaskManager {
     // for testing only
     void addTask(final Task task) {
         tasks.addTask(task);
-    }
-
-    TasksRegistry tasks() {
-        return tasks;
     }
 }
