@@ -31,8 +31,4 @@ public class ErrorEventHandler {
     public void handle(Throwable e) {
         backgroundEventQueue.add(new ErrorBackgroundEvent(e));
     }
-
-    public void handle(Throwable e, String message) {
-        backgroundEventQueue.add(new ErrorBackgroundEvent(e, message));
-    }
 }

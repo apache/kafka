@@ -59,8 +59,10 @@ import java.util.Collections;
  */
 public class HeartbeatRequestManager implements RequestManager {
     private final Logger logger;
-    private final int rebalanceTimeoutMs;
 
+    // Time that the group coordinator will wait on member to revoke its partitions. This is provided by the group
+    // coordinator in the heartbeat
+    private final int rebalanceTimeoutMs;
     private final CoordinatorRequestManager coordinatorRequestManager;
     private final SubscriptionState subscriptions;
     private final HeartbeatRequestState heartbeatRequestState;
@@ -136,7 +138,7 @@ public class HeartbeatRequestManager implements RequestManager {
     }
 
     private NetworkClientDelegate.UnsentRequest makeHeartbeatRequest() {
-        // TODO: We only need to send this field once unless the first request failed.
+        // TODO: We only need to send the rebalanceTimeoutMs field once unless the first request failed.
         ConsumerGroupHeartbeatRequestData data = new ConsumerGroupHeartbeatRequestData()
             .setGroupId(membershipManager.groupId())
             .setMemberEpoch(membershipManager.memberEpoch())
@@ -146,9 +148,7 @@ public class HeartbeatRequestManager implements RequestManager {
         membershipManager.groupInstanceId().ifPresent(data::setInstanceId);
 
         if (this.subscriptions.hasPatternSubscription()) {
-            // We haven't discsussed how Regex is stored in the consumer. We could do it in the subscriptionState
-            // , in the memberStateManager, or here.
-            // data.setSubscribedTopicRegex(regex)
+            // TODO: Pass the string to the GC if server side regex is used.
         } else {
             data.setSubscribedTopicNames(new ArrayList<>(this.subscriptions.subscription()));
         }
@@ -195,50 +195,57 @@ public class HeartbeatRequestManager implements RequestManager {
         switch(error) {
             case NOT_COORDINATOR:
             case COORDINATOR_NOT_AVAILABLE:
-                String message = String.format("Coordinator node %s is either not started or not valid. Retrying",
+                String message = String.format("Coordinator node %s is either not started or not valid. " +
+                        "Will attempt to find the coordinator again and retry",
                     coordinatorRequestManager.coordinator());
-                logInfo(errorMessage, response, currentTimeMs);
-                coordinatorRequestManager.markCoordinatorUnknown(response.data().errorMessage(), currentTimeMs);
+                logInfo(message, response, currentTimeMs);
+                coordinatorRequestManager.markCoordinatorUnknown(errorMessage, currentTimeMs);
                 break;
+
             case COORDINATOR_LOAD_IN_PROGRESS:
                 // retry
-                message = String.format("Heartbeat was not successful because the coordinator node %s is " +
-                    "loading."
-                    + "Retrying", coordinatorRequestManager.coordinator());
-                logInfo(errorMessage, response, currentTimeMs);
+                message = String.format("Coordinator node %s is loading. " +
+                    "Will resend a heartbeat request",
+                    coordinatorRequestManager.coordinator());
+                logInfo(message, response, currentTimeMs);
                 break;
+
             case GROUP_AUTHORIZATION_FAILED:
                 GroupAuthorizationException exception =
                     GroupAuthorizationException.forGroupId(membershipManager.groupId());
                 logger.error("GroupHeartbeatRequest failed due to group authorization failure: {}", exception.getMessage());
-                nonRetriableErrorHandler.handle(exception, errorMessage);
+                nonRetriableErrorHandler.handle(error.exception(exception.getMessage()));
                 break;
-            case INVALID_REQUEST:
-                logger.error("GroupHeartbeatRequest failed due to invalid request error: {}", errorMessage);
-                nonRetriableErrorHandler.handle(Errors.INVALID_REQUEST.exception(), errorMessage);
-                break;
-            case GROUP_MAX_SIZE_REACHED:
-                logger.error("GroupHeartbeatRequest failed due to the max group size limit: {}", errorMessage);
-                nonRetriableErrorHandler.handle(Errors.GROUP_MAX_SIZE_REACHED.exception(), errorMessage);
-                break;
-            case UNSUPPORTED_ASSIGNOR:
-                logger.error("GroupHeartbeatRequest failed due to unsupported assignor {}: {}",
-                    membershipManager.assignorSelection(), errorMessage);
-                nonRetriableErrorHandler.handle(Errors.UNSUPPORTED_ASSIGNOR.exception(), errorMessage);
-                break;
+
             case UNRELEASED_INSTANCE_ID:
                 logger.error("GroupHeartbeatRequest failed due to the instance id {} was not released: {}",
                     membershipManager.groupInstanceId().orElse("null"), errorMessage);
-                nonRetriableErrorHandler.handle(Errors.UNRELEASED_INSTANCE_ID.exception(), errorMessage);
+                nonRetriableErrorHandler.handle(Errors.UNRELEASED_INSTANCE_ID.exception(errorMessage));
                 break;
+
+            case INVALID_REQUEST:
+            case GROUP_MAX_SIZE_REACHED:
+            case UNSUPPORTED_ASSIGNOR:
+            case UNSUPPORTED_VERSION:
+                logger.error("GroupHeartbeatRequest failed due to error: {}", error);
+                nonRetriableErrorHandler.handle(error.exception(errorMessage));
+                break;
+
             case FENCED_MEMBER_EPOCH:
             case UNKNOWN_MEMBER_ID:
+                message = String.format("Get fenced for member.id: %s and epoch %s. " +
+                    "Will attempt to resend a heartbeat to rejoin the group",
+                    membershipManager.memberId(), membershipManager.memberEpoch());
+                logInfo(message, response, currentTimeMs);
                 membershipManager.transitionToFenced();
+                break;
+
             default:
                 // If the manager receives an unknown error - there could be a bug in the code or a new error code
                 logger.error("GroupHeartbeatRequest failed due to unexpected error: {}", error);
                 membershipManager.transitionToFailed();
-                nonRetriableErrorHandler.handle(error.exception(), errorMessage);
+                nonRetriableErrorHandler.handle(error.exception(errorMessage));
+                break;
         }
     }
 
