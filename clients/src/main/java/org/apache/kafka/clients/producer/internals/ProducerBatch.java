@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
+import java.util.Optional;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.RecordMetadata;
-import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.RecordBatchTooLargeException;
 import org.apache.kafka.common.header.Header;
@@ -81,9 +81,9 @@ public final class ProducerBatch {
     private boolean reopened;
 
     // Tracks the current-leader's epoch to which this batch would be sent, in the current to produce the batch.
-    private int currentLeaderEpoch;
+    private Optional<Integer> currentLeaderEpoch;
     // Tracks the attempt in which leader was changed to currentLeaderEpoch for the 1st time.
-    private int leaderChangedAttempts;
+    private int attemptsWhenLeaderLastChanged;
 
     public ProducerBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long createdMs) {
         this(tp, recordsBuilder, createdMs, false);
@@ -100,34 +100,39 @@ public final class ProducerBatch {
         this.isSplitBatch = isSplitBatch;
         float compressionRatioEstimation = CompressionRatioEstimator.estimation(topicPartition.topic(),
                                                                                 recordsBuilder.compressionType());
-        this.currentLeaderEpoch = PartitionInfo.UNKNOWN_LEADER_EPOCH;
-        this.leaderChangedAttempts = -1;
+        this.currentLeaderEpoch = Optional.empty();
+        this.attemptsWhenLeaderLastChanged = 0;
         recordsBuilder.setEstimatedCompressionRatio(compressionRatioEstimation);
     }
 
     /*
-     * Returns whether the leader epoch has changed since the last attempt.
+     * This is called to update the leader-epoch to which this batch is going to be produced in the ongoing attempt.
      * @param latestLeaderEpoch The latest leader epoch.
      * @return true if the leader has changed, otherwise false.
      */
-    boolean hasLeaderChanged(int latestLeaderEpoch) {
+    boolean maybeUpdateLeaderEpoch(Optional<Integer> latestLeaderEpoch) {
+        if (!latestLeaderEpoch.isPresent())
+            return false;
+
         boolean leaderChanged = false;
-        // Checking for leader change makes sense only from 1st retry onwards(attempt >=1).
-        log.trace("For {}, attempting to change leader, currentLeaderEpoch:{}, leaderChangedAttempts:{}, latestLeaderEpoch: {}, current Attempt: {}",
-            this, currentLeaderEpoch, leaderChangedAttempts, latestLeaderEpoch, attempts());
-        if (attempts() >= 1) {
+        int attempts = attempts();
+        log.trace("For {}, attempting to change leader, currentLeaderEpoch: {}, attemptsWhenLeaderLastChanged:{}, latestLeaderEpoch: {}, current attempt: {}",
+            this, currentLeaderEpoch.isPresent() ? currentLeaderEpoch.get() : "un-initialized", attemptsWhenLeaderLastChanged, latestLeaderEpoch.get(), attempts);
+        boolean isRetry = attempts >= 1;
+        // Checking for leader change makes sense only from 1st retry onwards(i.e attempt >=1).
+        if (isRetry) {
             // If the leader's epoch has changed, this counts as a leader change
-            if (currentLeaderEpoch != latestLeaderEpoch) {
-                leaderChangedAttempts = attempts();
+            if (!currentLeaderEpoch.equals(latestLeaderEpoch)) {
+                attemptsWhenLeaderLastChanged = attempts;
                 leaderChanged = true;
             } else {
                 // Otherwise, it's only a leader change until the first attempt is made with this leader
-                leaderChanged = attempts.get() == leaderChangedAttempts;
+                leaderChanged = attempts == attemptsWhenLeaderLastChanged;
             }
         }
         if (leaderChanged) {
-            log.debug("For {}, leaderChanged, currentLeaderEpoch:{}, leaderChangedAttempts:{}",
-                this, currentLeaderEpoch, leaderChangedAttempts);
+            log.debug("For {}, leader has changed, oldEpoch: {}, newEpoch: {}",
+                this, currentLeaderEpoch, latestLeaderEpoch);
         }
         currentLeaderEpoch = latestLeaderEpoch;
         return leaderChanged;
@@ -556,12 +561,12 @@ public final class ProducerBatch {
     }
 
     // VisibleForTesting
-    int currentLeaderEpoch() {
+    Optional<Integer> currentLeaderEpoch() {
         return currentLeaderEpoch;
     }
 
     // VisibleForTesting
-    int leaderChangedAttempts() {
-        return leaderChangedAttempts;
+    int attemptsWhenLeaderLastChanged() {
+        return attemptsWhenLeaderLastChanged;
     }
 }

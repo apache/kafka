@@ -705,7 +705,6 @@ public class RecordAccumulator {
             // synchronized block, as this lock is also used to synchronize producer threads
             // attempting to append() to a partition/batch.
 
-            int leaderEpoch = leaderAndEpoch.epoch.orElse(PartitionInfo.UNKNOWN_LEADER_EPOCH);
             synchronized (deque) {
                 // Deques are often empty in this path, esp with large partition counts,
                 // so we exit early if we can.
@@ -715,7 +714,8 @@ public class RecordAccumulator {
                 }
 
                 waitedTimeMs = batch.waitedTimeMs(nowMs);
-                backingOff = shouldBackoff(batch.hasLeaderChanged(leaderEpoch), batch, waitedTimeMs);
+                boolean hasLeaderChanged = batch.maybeUpdateLeaderEpoch(leaderAndEpoch.epoch);
+                backingOff = shouldBackoff(hasLeaderChanged, batch, waitedTimeMs);
                 backoffAttempts = batch.attempts();
                 dequeSize = deque.size();
                 full = dequeSize > 1 || batch.isFull();
@@ -868,13 +868,11 @@ public class RecordAccumulator {
             // In this case, skip sending it to the old leader, as it would return aa NO_LEADER_OR_FOLLOWER error.
             if (!leaderAndEpoch.leader.isPresent())
                 continue;
-            if (!node.equals(leaderAndEpoch.leader.get())) {
+            if (!node.equals(leaderAndEpoch.leader.get()))
                 continue;
-            }
             Deque<ProducerBatch> deque = getDeque(tp);
-            if (deque == null) {
+            if (deque == null)
                 continue;
-            }
 
             final ProducerBatch batch;
             synchronized (deque) {
@@ -885,7 +883,8 @@ public class RecordAccumulator {
 
                 // first != null
                 // Only drain the batch if it is not during backoff period.
-                if (shouldBackoff(first.hasLeaderChanged(leaderAndEpoch.epoch.orElse(PartitionInfo.UNKNOWN_LEADER_EPOCH)), first, first.waitedTimeMs(now)))
+                boolean hasLeaderChanged = first.maybeUpdateLeaderEpoch(leaderAndEpoch.epoch);
+                if (shouldBackoff(hasLeaderChanged, first, first.waitedTimeMs(now)))
                     continue;
 
                 if (size + first.estimatedSizeInBytes() > maxSize && !ready.isEmpty()) {

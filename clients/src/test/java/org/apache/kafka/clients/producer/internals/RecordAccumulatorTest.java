@@ -1468,8 +1468,8 @@ public class RecordAccumulatorTest {
                 result.readyNodes, 999999 /* maxSize */, now);
             assertTrue(batches.containsKey(node1.id()) && batches.get(node1.id()).size() == 1, "Node1 has 1 batch ready & drained");
             ProducerBatch batch = batches.get(node1.id()).get(0);
-            assertEquals(part1LeaderEpoch, batch.currentLeaderEpoch());
-            assertEquals(-1, batch.leaderChangedAttempts());
+            assertEquals(Optional.of(part1LeaderEpoch), batch.currentLeaderEpoch());
+            assertEquals(0, batch.attemptsWhenLeaderLastChanged());
             // Re-enqueue batch for subsequent retries & test-cases
             accum.reenqueue(batch, now);
         }
@@ -1506,8 +1506,8 @@ public class RecordAccumulatorTest {
                 result.readyNodes, 999999 /* maxSize */, now);
             assertTrue(batches.containsKey(node1.id()) && batches.get(node1.id()).size() == 1, "Node1 has 1 batch ready & drained");
             ProducerBatch batch = batches.get(node1.id()).get(0);
-            assertEquals(part1LeaderEpoch, batch.currentLeaderEpoch());
-            assertEquals(1, batch.leaderChangedAttempts());
+            assertEquals(Optional.of(part1LeaderEpoch), batch.currentLeaderEpoch());
+            assertEquals(1, batch.attemptsWhenLeaderLastChanged());
 
             // Re-enqueue batch for subsequent retries/test-cases.
             accum.reenqueue(batch, now);
@@ -1530,8 +1530,8 @@ public class RecordAccumulatorTest {
                 result.readyNodes, 999999 /* maxSize */, now);
             assertTrue(batches.containsKey(node1.id()) && batches.get(node1.id()).size() == 1, "Node1 has 1 batch ready & drained");
             ProducerBatch batch = batches.get(node1.id()).get(0);
-            assertEquals(part1LeaderEpoch, batch.currentLeaderEpoch());
-            assertEquals(1, batch.leaderChangedAttempts());
+            assertEquals(Optional.of(part1LeaderEpoch), batch.currentLeaderEpoch());
+            assertEquals(1, batch.attemptsWhenLeaderLastChanged());
 
             // Re-enqueue batch for subsequent retries/test-cases.
             accum.reenqueue(batch, now);
@@ -1555,8 +1555,8 @@ public class RecordAccumulatorTest {
                 result.readyNodes, 999999 /* maxSize */, now);
             assertTrue(batches.containsKey(node1.id()) && batches.get(node1.id()).size() == 1, "Node1 has 1 batch ready & drained");
             ProducerBatch batch = batches.get(node1.id()).get(0);
-            assertEquals(part1LeaderEpoch, batch.currentLeaderEpoch());
-            assertEquals(3, batch.leaderChangedAttempts());
+            assertEquals(Optional.of(part1LeaderEpoch), batch.currentLeaderEpoch());
+            assertEquals(3, batch.attemptsWhenLeaderLastChanged());
 
             // Re-enqueue batch for subsequent retries/test-cases.
             accum.reenqueue(batch, now);

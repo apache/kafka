@@ -20,7 +20,6 @@ package org.apache.kafka.common;
  * This is used to describe per-partition state in the MetadataResponse.
  */
 public class PartitionInfo {
-    public static final int UNKNOWN_LEADER_EPOCH = -1;
     private final String topic;
     private final int partition;
     private final Node leader;
