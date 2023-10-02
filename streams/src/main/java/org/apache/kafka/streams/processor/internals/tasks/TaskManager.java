@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals.tasks;
 
+import java.time.Duration;
 import java.util.Map;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -59,7 +60,7 @@ public interface TaskManager {
     KafkaFuture<Void> lockTasks(final Set<TaskId> taskIds);
 
     /**
-     * Lock all of the managed active tasks from the task manager. Similar to {@link #lockTasks(Set)}.
+     * Lock all the managed active tasks from the task manager. Similar to {@link #lockTasks(Set)}.
      *
      * This method does not block, instead a future is returned.
      */
@@ -71,7 +72,7 @@ public interface TaskManager {
     void unlockTasks(final Set<TaskId> taskIds);
 
     /**
-     * Unlock all of the managed active tasks from the task manager. Similar to {@link #unlockTasks(Set)}.
+     * Unlock all the managed active tasks from the task manager. Similar to {@link #unlockTasks(Set)}.
      */
     void unlockAllTasks();
 
@@ -120,13 +121,33 @@ public interface TaskManager {
     Map<TaskId, StreamsException> drainUncaughtExceptions();
 
     /**
+     * Can be used to check if a specific task has an uncaught exception.
+     *
+     * @param taskId the task ID to check for
+     */
+    boolean hasUncaughtException(final TaskId taskId);
+
+    /**
      * Signals that at least one task has become processable, e.g. because it was resumed or new records may be available.
      */
-    void signalProcessableTasks();
+    void signalTaskExecutors();
 
     /**
      * Blocks until unassigned processable tasks may be available.
      */
     void awaitProcessableTasks() throws InterruptedException;
+
+    /**
+     * Starts all threads associated with this task manager.
+     */
+    void startTaskExecutors();
+
+    /**
+     * Shuts down all threads associated with this task manager.
+     * All tasks will be unlocked and unassigned by the end of this.
+     *
+     * @param duration Time to wait for each thread to shut down.
+     */
+    void shutdown(final Duration duration);
 
 }

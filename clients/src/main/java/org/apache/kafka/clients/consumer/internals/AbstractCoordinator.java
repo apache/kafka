@@ -511,7 +511,10 @@ public abstract class AbstractCoordinator implements Closeable {
                     final String fullReason = String.format("rebalance failed due to '%s' (%s)",
                         exception.getMessage(),
                         simpleName);
-                    requestRejoin(shortReason, fullReason);
+                    // Don't need to request rejoin again for MemberIdRequiredException since we've done that in JoinGroupResponseHandler
+                    if (!(exception instanceof MemberIdRequiredException)) {
+                        requestRejoin(shortReason, fullReason);
+                    }
                 }
 
                 if (exception instanceof UnknownMemberIdException ||

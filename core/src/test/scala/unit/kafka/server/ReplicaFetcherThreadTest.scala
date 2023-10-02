@@ -749,9 +749,10 @@ class ReplicaFetcherThreadTest {
     val log: UnifiedLog = mock(classOf[UnifiedLog])
     val partition: Partition = mock(classOf[Partition])
     val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
+    val lastFetchedEpoch = 2
 
     when(log.highWatermark).thenReturn(0)
-    when(log.latestEpoch).thenReturn(Some(0))
+    when(log.latestEpoch).thenReturn(Some(lastFetchedEpoch))
     when(log.endOffsetForEpoch(0)).thenReturn(Some(new OffsetAndEpoch(0, 0)))
     when(log.logEndOffset).thenReturn(0)
     when(log.maybeUpdateHighWatermark(0)).thenReturn(None)
@@ -835,6 +836,7 @@ class ReplicaFetcherThreadTest {
 
     // Lag is set to Some(0).
     assertEquals(Some(0), thread.fetchState(t1p0).flatMap(_.lag))
+    assertEquals(Some(lastFetchedEpoch), thread.fetchState(t1p0).flatMap(_.lastFetchedEpoch))
   }
 
   @Test

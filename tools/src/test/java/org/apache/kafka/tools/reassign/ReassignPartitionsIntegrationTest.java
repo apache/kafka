@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.tools.reassign;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
+import kafka.admin.ReassignPartitionsCommand;
 import kafka.cluster.Partition;
 import kafka.log.UnifiedLog;
 import kafka.server.HostedPartition;
@@ -42,7 +42,6 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.tools.TerseException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -50,12 +49,11 @@ import org.junit.jupiter.params.provider.ValueSource;
 import scala.None$;
 import scala.Option;
 import scala.Some$;
+import scala.Tuple2;
 import scala.collection.JavaConverters;
 import scala.collection.Seq;
 
 import java.io.Closeable;
-import java.io.File;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -74,15 +72,21 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static kafka.admin.ReassignPartitionsCommand.brokerLevelFollowerThrottle;
+import static kafka.admin.ReassignPartitionsCommand.brokerLevelLeaderThrottle;
+import static kafka.admin.ReassignPartitionsCommand.brokerLevelLogDirThrottle;
+import static kafka.admin.ReassignPartitionsCommand.brokerLevelThrottles;
+import static kafka.admin.ReassignPartitionsCommand.cancelAssignment;
+import static kafka.admin.ReassignPartitionsCommand.executeAssignment;
+import static kafka.admin.ReassignPartitionsCommand.verifyAssignment;
 import static org.apache.kafka.server.common.MetadataVersion.IBP_2_7_IV1;
-import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.BROKER_LEVEL_THROTTLES;
-import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.cancelAssignment;
-import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.executeAssignment;
-import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.verifyAssignment;
+import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
+import static org.apache.kafka.tools.ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@SuppressWarnings("ClassFanOutComplexity")
 @Timeout(300)
 public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
     ReassignPartitionsTestCluster cluster;
@@ -95,12 +99,19 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
     }
 
     private final Map<Integer, Map<String, Long>> unthrottledBrokerConfigs = new HashMap<>(); {
-        IntStream.range(0, 4).forEach(brokerId ->
-            unthrottledBrokerConfigs.put(brokerId, BROKER_LEVEL_THROTTLES.stream()
-                .collect(Collectors.toMap(throttle -> throttle, throttle -> -1L))));
+        IntStream.range(0, 4).forEach(brokerId -> {
+            Map<String, Long> brokerConfig = new HashMap<>();
+
+            brokerLevelThrottles().foreach(throttle -> {
+                brokerConfig.put(throttle, -1L);
+                return null;
+            });
+
+            unthrottledBrokerConfigs.put(brokerId, brokerConfig);
+        });
     }
 
-    @ParameterizedTest(name = "{displayName}.quorum={0}")
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
     @ValueSource(strings = {"zk", "kraft"})
     public void testReassignment(String quorum) throws Exception {
         cluster = new ReassignPartitionsTestCluster(Collections.emptyMap(), Collections.emptyMap());
@@ -108,7 +119,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
         executeAndVerifyReassignment();
     }
 
-    @ParameterizedTest(name = "{displayName}.quorum={0}")
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
     @ValueSource(strings = "zk") // Note: KRaft requires AlterPartition
     public void testReassignmentWithAlterPartitionDisabled(String quorum) throws Exception {
         // Test reassignment when the IBP is on an older version which does not use
@@ -121,7 +132,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
         executeAndVerifyReassignment();
     }
 
-    @ParameterizedTest(name = "{displayName}.quorum={0}")
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
     @ValueSource(strings = "zk") // Note: KRaft requires AlterPartition
     public void testReassignmentCompletionDuringPartialUpgrade(String quorum) throws Exception {
         // Test reassignment during a partial upgrade when some brokers are relying on
@@ -147,7 +158,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
         executeAndVerifyReassignment();
     }
 
-    private void executeAndVerifyReassignment() throws ExecutionException, InterruptedException, JsonProcessingException, TerseException {
+    private void executeAndVerifyReassignment() throws ExecutionException, InterruptedException {
         String assignment = "{\"version\":1,\"partitions\":" +
             "[{\"topic\":\"foo\",\"partition\":0,\"replicas\":[0,1,3],\"log_dirs\":[\"any\",\"any\",\"any\"]}," +
             "{\"topic\":\"bar\",\"partition\":0,\"replicas\":[3,2,0],\"log_dirs\":[\"any\",\"any\",\"any\"]}" +
@@ -172,8 +183,8 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
         finalAssignment.put(foo0, new PartitionReassignmentState(Arrays.asList(0, 1, 3), Arrays.asList(0, 1, 3), true));
         finalAssignment.put(bar0, new PartitionReassignmentState(Arrays.asList(3, 2, 0), Arrays.asList(3, 2, 0), true));
 
-        VerifyAssignmentResult verifyAssignmentResult = runVerifyAssignment(cluster.adminClient, assignment, false);
-        assertFalse(verifyAssignmentResult.movesOngoing);
+        kafka.admin.ReassignPartitionsCommand.VerifyAssignmentResult verifyAssignmentResult = runVerifyAssignment(cluster.adminClient, assignment, false);
+        assertFalse(verifyAssignmentResult.movesOngoing());
 
         // Wait for the assignment to complete
         waitForVerifyAssignment(cluster.adminClient, assignment, false,
@@ -187,7 +198,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
         verifyReplicaDeleted(bar0, 1);
     }
 
-    @ParameterizedTest(name = "{displayName}.quorum={0}")
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
     @ValueSource(strings = {"zk", "kraft"})
     public void testHighWaterMarkAfterPartitionReassignment(String quorum) throws Exception {
         cluster = new ReassignPartitionsTestCluster(Collections.emptyMap(), Collections.emptyMap());
@@ -212,12 +223,12 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
         TestUtils.waitUntilTrue(() ->
                 cluster.servers.get(3).replicaManager().onlinePartition(part).
                     map(Partition::leaderLogIfLocal).isDefined(),
-            () -> "broker 3 should be the new leader", org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS, 10L);
+            () -> "broker 3 should be the new leader", DEFAULT_MAX_WAIT_MS, 10L);
         assertEquals(123L, cluster.servers.get(3).replicaManager().localLogOrException(part).highWatermark(),
             "Expected broker 3 to have the correct high water mark for the partition.");
     }
 
-    @ParameterizedTest(name = "{displayName}.quorum={0}")
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
     @ValueSource(strings = {"zk", "kraft"})
     public void testAlterReassignmentThrottle(String quorum) throws Exception {
         cluster = new ReassignPartitionsTestCluster(Collections.emptyMap(), Collections.emptyMap());
@@ -254,7 +265,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
     /**
      * Test running a reassignment with the interBrokerThrottle set.
      */
-    @ParameterizedTest(name = "{displayName}.quorum={0}")
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
     @ValueSource(strings = {"zk", "kraft"})
     public void testThrottledReassignment(String quorum) throws Exception {
         cluster = new ReassignPartitionsTestCluster(Collections.emptyMap(), Collections.emptyMap());
@@ -272,7 +283,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
             new PartitionReassignmentState(Arrays.asList(0, 1, 2), Arrays.asList(0, 3, 2), true));
         initialAssignment.put(new TopicPartition("baz", 2),
             new PartitionReassignmentState(Arrays.asList(0, 2, 1), Arrays.asList(3, 2, 1), true));
-        assertEquals(new VerifyAssignmentResult(initialAssignment), runVerifyAssignment(cluster.adminClient, assignment, false));
+        assertEquals(asScala(new VerifyAssignmentResult(initialAssignment)), runVerifyAssignment(cluster.adminClient, assignment, false));
         assertEquals(unthrottledBrokerConfigs, describeBrokerLevelThrottles(unthrottledBrokerConfigs.keySet()));
 
         // Execute the assignment
@@ -289,24 +300,23 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
         // Wait for the assignment to complete
         TestUtils.waitUntilTrue(
             () -> {
-                try {
-                    // Check the reassignment status.
-                    VerifyAssignmentResult result = runVerifyAssignment(cluster.adminClient, assignment, true);
+                // Check the reassignment status.
+                kafka.admin.ReassignPartitionsCommand.VerifyAssignmentResult result = runVerifyAssignment(cluster.adminClient, assignment, true);
 
-                    if (!result.partsOngoing) {
-                        return true;
-                    } else {
-                        assertFalse(result.partStates.values().stream().allMatch(v -> v.done), "Expected at least one partition reassignment to be ongoing when result = " + result);
-                        assertEquals(Arrays.asList(0, 3, 2), result.partStates.get(new TopicPartition("foo", 0)).targetReplicas);
-                        assertEquals(Arrays.asList(3, 2, 1), result.partStates.get(new TopicPartition("baz", 2)).targetReplicas);
-                        System.out.println("Current result: " + result);
-                        waitForInterBrokerThrottle(Arrays.asList(0, 1, 2, 3), interBrokerThrottle);
-                        return false;
-                    }
-                } catch (ExecutionException | InterruptedException | JsonProcessingException e) {
-                    throw new RuntimeException(e);
+                if (!result.partsOngoing()) {
+                    return true;
+                } else {
+                    assertFalse(
+                        result.partStates().values().forall(ReassignPartitionsCommand.PartitionReassignmentState::done),
+                        "Expected at least one partition reassignment to be ongoing when result = " + result
+                    );
+                    assertEquals(seq(0, 3, 2), result.partStates().get(new TopicPartition("foo", 0)).get().targetReplicas());
+                    assertEquals(seq(3, 2, 1), result.partStates().get(new TopicPartition("baz", 2)).get().targetReplicas());
+                    System.out.println("Current result: " + result);
+                    waitForInterBrokerThrottle(Arrays.asList(0, 1, 2, 3), interBrokerThrottle);
+                    return false;
                 }
-            }, () -> "Expected reassignment to complete.", org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS, 100L);
+            }, () -> "Expected reassignment to complete.", DEFAULT_MAX_WAIT_MS, 100L);
         waitForVerifyAssignment(cluster.adminClient, assignment, true,
             new VerifyAssignmentResult(finalAssignment));
         // The throttles should still have been preserved, since we ran with --preserve-throttles
@@ -317,7 +327,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
         waitForBrokerLevelThrottles(unthrottledBrokerConfigs);
     }
 
-    @ParameterizedTest(name = "{displayName}.quorum={0}")
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
     @ValueSource(strings = {"zk", "kraft"})
     public void testProduceAndConsumeWithReassignmentInProgress(String quorum) throws Exception {
         cluster = new ReassignPartitionsTestCluster(Collections.emptyMap(), Collections.emptyMap());
@@ -335,8 +345,8 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
             false,
             500,
             SecurityProtocol.PLAINTEXT,
-            None$.<File>empty(),
-            None$.<Properties>empty(),
+            None$.empty(),
+            None$.empty(),
             new ByteArrayDeserializer(),
             new ByteArrayDeserializer()
         );
@@ -344,11 +354,11 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
         TopicPartition part = new TopicPartition("baz", 2);
         try {
             consumer.assign(Collections.singleton(part));
-            TestUtils.pollUntilAtLeastNumRecords(consumer, 100, org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS);
+            TestUtils.pollUntilAtLeastNumRecords(consumer, 100, DEFAULT_MAX_WAIT_MS);
         } finally {
             consumer.close();
         }
-        TestUtils.removeReplicationThrottleForPartitions(cluster.adminClient, toSeq(Arrays.asList(0, 1, 2, 3)), toSet(Collections.singleton(part)));
+        TestUtils.removeReplicationThrottleForPartitions(cluster.adminClient, seq(0, 1, 2, 3), set(part));
         Map<TopicPartition, PartitionReassignmentState> finalAssignment = Collections.singletonMap(part,
             new PartitionReassignmentState(Arrays.asList(3, 2, 1), Arrays.asList(3, 2, 1), true));
         waitForVerifyAssignment(cluster.adminClient, assignment, false,
@@ -358,7 +368,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
     /**
      * Test running a reassignment and then cancelling it.
      */
-    @ParameterizedTest(name = "{displayName}.quorum={0}")
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
     @ValueSource(strings = {"zk", "kraft"})
     public void testCancellation(String quorum) throws Exception {
         TopicPartition foo0 = new TopicPartition("foo", 0);
@@ -388,21 +398,21 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
         waitForVerifyAssignment(cluster.adminClient, assignment, true,
             new VerifyAssignmentResult(partStates, true, Collections.emptyMap(), false));
         // Cancel the reassignment.
-        assertEquals(new Tuple2<>(new HashSet<>(Arrays.asList(foo0, baz1)), Collections.emptySet()), runCancelAssignment(cluster.adminClient, assignment, true));
+        assertEquals(new Tuple2<>(set(foo0, baz1), set()), runCancelAssignment(cluster.adminClient, assignment, true));
         // Broker throttles are still active because we passed --preserve-throttles
         waitForInterBrokerThrottle(Arrays.asList(0, 1, 2, 3), interBrokerThrottle);
         // Cancelling the reassignment again should reveal nothing to cancel.
-        assertEquals(new Tuple2<>(Collections.emptySet(), Collections.emptySet()), runCancelAssignment(cluster.adminClient, assignment, false));
+        assertEquals(new Tuple2<>(set(), set()), runCancelAssignment(cluster.adminClient, assignment, false));
         // This time, the broker throttles were removed.
         waitForBrokerLevelThrottles(unthrottledBrokerConfigs);
         // Verify that there are no ongoing reassignments.
-        assertFalse(runVerifyAssignment(cluster.adminClient, assignment, false).partsOngoing);
+        assertFalse(runVerifyAssignment(cluster.adminClient, assignment, false).partsOngoing());
         // Verify that the partition is removed from cancelled replicas
         verifyReplicaDeleted(foo0, 3);
         verifyReplicaDeleted(baz1, 3);
     }
 
-    @ParameterizedTest(name = "{displayName}.quorum={0}")
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
     @ValueSource(strings = {"zk", "kraft"})
     public void testCancellationWithAddingReplicaInIsr(String quorum) throws Exception {
         TopicPartition foo0 = new TopicPartition("foo", 0);
@@ -419,8 +429,8 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
         // We will throttle replica 4 so that only replica 3 joins the ISR
         TestUtils.setReplicationThrottleForPartitions(
             cluster.adminClient,
-            toSeq(Collections.singleton(4)),
-            toSet(Collections.singleton(foo0)),
+            seq(4),
+            set(foo0),
             1
         );
 
@@ -433,13 +443,13 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
             -1L
         );
         TestUtils.waitUntilTrue(
-            () -> Objects.equals(TestUtils.currentIsr(cluster.adminClient, foo0), toSet(Arrays.asList(0, 1, 2, 3))),
+            () -> Objects.equals(TestUtils.currentIsr(cluster.adminClient, foo0), set(0, 1, 2, 3)),
             () -> "Timed out while waiting for replica 3 to join the ISR",
-            org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS, 100L
+            DEFAULT_MAX_WAIT_MS, 100L
         );
 
         // Now cancel the assignment and verify that the partition is removed from cancelled replicas
-        assertEquals(new Tuple2<>(Collections.singleton(foo0), Collections.emptySet()), runCancelAssignment(cluster.adminClient, assignment, true));
+        assertEquals(new Tuple2<>(set(foo0), set()), runCancelAssignment(cluster.adminClient, assignment, true));
         verifyReplicaDeleted(foo0, 3);
         verifyReplicaDeleted(foo0, 4);
     }
@@ -448,28 +458,32 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
         TopicPartition topicPartition,
         Integer replicaId
     ) {
-        TestUtils.waitUntilTrue(() -> {
+        TestUtils.waitUntilTrue(
+            () -> {
                 KafkaBroker server = cluster.servers.get(replicaId);
                 HostedPartition partition = server.replicaManager().getPartition(topicPartition);
                 Option<UnifiedLog> log = server.logManager().getLog(topicPartition, false);
                 return partition == HostedPartition.None$.MODULE$ && log.isEmpty();
-            }, () -> "Timed out waiting for replica " + replicaId + " of " + topicPartition + " to be deleted",
-            org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS, 100L);
+            },
+            () -> "Timed out waiting for replica " + replicaId + " of " + topicPartition + " to be deleted",
+            DEFAULT_MAX_WAIT_MS,
+            100L
+        );
     }
 
     private void waitForLogDirThrottle(Set<Integer> throttledBrokers, Long logDirThrottle) {
         Map<String, Long> throttledConfigMap = new HashMap<>();
-        throttledConfigMap.put(ReassignPartitionsCommand.BROKER_LEVEL_LEADER_THROTTLE, -1L);
-        throttledConfigMap.put(ReassignPartitionsCommand.BROKER_LEVEL_FOLLOWER_THROTTLE, -1L);
-        throttledConfigMap.put(ReassignPartitionsCommand.BROKER_LEVEL_LOG_DIR_THROTTLE, logDirThrottle);
+        throttledConfigMap.put(brokerLevelLeaderThrottle(), -1L);
+        throttledConfigMap.put(brokerLevelFollowerThrottle(), -1L);
+        throttledConfigMap.put(brokerLevelLogDirThrottle(), logDirThrottle);
         waitForBrokerThrottles(throttledBrokers, throttledConfigMap);
     }
 
     private void waitForInterBrokerThrottle(List<Integer> throttledBrokers, Long interBrokerThrottle) {
         Map<String, Long> throttledConfigMap = new HashMap<>();
-        throttledConfigMap.put(ReassignPartitionsCommand.BROKER_LEVEL_LEADER_THROTTLE, interBrokerThrottle);
-        throttledConfigMap.put(ReassignPartitionsCommand.BROKER_LEVEL_FOLLOWER_THROTTLE, interBrokerThrottle);
-        throttledConfigMap.put(ReassignPartitionsCommand.BROKER_LEVEL_LOG_DIR_THROTTLE, -1L);
+        throttledConfigMap.put(brokerLevelLeaderThrottle(), interBrokerThrottle);
+        throttledConfigMap.put(brokerLevelFollowerThrottle(), interBrokerThrottle);
+        throttledConfigMap.put(brokerLevelLogDirThrottle(), -1L);
         waitForBrokerThrottles(throttledBrokers, throttledConfigMap);
     }
 
@@ -494,7 +508,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
                 throw new RuntimeException(e);
             }
         }, () -> "timed out waiting for broker throttle to become " + targetThrottles + ".  " +
-            "Latest throttles were " + curThrottles.get(), org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS, 25);
+            "Latest throttles were " + curThrottles.get(), DEFAULT_MAX_WAIT_MS, 25);
     }
 
     /**
@@ -512,9 +526,10 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
                 .get();
 
             Map<String, Long> throttles = new HashMap<>();
-            BROKER_LEVEL_THROTTLES.stream().forEach(throttleName -> {
+            brokerLevelThrottles().foreach(throttleName -> {
                 String configValue = Optional.ofNullable(brokerConfigs.get(throttleName)).map(ConfigEntry::value).orElse("-1");
                 throttles.put(throttleName, Long.parseLong(configValue));
+                return null;
             });
             results.put(brokerId, throttles);
         }
@@ -524,7 +539,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
     /**
      * Test moving partitions between directories.
      */
-    @ParameterizedTest(name = "{displayName}.quorum={0}")
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
     @ValueSource(strings = "zk") // JBOD not yet implemented for KRaft
     public void testLogDirReassignment(String quorum) throws Exception {
         TopicPartition topicPartition = new TopicPartition("foo", 0);
@@ -557,7 +572,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
         cluster.adminClient.incrementalAlterConfigs(Collections.singletonMap(
                 new ConfigResource(ConfigResource.Type.BROKER, "0"),
                 Collections.singletonList(new AlterConfigOp(
-                    new ConfigEntry(ReassignPartitionsCommand.BROKER_LEVEL_LOG_DIR_THROTTLE, ""), AlterConfigOp.OpType.DELETE))))
+                    new ConfigEntry(brokerLevelLogDirThrottle(), ""), AlterConfigOp.OpType.DELETE))))
             .all().get();
         waitForBrokerLevelThrottles(unthrottledBrokerConfigs);
 
@@ -574,7 +589,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
         assertEquals(reassignment.targetDir, info1.curLogDirs.getOrDefault(topicPartition, ""));
     }
 
-    @ParameterizedTest(name = "{displayName}.quorum={0}")
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
     @ValueSource(strings = "zk") // JBOD not yet implemented for KRaft
     public void testAlterLogDirReassignmentThrottle(String quorum) throws Exception {
         TopicPartition topicPartition = new TopicPartition("foo", 0);
@@ -608,7 +623,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
             ), false));
     }
 
-    class LogDirReassignment {
+    static class LogDirReassignment {
         final String json;
         final String currentDir;
         final String targetDir;
@@ -657,8 +672,8 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
 
 
 
-    private VerifyAssignmentResult runVerifyAssignment(Admin adminClient, String jsonString,
-                                                       Boolean preserveThrottles) throws ExecutionException, InterruptedException, JsonProcessingException {
+    private kafka.admin.ReassignPartitionsCommand.VerifyAssignmentResult runVerifyAssignment(Admin adminClient, String jsonString,
+                                                       Boolean preserveThrottles) {
         System.out.println("==> verifyAssignment(adminClient, jsonString=" + jsonString);
         return verifyAssignment(adminClient, jsonString, preserveThrottles);
     }
@@ -667,24 +682,21 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
                                          String jsonString,
                                          Boolean preserveThrottles,
                                          VerifyAssignmentResult expectedResult) {
-        final VerifyAssignmentResult[] latestResult = {null};
+        final kafka.admin.ReassignPartitionsCommand.VerifyAssignmentResult expectedResult0 = asScala(expectedResult);
+        final kafka.admin.ReassignPartitionsCommand.VerifyAssignmentResult[] latestResult = {null};
         TestUtils.waitUntilTrue(
             () -> {
-                try {
-                    latestResult[0] = runVerifyAssignment(adminClient, jsonString, preserveThrottles);
-                } catch (ExecutionException | InterruptedException | JsonProcessingException e) {
-                    throw new RuntimeException(e);
-                }
-                return expectedResult.equals(latestResult[0]);
+                latestResult[0] = runVerifyAssignment(adminClient, jsonString, preserveThrottles);
+                return expectedResult0.equals(latestResult[0]);
             }, () -> "Timed out waiting for verifyAssignment result " + expectedResult + ".  " +
-                "The latest result was " + latestResult[0], org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS, 10L);
+                "The latest result was " + latestResult[0], DEFAULT_MAX_WAIT_MS, 10L);
     }
 
     private void runExecuteAssignment(Admin adminClient,
                                       Boolean additional,
                                       String reassignmentJson,
                                       Long interBrokerThrottle,
-                                      Long replicaAlterLogDirsThrottle) throws ExecutionException, InterruptedException, JsonProcessingException, TerseException {
+                                      Long replicaAlterLogDirsThrottle) {
         System.out.println("==> executeAssignment(adminClient, additional=" + additional + ", " +
             "reassignmentJson=" + reassignmentJson + ", " +
             "interBrokerThrottle=" + interBrokerThrottle + ", " +
@@ -693,12 +705,16 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
             interBrokerThrottle, replicaAlterLogDirsThrottle, 10000L, Time.SYSTEM);
     }
 
-    private Tuple2<Set<TopicPartition>, Set<TopicPartitionReplica>> runCancelAssignment(Admin adminClient, String jsonString, Boolean preserveThrottles) throws ExecutionException, InterruptedException, JsonProcessingException, TerseException {
+    private Tuple2<scala.collection.immutable.Set<TopicPartition>, scala.collection.immutable.Set<TopicPartitionReplica>> runCancelAssignment(
+        Admin adminClient,
+        String jsonString,
+        Boolean preserveThrottles
+    ) {
         System.out.println("==> cancelAssignment(adminClient, jsonString=" + jsonString);
         return cancelAssignment(adminClient, jsonString, preserveThrottles, 10000L, Time.SYSTEM);
     }
 
-    class BrokerDirs {
+    static class BrokerDirs {
         final DescribeLogDirsResult result;
         final int brokerId;
 
@@ -724,10 +740,6 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
     }
 
     class ReassignPartitionsTestCluster implements Closeable {
-        private final Map<String, String> configOverrides;
-
-        private final Map<Integer, Map<String, String>> brokerConfigOverrides;
-
         private final List<KafkaConfig> brokerConfigs = new ArrayList<>();
 
         private final Map<Integer, String> brokers = new HashMap<>(); {
@@ -744,16 +756,13 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
             topics.put("baz", Arrays.asList(Arrays.asList(1, 0, 2), Arrays.asList(2, 0, 1), Arrays.asList(0, 2, 1)));
         }
 
-        private List<KafkaBroker> servers = new ArrayList<>();
+        private final List<KafkaBroker> servers = new ArrayList<>();
 
         private String brokerList;
 
         private Admin adminClient;
 
         public ReassignPartitionsTestCluster(Map<String, String> configOverrides, Map<Integer, Map<String, String>> brokerConfigOverrides) {
-            this.configOverrides = configOverrides;
-            this.brokerConfigOverrides = brokerConfigOverrides;
-
             brokers.forEach((brokerId, rack) -> {
                 Properties config = TestUtils.createBrokerConfig(
                     brokerId,
@@ -801,8 +810,8 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
         }
 
         public void createTopics() throws ExecutionException, InterruptedException {
-            TestUtils.waitUntilBrokerMetadataIsPropagated(toSeq(servers), org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS);
-            brokerList = TestUtils.plaintextBootstrapServers(toSeq(servers));
+            TestUtils.waitUntilBrokerMetadataIsPropagated(seq(servers), DEFAULT_MAX_WAIT_MS);
+            brokerList = TestUtils.plaintextBootstrapServers(seq(servers));
 
             adminClient = Admin.create(Collections.singletonMap(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList));
 
@@ -817,13 +826,11 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
                 }
                 return new NewTopic(e.getKey(), partMap);
             }).collect(Collectors.toList())).all().get();
-            topics.forEach((topicName, parts) -> {
-                TestUtils.waitForAllPartitionsMetadata(toSeq(servers), topicName, parts.size());
-            });
+            topics.forEach((topicName, parts) -> TestUtils.waitForAllPartitionsMetadata(seq(servers), topicName, parts.size()));
 
             if (isKRaftTest()) {
                 TestUtils.ensureConsistentKRaftMetadata(
-                    toSeq(cluster.servers),
+                    seq(cluster.servers),
                     controllerServer(),
                     "Timeout waiting for controller metadata propagating to brokers"
                 );
@@ -834,27 +841,84 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
             List<ProducerRecord<byte[], byte[]>> records = IntStream.range(0, numMessages).mapToObj(i ->
                 new ProducerRecord<byte[], byte[]>(topic, partition,
                     null, new byte[10000])).collect(Collectors.toList());
-            TestUtils.produceMessages(toSeq(servers), toSeq(records), -1);
+            TestUtils.produceMessages(seq(servers), seq(records), -1);
         }
 
         @Override
-        public void close() throws IOException {
+        public void close() {
             brokerList = null;
             Utils.closeQuietly(adminClient, "adminClient");
             adminClient = null;
             try {
-                TestUtils.shutdownServers(toSeq(servers), true);
+                TestUtils.shutdownServers(seq(servers), true);
             } finally {
                 servers.clear();
             }
         }
     }
 
-    private static <T> Seq<T> toSeq(Collection<T> col) {
-        return JavaConverters.asScalaIteratorConverter(col.iterator()).asScala().toSeq();
+    private ReassignPartitionsCommand.VerifyAssignmentResult asScala(VerifyAssignmentResult res) {
+        Map<TopicPartition, ReassignPartitionsCommand.PartitionReassignmentState> partStates = new HashMap<>();
+        res.partStates.forEach((tp, state) -> partStates.put(tp, asScala(state)));
+
+        Map<TopicPartitionReplica, ReassignPartitionsCommand.LogDirMoveState> moveStates = new HashMap<>();
+        res.moveStates.forEach((tpr, state) -> moveStates.put(tpr, asScala(state)));
+
+        return new ReassignPartitionsCommand.VerifyAssignmentResult(asScala(partStates), res.partsOngoing, asScala(moveStates), res.movesOngoing);
     }
 
-    private static <T> scala.collection.immutable.Set<T> toSet(Collection<T> set) {
-        return JavaConverters.asScalaIteratorConverter(set.iterator()).asScala().toSet();
+    @SuppressWarnings({"unchecked"})
+    private ReassignPartitionsCommand.PartitionReassignmentState asScala(PartitionReassignmentState state) {
+        return new ReassignPartitionsCommand.PartitionReassignmentState(
+            seq((List) state.currentReplicas),
+            seq((List) state.targetReplicas),
+            state.done
+        );
+    }
+
+    private ReassignPartitionsCommand.LogDirMoveState asScala(LogDirMoveState state) {
+        if (state instanceof ActiveMoveState) {
+            ActiveMoveState s = (ActiveMoveState) state;
+            return new ReassignPartitionsCommand.ActiveMoveState(s.currentLogDir, s.targetLogDir, s.futureLogDir);
+        } else if (state instanceof CancelledMoveState) {
+            CancelledMoveState s = (CancelledMoveState) state;
+            return new ReassignPartitionsCommand.CancelledMoveState(s.currentLogDir, s.targetLogDir);
+        } else if (state instanceof CompletedMoveState) {
+            CompletedMoveState s = (CompletedMoveState) state;
+            return new ReassignPartitionsCommand.CompletedMoveState(s.targetLogDir);
+        } else if (state instanceof MissingLogDirMoveState) {
+            MissingLogDirMoveState s = (MissingLogDirMoveState) state;
+            return new ReassignPartitionsCommand.MissingLogDirMoveState(s.targetLogDir);
+        } else if (state instanceof MissingReplicaMoveState) {
+            MissingReplicaMoveState s = (MissingReplicaMoveState) state;
+            return new ReassignPartitionsCommand.MissingReplicaMoveState(s.targetLogDir);
+        }
+
+        throw new IllegalArgumentException("Unknown state " + state);
+    }
+
+    @SuppressWarnings("unchecked")
+    static <T> scala.collection.immutable.Set<T> set(final T... set) {
+        return mutableSet(set).toSet();
+    }
+
+    @SuppressWarnings({"deprecation", "unchecked"})
+    private static <T> scala.collection.mutable.Set<T> mutableSet(final T...set) {
+        return JavaConverters.asScalaSet(new HashSet<>(Arrays.asList(set)));
+    }
+
+    @SuppressWarnings({"unchecked"})
+    private static <T> Seq<T> seq(T... seq) {
+        return seq(Arrays.asList(seq));
+    }
+
+    @SuppressWarnings({"deprecation"})
+    private static <T> Seq<T> seq(Collection<T> seq) {
+        return JavaConverters.asScalaIteratorConverter(seq.iterator()).asScala().toSeq();
+    }
+
+    @SuppressWarnings("deprecation")
+    private static <K, V> scala.collection.Map<K, V> asScala(Map<K, V> jmap) {
+        return JavaConverters.mapAsScalaMap(jmap);
     }
 }
