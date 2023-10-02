@@ -448,37 +448,48 @@ public class GroupMetadataManager {
     /**
      * Handles a DescribeGroup request.
      *
-     * @param groupIds The IDs of the groups to describe.
+     * @param groupIds          The IDs of the groups to describe.
+     * @param committedOffset   A specified committed offset corresponding to this shard.
+     *
      * @return A list containing the DescribeGroupsResponseData.DescribedGroup.
      */
     public List<DescribeGroupsResponseData.DescribedGroup> describeGroups(
-        List<String> groupIds
+        List<String> groupIds,
+        long committedOffset
     ) {
         final List<DescribeGroupsResponseData.DescribedGroup> describedGroups = new ArrayList<>();
         groupIds.forEach(groupId -> {
             try {
-                GenericGroup group = getOrMaybeCreateGenericGroup(groupId, false);
-                if (group.isInState(STABLE)) {
-                    if (!group.protocolName().isPresent()) {
+                Group group = group(groupId, committedOffset);
+                if (group.type() != GENERIC) {
+                    // We don't support upgrading/downgrading between protocols at the moment, so
+                    // we throw an exception if a group exists with the wrong type.
+                    throw new GroupIdNotFoundException(String.format("Group %s is not a generic group.",
+                        groupId));
+                }
+                GenericGroup genericGroup = (GenericGroup) group;
+
+                if (genericGroup.isInState(STABLE)) {
+                    if (!genericGroup.protocolName().isPresent()) {
                         throw new IllegalStateException("Invalid null group protocol for stable group");
                     }
 
                     describedGroups.add(new DescribeGroupsResponseData.DescribedGroup()
                         .setGroupId(groupId)
-                        .setGroupState(group.stateAsString())
-                        .setProtocolType(group.protocolType().orElse(""))
-                        .setProtocolData(group.protocolName().get())
-                        .setMembers(group.allMembers().stream()
-                            .map(member -> member.describe(group.protocolName().get()))
+                        .setGroupState(genericGroup.stateAsString())
+                        .setProtocolType(genericGroup.protocolType().orElse(""))
+                        .setProtocolData(genericGroup.protocolName().get())
+                        .setMembers(genericGroup.allMembers().stream()
+                            .map(member -> member.describe(genericGroup.protocolName().get()))
                             .collect(Collectors.toList())
                         )
                     );
                 } else {
                     describedGroups.add(new DescribeGroupsResponseData.DescribedGroup()
                         .setGroupId(groupId)
-                        .setGroupState(group.stateAsString())
-                        .setProtocolType(group.protocolType().orElse(""))
-                        .setMembers(group.allMembers().stream()
+                        .setGroupState(genericGroup.stateAsString())
+                        .setProtocolType(genericGroup.protocolType().orElse(""))
+                        .setMembers(genericGroup.allMembers().stream()
                             .map(member -> member.describeNoMetadata())
                             .collect(Collectors.toList())
                         )

@@ -532,7 +532,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 runtime.scheduleReadOperation(
                     "describe-groups",
                     topicPartition,
-                    (coordinator, __) -> coordinator.describeGroups(context, groupList)
+                    (coordinator, lastCommittedOffset) -> coordinator.describeGroups(context, groupList, lastCommittedOffset)
                 ).exceptionally(exception -> {
                     if (!(exception instanceof KafkaException)) {
                         log.error("DescribeGroups request {} hit an unexpected exception: {}",

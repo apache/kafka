@@ -62,7 +62,6 @@ import org.apache.kafka.coordinator.group.assignor.RangeAssignor;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorRuntime;
 import org.apache.kafka.server.record.BrokerCompressionType;
 import org.apache.kafka.server.util.FutureUtils;
-import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -78,7 +77,6 @@ import java.util.List;
 import java.util.OptionalInt;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -764,7 +762,6 @@ public class GroupCoordinatorServiceTest {
         );
         int partitionCount = 2;
         service.startup(() -> partitionCount);
-        CountDownLatch latch = new CountDownLatch(1);
 
         DescribeGroupsResponseData.DescribedGroup describedGroup1 = new DescribeGroupsResponseData.DescribedGroup()
             .setGroupId("group-id-1");
@@ -780,24 +777,20 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(Collections.singletonList(describedGroup1)));
+
+        CompletableFuture<Object> describedGroupFuture = new CompletableFuture<>();
         when(runtime.scheduleReadOperation(
             ArgumentMatchers.eq("describe-groups"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 1)),
             ArgumentMatchers.any()
-        )).thenAnswer(invocation -> CompletableFuture.supplyAsync(() -> {
-            try {
-                assertTrue(latch.await(5, TimeUnit.SECONDS));
-            } catch (InterruptedException ignored) { }
-            return Collections.singletonList(describedGroup2);
-        }));
+        )).thenReturn(describedGroupFuture);
 
         CompletableFuture<List<DescribeGroupsResponseData.DescribedGroup>> future =
             service.describeGroups(requestContext(ApiKeys.DESCRIBE_GROUPS), Arrays.asList("group-id-1", "group-id-2"));
 
         assertFalse(future.isDone());
-        latch.countDown();
+        describedGroupFuture.complete(Collections.singletonList(describedGroup2));
 
-        TestUtils.waitForCondition(future::isDone, "The future did not complete.");
         assertTrue(future.get().containsAll(expectedDescribedGroups));
         assertTrue(expectedDescribedGroups.containsAll(future.get()));
     }

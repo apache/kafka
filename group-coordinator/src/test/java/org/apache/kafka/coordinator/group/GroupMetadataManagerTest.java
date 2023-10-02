@@ -1029,6 +1029,10 @@ public class GroupMetadataManagerTest {
             return groupMetadataManager.listGroups(statesFilter, lastCommittedOffset);
         }
 
+        public List<DescribeGroupsResponseData.DescribedGroup> describeGroups(List<String> groupIds) {
+            return groupMetadataManager.describeGroups(groupIds, lastCommittedOffset);
+        }
+
         public void verifyHeartbeat(
             String groupId,
             JoinGroupResponseData joinResponse,
@@ -8694,7 +8698,7 @@ public class GroupMetadataManagerTest {
         JoinGroupResponseData responseData = context.joinGenericGroupAsDynamicMemberAndCompleteRebalance("group-id");
 
         List<DescribeGroupsResponseData.DescribedGroup> describedGroups =
-            context.groupMetadataManager.describeGroups(Collections.singletonList("group-id"));
+            context.describeGroups(Collections.singletonList("group-id"));
 
         assertEquals(responseData.protocolType(), describedGroups.get(0).protocolType());
         assertEquals(responseData.protocolName(), describedGroups.get(0).protocolData());
@@ -8715,7 +8719,7 @@ public class GroupMetadataManagerTest {
         GenericGroup group = context.groupMetadataManager.getOrMaybeCreateGenericGroup("group-id", false);
 
         List<DescribeGroupsResponseData.DescribedGroup> describedGroups =
-            context.groupMetadataManager.describeGroups(Collections.singletonList("group-id"));
+            context.describeGroups(Collections.singletonList("group-id"));
 
         assertEquals("consumer", describedGroups.get(0).protocolType());
         assertEquals("range", describedGroups.get(0).protocolData());
@@ -8741,7 +8745,7 @@ public class GroupMetadataManagerTest {
         );
 
         List<DescribeGroupsResponseData.DescribedGroup> describedGroups =
-            context.groupMetadataManager.describeGroups(Collections.singletonList("group-id"));
+            context.describeGroups(Collections.singletonList("group-id"));
 
         assertTrue(group.isInState(COMPLETING_REBALANCE));
         assertEquals(responseData.protocolType(), describedGroups.get(0).protocolType());

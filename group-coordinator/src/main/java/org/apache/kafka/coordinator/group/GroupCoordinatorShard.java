@@ -329,15 +329,18 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
     /**
      * Handles a DescribeGroups request.
      *
-     * @param context   The request context.
-     * @param groupIds  The IDs of the groups to describe.
+     * @param context           The request context.
+     * @param groupIds          The IDs of the groups to describe.
+     * @param committedOffset   A specified committed offset corresponding to this shard.
+     *
      * @return A list containing the DescribeGroupsResponseData.DescribedGroup.
      */
     public List<DescribeGroupsResponseData.DescribedGroup> describeGroups(
         RequestContext context,
-        List<String> groupIds
+        List<String> groupIds,
+        long committedOffset
     ) {
-        return groupMetadataManager.describeGroups(groupIds);
+        return groupMetadataManager.describeGroups(groupIds, committedOffset);
     }
 
     /**
