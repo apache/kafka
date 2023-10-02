@@ -515,6 +515,16 @@ public class KafkaRaftClientTest {
 
         assertFalse(context.client.quorum().isResigned());
 
+        // Received fetch request from another voter, the fetch timer should be reset.
+        context.deliverRequest(context.fetchRequest(epoch, remoteId2, 0, 0, 0));
+        context.pollUntilRequest();
+
+        // Since the fetch timer is reset, the leader should not get resigned
+        context.time.sleep(context.fetchTimeoutMs / 2);
+        context.client.poll();
+
+        assertFalse(context.client.quorum().isResigned());
+
         // Received fetch request from an observer, but the fetch timer should not be reset.
         context.deliverRequest(context.fetchRequest(epoch, observerId3, 0, 0, 0));
         context.pollUntilRequest();
