@@ -259,7 +259,7 @@ scala-library-2.13.12
 scala-logging_2.13-3.9.4
 scala-reflect-2.13.12
 scala-java8-compat_2.13-1.0.2
-snappy-java-1.1.10.4
+snappy-java-1.1.10.5
 swagger-annotations-2.2.8
 zookeeper-3.8.2
 zookeeper-jute-3.8.2
