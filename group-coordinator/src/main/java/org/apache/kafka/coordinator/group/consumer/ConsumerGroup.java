@@ -618,12 +618,8 @@ public class ConsumerGroup implements Group {
      */
     @Override
     public void validateDeleteGroup() throws ApiException {
-        switch (state()) {
-            case STABLE:
-            case ASSIGNING:
-            case RECONCILING:
-                throw Errors.NON_EMPTY_GROUP.exception();
-            default:
+        if (state() != ConsumerGroupState.EMPTY) {
+            throw Errors.NON_EMPTY_GROUP.exception();
         }
     }
 

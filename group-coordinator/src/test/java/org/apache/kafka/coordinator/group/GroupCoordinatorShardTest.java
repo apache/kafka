@@ -24,6 +24,7 @@ import org.apache.kafka.common.message.OffsetCommitResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.RequestContext;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataKey;
@@ -73,6 +74,7 @@ public class GroupCoordinatorShardTest {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
+            new LogContext(),
             groupMetadataManager,
             offsetMetadataManager
         );
@@ -97,6 +99,7 @@ public class GroupCoordinatorShardTest {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
+            new LogContext(),
             groupMetadataManager,
             offsetMetadataManager
         );
@@ -121,6 +124,7 @@ public class GroupCoordinatorShardTest {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
+            new LogContext(),
             groupMetadataManager,
             offsetMetadataManager
         );
@@ -143,12 +147,12 @@ public class GroupCoordinatorShardTest {
         );
 
         doNothing().when(groupMetadataManager).validateDeleteGroup(ArgumentMatchers.anyString());
-        doAnswer(invocation -> {
+        when(offsetMetadataManager.deleteAllOffsets(anyString(), anyList())).thenAnswer(invocation -> {
             String groupId = invocation.getArgument(0);
             List<Record> records = invocation.getArgument(1);
             records.add(RecordHelpers.newOffsetCommitTombstoneRecord(groupId, "topic-name", 0));
-            return null;
-        }).when(offsetMetadataManager).deleteAllOffsets(anyString(), anyList());
+            return 1;
+        });
         doAnswer(invocation -> {
             String groupId = invocation.getArgument(0);
             List<Record> records = invocation.getArgument(1);
@@ -172,6 +176,7 @@ public class GroupCoordinatorShardTest {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
+            new LogContext(),
             groupMetadataManager,
             offsetMetadataManager
         );
@@ -233,6 +238,7 @@ public class GroupCoordinatorShardTest {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
+            new LogContext(),
             groupMetadataManager,
             offsetMetadataManager
         );
@@ -258,6 +264,7 @@ public class GroupCoordinatorShardTest {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
+            new LogContext(),
             groupMetadataManager,
             offsetMetadataManager
         );
@@ -282,6 +289,7 @@ public class GroupCoordinatorShardTest {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
+            new LogContext(),
             groupMetadataManager,
             offsetMetadataManager
         );
@@ -302,6 +310,7 @@ public class GroupCoordinatorShardTest {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
+            new LogContext(),
             groupMetadataManager,
             offsetMetadataManager
         );
@@ -321,6 +330,7 @@ public class GroupCoordinatorShardTest {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
+            new LogContext(),
             groupMetadataManager,
             offsetMetadataManager
         );
@@ -341,6 +351,7 @@ public class GroupCoordinatorShardTest {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
+            new LogContext(),
             groupMetadataManager,
             offsetMetadataManager
         );
@@ -360,6 +371,7 @@ public class GroupCoordinatorShardTest {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
+            new LogContext(),
             groupMetadataManager,
             offsetMetadataManager
         );
@@ -380,6 +392,7 @@ public class GroupCoordinatorShardTest {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
+            new LogContext(),
             groupMetadataManager,
             offsetMetadataManager
         );
@@ -399,6 +412,7 @@ public class GroupCoordinatorShardTest {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
+            new LogContext(),
             groupMetadataManager,
             offsetMetadataManager
         );
@@ -419,6 +433,7 @@ public class GroupCoordinatorShardTest {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
+            new LogContext(),
             groupMetadataManager,
             offsetMetadataManager
         );
@@ -438,6 +453,7 @@ public class GroupCoordinatorShardTest {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
+            new LogContext(),
             groupMetadataManager,
             offsetMetadataManager
         );
@@ -458,6 +474,7 @@ public class GroupCoordinatorShardTest {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
+            new LogContext(),
             groupMetadataManager,
             offsetMetadataManager
         );
@@ -477,6 +494,7 @@ public class GroupCoordinatorShardTest {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
+            new LogContext(),
             groupMetadataManager,
             offsetMetadataManager
         );
@@ -497,6 +515,7 @@ public class GroupCoordinatorShardTest {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
+            new LogContext(),
             groupMetadataManager,
             offsetMetadataManager
         );
@@ -516,6 +535,7 @@ public class GroupCoordinatorShardTest {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
+            new LogContext(),
             groupMetadataManager,
             offsetMetadataManager
         );
@@ -528,6 +548,7 @@ public class GroupCoordinatorShardTest {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
+            new LogContext(),
             groupMetadataManager,
             offsetMetadataManager
         );
@@ -547,6 +568,7 @@ public class GroupCoordinatorShardTest {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
+            new LogContext(),
             groupMetadataManager,
             offsetMetadataManager
         );
@@ -566,6 +588,7 @@ public class GroupCoordinatorShardTest {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
+            new LogContext(),
             groupMetadataManager,
             offsetMetadataManager
         );
@@ -586,6 +609,7 @@ public class GroupCoordinatorShardTest {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
+            new LogContext(),
             groupMetadataManager,
             offsetMetadataManager
         );

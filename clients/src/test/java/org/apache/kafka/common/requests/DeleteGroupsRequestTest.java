@@ -19,7 +19,6 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.DeleteGroupsRequestData;
 import org.apache.kafka.common.message.DeleteGroupsResponseData;
 import org.apache.kafka.common.protocol.Errors;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -32,16 +31,10 @@ public class DeleteGroupsRequestTest {
     protected static String groupId1 = "group-id-1";
     protected static String groupId2 = "group-id-2";
 
-    private static DeleteGroupsRequestData data;
-
-    @BeforeEach
-    public void setUp() {
-        data = new DeleteGroupsRequestData()
-            .setGroupsNames(Arrays.asList(groupId1, groupId2));
-    }
-
     @Test
     public void testGetErrorResultCollection() {
+        DeleteGroupsRequestData data = new DeleteGroupsRequestData()
+            .setGroupsNames(Arrays.asList(groupId1, groupId2));
         DeleteGroupsResponseData.DeletableGroupResultCollection expectedResultCollection =
             new DeleteGroupsResponseData.DeletableGroupResultCollection(Arrays.asList(
                 new DeleteGroupsResponseData.DeletableGroupResult()

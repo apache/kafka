@@ -194,7 +194,7 @@ public class GroupCoordinatorServiceTest {
             Arguments.arguments(new KafkaStorageException(), Errors.NOT_COORDINATOR.code(), null),
             Arguments.arguments(new RecordTooLargeException(), Errors.UNKNOWN_SERVER_ERROR.code(), null),
             Arguments.arguments(new RecordBatchTooLargeException(), Errors.UNKNOWN_SERVER_ERROR.code(), null),
-            Arguments.arguments(new InvalidFetchSizeException(""), Errors.UNKNOWN_SERVER_ERROR.code(), null),
+            Arguments.arguments(new InvalidFetchSizeException(null), Errors.UNKNOWN_SERVER_ERROR.code(), null),
             Arguments.arguments(new InvalidRequestException("Invalid"), Errors.INVALID_REQUEST.code(), "Invalid")
         );
     }
@@ -1028,8 +1028,16 @@ public class GroupCoordinatorServiceTest {
         assertEquals(response, future.get());
     }
 
-    @Test
-    public void testDeleteOffsetsCoordinatorNotAvailableException() throws Exception {
+    private static Stream<Arguments> testDeleteOffsetsWithExceptionSource() {
+        return testConsumerGroupHeartbeatWithExceptionSource();
+    }
+
+    @ParameterizedTest
+    @MethodSource("testDeleteOffsetsWithExceptionSource")
+    public void testDeleteOffsetsWithException(
+        Throwable exception,
+        short expectedErrorCode
+    ) throws Exception {
         CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
         GroupCoordinatorService service = new GroupCoordinatorService(
             new LogContext(),
@@ -1051,15 +1059,13 @@ public class GroupCoordinatorServiceTest {
             .setTopics(requestTopicCollection);
 
         OffsetDeleteResponseData response = new OffsetDeleteResponseData()
-            .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code());
+            .setErrorCode(expectedErrorCode);
 
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("delete-offsets"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
             ArgumentMatchers.any()
-        )).thenReturn(FutureUtils.failedFuture(
-            Errors.COORDINATOR_LOAD_IN_PROGRESS.exception()
-        ));
+        )).thenReturn(FutureUtils.failedFuture(exception));
 
         CompletableFuture<OffsetDeleteResponseData> future = service.deleteOffsets(
             requestContext(ApiKeys.OFFSET_DELETE),
@@ -1101,9 +1107,9 @@ public class GroupCoordinatorServiceTest {
             new DeleteGroupsResponseData.DeletableGroupResultCollection();
         expectedResultCollection.addAll(Arrays.asList(
             new DeleteGroupsResponseData.DeletableGroupResult().setGroupId(null).setErrorCode(Errors.INVALID_GROUP_ID.code()),
-            result1.duplicate(),
             result2.duplicate(),
-            result3.duplicate()
+            result3.duplicate(),
+            result1.duplicate()
         ));
 
         when(runtime.partitions()).thenReturn(Sets.newSet(
@@ -1138,7 +1144,47 @@ public class GroupCoordinatorServiceTest {
         assertFalse(future.isDone());
         resultCollectionFuture.complete(resultCollection2);
 
-        assertTrue(expectedResultCollection.containsAll(future.get()));
-        assertTrue(future.get().containsAll(expectedResultCollection));
+        assertEquals(expectedResultCollection, future.get());
+    }
+
+    private static Stream<Arguments> testDeleteGroupsWithExceptionSource() {
+        return testConsumerGroupHeartbeatWithExceptionSource();
+    }
+
+    @ParameterizedTest
+    @MethodSource("testDeleteGroupsWithExceptionSource")
+    public void testDeleteGroupsWithException(
+        Throwable exception,
+        short expectedErrorCode
+    ) throws Exception {
+        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorService(
+            new LogContext(),
+            createConfig(),
+            runtime
+        );
+        service.startup(() -> 1);
+
+        when(runtime.scheduleWriteOperation(
+            ArgumentMatchers.eq("delete-groups"),
+            ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
+            ArgumentMatchers.any()
+        )).thenReturn(FutureUtils.failedFuture(exception));
+
+        CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> future =
+            service.deleteGroups(
+                requestContext(ApiKeys.DELETE_GROUPS),
+                Collections.singletonList("group-id"),
+                BufferSupplier.NO_CACHING
+            );
+
+        assertEquals(
+            new DeleteGroupsResponseData.DeletableGroupResultCollection(Collections.singletonList(
+                new DeleteGroupsResponseData.DeletableGroupResult()
+                    .setGroupId("group-id")
+                    .setErrorCode(expectedErrorCode)
+            ).iterator()),
+            future.get()
+        );
     }
 }

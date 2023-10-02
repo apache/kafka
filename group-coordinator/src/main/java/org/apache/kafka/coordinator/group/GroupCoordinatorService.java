@@ -262,30 +262,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
             "consumer-group-heartbeat",
             topicPartitionFor(request.groupId()),
             coordinator -> coordinator.consumerGroupHeartbeat(context, request)
-        ).exceptionally(exception -> {
-            if (exception instanceof UnknownTopicOrPartitionException ||
-                exception instanceof NotEnoughReplicasException) {
-                return new ConsumerGroupHeartbeatResponseData()
-                    .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code());
-            }
-
-            if (exception instanceof NotLeaderOrFollowerException ||
-                exception instanceof KafkaStorageException) {
-                return new ConsumerGroupHeartbeatResponseData()
-                    .setErrorCode(Errors.NOT_COORDINATOR.code());
-            }
-
-            if (exception instanceof RecordTooLargeException ||
-                exception instanceof RecordBatchTooLargeException ||
-                exception instanceof InvalidFetchSizeException) {
-                return new ConsumerGroupHeartbeatResponseData()
-                    .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code());
-            }
-
-            return new ConsumerGroupHeartbeatResponseData()
-                .setErrorCode(Errors.forException(exception).code())
-                .setErrorMessage(exception.getMessage());
-        });
+        ).exceptionally(exception ->
+            new ConsumerGroupHeartbeatResponseData()
+                .setErrorCode(getErrorsForException(exception).code())
+                .setErrorMessage(exception.getMessage())
+        );
     }
 
     /**
@@ -551,59 +532,25 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     "delete-groups",
                     topicPartition,
                     coordinator -> coordinator.deleteGroups(context, groupList)
-                ).exceptionally(exception -> {
-                    if (exception instanceof UnknownTopicOrPartitionException ||
-                        exception instanceof NotEnoughReplicasException) {
-                        return DeleteGroupsRequest.getErrorResultCollection(
-                            groupList,
-                            Errors.COORDINATOR_NOT_AVAILABLE
-                        );
-                    }
-
-                    if (exception instanceof NotLeaderOrFollowerException ||
-                        exception instanceof KafkaStorageException) {
-                        return DeleteGroupsRequest.getErrorResultCollection(
-                            groupList,
-                            Errors.NOT_COORDINATOR
-                        );
-                    }
-
-                    if (exception instanceof RecordTooLargeException ||
-                        exception instanceof RecordBatchTooLargeException ||
-                        exception instanceof InvalidFetchSizeException) {
-                        return DeleteGroupsRequest.getErrorResultCollection(
-                            groupList,
-                            Errors.UNKNOWN_SERVER_ERROR
-                        );
-                    }
-
-                    return DeleteGroupsRequest.getErrorResultCollection(
-                        groupList,
-                        Errors.forException(exception)
-                    );
-                });
+                ).exceptionally(exception ->
+                    DeleteGroupsRequest.getErrorResultCollection(groupList, getErrorsForException(exception))
+                );
 
             futures.add(future);
         });
 
         final CompletableFuture<Void> allFutures = CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]));
-        final CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> resFuture = allFutures.thenApply(v -> {
+        return allFutures.thenApply(v -> {
             final DeleteGroupsResponseData.DeletableGroupResultCollection res = new DeleteGroupsResponseData.DeletableGroupResultCollection();
-            final List<String> deletedGroups = new ArrayList<>();
             futures.forEach(future ->
                 // We don't use res.addAll(future.join()) because DeletableGroupResultCollection is an ImplicitLinkedHashMultiCollection,
                 // which has requirements for adding elements (see ImplicitLinkedHashCollection.java#add).
-                future.join().forEach(result -> {
-                    res.add(result.duplicate());
-                    if (result.errorCode() == Errors.NONE.code()) {
-                        deletedGroups.add(result.groupId());
-                    }
-                })
+                future.join().forEach(result ->
+                    res.add(result.duplicate())
+                )
             );
-            log.info("The following groups were deleted: {}.", String.join(", ", deletedGroups));
             return res;
         });
-        return resFuture;
     }
 
     /**
@@ -719,37 +666,9 @@ public class GroupCoordinatorService implements GroupCoordinator {
             "commit-offset",
             topicPartitionFor(request.groupId()),
             coordinator -> coordinator.commitOffset(context, request)
-        ).exceptionally(exception -> {
-            if (exception instanceof UnknownTopicOrPartitionException ||
-                exception instanceof NotEnoughReplicasException) {
-                return OffsetCommitRequest.getErrorResponse(
-                    request,
-                    Errors.COORDINATOR_NOT_AVAILABLE
-                );
-            }
-
-            if (exception instanceof NotLeaderOrFollowerException ||
-                exception instanceof KafkaStorageException) {
-                return OffsetCommitRequest.getErrorResponse(
-                    request,
-                    Errors.NOT_COORDINATOR
-                );
-            }
-
-            if (exception instanceof RecordTooLargeException ||
-                exception instanceof RecordBatchTooLargeException ||
-                exception instanceof InvalidFetchSizeException) {
-                return OffsetCommitRequest.getErrorResponse(
-                    request,
-                    Errors.INVALID_COMMIT_OFFSET_SIZE
-                );
-            }
-
-            return OffsetCommitRequest.getErrorResponse(
-                request,
-                Errors.forException(exception)
-            );
-        });
+        ).exceptionally(exception ->
+            OffsetCommitRequest.getErrorResponse(request, getErrorsForException(exception))
+        );
     }
 
     /**
@@ -793,29 +712,10 @@ public class GroupCoordinatorService implements GroupCoordinator {
             "delete-offsets",
             topicPartitionFor(request.groupId()),
             coordinator -> coordinator.deleteOffsets(context, request)
-        ).exceptionally(exception -> {
-            if (exception instanceof UnknownTopicOrPartitionException ||
-                exception instanceof NotEnoughReplicasException) {
-                return new OffsetDeleteResponseData()
-                    .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code());
-            }
-
-            if (exception instanceof NotLeaderOrFollowerException ||
-                exception instanceof KafkaStorageException) {
-                return new OffsetDeleteResponseData()
-                    .setErrorCode(Errors.NOT_COORDINATOR.code());
-            }
-
-            if (exception instanceof RecordTooLargeException ||
-                exception instanceof RecordBatchTooLargeException ||
-                exception instanceof InvalidFetchSizeException) {
-                return new OffsetDeleteResponseData()
-                    .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code());
-            }
-
-            return new OffsetDeleteResponseData()
-                .setErrorCode(Errors.forException(exception).code());
-        });
+        ).exceptionally(exception ->
+            new OffsetDeleteResponseData()
+                .setErrorCode(getErrorsForException(exception).code())
+        );
     }
 
     /**
@@ -934,5 +834,29 @@ public class GroupCoordinatorService implements GroupCoordinator {
 
     private static boolean isGroupIdNotEmpty(String groupId) {
         return groupId != null && !groupId.isEmpty();
+    }
+
+    /**
+     * Handles the exception in the scheduleWriteOperation.
+     * @return The Errors instance associated with the given exception.
+     */
+    private Errors getErrorsForException(Throwable exception) {
+        if (exception instanceof UnknownTopicOrPartitionException ||
+            exception instanceof NotEnoughReplicasException) {
+            return Errors.COORDINATOR_NOT_AVAILABLE;
+        }
+
+        if (exception instanceof NotLeaderOrFollowerException ||
+            exception instanceof KafkaStorageException) {
+            return Errors.NOT_COORDINATOR;
+        }
+
+        if (exception instanceof RecordTooLargeException ||
+            exception instanceof RecordBatchTooLargeException ||
+            exception instanceof InvalidFetchSizeException) {
+            return Errors.UNKNOWN_SERVER_ERROR;
+        }
+
+        return Errors.forException(exception);
     }
 }

@@ -64,10 +64,12 @@ import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.timeline.SnapshotRegistry;
+import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * The group coordinator shard is a replicated state machine that manages the metadata of all
@@ -161,11 +163,17 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
                 .build();
 
             return new GroupCoordinatorShard(
+                logContext,
                 groupMetadataManager,
                 offsetMetadataManager
             );
         }
     }
+
+    /**
+     * The logger.
+     */
+    private final Logger log;
 
     /**
      * The group metadata manager.
@@ -180,13 +188,16 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
     /**
      * Constructor.
      *
+     * @param logContext            The log context.
      * @param groupMetadataManager  The group metadata manager.
      * @param offsetMetadataManager The offset metadata manager.
      */
     GroupCoordinatorShard(
+        LogContext logContext,
         GroupMetadataManager groupMetadataManager,
         OffsetMetadataManager offsetMetadataManager
     ) {
+        this.log = logContext.logger(GroupCoordinatorShard.class);
         this.groupMetadataManager = groupMetadataManager;
         this.offsetMetadataManager = offsetMetadataManager;
     }
@@ -282,12 +293,15 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
         final DeleteGroupsResponseData.DeletableGroupResultCollection resultCollection =
             new DeleteGroupsResponseData.DeletableGroupResultCollection(groupIds.size());
         final List<Record> records = new ArrayList<>();
+        AtomicInteger numDeletedOffsets = new AtomicInteger();
+        List<String> deletedGroups = new ArrayList<>();
 
         groupIds.forEach(groupId -> {
             try {
                 groupMetadataManager.validateDeleteGroup(groupId);
-                offsetMetadataManager.deleteAllOffsets(groupId, records);
+                numDeletedOffsets.addAndGet(offsetMetadataManager.deleteAllOffsets(groupId, records));
                 groupMetadataManager.deleteGroup(groupId, records);
+                deletedGroups.add(groupId);
 
                 resultCollection.add(
                     new DeleteGroupsResponseData.DeletableGroupResult()
@@ -302,6 +316,10 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
             }
         });
 
+        log.info("The following groups were deleted: {}. A total of {} offsets were removed",
+            String.join(", ", deletedGroups),
+            numDeletedOffsets
+        );
         return new CoordinatorResult<>(records, resultCollection);
     }
 
