@@ -96,6 +96,7 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Random;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
@@ -783,22 +784,12 @@ public class IQv2StoreIntegrationTest {
                     if (storeToTest.timestamped()) {
                         final Function<ValueAndTimestamp<Integer>, Integer> valueExtractor =
                             ValueAndTimestamp::value;
-                        if (kind.equals("DSL")) {
-                            shouldHandleKeyQuery(2, valueExtractor, 5);
-                            shouldHandleRangeDSLQueries(valueExtractor);
-                        } else {
-                            shouldHandleKeyQuery(2, valueExtractor, 5);
-                            shouldHandleRangePAPIQueries(valueExtractor);
-                        }
+                        shouldHandleKeyQuery(2, valueExtractor, 5);
+                        shouldHandleRangeQueries(valueExtractor);
                     } else {
                         final Function<Integer, Integer> valueExtractor = Function.identity();
-                        if (kind.equals("DSL")) {
-                            shouldHandleKeyQuery(2, valueExtractor, 5);
-                            shouldHandleRangeDSLQueries(valueExtractor);
-                        } else {
-                            shouldHandleKeyQuery(2, valueExtractor, 5);
-                            shouldHandleRangePAPIQueries(valueExtractor);
-                        }
+                        shouldHandleKeyQuery(2, valueExtractor, 5);
+                        shouldHandleRangeQueries(valueExtractor);
                     }
                 }
 
@@ -842,77 +833,93 @@ public class IQv2StoreIntegrationTest {
     }
 
 
-    private <T> void shouldHandleRangeDSLQueries(final Function<T, Integer> extractor) {
+    private <T> void shouldHandleRangeQueries(final Function<T, Integer> extractor) {
         shouldHandleRangeQuery(
             Optional.of(0),
             Optional.of(4),
+            true,
             extractor,
-            mkSet(1, 3, 5, 7, 9)
+            Arrays.asList(1, 5, 9, 3, 7)
         );
 
         shouldHandleRangeQuery(
             Optional.of(1),
             Optional.of(3),
+            true,
             extractor,
-            mkSet(3, 5, 7)
+            Arrays.asList(5, 3, 7)
         );
 
         shouldHandleRangeQuery(
             Optional.of(3),
             Optional.empty(),
+            true,
             extractor,
-            mkSet(7, 9)
+            Arrays.asList(9, 7)
         );
 
         shouldHandleRangeQuery(
             Optional.empty(),
             Optional.of(3),
+            true,
             extractor,
-            mkSet(1, 3, 5, 7)
+            Arrays.asList(1, 5, 3, 7)
         );
 
         shouldHandleRangeQuery(
             Optional.empty(),
             Optional.empty(),
+            true,
             extractor,
-            mkSet(1, 3, 5, 7, 9)
-        );
-    }
-
-    private <T> void shouldHandleRangePAPIQueries(final Function<T, Integer> extractor) {
-        shouldHandleRangeQuery(
-            Optional.of(0),
-            Optional.of(4),
-            extractor,
-            mkSet(1, 3, 5, 7, 9)
+            Arrays.asList(1, 5, 9, 3, 7)
         );
 
         shouldHandleRangeQuery(
             Optional.of(1),
             Optional.of(3),
+            false,
             extractor,
-            mkSet(3, 5, 7)
+            Arrays.asList(5, 7, 3)
+        );
+
+        shouldHandleRangeQuery(
+            Optional.of(0),
+            Optional.of(4),
+            false,
+            extractor,
+            Arrays.asList(9, 5, 1, 7, 3)
+        );
+
+        shouldHandleRangeQuery(
+            Optional.of(1),
+            Optional.of(3),
+            false,
+            extractor,
+            Arrays.asList(5, 7, 3)
         );
 
         shouldHandleRangeQuery(
             Optional.of(3),
             Optional.empty(),
+            false,
             extractor,
-            mkSet(7, 9)
+            Arrays.asList(9, 7)
         );
 
         shouldHandleRangeQuery(
             Optional.empty(),
             Optional.of(3),
+            false,
             extractor,
-            mkSet(1, 3, 5, 7)
+            Arrays.asList(5, 1, 7, 3)
         );
 
         shouldHandleRangeQuery(
             Optional.empty(),
             Optional.empty(),
+            false,
             extractor,
-            mkSet(1, 3, 5, 7, 9)
+            Arrays.asList(9, 5, 1, 7, 3)
         );
     }
 
@@ -1586,12 +1593,15 @@ public class IQv2StoreIntegrationTest {
     public <V> void shouldHandleRangeQuery(
         final Optional<Integer> lower,
         final Optional<Integer> upper,
+        final boolean isKeyAscending,
         final Function<V, Integer> valueExtactor,
-        final Set<Integer> expectedValue) {
+        final List<Integer> expectedValue) {
 
-        final RangeQuery<Integer, V> query;
-        
+        RangeQuery<Integer, V> query;
         query = RangeQuery.withRange(lower.orElse(null), upper.orElse(null));
+        if (!isKeyAscending) {
+            query = query.withDescendingKeys();
+        }
 
         final StateQueryRequest<KeyValueIterator<Integer, V>> request =
             inStore(STORE_NAME)
@@ -1604,9 +1614,10 @@ public class IQv2StoreIntegrationTest {
         if (result.getGlobalResult() != null) {
             fail("global tables aren't implemented");
         } else {
-            final Set<Integer> actualValue = new HashSet<>();
+            final List<Integer> actualValue = new ArrayList<>();
             final Map<Integer, QueryResult<KeyValueIterator<Integer, V>>> queryResult = result.getPartitionResults();
-            for (final int partition : queryResult.keySet()) {
+            final TreeSet<Integer> partitions = new TreeSet<>(queryResult.keySet());
+            for (final int partition : partitions) {
                 final boolean failure = queryResult.get(partition).isFailure();
                 if (failure) {
                     throw new AssertionError(queryResult.toString());
