@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.processor.internals.tasks;
 
 import java.time.Duration;
-import java.util.Collection;
 import java.util.concurrent.locks.Condition;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
