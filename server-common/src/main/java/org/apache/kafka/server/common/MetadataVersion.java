@@ -173,16 +173,24 @@ public enum MetadataVersion {
     // Adds replica epoch to Fetch request (KIP-903).
     IBP_3_5_IV1(10, "3.5", "IV1", false),
 
-    // Support for SCRAM
+    // KRaft support for SCRAM
     IBP_3_5_IV2(11, "3.5", "IV2", true),
 
     // Remove leader epoch bump when KRaft controller shrinks the ISR (KAFKA-15021)
     IBP_3_6_IV0(12, "3.6", "IV0", false),
 
     // Add metadata transactions
-    IBP_3_6_IV1(13, "3.6", "IV1", true);
+    IBP_3_6_IV1(13, "3.6", "IV1", true),
 
-    // NOTE: update the default version in @ClusterTest annotation to point to the latest version
+    // Add KRaft support for Delegation Tokens
+    IBP_3_6_IV2(14, "3.6", "IV2", true),
+
+    // Implement KIP-919 controller registration.
+    IBP_3_7_IV0(15, "3.7", "IV0", true);
+
+    // NOTES when adding a new version:
+    //   Update the default version in @ClusterTest annotation to point to the latest version
+    //   Change expected message in org.apache.kafka.tools.FeatureCommandTest in multiple places (search for "Change expected message")
     public static final String FEATURE_NAME = "metadata.version";
 
     /**
@@ -274,6 +282,10 @@ public enum MetadataVersion {
         return this.isAtLeast(IBP_3_6_IV1);
     }
 
+    public boolean isDelegationTokenSupported() {
+        return this.isAtLeast(IBP_3_6_IV2);
+    }
+
     public boolean isKRaftSupported() {
         return this.featureLevel > 0;
     }
@@ -309,6 +321,19 @@ public enum MetadataVersion {
         } else {
             return (short) 0;
         }
+    }
+
+    public short registerControllerRecordVersion() {
+        if (isAtLeast(MetadataVersion.IBP_3_7_IV0)) {
+            return (short) 0;
+        } else {
+            throw new RuntimeException("Controller registration is not supported in " +
+                    "MetadataVersion " + this);
+        }
+    }
+
+    public boolean isControllerRegistrationSupported() {
+        return this.isAtLeast(MetadataVersion.IBP_3_7_IV0);
     }
 
     public short fetchRequestVersion() {

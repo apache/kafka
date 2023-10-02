@@ -20,7 +20,7 @@ import kafka.utils.TestUtils
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType
-import org.apache.kafka.server.log.remote.storage.{RemoteLogSegmentId, RemoteLogSegmentMetadata, RemoteStorageManager}
+import org.apache.kafka.server.log.remote.storage.{RemoteLogSegmentId, RemoteLogSegmentMetadata, RemoteResourceNotFoundException, RemoteStorageManager}
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.log.RemoteIndexCache.{REMOTE_LOG_INDEX_CACHE_CLEANER_THREAD, remoteOffsetIndexFile, remoteOffsetIndexFileName, remoteTimeIndexFile, remoteTimeIndexFileName, remoteTransactionIndexFile, remoteTransactionIndexFileName}
 import org.apache.kafka.storage.internals.log.{LogFileUtils, OffsetIndex, OffsetPosition, RemoteIndexCache, TimeIndex, TransactionIndex}
@@ -32,7 +32,7 @@ import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito._
 import org.slf4j.{Logger, LoggerFactory}
 
-import java.io.{File, FileInputStream}
+import java.io.{File, FileInputStream, IOException, PrintWriter}
 import java.nio.file.Files
 import java.util
 import java.util.Collections
@@ -91,7 +91,11 @@ class RemoteIndexCacheTest {
     Utils.closeQuietly(cache, "RemoteIndexCache created for unit test")
     // best effort to delete the per-test resource. Even if we don't delete, it is ok because the parent directory
     // will be deleted at the end of test.
-    Utils.delete(logDir)
+    try {
+      Utils.delete(logDir)
+    } catch {
+      case _: IOException => // ignore
+    }
     // Verify no lingering threads. It is important to have this as the very last statement in the @aftereach
     // because this may throw an exception and prevent cleanup after it
     TestUtils.assertNoNonDaemonThreads(REMOTE_LOG_INDEX_CACHE_CLEANER_THREAD)
@@ -137,6 +141,31 @@ class RemoteIndexCacheTest {
     assertEquals(offsetPosition2.position, resultPosition2)
     assertNotNull(cache.getIndexEntry(rlsMetadata))
     verifyNoInteractions(rsm)
+  }
+
+  @Test
+  def testFetchIndexForMissingTransactionIndex(): Unit = {
+    when(rsm.fetchIndex(any(classOf[RemoteLogSegmentMetadata]), any(classOf[IndexType])))
+      .thenAnswer(ans => {
+        val metadata = ans.getArgument[RemoteLogSegmentMetadata](0)
+        val indexType = ans.getArgument[IndexType](1)
+        val offsetIdx = createOffsetIndexForSegmentMetadata(metadata)
+        val timeIdx = createTimeIndexForSegmentMetadata(metadata)
+        maybeAppendIndexEntries(offsetIdx, timeIdx)
+        indexType match {
+          case IndexType.OFFSET => new FileInputStream(offsetIdx.file)
+          case IndexType.TIMESTAMP => new FileInputStream(timeIdx.file)
+          // Throw RemoteResourceNotFoundException since transaction index is not available
+          case IndexType.TRANSACTION => throw new RemoteResourceNotFoundException("txn index not found")
+          case IndexType.LEADER_EPOCH => // leader-epoch-cache is not accessed.
+          case IndexType.PRODUCER_SNAPSHOT => // producer-snapshot is not accessed.
+        }
+      })
+
+    val entry = cache.getIndexEntry(rlsMetadata)
+    // Verify an empty file is created in the cache directory
+    assertTrue(entry.txnIndex().file().exists())
+    assertEquals(0, entry.txnIndex().file().length())
   }
 
   @Test
@@ -495,6 +524,23 @@ class RemoteIndexCacheTest {
     }
   }
 
+  @Test
+  def testCorruptOffsetIndexFileExistsButNotInCache(): Unit = {
+    // create Corrupt Offset Index File
+    createCorruptRemoteIndexCacheOffsetFile()
+    val entry = cache.getIndexEntry(rlsMetadata)
+    // Test would fail if it throws corrupt Exception
+    val expectedOffsetIndexFileName: String = remoteOffsetIndexFileName(rlsMetadata)
+    val offsetIndexFile = entry.offsetIndex.file().toPath
+
+    assertEquals(expectedOffsetIndexFileName, offsetIndexFile.getFileName.toString)
+    // assert that parent directory for the index files is correct
+    assertEquals(RemoteIndexCache.DIR_NAME, offsetIndexFile.getParent.getFileName.toString,
+      s"offsetIndex=$offsetIndexFile is not overwrite under incorrect parent")
+    // file is corrupted it should fetch from remote storage again
+    verifyFetchIndexInvocation(count = 1)
+  }
+
   private def generateSpyCacheEntry(remoteLogSegmentId: RemoteLogSegmentId
                                     = RemoteLogSegmentId.generateNew(idPartition)): RemoteIndexCache.Entry = {
     val rlsMetadata = new RemoteLogSegmentMetadata(remoteLogSegmentId, baseOffset, lastOffset,
@@ -569,4 +615,13 @@ class RemoteIndexCacheTest {
       timeIndex.flush()
     }
   }
+
+  private def createCorruptRemoteIndexCacheOffsetFile(): Unit = {
+    val pw =  new PrintWriter(remoteOffsetIndexFile(new File(tpDir, RemoteIndexCache.DIR_NAME), rlsMetadata))
+    pw.write("Hello, world")
+    // The size of the string written in the file is 12 bytes,
+    // but it should be multiple of Offset Index EntrySIZE which is equal to 8.
+    pw.close()
+  }
+
 }

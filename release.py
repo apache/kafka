@@ -332,8 +332,8 @@ def command_release_announcement_email():
         validate_release_num(previous_release_version_num)
     if release_version_num < previous_release_version_num :
         fail("Current release version number can't be less than previous release version number")
-    number_of_contributors = int(subprocess.check_output('git shortlog -sn --group=author --group=trailer:co-authored-by --no-merges %s..%s | uniq | wc -l' % (previous_release_version_num, release_version_num) , shell=True).decode('utf-8'))
-    contributors = subprocess.check_output("git shortlog -sn --group=author --group=trailer:co-authored-by --no-merges %s..%s | cut -f2 | sort --ignore-case | uniq" % (previous_release_version_num, release_version_num), shell=True).decode('utf-8')
+    number_of_contributors = int(subprocess.check_output('git shortlog -sn --group=author --group=trailer:co-authored-by --group=trailer:Reviewers --no-merges %s..%s | uniq | wc -l' % (previous_release_version_num, release_version_num) , shell=True).decode('utf-8'))
+    contributors = subprocess.check_output("git shortlog -sn --group=author --group=trailer:co-authored-by --group=trailer:Reviewers  --no-merges %s..%s | cut -f2 | sort --ignore-case | uniq" % (previous_release_version_num, release_version_num), shell=True).decode('utf-8')
     release_announcement_data = {
         'number_of_contributors': number_of_contributors,
         'contributors': ', '.join(str(x) for x in filter(None, contributors.split('\n'))),

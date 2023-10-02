@@ -36,8 +36,6 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestSslUtils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.condition.DisabledOnJre;
-import org.junit.jupiter.api.condition.JRE;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -195,7 +193,6 @@ public class SslTransportLayerTest {
      */
     @ParameterizedTest
     @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
-    @DisabledOnJre(value = JRE.JAVA_20, disabledReason = "KAFKA-15117")
     public void testValidEndpointIdentificationCN(Args args) throws Exception {
         args.serverCertStores = certBuilder(true, "localhost", args.useInlinePem).build();
         args.clientCertStores = certBuilder(false, "localhost", args.useInlinePem).build();

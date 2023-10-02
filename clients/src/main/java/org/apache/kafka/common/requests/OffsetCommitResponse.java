@@ -46,6 +46,8 @@ import java.util.function.Function;
  *   - {@link Errors#INVALID_COMMIT_OFFSET_SIZE}
  *   - {@link Errors#TOPIC_AUTHORIZATION_FAILED}
  *   - {@link Errors#GROUP_AUTHORIZATION_FAILED}
+ *   - {@link Errors#INVALID_PRODUCER_ID_MAPPING}
+ *   - {@link Errors#INVALID_TXN_STATE}
  */
 public class OffsetCommitResponse extends AbstractResponse {
 

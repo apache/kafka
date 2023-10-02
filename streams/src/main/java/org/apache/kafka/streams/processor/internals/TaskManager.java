@@ -302,7 +302,7 @@ public class TaskManager {
             }
             task.revive();
             if (stateUpdater != null) {
-                tasks.addPendingTaskToInit(Collections.singleton(task));
+                tasks.addPendingTasksToInit(Collections.singleton(task));
             }
         }
     }
@@ -403,14 +403,14 @@ public class TaskManager {
     private void createNewTasks(final Map<TaskId, Set<TopicPartition>> activeTasksToCreate,
                                 final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate) {
         final Collection<Task> newActiveTasks = activeTaskCreator.createTasks(mainConsumer, activeTasksToCreate);
-        final Collection<Task> newStandbyTask = standbyTaskCreator.createTasks(standbyTasksToCreate);
+        final Collection<Task> newStandbyTasks = standbyTaskCreator.createTasks(standbyTasksToCreate);
 
         if (stateUpdater == null) {
             tasks.addActiveTasks(newActiveTasks);
-            tasks.addStandbyTasks(newStandbyTask);
+            tasks.addStandbyTasks(newStandbyTasks);
         } else {
-            tasks.addPendingTaskToInit(newActiveTasks);
-            tasks.addPendingTaskToInit(newStandbyTask);
+            tasks.addPendingTasksToInit(newActiveTasks);
+            tasks.addPendingTasksToInit(newStandbyTasks);
         }
     }
 
@@ -477,7 +477,7 @@ public class TaskManager {
 
     private void handleTasksPendingInitialization() {
         // All tasks pending initialization are not part of the usual bookkeeping
-        for (final Task task : tasks.drainPendingTaskToInit()) {
+        for (final Task task : tasks.drainPendingTasksToInit()) {
             task.suspend();
             task.closeClean();
         }
@@ -489,7 +489,8 @@ public class TaskManager {
                                                 final Set<Task> tasksToCloseClean) {
         for (final Task task : tasks.allTasks()) {
             if (!task.isActive()) {
-                throw new IllegalStateException("Standby tasks should only be managed by the state updater");
+                throw new IllegalStateException("Standby tasks should only be managed by the state updater, " +
+                    "but standby task " + task.id() + " is managed by the stream thread");
             }
             final TaskId taskId = task.id();
             if (activeTasksToCreate.containsKey(taskId)) {
@@ -763,7 +764,9 @@ public class TaskManager {
         if (stateUpdater.restoresActiveTasks()) {
             handleRestoredTasksFromStateUpdater(now, offsetResetter);
         }
-        return !stateUpdater.restoresActiveTasks() && !tasks.hasPendingTasksToRecycle();
+        return !stateUpdater.restoresActiveTasks()
+            && !tasks.hasPendingTasksToRecycle()
+            && !tasks.hasPendingTasksToInit();
     }
 
     private void recycleTaskFromStateUpdater(final Task task,
@@ -776,8 +779,7 @@ public class TaskManager {
             newTask = task.isActive() ?
                 convertActiveToStandby((StreamTask) task, inputPartitions) :
                 convertStandbyToActive((StandbyTask) task, inputPartitions);
-            newTask.initializeIfNeeded();
-            stateUpdater.add(newTask);
+            addTaskToStateUpdater(newTask);
         } catch (final RuntimeException e) {
             final TaskId taskId = task.id();
             final String uncleanMessage = String.format("Failed to recycle task %s cleanly. " +
@@ -838,15 +840,9 @@ public class TaskManager {
 
     private void addTasksToStateUpdater() {
         final Map<TaskId, RuntimeException> taskExceptions = new LinkedHashMap<>();
-        for (final Task task : tasks.drainPendingTaskToInit()) {
+        for (final Task task : tasks.drainPendingTasksToInit()) {
             try {
-                task.initializeIfNeeded();
-                stateUpdater.add(task);
-            } catch (final LockException lockException) {
-                // The state directory may still be locked by another thread, when the rebalance just happened.
-                // Retry in the next iteration.
-                log.info("Encountered lock exception. Reattempting locking the state in the next iteration.", lockException);
-                tasks.addPendingTaskToInit(Collections.singleton(task));
+                addTaskToStateUpdater(task);
             } catch (final RuntimeException e) {
                 // need to add task back to the bookkeeping to be handled by the stream thread
                 tasks.addTask(task);
@@ -855,6 +851,18 @@ public class TaskManager {
         }
 
         maybeThrowTaskExceptions(taskExceptions);
+    }
+
+    private void addTaskToStateUpdater(final Task task) {
+        try {
+            task.initializeIfNeeded();
+            stateUpdater.add(task);
+        } catch (final LockException lockException) {
+            // The state directory may still be locked by another thread, when the rebalance just happened.
+            // Retry in the next iteration.
+            log.info("Encountered lock exception. Reattempting locking the state in the next iteration.", lockException);
+            tasks.addPendingTasksToInit(Collections.singleton(task));
+        }
     }
 
     public void handleExceptionsFromStateUpdater() {
@@ -1221,9 +1229,10 @@ public class TaskManager {
      */
     private void releaseLockedUnassignedTaskDirectories() {
         final Iterator<TaskId> taskIdIterator = lockedTaskDirectories.iterator();
+        final Map<TaskId, Task> allTasks = allTasks();
         while (taskIdIterator.hasNext()) {
             final TaskId id = taskIdIterator.next();
-            if (!tasks.contains(id)) {
+            if (!allTasks.containsKey(id)) {
                 stateDirectory.unlock(id);
                 taskIdIterator.remove();
             }
@@ -1628,6 +1637,25 @@ public class TaskManager {
     }
 
     /**
+     * Resumes polling in the main consumer for all partitions for which
+     * the corresponding record queues have capacity (again).
+     */
+    public void resumePollingForPartitionsWithAvailableSpace() {
+        for (final Task t: tasks.activeTasks()) {
+            t.resumePollingForPartitionsWithAvailableSpace();
+        }
+    }
+
+    /**
+     * Fetches up-to-date lag information from the consumer.
+     */
+    public void updateLags() {
+        for (final Task t: tasks.activeTasks()) {
+            t.updateLags();
+        }
+    }
+
+    /**
      * Take records and add them to each respective task
      *
      * @param records Records, can be null
@@ -1893,9 +1921,5 @@ public class TaskManager {
     // for testing only
     void addTask(final Task task) {
         tasks.addTask(task);
-    }
-
-    TasksRegistry tasks() {
-        return tasks;
     }
 }

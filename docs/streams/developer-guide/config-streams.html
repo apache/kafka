@@ -81,7 +81,6 @@ settings.put(... , ...);</code></pre>
               <li><a class="reference internal" href="#max-warmup-replicas" id="id29">max.warmup.replicas</a></li>
               <li><a class="reference internal" href="#num-standby-replicas" id="id10">num.standby.replicas</a></li>
               <li><a class="reference internal" href="#num-stream-threads" id="id11">num.stream.threads</a></li>
-              <li><a class="reference internal" href="#partition-grouper" id="id12">partition.grouper</a></li>
               <li><a class="reference internal" href="#probing-rebalance-interval-ms" id="id30">probing.rebalance.interval.ms</a></li>
               <li><a class="reference internal" href="#processing-guarantee" id="id25">processing.guarantee</a></li>
               <li><a class="reference internal" href="#rack-aware-assignment-non-overlap-cost" id="id37">rack.aware.assignment.non_overlap_cost</a></li>
@@ -364,11 +363,6 @@ streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);</code></pre>
             <td>Medium</td>
             <td colspan="2">The number of threads to execute stream processing.</td>
             <td>1</td>
-          </tr>
-          <tr class="row-even"><td>partition.grouper</td>
-            <td>Low</td>
-            <td colspan="2">Partition grouper class that implements the <code class="docutils literal"><span class="pre">PartitionGrouper</span></code> interface.</td>
-            <td>See <a class="reference internal" href="#streams-developer-guide-partition-grouper"><span class="std std-ref">Partition Grouper</span></a></td>
           </tr>
           <tr class="row-odd"><td>probing.rebalance.interval.ms</td>
             <td>Low</td>
@@ -882,17 +876,6 @@ rack.aware.assignment.tags: zone,cluster   | rack.aware.assignment.tags: zone,cl
           <blockquote>
             <div>This specifies the number of stream threads in an instance of the Kafka Streams application. The stream processing code runs in these thread.
               For more information about Kafka Streams threading model, see <a class="reference internal" href="../architecture.html#streams_architecture_threads"><span class="std std-ref">Threading Model</span></a>.</div></blockquote>
-        </div>
-        <div class="section" id="partition-grouper">
-          <span id="streams-developer-guide-partition-grouper"></span><h4><a class="toc-backref" href="#id12">partition.grouper</a><a class="headerlink" href="#partition-grouper" title="Permalink to this headline"></a></h4>
-          <blockquote>
-            <div>
-              <b>[DEPRECATED]</b> A partition grouper creates a list of stream tasks from the partitions of source topics, where each created task is assigned with a group of source topic partitions.
-              The default implementation provided by Kafka Streams is <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/processor/DefaultPartitionGrouper.html">DefaultPartitionGrouper</a>.
-              It assigns each task with one partition for each of the source topic partitions. The generated number of tasks equals the largest
-              number of partitions among the input topics. Usually an application does not need to customize the partition grouper.
-            </div>
-          </blockquote>
         </div>
         <div class="section" id="probing-rebalance-interval-ms">
           <h4><a class="toc-backref" href="#id30">probing.rebalance.interval.ms</a><a class="headerlink" href="#probing-rebalance-interval-ms" title="Permalink to this headline"></a></h4>

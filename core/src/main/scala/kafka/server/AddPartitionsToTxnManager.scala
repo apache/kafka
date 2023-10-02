@@ -18,19 +18,22 @@
 package kafka.server
 
 import kafka.server.AddPartitionsToTxnManager.{VerificationFailureRateMetricName, VerificationTimeMsMetricName}
+import kafka.utils.Implicits.MapExtensionMethods
 import kafka.utils.Logging
 import org.apache.kafka.clients.{ClientResponse, NetworkClient, RequestCompletionHandler}
+import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.{Node, TopicPartition}
-import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.{AddPartitionsToTxnTransaction, AddPartitionsToTxnTransactionCollection}
+import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.{AddPartitionsToTxnTopic, AddPartitionsToTxnTopicCollection, AddPartitionsToTxnTransaction, AddPartitionsToTxnTransactionCollection}
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.{AddPartitionsToTxnRequest, AddPartitionsToTxnResponse}
+import org.apache.kafka.common.requests.{AddPartitionsToTxnRequest, AddPartitionsToTxnResponse, MetadataResponse}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.{InterBrokerSendThread, RequestAndCompletionHandler}
 
 import java.util
 import java.util.concurrent.TimeUnit
-import scala.collection.mutable
+import scala.collection.{Set, Seq, mutable}
+import scala.jdk.CollectionConverters._
 
 object AddPartitionsToTxnManager {
   type AppendCallback = Map[TopicPartition, Errors] => Unit
@@ -38,7 +41,6 @@ object AddPartitionsToTxnManager {
   val VerificationFailureRateMetricName = "VerificationFailureRate"
   val VerificationTimeMsMetricName = "VerificationTimeMs"
 }
-
 
 /*
  * Data structure to hold the transactional data to send to a node. Note -- at most one request per transactional ID
@@ -49,10 +51,18 @@ class TransactionDataAndCallbacks(val transactionData: AddPartitionsToTxnTransac
                                   val callbacks: mutable.Map[String, AddPartitionsToTxnManager.AppendCallback],
                                   val startTimeMs: mutable.Map[String, Long])
 
-
-class AddPartitionsToTxnManager(config: KafkaConfig, client: NetworkClient, time: Time)
-  extends InterBrokerSendThread("AddPartitionsToTxnSenderThread-" + config.brokerId, client, config.requestTimeoutMs, time)
-  with Logging {
+class AddPartitionsToTxnManager(
+  config: KafkaConfig,
+  client: NetworkClient,
+  metadataCache: MetadataCache,
+  partitionFor: String => Int,
+  time: Time
+) extends InterBrokerSendThread(
+  "AddPartitionsToTxnSenderThread-" + config.brokerId,
+  client,
+  config.requestTimeoutMs,
+  time
+) with Logging {
 
   this.logIdent = logPrefix
 
@@ -63,7 +73,41 @@ class AddPartitionsToTxnManager(config: KafkaConfig, client: NetworkClient, time
   val verificationFailureRate = metricsGroup.newMeter(VerificationFailureRateMetricName, "failures", TimeUnit.SECONDS)
   val verificationTimeMs = metricsGroup.newHistogram(VerificationTimeMsMetricName)
 
-  def addTxnData(node: Node, transactionData: AddPartitionsToTxnTransaction, callback: AddPartitionsToTxnManager.AppendCallback): Unit = {
+  def verifyTransaction(
+    transactionalId: String,
+    producerId: Long,
+    producerEpoch: Short,
+    topicPartitions: Seq[TopicPartition],
+    callback: AddPartitionsToTxnManager.AppendCallback
+  ): Unit = {
+    val (error, node) = getTransactionCoordinator(partitionFor(transactionalId))
+
+    if (error != Errors.NONE) {
+      callback(topicPartitions.map(tp => tp -> error).toMap)
+    } else {
+      val topicCollection = new AddPartitionsToTxnTopicCollection()
+      topicPartitions.groupBy(_.topic).forKeyValue { (topic, tps) =>
+        topicCollection.add(new AddPartitionsToTxnTopic()
+          .setName(topic)
+          .setPartitions(tps.map(tp => Int.box(tp.partition)).toList.asJava))
+      }
+
+      val transactionData = new AddPartitionsToTxnTransaction()
+        .setTransactionalId(transactionalId)
+        .setProducerId(producerId)
+        .setProducerEpoch(producerEpoch)
+        .setVerifyOnly(true)
+        .setTopics(topicCollection)
+
+      addTxnData(node, transactionData, callback)
+    }
+  }
+
+  private def addTxnData(
+    node: Node,
+    transactionData: AddPartitionsToTxnTransaction,
+    callback: AddPartitionsToTxnManager.AppendCallback
+  ): Unit = {
     nodesToTransactions.synchronized {
       val curTime = time.milliseconds()
       // Check if we have already have either node or individual transaction. Add the Node if it isn't there.
@@ -99,6 +143,33 @@ class AddPartitionsToTxnManager(config: KafkaConfig, client: NetworkClient, time
       existingNodeAndTransactionData.callbacks.put(transactionData.transactionalId, callback)
       existingNodeAndTransactionData.startTimeMs.put(transactionData.transactionalId, curTime)
       wakeup()
+    }
+  }
+
+  private def getTransactionCoordinator(partition: Int): (Errors, Node) = {
+    val listenerName = config.interBrokerListenerName
+
+    val topicMetadata = metadataCache.getTopicMetadata(Set(Topic.TRANSACTION_STATE_TOPIC_NAME), listenerName)
+
+    if (topicMetadata.headOption.isEmpty) {
+      // If topic is not created, then the transaction is definitely not started.
+      (Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode)
+    } else {
+      if (topicMetadata.head.errorCode != Errors.NONE.code) {
+        (Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode)
+      } else {
+        val coordinatorEndpoint = topicMetadata.head.partitions.asScala
+          .find(_.partitionIndex == partition)
+          .filter(_.leaderId != MetadataResponse.NO_LEADER_ID)
+          .flatMap(metadata => metadataCache.getAliveBrokerNode(metadata.leaderId, listenerName))
+
+        coordinatorEndpoint match {
+          case Some(endpoint) =>
+            (Errors.NONE, endpoint)
+          case _ =>
+            (Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode)
+        }
+      }
     }
   }
 

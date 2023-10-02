@@ -1452,7 +1452,7 @@ public class IntegrationTestUtils {
     public static void waitUntilStreamsHasPolled(final KafkaStreams kafkaStreams, final int pollNumber)
         throws InterruptedException {
         final Double initialCount = getStreamsPollNumber(kafkaStreams);
-        retryOnExceptionWithTimeout(1000, () -> {
+        retryOnExceptionWithTimeout(10000, () -> {
             assertThat(getStreamsPollNumber(kafkaStreams), is(greaterThanOrEqualTo(initialCount + pollNumber)));
         });
     }
