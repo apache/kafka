@@ -39,6 +39,8 @@ import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
 import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, EpochEntry, FetchIsolation, LogConfig, LogFileUtils, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogStartOffsetIncrementReason, ProducerStateManager, ProducerStateManagerConfig, RecordValidationException}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.EnumSource
 import org.mockito.ArgumentMatchers
 import org.mockito.ArgumentMatchers.anyLong
 import org.mockito.Mockito.{mock, when}
@@ -3725,13 +3727,14 @@ class UnifiedLogTest {
     listener.verify(expectedHighWatermark = 4)
   }
 
-  @Test
-  def testTransactionIsOngoingAndVerificationGuard(): Unit = {
+  @ParameterizedTest
+  @EnumSource(value = classOf[AppendOrigin], names = Array("CLIENT", "COORDINATOR"))
+  def testTransactionIsOngoingAndVerificationGuard(appendOrigin: AppendOrigin): Unit = {
     val producerStateManagerConfig = new ProducerStateManagerConfig(86400000, true)
 
     val producerId = 23L
     val producerEpoch = 1.toShort
-    val sequence = 3
+    var sequence = if (appendOrigin == AppendOrigin.CLIENT) 3 else 0
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 2048 * 5)
     val log = createLog(logDir, logConfig, producerStateManagerConfig = producerStateManagerConfig)
     assertFalse(log.hasOngoingTransaction(producerId))
@@ -3746,32 +3749,36 @@ class UnifiedLogTest {
       new SimpleRecord("2".getBytes)
     )
 
+    // Only clients have nonzero sequences
+    if (appendOrigin == AppendOrigin.CLIENT)
+      sequence = sequence + 2
+
     val transactionalRecords = MemoryRecords.withTransactionalRecords(
       CompressionType.NONE,
       producerId,
       producerEpoch,
-      sequence + 2,
+      sequence,
       new SimpleRecord("1".getBytes),
       new SimpleRecord("2".getBytes)
     )
 
-    val verificationGuard = log.maybeStartTransactionVerification(producerId, sequence + 2, producerEpoch)
+    val verificationGuard = log.maybeStartTransactionVerification(producerId, sequence, producerEpoch)
     assertNotNull(verificationGuard)
 
-    log.appendAsLeader(idempotentRecords, leaderEpoch = 0)
+    log.appendAsLeader(idempotentRecords, origin = appendOrigin, leaderEpoch = 0)
     assertFalse(log.hasOngoingTransaction(producerId))
 
     // Since we wrote idempotent records, we keep verification guard.
     assertEquals(verificationGuard, log.verificationGuard(producerId))
 
     // Now write the transactional records
-    log.appendAsLeader(transactionalRecords, leaderEpoch = 0, verificationGuard = verificationGuard)
+    log.appendAsLeader(transactionalRecords, origin = appendOrigin, leaderEpoch = 0, verificationGuard = verificationGuard)
     assertTrue(log.hasOngoingTransaction(producerId))
     // Verification guard should be cleared now.
     assertNull(log.verificationGuard(producerId))
 
     // A subsequent maybeStartTransactionVerification will be empty since we are already verified.
-    assertNull(log.maybeStartTransactionVerification(producerId, sequence + 2, producerEpoch))
+    assertNull(log.maybeStartTransactionVerification(producerId, sequence, producerEpoch))
 
     val endTransactionMarkerRecord = MemoryRecords.withEndTransactionMarker(
       producerId,
@@ -3783,8 +3790,11 @@ class UnifiedLogTest {
     assertFalse(log.hasOngoingTransaction(producerId))
     assertNull(log.verificationGuard(producerId))
 
+    if (appendOrigin == AppendOrigin.CLIENT)
+      sequence = sequence + 1
+
     // A new maybeStartTransactionVerification will not be empty, as we need to verify the next transaction.
-    val newVerificationGuard = log.maybeStartTransactionVerification(producerId, sequence + 3, producerEpoch)
+    val newVerificationGuard = log.maybeStartTransactionVerification(producerId, sequence, producerEpoch)
     assertNotNull(newVerificationGuard)
     assertNotEquals(verificationGuard, newVerificationGuard)
   }

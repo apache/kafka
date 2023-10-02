@@ -1048,8 +1048,10 @@ class UnifiedLog(@volatile var logStartOffset: Long,
           if (duplicateBatch.isPresent) {
             return (updatedProducers, completedTxns.toList, Some(duplicateBatch.get()))
           }
+        }
 
-          // Verify that if the record is transactional & the append origin is client, that we either have an ongoing transaction or verified transaction state.
+        if (origin == AppendOrigin.CLIENT || origin == AppendOrigin.COORDINATOR) {
+          // Verify that if the record is transactional & the append origin is client/coordinator, that we either have an ongoing transaction or verified transaction state.
           // This guarantees that transactional records are never written to the log outside of the transaction coordinator's knowledge of an open transaction on
           // the partition. If we do not have an ongoing transaction or correct guard, return an error and do not append.
           // There are two phases -- the first append to the log and subsequent appends.
@@ -1086,7 +1088,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   }
 
   private def batchMissingRequiredVerification(batch: MutableRecordBatch, requestVerificationGuard: Object): Boolean = {
-    producerStateManager.producerStateManagerConfig().transactionVerificationEnabled() &&
+    producerStateManager.producerStateManagerConfig().transactionVerificationEnabled() && !batch.isControlBatch &&
       (requestVerificationGuard != verificationGuard(batch.producerId) || requestVerificationGuard == null)
   }
 
