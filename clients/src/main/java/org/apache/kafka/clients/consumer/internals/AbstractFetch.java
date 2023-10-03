@@ -43,11 +43,11 @@ import java.io.Closeable;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.consumer.internals.FetchUtils.requestMetadataUpdate;
 
@@ -333,7 +333,7 @@ public abstract class AbstractFetch implements Closeable {
 
     protected Map<Node, FetchSessionHandler.FetchRequestData> prepareCloseFetchSessionRequests() {
         final Cluster cluster = metadata.fetch();
-        Map<Node, FetchSessionHandler.Builder> fetchable = new LinkedHashMap<>();
+        Map<Node, FetchSessionHandler.Builder> fetchable = new HashMap<>();
 
         try {
             sessionHandlers.forEach((fetchTargetNodeId, sessionHandler) -> {
@@ -355,11 +355,7 @@ public abstract class AbstractFetch implements Closeable {
             sessionHandlers.clear();
         }
 
-        Map<Node, FetchSessionHandler.FetchRequestData> reqs = new LinkedHashMap<>();
-        for (Map.Entry<Node, FetchSessionHandler.Builder> entry : fetchable.entrySet()) {
-            reqs.put(entry.getKey(), entry.getValue().build());
-        }
-        return reqs;
+        return fetchable.entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().build()));
     }
 
     /**
@@ -370,7 +366,7 @@ public abstract class AbstractFetch implements Closeable {
         // Update metrics in case there was an assignment change
         metricsManager.maybeUpdateAssignment(subscriptions);
 
-        Map<Node, FetchSessionHandler.Builder> fetchable = new LinkedHashMap<>();
+        Map<Node, FetchSessionHandler.Builder> fetchable = new HashMap<>();
         long currentTimeMs = time.milliseconds();
         Map<String, Uuid> topicIds = metadata.topicIds();
 
@@ -419,11 +415,7 @@ public abstract class AbstractFetch implements Closeable {
             }
         }
 
-        Map<Node, FetchSessionHandler.FetchRequestData> reqs = new LinkedHashMap<>();
-        for (Map.Entry<Node, FetchSessionHandler.Builder> entry : fetchable.entrySet()) {
-            reqs.put(entry.getKey(), entry.getValue().build());
-        }
-        return reqs;
+        return fetchable.entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().build()));
     }
 
     // Visible for testing
