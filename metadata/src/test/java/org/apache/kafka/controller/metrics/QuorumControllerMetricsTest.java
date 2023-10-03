@@ -197,11 +197,26 @@ public class QuorumControllerMetricsTest {
         try (QuorumControllerMetrics metrics = new QuorumControllerMetrics(Optional.of(registry), time, true)) {
             metrics.updateDualWriteOffset(90);
             metrics.setLastCommittedRecordOffset(100);
+            metrics.setActive(true);
             @SuppressWarnings("unchecked")
             Gauge<Long> zkWriteBehindLag = (Gauge<Long>) registry
                 .allMetrics()
                 .get(metricName("KafkaController", "ZkWriteBehindLag"));
             assertEquals(10, zkWriteBehindLag.value());
+        } finally {
+            registry.shutdown();
+        }
+
+        // test zkWriteBehindLag metric when in dual-write mode and not active
+        try (QuorumControllerMetrics metrics = new QuorumControllerMetrics(Optional.of(registry), time, true)) {
+            metrics.updateDualWriteOffset(90);
+            metrics.setLastCommittedRecordOffset(100);
+            metrics.setActive(false);
+            @SuppressWarnings("unchecked")
+            Gauge<Long> zkWriteBehindLag = (Gauge<Long>) registry
+                    .allMetrics()
+                    .get(metricName("KafkaController", "ZkWriteBehindLag"));
+            assertEquals(0, zkWriteBehindLag.value());
         } finally {
             registry.shutdown();
         }
