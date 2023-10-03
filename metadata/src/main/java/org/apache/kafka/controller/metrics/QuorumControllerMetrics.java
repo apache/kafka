@@ -160,7 +160,7 @@ public class QuorumControllerMetrics implements AutoCloseable {
             registry.ifPresent(r -> r.newGauge(ZK_WRITE_BEHIND_LAG, new Gauge<Long>() {
                 @Override
                 public Long value() {
-                    // not in dual-write mode on not an active controller: set metric value to 0
+                    // not in dual-write mode or not an active controller: set metric value to 0
                     if (dualWriteOffset() == 0 || !active()) return 0L;
                     // in dual write mode
                     else return lastCommittedRecordOffset() - dualWriteOffset();
