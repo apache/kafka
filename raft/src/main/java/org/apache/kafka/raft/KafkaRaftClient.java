@@ -965,7 +965,6 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         }
 
         int replicaId = FetchRequest.replicaId(request);
-
         FetchResponseData response = tryCompleteFetchRequest(replicaId, fetchPartition, currentTimeMs);
         FetchResponseData.PartitionData partitionResponse =
             response.responses().get(0).partitions().get(0);
@@ -1258,7 +1257,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
      * - {@link Errors#POSITION_OUT_OF_RANGE} if the request snapshot offset out of range
      */
     private FetchSnapshotResponseData handleFetchSnapshotRequest(
-        RaftRequest.Inbound requestMetadata
+        RaftRequest.Inbound requestMetadata,
+        long currentTimeMs
     ) {
         FetchSnapshotRequestData data = (FetchSnapshotRequestData) requestMetadata.data;
 
@@ -1340,6 +1340,9 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         }
 
         UnalignedRecords records = snapshot.slice(partitionSnapshot.position(), Math.min(data.maxBytes(), maxSnapshotSize));
+
+        Optional<LeaderState<T>> state = quorum.maybeLeaderState();
+        state.ifPresent(s -> s.maybeResetMajorityFollowerFetchTimer(data.replicaId(), currentTimeMs));
 
         return FetchSnapshotResponse.singleton(
             log.topicPartition(),
@@ -1702,7 +1705,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                 break;
 
             case FETCH_SNAPSHOT:
-                responseFuture = completedFuture(handleFetchSnapshotRequest(request));
+                responseFuture = completedFuture(handleFetchSnapshotRequest(request, currentTimeMs));
                 break;
 
             default:
@@ -1876,6 +1879,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
         FetchSnapshotRequestData request = FetchSnapshotRequest.singleton(
             clusterId,
+            quorum().localIdOrSentinel(),
             log.topicPartition(),
             snapshotPartition -> {
                 return snapshotPartition
@@ -1991,7 +1995,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         LeaderState<T> state = quorum.leaderStateOrThrow();
         maybeFireLeaderChange(state);
 
-        if (shutdown.get() != null || state.isResignRequested() || state.hasMajorityFollowerFetchTimeoutExpired(currentTimeMs)) {
+        if (shutdown.get() != null || state.isResignRequested() || state.hasMajorityFollowerFetchExpired(currentTimeMs)) {
             transitionToResigned(state.nonLeaderVotersByDescendingFetchOffset());
             return 0L;
         }

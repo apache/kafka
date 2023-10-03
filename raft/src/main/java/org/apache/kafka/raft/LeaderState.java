@@ -90,6 +90,8 @@ public class LeaderState<T> implements EpochState {
         this.fetchTimer = time.timer(fetchTimeoutMs);
     }
 
+    // Check if the fetchTimer is expired because we didn't receive fetch/fetchSnapshot request from the majority of
+    // the voters within fetch timeout.
     public boolean hasMajorityFollowerFetchExpired(long currentTimeMs) {
         fetchTimer.update(currentTimeMs);
         boolean isExpired = fetchTimer.isExpired();
@@ -100,8 +102,8 @@ public class LeaderState<T> implements EpochState {
         return isExpired;
     }
 
-    // visible for testing
-    void maybeResetMajorityFollowerFetchTimer(int id, long currentTimeMs) {
+    // Reset the fetch timer if we've received fetch/fetchSnapshot request from the majority of the voter
+    public void maybeResetMajorityFollowerFetchTimer(int id, long currentTimeMs) {
         updateFetchedVoters(id);
         // The majority number of the voters excluding the leader. Ex: 3 voters, the value will be 1
         int majority = voterStates.size() / 2;
