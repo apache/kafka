@@ -59,6 +59,7 @@ import java.util.Collections;
  */
 public class HeartbeatRequestManager implements RequestManager {
     private final Logger logger;
+    private final Time time;
 
     // Time that the group coordinator will wait on member to revoke its partitions. This is provided by the group
     // coordinator in the heartbeat
@@ -78,6 +79,7 @@ public class HeartbeatRequestManager implements RequestManager {
         final MembershipManager membershipManager,
         final ErrorEventHandler nonRetriableErrorHandler) {
         this.coordinatorRequestManager = coordinatorRequestManager;
+        this.time = time;
         this.logger = logContext.logger(getClass());
         this.subscriptions = subscriptions;
         this.membershipManager = membershipManager;
@@ -92,6 +94,7 @@ public class HeartbeatRequestManager implements RequestManager {
     // Visible for testing
     HeartbeatRequestManager(
         final LogContext logContext,
+        final Time time,
         final ConsumerConfig config,
         final CoordinatorRequestManager coordinatorRequestManager,
         final SubscriptionState subscriptions,
@@ -99,6 +102,7 @@ public class HeartbeatRequestManager implements RequestManager {
         final HeartbeatRequestState heartbeatRequestState,
         final ErrorEventHandler nonRetriableErrorHandler) {
         this.logger = logContext.logger(this.getClass());
+        this.time = time;
         this.subscriptions = subscriptions;
         this.rebalanceTimeoutMs = config.getInt(CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG);
         this.coordinatorRequestManager = coordinatorRequestManager;
@@ -158,12 +162,13 @@ public class HeartbeatRequestManager implements RequestManager {
         NetworkClientDelegate.UnsentRequest request = new NetworkClientDelegate.UnsentRequest(
             new ConsumerGroupHeartbeatRequest.Builder(data),
             coordinatorRequestManager.coordinator());
-
         request.future().whenComplete((response, exception) -> {
-            if (exception == null) {
+            if (response != null) {
                 onResponse((ConsumerGroupHeartbeatResponse) response.responseBody(), response.receivedTimeMs());
             } else {
-                onFailure(exception, response.receivedTimeMs());
+                // TODO: Currently, we lack a good way to propage the response time from the network client to the
+                //  request handler. We will need to store the response time in the handler to make it accessible.
+                onFailure(exception, time.milliseconds());
             }
         });
         return request;
@@ -199,6 +204,8 @@ public class HeartbeatRequestManager implements RequestManager {
                                  final long currentTimeMs) {
         Errors error = Errors.forCode(response.data().errorCode());
         String errorMessage = response.data().errorMessage();
+        // TODO: upon encountering a fatal/fenced error, trigger onPartitionLost logic to give up the current
+        //  assignments.
         switch (error) {
             case NOT_COORDINATOR:
             case COORDINATOR_NOT_AVAILABLE:
@@ -257,7 +264,6 @@ public class HeartbeatRequestManager implements RequestManager {
                 logger.error("GroupHeartbeatRequest failed due to unexpected error: {}", error);
                 membershipManager.transitionToFailed();
                 nonRetriableErrorHandler.handle(error.exception(errorMessage));
-                membershipManager.transitionToFailed();
                 break;
         }
     }

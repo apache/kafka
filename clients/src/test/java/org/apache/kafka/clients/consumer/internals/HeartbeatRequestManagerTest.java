@@ -20,6 +20,7 @@ import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -107,6 +108,7 @@ public class HeartbeatRequestManagerTest {
         errorEventHandler = mock(ErrorEventHandler.class);
         heartbeatRequestManager = new HeartbeatRequestManager(
             mockLogContext,
+            mockTime,
             config,
             mockCoordinatorRequestManager,
             mockSubscriptionState,
@@ -178,6 +180,32 @@ public class HeartbeatRequestManagerTest {
     }
 
     @Test
+    public void testBackoffOnHeartbeatTimeout() {
+        heartbeatRequestState = new HeartbeatRequestManager.HeartbeatRequestState(
+            mockLogContext,
+            mockTime,
+            0,
+            retryBackoffMs,
+            retryBackoffMaxMs,
+            0);
+        heartbeatRequestManager = createManager();
+        when(mockCoordinatorRequestManager.coordinator()).thenReturn(Optional.of(new Node(1, "localhost", 9999)));
+        when(mockMembershipManager.shouldSendHeartbeat()).thenReturn(true);
+        NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(mockTime.milliseconds());
+        assertEquals(1, result.unsentRequests.size());
+        result.unsentRequests.get(0).future().completeExceptionally(new TimeoutException("timeout"));
+
+        // assure the manager will backoff on timeout
+        mockTime.sleep(retryBackoffMs - 1);
+        result = heartbeatRequestManager.poll(mockTime.milliseconds());
+        assertEquals(0, result.unsentRequests.size());
+
+        mockTime.sleep(1);
+        result = heartbeatRequestManager.poll(mockTime.milliseconds());
+        assertEquals(1, result.unsentRequests.size());
+    }
+
+    @Test
     public void testNoCoordinator() {
         when(mockCoordinatorRequestManager.coordinator()).thenReturn(Optional.empty());
         NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(mockTime.milliseconds());
@@ -229,9 +257,14 @@ public class HeartbeatRequestManagerTest {
         } else if (errorCode == Errors.COORDINATOR_LOAD_IN_PROGRESS.code()) {
             verify(errorEventHandler, never()).handle(any());
             assertEquals(retryBackoffMs, heartbeatRequestState.nextHeartbeatMs(mockTime.milliseconds()));
+        } else if (errorCode == Errors.COORDINATOR_NOT_AVAILABLE.code() ||
+            errorCode == Errors.NOT_COORDINATOR.code()) {
+            // NOT_COORDINATOR/COORDINATOR_NOT_AVAILABLE should be retried immediately when the coordinator node
+            // becomes available
+            verify(errorEventHandler, never()).handle(any());
+            verify(mockCoordinatorRequestManager).markCoordinatorUnknown(any(), anyLong());
+            assertEquals(0, heartbeatRequestState.nextHeartbeatMs(mockTime.milliseconds()));
         } else {
-            // NOT_COORDINATOR/COORDINATOR_LOAD_IN_PROGRESS/COORDINATOR_NOT_AVAILABLE
-            // should be retried immediately when the coordinator node becomes available
             verify(errorEventHandler, never()).handle(any());
             assertEquals(0, heartbeatRequestState.nextHeartbeatMs(mockTime.milliseconds()));
         }
@@ -278,12 +311,15 @@ public class HeartbeatRequestManagerTest {
     private ClientResponse createHeartbeatResponse(
         final NetworkClientDelegate.UnsentRequest request,
         final Errors error) {
-        ConsumerGroupHeartbeatResponse response = new ConsumerGroupHeartbeatResponse(new ConsumerGroupHeartbeatResponseData()
+        ConsumerGroupHeartbeatResponseData data = new ConsumerGroupHeartbeatResponseData()
             .setErrorCode(error.code())
             .setHeartbeatIntervalMs(heartbeatIntervalMs)
             .setMemberId(memberId)
-            .setMemberEpoch(memberEpoch));
-
+            .setMemberEpoch(memberEpoch);
+        if (error != Errors.NONE) {
+            data.setErrorMessage("stubbed error message");
+        }
+        ConsumerGroupHeartbeatResponse response = new ConsumerGroupHeartbeatResponse(data);
         return new ClientResponse(
             new RequestHeader(ApiKeys.CONSUMER_GROUP_HEARTBEAT, ApiKeys.CONSUMER_GROUP_HEARTBEAT.latestVersion(), "client-id", 1),
             request.callback(),
@@ -299,6 +335,7 @@ public class HeartbeatRequestManagerTest {
     private HeartbeatRequestManager createManager() {
         return new HeartbeatRequestManager(
             mockLogContext,
+            mockTime,
             config,
             mockCoordinatorRequestManager,
             mockSubscriptionState,
