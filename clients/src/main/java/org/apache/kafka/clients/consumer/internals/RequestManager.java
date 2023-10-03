@@ -27,11 +27,35 @@ import static org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.
  */
 public interface RequestManager {
 
+    /**
+     * During normal operation of the {@link Consumer}, a request manager may need to send out network requests.
+     * Implementations can return {@link PollResult their need for network I/O} by returning the requests here.
+     * Because the {@code poll} method is called within the single-threaded context of the consumer's main network
+     * I/O thread, there should be no need for synchronization protection within itself or other state.
+     *
+     * <p/>
+     *
+     * <em>Note</em>: no network I/O occurs in this method. The method itself should not block on I/O or for any
+     * other reason. This method is called from by the consumer's main network I/O thread. So quick execution of
+     * this method in <em>all</em> request managers is critical to ensure that we can heartbeat in a timely fashion.
+     *
+     * @param currentTimeMs The current system time at which the method was called; useful for determining if
+     *                      time-sensitive operations should be performed
+     */
     PollResult poll(long currentTimeMs);
 
     /**
-     * On shutdown of the {@link Consumer}, a request manager may want/need to send out some requests. If so,
-     * implementations can signal that by returning the close requests here.
+     * On shutdown of the {@link Consumer}, a request manager may need to send out network requests. Implementations
+     * can signal that by returning the {@link PollResult close} requests here. Unlike {@link #poll(long)}, the
+     * {@code pollOnClose} method is called from the <em>application thread</em>. Therefore, protection should be made
+     * when interacting with other any state that could be affected by other threads.
+     *
+     * <p/>
+     *
+     * <em>Note</em>: no network I/O occurs in this method. The method itself should not block on I/O or for any
+     * other reason. This method is called (indirectly) by the {@link Consumer#close() consumer's close method}.
+     * So quick execution of this method in <em>all</em> request managers is critical to ensure that we can
+     * complete as many of the shutdown tasks as possible given the user-provided timeout.
      */
     default PollResult pollOnClose() {
         return EMPTY;

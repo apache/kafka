@@ -87,6 +87,9 @@ public class FetchRequestManager extends AbstractFetch implements RequestManager
         futures.add(future);
     }
 
+    /**
+     * @see RequestManager#poll(long)
+     */
     @Override
     public PollResult poll(long currentTimeMs) {
         List<UnsentRequest> requests = prepareFetchRequests().entrySet().stream().map(entry -> {
@@ -110,6 +113,9 @@ public class FetchRequestManager extends AbstractFetch implements RequestManager
         return new PollResult(requests);
     }
 
+    /**
+     * @see RequestManager#pollOnClose()
+     */
     @Override
     public PollResult pollOnClose() {
         List<UnsentRequest> requests = prepareCloseFetchSessionRequests().entrySet().stream().map(entry -> {
