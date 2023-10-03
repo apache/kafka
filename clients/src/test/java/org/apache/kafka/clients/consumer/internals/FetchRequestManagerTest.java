@@ -185,7 +185,6 @@ public class FetchRequestManagerTest {
     private MockClient client;
     private Metrics metrics;
     private ApiVersions apiVersions = new ApiVersions();
-    private ConsumerNetworkClient oldConsumerClient;
     private TestableFetchRequestManager<?, ?> fetcher;
     private TestableNetworkClientDelegate networkClientDelegate;
     private OffsetFetcher offsetFetcher;
@@ -3400,8 +3399,16 @@ public class FetchRequestManagerTest {
                 metricsManager,
                 networkClientDelegate,
                 fetchCollector));
+        ConsumerNetworkClient consumerNetworkClient = new ConsumerNetworkClient(
+                logContext,
+                client,
+                metadata,
+                time,
+                retryBackoffMs,
+                (int) requestTimeoutMs,
+                Integer.MAX_VALUE);
         offsetFetcher = new OffsetFetcher(logContext,
-                oldConsumerClient,
+                consumerNetworkClient,
                 metadata,
                 subscriptions,
                 time,
@@ -3421,8 +3428,6 @@ public class FetchRequestManagerTest {
                 subscriptions, logContext, new ClusterResourceListeners());
         client = new MockClient(time, metadata);
         metrics = new Metrics(metricConfig, time);
-        oldConsumerClient = spy(new ConsumerNetworkClient(logContext, client, metadata, time,
-                retryBackoffMs, (int) requestTimeoutMs, Integer.MAX_VALUE));
         metricsRegistry = new FetchMetricsRegistry(metricConfig.tags().keySet(), "consumer" + groupId);
         metricsManager = new FetchMetricsManager(metrics, metricsRegistry);
 
