@@ -316,7 +316,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
             }
         });
 
-        log.info("The following groups were deleted: {}. A total of {} offsets were removed",
+        log.info("The following groups were deleted: {}. A total of {} offsets were removed.",
             String.join(", ", deletedGroups),
             numDeletedOffsets
         );

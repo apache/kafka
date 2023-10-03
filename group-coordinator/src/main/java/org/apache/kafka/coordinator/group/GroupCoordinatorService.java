@@ -262,11 +262,30 @@ public class GroupCoordinatorService implements GroupCoordinator {
             "consumer-group-heartbeat",
             topicPartitionFor(request.groupId()),
             coordinator -> coordinator.consumerGroupHeartbeat(context, request)
-        ).exceptionally(exception ->
-            new ConsumerGroupHeartbeatResponseData()
-                .setErrorCode(getErrorsForException(exception).code())
-                .setErrorMessage(exception.getMessage())
-        );
+        ).exceptionally(exception -> {
+            if (exception instanceof UnknownTopicOrPartitionException ||
+                exception instanceof NotEnoughReplicasException) {
+                return new ConsumerGroupHeartbeatResponseData()
+                    .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code());
+            }
+
+            if (exception instanceof NotLeaderOrFollowerException ||
+                exception instanceof KafkaStorageException) {
+                return new ConsumerGroupHeartbeatResponseData()
+                    .setErrorCode(Errors.NOT_COORDINATOR.code());
+            }
+
+            if (exception instanceof RecordTooLargeException ||
+                exception instanceof RecordBatchTooLargeException ||
+                exception instanceof InvalidFetchSizeException) {
+                return new ConsumerGroupHeartbeatResponseData()
+                    .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code());
+            }
+
+            return new ConsumerGroupHeartbeatResponseData()
+                .setErrorCode(Errors.forException(exception).code())
+                .setErrorMessage(exception.getMessage());
+        });
     }
 
     /**
@@ -533,7 +552,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     topicPartition,
                     coordinator -> coordinator.deleteGroups(context, groupList)
                 ).exceptionally(exception ->
-                    DeleteGroupsRequest.getErrorResultCollection(groupList, getErrorsForException(exception))
+                    DeleteGroupsRequest.getErrorResultCollection(groupList, normalizeException(exception))
                 );
 
             futures.add(future);
@@ -667,7 +686,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             topicPartitionFor(request.groupId()),
             coordinator -> coordinator.commitOffset(context, request)
         ).exceptionally(exception ->
-            OffsetCommitRequest.getErrorResponse(request, getErrorsForException(exception))
+            OffsetCommitRequest.getErrorResponse(request, normalizeException(exception))
         );
     }
 
@@ -714,7 +733,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             coordinator -> coordinator.deleteOffsets(context, request)
         ).exceptionally(exception ->
             new OffsetDeleteResponseData()
-                .setErrorCode(getErrorsForException(exception).code())
+                .setErrorCode(normalizeException(exception).code())
         );
     }
 
@@ -840,7 +859,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
      * Handles the exception in the scheduleWriteOperation.
      * @return The Errors instance associated with the given exception.
      */
-    private Errors getErrorsForException(Throwable exception) {
+    private static Errors normalizeException(Throwable exception) {
         if (exception instanceof UnknownTopicOrPartitionException ||
             exception instanceof NotEnoughReplicasException) {
             return Errors.COORDINATOR_NOT_AVAILABLE;

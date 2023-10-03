@@ -60,7 +60,6 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -146,13 +145,13 @@ public class GroupCoordinatorShardTest {
             expectedResultCollection
         );
 
-        doNothing().when(groupMetadataManager).validateDeleteGroup(ArgumentMatchers.anyString());
         when(offsetMetadataManager.deleteAllOffsets(anyString(), anyList())).thenAnswer(invocation -> {
             String groupId = invocation.getArgument(0);
             List<Record> records = invocation.getArgument(1);
             records.add(RecordHelpers.newOffsetCommitTombstoneRecord(groupId, "topic-name", 0));
             return 1;
         });
+        // Mockito#when only stubs method returning non-void value, so we use Mockito#doAnswer instead.
         doAnswer(invocation -> {
             String groupId = invocation.getArgument(0);
             List<Record> records = invocation.getArgument(1);
@@ -205,6 +204,7 @@ public class GroupCoordinatorShardTest {
             expectedResultCollection
         );
 
+        // Mockito#when only stubs method returning non-void value, so we use Mockito#doAnswer and Mockito#doThrow instead.
         doThrow(Errors.INVALID_GROUP_ID.exception())
             .when(groupMetadataManager).validateDeleteGroup(ArgumentMatchers.eq("group-id-2"));
         doAnswer(invocation -> {

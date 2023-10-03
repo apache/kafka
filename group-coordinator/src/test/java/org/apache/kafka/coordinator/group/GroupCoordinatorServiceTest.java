@@ -194,7 +194,7 @@ public class GroupCoordinatorServiceTest {
             Arguments.arguments(new KafkaStorageException(), Errors.NOT_COORDINATOR.code(), null),
             Arguments.arguments(new RecordTooLargeException(), Errors.UNKNOWN_SERVER_ERROR.code(), null),
             Arguments.arguments(new RecordBatchTooLargeException(), Errors.UNKNOWN_SERVER_ERROR.code(), null),
-            Arguments.arguments(new InvalidFetchSizeException(null), Errors.UNKNOWN_SERVER_ERROR.code(), null),
+            Arguments.arguments(new InvalidFetchSizeException(""), Errors.UNKNOWN_SERVER_ERROR.code(), null),
             Arguments.arguments(new InvalidRequestException("Invalid"), Errors.INVALID_REQUEST.code(), "Invalid")
         );
     }
