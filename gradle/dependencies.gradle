@@ -142,7 +142,7 @@ versions += [
   lz4: "1.8.0",
   mavenArtifact: "3.8.8",
   metrics: "2.2.0",
-  netty: "4.1.94.Final",
+  netty: "4.1.96.Final",
   pcollections: "4.0.1",
   powermock: "2.0.9",
   reflections: "0.10.2",
@@ -182,6 +182,7 @@ libs += [
   caffeine: "com.github.ben-manes.caffeine:caffeine:$versions.caffeine",
   commonsCli: "commons-cli:commons-cli:$versions.commonsCli",
   commonsValidator: "commons-validator:commons-validator:$versions.commonsValidator",
+  commonsCodec: "commons-codec:commons-codec:$versions.commonsCodec",
   easymock: "org.easymock:easymock:$easymockVersion",
   jacksonAnnotations: "com.fasterxml.jackson.core:jackson-annotations:$versions.jackson",
   jacksonDatabind: "com.fasterxml.jackson.core:jackson-databind:$versions.jacksonDatabind",
@@ -258,5 +259,5 @@ libs += [
   jfreechart: "jfreechart:jfreechart:$versions.jfreechart",
   mavenArtifact: "org.apache.maven:maven-artifact:$versions.mavenArtifact",
   zstd: "com.github.luben:zstd-jni:$versions.zstd",
-  httpclient: "org.apache.httpcomponents:httpclient:$versions.httpclient"
+  httpclient: "org.apache.httpcomponents:httpclient:$versions.httpclient",
 ]
