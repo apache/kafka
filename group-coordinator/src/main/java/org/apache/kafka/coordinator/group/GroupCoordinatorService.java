@@ -540,7 +540,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         });
 
         final CompletableFuture<Void> allFutures = CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]));
-        return allFutures.thenApply(v -> {
+        return allFutures.thenApply(__ -> {
             final DeleteGroupsResponseData.DeletableGroupResultCollection res = new DeleteGroupsResponseData.DeletableGroupResultCollection();
             futures.forEach(future ->
                 // We don't use res.addAll(future.join()) because DeletableGroupResultCollection is an ImplicitLinkedHashMultiCollection,

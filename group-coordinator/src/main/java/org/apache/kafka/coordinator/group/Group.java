@@ -110,6 +110,7 @@ public interface Group {
      * @return Whether the group is subscribed to the topic.
      */
     boolean isSubscribedToTopic(String topic);
+    
     /**
      * Populates the list of records with tombstone(s) for deleting the group.
      *

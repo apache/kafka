@@ -414,7 +414,7 @@ public class OffsetMetadataManager {
      * Populates the record list passed in with records to update the state machine.
      * Validations are done in {@link GroupCoordinatorShard#deleteGroups(RequestContext, List)}
      *
-     * @param groupId The ID of the given group.
+     * @param groupId The id of the given group.
      * @param records The record list to populate.
      *
      * @return The number of offsets to be deleted.
@@ -428,7 +428,7 @@ public class OffsetMetadataManager {
 
         if (offsetsByTopic != null) {
             offsetsByTopic.forEach((topic, offsetsByPartition) ->
-                offsetsByPartition.forEach((partition, __) -> {
+                offsetsByPartition.keySet().forEach(partition -> {
                     records.add(RecordHelpers.newOffsetCommitTombstoneRecord(groupId, topic, partition));
                     numDeletedOffsets.getAndIncrement();
                 })

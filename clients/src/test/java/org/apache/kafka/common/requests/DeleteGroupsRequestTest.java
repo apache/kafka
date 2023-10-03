@@ -28,11 +28,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class DeleteGroupsRequestTest {
 
-    protected static String groupId1 = "group-id-1";
-    protected static String groupId2 = "group-id-2";
-
     @Test
     public void testGetErrorResultCollection() {
+        String groupId1 = "group-id-1";
+        String groupId2 = "group-id-2";
         DeleteGroupsRequestData data = new DeleteGroupsRequestData()
             .setGroupsNames(Arrays.asList(groupId1, groupId2));
         DeleteGroupsResponseData.DeletableGroupResultCollection expectedResultCollection =

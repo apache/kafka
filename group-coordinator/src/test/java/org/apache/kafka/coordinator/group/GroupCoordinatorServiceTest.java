@@ -1028,12 +1028,8 @@ public class GroupCoordinatorServiceTest {
         assertEquals(response, future.get());
     }
 
-    private static Stream<Arguments> testDeleteOffsetsWithExceptionSource() {
-        return testConsumerGroupHeartbeatWithExceptionSource();
-    }
-
     @ParameterizedTest
-    @MethodSource("testDeleteOffsetsWithExceptionSource")
+    @MethodSource("testConsumerGroupHeartbeatWithExceptionSource")
     public void testDeleteOffsetsWithException(
         Throwable exception,
         short expectedErrorCode
@@ -1144,15 +1140,12 @@ public class GroupCoordinatorServiceTest {
         assertFalse(future.isDone());
         resultCollectionFuture.complete(resultCollection2);
 
+        assertTrue(future.isDone());
         assertEquals(expectedResultCollection, future.get());
     }
 
-    private static Stream<Arguments> testDeleteGroupsWithExceptionSource() {
-        return testConsumerGroupHeartbeatWithExceptionSource();
-    }
-
     @ParameterizedTest
-    @MethodSource("testDeleteGroupsWithExceptionSource")
+    @MethodSource("testConsumerGroupHeartbeatWithExceptionSource")
     public void testDeleteGroupsWithException(
         Throwable exception,
         short expectedErrorCode

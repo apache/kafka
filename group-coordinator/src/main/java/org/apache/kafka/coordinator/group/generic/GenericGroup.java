@@ -893,6 +893,7 @@ public class GenericGroup implements Group {
      *
      * @param records The list of records.
      */
+    @Override
     public void createGroupTombstoneRecords(List<Record> records) {
         records.add(RecordHelpers.newGroupMetadataTombstoneRecord(groupId()));
     }

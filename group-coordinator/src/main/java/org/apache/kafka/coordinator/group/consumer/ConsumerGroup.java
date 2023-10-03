@@ -628,6 +628,7 @@ public class ConsumerGroup implements Group {
      *
      * @param records The list of records.
      */
+    @Override
     public void createGroupTombstoneRecords(List<Record> records) {
         records.add(RecordHelpers.newTargetAssignmentEpochTombstoneRecord(groupId()));
         records.add(RecordHelpers.newGroupSubscriptionMetadataTombstoneRecord(groupId()));

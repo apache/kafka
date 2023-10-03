@@ -293,8 +293,8 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
         final DeleteGroupsResponseData.DeletableGroupResultCollection resultCollection =
             new DeleteGroupsResponseData.DeletableGroupResultCollection(groupIds.size());
         final List<Record> records = new ArrayList<>();
-        AtomicInteger numDeletedOffsets = new AtomicInteger();
-        List<String> deletedGroups = new ArrayList<>();
+        final AtomicInteger numDeletedOffsets = new AtomicInteger();
+        final List<String> deletedGroups = new ArrayList<>();
 
         groupIds.forEach(groupId -> {
             try {
@@ -356,7 +356,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
     }
 
     /**
-     * Handles a OffsetCommit request.
+     * Handles an OffsetCommit request.
      *
      * @param context The request context.
      * @param request The actual OffsetCommit request.
