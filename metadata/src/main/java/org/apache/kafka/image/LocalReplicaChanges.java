@@ -26,19 +26,22 @@ import java.util.Map;
 
 public final class LocalReplicaChanges {
     private final Set<TopicPartition> deletes;
-    private final Map<TopicPartition, PartitionInfo> leaders;
+    private final Map<TopicPartition, PartitionInfo> electedLeaders;
+    private final Map<TopicPartition, PartitionInfo> updatedLeaders;
     private final Map<TopicPartition, PartitionInfo> followers;
     // The topic name -> topic id map in leaders and followers changes
     private final Map<String, Uuid> topicIds;
 
     LocalReplicaChanges(
         Set<TopicPartition> deletes,
-        Map<TopicPartition, PartitionInfo> leaders,
+        Map<TopicPartition, PartitionInfo> electedLeaders,
+        Map<TopicPartition, PartitionInfo> updatedLeaders,
         Map<TopicPartition, PartitionInfo> followers,
         Map<String, Uuid> topicIds
     ) {
         this.deletes = deletes;
-        this.leaders = leaders;
+        this.electedLeaders = electedLeaders;
+        this.updatedLeaders = updatedLeaders;
         this.followers = followers;
         this.topicIds = topicIds;
     }
@@ -47,8 +50,12 @@ public final class LocalReplicaChanges {
         return deletes;
     }
 
-    public Map<TopicPartition, PartitionInfo> leaders() {
-        return leaders;
+    public Map<TopicPartition, PartitionInfo> electedLeaders() {
+        return electedLeaders;
+    }
+
+    public Map<TopicPartition, PartitionInfo> updatedLeaders() {
+        return updatedLeaders;
     }
 
     public Map<TopicPartition, PartitionInfo> followers() {
@@ -62,9 +69,10 @@ public final class LocalReplicaChanges {
     @Override
     public String toString() {
         return String.format(
-            "LocalReplicaChanges(deletes = %s, leaders = %s, followers = %s)",
+            "LocalReplicaChanges(deletes = %s, newly elected leaders = %s, updated leaders = %s, followers = %s)",
             deletes,
-            leaders,
+            electedLeaders,
+            updatedLeaders,
             followers
         );
     }

@@ -375,7 +375,7 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
                                   newTopicPartitions: immutable.Set[TopicPartition],
                                   newTxnStartTimestamp: Long,
                                   updateTimestamp: Long): TxnTransitMetadata = {
-    if (pendingState.isDefined)
+    if (pendingState.isDefined && pendingState.get != newState)
       throw new IllegalStateException(s"Preparing transaction state transition to $newState " +
         s"while it already a pending state ${pendingState.get}")
 

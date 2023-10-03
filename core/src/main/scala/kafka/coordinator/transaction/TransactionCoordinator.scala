@@ -447,12 +447,13 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
     info(s"Elected as the txn coordinator for partition $txnTopicPartitionId at epoch $coordinatorEpoch")
     // The operations performed during immigration must be resilient to any previous errors we saw or partial state we
     // left off during the unloading phase. Ensure we remove all associated state for this partition before we continue
-    // loading it.
-    txnMarkerChannelManager.removeMarkersForTxnTopicPartition(txnTopicPartitionId)
+    // loading it. In the case where the state partition is already loaded, we want to remove inflight markers with the
+    // old epoch.
+      txnMarkerChannelManager.removeMarkersForTxnTopicPartition(txnTopicPartitionId)
 
-    // Now load the partition.
-    txnManager.loadTransactionsForTxnTopicPartition(txnTopicPartitionId, coordinatorEpoch,
-      txnMarkerChannelManager.addTxnMarkersToSend)
+      // Now load the partition.
+      txnManager.loadTransactionsForTxnTopicPartition(txnTopicPartitionId, coordinatorEpoch,
+        txnMarkerChannelManager.addTxnMarkersToSend, txnManager.hasTxnStateLoaded(txnTopicPartitionId))
   }
 
   /**

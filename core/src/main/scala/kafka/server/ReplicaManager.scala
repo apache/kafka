@@ -2483,12 +2483,12 @@ class ReplicaManager(val config: KafkaConfig,
       }
 
       // Handle partitions which we are now the leader or follower for.
-      if (!localChanges.leaders.isEmpty || !localChanges.followers.isEmpty) {
+      if (!localChanges.updatedLeaders.isEmpty || !localChanges.followers.isEmpty) {
         val lazyOffsetCheckpoints = new LazyOffsetCheckpoints(this.highWatermarkCheckpoints)
         val leaderChangedPartitions = new mutable.HashSet[Partition]
         val followerChangedPartitions = new mutable.HashSet[Partition]
-        if (!localChanges.leaders.isEmpty) {
-          applyLocalLeadersDelta(leaderChangedPartitions, delta, lazyOffsetCheckpoints, localChanges.leaders.asScala)
+        if (!localChanges.updatedLeaders.isEmpty) {
+          applyLocalLeadersDelta(leaderChangedPartitions, delta, lazyOffsetCheckpoints, localChanges.updatedLeaders.asScala)
         }
         if (!localChanges.followers.isEmpty) {
           applyLocalFollowersDelta(followerChangedPartitions, newImage, delta, lazyOffsetCheckpoints, localChanges.followers.asScala)

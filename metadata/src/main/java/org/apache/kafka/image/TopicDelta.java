@@ -120,15 +120,17 @@ public final class TopicDelta {
      *
      * The changes identified are:
      *   1. partitions for which the broker is not a replica anymore
-     *   2. partitions for which the broker is now the leader
-     *   3. partitions for which the broker is now a follower
+     *   2. partitions for which the broker is now a leader
+     *   3. partitions for which the isr or replicas change if the broker is a leader
+     *   4. partitions for which the broker is now a follower or follower with isr or replica updates
      *
      * @param brokerId the broker id
-     * @return the list of partitions which the broker should remove, become leader or become follower.
+     * @return the list of partitions which the broker should remove, become leader, become/update leader, or become/update follower.
      */
     public LocalReplicaChanges localChanges(int brokerId) {
         Set<TopicPartition> deletes = new HashSet<>();
-        Map<TopicPartition, LocalReplicaChanges.PartitionInfo> leaders = new HashMap<>();
+        Map<TopicPartition, LocalReplicaChanges.PartitionInfo> electedLeaders = new HashMap<>();
+        Map<TopicPartition, LocalReplicaChanges.PartitionInfo> updatedLeaders = new HashMap<>();
         Map<TopicPartition, LocalReplicaChanges.PartitionInfo> followers = new HashMap<>();
         Map<String, Uuid> topicIds = new HashMap<>();
 
@@ -141,10 +143,12 @@ public final class TopicDelta {
             } else if (entry.getValue().leader == brokerId) {
                 PartitionRegistration prevPartition = image.partitions().get(entry.getKey());
                 if (prevPartition == null || prevPartition.partitionEpoch != entry.getValue().partitionEpoch) {
-                    leaders.put(
-                        new TopicPartition(name(), entry.getKey()),
-                        new LocalReplicaChanges.PartitionInfo(id(), entry.getValue())
-                    );
+                    TopicPartition tp = new TopicPartition(name(), entry.getKey());
+                    LocalReplicaChanges.PartitionInfo partitionInfo = new LocalReplicaChanges.PartitionInfo(id(), entry.getValue());
+                    updatedLeaders.put(tp, partitionInfo);
+                    if (prevPartition == null || prevPartition.leaderEpoch != entry.getValue().leaderEpoch) {
+                        electedLeaders.put(tp, partitionInfo);
+                    }
                     topicIds.putIfAbsent(name(), id());
                 }
             } else if (
@@ -162,7 +166,7 @@ public final class TopicDelta {
             }
         }
 
-        return new LocalReplicaChanges(deletes, leaders, followers, topicIds);
+        return new LocalReplicaChanges(deletes, electedLeaders, updatedLeaders, followers, topicIds);
     }
 
     @Override

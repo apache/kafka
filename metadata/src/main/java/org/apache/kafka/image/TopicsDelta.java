@@ -188,7 +188,8 @@ public final class TopicsDelta {
      */
     public LocalReplicaChanges localChanges(int brokerId) {
         Set<TopicPartition> deletes = new HashSet<>();
-        Map<TopicPartition, LocalReplicaChanges.PartitionInfo> leaders = new HashMap<>();
+        Map<TopicPartition, LocalReplicaChanges.PartitionInfo> electedLeaders = new HashMap<>();
+        Map<TopicPartition, LocalReplicaChanges.PartitionInfo> updatedLeaders = new HashMap<>();
         Map<TopicPartition, LocalReplicaChanges.PartitionInfo> followers = new HashMap<>();
         Map<String, Uuid> topicIds = new HashMap<>();
 
@@ -196,7 +197,8 @@ public final class TopicsDelta {
             LocalReplicaChanges changes = delta.localChanges(brokerId);
 
             deletes.addAll(changes.deletes());
-            leaders.putAll(changes.leaders());
+            electedLeaders.putAll(changes.electedLeaders());
+            updatedLeaders.putAll(changes.updatedLeaders());
             followers.putAll(changes.followers());
             topicIds.putAll(changes.topicIds());
         }
@@ -211,7 +213,7 @@ public final class TopicsDelta {
             });
         });
 
-        return new LocalReplicaChanges(deletes, leaders, followers, topicIds);
+        return new LocalReplicaChanges(deletes, electedLeaders, updatedLeaders, followers, topicIds);
     }
 
     @Override
