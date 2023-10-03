@@ -188,8 +188,8 @@ public enum MetadataVersion {
     // Implement KIP-919 controller registration.
     IBP_3_7_IV0(15, "3.7", "IV0", true),
 
-    // Testing MV for KIP-966. New MV should be added above
-    IBP_ELR_testing(10000, "test", "test", true);
+    // Testing MV for KIP-966. New MV should be added above and adjust the feature level for IBP_ELR_testing.
+    IBP_ELR_testing(16, "test", "test", true);
 
     // NOTES when adding a new version:
     //   Update the default version in @ClusterTest annotation to point to the latest version
@@ -294,7 +294,9 @@ public enum MetadataVersion {
     }
 
     // TODO(KIP-966): Add new metadata version to enable ELR.
-    public boolean isElrSupported() { return this.equals(IBP_ELR_testing); }
+    public boolean isElrSupported() {
+        return this.equals(IBP_ELR_testing);
+    }
 
     public RecordVersion highestSupportedRecordVersion() {
         if (this.isLessThan(IBP_0_10_0_IV0)) {
