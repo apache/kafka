@@ -1140,7 +1140,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
       }
 
       // check that offsets are monotonically increasing
-      if (requireOffsetsMonotonic && lastOffset >= batch.lastOffset)
+      if (lastOffset >= batch.lastOffset)
         monotonic = false
 
       // update the last offset seen
