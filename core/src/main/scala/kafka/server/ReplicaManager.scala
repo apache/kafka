@@ -763,20 +763,20 @@ class ReplicaManager(val config: KafkaConfig,
         val errorResults = (unverifiedEntries ++ errorsPerPartition).map {
           case (topicPartition, error) =>
             // translate transaction coordinator errors to known producer response errors
-            val finalException =
+            val customException =
               error match {
-                case Errors.INVALID_TXN_STATE => error.exception("Partition was not added to the transaction")
+                case Errors.INVALID_TXN_STATE => Some(error.exception("Partition was not added to the transaction"))
                 case Errors.CONCURRENT_TRANSACTIONS |
                      Errors.COORDINATOR_LOAD_IN_PROGRESS |
                      Errors.COORDINATOR_NOT_AVAILABLE |
-                     Errors.NOT_COORDINATOR => new NotEnoughReplicasException(
-                         s"Unable to verify the partition has been added to the transaction. Underlying error: ${error.toString}")
-                case _ => error.exception()
+                     Errors.NOT_COORDINATOR => Some(new NotEnoughReplicasException(
+                         s"Unable to verify the partition has been added to the transaction. Underlying error: ${error.toString}"))
+                case _ => None
             }
             topicPartition -> LogAppendResult(
               LogAppendInfo.UNKNOWN_LOG_APPEND_INFO,
-              Some(finalException),
-              hasCustomErrorMessage = true
+              Some(customException.getOrElse(error.exception)),
+              hasCustomErrorMessage = customException.isDefined
             )
         }
 
