@@ -1366,8 +1366,8 @@ public class GroupMetadataManager {
         } else {
             ConsumerGroupMember newMember = new ConsumerGroupMember.Builder(oldMember)
                 .setMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH)
-                .setPreviousMemberEpoch(-1)
-                .setTargetMemberEpoch(-1)
+                .setPreviousMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH)
+                .setTargetMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH)
                 .setAssignedPartitions(Collections.emptyMap())
                 .setPartitionsPendingRevocation(Collections.emptyMap())
                 .setPartitionsPendingAssignment(Collections.emptyMap())
