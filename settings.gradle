@@ -13,40 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-plugins {
-    id 'com.gradle.enterprise' version '3.14.1'
-    id 'com.gradle.common-custom-user-data-gradle-plugin' version '1.11.1'
-}
 
-def isGithubActions = System.getenv('GITHUB_ACTIONS') != null
-def isJenkins = System.getenv('JENKINS_URL') != null
-def isCI = isGithubActions || isJenkins
-
-gradleEnterprise {
-    server = "https://ge.apache.org"
-    buildScan {
-        capture { taskInputFiles = true }
-        uploadInBackground = !isCI
-        publishAlways()
-        publishIfAuthenticated()
-        obfuscation {
-            // This obfuscates the IP addresses of the build machine in the build scan.
-            // Alternatively, the build scan will provide the hostname for troubleshooting host-specific issues.
-            ipAddresses { addresses -> addresses.collect { address -> "0.0.0.0"} }
-        }
-    }
-}
-
-buildCache {
-    local {
-        enabled = !isCI
-    }
-
-    remote(gradleEnterprise.buildCache) {
-        enabled = false
-    }
-}
-
+//DO NOT MERGE gradle enterprise from AK due to licensing issues
+//see more discussion here https://github.com/apache/kafka/pull/13676#issuecomment-1599025907
 include 'clients',
     'connect:api',
     'connect:basic-auth-extension',
