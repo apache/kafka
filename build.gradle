@@ -37,7 +37,7 @@ plugins {
   id 'java-library'
   id 'org.owasp.dependencycheck' version '8.2.1'
   id 'org.nosphere.apache.rat' version "0.8.0"
-  id "io.swagger.core.v3.swagger-gradle-plugin" version "2.2.8"
+  id "io.swagger.core.v3.swagger-gradle-plugin" version "${versions.swagger}"
 
   id "com.github.spotbugs" version '5.0.13' apply false
   id 'org.scoverage' version '7.0.1' apply false
@@ -931,7 +931,7 @@ project(':core') {
       exclude group: 'junit', module: 'junit'
     }
     testImplementation libs.caffeine
-    
+
     generator project(':generator')
   }
 
