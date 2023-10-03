@@ -777,7 +777,7 @@ public class ReplicationControlManager {
         for (Entry<Integer, PartitionRegistration> partEntry : newParts.entrySet()) {
             int partitionIndex = partEntry.getKey();
             PartitionRegistration info = partEntry.getValue();
-            records.add(info.toRecord(topicId, partitionIndex, featureControl.metadataVersion().partitionRecordVersion()));
+            records.add(info.toRecord(topicId, partitionIndex));
         }
         return ApiError.NONE;
     }
@@ -1675,7 +1675,7 @@ public class ReplicationControlManager {
                         " time(s): All brokers are currently fenced or in controlled shutdown.");
             }
             records.add(buildPartitionRegistration(replicas, isr)
-                .toRecord(topicId, partitionId, featureControl.metadataVersion().partitionRecordVersion()));
+                .toRecord(topicId, partitionId));
             partitionId++;
         }
     }

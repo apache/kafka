@@ -392,7 +392,7 @@ public class PartitionChangeBuilder {
         if (changeRecordIsNoOp(record)) {
             return Optional.empty();
         } else {
-            return Optional.of(new ApiMessageAndVersion(record, metadataVersion.partitionChangeRecordVersion()));
+            return Optional.of(new ApiMessageAndVersion(record, (short) 1));
         }
     }
 

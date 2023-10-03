@@ -889,7 +889,7 @@ public class ReplicationControlManagerTest {
 
     @Test
     public void testEligibleLeaderReplicas_ShrinkAndExpandIsr() throws Exception {
-        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().build();
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().setMetadataVersion(MetadataVersion.IBP_ELR_testing).build();
         ReplicationControlManager replicationControl = ctx.replicationControl;
         ctx.registerBrokers(0, 1, 2);
         ctx.unfenceBrokers(0, 1, 2);
@@ -928,7 +928,7 @@ public class ReplicationControlManagerTest {
 
     @Test
     public void testEligibleLeaderReplicas_BrokerFence() throws Exception {
-        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().build();
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().setMetadataVersion(MetadataVersion.IBP_ELR_testing).build();
         ReplicationControlManager replicationControl = ctx.replicationControl;
         ctx.registerBrokers(0, 1, 2, 3);
         ctx.unfenceBrokers(0, 1, 2, 3);
@@ -2459,7 +2459,7 @@ public class ReplicationControlManagerTest {
                 .setTopicId(topicId)
                 .setIsr(asList(1, 2))
                 .setLeader(1),
-            metadataVersion.partitionChangeRecordVersion()));
+            (short) 1));
 
         assertEquals(expectedRecords, result.records());
     }

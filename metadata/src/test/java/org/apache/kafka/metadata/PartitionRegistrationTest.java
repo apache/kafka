@@ -73,7 +73,7 @@ public class PartitionRegistrationTest {
             setReplicas(new int[]{1, 2, 3}).setIsr(new int[]{1, 2}).setRemovingReplicas(new int[]{1}).setLeader(1).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(0).setPartitionEpoch(0).build();
         Uuid topicId = Uuid.fromString("OGdAI5nxT_m-ds3rJMqPLA");
         int partitionId = 4;
-        ApiMessageAndVersion record = registrationA.toRecord(topicId, partitionId, (short) 0);
+        ApiMessageAndVersion record = registrationA.toRecord(topicId, partitionId);
         PartitionRegistration registrationB =
             new PartitionRegistration((PartitionRecord) record.message());
         assertEquals(registrationA, registrationB);

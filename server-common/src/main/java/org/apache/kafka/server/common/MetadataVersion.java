@@ -188,8 +188,8 @@ public enum MetadataVersion {
     // Implement KIP-919 controller registration.
     IBP_3_7_IV0(15, "3.7", "IV0", true),
 
-    // Add ELR related supports (KIP-966).
-    IBP_3_7_IV1(16, "3.7", "IV1", true);
+    // Testing MV for KIP-966. New MV should be added above
+    IBP_ELR_testing(10000, "test", "test", true);
 
     // NOTES when adding a new version:
     //   Update the default version in @ClusterTest annotation to point to the latest version
@@ -289,13 +289,12 @@ public enum MetadataVersion {
         return this.isAtLeast(IBP_3_6_IV2);
     }
 
-    public boolean isElrSupported() {
-        return this.isAtLeast(IBP_3_7_IV1);
-    }
-
     public boolean isKRaftSupported() {
         return this.featureLevel > 0;
     }
+
+    // TODO(KIP-966): Add new metadata version to enable ELR.
+    public boolean isElrSupported() { return this.equals(IBP_ELR_testing); }
 
     public RecordVersion highestSupportedRecordVersion() {
         if (this.isLessThan(IBP_0_10_0_IV0)) {
@@ -341,21 +340,6 @@ public enum MetadataVersion {
 
     public boolean isControllerRegistrationSupported() {
         return this.isAtLeast(MetadataVersion.IBP_3_7_IV0);
-    }
-
-    public short partitionChangeRecordVersion() {
-        if (isElrSupported()) {
-            return (short) 1;
-        } else {
-            return (short) 0;
-        }
-    }
-    public short partitionRecordVersion() {
-        if (isElrSupported()) {
-            return (short) 1;
-        } else {
-            return (short) 0;
-        }
     }
 
     public short fetchRequestVersion() {
@@ -534,8 +518,9 @@ public enum MetadataVersion {
         }
     }
 
+    // TODO(KIP-966) Move back the latest version to be VERSIONS.length - 1
     public static MetadataVersion latest() {
-        return VERSIONS[VERSIONS.length - 1];
+        return VERSIONS[VERSIONS.length - 2];
     }
 
     public static boolean checkIfMetadataChanged(MetadataVersion sourceVersion, MetadataVersion targetVersion) {
