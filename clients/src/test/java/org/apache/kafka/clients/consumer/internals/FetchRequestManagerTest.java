@@ -402,10 +402,10 @@ public class FetchRequestManagerTest {
         assignFromUser(singleton(tp.topicPartition()));
         subscriptions.seek(tp.topicPartition(), 0);
 
-        // Fetch should use latest version
         assertEquals(1, sendFetches());
         assertFalse(fetcher.hasCompletedFetches());
 
+        // Fetch should use latest version
         client.prepareResponse(
                 fetchRequestMatcher(ApiKeys.FETCH.latestVersion(), tp, 0, Optional.of(validLeaderEpoch)),
                 fullFetchResponse(tp, records, Errors.NONE, 100L, 0)
