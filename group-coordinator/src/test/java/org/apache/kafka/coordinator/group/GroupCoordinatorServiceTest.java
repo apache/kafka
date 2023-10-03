@@ -791,8 +791,7 @@ public class GroupCoordinatorServiceTest {
         assertFalse(future.isDone());
         describedGroupFuture.complete(Collections.singletonList(describedGroup2));
 
-        assertTrue(future.get().containsAll(expectedDescribedGroups));
-        assertTrue(expectedDescribedGroups.containsAll(future.get()));
+        assertEquals(expectedDescribedGroups, future.get());
     }
 
     @Test

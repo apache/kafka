@@ -425,6 +425,7 @@ public class GroupMetadataManagerTest {
             this.groupMetadataManager = groupMetadataManager;
             this.genericGroupInitialRebalanceDelayMs = genericGroupInitialRebalanceDelayMs;
             this.genericGroupNewMemberJoinTimeoutMs = genericGroupNewMemberJoinTimeoutMs;
+
         }
 
         public void commit() {
@@ -1212,6 +1213,10 @@ public class GroupMetadataManagerTest {
             }
 
             lastWrittenOffset++;
+            snapshotRegistry.getOrCreateSnapshot(lastWrittenOffset);
+        }
+
+        private void createSnapshot() {
             snapshotRegistry.getOrCreateSnapshot(lastWrittenOffset);
         }
     }
@@ -8754,6 +8759,23 @@ public class GroupMetadataManagerTest {
             .contains(responseData.memberId()));
         describedGroups.get(0).members().forEach(member -> assertTrue(member.memberMetadata().length == 0));
         describedGroups.get(0).members().forEach(member -> assertTrue(member.memberAssignment().length == 0));
+    }
+
+    @Test
+    public void testDescribeGroupsGroupIdNotFoundException() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+        context.createSnapshot();
+
+        List<DescribeGroupsResponseData.DescribedGroup> expectedDescribedGroups =
+            Collections.singletonList(new DescribeGroupsResponseData.DescribedGroup()
+                .setGroupId("group-id")
+                .setGroupState(DEAD.toString())
+            );
+        List<DescribeGroupsResponseData.DescribedGroup> describedGroups =
+            context.describeGroups(Collections.singletonList("group-id"));
+
+        assertEquals(expectedDescribedGroups, describedGroups);
     }
 
     public static <T> void assertUnorderedListEquals(

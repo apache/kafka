@@ -460,45 +460,38 @@ public class GroupMetadataManager {
         final List<DescribeGroupsResponseData.DescribedGroup> describedGroups = new ArrayList<>();
         groupIds.forEach(groupId -> {
             try {
-                Group group = group(groupId, committedOffset);
-                if (group.type() != GENERIC) {
-                    // We don't support upgrading/downgrading between protocols at the moment, so
-                    // we throw an exception if a group exists with the wrong type.
-                    throw new GroupIdNotFoundException(String.format("Group %s is not a generic group.",
-                        groupId));
-                }
-                GenericGroup genericGroup = (GenericGroup) group;
+                GenericGroup group = getGenericGroupByCommittedOffset(groupId, committedOffset);
 
-                if (genericGroup.isInState(STABLE)) {
-                    if (!genericGroup.protocolName().isPresent()) {
+                if (group.isInState(STABLE)) {
+                    if (!group.protocolName().isPresent()) {
                         throw new IllegalStateException("Invalid null group protocol for stable group");
                     }
 
                     describedGroups.add(new DescribeGroupsResponseData.DescribedGroup()
                         .setGroupId(groupId)
-                        .setGroupState(genericGroup.stateAsString())
-                        .setProtocolType(genericGroup.protocolType().orElse(""))
-                        .setProtocolData(genericGroup.protocolName().get())
-                        .setMembers(genericGroup.allMembers().stream()
-                            .map(member -> member.describe(genericGroup.protocolName().get()))
+                        .setGroupState(group.stateAsString())
+                        .setProtocolType(group.protocolType().orElse(""))
+                        .setProtocolData(group.protocolName().get())
+                        .setMembers(group.allMembers().stream()
+                            .map(member -> member.describe(group.protocolName().get()))
                             .collect(Collectors.toList())
                         )
                     );
                 } else {
                     describedGroups.add(new DescribeGroupsResponseData.DescribedGroup()
                         .setGroupId(groupId)
-                        .setGroupState(genericGroup.stateAsString())
-                        .setProtocolType(genericGroup.protocolType().orElse(""))
-                        .setMembers(genericGroup.allMembers().stream()
+                        .setGroupState(group.stateAsString())
+                        .setProtocolType(group.protocolType().orElse(""))
+                        .setMembers(group.allMembers().stream()
                             .map(member -> member.describeNoMetadata())
                             .collect(Collectors.toList())
                         )
                     );
                 }
-            } catch (ApiException exception) {
+            } catch (GroupIdNotFoundException exception) {
                 describedGroups.add(new DescribeGroupsResponseData.DescribedGroup()
                     .setGroupId(groupId)
-                    .setErrorCode(Errors.forException(exception).code())
+                    .setGroupState(DEAD.toString())
                 );
             }
         });
@@ -579,6 +572,31 @@ public class GroupMetadataManager {
                 throw new GroupIdNotFoundException(String.format("Group %s is not a generic group.",
                     groupId));
             }
+        }
+    }
+
+    /**
+     * Gets a generic group by committed offset.
+     *
+     * @param groupId           The group id.
+     * @param committedOffset   A specified committed offset corresponding to this shard.
+     *
+     * @return A GenericGroup.
+     * @throws GroupIdNotFoundException if the group does not exist or is not a generic group.
+     */
+    public GenericGroup getGenericGroupByCommittedOffset(
+        String groupId,
+        long committedOffset
+    ) throws GroupIdNotFoundException {
+        Group group = group(groupId, committedOffset);
+
+        if (group.type() == GENERIC) {
+            return (GenericGroup) group;
+        } else {
+            // We don't support upgrading/downgrading between protocols at the moment so
+            // we throw an exception if a group exists with the wrong type.
+            throw new GroupIdNotFoundException(String.format("Group %s is not a generic group.",
+                groupId));
         }
     }
 
