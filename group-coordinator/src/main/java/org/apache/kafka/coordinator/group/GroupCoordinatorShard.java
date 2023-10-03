@@ -69,7 +69,6 @@ import org.slf4j.Logger;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * The group coordinator shard is a replicated state machine that manages the metadata of all
@@ -293,13 +292,13 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
         final DeleteGroupsResponseData.DeletableGroupResultCollection resultCollection =
             new DeleteGroupsResponseData.DeletableGroupResultCollection(groupIds.size());
         final List<Record> records = new ArrayList<>();
-        final AtomicInteger numDeletedOffsets = new AtomicInteger();
+        int numDeletedOffsets = 0;
         final List<String> deletedGroups = new ArrayList<>();
 
-        groupIds.forEach(groupId -> {
+        for (String groupId : groupIds) {
             try {
                 groupMetadataManager.validateDeleteGroup(groupId);
-                numDeletedOffsets.addAndGet(offsetMetadataManager.deleteAllOffsets(groupId, records));
+                numDeletedOffsets += offsetMetadataManager.deleteAllOffsets(groupId, records);
                 groupMetadataManager.deleteGroup(groupId, records);
                 deletedGroups.add(groupId);
 
@@ -314,7 +313,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
                         .setErrorCode(Errors.forException(exception).code())
                 );
             }
-        });
+        }
 
         log.info("The following groups were deleted: {}. A total of {} offsets were removed.",
             String.join(", ", deletedGroups),
