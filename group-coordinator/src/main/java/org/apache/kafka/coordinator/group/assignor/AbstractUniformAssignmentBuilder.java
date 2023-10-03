@@ -17,7 +17,7 @@
 package org.apache.kafka.coordinator.group.assignor;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.coordinator.group.common.TopicIdPartition;
+import org.apache.kafka.server.common.TopicIdPartition;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -153,7 +153,7 @@ public abstract class AbstractUniformAssignmentBuilder {
                 racksPerPartition = new HashMap<>();
                 allPartitionRacks = new HashSet<>();
                 topicIdPartitions.forEach(tp -> {
-                    Set<String> racks = subscribedTopicDescriber.racksForPartition(tp.topicId(), tp.partition());
+                    Set<String> racks = subscribedTopicDescriber.racksForPartition(tp.topicId(), tp.partitionId());
                     racksPerPartition.put(tp, racks);
                     if (!racks.isEmpty()) allPartitionRacks.addAll(racks);
                 });
@@ -209,7 +209,7 @@ public abstract class AbstractUniformAssignmentBuilder {
         protected List<TopicIdPartition> sortPartitionsByRackMembers(Collection<TopicIdPartition> topicIdPartitions) {
 
             List<TopicIdPartition> sortedPartitionsList = topicIdPartitions.stream()
-                .sorted(Comparator.comparing(TopicIdPartition::topicId).thenComparing(TopicIdPartition::partition))
+                .sorted(Comparator.comparing(TopicIdPartition::topicId).thenComparing(TopicIdPartition::partitionId))
                 .collect(Collectors.toList());
 
             if (membersWithSameRackAsPartition.isEmpty())

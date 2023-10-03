@@ -17,7 +17,7 @@
 package org.apache.kafka.coordinator.group.assignor;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.coordinator.group.common.TopicIdPartition;
+import org.apache.kafka.server.common.TopicIdPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -224,7 +224,7 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
                         targetAssignment,
                         memberId,
                         topicIdPartition.topicId(),
-                        topicIdPartition.partition()
+                        topicIdPartition.partitionId()
                     );
                     unassignedPartitions.remove(topicIdPartition);
                 });
@@ -236,7 +236,7 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
                         targetAssignment,
                         memberId,
                         topicIdPartition.topicId(),
-                        topicIdPartition.partition()
+                        topicIdPartition.partitionId()
                     );
                     unassignedPartitions.remove(topicIdPartition);
                     remainingMembersToGetAnExtraPartition--;
@@ -322,7 +322,7 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
         Queue<String> roundRobinMembers = new LinkedList<>(potentiallyUnfilledMembers.keySet());
 
         List<TopicIdPartition> sortedPartitionsList = unassignedPartitions.stream()
-            .sorted(Comparator.comparing(TopicIdPartition::topicId).thenComparing(TopicIdPartition::partition))
+            .sorted(Comparator.comparing(TopicIdPartition::topicId).thenComparing(TopicIdPartition::partitionId))
             .collect(Collectors.toList());
 
         Iterator<TopicIdPartition> partitionIterator = sortedPartitionsList.iterator();
@@ -407,7 +407,7 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
                 targetAssignment,
                 memberId,
                 topicIdPartition.topicId(),
-                topicIdPartition.partition()
+                topicIdPartition.partitionId()
             );
             return true;
         }
