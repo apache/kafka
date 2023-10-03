@@ -214,13 +214,13 @@ public class FetchRequestManagerTest {
                 tp -> validLeaderEpoch, topicIds), false, 0L);
     }
 
-    private void assignFromUserNoId(Set<TopicPartition> partitions) {
-        subscriptions.assignFromUser(partitions);
-        client.updateMetadata(RequestTestUtils.metadataUpdateWithIds(1, singletonMap("noId", 1), Collections.emptyMap()));
+    private void assignFromUser(TopicPartition partition) {
+        subscriptions.assignFromUser(singleton(partition));
+        client.updateMetadata(RequestTestUtils.metadataUpdateWithIds(1, singletonMap(partition.topic(), 1), Collections.emptyMap()));
 
         // A dummy metadata update to ensure valid leader epoch.
         metadata.update(9, RequestTestUtils.metadataUpdateWithIds("dummy", 1,
-                Collections.emptyMap(), singletonMap("noId", 1),
+                Collections.emptyMap(), singletonMap(partition.topic(), 1),
                 tp -> validLeaderEpoch, topicIds), false, 0L);
     }
 
@@ -368,7 +368,7 @@ public class FetchRequestManagerTest {
         buildFetcher();
 
         TopicIdPartition noId = new TopicIdPartition(Uuid.ZERO_UUID, new TopicPartition("noId", 0));
-        assignFromUserNoId(singleton(noId.topicPartition()));
+        assignFromUser(noId.topicPartition());
         subscriptions.seek(noId.topicPartition(), 0);
 
         // Fetch should use request version 12
