@@ -226,11 +226,14 @@ public class HeartbeatRequestManagerTest {
         } else if (isFatal) {
             // The memberStateManager should have stopped heartbeat at this point
             ensureFatalError();
-        } else {
-            // NOT_COORDINATOR/COORDINATOR_LOAD_IN_PROGRESS/COORDINATOR_NOT_AVAILABLE
-            // should be automatically retried
+        } else if (errorCode == Errors.COORDINATOR_LOAD_IN_PROGRESS.code()) {
             verify(errorEventHandler, never()).handle(any());
             assertEquals(retryBackoffMs, heartbeatRequestState.nextHeartbeatMs(mockTime.milliseconds()));
+        } else {
+            // NOT_COORDINATOR/COORDINATOR_LOAD_IN_PROGRESS/COORDINATOR_NOT_AVAILABLE
+            // should be retried immediately when the coordinator node becomes available
+            verify(errorEventHandler, never()).handle(any());
+            assertEquals(0, heartbeatRequestState.nextHeartbeatMs(mockTime.milliseconds()));
         }
     }
 

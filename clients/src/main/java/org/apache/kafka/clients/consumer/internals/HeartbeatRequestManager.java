@@ -173,6 +173,15 @@ public class HeartbeatRequestManager implements RequestManager {
         this.heartbeatRequestState.onFailedAttempt(responseTimeMs);
         logger.warn("Failed to send heartbeat to coordinator node {} due to error: {}",
                 coordinatorRequestManager.coordinator(), exception.getMessage());
+        if (exception instanceof RetriableException) {
+            logger.debug("Retrying heartbeat request in {}ms due to {}",
+                heartbeatRequestState.remainingBackoffMs(responseTimeMs),
+                exception.getMessage());
+        } else {
+            logger.error("Heartbeat request failed due to fatal error", exception);
+            membershipManager.transitionToFailed();
+            nonRetriableErrorHandler.handle(exception);
+        }
     }
 
     private void onResponse(final ConsumerGroupHeartbeatResponse response, long currentTimeMs) {
@@ -188,13 +197,12 @@ public class HeartbeatRequestManager implements RequestManager {
 
     private void onErrorResponse(final ConsumerGroupHeartbeatResponse response,
                                  final long currentTimeMs) {
-        this.heartbeatRequestState.onFailedAttempt(currentTimeMs);
         Errors error = Errors.forCode(response.data().errorCode());
-        maybeTransitionToFailureState(error);
         String errorMessage = response.data().errorMessage();
-        switch(error) {
+        switch (error) {
             case NOT_COORDINATOR:
             case COORDINATOR_NOT_AVAILABLE:
+                // the manager should retry immediately when the coordinator node becomes available again
                 String message = String.format("Coordinator node %s is either not started or not valid. " +
                         "Will attempt to find the coordinator again and retry",
                     coordinatorRequestManager.coordinator());
@@ -203,11 +211,12 @@ public class HeartbeatRequestManager implements RequestManager {
                 break;
 
             case COORDINATOR_LOAD_IN_PROGRESS:
-                // retry
+                // the manager will backoff and retry
                 message = String.format("Coordinator node %s is loading. " +
                     "Will resend a heartbeat request",
                     coordinatorRequestManager.coordinator());
                 logInfo(message, response, currentTimeMs);
+                heartbeatRequestState.onFailedAttempt(currentTimeMs);
                 break;
 
             case GROUP_AUTHORIZATION_FAILED:
@@ -215,12 +224,14 @@ public class HeartbeatRequestManager implements RequestManager {
                     GroupAuthorizationException.forGroupId(membershipManager.groupId());
                 logger.error("GroupHeartbeatRequest failed due to group authorization failure: {}", exception.getMessage());
                 nonRetriableErrorHandler.handle(error.exception(exception.getMessage()));
+                membershipManager.transitionToFailed();
                 break;
 
             case UNRELEASED_INSTANCE_ID:
                 logger.error("GroupHeartbeatRequest failed due to the instance id {} was not released: {}",
                     membershipManager.groupInstanceId().orElse("null"), errorMessage);
                 nonRetriableErrorHandler.handle(Errors.UNRELEASED_INSTANCE_ID.exception(errorMessage));
+                membershipManager.transitionToFailed();
                 break;
 
             case INVALID_REQUEST:
@@ -229,6 +240,7 @@ public class HeartbeatRequestManager implements RequestManager {
             case UNSUPPORTED_VERSION:
                 logger.error("GroupHeartbeatRequest failed due to error: {}", error);
                 nonRetriableErrorHandler.handle(error.exception(errorMessage));
+                membershipManager.transitionToFailed();
                 break;
 
             case FENCED_MEMBER_EPOCH:
@@ -245,17 +257,9 @@ public class HeartbeatRequestManager implements RequestManager {
                 logger.error("GroupHeartbeatRequest failed due to unexpected error: {}", error);
                 membershipManager.transitionToFailed();
                 nonRetriableErrorHandler.handle(error.exception(errorMessage));
+                membershipManager.transitionToFailed();
                 break;
         }
-    }
-
-    private void maybeTransitionToFailureState(Errors error) {
-        if (error.exception() instanceof RetriableException ||
-            error == Errors.UNKNOWN_MEMBER_ID ||
-            error == Errors.FENCED_MEMBER_EPOCH) {
-            return;
-        }
-        membershipManager.transitionToFailed();
     }
 
     private void logInfo(final String message,
