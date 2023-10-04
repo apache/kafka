@@ -343,12 +343,12 @@ public class FeatureControlManager {
             if (!metadataChanged) {
                 log.warn("Downgrading metadata.version from {} to {}.", currentVersion, newVersion);
             } else if (allowUnsafeDowngrade) {
-                return invalidMetadataVersion(newVersionLevel, "Unsafe metadata downgrade is not supported " +
-                        "in this version.");
+                return invalidMetadataVersion(newVersionLevel, "Unsafe metadata downgrade is not supported.");
             } else {
+                // The phrase "Retry using UNSAFE_DOWNGRADE if you want to force the downgrade to proceed." has been removed
+                // because unsafe metadata downgrades are not supported. We can add it back when implemented (KAFKA-13896).
                 return invalidMetadataVersion(newVersionLevel, "Refusing to perform the requested " +
-                        "downgrade because it might delete metadata information. Retry using " +
-                        "UNSAFE_DOWNGRADE if you want to force the downgrade to proceed.");
+                        "downgrade because it might delete metadata information.");
             }
         } else {
             log.warn("Upgrading metadata.version from {} to {}.", currentVersion, newVersion);
