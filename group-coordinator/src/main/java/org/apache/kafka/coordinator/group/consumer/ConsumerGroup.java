@@ -45,8 +45,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
-import static org.apache.kafka.coordinator.group.Utils.ofSentinel;
-
 /**
  * A Consumer Group. All the metadata in this class are backed by
  * records in the __consumer_offsets partitions.
@@ -336,7 +334,7 @@ public class ConsumerGroup implements Group {
             }
             member = getOrMaybeCreateMember(memberId, false);
         } else {
-            // No member found against this instance id. Creating new.
+            // No existing member found against this instance id. Creating new.
             if (existingMemberId == null) {
                 member = getOrMaybeCreateMember(memberId, true);
                 staticMembers.put(instanceId, memberId);
@@ -347,9 +345,11 @@ public class ConsumerGroup implements Group {
                 int currentMemberEpoch = existingMember.memberEpoch();
                 // A new member with a used instance id joined but the previous member using the same instance id
                 // hasn't requested leaving the group.
-                if (currentMemberEpoch != -2) {
+                if (currentMemberEpoch != -2 && !existingMemberId.equals(memberId)) {
                     throw Errors.UNRELEASED_INSTANCE_ID.exception();
                 }
+                // A new static member is trying to take the place of a departed static member. We will
+                // provide the assignments of the old member to the new one.
                 member = new ConsumerGroupMember.Builder(memberId, existingMember)
                         .setMemberEpoch(existingMember.targetMemberEpoch())
                         .setPreviousMemberEpoch(0)

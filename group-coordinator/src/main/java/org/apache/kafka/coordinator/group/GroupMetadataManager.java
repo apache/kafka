@@ -891,6 +891,12 @@ public class GroupMetadataManager {
                     groupId, memberId, updatedMember.subscribedTopicRegex());
                 bumpGroupEpoch = true;
             }
+        } else {
+            // A new static member replaces an older one with the same instance id, assignments etc.
+            // We will create a new member subscription record for this new member.
+            if (instanceId != null) {
+                records.add(newMemberSubscriptionRecord(groupId, updatedMember));
+            }
         }
 
         if (bumpGroupEpoch || group.hasMetadataExpired(currentTimeMs)) {
@@ -1022,8 +1028,8 @@ public class GroupMetadataManager {
     ) throws ApiException {
         ConsumerGroup group = getOrMaybeCreateConsumerGroup(groupId, false);
         ConsumerGroupMember member = memberEpoch == -2 ?
-                group.getOrMaybeCreateStaticMember(memberId, instanceId,false) :
-                group.getOrMaybeCreateMember(memberId,false);
+                group.getOrMaybeCreateStaticMember(memberId, instanceId, false) :
+                group.getOrMaybeCreateMember(memberId, false);
 
         List<Record> records = new ArrayList<>();
         // The departing member is a static one. We don't need to fence this member because it is
