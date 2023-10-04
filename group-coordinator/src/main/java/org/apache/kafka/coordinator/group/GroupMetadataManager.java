@@ -998,9 +998,18 @@ public class GroupMetadataManager {
         ConsumerGroup group = getOrMaybeCreateConsumerGroup(groupId, false);
         ConsumerGroupMember member = group.getOrMaybeCreateMember(memberId, false);
 
-        log.info("[GroupId " + groupId + "] Member " + memberId + " left the consumer group.");
-
-        List<Record> records = consumerGroupFenceMember(group, member);
+        List<Record> records = new ArrayList<>();
+        // The departing member is a static one. We don't need to fence this member because it is
+        // expected to come back within session timeout
+        if (member.instanceId() != null) {
+            log.info("Member {} with instance id {} is a static member and will not be fenced from the group", memberId, member.instanceId());
+        } else {
+            log.info("[GroupId {}] Member {} left the consumer group.", groupId, memberId);
+            records.addAll(consumerGroupFenceMember(group, member));
+        }
+        // It should be ok to return -1 as the member epoch for a member even if it's a static member because it will
+        // join back with member id 0 and the heartbeat thread handler should be able to detect if it's a re-joining
+        // static member with the same instance id
         return new CoordinatorResult<>(records, new ConsumerGroupHeartbeatResponseData()
             .setMemberId(memberId)
             .setMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH));
