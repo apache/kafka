@@ -1790,6 +1790,16 @@ $ bin/kafka-acls.sh \
         <td>average time, in milliseconds, it took to load transaction metadata from the consumer offset partitions loaded in the last 30 seconds (including time spent waiting for the loading task to be scheduled)</td>
       </tr>
       <tr>
+        <td>Rate of transactional verification errors</td>
+        <td>kafka.server:type=AddPartitionsToTxnManager,name=VerificationFailureRate</td>
+        <td>Rate of verifications that returned in failure either from the AddPartitionsToTxn API response or through errors in the AddPartitionsToTxnManager. In steady state 0, but transient errors are expected during rolls and reassignments of the transactional state partition.</td>
+      </tr>
+      <tr>
+        <td>Time to verify a transactional request</td>
+        <td>kafka.server:type=AddPartitionsToTxnManager,name=VerificationTimeMs</td>
+        <td>The amount of time queueing while a possible previous request is in-flight plus the round trip to the transaction coordinator to verify (or not verify)</td>
+      </tr>
+      <tr>
         <td>Consumer Group Offset Count</td>
         <td>kafka.server:type=GroupMetadataManager,name=NumOffsets</td>
         <td>Total number of committed offsets for Consumer Groups</td>
