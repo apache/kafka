@@ -335,6 +335,17 @@ class MetadataVersionTest {
 
     @ParameterizedTest
     @EnumSource(value = MetadataVersion.class)
+    public void testIsElrSupported(MetadataVersion metadataVersion) {
+        assertEquals(metadataVersion.equals(IBP_ELR_testing),
+                metadataVersion.isElrSupported());
+        short expectPartitionRecordVersion = metadataVersion.equals(IBP_ELR_testing) ? (short) 1 : (short) 0;
+        assertEquals(expectPartitionRecordVersion, metadataVersion.partitionRecordVersion());
+        short expectPartitionChangeRecordVersion = metadataVersion.equals(IBP_ELR_testing) ? (short) 1 : (short) 0;
+        assertEquals(expectPartitionChangeRecordVersion, metadataVersion.partitionChangeRecordVersion());
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = MetadataVersion.class)
     public void testGroupMetadataValueVersion(MetadataVersion metadataVersion) {
         final short expectedVersion;
         if (metadataVersion.isAtLeast(MetadataVersion.IBP_2_3_IV0)) {

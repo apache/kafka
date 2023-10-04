@@ -298,6 +298,21 @@ public enum MetadataVersion {
         return this.equals(IBP_ELR_testing);
     }
 
+    public short partitionChangeRecordVersion() {
+        if (isElrSupported()) {
+            return (short) 1;
+        } else {
+            return (short) 0;
+        }
+    }
+    public short partitionRecordVersion() {
+        if (isElrSupported()) {
+            return (short) 1;
+        } else {
+            return (short) 0;
+        }
+    }
+
     public RecordVersion highestSupportedRecordVersion() {
         if (this.isLessThan(IBP_0_10_0_IV0)) {
             return RecordVersion.V0;
