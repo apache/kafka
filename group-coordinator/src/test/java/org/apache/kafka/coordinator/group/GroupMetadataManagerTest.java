@@ -31,6 +31,7 @@ import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnsupportedAssignorException;
+import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.HeartbeatRequestData;
@@ -1026,6 +1027,10 @@ public class GroupMetadataManagerTest {
 
         public List<ListGroupsResponseData.ListedGroup> sendListGroups(List<String> statesFilter) {
             return groupMetadataManager.listGroups(statesFilter, lastCommittedOffset);
+        }
+
+        public List<ConsumerGroupDescribeResponseData.DescribedGroup> sendConsumerGroupDecribe(List<String> groupIds) {
+            return groupMetadataManager.consumerGroupDescribe(groupIds);
         }
 
         public void verifyHeartbeat(
@@ -8684,6 +8689,68 @@ public class GroupMetadataManagerTest {
         ).collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
 
         assertEquals(expectAllGroupMap, actualAllGroupMap);
+    }
+
+    @Test
+    public void testConsumerGroupDescribeNoErrors() {
+        String consumerGroupId = "consumerGroupId";
+        int epoch = 10;
+        String memberId = Uuid.randomUuid().toString();
+        String topicName = "topicName";
+
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroup(new ConsumerGroupBuilder(consumerGroupId, epoch))
+            .build();
+
+        ConsumerGroupMember.Builder memberBuilder = new ConsumerGroupMember.Builder(memberId)
+            .setSubscribedTopicNames(Collections.singletonList(topicName));
+        context.replay(RecordHelpers.newMemberSubscriptionRecord(
+            consumerGroupId,
+            memberBuilder.build()
+        ));
+        context.replay(RecordHelpers.newGroupEpochRecord(consumerGroupId, epoch + 1));
+
+        List<ConsumerGroupDescribeResponseData.DescribedGroup> actual = context.sendConsumerGroupDecribe(Arrays.asList(consumerGroupId));
+        ConsumerGroupDescribeResponseData.DescribedGroup describedGroup = new ConsumerGroupDescribeResponseData.DescribedGroup();
+        describedGroup.setGroupEpoch(epoch + 1);
+        describedGroup.setGroupId(consumerGroupId);
+        describedGroup.setMembers(Collections.singletonList(memberBuilder.build().asConsumerGroupDescribeMember()));
+        describedGroup.setAssignorName(null);
+        describedGroup.setGroupState("assigning");
+        List<ConsumerGroupDescribeResponseData.DescribedGroup> expected = Collections.singletonList(
+            describedGroup
+        );
+
+        assertEquals(expected, actual);
+    }
+
+    @Test
+    public void testConsumerGroupDescribeWithErrors() {
+        String groupId = "groupId";
+
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withAssignors(Collections.singletonList(assignor))
+            .build();
+        context.replay(newGroupMetadataRecord(
+            groupId,
+            new GroupMetadataValue()
+                .setMembers(Collections.emptyList()),
+            MetadataVersion.latest()
+        ));
+
+        List<ConsumerGroupDescribeResponseData.DescribedGroup> actual = context.sendConsumerGroupDecribe(Collections.singletonList(groupId));
+        ConsumerGroupDescribeResponseData.DescribedGroup describedGroup = new ConsumerGroupDescribeResponseData.DescribedGroup();
+        describedGroup.setGroupId(groupId);
+        describedGroup.setErrorCode(Errors.INVALID_GROUP_ID.code());
+        describedGroup.setErrorMessage(Errors.INVALID_GROUP_ID.message());
+        List<ConsumerGroupDescribeResponseData.DescribedGroup> expected = Collections.singletonList(
+            describedGroup
+        );
+
+        assertEquals(expected, actual);
     }
 
     public static <T> void assertUnorderedListEquals(

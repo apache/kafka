@@ -3725,7 +3725,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       CompletableFuture.completedFuture[Unit](())
     } else {
       val response = new ConsumerGroupDescribeResponseData()
-      val includeAuthorizedOperations = consumerGroupDescribeRequest.data.includeAuthorizedOperations
+//      val includeAuthorizedOperations = consumerGroupDescribeRequest.data.includeAuthorizedOperations
 
       val authorizedGroups = new ArrayBuffer[String]()
       consumerGroupDescribeRequest.data.groupIds.forEach { groupId =>
