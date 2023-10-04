@@ -316,10 +316,7 @@ public class FetchRequestManagerTest {
         // NOTE: by design the FetchRequestManager doesn't perform network I/O internally. That means that calling
         // close with a Timer will NOT send out the close session requests on close. The network I/O logic is
         // handled inside DefaultBackgroundThread.runAtClose, so we need to run that logic here.
-        DefaultBackgroundThread.runAtClose(time,
-                Collections.singletonList(Optional.of(fetcher)),
-                networkClientDelegate,
-                timer);
+        DefaultBackgroundThread.runAtClose(singletonList(Optional.of(fetcher)), networkClientDelegate, timer);
 
         NetworkClientDelegate.PollResult pollResult = fetcher.poll(time.milliseconds());
         networkClientDelegate.addAll(pollResult.unsentRequests);

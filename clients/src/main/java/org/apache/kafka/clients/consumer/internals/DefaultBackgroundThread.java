@@ -168,12 +168,9 @@ public class DefaultBackgroundThread extends KafkaThread implements Closeable {
      * </ol>
      */
     // Visible for testing
-    static void runAtClose(final Time time,
-                           final Collection<Optional<? extends RequestManager>> requestManagers,
+    static void runAtClose(final Collection<Optional<? extends RequestManager>> requestManagers,
                            final NetworkClientDelegate networkClientDelegate,
                            final Timer timer) {
-        long currentTimeMs = time.milliseconds();
-
         // These are the optional outgoing requests at the
         List<NetworkClientDelegate.PollResult> pollResults = requestManagers.stream()
                 .filter(Optional::isPresent)
@@ -184,7 +181,7 @@ public class DefaultBackgroundThread extends KafkaThread implements Closeable {
                 .map(networkClientDelegate::addAll)
                 .reduce(MAX_POLL_TIMEOUT_MS, Math::min);
         pollWaitTimeMs = Math.min(pollWaitTimeMs, timer.remainingMs());
-        networkClientDelegate.poll(pollWaitTimeMs, currentTimeMs);
+        networkClientDelegate.poll(pollWaitTimeMs, timer.currentTimeMs());
         timer.update();
 
         List<Future<?>> requestFutures = pollResults.stream()
@@ -195,7 +192,7 @@ public class DefaultBackgroundThread extends KafkaThread implements Closeable {
         // Poll to ensure that request has been written to the socket. Wait until either the timer has expired or until
         // all requests have received a response.
         while (timer.notExpired() && !requestFutures.stream().allMatch(Future::isDone)) {
-            networkClientDelegate.poll(timer.remainingMs(), currentTimeMs);
+            networkClientDelegate.poll(timer.remainingMs(), timer.currentTimeMs());
             timer.update();
         }
     }
@@ -247,7 +244,7 @@ public class DefaultBackgroundThread extends KafkaThread implements Closeable {
             }
         }
 
-        runAtClose(time, requestManagers.entries(), networkClientDelegate, timer);
+        runAtClose(requestManagers.entries(), networkClientDelegate, timer);
         closeQuietly(requestManagers, "request managers");
         closeQuietly(networkClientDelegate, "network client delegate");
         closeQuietly(applicationEventProcessor, "application event processor");
