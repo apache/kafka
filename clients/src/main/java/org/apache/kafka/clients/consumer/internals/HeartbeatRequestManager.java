@@ -61,8 +61,7 @@ public class HeartbeatRequestManager implements RequestManager {
     private final Logger logger;
     private final Time time;
 
-    // Time that the group coordinator will wait on member to revoke its partitions. This is provided by the group
-    // coordinator in the heartbeat
+    // Time that the group coordinator will wait on member to revoke its partitions.
     private final int rebalanceTimeoutMs;
     private final CoordinatorRequestManager coordinatorRequestManager;
     private final SubscriptionState subscriptions;
@@ -278,8 +277,9 @@ public class HeartbeatRequestManager implements RequestManager {
     }
 
     /**
-     * Maintains the state of the Heartbeat request. The object extends {@link RequestState} to enable exponential
-     * backoff and duplicated request handling. The two fields that it holds are:
+     * Represents the state of a heartbeat request, including logic for timing, retries, and exponential backoff. The
+     * object extends {@link RequestState} to enable exponential backoff and duplicated request handling. The two fields
+     * that it holds are:
      *
      * <ol>
      *     <li>{@link #heartbeatTimer} - a timer that tracks the time since the last heartbeat was sent.</li>
