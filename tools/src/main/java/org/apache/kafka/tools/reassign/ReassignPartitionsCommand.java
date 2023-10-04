@@ -419,36 +419,27 @@ public class ReassignPartitionsCommand {
         Map<TopicPartitionReplica, DescribeReplicaLogDirsResult.ReplicaLogDirInfo> replicaLogDirInfos = adminClient
             .describeReplicaLogDirs(targetMoves.keySet()).all().get();
 
-        Map<TopicPartitionReplica, LogDirMoveState> res = new HashMap<>();
-
-        targetMoves.entrySet().forEach(e -> {
+        return targetMoves.entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey, e -> {
             TopicPartitionReplica replica = e.getKey();
             String targetLogDir = e.getValue();
 
-            LogDirMoveState moveState;
+            if (!replicaLogDirInfos.containsKey(replica))
+                return new MissingReplicaMoveState(targetLogDir);
 
-            if (!replicaLogDirInfos.containsKey(replica)) {
-                moveState = new MissingReplicaMoveState(targetLogDir);
-            } else {
-                DescribeReplicaLogDirsResult.ReplicaLogDirInfo info = replicaLogDirInfos.get(replica);
-                if (info.getCurrentReplicaLogDir() == null) {
-                    moveState = new MissingLogDirMoveState(targetLogDir);
-                } else if (info.getFutureReplicaLogDir() == null) {
-                    if (info.getCurrentReplicaLogDir().equals(targetLogDir)) {
-                        moveState = new CompletedMoveState(targetLogDir);
-                    } else {
-                        moveState = new CancelledMoveState(info.getCurrentReplicaLogDir(), targetLogDir);
-                    }
-                } else {
-                    moveState = new ActiveMoveState(info.getCurrentReplicaLogDir(),
-                        targetLogDir,
-                        info.getFutureReplicaLogDir());
-                }
+            DescribeReplicaLogDirsResult.ReplicaLogDirInfo info = replicaLogDirInfos.get(replica);
+
+            if (info.getCurrentReplicaLogDir() == null)
+                return new MissingLogDirMoveState(targetLogDir);
+
+            if (info.getFutureReplicaLogDir() == null) {
+                if (info.getCurrentReplicaLogDir().equals(targetLogDir))
+                    return new CompletedMoveState(targetLogDir);
+
+                return new CancelledMoveState(info.getCurrentReplicaLogDir(), targetLogDir);
             }
-            res.put(replica, moveState);
-        });
 
-        return res;
+            return new ActiveMoveState(info.getCurrentReplicaLogDir(), targetLogDir, info.getFutureReplicaLogDir());
+        }));
     }
 
     /**
@@ -539,13 +530,12 @@ public class ReassignPartitionsCommand {
      * @param topics                The topics to clear the throttles for.
      */
     private static void clearTopicLevelThrottles(Admin adminClient, Set<String> topics) throws ExecutionException, InterruptedException {
-        Map<ConfigResource, Collection<AlterConfigOp>> configOps = new HashMap<>();
-        topics.forEach(topicName -> configOps.put(
-            new ConfigResource(ConfigResource.Type.TOPIC, topicName),
-            TOPIC_LEVEL_THROTTLES.stream().map(throttle -> new AlterConfigOp(new ConfigEntry(throttle, null),
+        Map<ConfigResource, Collection<AlterConfigOp>> configOps = topics.stream().collect(Collectors.toMap(
+            topicName -> new ConfigResource(ConfigResource.Type.TOPIC, topicName),
+            topicName -> TOPIC_LEVEL_THROTTLES.stream().map(throttle -> new AlterConfigOp(new ConfigEntry(throttle, null),
                 AlterConfigOp.OpType.DELETE)).collect(Collectors.toList())
-
         ));
+
         adminClient.incrementalAlterConfigs(configOps).all().get();
     }
 
@@ -634,7 +624,6 @@ public class ReassignPartitionsCommand {
     static Map<TopicPartition, List<Integer>> getReplicaAssignmentForTopics(Admin adminClient,
                                                                             List<String> topics
     ) throws ExecutionException, InterruptedException {
-
         Map<TopicPartition, List<Integer>> res = new HashMap<>();
         describeTopics(adminClient, new HashSet<>(topics)).forEach((topicName, topicDescription) ->
             topicDescription.partitions().forEach(info -> res.put(
