@@ -374,8 +374,7 @@ public class StreamThread extends Thread {
 
         final ThreadCache cache = new ThreadCache(logContext, cacheSizeBytes, streamsMetrics);
 
-        final boolean stateUpdaterEnabled =
-            InternalConfig.getBoolean(config.originals(), InternalConfig.STATE_UPDATER_ENABLED, false);
+        final boolean stateUpdaterEnabled = InternalConfig.getStateUpdaterEnabled(config.originals());
         final ActiveTaskCreator activeTaskCreator = new ActiveTaskCreator(
             topologyMetadata,
             config,
@@ -558,7 +557,7 @@ public class StreamThread extends Thread {
 
         this.numIterations = 1;
         this.eosEnabled = eosEnabled(config);
-        this.stateUpdaterEnabled = InternalConfig.getBoolean(config.originals(), InternalConfig.STATE_UPDATER_ENABLED, false);
+        this.stateUpdaterEnabled = InternalConfig.getStateUpdaterEnabled(config.originals());
     }
 
     private static final class InternalConsumerConfig extends ConsumerConfig {
@@ -859,7 +858,7 @@ public class StreamThread extends Thread {
 
                     if (log.isDebugEnabled()) {
                         log.debug("Committed all active tasks {} and standby tasks {} in {}ms",
-                            taskManager.activeTaskIds(), taskManager.standbyTaskIds(), commitLatency);
+                            taskManager.activeRunningTaskIds(), taskManager.standbyTaskIds(), commitLatency);
                     }
                 }
 
@@ -1128,7 +1127,7 @@ public class StreamThread extends Thread {
         if (now - lastCommitMs > commitTimeMs) {
             if (log.isDebugEnabled()) {
                 log.debug("Committing all active tasks {} and standby tasks {} since {}ms has elapsed (commit interval is {}ms)",
-                          taskManager.activeTaskIds(), taskManager.standbyTaskIds(), now - lastCommitMs, commitTimeMs);
+                          taskManager.activeRunningTaskIds(), taskManager.standbyTaskIds(), now - lastCommitMs, commitTimeMs);
             }
 
             committed = taskManager.commit(
