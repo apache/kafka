@@ -67,7 +67,10 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
@@ -172,7 +175,11 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
         }
     }
 
+    /**
+     * The group/offsets expiration key to schedule a timer task.
+     */
     private static final String GROUP_EXPIRATION_KEY = "expire-group-metadata";
+
     /**
      * The logger.
      */
@@ -435,17 +442,28 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
         return offsetMetadataManager.deleteOffsets(request);
     }
 
+    /**
+     * For each group, remove all expired offsets. If all offsets for the group is removed and the group is eligible
+     * for deletion, delete the group.
+     *
+     * @return The list of tombstones (offset commit and group metadata) to append.
+     */
     public CoordinatorResult<Void, Record> cleanupGroupMetadata() {
         List<Record> records = new ArrayList<>();
-        offsetMetadataManager.cleanupOffsetMetadata(records, config.offsetsRetentionMs);
+        Set<String> groupsWithEmptyOffsets = new HashSet<>();
+        groupMetadataManager.groupIds()
+            .forEach(groupId -> offsetMetadataManager.cleanupExpiredOffsets(groupId, records, config.offsetsRetentionMs)
+                .ifPresent(groupsWithEmptyOffsets::add));
+
+        groupsWithEmptyOffsets.forEach(groupId -> groupMetadataManager.maybeDeleteGroup(groupId, records));
 
         // Reschedule the next cycle.
         scheduleGroupMetadataExpiration();
-        return new CoordinatorResult<>(records, null);
+        return new CoordinatorResult<>(records);
     }
 
     /**
-     * Schedule the cleanup. If any exceptions are thrown above, the timer will retry.
+     * Schedule the group/offsets expiration job. If any exceptions are thrown above, the timer will retry.
      */
     private void scheduleGroupMetadataExpiration() {
         timer.schedule(

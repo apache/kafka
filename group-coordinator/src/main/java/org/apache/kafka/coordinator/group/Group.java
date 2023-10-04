@@ -121,5 +121,15 @@ public interface Group {
      */
     void createGroupTombstoneRecords(List<Record> records);
 
-    OffsetMetadataManager.ExpiredOffsetChecker expiredOffsets();
+    /**
+     * @return Whether the group can be deleted or not.
+     */
+    boolean isEligibleForDeletion();
+
+    /**
+     * See {@link org.apache.kafka.coordinator.group.OffsetMetadataManager.ExpirationCondition}
+     *
+     * @return The expiration condition for the group.
+     */
+    OffsetMetadataManager.ExpirationCondition expirationCondition();
 }

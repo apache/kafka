@@ -46,6 +46,9 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
+import static org.apache.kafka.coordinator.group.generic.GenericGroupState.EMPTY;
+import static org.apache.kafka.coordinator.group.generic.GenericGroupState.STABLE;
+
 /**
  * A Consumer Group. All the metadata in this class are backed by
  * records in the __consumer_offsets partitions.
@@ -639,9 +642,16 @@ public class ConsumerGroup implements Group {
     }
 
     @Override
-    public OffsetMetadataManager.ExpiredOffsetChecker expiredOffsets() {
-        // TODO: implement
-        return null;
+    public boolean isEligibleForDeletion() {
+        return state() == ConsumerGroupState.EMPTY;
+    }
+
+    @Override
+    public OffsetMetadataManager.ExpirationCondition expirationCondition() {
+        return new OffsetMetadataManager.ExpirationCondition(
+            offsetAndMetadata -> offsetAndMetadata.commitTimestampMs,
+            subscribedTopicNames()
+        );
     }
 
     /**

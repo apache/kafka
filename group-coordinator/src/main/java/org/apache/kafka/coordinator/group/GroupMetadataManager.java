@@ -3088,6 +3088,19 @@ public class GroupMetadataManager {
     }
 
     /**
+     * Delete the group if it exists and is eligible for deletion.
+     *
+     * @param groupId The group id.
+     * @param records The list of records to append the group metadata tombstone records.
+     */
+    public void maybeDeleteGroup(String groupId, List<Record> records) {
+        Group group = groups.get(groupId);
+        if (group != null && group.isEligibleForDeletion()) {
+            deleteGroup(groupId, records);
+        }
+    }
+
+    /**
      * Checks whether the given protocol type or name in the request is inconsistent with the group's.
      *
      * @param protocolTypeOrName       The request's protocol type or name.
@@ -3102,6 +3115,10 @@ public class GroupMetadataManager {
         return protocolTypeOrName != null
             && groupProtocolTypeOrName != null
             && !groupProtocolTypeOrName.equals(protocolTypeOrName);
+    }
+
+    public Set<String> groupIds() {
+        return this.groups.keySet();
     }
 
     /**

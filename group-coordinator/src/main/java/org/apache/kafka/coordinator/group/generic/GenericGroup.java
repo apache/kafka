@@ -905,35 +905,49 @@ public class GenericGroup implements Group {
     }
 
     @Override
-    public OffsetMetadataManager.ExpiredOffsetChecker expiredOffsets() {
+    public boolean isEligibleForDeletion() {
+        return isInState(EMPTY) && generationId > 0;
+    }
+
+    /**
+     * Return the expiration condition to be used for this group. This is based on several factors
+     * such as the group state, the protocol type, and the GroupMetadata record version.
+     * See {@link org.apache.kafka.coordinator.group.OffsetMetadataManager.ExpirationCondition}
+     *
+     * @return The expiration condition.
+     */
+    @Override
+    public OffsetMetadataManager.ExpirationCondition expirationCondition() {
         if (protocolType.isPresent()) {
             if (isInState(EMPTY)) {
-                // no consumer exists in the group =>
-                // - if current state timestamp exists and retention period has passed since group became Empty,
+                // No consumer exists in the group =>
+                // - If current state timestamp exists and retention period has passed since group became Empty,
                 //   expire all offsets with no pending offset commit;
-                // - if there is no current state timestamp (old group metadata schema) and retention period has passed
+                // - If there is no current state timestamp (old group metadata schema) and retention period has passed
                 //   since the last commit timestamp, expire the offset
-                return new OffsetMetadataManager.ExpiredOffsetChecker(
+                return new OffsetMetadataManager.ExpirationCondition(
                     offsetAndMetadata -> currentStateTimestamp.orElse(offsetAndMetadata.commitTimestampMs),
                     Collections.emptySet());
-            } else if (ConsumerProtocol.PROTOCOL_TYPE.equals(protocolType.get()) && subscribedTopics.isPresent() && isInState(STABLE)) {
-                // consumers exist in the group and group is Stable =>
-                // - if the group is aware of the subscribed topics and retention period had passed since the
+            } else if (ConsumerProtocol.PROTOCOL_TYPE.equals(protocolType.get()) &&
+                subscribedTopics.isPresent() && isInState(STABLE)) {
+                // Consumers exist in the group and group is Stable =>
+                // - If the group is aware of the subscribed topics and retention period had passed since the
                 //   last commit timestamp, expire the offset. offset with pending offset commit are not
                 //   expired
-                return new OffsetMetadataManager.ExpiredOffsetChecker(
+                return new OffsetMetadataManager.ExpirationCondition(
                     offsetAndMetadata -> offsetAndMetadata.commitTimestampMs,
                     subscribedTopics.orElse(Collections.emptySet()));
             }
         } else {
             // protocolType is None => standalone (simple) consumer, that uses Kafka for offset storage only
             // expire offsets with no pending offset commit that retention period has passed since their last commit
-            return new OffsetMetadataManager.ExpiredOffsetChecker(
+            return new OffsetMetadataManager.ExpirationCondition(
                 offsetAndMetadata -> offsetAndMetadata.commitTimestampMs,
                 Collections.emptySet());
         }
 
-        return new OffsetMetadataManager.ExpiredOffsetChecker(offsetAndMetadata -> -1L, Collections.emptySet());
+        // If none of the conditions above are met, do not expire any offsets.
+        return new OffsetMetadataManager.ExpirationCondition(offsetAndMetadata -> Long.MAX_VALUE, Collections.emptySet());
 
     }
 
