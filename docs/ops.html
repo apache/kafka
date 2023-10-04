@@ -1792,12 +1792,12 @@ $ bin/kafka-acls.sh \
       <tr>
         <td>Rate of transactional verification errors</td>
         <td>kafka.server:type=AddPartitionsToTxnManager,name=VerificationFailureRate</td>
-        <td>in steady state 0, but transient errors are expected during rolls and reassignments of the transactional state partition</td>
+        <td>Rate of verifications that returned in failure either from the AddPartitionsToTxn API response or through errors in the AddPartitionsToTxnManager. In steady state 0, but transient errors are expected during rolls and reassignments of the transactional state partition.</td>
       </tr>
       <tr>
         <td>Time to verify a transactional request</td>
         <td>kafka.server:type=AddPartitionsToTxnManager,name=VerificationTimeMs</td>
-        <td>the amount of time queueing while a possible previous request is in-flight plus the round trip to the transaction coordinator to verify (or not verify)</td>
+        <td>The amount of time queueing while a possible previous request is in-flight plus the round trip to the transaction coordinator to verify (or not verify)</td>
       </tr>
       <tr>
         <td>Consumer Group Offset Count</td>
