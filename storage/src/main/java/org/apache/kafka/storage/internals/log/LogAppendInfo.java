@@ -204,6 +204,10 @@ public class LogAppendInfo {
         return leaderHwChange;
     }
 
+    public boolean hasValidBytes() {
+        return validBytes > 0;
+    }
+
     /**
      * Get the first offset if it exists, else get the last offset of the first batch
      * For magic versions 2 and newer, this method will return first offset. For magic versions
