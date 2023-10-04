@@ -626,14 +626,12 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         Map<TopicPartition, Long> timestampToSearch = partitions
                 .stream()
                 .collect(Collectors.toMap(Function.identity(), tp -> timestamp));
-        final ListOffsetsApplicationEvent listOffsetsEvent = new ListOffsetsApplicationEvent(
+        ListOffsetsApplicationEvent listOffsetsEvent = new ListOffsetsApplicationEvent(
                 timestampToSearch,
-                false
-        );
+                false);
         Map<TopicPartition, OffsetAndTimestamp> offsetAndTimestampMap = applicationEventHandler.addAndGet(
                 listOffsetsEvent,
-                time.timer(timeout)
-        );
+                time.timer(timeout));
         return offsetAndTimestampMap
                 .entrySet()
                 .stream()
