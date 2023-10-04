@@ -460,7 +460,7 @@ public class GroupMetadataManager {
         final List<DescribeGroupsResponseData.DescribedGroup> describedGroups = new ArrayList<>();
         groupIds.forEach(groupId -> {
             try {
-                GenericGroup group = getGenericGroupByCommittedOffset(groupId, committedOffset);
+                GenericGroup group = genericGroup(groupId, committedOffset);
 
                 if (group.isInState(STABLE)) {
                     if (!group.protocolName().isPresent()) {
@@ -584,7 +584,7 @@ public class GroupMetadataManager {
      * @return A GenericGroup.
      * @throws GroupIdNotFoundException if the group does not exist or is not a generic group.
      */
-    public GenericGroup getGenericGroupByCommittedOffset(
+    public GenericGroup genericGroup(
         String groupId,
         long committedOffset
     ) throws GroupIdNotFoundException {

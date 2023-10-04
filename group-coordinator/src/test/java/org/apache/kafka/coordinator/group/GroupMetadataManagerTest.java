@@ -425,6 +425,7 @@ public class GroupMetadataManagerTest {
             this.groupMetadataManager = groupMetadataManager;
             this.genericGroupInitialRebalanceDelayMs = genericGroupInitialRebalanceDelayMs;
             this.genericGroupNewMemberJoinTimeoutMs = genericGroupNewMemberJoinTimeoutMs;
+            snapshotRegistry.getOrCreateSnapshot(lastWrittenOffset);
         }
 
         public void commit() {
@@ -1138,6 +1139,19 @@ public class GroupMetadataManagerTest {
             return groupMetadataManager.genericGroupLeave(context, request);
         }
 
+        private void testDescribeGroupsUncommittedGroup(String groupId) {
+            List<DescribeGroupsResponseData.DescribedGroup> describedGroups =
+                describeGroups(Collections.singletonList(groupId));
+
+            assertEquals(
+                Collections.singletonList(new DescribeGroupsResponseData.DescribedGroup()
+                    .setGroupId("group-id")
+                    .setGroupState(DEAD.toString())
+                ),
+                describedGroups
+            );
+        }
+
         private ApiMessage messageOrNull(ApiMessageAndVersion apiMessageAndVersion) {
             if (apiMessageAndVersion == null) {
                 return null;
@@ -1216,6 +1230,7 @@ public class GroupMetadataManagerTest {
         }
 
         private void createSnapshot() {
+            lastWrittenOffset++;
             snapshotRegistry.getOrCreateSnapshot(lastWrittenOffset);
         }
     }
@@ -8700,15 +8715,31 @@ public class GroupMetadataManagerTest {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .build();
         JoinGroupResponseData responseData = context.joinGenericGroupAsDynamicMemberAndCompleteRebalance("group-id");
+        context.testDescribeGroupsUncommittedGroup("group-id");
+
+        context.createSnapshot();
+        context.commit();
+
+        List<DescribeGroupsResponseData.DescribedGroup> expectedDescribedGroups = Collections.singletonList(
+            new DescribeGroupsResponseData.DescribedGroup()
+                .setGroupId("group-id")
+                .setGroupState(STABLE.toString())
+                .setProtocolType(responseData.protocolType())
+                .setProtocolData(responseData.protocolName())
+                .setMembers(responseData.members().stream().map(member ->
+                    new DescribeGroupsResponseData.DescribedGroupMember()
+                        .setMemberId(member.memberId())
+                        .setGroupInstanceId(member.groupInstanceId())
+                        .setClientId("client")
+                        .setClientHost("localhost/127.0.0.1")
+                        .setMemberMetadata(member.metadata())
+                ).collect(Collectors.toList()))
+        );
 
         List<DescribeGroupsResponseData.DescribedGroup> describedGroups =
             context.describeGroups(Collections.singletonList("group-id"));
 
-        assertEquals(responseData.protocolType(), describedGroups.get(0).protocolType());
-        assertEquals(responseData.protocolName(), describedGroups.get(0).protocolData());
-        assertEquals(responseData.members().stream().map(member -> member.memberId()).collect(Collectors.toList()),
-            describedGroups.get(0).members().stream().map(member -> member.memberId()).collect(Collectors.toList())
-        );
+        assertEquals(expectedDescribedGroups, describedGroups);
     }
 
     @Test
@@ -8720,26 +8751,40 @@ public class GroupMetadataManagerTest {
             "leader-instance-id",
             "follower-instance-id"
         );
+        context.testDescribeGroupsUncommittedGroup("group-id");
+
+        context.createSnapshot();
+        context.commit();
+
         GenericGroup group = context.groupMetadataManager.getOrMaybeCreateGenericGroup("group-id", false);
+        List<DescribeGroupsResponseData.DescribedGroup> expectedDescribedGroups = Collections.singletonList(
+            new DescribeGroupsResponseData.DescribedGroup()
+                .setGroupId("group-id")
+                .setGroupState(STABLE.toString())
+                .setProtocolType(group.protocolType().get())
+                .setProtocolData(group.protocolName().get())
+                .setMembers(group.allMembers().stream().map(member ->
+                    new DescribeGroupsResponseData.DescribedGroupMember()
+                        .setMemberId(member.memberId())
+                        .setGroupInstanceId(member.groupInstanceId().get())
+                        .setClientId(member.clientId())
+                        .setClientHost(member.clientHost())
+                        .setMemberMetadata(member.metadata(group.protocolName().get()))
+                        .setMemberAssignment(member.assignment())
+                ).collect(Collectors.toList()))
+        );
 
         List<DescribeGroupsResponseData.DescribedGroup> describedGroups =
             context.describeGroups(Collections.singletonList("group-id"));
 
-        assertEquals("consumer", describedGroups.get(0).protocolType());
-        assertEquals("range", describedGroups.get(0).protocolData());
-        assertEquals(group.allMembers().stream().map(member -> member.memberId()).collect(Collectors.toList()),
-            describedGroups.get(0).members().stream().map(member -> member.memberId()).collect(Collectors.toList())
-        );
-        assertEquals(group.allMembers().stream().map(member -> member.groupInstanceId().get()).collect(Collectors.toList()),
-            describedGroups.get(0).members().stream().map(member -> member.groupInstanceId()).collect(Collectors.toList())
-        );
+        assertEquals(expectedDescribedGroups, describedGroups);
     }
 
     @Test
     public void testDescribeGroupRebalancing() throws Exception {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .build();
-        GenericGroup group = context.createGenericGroup("group-id");
+        context.createGenericGroup("group-id");
         JoinGroupResponseData responseData = context.joinGenericGroupAsDynamicMemberAndCompleteJoin(
             new JoinGroupRequestBuilder()
                 .withGroupId("group-id")
@@ -8747,24 +8792,36 @@ public class GroupMetadataManagerTest {
                 .withDefaultProtocolTypeAndProtocols()
                 .build()
         );
+        context.testDescribeGroupsUncommittedGroup("group-id");
+
+        context.createSnapshot();
+        context.commit();
+
+        List<DescribeGroupsResponseData.DescribedGroup> expectedDescribedGroups = Collections.singletonList(
+            new DescribeGroupsResponseData.DescribedGroup()
+                .setGroupId("group-id")
+                .setGroupState(COMPLETING_REBALANCE.toString())
+                .setProtocolType(responseData.protocolType())
+                .setProtocolData("")
+                .setMembers(responseData.members().stream().map(member ->
+                    new DescribeGroupsResponseData.DescribedGroupMember()
+                        .setMemberId(member.memberId())
+                        .setGroupInstanceId(member.groupInstanceId())
+                        .setClientId("client")
+                        .setClientHost("localhost/127.0.0.1")
+                ).collect(Collectors.toList()))
+        );
 
         List<DescribeGroupsResponseData.DescribedGroup> describedGroups =
             context.describeGroups(Collections.singletonList("group-id"));
 
-        assertTrue(group.isInState(COMPLETING_REBALANCE));
-        assertEquals(responseData.protocolType(), describedGroups.get(0).protocolType());
-        assertEquals("", describedGroups.get(0).protocolData());
-        assertTrue(describedGroups.get(0).members().stream().map(member -> member.memberId()).collect(Collectors.toList())
-            .contains(responseData.memberId()));
-        describedGroups.get(0).members().forEach(member -> assertTrue(member.memberMetadata().length == 0));
-        describedGroups.get(0).members().forEach(member -> assertTrue(member.memberAssignment().length == 0));
+        assertEquals(expectedDescribedGroups, describedGroups);
     }
 
     @Test
     public void testDescribeGroupsGroupIdNotFoundException() {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .build();
-        context.createSnapshot();
 
         List<DescribeGroupsResponseData.DescribedGroup> expectedDescribedGroups =
             Collections.singletonList(new DescribeGroupsResponseData.DescribedGroup()

@@ -790,7 +790,6 @@ public class GroupCoordinatorServiceTest {
 
         assertFalse(future.isDone());
         describedGroupFuture.complete(Collections.singletonList(describedGroup2));
-
         assertEquals(expectedDescribedGroups, future.get());
     }
 
