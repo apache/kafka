@@ -325,9 +325,9 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         Timer timer = time.timer(timeout);
 
         try {
-            this.kafkaConsumerMetrics.recordPollStart(timer.currentTimeMs());
+            kafkaConsumerMetrics.recordPollStart(timer.currentTimeMs());
 
-            if (this.subscriptions.hasNoSubscriptionOrUserAssignment()) {
+            if (subscriptions.hasNoSubscriptionOrUserAssignment()) {
                 throw new IllegalStateException("Consumer is not subscribed to any topics or assigned any partitions");
             }
 
@@ -343,14 +343,14 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
                                 + "since the consumer's position has advanced for at least one topic partition");
                     }
 
-                    return this.interceptors.onConsume(new ConsumerRecords<>(fetch.records()));
+                    return interceptors.onConsume(new ConsumerRecords<>(fetch.records()));
                 }
                 // We will wait for retryBackoffMs
             } while (timer.notExpired());
 
             return ConsumerRecords.empty();
         } finally {
-            this.kafkaConsumerMetrics.recordPollEnd(timer.currentTimeMs());
+            kafkaConsumerMetrics.recordPollEnd(timer.currentTimeMs());
         }
         // TODO: Once we implement poll(), clear wakeupTrigger in a finally block: wakeupTrigger.clearActiveTask();
     }
@@ -413,8 +413,8 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         SubscriptionState.FetchPosition newPosition = new SubscriptionState.FetchPosition(
                 offset,
                 Optional.empty(), // This will ensure we skip validation
-                this.metadata.currentLeader(partition));
-        this.subscriptions.seekUnvalidated(partition, newPosition);
+                metadata.currentLeader(partition));
+        subscriptions.seekUnvalidated(partition, newPosition);
     }
 
     @Override
@@ -430,13 +430,13 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         } else {
             log.info("Seeking to offset {} for partition {}", offset, partition);
         }
-        Metadata.LeaderAndEpoch currentLeaderAndEpoch = this.metadata.currentLeader(partition);
+        Metadata.LeaderAndEpoch currentLeaderAndEpoch = metadata.currentLeader(partition);
         SubscriptionState.FetchPosition newPosition = new SubscriptionState.FetchPosition(
                 offsetAndMetadata.offset(),
                 offsetAndMetadata.leaderEpoch(),
                 currentLeaderAndEpoch);
-        this.updateLastSeenEpochIfNewer(partition, offsetAndMetadata);
-        this.subscriptions.seekUnvalidated(partition, newPosition);
+        updateLastSeenEpochIfNewer(partition, offsetAndMetadata);
+        subscriptions.seekUnvalidated(partition, newPosition);
     }
 
     @Override
@@ -444,7 +444,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         if (partitions == null)
             throw new IllegalArgumentException("Partitions collection cannot be null");
 
-        Collection<TopicPartition> parts = partitions.isEmpty() ? this.subscriptions.assignedPartitions() : partitions;
+        Collection<TopicPartition> parts = partitions.isEmpty() ? subscriptions.assignedPartitions() : partitions;
         subscriptions.requestOffsetReset(parts, OffsetResetStrategy.EARLIEST);
     }
 
@@ -453,7 +453,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         if (partitions == null)
             throw new IllegalArgumentException("Partitions collection cannot be null");
 
-        Collection<TopicPartition> parts = partitions.isEmpty() ? this.subscriptions.assignedPartitions() : partitions;
+        Collection<TopicPartition> parts = partitions.isEmpty() ? subscriptions.assignedPartitions() : partitions;
         subscriptions.requestOffsetReset(parts, OffsetResetStrategy.LATEST);
     }
 
@@ -464,12 +464,12 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public long position(TopicPartition partition, Duration timeout) {
-        if (!this.subscriptions.isAssigned(partition))
+        if (!subscriptions.isAssigned(partition))
             throw new IllegalStateException("You can only check the position for partitions assigned to this consumer.");
 
         Timer timer = time.timer(timeout);
         do {
-            SubscriptionState.FetchPosition position = this.subscriptions.validPosition(partition);
+            SubscriptionState.FetchPosition position = subscriptions.validPosition(partition);
             if (position != null)
                 return position.offset;
 
@@ -523,7 +523,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public Map<MetricName, ? extends Metric> metrics() {
-        return Collections.unmodifiableMap(this.metrics.metrics());
+        return Collections.unmodifiableMap(metrics.metrics());
     }
 
     @Override
@@ -706,7 +706,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         if (applicationEventHandler != null)
             closeQuietly(() -> applicationEventHandler.close(timeout), "Failed to close application event handler with a timeout(ms)=" + timeout, firstException);
 
-        closeQuietly(fetchBuffer, "Failed to close fetcher", firstException);
+        closeQuietly(fetchBuffer, "Failed to close the fetch buffer", firstException);
         closeQuietly(interceptors, "consumer interceptors", firstException);
         closeQuietly(kafkaConsumerMetrics, "kafka consumer metrics", firstException);
         closeQuietly(metrics, "consumer metrics", firstException);
@@ -759,7 +759,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public Set<TopicPartition> assignment() {
-        return Collections.unmodifiableSet(this.subscriptions.assignedPartitions());
+        return Collections.unmodifiableSet(subscriptions.assignedPartitions());
     }
 
     /**
@@ -769,7 +769,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public Set<String> subscription() {
-        return Collections.unmodifiableSet(this.subscriptions.subscription());
+        return Collections.unmodifiableSet(subscriptions.subscription());
     }
 
     @Override
@@ -803,7 +803,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
 
             fetchBuffer.retainAll(currentTopicPartitions);
             log.info("Subscribed to topic(s): {}", join(topics, ", "));
-            if (this.subscriptions.subscribe(new HashSet<>(topics), callback))
+            if (subscriptions.subscribe(new HashSet<>(topics), callback))
                 metadata.requestUpdateForNewTopics();
         }
     }
@@ -815,7 +815,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         }
 
         if (partitions.isEmpty()) {
-            this.unsubscribe();
+            unsubscribe();
             return;
         }
 
@@ -837,10 +837,10 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
 
         // make sure the offsets of topic partitions the consumer is unsubscribing from
         // are committed since there will be no following rebalance
-        applicationEventHandler.add(new AssignmentChangeApplicationEvent(this.subscriptions.allConsumed(), time.milliseconds()));
+        applicationEventHandler.add(new AssignmentChangeApplicationEvent(subscriptions.allConsumed(), time.milliseconds()));
 
         log.info("Assigned to partition(s): {}", join(partitions, ", "));
-        if (this.subscriptions.assignFromUser(new HashSet<>(partitions)))
+        if (subscriptions.assignFromUser(new HashSet<>(partitions)))
             applicationEventHandler.add(new NewTopicsMetadataUpdateRequestEvent());
     }
 
@@ -853,9 +853,9 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
 
         throwIfNoAssignorsConfigured();
         log.info("Subscribed to pattern: '{}'", pattern);
-        this.subscriptions.subscribe(pattern, listener);
-        this.updatePatternSubscription(metadata.fetch());
-        this.metadata.requestUpdateForNewTopics();
+        subscriptions.subscribe(pattern, listener);
+        updatePatternSubscription(metadata.fetch());
+        metadata.requestUpdateForNewTopics();
     }
 
     /**
@@ -884,7 +884,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     @Override
     public void unsubscribe() {
         fetchBuffer.retainAll(Collections.emptySet());
-        this.subscriptions.unsubscribe();
+        subscriptions.unsubscribe();
     }
 
     @Override
@@ -1016,7 +1016,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         log.debug("Refreshing committed offsets for partitions {}", initializingPartitions);
         try {
             final Map<TopicPartition, OffsetAndMetadata> offsets = applicationEventHandler.addAndGet(new OffsetFetchApplicationEvent(initializingPartitions), timer);
-            return ConsumerUtils.refreshCommittedOffsets(offsets, this.metadata, this.subscriptions);
+            return ConsumerUtils.refreshCommittedOffsets(offsets, metadata, subscriptions);
         } catch (org.apache.kafka.common.errors.TimeoutException e) {
             log.error("Couldn't refresh committed offsets before timeout expired");
             return false;
