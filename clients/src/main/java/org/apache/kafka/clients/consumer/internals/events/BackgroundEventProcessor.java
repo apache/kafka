@@ -43,11 +43,9 @@ public class BackgroundEventProcessor extends EventProcessor<BackgroundEvent> {
 
     /**
      * Process the events—if any—that were produced by the {@link ConsumerNetworkThread network thread}.
-     * It is possible that when processing the events that a given event will
-     * {@link ErrorBackgroundEvent represent an error directly}, or it could be that processing an event generates
-     * an error. In such cases, the processor will continue to process the remaining events. In this case, we
-     * provide the caller to provide a callback handler that "collects" the errors. We grab the first error that
-     * occurred and throw it.
+     * It is possible that {@link ErrorBackgroundEvent an error} could occur when processing the events.
+     * In such cases, the processor will take a reference to the first error, continue to process the
+     * remaining events, and then throw the first error that occurred.
      */
     @Override
     public void process() {
