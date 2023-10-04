@@ -285,6 +285,12 @@ class RemoteIndexCacheTest {
     // call remove function to mark the entry for removal
     cache.remove(internalIndexKey)
 
+    // wait until entry is marked for deletion
+    TestUtils.waitUntilTrue(() => cacheEntry.isMarkedForCleanup,
+      "Failed to mark cache entry for cleanup after invalidation")
+    TestUtils.waitUntilTrue(() => cacheEntry.isCleanStarted,
+      "Failed to cleanup cache entry after invalidation")
+
     // first it will be marked for cleanup, second time markForCleanup is called when cleanup() is called
     verify(cacheEntry, times(2)).markForCleanup()
     // after that async it will be cleaned up

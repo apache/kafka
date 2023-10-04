@@ -132,7 +132,7 @@ public class RemoteIndexCache implements Closeable {
 
         internalCache = Caffeine.newBuilder()
                 .maximumSize(maxSize)
-                // removeListener is invoked when either the entry is invalidated (means manual removal by the caller) or
+                // evictionListener is invoked when either the entry is invalidated (means manual removal by the caller) or
                 // evicted (means removal due to the policy)
                 .evictionListener((Uuid key, Entry entry, RemovalCause cause) -> {
                     // Mark the entries for cleanup and add them to the queue to be garbage collected later by the background thread.
@@ -172,8 +172,8 @@ public class RemoteIndexCache implements Closeable {
             internalCache.asMap().computeIfPresent(key, (k, v) -> {
                 try {
                     v.markForCleanup();
-                    v.cleanup();
-                } catch (IOException e) {
+                    expiredIndexes.put(v);
+                } catch (IOException | InterruptedException e) {
                     throw new KafkaException(e);
                 }
                 // Returning null to remove the key from the cache
@@ -190,8 +190,8 @@ public class RemoteIndexCache implements Closeable {
             keys.forEach(key -> internalCache.asMap().computeIfPresent(key, (k, v) -> {
                 try {
                     v.markForCleanup();
-                    v.cleanup();
-                } catch (IOException e) {
+                    expiredIndexes.put(v);
+                } catch (IOException | InterruptedException e) {
                     throw new KafkaException(e);
                 }
                 // Returning null to remove the key from the cache
