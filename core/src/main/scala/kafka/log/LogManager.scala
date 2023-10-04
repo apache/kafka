@@ -275,7 +275,7 @@ class LogManager(logDirs: Seq[File],
   private def directoryIds(dirs: Seq[File]): Map[String, Uuid] = {
     dirs.flatMap { dir =>
       try {
-        val metadataCheckpoint = new BrokerMetadataCheckpoint(new File(dir, "meta.properties"))
+        val metadataCheckpoint = new BrokerMetadataCheckpoint(new File(dir, KafkaServer.brokerMetaPropsFile))
         metadataCheckpoint.read().map { props =>
           val rawMetaProperties = new RawMetaProperties(props)
           val uuid = rawMetaProperties.directoryId match {

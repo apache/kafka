@@ -172,7 +172,7 @@ object BrokerMetadataCheckpoint extends Logging {
     val offlineDirs = mutable.ArrayBuffer.empty[String]
 
     for (logDir <- logDirs) {
-      val brokerCheckpointFile = new File(logDir, "meta.properties")
+      val brokerCheckpointFile = new File(logDir, KafkaServer.brokerMetaPropsFile)
       val brokerCheckpoint = new BrokerMetadataCheckpoint(brokerCheckpointFile)
 
       try {

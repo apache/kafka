@@ -23,7 +23,7 @@ import java.nio.file.{Files, Paths}
 import java.util
 import java.util.Properties
 import org.apache.kafka.common.{KafkaException, Uuid}
-import kafka.server.{BrokerMetadataCheckpoint, KafkaConfig, MetaProperties}
+import kafka.server.{BrokerMetadataCheckpoint, KafkaConfig, KafkaServer, MetaProperties}
 import kafka.utils.Exit
 import kafka.utils.TestUtils
 import org.apache.commons.io.output.NullOutputStream
@@ -115,7 +115,7 @@ Found problem:
     val stream = new ByteArrayOutputStream()
     val tempDir = TestUtils.tempDir()
     try {
-      Files.write(tempDir.toPath.resolve("meta.properties"),
+      Files.write(tempDir.toPath.resolve(KafkaServer.brokerMetaPropsFile),
         String.join("\n", util.Arrays.asList(
           "version=1",
           "cluster.id=XcZZOzUqS4yHOjhMQB6JLQ")).
@@ -139,7 +139,7 @@ Found problem:
     val stream = new ByteArrayOutputStream()
     val tempDir = TestUtils.tempDir()
     try {
-      Files.write(tempDir.toPath.resolve("meta.properties"),
+      Files.write(tempDir.toPath.resolve(KafkaServer.brokerMetaPropsFile),
         String.join("\n", util.Arrays.asList(
           "version=0",
           "broker.id=1",
@@ -373,7 +373,7 @@ Found problem:
       assertEquals(0, StorageTool.
         formatCommand(new PrintStream(NullOutputStream.NULL_OUTPUT_STREAM), Seq(tempDir.toString), metaProperties, bootstrapMetadata, MetadataVersion.latest(), ignoreFormatted = false))
 
-      val metaPropertiesFile = Paths.get(tempDir.toURI).resolve("meta.properties").toFile
+      val metaPropertiesFile = Paths.get(tempDir.toURI).resolve(KafkaServer.brokerMetaPropsFile).toFile
       assertTrue(metaPropertiesFile.exists())
       val properties = new BrokerMetadataCheckpoint(metaPropertiesFile).read().get
       assertTrue(properties.containsKey("directory.id"))

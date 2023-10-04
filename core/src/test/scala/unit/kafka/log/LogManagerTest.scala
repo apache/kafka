@@ -20,7 +20,7 @@ package kafka.log
 import com.yammer.metrics.core.{Gauge, MetricName}
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.server.metadata.{ConfigRepository, MockConfigRepository}
-import kafka.server.{BrokerMetadataCheckpoint, BrokerTopicStats, RawMetaProperties}
+import kafka.server.{BrokerMetadataCheckpoint, BrokerTopicStats, KafkaServer, RawMetaProperties}
 import kafka.utils._
 import org.apache.directory.api.util.FileUtils
 import org.apache.kafka.common.config.TopicConfig
@@ -1018,7 +1018,7 @@ class LogManagerTest {
       rawProps.nodeId = 1
       rawProps.clusterId = "IVT1Seu3QjacxS7oBTKhDQ"
       id.foreach(v => rawProps.directoryId = v)
-      new BrokerMetadataCheckpoint(new File(dir, "meta.properties")).write(rawProps.props)
+      new BrokerMetadataCheckpoint(new File(dir, KafkaServer.brokerMetaPropsFile)).write(rawProps.props)
     }
     val dirs: Seq[File] = Seq.fill(5)(TestUtils.tempDir())
     writeMetaProperties(dirs(0))
