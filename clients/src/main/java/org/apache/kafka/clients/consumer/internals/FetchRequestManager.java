@@ -33,12 +33,10 @@ import org.apache.kafka.clients.FetchSessionHandler;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.UnsentRequest;
-import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.slf4j.Logger;
 
 /**
  * {@code FetchRequestManager} is responsible for generating {@link FetchRequest} that represent the
@@ -47,22 +45,17 @@ import org.slf4j.Logger;
  */
 public class FetchRequestManager extends AbstractFetch implements RequestManager {
 
-    private final Logger log;
-    private final BackgroundEventHandler backgroundEventHandler;
     private final NetworkClientDelegate networkClientDelegate;
     private final List<CompletableFuture<Queue<CompletedFetch>>> futures;
 
     FetchRequestManager(final LogContext logContext,
                         final Time time,
-                        final BackgroundEventHandler backgroundEventHandler,
                         final ConsumerMetadata metadata,
                         final SubscriptionState subscriptions,
                         final FetchConfig fetchConfig,
                         final FetchMetricsManager metricsManager,
                         final NetworkClientDelegate networkClientDelegate) {
         super(logContext, metadata, subscriptions, fetchConfig, metricsManager, time);
-        this.log = logContext.logger(FetchRequestManager.class);
-        this.backgroundEventHandler = backgroundEventHandler;
         this.networkClientDelegate = networkClientDelegate;
         this.futures = new ArrayList<>();
     }

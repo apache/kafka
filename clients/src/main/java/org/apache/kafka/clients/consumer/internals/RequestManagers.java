@@ -131,7 +131,6 @@ public class RequestManagers implements Closeable {
                         logContext);
                 final FetchRequestManager fetch = new FetchRequestManager(logContext,
                         time,
-                        backgroundEventHandler,
                         metadata,
                         subscriptions,
                         fetchConfig,

@@ -29,7 +29,6 @@ import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetOutOfRangeException;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
-import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaException;
@@ -115,7 +114,6 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
@@ -3389,7 +3387,6 @@ public class FetchRequestManagerTest {
         fetcher = spy(new TestableFetchRequestManager<>(
                 logContext,
                 time,
-                new BackgroundEventHandler(logContext, new LinkedBlockingQueue<>()),
                 metadata,
                 subscriptionState,
                 fetchConfig,
@@ -3447,14 +3444,13 @@ public class FetchRequestManagerTest {
 
         public TestableFetchRequestManager(LogContext logContext,
                                            Time time,
-                                           BackgroundEventHandler backgroundEventHandler,
                                            ConsumerMetadata metadata,
                                            SubscriptionState subscriptions,
                                            FetchConfig fetchConfig,
                                            FetchMetricsManager metricsManager,
                                            NetworkClientDelegate networkClientDelegate,
                                            FetchCollector<K, V> fetchCollector) {
-            super(logContext, time, backgroundEventHandler, metadata, subscriptions, fetchConfig, metricsManager, networkClientDelegate);
+            super(logContext, time, metadata, subscriptions, fetchConfig, metricsManager, networkClientDelegate);
             this.fetchCollector = fetchCollector;
         }
 

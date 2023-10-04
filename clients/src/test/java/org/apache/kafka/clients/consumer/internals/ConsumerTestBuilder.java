@@ -153,7 +153,6 @@ public class ConsumerTestBuilder implements Closeable {
                 groupState));
         this.fetchRequestManager = spy(new FetchRequestManager(logContext,
                 time,
-                backgroundEventHandler,
                 metadata,
                 subscriptions,
                 fetchConfig,
