@@ -23,7 +23,7 @@ import org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType
 import org.apache.kafka.server.log.remote.storage.{RemoteLogSegmentId, RemoteLogSegmentMetadata, RemoteResourceNotFoundException, RemoteStorageManager}
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.log.RemoteIndexCache.{REMOTE_LOG_INDEX_CACHE_CLEANER_THREAD, remoteOffsetIndexFile, remoteOffsetIndexFileName, remoteTimeIndexFile, remoteTimeIndexFileName, remoteTransactionIndexFile, remoteTransactionIndexFileName}
-import org.apache.kafka.storage.internals.log.{LogFileUtils, OffsetIndex, OffsetPosition, RemoteIndexCache, TimeIndex, TransactionIndex}
+import org.apache.kafka.storage.internals.log.{CorruptIndexException, LogFileUtils, OffsetIndex, OffsetPosition, RemoteIndexCache, TimeIndex, TransactionIndex}
 import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
@@ -33,7 +33,7 @@ import org.mockito.Mockito._
 import org.slf4j.{Logger, LoggerFactory}
 
 import java.io.{File, FileInputStream, IOException, PrintWriter}
-import java.nio.file.Files
+import java.nio.file.{Files, Paths}
 import java.util
 import java.util.Collections
 import java.util.concurrent.{CountDownLatch, Executors, TimeUnit}
@@ -569,6 +569,126 @@ class RemoteIndexCacheTest {
       s"offsetIndex=$offsetIndexFile is not overwrite under incorrect parent")
     // file is corrupted it should fetch from remote storage again
     verifyFetchIndexInvocation(count = 1)
+  }
+
+  @Test
+  def testOffsetIndexFileAlreadyExistOnDiskButNotInCache(): Unit ={
+    val remoteIndexCacheDir = new File(tpDir,RemoteIndexCache.DIR_NAME)
+    val tempSuffix = ".tmptest"
+    def getRemoteCacheIndexFileFromDisk(suffix: String) = {
+      Files.walk(remoteIndexCacheDir.toPath)
+        .filter(Files.isRegularFile(_))
+        .filter(path => path.getFileName.toString.endsWith(suffix))
+        .findAny()
+    }
+    def renameRemoteCacheIndexFileFromDisk(suffix: String) = {
+      Files.walk(remoteIndexCacheDir.toPath)
+        .filter(Files.isRegularFile(_))
+        .filter(path => path.getFileName.toString.endsWith(suffix))
+        .forEach(f => Files.move(f,f.resolveSibling(f.getFileName().toString().stripSuffix(tempSuffix))))
+    }
+    val entry = cache.getIndexEntry(rlsMetadata)
+    // copy files with temporary name
+    Files.copy(entry.offsetIndex().file().toPath(),Paths.get(Utils.replaceSuffix(entry.offsetIndex().file().getPath(),"",tempSuffix)))
+    Files.copy(entry.txnIndex().file().toPath(),Paths.get(Utils.replaceSuffix(entry.txnIndex().file().getPath(),"",tempSuffix)))
+    Files.copy(entry.timeIndex().file().toPath(),Paths.get(Utils.replaceSuffix(entry.timeIndex().file().getPath(),"",tempSuffix)))
+
+    cache.internalCache().invalidate(rlsMetadata.remoteLogSegmentId().id())
+
+    // wait until entry is marked for deletion
+    TestUtils.waitUntilTrue(() => entry.isMarkedForCleanup,
+      "Failed to mark cache entry for cleanup after invalidation")
+    TestUtils.waitUntilTrue(() => entry.isCleanStarted,
+      "Failed to cleanup cache entry after invalidation")
+
+    // restore index files
+    renameRemoteCacheIndexFileFromDisk(tempSuffix)
+    // validate cache entry for the above key should be  null
+    assertNull(cache.internalCache().getIfPresent(rlsMetadata.remoteLogSegmentId().id()))
+    cache.getIndexEntry(rlsMetadata)
+    // Index  Files already exist
+    // rsm should not be called again
+    // instead files exist on disk
+    // should be used
+    verifyFetchIndexInvocation(count = 1)
+    // verify index files on disk
+    assertTrue(getRemoteCacheIndexFileFromDisk(LogFileUtils.INDEX_FILE_SUFFIX).isPresent, s"Offset index file should be present on disk at ${remoteIndexCacheDir.toPath}")
+    assertTrue(getRemoteCacheIndexFileFromDisk(LogFileUtils.TXN_INDEX_FILE_SUFFIX).isPresent, s"Txn index file should be present on disk at ${remoteIndexCacheDir.toPath}")
+    assertTrue(getRemoteCacheIndexFileFromDisk(LogFileUtils.TIME_INDEX_FILE_SUFFIX).isPresent, s"Time index file should be present on disk at ${remoteIndexCacheDir.toPath}")
+  }
+
+  @Test
+  def testRSMReturnCorruptedIndexFile(): Unit ={
+
+    when(rsm.fetchIndex(any(classOf[RemoteLogSegmentMetadata]), any(classOf[IndexType])))
+      .thenAnswer(ans => {
+        val metadata = ans.getArgument[RemoteLogSegmentMetadata](0)
+        val indexType = ans.getArgument[IndexType](1)
+        val pw =  new PrintWriter(remoteOffsetIndexFile(tpDir, metadata))
+        pw.write("Hello, world")
+        // The size of the string written in the file is 12 bytes,
+        // but it should be multiple of Offset Index EntrySIZE which is equal to 8.
+        pw.close()
+        val offsetIdx = createOffsetIndexForSegmentMetadata(metadata)
+        val timeIdx = createTimeIndexForSegmentMetadata(metadata)
+        val txnIdx = createTxIndexForSegmentMetadata(metadata)
+        maybeAppendIndexEntries(offsetIdx, timeIdx)
+        indexType match {
+          case IndexType.OFFSET => new FileInputStream(offsetIdx.file)
+          case IndexType.TIMESTAMP => new FileInputStream(timeIdx.file)
+          case IndexType.TRANSACTION => new FileInputStream(txnIdx.file)
+          case IndexType.LEADER_EPOCH => // leader-epoch-cache is not accessed.
+          case IndexType.PRODUCER_SNAPSHOT => // producer-snapshot is not accessed.
+        }
+      })
+      assertThrows(classOf[CorruptIndexException], () => cache.getIndexEntry(rlsMetadata))
+  }
+
+  @Test
+  def testConcurrentCacheDeletedFileExists(): Unit  = {
+    val remoteIndexCacheDir = new File(tpDir,RemoteIndexCache.DIR_NAME)
+    def getRemoteCacheIndexFileFromDisk(suffix: String) = {
+      Files.walk(remoteIndexCacheDir.toPath)
+        .filter(Files.isRegularFile(_))
+        .filter(path => path.getFileName.toString.endsWith(suffix))
+        .findAny()
+    }
+    val entry = cache.getIndexEntry(rlsMetadata)
+    // verify index files on disk
+    assertTrue(getRemoteCacheIndexFileFromDisk(LogFileUtils.INDEX_FILE_SUFFIX).isPresent, s"Offset index file should be present on disk at ${remoteIndexCacheDir.toPath}")
+    assertTrue(getRemoteCacheIndexFileFromDisk(LogFileUtils.TXN_INDEX_FILE_SUFFIX).isPresent, s"Txn index file should be present on disk at ${remoteIndexCacheDir.toPath}")
+    assertTrue(getRemoteCacheIndexFileFromDisk(LogFileUtils.TIME_INDEX_FILE_SUFFIX).isPresent, s"Time index file should be present on disk at ${remoteIndexCacheDir.toPath}")
+
+    // Simulating a concurrency issue where deleted files already exist on disk
+    // This happen when cleanerThread is slow and not able to delete index entries
+    // while same index Entry is cached again and invalidated.
+    // The new deleted file created should be replaced by existing deleted file.
+
+    // create deleted suffix file
+    Files.copy(entry.offsetIndex().file().toPath(),Paths.get(Utils.replaceSuffix(entry.offsetIndex().file().getPath(),"",LogFileUtils.DELETED_FILE_SUFFIX)))
+    Files.copy(entry.txnIndex().file().toPath(),Paths.get(Utils.replaceSuffix(entry.txnIndex().file().getPath(),"",LogFileUtils.DELETED_FILE_SUFFIX)))
+    Files.copy(entry.timeIndex().file().toPath(),Paths.get(Utils.replaceSuffix(entry.timeIndex().file().getPath(),"",LogFileUtils.DELETED_FILE_SUFFIX)))
+
+    // verify deleted file exists on disk
+    assertTrue(getRemoteCacheIndexFileFromDisk(LogFileUtils.DELETED_FILE_SUFFIX).isPresent, s"Deleted Offset index file should be present on disk at ${remoteIndexCacheDir.toPath}")
+
+    cache.internalCache().invalidate(rlsMetadata.remoteLogSegmentId().id())
+
+    // wait until entry is marked for deletion
+    TestUtils.waitUntilTrue(() => entry.isMarkedForCleanup,
+      "Failed to mark cache entry for cleanup after invalidation")
+    TestUtils.waitUntilTrue(() => entry.isCleanStarted,
+      "Failed to cleanup cache entry after invalidation")
+
+    // verify no index files on disk
+    assertFalse(getRemoteCacheIndexFileFromDisk(LogFileUtils.INDEX_FILE_SUFFIX).isPresent,
+      s"Offset index file should not be present on disk at ${remoteIndexCacheDir.toPath}")
+    assertFalse(getRemoteCacheIndexFileFromDisk(LogFileUtils.TXN_INDEX_FILE_SUFFIX).isPresent,
+      s"Txn index file should not be present on disk at ${remoteIndexCacheDir.toPath}")
+    assertFalse(getRemoteCacheIndexFileFromDisk(LogFileUtils.TIME_INDEX_FILE_SUFFIX).isPresent,
+      s"Time index file should not be present on disk at ${remoteIndexCacheDir.toPath}")
+    assertFalse(getRemoteCacheIndexFileFromDisk(LogFileUtils.DELETED_FILE_SUFFIX).isPresent,
+      s"Index file marked for deletion should not be present on disk at ${remoteIndexCacheDir.toPath}")
   }
 
   private def generateSpyCacheEntry(remoteLogSegmentId: RemoteLogSegmentId
