@@ -1031,6 +1031,11 @@ public class GroupMetadataManager {
         if (memberEpoch == -2) {
             log.info("[GroupId {}] Member {} with instance id {} is a static member and will not be fenced from the group",
                     groupId, memberId, member.instanceId());
+            // We will write a member epoch of -2 for this departing static member.
+            ConsumerGroupMember leavingStaticMember = new ConsumerGroupMember.Builder(member)
+                    .setMemberEpoch(-2)
+                    .build();
+            records.add(newCurrentAssignmentRecord(group.groupId(), leavingStaticMember));
         } else {
             log.info("[GroupId {}] Member {} left the consumer group.", groupId, memberId);
             records.addAll(consumerGroupFenceMember(group, member));

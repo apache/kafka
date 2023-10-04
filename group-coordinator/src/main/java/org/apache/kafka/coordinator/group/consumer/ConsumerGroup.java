@@ -45,6 +45,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
+import static org.apache.kafka.coordinator.group.Utils.ofSentinel;
+
 /**
  * A Consumer Group. All the metadata in this class are backed by
  * records in the __consumer_offsets partitions.
@@ -334,9 +336,28 @@ public class ConsumerGroup implements Group {
             }
             member = getOrMaybeCreateMember(memberId, false);
         } else {
-            // Static member joined or re-joined
-            member = getOrMaybeCreateMember(memberId, true);
-            staticMembers.put(instanceId, memberId);
+            // No member found against this instance id. Creating new.
+            if (existingMemberId == null) {
+                member = getOrMaybeCreateMember(memberId, true);
+                staticMembers.put(instanceId, memberId);
+                return member;
+            } else {
+                // Get the details of the existing member
+                ConsumerGroupMember existingMember = getOrMaybeCreateMember(existingMemberId, false);
+                int currentMemberEpoch = existingMember.memberEpoch();
+                // A new member with a used instance id joined but the previous member using the same instance id
+                // hasn't requested leaving the group.
+                if (currentMemberEpoch != -2) {
+                    throw Errors.UNRELEASED_INSTANCE_ID.exception();
+                }
+                member = new ConsumerGroupMember.Builder(memberId, existingMember)
+                        .setMemberEpoch(existingMember.targetMemberEpoch())
+                        .setPreviousMemberEpoch(0)
+                        .setTargetMemberEpoch(existingMember.targetMemberEpoch())
+                        .build();
+                updateMember(member);
+                staticMembers.put(instanceId, memberId);
+            }
         }
         return member;
     }
@@ -351,7 +372,6 @@ public class ConsumerGroup implements Group {
             throw new IllegalArgumentException("newMember cannot be null.");
         }
         ConsumerGroupMember oldMember = members.put(newMember.memberId(), newMember);
-        staticMembers.put(newMember.instanceId(), newMember.memberId());
         maybeUpdateSubscribedTopicNames(oldMember, newMember);
         maybeUpdateServerAssignors(oldMember, newMember);
         maybeUpdatePartitionEpoch(oldMember, newMember);

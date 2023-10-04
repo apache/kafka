@@ -87,6 +87,28 @@ public class ConsumerGroupMember {
             this.partitionsPendingAssignment = member.partitionsPendingAssignment;
         }
 
+        public Builder(String memberId, ConsumerGroupMember member) {
+            Objects.requireNonNull(memberId);
+            Objects.requireNonNull(member);
+
+            this.memberId = memberId;
+            this.memberEpoch = member.memberEpoch;
+            this.previousMemberEpoch = member.previousMemberEpoch;
+            this.targetMemberEpoch = member.targetMemberEpoch;
+            this.instanceId = member.instanceId;
+            this.rackId = member.rackId;
+            this.rebalanceTimeoutMs = member.rebalanceTimeoutMs;
+            this.clientId = member.clientId;
+            this.clientHost = member.clientHost;
+            this.subscribedTopicNames = member.subscribedTopicNames;
+            this.subscribedTopicRegex = member.subscribedTopicRegex;
+            this.serverAssignorName = member.serverAssignorName;
+            this.clientAssignors = member.clientAssignors;
+            this.assignedPartitions = member.assignedPartitions;
+            this.partitionsPendingRevocation = member.partitionsPendingRevocation;
+            this.partitionsPendingAssignment = member.partitionsPendingAssignment;
+        }
+
         public Builder setMemberEpoch(int memberEpoch) {
             this.memberEpoch = memberEpoch;
             return this;
