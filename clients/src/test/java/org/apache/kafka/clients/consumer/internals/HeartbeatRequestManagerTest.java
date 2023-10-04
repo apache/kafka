@@ -24,12 +24,14 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest;
 import org.apache.kafka.common.requests.ConsumerGroupHeartbeatResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -47,6 +49,7 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_
 import static org.apache.kafka.clients.consumer.ConsumerConfig.RETRY_BACKOFF_MS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
@@ -201,6 +204,37 @@ public class HeartbeatRequestManagerTest {
 
         assertEquals(Long.MAX_VALUE, result.timeUntilNextPollMs);
         assertEquals(0, result.unsentRequests.size());
+    }
+
+    @ParameterizedTest
+    @ApiKeyVersionsSource(apiKey = ApiKeys.CONSUMER_GROUP_HEARTBEAT)
+    public void testValidateConsumerGroupHeartbeatRequest(final short version) {
+        heartbeatRequestState = new HeartbeatRequestManager.HeartbeatRequestState(
+            logContext,
+            time,
+            0,
+            RETRY_BACKOFF_MS,
+            RETRY_BACKOFF_MAX_MS,
+            0);
+        heartbeatRequestManager = createManager();
+        // Update membershipManager's memberId and memberEpoch
+        ConsumerGroupHeartbeatResponse result =
+            new ConsumerGroupHeartbeatResponse(new ConsumerGroupHeartbeatResponseData()
+            .setMemberId(memberId)
+            .setMemberEpoch(memberEpoch));
+        membershipManager.updateState(result.data());
+
+        // Create a ConsumerHeartbeatRequest and verify the payload
+        NetworkClientDelegate.PollResult pollResult = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(1, pollResult.unsentRequests.size());
+        NetworkClientDelegate.UnsentRequest request = pollResult.unsentRequests.get(0);
+        assertTrue(request.requestBuilder() instanceof ConsumerGroupHeartbeatRequest.Builder);
+
+        ConsumerGroupHeartbeatRequest heartbeatRequest =
+            (ConsumerGroupHeartbeatRequest) request.requestBuilder().build(version);
+        assertEquals(GROUP_ID, heartbeatRequest.data().groupId());
+        assertEquals(memberId, heartbeatRequest.data().memberId());
+        assertEquals(memberEpoch, heartbeatRequest.data().memberEpoch());
     }
 
     @ParameterizedTest
