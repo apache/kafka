@@ -20,7 +20,7 @@ import kafka.internals.generated.TransactionLogKey
 
 import java.lang.management.ManagementFactory
 import java.nio.ByteBuffer
-import java.util.concurrent.CountDownLatch
+import java.util.concurrent.{ConcurrentHashMap, CountDownLatch}
 import java.util.concurrent.locks.ReentrantLock
 import javax.management.ObjectName
 import kafka.log.UnifiedLog
@@ -875,18 +875,35 @@ class TransactionStateManagerTest {
     val startOffset = 0L
     val records = MemoryRecords.withRecords(startOffset, CompressionType.NONE, txnRecords.toArray: _*)
 
+    val transactionsWithPendingMarkers = new ConcurrentHashMap[String, PendingCompleteTxn]
+    def sendMarkers(coordinatorEpoch: Int,
+                    txnResult: TransactionResult,
+                    txnMetadata: TransactionMetadata,
+                    newMetadata: TxnTransitMetadata): Unit = {
+      val transactionalId = txnMetadata.transactionalId
+      val pendingCompleteTxn = PendingCompleteTxn(
+        transactionalId,
+        coordinatorEpoch,
+        txnMetadata,
+        newMetadata)
+
+      transactionsWithPendingMarkers.put(transactionalId, pendingCompleteTxn)
+    }
+
     prepareTxnLog(topicPartition, 0, records)
 
     // immigrate partition at epoch 0
-    transactionManager.loadTransactionsForTxnTopicPartition(partitionId, coordinatorEpoch = 0, (_, _, _, _) => (), false)
+    transactionManager.loadTransactionsForTxnTopicPartition(partitionId, coordinatorEpoch = 0, sendMarkers, false)
     assertEquals(0, transactionManager.loadingPartitions.size)
+    assertEquals(0, transactionsWithPendingMarkers.get(transactionalId1).coordinatorEpoch)
 
     // Re-immigrate partition at epoch 1. This should be successful even though we didn't get to emigrate the partition.
     prepareTxnLog(topicPartition, 0, records)
-    transactionManager.loadTransactionsForTxnTopicPartition(partitionId, coordinatorEpoch = 1, (_, _, _, _) => (), true)
+    transactionManager.loadTransactionsForTxnTopicPartition(partitionId, coordinatorEpoch = 1, sendMarkers, true)
     assertEquals(0, transactionManager.loadingPartitions.size)
     assertTrue(transactionManager.transactionMetadataCache.contains(partitionId))
     assertEquals(1, transactionManager.transactionMetadataCache(partitionId).coordinatorEpoch)
+    assertEquals(1, transactionsWithPendingMarkers.get(transactionalId1).coordinatorEpoch)
   }
 
   @Test
