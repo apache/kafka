@@ -449,11 +449,11 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
     // left off during the unloading phase. Ensure we remove all associated state for this partition before we continue
     // loading it. In the case where the state partition is already loaded, we want to remove inflight markers with the
     // old epoch.
-      txnMarkerChannelManager.removeMarkersForTxnTopicPartition(txnTopicPartitionId)
+    txnMarkerChannelManager.removeMarkersForTxnTopicPartition(txnTopicPartitionId)
 
-      // Now load the partition.
-      txnManager.loadTransactionsForTxnTopicPartition(txnTopicPartitionId, coordinatorEpoch,
-        txnMarkerChannelManager.addTxnMarkersToSend, txnManager.hasTxnStateLoaded(txnTopicPartitionId))
+    // Now load the partition.
+    txnManager.loadTransactionsForTxnTopicPartition(txnTopicPartitionId, coordinatorEpoch,
+      txnMarkerChannelManager.addTxnMarkersToSend, txnManager.hasTxnStateLoaded(txnTopicPartitionId))
   }
 
   /**

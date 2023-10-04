@@ -120,9 +120,9 @@ public final class TopicDelta {
      *
      * The changes identified are:
      *   1. partitions for which the broker is not a replica anymore
-     *   2. partitions for which the broker is now a leader
-     *   3. partitions for which the isr or replicas change if the broker is a leader
-     *   4. partitions for which the broker is now a follower or follower with isr or replica updates
+     *   2. partitions for which the broker is now a leader (leader epoch bump on the leader)
+     *   3. partitions for which the isr or replicas change if the broker is a leader (partition epoch bump on the leader)
+     *   4. partitions for which the broker is now a follower or follower with isr or replica updates (partition epoch bump on follower)
      *
      * @param brokerId the broker id
      * @return the list of partitions which the broker should remove, become leader, become/update leader, or become/update follower.
