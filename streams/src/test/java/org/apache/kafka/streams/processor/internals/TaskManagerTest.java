@@ -590,28 +590,49 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldAssignActiveTaskInTasksRegistryToBeRecycledWithStateUpdaterEnabled() {
-        final StreamTask activeTaskToRecycle = statefulTask(taskId03, taskId03ChangelogPartitions)
-            .inState(State.SUSPENDED)
-            .withInputPartitions(taskId03Partitions).build();
-        final StandbyTask recycledStandbyTask = standbyTask(taskId03, taskId03ChangelogPartitions)
-            .inState(State.CREATED)
-            .withInputPartitions(taskId03Partitions).build();
-        final TasksRegistry tasks = Mockito.mock(TasksRegistry.class);
+    public void shouldAddRecycledStandbyTaskfromActiveToPendingTasksToInitWithStateUpdaterEnabled() {
+        final StreamTask activeTaskToRecycle = statefulTask(taskId01, taskId01ChangelogPartitions)
+            .withInputPartitions(taskId01Partitions)
+            .inState(State.RUNNING).build();
+        final StandbyTask standbyTask = standbyTask(taskId01, taskId01ChangelogPartitions)
+            .withInputPartitions(taskId01Partitions)
+            .inState(State.CREATED).build();
+        final TasksRegistry tasks = mock(TasksRegistry.class);
         when(tasks.allTasks()).thenReturn(mkSet(activeTaskToRecycle));
+        when(standbyTaskCreator.createStandbyTaskFromActive(activeTaskToRecycle, taskId01Partitions))
+            .thenReturn(standbyTask);
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
-        when(standbyTaskCreator.createStandbyTaskFromActive(activeTaskToRecycle, activeTaskToRecycle.inputPartitions()))
-            .thenReturn(recycledStandbyTask);
 
-        taskManager.handleAssignment(
-            Collections.emptyMap(),
-            mkMap(mkEntry(activeTaskToRecycle.id(), activeTaskToRecycle.inputPartitions()))
-        );
+        taskManager.handleAssignment(emptyMap(), mkMap(mkEntry(taskId01, taskId01Partitions)));
 
-        Mockito.verify(activeTaskCreator).closeAndRemoveTaskProducerIfNeeded(activeTaskToRecycle.id());
-        Mockito.verify(activeTaskCreator).createTasks(consumer, Collections.emptyMap());
         Mockito.verify(activeTaskToRecycle).prepareCommit();
-        Mockito.verify(tasks).replaceActiveWithStandby(recycledStandbyTask);
+        Mockito.verify(activeTaskCreator).closeAndRemoveTaskProducerIfNeeded(activeTaskToRecycle.id());
+        Mockito.verify(tasks).addPendingTasksToInit(mkSet(standbyTask));
+        Mockito.verify(tasks).removeTask(activeTaskToRecycle);
+        Mockito.verify(activeTaskCreator).createTasks(consumer, Collections.emptyMap());
+        Mockito.verify(standbyTaskCreator).createTasks(Collections.emptyMap());
+    }
+
+    @Test
+    public void shouldAddRecycledStandbyTaskfromActiveToTaskRegistryWithStateUpdaterDisabled() {
+        final StreamTask activeTaskToRecycle = statefulTask(taskId01, taskId01ChangelogPartitions)
+            .withInputPartitions(taskId01Partitions)
+            .inState(State.RUNNING).build();
+        final StandbyTask standbyTask = standbyTask(taskId01, taskId01ChangelogPartitions)
+            .withInputPartitions(taskId01Partitions)
+            .inState(State.CREATED).build();
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        when(tasks.allTasks()).thenReturn(mkSet(activeTaskToRecycle));
+        when(standbyTaskCreator.createStandbyTaskFromActive(activeTaskToRecycle, taskId01Partitions))
+            .thenReturn(standbyTask);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, false);
+
+        taskManager.handleAssignment(emptyMap(), mkMap(mkEntry(taskId01, taskId01Partitions)));
+
+        Mockito.verify(activeTaskToRecycle).prepareCommit();
+        Mockito.verify(activeTaskCreator).closeAndRemoveTaskProducerIfNeeded(activeTaskToRecycle.id());
+        Mockito.verify(tasks).replaceActiveWithStandby(standbyTask);
+        Mockito.verify(activeTaskCreator).createTasks(consumer, Collections.emptyMap());
         Mockito.verify(standbyTaskCreator).createTasks(Collections.emptyMap());
     }
 
@@ -1682,6 +1703,48 @@ public class TaskManagerTest {
         taskManager.handleRebalanceComplete();
         assertThat(taskManager.lockedTaskDirectories(), is(mkSet(taskId00, taskId01)));
         verify(stateDirectory);
+    }
+
+    @Test
+    public void shouldReleaseLockForUnassignedTasksAfterRebalanceWithStateUpdater() throws Exception {
+        final StreamTask runningStatefulTask = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .inState(State.RUNNING)
+            .withInputPartitions(taskId00Partitions).build();
+        final StreamTask restoringStatefulTask = statefulTask(taskId01, taskId01ChangelogPartitions)
+            .inState(State.RESTORING)
+            .withInputPartitions(taskId01Partitions).build();
+        final StandbyTask standbyTask = standbyTask(taskId02, taskId02ChangelogPartitions)
+            .inState(State.RUNNING)
+            .withInputPartitions(taskId02Partitions).build();
+        final StandbyTask unassignedStandbyTask = standbyTask(taskId03, taskId03ChangelogPartitions)
+            .inState(State.CREATED)
+            .withInputPartitions(taskId03Partitions).build();
+        final TasksRegistry tasks = Mockito.mock(TasksRegistry.class);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
+        when(tasks.allTasksPerId()).thenReturn(mkMap(mkEntry(taskId00, runningStatefulTask)));
+        when(stateUpdater.getTasks()).thenReturn(mkSet(standbyTask, restoringStatefulTask));
+        when(tasks.allTasks()).thenReturn(mkSet(runningStatefulTask));
+        expectLockObtainedFor(taskId00, taskId01, taskId02, taskId03);
+        expectUnlockFor(taskId03);
+        makeTaskFolders(
+            taskId00.toString(),
+            taskId01.toString(),
+            taskId02.toString(),
+            taskId03.toString()
+        );
+        replay(stateDirectory);
+
+        final Set<TopicPartition> assigned = mkSet(t1p0, t1p1, t1p2);
+        expect(consumer.assignment()).andReturn(assigned);
+        consumer.pause(mkSet(t1p1, t1p2));
+        replay(consumer);
+
+        taskManager.handleRebalanceStart(singleton("topic"));
+        taskManager.handleRebalanceComplete();
+
+        verify(consumer);
+        verify(stateDirectory);
+        assertThat(taskManager.lockedTaskDirectories(), is(mkSet(taskId00, taskId01, taskId02)));
     }
 
     @Test

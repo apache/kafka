@@ -293,7 +293,11 @@
 
     <subpackage name="reassign">
       <allow pkg="org.apache.kafka.admin"/>
+      <allow pkg="org.apache.kafka.tools"/>
       <allow pkg="kafka.admin" />
+      <allow pkg="kafka.cluster" />
+      <allow pkg="kafka.log" />
+      <allow pkg="kafka.server" />
       <allow pkg="scala" />
     </subpackage>
   </subpackage>
