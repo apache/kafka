@@ -569,10 +569,6 @@ class RemoteIndexCacheTest {
         invocation.callRealMethod()
         // Signal TestWait to unblock itself so that test can be completed
         latchForTestWait.countDown()
-      } else {
-        // Subsequent call for markForCleanup method
-        latchForCacheRead.countDown()
-        latchForCacheRemove.countDown()
       }
     }).when(spyEntry).markForCleanup()
 
