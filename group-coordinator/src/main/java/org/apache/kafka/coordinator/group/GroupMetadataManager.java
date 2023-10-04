@@ -1048,7 +1048,7 @@ public class GroupMetadataManager {
         }
         return new CoordinatorResult<>(records, new ConsumerGroupHeartbeatResponseData()
             .setMemberId(memberId)
-            .setMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH));
+            .setMemberEpoch(memberEpoch));
     }
 
     /**
