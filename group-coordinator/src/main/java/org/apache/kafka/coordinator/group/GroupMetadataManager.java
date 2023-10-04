@@ -3061,6 +3061,33 @@ public class GroupMetadataManager {
     }
 
     /**
+     * Handles a DeleteGroups request.
+     * Populates the record list passed in with record to update the state machine.
+     * Validations are done in {@link GroupCoordinatorShard#deleteGroups(RequestContext, List)} by
+     * calling {@link GroupMetadataManager#validateDeleteGroup(String)}.
+     *
+     * @param groupId The id of the group to be deleted. It has been checked in {@link GroupMetadataManager#validateDeleteGroup}.
+     * @param records The record list to populate.
+     */
+    public void deleteGroup(
+        String groupId,
+        List<Record> records
+    ) {
+        // At this point, we have already validated the group id, so we know that the group exists and that no exception will be thrown.
+        group(groupId).createGroupTombstoneRecords(records);
+    }
+
+    /**
+     * Validates the DeleteGroups request.
+     *
+     * @param groupId The id of the group to be deleted.
+     */
+    void validateDeleteGroup(String groupId) throws ApiException {
+        Group group = group(groupId);
+        group.validateDeleteGroup();
+    }
+
+    /**
      * Checks whether the given protocol type or name in the request is inconsistent with the group's.
      *
      * @param protocolTypeOrName       The request's protocol type or name.
