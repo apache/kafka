@@ -19,7 +19,6 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.Node;
-import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -78,18 +77,6 @@ public class HeartbeatRequestManagerTest {
     private String memberId = "member-id";
     private int memberEpoch = 1;
     private ErrorEventHandler errorEventHandler;
-
-    private ConsumerGroupHeartbeatResponseData.Assignment mockAssignment() {
-        return new ConsumerGroupHeartbeatResponseData.Assignment()
-            .setAssignedTopicPartitions(Arrays.asList(
-                new ConsumerGroupHeartbeatResponseData.TopicPartitions()
-                    .setTopicId(Uuid.randomUuid())
-                    .setPartitions(Arrays.asList(0, 1, 2)),
-                new ConsumerGroupHeartbeatResponseData.TopicPartitions()
-                    .setTopicId(Uuid.randomUuid())
-                    .setPartitions(Arrays.asList(3, 4, 5))
-            ));
-    }
 
     @BeforeEach
     public void setUp() {
