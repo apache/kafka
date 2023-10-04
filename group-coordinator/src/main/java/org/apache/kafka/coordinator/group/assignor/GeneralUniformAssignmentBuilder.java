@@ -818,7 +818,6 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
             }
         }
 
-
         /**
          * Sorts members in ascending or descending order based on their current target assignment size.
          * Members that have reached their max assignment size are removed.
