@@ -673,7 +673,8 @@ public class ReassignPartitionsCommand {
             .filter(node -> brokerSet.contains(node.id()))
             .map(node -> (enableRackAwareness && node.rack() != null)
                 ? new BrokerMetadata(node.id(), Optional.of(node.rack()))
-                : new BrokerMetadata(node.id(), Optional.empty())).collect(Collectors.toList());
+                : new BrokerMetadata(node.id(), Optional.empty())
+            ).collect(Collectors.toList());
 
         long numRackless = results.stream().filter(m -> !m.rack.isPresent()).count();
         if (enableRackAwareness && numRackless != 0 && numRackless != results.size()) {
