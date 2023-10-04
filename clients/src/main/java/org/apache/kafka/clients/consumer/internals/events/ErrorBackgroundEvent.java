@@ -16,21 +16,13 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-import java.util.Optional;
-
 public class ErrorBackgroundEvent extends BackgroundEvent {
 
     private final Throwable error;
-    private final Optional<String> message;
 
     public ErrorBackgroundEvent(Throwable error) {
-        this(error, null);
-    }
-
-    public ErrorBackgroundEvent(Throwable error, String message) {
         super(Type.ERROR);
         this.error = error;
-        this.message = Optional.ofNullable(message);
     }
 
     public Throwable error() {
@@ -45,14 +37,13 @@ public class ErrorBackgroundEvent extends BackgroundEvent {
 
         ErrorBackgroundEvent that = (ErrorBackgroundEvent) o;
 
-        return error.equals(that.error) && message.equals(that.message);
+        return error.equals(that.error);
     }
 
     @Override
     public int hashCode() {
         int result = super.hashCode();
         result = 31 * result + error.hashCode();
-        result = 31 * result + message.hashCode();
         return result;
     }
 
@@ -61,7 +52,6 @@ public class ErrorBackgroundEvent extends BackgroundEvent {
         return "ErrorBackgroundEvent{" +
             toStringBase() +
             ", error=" + error +
-            ", message='" + message +
             '}';
     }
 }

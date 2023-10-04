@@ -92,7 +92,6 @@ public class MembershipManagerImplTest {
         assertEquals(MEMBER_ID, membershipManager.memberId());
         assertEquals(MEMBER_EPOCH, membershipManager.memberEpoch());
 
-
         membershipManager.transitionToFenced();
         assertFalse(membershipManager.memberId().isEmpty());
         assertEquals(0, membershipManager.memberEpoch());

@@ -61,12 +61,35 @@ public class HeartbeatRequestManager implements RequestManager {
     private final Logger logger;
     private final Time time;
 
-    // Time that the group coordinator will wait on member to revoke its partitions.
+    /**
+     * Time that the group coordinator will wait on member to revoke its partitions. This is provided by the group
+     * coordinator in the heartbeat
+     */
     private final int rebalanceTimeoutMs;
+
+    /**
+     * Manages finding and updating the connection to the group coordinator
+     */
     private final CoordinatorRequestManager coordinatorRequestManager;
+
+    /**
+     * The subscription state
+     */
     private final SubscriptionState subscriptions;
+
+    /**
+     * Manages heartbeat request timing and retries
+     */
     private final HeartbeatRequestState heartbeatRequestState;
+
+    /**
+     * Manages the rebalance state of the member
+     */
     private final MembershipManager membershipManager;
+
+    /**
+     * Allows the background thread to propagate errors back to the user
+     */
     private final ErrorEventHandler nonRetriableErrorHandler;
 
     public HeartbeatRequestManager(
@@ -218,8 +241,8 @@ public class HeartbeatRequestManager implements RequestManager {
 
             case COORDINATOR_LOAD_IN_PROGRESS:
                 // the manager will backoff and retry
-                message = String.format("Coordinator node %s is loading. " +
-                    "Will resend a heartbeat request",
+                message = String.format("GroupHeartbeatRequest failed because the group coordinator %s is incorrect. " +
+                        "Will attempt to retry",
                     coordinatorRequestManager.coordinator());
                 logInfo(message, response, currentTimeMs);
                 heartbeatRequestState.onFailedAttempt(currentTimeMs);
@@ -250,9 +273,15 @@ public class HeartbeatRequestManager implements RequestManager {
                 break;
 
             case FENCED_MEMBER_EPOCH:
+                message = String.format("GroupHeartbeatRequest failed because member epoch %s is invalid. " +
+                        "Will abandon all partitions and rejoin the group",
+                    membershipManager.memberId(), membershipManager.memberEpoch());
+                logInfo(message, response, currentTimeMs);
+                membershipManager.transitionToFenced();
+                break;
             case UNKNOWN_MEMBER_ID:
-                message = String.format("Get fenced for member.id: %s and epoch %s. " +
-                    "Will attempt to resend a heartbeat to rejoin the group",
+                message = String.format("GroupHeartbeatRequest failed because member id %s is invalid. " +
+                        "Will abandon all partitions and rejoin the group",
                     membershipManager.memberId(), membershipManager.memberEpoch());
                 logInfo(message, response, currentTimeMs);
                 membershipManager.transitionToFenced();
@@ -280,15 +309,16 @@ public class HeartbeatRequestManager implements RequestManager {
      * Represents the state of a heartbeat request, including logic for timing, retries, and exponential backoff. The
      * object extends {@link RequestState} to enable exponential backoff and duplicated request handling. The two fields
      * that it holds are:
-     *
-     * <ol>
-     *     <li>{@link #heartbeatTimer} - a timer that tracks the time since the last heartbeat was sent.</li>
-     *     <li>{@link #heartbeatIntervalMs} - the heartbeat interval which is acquired/updated through the heartbeat
-     *     request}</li>
-     * </ol>
      */
     static class HeartbeatRequestState extends RequestState {
+        /**
+         *  Timer that tracks the time since the last heartbeat was sent
+         */
         final Timer heartbeatTimer;
+
+        /**
+         * The heartbeat interval which is acquired/updated through the heartbeat request
+         */
         long heartbeatIntervalMs;
 
         public HeartbeatRequestState(
