@@ -327,12 +327,11 @@ public class ReassignPartitionsCommand {
                     false));
         }).collect(Collectors.toList());
 
-        Set<String> topicNamesToLookUp = new HashSet<>();
-        notFoundReassignments.forEach(e -> {
-            TopicPartition part = e.v1;
-            if (!currentReassignments.containsKey(part))
-                topicNamesToLookUp.add(part.topic());
-        });
+        Set<String> topicNamesToLookUp = notFoundReassignments.stream()
+            .map(e -> e.v1)
+            .filter(part -> !currentReassignments.containsKey(part))
+            .map(TopicPartition::topic)
+            .collect(Collectors.toSet());
 
         Map<String, KafkaFuture<TopicDescription>> topicDescriptions = adminClient.
             describeTopics(topicNamesToLookUp).topicNameValues();
