@@ -101,6 +101,7 @@ import static org.apache.kafka.common.protocol.Errors.COORDINATOR_NOT_AVAILABLE;
 import static org.apache.kafka.common.protocol.Errors.ILLEGAL_GENERATION;
 import static org.apache.kafka.common.protocol.Errors.NOT_COORDINATOR;
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_SERVER_ERROR;
+import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
 import static org.apache.kafka.common.requests.JoinGroupRequest.UNKNOWN_MEMBER_ID;
 import static org.apache.kafka.coordinator.group.Group.GroupType.CONSUMER;
 import static org.apache.kafka.coordinator.group.Group.GroupType.GENERIC;
@@ -579,7 +580,7 @@ public class GroupMetadataManager {
         throwIfEmptyString(request.rackId(), "RackId can't be empty.");
         throwIfNotNull(request.subscribedTopicRegex(), "SubscribedTopicRegex is not supported yet.");
 
-        if (request.memberEpoch() > 0 || request.memberEpoch() == -1) {
+        if (request.memberEpoch() > 0 || request.memberEpoch() == LEAVE_GROUP_MEMBER_EPOCH) {
             throwIfEmptyString(request.memberId(), "MemberId can't be empty.");
         } else if (request.memberEpoch() == 0) {
             if (request.rebalanceTimeoutMs() == -1) {
@@ -923,7 +924,7 @@ public class GroupMetadataManager {
         List<Record> records = consumerGroupFenceMember(group, member);
         return new CoordinatorResult<>(records, new ConsumerGroupHeartbeatResponseData()
             .setMemberId(memberId)
-            .setMemberEpoch(-1));
+            .setMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH));
     }
 
     /**
@@ -1083,8 +1084,7 @@ public class GroupMetadataManager {
     ) throws ApiException {
         throwIfConsumerGroupHeartbeatRequestIsInvalid(request);
 
-        if (request.memberEpoch() == -1) {
-            // -1 means that the member wants to leave the group.
+        if (request.memberEpoch() == LEAVE_GROUP_MEMBER_EPOCH) {
             return consumerGroupLeave(
                 request.groupId(),
                 request.memberId()
@@ -1133,7 +1133,7 @@ public class GroupMetadataManager {
                 .build());
         } else {
             ConsumerGroupMember oldMember = consumerGroup.getOrMaybeCreateMember(memberId, false);
-            if (oldMember.memberEpoch() != -1) {
+            if (oldMember.memberEpoch() != LEAVE_GROUP_MEMBER_EPOCH) {
                 throw new IllegalStateException("Received a tombstone record to delete member " + memberId
                     + " but did not receive ConsumerGroupCurrentMemberAssignmentValue tombstone.");
             }
@@ -1354,9 +1354,9 @@ public class GroupMetadataManager {
             consumerGroup.updateMember(newMember);
         } else {
             ConsumerGroupMember newMember = new ConsumerGroupMember.Builder(oldMember)
-                .setMemberEpoch(-1)
-                .setPreviousMemberEpoch(-1)
-                .setTargetMemberEpoch(-1)
+                .setMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH)
+                .setPreviousMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH)
+                .setTargetMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH)
                 .setAssignedPartitions(Collections.emptyMap())
                 .setPartitionsPendingRevocation(Collections.emptyMap())
                 .setPartitionsPendingAssignment(Collections.emptyMap())
