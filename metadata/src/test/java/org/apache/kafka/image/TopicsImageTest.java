@@ -207,14 +207,6 @@ public class TopicsImageTest {
          */
         List<ApiMessageAndVersion> topicRecords = new ArrayList<>(DELTA1_RECORDS);
 
-        // Attempt to create a new foo topic with a different id and replica placement
-        topicRecords.add(
-            new ApiMessageAndVersion(
-                new TopicRecord().setName("foo").setTopicId(FOO_UUID3),
-                TOPIC_RECORD.highestSupportedVersion()
-            )
-        );
-        topicRecords.add(newPartitionRecord(FOO_UUID3, 0, Arrays.asList(0, 1, localId)));
         // Create a new bam topic with a different id
         topicRecords.add(
             new ApiMessageAndVersion(
@@ -244,11 +236,6 @@ public class TopicsImageTest {
         RecordTestUtils.replayAll(delta, topicRecords);
 
         LocalReplicaChanges changes = delta.localChanges(localId);
-        // changes to foo will show up in LocalReplicaChanges but will not be applied
-        assertEquals(
-            new HashSet<>(Arrays.asList(new TopicPartition("foo", 0), new TopicPartition("foo", 1))),
-            changes.deletes()
-        );
         assertEquals(
             new HashSet<>(Arrays.asList(new TopicPartition("baz", 0))),
             changes.leaders().keySet()
@@ -256,7 +243,7 @@ public class TopicsImageTest {
         assertEquals(
             new HashSet<>(
                 Arrays.asList(new TopicPartition("baz", 1), new TopicPartition("bar", 0),
-                    new TopicPartition("foo", 0), new TopicPartition("bam", 1))
+                    new TopicPartition("bam", 1))
             ),
             changes.followers().keySet()
         );

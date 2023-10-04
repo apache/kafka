@@ -53,10 +53,6 @@ public class ProducerIdsImageTest {
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new ProducerIdsRecord().
             setBrokerId(3).
             setBrokerEpoch(100).
-            setNextProducerId(789), (short) 0));
-        DELTA1_RECORDS.add(new ApiMessageAndVersion(new ProducerIdsRecord().
-            setBrokerId(3).
-            setBrokerEpoch(100).
             setNextProducerId(780), (short) 0));
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new ProducerIdsRecord().
             setBrokerId(3).
@@ -65,13 +61,12 @@ public class ProducerIdsImageTest {
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new ProducerIdsRecord().
             setBrokerId(2).
             setBrokerEpoch(100).
-            setNextProducerId(460), (short) 0));
+            setNextProducerId(800), (short) 0));
 
         DELTA1 = new ProducerIdsDelta(IMAGE1);
         RecordTestUtils.replayAll(DELTA1, DELTA1_RECORDS);
 
-        // producer ids must be increasing, but delta replay does not check this (only QuorumController replay)
-        IMAGE2 = new ProducerIdsImage(460);
+        IMAGE2 = new ProducerIdsImage(800);
     }
 
     @Test

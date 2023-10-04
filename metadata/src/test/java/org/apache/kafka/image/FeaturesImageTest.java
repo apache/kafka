@@ -130,7 +130,7 @@ public class FeaturesImageTest {
     public void testApplyDelta2() {
         assertEquals(IMAGE3, DELTA2.apply());
         // check image2 + delta2 = image3, since records for image2 + delta2 might differ from records from image3
-        List<ApiMessageAndVersion> records = getImageRecords(IMAGE3);
+        List<ApiMessageAndVersion> records = getImageRecords(IMAGE2);
         records.addAll(DELTA2_RECORDS);
         testToImage(IMAGE3, records);
     }

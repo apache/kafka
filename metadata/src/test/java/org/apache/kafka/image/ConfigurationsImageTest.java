@@ -72,7 +72,7 @@ public class ConfigurationsImageTest {
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new ConfigRecord().setResourceType(BROKER.id()).
             setResourceName("1").setName("foobar").setValue(null),
             CONFIG_RECORD.highestSupportedVersion()));
-        // add back config to b1
+        // add new config to b1
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new ConfigRecord().setResourceType(BROKER.id()).
             setResourceName("1").setName("barfoo").setValue("bazfoo"),
             CONFIG_RECORD.highestSupportedVersion()));

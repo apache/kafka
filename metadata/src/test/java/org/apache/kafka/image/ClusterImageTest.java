@@ -54,6 +54,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import static org.apache.kafka.common.metadata.MetadataRecordType.BROKER_REGISTRATION_CHANGE_RECORD;
 import static org.apache.kafka.common.metadata.MetadataRecordType.FENCE_BROKER_RECORD;
 import static org.apache.kafka.common.metadata.MetadataRecordType.REGISTER_BROKER_RECORD;
 import static org.apache.kafka.common.metadata.MetadataRecordType.UNFENCE_BROKER_RECORD;
@@ -125,7 +126,7 @@ public class ClusterImageTest {
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new BrokerRegistrationChangeRecord().
             setBrokerId(0).setBrokerEpoch(1000).setInControlledShutdown(
                 BrokerRegistrationInControlledShutdownChange.IN_CONTROLLED_SHUTDOWN.value()),
-            FENCE_BROKER_RECORD.highestSupportedVersion()));
+            BROKER_REGISTRATION_CHANGE_RECORD.highestSupportedVersion()));
         // unregister b2
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new UnregisterBrokerRecord().
             setBrokerId(2).setBrokerEpoch(123),
@@ -185,7 +186,7 @@ public class ClusterImageTest {
         DELTA2_RECORDS.add(new ApiMessageAndVersion(new BrokerRegistrationChangeRecord().
             setBrokerId(0).setBrokerEpoch(1000).setInControlledShutdown(
                 BrokerRegistrationInControlledShutdownChange.NONE.value()),
-            FENCE_BROKER_RECORD.highestSupportedVersion()));
+            BROKER_REGISTRATION_CHANGE_RECORD.highestSupportedVersion()));
         // re-register b2
         DELTA2_RECORDS.add(new ApiMessageAndVersion(new RegisterBrokerRecord().
             setBrokerId(2).setIsMigratingZkBroker(true).setIncarnationId(Uuid.fromString("Am5Yse7GQxaw0b2alM74bP")).
