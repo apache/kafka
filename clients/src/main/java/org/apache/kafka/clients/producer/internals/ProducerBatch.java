@@ -105,37 +105,34 @@ public final class ProducerBatch {
         recordsBuilder.setEstimatedCompressionRatio(compressionRatioEstimation);
     }
 
-    /*
-     * This is called to update the leader-epoch to which this batch is going to be produced in the ongoing attempt.
-     * @param latestLeaderEpoch The latest leader epoch.
-     * @return true if the leader has changed, otherwise false.
+    /**
+     * It will update the leader to which this batch will be produced for the ongoing attempt, if a newer leader is known.
+     * @param latestLeaderEpoch latest leader's epoch.
      */
-    boolean maybeUpdateLeaderEpoch(Optional<Integer> latestLeaderEpoch) {
-        if (!latestLeaderEpoch.isPresent())
-            return false;
+    void maybeUpdateLeaderEpoch(Optional<Integer> latestLeaderEpoch) {
+        if (!currentLeaderEpoch.equals(latestLeaderEpoch)) {
+            log.trace("For {}, leader will be updated, currentLeaderEpoch: {}, attemptsWhenLeaderLastChanged:{}, latestLeaderEpoch: {}, current attempt: {}",
+                this, currentLeaderEpoch, attemptsWhenLeaderLastChanged, latestLeaderEpoch, attempts);
+            attemptsWhenLeaderLastChanged = attempts();
+            currentLeaderEpoch = latestLeaderEpoch;
+        } else {
+            log.trace("For {}, leader wasn't updated, currentLeaderEpoch: {}, attemptsWhenLeaderLastChanged:{}, latestLeaderEpoch: {}, current attempt: {}",
+                this, currentLeaderEpoch, attemptsWhenLeaderLastChanged, latestLeaderEpoch, attempts);
+        }
+    }
 
-        boolean leaderChanged = false;
+    /**
+     * It will return true, for a when batch is being retried, it will be retried to a newer leader.
+     */
+
+    boolean hasLeaderChangedForTheOngoingRetry() {
         int attempts = attempts();
-        log.trace("For {}, attempting to change leader, currentLeaderEpoch: {}, attemptsWhenLeaderLastChanged:{}, latestLeaderEpoch: {}, current attempt: {}",
-            this, currentLeaderEpoch.isPresent() ? currentLeaderEpoch.get() : "un-initialized", attemptsWhenLeaderLastChanged, latestLeaderEpoch.get(), attempts);
         boolean isRetry = attempts >= 1;
-        // Checking for leader change makes sense only from 1st retry onwards(i.e attempt >=1).
-        if (isRetry) {
-            // If the leader's epoch has changed, this counts as a leader change
-            if (!currentLeaderEpoch.equals(latestLeaderEpoch)) {
-                attemptsWhenLeaderLastChanged = attempts;
-                leaderChanged = true;
-            } else {
-                // Otherwise, it's only a leader change until the first attempt is made with this leader
-                leaderChanged = attempts == attemptsWhenLeaderLastChanged;
-            }
-        }
-        if (leaderChanged) {
-            log.debug("For {}, leader has changed, oldEpoch: {}, newEpoch: {}",
-                this, currentLeaderEpoch, latestLeaderEpoch);
-        }
-        currentLeaderEpoch = latestLeaderEpoch;
-        return leaderChanged;
+        if (!isRetry)
+            return false;
+        if (attempts == attemptsWhenLeaderLastChanged)
+            return true;
+        return false;
     }
 
 

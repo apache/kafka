@@ -685,7 +685,8 @@ public class RecordAccumulator {
             // partitions.  Do it here so that it's done for all code paths.
 
             Metadata.LeaderAndEpoch leaderAndEpoch = metadata.currentLeader(part);
-            if (leaderAndEpoch.leader.isPresent() && queueSizes != null) {
+            Node leader = leaderAndEpoch.leader.orElse(null);
+            if (leader != null && queueSizes != null) {
                 ++queueSizesIndex;
                 assert queueSizesIndex < queueSizes.length;
                 partitionIds[queueSizesIndex] = part.partition();
@@ -714,14 +715,14 @@ public class RecordAccumulator {
                 }
 
                 waitedTimeMs = batch.waitedTimeMs(nowMs);
-                boolean hasLeaderChanged = batch.maybeUpdateLeaderEpoch(leaderAndEpoch.epoch);
-                backingOff = shouldBackoff(hasLeaderChanged, batch, waitedTimeMs);
+                batch.maybeUpdateLeaderEpoch(leaderAndEpoch.epoch);
+                backingOff = shouldBackoff(batch.hasLeaderChangedForTheOngoingRetry(), batch, waitedTimeMs);
                 backoffAttempts = batch.attempts();
                 dequeSize = deque.size();
                 full = dequeSize > 1 || batch.isFull();
             }
 
-            if (!leaderAndEpoch.leader.isPresent()) {
+            if (leader == null) {
                 // This is a partition for which leader is not known, but messages are available to send.
                 // Note that entries are currently not removed from batches when deque is empty.
                 unknownLeaderTopics.add(part.topic());
@@ -731,7 +732,7 @@ public class RecordAccumulator {
                 if (partitionAvailabilityTimeoutMs > 0) {
                     // Check if we want to exclude the partition from the list of available partitions
                     // if the broker hasn't responded for some time.
-                    NodeLatencyStats nodeLatencyStats = nodeStats.get(leaderAndEpoch.leader.get().id());
+                    NodeLatencyStats nodeLatencyStats = nodeStats.get(leader.id());
                     if (nodeLatencyStats != null) {
                         // NOTE: there is no synchronization between reading metrics,
                         // so we read ready time first to avoid accidentally marking partition
@@ -742,7 +743,7 @@ public class RecordAccumulator {
                     }
                 }
 
-                nextReadyCheckDelayMs = batchReady(exhausted, part, leaderAndEpoch.leader.get(), waitedTimeMs, backingOff,
+                nextReadyCheckDelayMs = batchReady(exhausted, part, leader, waitedTimeMs, backingOff,
                     backoffAttempts, full, nextReadyCheckDelayMs, readyNodes);
             }
         }
@@ -804,7 +805,16 @@ public class RecordAccumulator {
     }
 
     private boolean shouldBackoff(boolean hasLeaderChanged, final ProducerBatch batch, final long waitedTimeMs) {
-        return !hasLeaderChanged && batch.attempts() > 0 && waitedTimeMs < retryBackoff.backoff(batch.attempts() - 1);
+        boolean shouldWaitMore = batch.attempts() > 0 && waitedTimeMs < retryBackoff.backoff(batch.attempts() - 1);
+        boolean shouldBackoff = !hasLeaderChanged && shouldWaitMore;
+        if (shouldBackoff) {
+            log.trace(
+                "For {}, will backoff", batch);
+        } else {
+            log.trace(
+                "For {}, will not backoff, shouldWaitMore {}, hasLeaderChanged {}", batch, shouldWaitMore, hasLeaderChanged);
+        }
+        return shouldBackoff;
     }
 
     private boolean shouldStopDrainBatchesForPartition(ProducerBatch first, TopicPartition tp) {
@@ -863,7 +873,7 @@ public class RecordAccumulator {
             // Only proceed if the partition has no in-flight batches.
             if (isMuted(tp))
                 continue;
-            Metadata.LeaderAndEpoch leaderAndEpoch = metadata.currentLeader(new TopicPartition(part.topic(), part.partition()));
+            Metadata.LeaderAndEpoch leaderAndEpoch = metadata.currentLeader(tp);
             // Although a small chance, but skip this partition if leader has changed since the partition -> node assignment obtained from outside the loop.
             // In this case, skip sending it to the old leader, as it would return aa NO_LEADER_OR_FOLLOWER error.
             if (!leaderAndEpoch.leader.isPresent())
@@ -883,8 +893,8 @@ public class RecordAccumulator {
 
                 // first != null
                 // Only drain the batch if it is not during backoff period.
-                boolean hasLeaderChanged = first.maybeUpdateLeaderEpoch(leaderAndEpoch.epoch);
-                if (shouldBackoff(hasLeaderChanged, first, first.waitedTimeMs(now)))
+                first.maybeUpdateLeaderEpoch(leaderAndEpoch.epoch);
+                if (shouldBackoff(first.hasLeaderChangedForTheOngoingRetry(), first, first.waitedTimeMs(now)))
                     continue;
 
                 if (size + first.estimatedSizeInBytes() > maxSize && !ready.isEmpty()) {

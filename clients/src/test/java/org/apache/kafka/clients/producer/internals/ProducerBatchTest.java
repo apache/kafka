@@ -264,19 +264,28 @@ public class ProducerBatchTest {
             testCompleteExceptionally(recordCount, topLevelException, null));
     }
 
+    /**
+     * This tests that leader is correctly maintained & leader-change is correctly detected across retries
+     * of the batch. It does so by testing primarily testing methods
+     * 1. maybeUpdateLeaderEpoch
+     * 2. hasLeaderChangedForTheOngoingRetry
+     */
+
     @Test
-    public void testMaybeUpdateLeaderEpoch() {
+    public void testWithLeaderChangesAcrossRetries() {
         ProducerBatch batch = new ProducerBatch(new TopicPartition("topic", 1), memoryRecordsBuilder, now);
 
         // Starting state for the batch, no attempt made to send it yet.
         assertEquals(Optional.empty(), batch.currentLeaderEpoch());
         assertEquals(0, batch.attemptsWhenLeaderLastChanged()); // default value
-        assertFalse(batch.maybeUpdateLeaderEpoch(Optional.empty()));
+        batch.maybeUpdateLeaderEpoch(Optional.empty());
+        assertFalse(batch.hasLeaderChangedForTheOngoingRetry());
 
         // 1st attempt[Not a retry] to send the batch.
         // Check leader isn't flagged as a new leader.
         int batchLeaderEpoch = 100;
-        assertFalse(batch.maybeUpdateLeaderEpoch(Optional.of(batchLeaderEpoch)), "batch leader is assigned for 1st time");
+        batch.maybeUpdateLeaderEpoch(Optional.of(batchLeaderEpoch));
+        assertFalse(batch.hasLeaderChangedForTheOngoingRetry(), "batch leader is assigned for 1st time");
         assertEquals(batchLeaderEpoch, batch.currentLeaderEpoch().get());
         assertEquals(0, batch.attemptsWhenLeaderLastChanged());
 
@@ -284,23 +293,25 @@ public class ProducerBatchTest {
         // Check leader change is detected.
         batchLeaderEpoch = 101;
         batch.reenqueued(0);
-        assertTrue(batch.maybeUpdateLeaderEpoch(Optional.of(batchLeaderEpoch)), "batch leader has changed");
+        batch.maybeUpdateLeaderEpoch(Optional.of(batchLeaderEpoch));
+        assertTrue(batch.hasLeaderChangedForTheOngoingRetry(), "batch leader has changed");
         assertEquals(batchLeaderEpoch, batch.currentLeaderEpoch().get());
         assertEquals(1, batch.attemptsWhenLeaderLastChanged());
 
         // 2nd attempt[1st retry] still ongoing, yet to be made.
         // Check same leaderEpoch(101) is still considered as a leader-change.
-        assertTrue(batch.maybeUpdateLeaderEpoch(Optional.of(batchLeaderEpoch)), "batch leader has changed");
+        batch.maybeUpdateLeaderEpoch(Optional.of(batchLeaderEpoch));
+        assertTrue(batch.hasLeaderChangedForTheOngoingRetry(), "batch leader has changed");
         assertEquals(batchLeaderEpoch, batch.currentLeaderEpoch().get());
         assertEquals(1, batch.attemptsWhenLeaderLastChanged());
 
         // 3rd attempt[2nd retry] to the same leader-epoch(101).
         // Check same leaderEpoch(101) as not detected as a leader-change.
         batch.reenqueued(0);
-        assertFalse(batch.maybeUpdateLeaderEpoch(Optional.of(batchLeaderEpoch)), "batch leader has not changed");
+        batch.maybeUpdateLeaderEpoch(Optional.of(batchLeaderEpoch));
+        assertFalse(batch.hasLeaderChangedForTheOngoingRetry(), "batch leader has not changed");
         assertEquals(batchLeaderEpoch, batch.currentLeaderEpoch().get());
         assertEquals(1, batch.attemptsWhenLeaderLastChanged());
-
     }
 
     private void testCompleteExceptionally(

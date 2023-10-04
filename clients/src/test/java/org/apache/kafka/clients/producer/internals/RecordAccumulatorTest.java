@@ -68,7 +68,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
-import org.slf4j.Logger;
 
 import static java.util.Arrays.asList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -103,8 +102,6 @@ public class RecordAccumulatorTest {
     private Metrics metrics = new Metrics(time);
     private final long maxBlockTimeMs = 1000;
     private final LogContext logContext = new LogContext();
-
-    private final Logger log = logContext.logger(RecordAccumulatorTest.class);
 
     @BeforeEach
     public void setup() {
@@ -1457,9 +1454,8 @@ public class RecordAccumulatorTest {
         long now = time.milliseconds();
         accum.append(topic, partition1, 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs, false, now, cluster);
 
-        // 1st attempt to produce batchA, it should be ready & drained to be produced.
+        // 1st attempt(not a retry) to produce batchA, it should be ready & drained to be produced.
         {
-            log.info("Running 1st attempt to produce batchA, it should be ready & drained to be produced.");
             now += lingerMs + 1;
             RecordAccumulator.ReadyCheckResult result = accum.ready(metadataMock, now);
             assertTrue(result.readyNodes.contains(node1), "Node1 is ready");
@@ -1476,7 +1472,6 @@ public class RecordAccumulatorTest {
 
         // In this retry of batchA, wait-time between retries is less than configured and no leader change, so should backoff.
         {
-            log.info("In this retry of batchA, wait-time between retries is less than configured and no leader change, so should backoff.");
             now += 1;
             RecordAccumulator.ReadyCheckResult result = accum.ready(metadataMock, now);
             assertFalse(result.readyNodes.contains(node1), "Node1 is not ready");
@@ -1490,7 +1485,6 @@ public class RecordAccumulatorTest {
 
         // In this retry of batchA, wait-time between retries is less than configured and leader has changed, so should not backoff.
         {
-            log.info("In this retry of batchA, wait-time between retries is less than configured and leader has changed, so should not backoff.");
             now += 1;
             part1LeaderEpoch++;
             // Create cluster metadata, with new leader epoch.
@@ -1515,7 +1509,6 @@ public class RecordAccumulatorTest {
 
         // In this retry of batchA, wait-time between retries is more than configured and no leader change, so should not backoff.
         {
-            log.info("In this retry of batchA, wait-time between retries is more than configured and no leader change, so should not backoff");
             now += 2 * retryBackoffMaxMs;
             // Create cluster metadata, with new leader epoch.
             part1 = new PartitionInfo(topic, partition1, node1, null, null, null);
@@ -1539,7 +1532,6 @@ public class RecordAccumulatorTest {
 
         // In this retry of batchA, wait-time between retries is more than configured and leader has changed, so should not backoff.
         {
-            log.info("In this retry of batchA, wait-time between retries is more than configured and leader has changed, so should not backoff.");
             now += 2 * retryBackoffMaxMs;
             part1LeaderEpoch++;
             // Create cluster metadata, with new leader epoch.

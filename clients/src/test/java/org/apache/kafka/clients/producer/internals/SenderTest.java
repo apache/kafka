@@ -108,7 +108,6 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-import org.slf4j.Logger;
 
 import static org.apache.kafka.clients.producer.internals.ProducerTestUtils.runUntil;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -156,8 +155,6 @@ public class SenderTest {
     private Sender sender = null;
     private SenderMetricsRegistry senderMetricsRegistry = null;
     private final LogContext logContext = new LogContext();
-
-    private final Logger log = logContext.logger(SenderTest.class);
 
     @BeforeEach
     public void setup() {
@@ -3184,7 +3181,6 @@ public class SenderTest {
                     }));
 
             // Produce batch, it returns with a retry-able error like NOT_LEADER_OR_FOLLOWER, scheduled for retry.
-            // This triggers a metadata-request, that discovers a new-leader for tp0.
             Future<RecordMetadata> futureIsProduced = appendToAccumulator(tp0, 0L, "key", "value");
             sender.runOnce(); // connect
             sender.runOnce(); // send produce request
@@ -3198,7 +3194,6 @@ public class SenderTest {
 
             // TEST that as new-leader(with epochA) is discovered, the batch is retried immediately i.e. skips any backoff period.
             // Update leader epoch for tp0
-            log.info("Test that to a new-leader, batch is retried immediately.");
             int newEpoch = ++tp0LeaderEpoch;
             this.client.updateMetadata(
                 RequestTestUtils.metadataUpdateWith(1, Collections.singletonMap("test", 2),
@@ -3219,14 +3214,12 @@ public class SenderTest {
             assertTrue(!futureIsProduced.isDone(), "Produce request is yet not done.");
 
             // TEST that a subsequent retry to the same leader(epochA) waits the backoff period.
-            log.info("Test that subsequent retry to the new-leader discovered earlier, batch isn't retried immediately");
             sender.runOnce(); //send produce request
             // No batches in-flight
             assertEquals(0, sender.inFlightBatches(tp0).size());
             assertTrue(!client.hasInFlightRequests());
 
             // TEST that after waiting for longer than backoff period, batch is retried again.
-            log.info("TEST that after waiting for longer than backoff period, batch is retried again.");
             time.sleep(2 * retryBackoffMaxMs);
             sender.runOnce(); // send produce request
             assertEquals(1, sender.inFlightBatches(tp0).size());
