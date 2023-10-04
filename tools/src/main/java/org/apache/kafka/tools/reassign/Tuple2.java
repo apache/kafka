@@ -43,6 +43,6 @@ public final class Tuple2<V1, V2> {
 
     @Override
     public String toString() {
-        return "Tuple{v1=" + v1 + ", v2=" + v2 + '}';
+        return "Tuple2{v1=" + v1 + ", v2=" + v2 + '}';
     }
 }
