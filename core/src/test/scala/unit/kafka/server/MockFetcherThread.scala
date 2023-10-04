@@ -23,10 +23,10 @@ import org.apache.kafka.common.requests.FetchResponse
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.server.common.OffsetAndEpoch
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.storage.internals.log.{LogAppendInfo, LogOffsetMetadata}
+import org.apache.kafka.storage.internals.log.LogAppendInfo
 import org.junit.jupiter.api.Assertions._
 
-import java.util.{Optional, OptionalInt}
+import java.util.OptionalInt
 import scala.collection.{Map, Set, mutable}
 import scala.jdk.CollectionConverters._
 
@@ -102,7 +102,7 @@ class MockFetcherThread(val mockLeader: MockLeaderEndPoint,
     state.logStartOffset = partitionData.logStartOffset
     state.highWatermark = partitionData.highWatermark
 
-    Some(new LogAppendInfo(Optional.of(new LogOffsetMetadata(fetchOffset)),
+    Some(new LogAppendInfo(fetchOffset,
       lastOffset,
       lastEpoch,
       maxTimestamp,
@@ -111,10 +111,7 @@ class MockFetcherThread(val mockLeader: MockLeaderEndPoint,
       state.logStartOffset,
       RecordConversionStats.EMPTY,
       CompressionType.NONE,
-      CompressionType.NONE,
-      batches.size,
       FetchResponse.recordsSize(partitionData),
-      true,
       batches.headOption.map(_.lastOffset).getOrElse(-1)))
   }
 
