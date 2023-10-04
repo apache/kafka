@@ -430,9 +430,7 @@ object StorageTool extends Logging {
       }
       val metaPropertiesPath = Paths.get(directory, KafkaServer.brokerMetaPropsFile)
       val checkpoint = new BrokerMetadataCheckpoint(metaPropertiesPath.toFile)
-      val rawProps = new RawMetaProperties(metaProperties.toProperties)
-      rawProps.directoryId = Uuid.randomUuid().toString
-      checkpoint.write(rawProps.props)
+      checkpoint.write(metaProperties.toPropertiesWithDirectoryId(Uuid.randomUuid().toString))
 
       val bootstrapDirectory = new BootstrapDirectory(directory, Optional.empty())
       bootstrapDirectory.writeBinaryFile(bootstrapMetadata)

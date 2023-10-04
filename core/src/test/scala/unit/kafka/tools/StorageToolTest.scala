@@ -30,7 +30,7 @@ import org.apache.commons.io.output.NullOutputStream
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.common.metadata.UserScramCredentialRecord
-import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals, assertThrows, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue}
 import org.junit.jupiter.api.{Test, Timeout}
 
 import scala.collection.mutable
@@ -378,8 +378,7 @@ Found problem:
       val properties = new BrokerMetadataCheckpoint(metaPropertiesFile).read().get
       assertTrue(properties.containsKey("directory.id"))
       val directoryId = Uuid.fromString(properties.getProperty("directory.id"))
-      assertNotEquals(Uuid.UNKNOWN_DIR, directoryId)
-      assertNotEquals(Uuid.OFFLINE_DIR, directoryId)
+      assertFalse(Uuid.RESERVED.contains(directoryId))
     } finally Utils.delete(tempDir)
   }
 }

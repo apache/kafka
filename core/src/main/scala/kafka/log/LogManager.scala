@@ -118,6 +118,7 @@ class LogManager(logDirs: Seq[File],
 
   private val dirLocks = lockLogDirs(liveLogDirs)
   private val dirIds = directoryIds(liveLogDirs)
+  val directoryIds: Set[Uuid] = dirIds.values.toSet
   @volatile private var recoveryPointCheckpoints = liveLogDirs.map(dir =>
     (dir, new OffsetCheckpointFile(new File(dir, RecoveryPointCheckpointFile), logDirFailureChannel))).toMap
   @volatile private var logStartOffsetCheckpoints = liveLogDirs.map(dir =>
@@ -1377,8 +1378,6 @@ class LogManager(logDirs: Seq[File],
 
     _liveLogDirs.contains(new File(logDir))
   }
-
-  def directoryIds: Set[Uuid] = dirIds.values.toSet
 
   /**
    * Flush any log which has exceeded its flush interval and has unwritten messages.

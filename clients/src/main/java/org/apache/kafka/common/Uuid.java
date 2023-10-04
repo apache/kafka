@@ -19,6 +19,7 @@ package org.apache.kafka.common;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Base64;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -55,7 +56,11 @@ public class Uuid implements Comparable<Uuid> {
      */
     public static final Uuid OFFLINE_DIR = ONE_UUID;
 
-    private static final Set<Uuid> RESERVED = new HashSet<>(Arrays.asList(METADATA_TOPIC_ID, ZERO_UUID, ONE_UUID, UNKNOWN_DIR, OFFLINE_DIR));
+    /**
+     * The set of reserved UUIDs that will never be returned by the randomUuid method.
+     */
+    public static final Set<Uuid> RESERVED = Collections.unmodifiableSet(new HashSet<>(
+            Arrays.asList(METADATA_TOPIC_ID, ZERO_UUID, ONE_UUID, UNKNOWN_DIR, OFFLINE_DIR)));
 
     private final long mostSignificantBits;
     private final long leastSignificantBits;

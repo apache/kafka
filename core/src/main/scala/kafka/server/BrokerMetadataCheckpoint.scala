@@ -65,11 +65,7 @@ class RawMetaProperties(val props: Properties = new Properties()) {
   }
 
   def directoryId: Option[String] = {
-    if (props.containsKey(DirectoryIdKey)) {
-      Option(props.getProperty(DirectoryIdKey))
-    } else {
-      None
-    }
+    Option(props.getProperty(DirectoryIdKey))
   }
 
   def directoryId_=(id: String): Unit = {
@@ -147,11 +143,21 @@ case class MetaProperties(
   clusterId: String,
   nodeId: Int,
 ) {
-  def toProperties: Properties = {
+  private def toRawMetaProperties: RawMetaProperties = {
     val properties = new RawMetaProperties()
     properties.version = 1
     properties.clusterId = clusterId
     properties.nodeId = nodeId
+    properties
+  }
+
+  def toProperties: Properties = {
+    toRawMetaProperties.props
+  }
+
+  def toPropertiesWithDirectoryId(directoryId: String): Properties = {
+    val properties = toRawMetaProperties
+    properties.directoryId = directoryId
     properties.props
   }
 
