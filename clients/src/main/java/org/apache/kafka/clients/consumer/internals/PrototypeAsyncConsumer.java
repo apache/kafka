@@ -107,9 +107,10 @@ import static org.apache.kafka.common.utils.Utils.join;
 import static org.apache.kafka.common.utils.Utils.propsToMap;
 
 /**
- * This prototype consumer uses the EventHandler to process application
- * events so that the network IO can be processed in a background thread. Visit
- * <a href="https://cwiki.apache.org/confluence/display/KAFKA/Proposal%3A+Consumer+Threading+Model+Refactor" >this document</a>
+ * This prototype consumer uses an {@link ApplicationEventHandler event handler} to process
+ * {@link ApplicationEvent application events} so that the network IO can be processed in a dedicated
+ * {@link ConsumerNetworkThread network thread}. Visit
+ * <a href="https://cwiki.apache.org/confluence/display/KAFKA/Proposal%3A+Consumer+Threading+Model+Refactor">this document</a>
  * for detail implementation.
  */
 public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
@@ -141,9 +142,10 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     private final WakeupTrigger wakeupTrigger = new WakeupTrigger();
 
     /**
-     * A thread-safe {@link BlockingQueue queue} for the results that are populated in the background thread
-     * when the fetch results are available. Because the {@link #fetchBuffer fetch buffer} is not thread-safe, we
-     * need to separate the results collection that we provide to the background thread from the collection that
+     * A thread-safe {@link BlockingQueue queue} for the results that are populated in the
+     * {@link ConsumerNetworkThread network thread} when the fetch results are available. Because
+     * the {@link #fetchBuffer fetch buffer} is not thread-safe, we need to separate the results
+     * collection that we provide to the network thread from the collection that
      * we read from on the application thread.
      */
     private final BlockingQueue<CompletedFetch> fetchResults = new LinkedBlockingQueue<>();
@@ -897,8 +899,8 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * Send the requests for fetch data to the background thread and set up to collect the results in
-     * {@link #fetchResults}.
+     * Send the requests for fetch data to the {@link ConsumerNetworkThread network thread} and set up to
+     * collect the results in {@link #fetchResults}.
      */
     private void sendFetches() {
         FetchEvent event = new FetchEvent();

@@ -17,11 +17,12 @@
 package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.consumer.internals.CompletedFetch;
+import org.apache.kafka.clients.consumer.internals.ConsumerNetworkThread;
 
 import java.util.Queue;
 
 /**
- * This event signals the background thread to submit a fetch request.
+ * This event signals the {@link ConsumerNetworkThread network thread} to submit a fetch request.
  */
 public class FetchEvent extends CompletableApplicationEvent<Queue<CompletedFetch>> {
 

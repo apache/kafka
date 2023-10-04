@@ -183,12 +183,12 @@ public class ConsumerTestBuilder implements Closeable {
         closeQuietly(backgroundEventProcessor, BackgroundEventProcessor.class.getSimpleName());
     }
 
-    public static class DefaultBackgroundThreadTestBuilder extends ConsumerTestBuilder {
+    public static class ConsumerNetworkThreadTestBuilder extends ConsumerTestBuilder {
 
-        final DefaultBackgroundThread backgroundThread;
+        final ConsumerNetworkThread consumerNetworkThread;
 
-        public DefaultBackgroundThreadTestBuilder() {
-            this.backgroundThread = new DefaultBackgroundThread(
+        public ConsumerNetworkThreadTestBuilder() {
+            this.consumerNetworkThread = new ConsumerNetworkThread(
                     logContext,
                     time,
                     () -> applicationEventProcessor,
@@ -199,7 +199,7 @@ public class ConsumerTestBuilder implements Closeable {
 
         @Override
         public void close() {
-            closeQuietly(backgroundThread, DefaultBackgroundThread.class.getSimpleName());
+            closeQuietly(consumerNetworkThread, ConsumerNetworkThread.class.getSimpleName());
         }
     }
 

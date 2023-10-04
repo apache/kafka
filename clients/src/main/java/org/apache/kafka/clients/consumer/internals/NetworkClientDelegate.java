@@ -348,7 +348,7 @@ public class NetworkClientDelegate implements AutoCloseable {
 
     /**
      * Creates a {@link Supplier} for deferred creation during invocation by
-     * {@link org.apache.kafka.clients.consumer.internals.DefaultBackgroundThread}.
+     * {@link ConsumerNetworkThread}.
      */
     public static Supplier<NetworkClientDelegate> supplier(final Time time,
                                                            final LogContext logContext,

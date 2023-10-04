@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-import org.apache.kafka.clients.consumer.internals.DefaultBackgroundThread;
+import org.apache.kafka.clients.consumer.internals.ConsumerNetworkThread;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
@@ -25,7 +25,7 @@ import java.util.Queue;
 
 /**
  * An event handler that receives {@link BackgroundEvent background events} from the
- * {@link DefaultBackgroundThread background thread} which are then made available to the application thread
+ * {@link ConsumerNetworkThread network thread} which are then made available to the application thread
  * via the {@link BackgroundEventProcessor}.
  */
 
@@ -42,7 +42,7 @@ public class BackgroundEventHandler {
     /**
      * Add a {@link BackgroundEvent} to the handler.
      *
-     * @param event A {@link BackgroundEvent} created by the {@link DefaultBackgroundThread background thread}
+     * @param event A {@link BackgroundEvent} created by the {@link ConsumerNetworkThread network thread}
      */
     public void add(BackgroundEvent event) {
         Objects.requireNonNull(event, "BackgroundEvent provided to add must be non-null");

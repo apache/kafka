@@ -16,10 +16,12 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
+import org.apache.kafka.clients.consumer.internals.ConsumerNetworkThread;
+
 import java.util.Objects;
 
 /**
- * This is the abstract definition of the events created by the background thread.
+ * This is the abstract definition of the events created by the {@link ConsumerNetworkThread network thread}.
  */
 public abstract class BackgroundEvent {
 

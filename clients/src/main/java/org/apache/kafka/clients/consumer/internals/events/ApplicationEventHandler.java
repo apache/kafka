@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-import org.apache.kafka.clients.consumer.internals.DefaultBackgroundThread;
+import org.apache.kafka.clients.consumer.internals.ConsumerNetworkThread;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate;
 import org.apache.kafka.clients.consumer.internals.RequestManagers;
 import org.apache.kafka.common.internals.IdempotentCloser;
@@ -36,13 +36,13 @@ import java.util.function.Supplier;
 
 /**
  * An event handler that receives {@link ApplicationEvent application events} from the application thread which
- * are then readable from the {@link ApplicationEventProcessor} in the background thread.
+ * are then readable from the {@link ApplicationEventProcessor} in the {@link ConsumerNetworkThread network thread}.
  */
 public class ApplicationEventHandler implements Closeable {
 
     private final Logger log;
     private final BlockingQueue<ApplicationEvent> applicationEventQueue;
-    private final DefaultBackgroundThread backgroundThread;
+    private final ConsumerNetworkThread networkThread;
     private final IdempotentCloser closer = new IdempotentCloser();
 
     public ApplicationEventHandler(final LogContext logContext,
@@ -53,12 +53,12 @@ public class ApplicationEventHandler implements Closeable {
                                    final Supplier<RequestManagers> requestManagersSupplier) {
         this.log = logContext.logger(ApplicationEventHandler.class);
         this.applicationEventQueue = applicationEventQueue;
-        this.backgroundThread = new DefaultBackgroundThread(logContext,
+        this.networkThread = new ConsumerNetworkThread(logContext,
                 time,
                 applicationEventProcessorSupplier,
                 networkClientDelegateSupplier,
                 requestManagersSupplier);
-        this.backgroundThread.start();
+        this.networkThread.start();
     }
 
     /**
@@ -69,7 +69,7 @@ public class ApplicationEventHandler implements Closeable {
     public void add(final ApplicationEvent event) {
         Objects.requireNonNull(event, "ApplicationEvent provided to add must be non-null");
         log.trace("Enqueued event: {}", event);
-        backgroundThread.wakeup();
+        networkThread.wakeup();
         applicationEventQueue.add(event);
     }
 
@@ -81,7 +81,7 @@ public class ApplicationEventHandler implements Closeable {
      *
      * See {@link CompletableApplicationEvent#get(Timer)} and {@link Future#get(long, TimeUnit)} for more details.
      *
-     * @param event A {@link CompletableApplicationEvent} created by the polling thread.
+     * @param event A {@link CompletableApplicationEvent} created by the polling thread
      * @param timer Timer for which to wait for the event to complete
      * @return      Value that is the result of the event
      * @param <T>   Type of return value of the event
@@ -100,7 +100,7 @@ public class ApplicationEventHandler implements Closeable {
 
     public void close(final Duration timeout) {
         closer.close(
-                () -> Utils.closeQuietly(() -> backgroundThread.close(timeout), "application event handler"),
+                () -> Utils.closeQuietly(() -> networkThread.close(timeout), "consumer network thread"),
                 () -> log.warn("The application event handler was already closed")
         );
     }

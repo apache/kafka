@@ -116,7 +116,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
                 time, retryBackoffMs, apiVersions);
         // Register the cluster metadata update callback. Note this only relies on the
         // requestsToRetry initialized above, and won't be invoked until all managers are
-        // initialized and the background thread started.
+        // initialized and the network thread started.
         this.metadata.addClusterUpdateListener(this);
     }
 

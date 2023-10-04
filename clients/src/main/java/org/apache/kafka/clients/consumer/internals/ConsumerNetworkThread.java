@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
+import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.WakeupException;
@@ -42,14 +43,10 @@ import java.util.stream.Collectors;
 import static org.apache.kafka.common.utils.Utils.closeQuietly;
 
 /**
- * Background thread runnable that consumes {@code ApplicationEvent} and
- * produces {@code BackgroundEvent}. It uses an event loop to consume and
- * produce events, and poll the network client to handle network IO.
- * <p>
- * It holds a reference to the {@link SubscriptionState}, which is
- * initialized by the application thread.
+ * Background thread runnable that consumes {@link ApplicationEvent} and produces {@link BackgroundEvent}. It
+ * uses an event loop to consume and produce events, and poll the network client to handle network IO.
  */
-public class DefaultBackgroundThread extends KafkaThread implements Closeable {
+public class ConsumerNetworkThread extends KafkaThread implements Closeable {
 
     private static final long MAX_POLL_TIMEOUT_MS = 5000;
     private static final String BACKGROUND_THREAD_NAME = "consumer_background_thread";
@@ -64,11 +61,11 @@ public class DefaultBackgroundThread extends KafkaThread implements Closeable {
     private volatile boolean running;
     private final IdempotentCloser closer = new IdempotentCloser();
 
-    public DefaultBackgroundThread(LogContext logContext,
-                                   Time time,
-                                   Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier,
-                                   Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
-                                   Supplier<RequestManagers> requestManagersSupplier) {
+    public ConsumerNetworkThread(LogContext logContext,
+                                 Time time,
+                                 Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier,
+                                 Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
+                                 Supplier<RequestManagers> requestManagersSupplier) {
         super(BACKGROUND_THREAD_NAME, true);
         this.time = time;
         this.log = logContext.logger(getClass());
@@ -79,25 +76,25 @@ public class DefaultBackgroundThread extends KafkaThread implements Closeable {
 
     @Override
     public void run() {
-        closer.assertOpen("Consumer background thread is already closed");
+        closer.assertOpen("Consumer network thread is already closed");
         running = true;
 
         try {
-            log.debug("Background thread started");
+            log.debug("Consumer network thread started");
 
-            // Wait until we're securely in the background thread to initialize these objects...
+            // Wait until we're securely in the background network thread to initialize these objects...
             initializeResources();
 
             while (running) {
                 try {
                     runOnce();
                 } catch (final WakeupException e) {
-                    log.debug("WakeupException caught, background thread won't be interrupted");
-                    // swallow the wakeup exception to prevent killing the background thread.
+                    log.debug("WakeupException caught, consumer network thread won't be interrupted");
+                    // swallow the wakeup exception to prevent killing the thread.
                 }
             }
         } catch (final Throwable t) {
-            log.error("The background thread failed due to unexpected error", t);
+            log.error("The consumer network thread failed due to unexpected error", t);
             throw new KafkaException(t);
         }
     }
@@ -215,12 +212,12 @@ public class DefaultBackgroundThread extends KafkaThread implements Closeable {
     public void close(final Duration timeout) {
         closer.close(
                 () -> closeInternal(timeout),
-                () -> log.warn("The consumer background thread was already closed")
+                () -> log.warn("The consumer network thread was already closed")
         );
     }
 
     void closeInternal(final Duration timeout) {
-        log.trace("Closing the consumer background thread");
+        log.trace("Closing the consumer network thread");
         boolean hadStarted = running;
         running = false;
         wakeup();
@@ -248,6 +245,6 @@ public class DefaultBackgroundThread extends KafkaThread implements Closeable {
         closeQuietly(requestManagers, "request managers");
         closeQuietly(networkClientDelegate, "network client delegate");
         closeQuietly(applicationEventProcessor, "application event processor");
-        log.debug("Closed the consumer background thread");
+        log.debug("Closed the consumer network thread");
     }
 }

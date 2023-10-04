@@ -65,9 +65,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @SuppressWarnings("ClassDataAbstractionCoupling")
-public class DefaultBackgroundThreadTest {
+public class ConsumerNetworkThreadTest {
 
-    private ConsumerTestBuilder.DefaultBackgroundThreadTestBuilder testBuilder;
+    private ConsumerTestBuilder.ConsumerNetworkThreadTestBuilder testBuilder;
     private Time time;
     private ConsumerMetadata metadata;
     private NetworkClientDelegate networkClient;
@@ -76,12 +76,12 @@ public class DefaultBackgroundThreadTest {
     private CoordinatorRequestManager coordinatorManager;
     private OffsetsRequestManager offsetsRequestManager;
     private CommitRequestManager commitManager;
-    private DefaultBackgroundThread backgroundThread;
+    private ConsumerNetworkThread consumerNetworkThread;
     private MockClient client;
 
     @BeforeEach
     public void setup() {
-        testBuilder = new ConsumerTestBuilder.DefaultBackgroundThreadTestBuilder();
+        testBuilder = new ConsumerTestBuilder.ConsumerNetworkThreadTestBuilder();
         time = testBuilder.time;
         metadata = testBuilder.metadata;
         networkClient = testBuilder.networkClientDelegate;
@@ -91,8 +91,8 @@ public class DefaultBackgroundThreadTest {
         coordinatorManager = testBuilder.coordinatorRequestManager;
         commitManager = testBuilder.commitRequestManager;
         offsetsRequestManager = testBuilder.offsetsRequestManager;
-        backgroundThread = testBuilder.backgroundThread;
-        backgroundThread.initializeResources();
+        consumerNetworkThread = testBuilder.consumerNetworkThread;
+        consumerNetworkThread.initializeResources();
     }
 
     @AfterEach
@@ -103,17 +103,17 @@ public class DefaultBackgroundThreadTest {
 
     @Test
     public void testStartupAndTearDown() throws InterruptedException {
-        backgroundThread.start();
-        TestUtils.waitForCondition(backgroundThread::isRunning, "Failed awaiting for the background thread to be running");
+        consumerNetworkThread.start();
+        TestUtils.waitForCondition(consumerNetworkThread::isRunning, "Failed awaiting for the background thread to be running");
 
         // There's a nonzero amount of time between starting the thread and having it
         // begin to execute our code. Wait for a bit before checking...
         int maxWaitMs = 1000;
-        TestUtils.waitForCondition(backgroundThread::isRunning,
+        TestUtils.waitForCondition(consumerNetworkThread::isRunning,
                 maxWaitMs,
                 "Thread did not start within " + maxWaitMs + " ms");
-        backgroundThread.close(Duration.ofMillis(maxWaitMs));
-        TestUtils.waitForCondition(() -> !backgroundThread.isRunning(),
+        consumerNetworkThread.close(Duration.ofMillis(maxWaitMs));
+        TestUtils.waitForCondition(() -> !consumerNetworkThread.isRunning(),
                 maxWaitMs,
                 "Thread did not stop within " + maxWaitMs + " ms");
     }
@@ -122,7 +122,7 @@ public class DefaultBackgroundThreadTest {
     public void testApplicationEvent() {
         FetchEvent e = new FetchEvent();
         applicationEventsQueue.add(e);
-        backgroundThread.runOnce();
+        consumerNetworkThread.runOnce();
         verify(applicationEventProcessor, times(1)).process(e);
     }
 
@@ -130,7 +130,7 @@ public class DefaultBackgroundThreadTest {
     public void testMetadataUpdateEvent() {
         ApplicationEvent e = new NewTopicsMetadataUpdateRequestEvent();
         applicationEventsQueue.add(e);
-        backgroundThread.runOnce();
+        consumerNetworkThread.runOnce();
         verify(metadata).requestUpdateForNewTopics();
     }
 
@@ -138,7 +138,7 @@ public class DefaultBackgroundThreadTest {
     public void testCommitEvent() {
         ApplicationEvent e = new CommitApplicationEvent(new HashMap<>());
         applicationEventsQueue.add(e);
-        backgroundThread.runOnce();
+        consumerNetworkThread.runOnce();
         verify(applicationEventProcessor).process(any(CommitApplicationEvent.class));
     }
 
@@ -147,7 +147,7 @@ public class DefaultBackgroundThreadTest {
         Map<TopicPartition, Long> timestamps = Collections.singletonMap(new TopicPartition("topic1", 1), 5L);
         ApplicationEvent e = new ListOffsetsApplicationEvent(timestamps, true);
         applicationEventsQueue.add(e);
-        backgroundThread.runOnce();
+        consumerNetworkThread.runOnce();
         verify(applicationEventProcessor).process(any(ListOffsetsApplicationEvent.class));
         assertTrue(applicationEventsQueue.isEmpty());
     }
@@ -156,19 +156,19 @@ public class DefaultBackgroundThreadTest {
     public void testResetPositionsEventIsProcessed() {
         ResetPositionsApplicationEvent e = new ResetPositionsApplicationEvent();
         applicationEventsQueue.add(e);
-        backgroundThread.runOnce();
+        consumerNetworkThread.runOnce();
         verify(applicationEventProcessor).process(any(ResetPositionsApplicationEvent.class));
         assertTrue(applicationEventsQueue.isEmpty());
     }
 
     @Test
-    public void testResetPositionsProcessFailureInterruptsBackgroundThread() {
+    public void testResetPositionsProcessFailureInterruptsConsumerNetworkThread() {
         TopicAuthorizationException authException = new TopicAuthorizationException("Topic authorization failed");
         doThrow(authException).when(offsetsRequestManager).resetPositionsIfNeeded();
 
         ResetPositionsApplicationEvent event = new ResetPositionsApplicationEvent();
         applicationEventsQueue.add(event);
-        assertThrows(TopicAuthorizationException.class, () -> backgroundThread.runOnce());
+        assertThrows(TopicAuthorizationException.class, () -> consumerNetworkThread.runOnce());
 
         verify(applicationEventProcessor).process(any(ResetPositionsApplicationEvent.class));
     }
@@ -177,7 +177,7 @@ public class DefaultBackgroundThreadTest {
     public void testValidatePositionsEventIsProcessed() {
         ValidatePositionsApplicationEvent e = new ValidatePositionsApplicationEvent();
         applicationEventsQueue.add(e);
-        backgroundThread.runOnce();
+        consumerNetworkThread.runOnce();
         verify(applicationEventProcessor).process(any(ValidatePositionsApplicationEvent.class));
         assertTrue(applicationEventsQueue.isEmpty());
     }
@@ -189,7 +189,7 @@ public class DefaultBackgroundThreadTest {
 
         ValidatePositionsApplicationEvent event = new ValidatePositionsApplicationEvent();
         applicationEventsQueue.add(event);
-        assertThrows(LogTruncationException.class, backgroundThread::runOnce);
+        assertThrows(LogTruncationException.class, consumerNetworkThread::runOnce);
 
         verify(applicationEventProcessor).process(any(ValidatePositionsApplicationEvent.class));
     }
@@ -202,7 +202,7 @@ public class DefaultBackgroundThreadTest {
         ApplicationEvent e = new AssignmentChangeApplicationEvent(offset, currentTimeMs);
         applicationEventsQueue.add(e);
 
-        backgroundThread.runOnce();
+        consumerNetworkThread.runOnce();
         verify(applicationEventProcessor).process(any(AssignmentChangeApplicationEvent.class));
         verify(networkClient, times(1)).poll(anyLong(), anyLong());
         verify(commitManager, times(1)).updateAutoCommitTimer(currentTimeMs);
@@ -211,7 +211,7 @@ public class DefaultBackgroundThreadTest {
 
     @Test
     void testFindCoordinator() {
-        backgroundThread.runOnce();
+        consumerNetworkThread.runOnce();
         verify(coordinatorManager, times(1)).poll(anyLong());
         verify(networkClient, times(1)).poll(anyLong(), anyLong());
     }
@@ -219,7 +219,7 @@ public class DefaultBackgroundThreadTest {
     @Test
     void testFetchTopicMetadata() {
         applicationEventsQueue.add(new TopicMetadataApplicationEvent("topic"));
-        backgroundThread.runOnce();
+        consumerNetworkThread.runOnce();
         verify(applicationEventProcessor).process(any(TopicMetadataApplicationEvent.class));
     }
 
@@ -247,7 +247,7 @@ public class DefaultBackgroundThreadTest {
 
     @Test
     void testRequestManagersArePolledOnce() {
-        backgroundThread.runOnce();
+        consumerNetworkThread.runOnce();
         testBuilder.requestManagers.entries().forEach(rmo -> rmo.ifPresent(rm -> verify(rm, times(1)).poll(anyLong())));
         verify(networkClient, times(1)).poll(anyLong(), anyLong());
     }
@@ -257,7 +257,7 @@ public class DefaultBackgroundThreadTest {
         MetadataResponse metadataResponse = RequestTestUtils.metadataUpdateWith(2, Collections.emptyMap());
         client.prepareMetadataUpdate(metadataResponse);
         metadata.requestUpdate(false);
-        backgroundThread.runOnce();
+        consumerNetworkThread.runOnce();
         verify(metadata, times(1)).updateWithCurrentRequestVersion(eq(metadataResponse), eq(false), anyLong());
     }
 
@@ -272,7 +272,7 @@ public class DefaultBackgroundThreadTest {
         assertFalse(future.isDone());
         assertFalse(applicationEventsQueue.isEmpty());
 
-        backgroundThread.close();
+        consumerNetworkThread.close();
         assertTrue(future.isCompletedExceptionally());
         assertTrue(applicationEventsQueue.isEmpty());
     }

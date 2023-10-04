@@ -31,6 +31,7 @@ import org.apache.kafka.clients.FetchSessionHandler;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.UnsentRequest;
+import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
 import org.apache.kafka.common.Node;
@@ -173,8 +174,8 @@ public class FetchRequestManager extends AbstractFetch implements RequestManager
      *
      * <p/>
      *
-     * This is used by the {@link org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor} to
-     * pull off any fetch results that are stored in the background thread to provide them to the application thread.
+     * This is used by the {@link ApplicationEventProcessor} to pull off any fetch results that are stored in
+     * the {@link ConsumerNetworkThread network thread} to provide them to the application thread.
      *
      * @return {@link Queue} containing zero or more {@link CompletedFetch}
      */
