@@ -16,33 +16,20 @@
  */
 package org.apache.kafka.connect.util;
 
-/**
- * Generic interface for callbacks
- */
-public interface Callback<V> {
-    /**
-     * Invoked upon completion of the operation.
-     *
-     * @param error the error that caused the operation to fail, or null if no error occurred
-     * @param result the return value, or null if the operation failed
-     */
-    void onCompletion(Throwable error, V result);
+import java.util.Objects;
+import java.util.concurrent.TimeoutException;
 
-    default void recordStage(Stage stage) {
+public class StagedTimeoutException extends TimeoutException {
+
+    private final Stage stage;
+
+    public StagedTimeoutException(Stage stage) {
+        super();
+        this.stage = Objects.requireNonNull(stage, "Stage may not be null");
     }
 
-    default <V2> Callback<V2> chainStaging(Callback<V2> chained) {
-        return new Callback<V2>() {
-            @Override
-            public void recordStage(Stage stage) {
-                Callback.this.recordStage(stage);
-            }
-
-            @Override
-            public void onCompletion(Throwable error, V2 result) {
-                chained.onCompletion(error, result);
-            }
-        };
+    public Stage stage() {
+        return stage;
     }
 
 }

@@ -69,6 +69,7 @@ import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.FutureCallback;
+import org.apache.kafka.connect.util.Stage;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -91,6 +92,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.AbstractExecutorService;
+import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -697,6 +699,8 @@ public class DistributedHerderTest {
 
         // No immediate action besides this -- change will be picked up via the config log
 
+        List<String> stages = expectRecordStages(putConnectorCallback);
+
         herder.putConnectorConfig(CONN2, CONN2_CONFIG, false, putConnectorCallback);
         // This tick runs the initial herder request, which issues an asynchronous request for
         // connector validation
@@ -711,6 +715,14 @@ public class DistributedHerderTest {
         ConnectorInfo info = new ConnectorInfo(CONN2, CONN2_CONFIG, Collections.emptyList(), ConnectorType.SOURCE);
         verify(putConnectorCallback).onCompletion(isNull(), eq(new Herder.Created<>(true, info)));
         verifyNoMoreInteractions(worker, member, configBackingStore, statusBackingStore, putConnectorCallback);
+
+        assertEquals(
+                Arrays.asList(
+                        "ensuring membership in the cluster",
+                        "writing a config for connector " + CONN2 + " to the config topic"
+                ),
+                stages
+        );
     }
 
     @Test
@@ -741,6 +753,7 @@ public class DistributedHerderTest {
         doNothing().when(member).ensureActive();
 
         // No immediate action besides this -- change will be picked up via the config log
+        List<String> stages = expectRecordStages(putConnectorCallback);
 
         herder.putConnectorConfig(CONN2, CONN2_CONFIG, TargetState.STOPPED, false, putConnectorCallback);
         // This tick runs the initial herder request, which issues an asynchronous request for
@@ -756,6 +769,14 @@ public class DistributedHerderTest {
         ConnectorInfo info = new ConnectorInfo(CONN2, CONN2_CONFIG, Collections.emptyList(), ConnectorType.SOURCE);
         verify(putConnectorCallback).onCompletion(isNull(), eq(new Herder.Created<>(true, info)));
         verifyNoMoreInteractions(worker, member, configBackingStore, statusBackingStore, putConnectorCallback);
+
+        assertEquals(
+                Arrays.asList(
+                        "ensuring membership in the cluster",
+                        "writing a config for connector " + CONN2 + " to the config topic"
+                ),
+                stages
+        );
     }
 
     @Test
@@ -785,6 +806,8 @@ public class DistributedHerderTest {
         // This will occur just before/during the second tick
         doNothing().when(member).ensureActive();
 
+        List<String> stages = expectRecordStages(putConnectorCallback);
+
         herder.putConnectorConfig(CONN2, CONN2_CONFIG, false, putConnectorCallback);
         // This tick runs the initial herder request, which issues an asynchronous request for
         // connector validation
@@ -799,6 +822,14 @@ public class DistributedHerderTest {
         // Verify that the exception thrown during the config backing store write is propagated via the callback
         verify(putConnectorCallback).onCompletion(any(ConnectException.class), isNull());
         verifyNoMoreInteractions(worker, member, configBackingStore, statusBackingStore, putConnectorCallback);
+
+        assertEquals(
+                Arrays.asList(
+                        "ensuring membership in the cluster",
+                        "writing a config for connector " + CONN2 + " to the config topic"
+                ),
+                stages
+        );
     }
 
     @Test
@@ -822,6 +853,8 @@ public class DistributedHerderTest {
             return null;
         }).when(herder).validateConnectorConfig(eq(config), validateCallback.capture());
 
+        List<String> stages = expectRecordStages(putConnectorCallback);
+
         herder.putConnectorConfig(CONN2, config, false, putConnectorCallback);
         herder.tick();
 
@@ -835,6 +868,15 @@ public class DistributedHerderTest {
         verify(putConnectorCallback).onCompletion(error.capture(), isNull());
         assertTrue(error.getValue() instanceof BadRequestException);
         verifyNoMoreInteractions(worker, member, configBackingStore, statusBackingStore, putConnectorCallback);
+
+        assertEquals(
+                Arrays.asList(
+                        "awaiting startup",
+                        "ensuring membership in the cluster",
+                        "reading to the end of the config topic"
+                ),
+                stages
+        );
     }
 
     @Test
@@ -898,6 +940,8 @@ public class DistributedHerderTest {
             return null;
         }).when(herder).validateConnectorConfig(eq(CONN1_CONFIG), validateCallback.capture());
 
+        List<String> stages = expectRecordStages(putConnectorCallback);
+
         herder.putConnectorConfig(CONN1, CONN1_CONFIG, false, putConnectorCallback);
         herder.tick();
 
@@ -910,6 +954,15 @@ public class DistributedHerderTest {
         // CONN1 already exists
         verify(putConnectorCallback).onCompletion(any(AlreadyExistsException.class), isNull());
         verifyNoMoreInteractions(worker, member, configBackingStore, statusBackingStore, putConnectorCallback);
+
+        assertEquals(
+                Arrays.asList(
+                        "awaiting startup",
+                        "ensuring membership in the cluster",
+                        "reading to the end of the config topic"
+                ),
+                stages
+        );
     }
 
     @Test
@@ -933,6 +986,8 @@ public class DistributedHerderTest {
         // And delete the connector
         doNothing().when(configBackingStore).removeConnectorConfig(CONN1);
         doNothing().when(putConnectorCallback).onCompletion(null, new Herder.Created<>(false, null));
+
+        List<String> stages = expectRecordStages(putConnectorCallback);
 
         herder.deleteConnectorConfig(CONN1, putConnectorCallback);
 
@@ -961,6 +1016,17 @@ public class DistributedHerderTest {
         assertStatistics("leaderUrl", true, 3, 1, 100, 2100L);
 
         verifyNoMoreInteractions(worker, member, configBackingStore, statusBackingStore, putConnectorCallback);
+
+        assertEquals(
+                Arrays.asList(
+                        "awaiting startup",
+                        "ensuring membership in the cluster",
+                        "reading to the end of the config topic",
+                        "starting 1 connectors and tasks after a rebalance",
+                        "removing the config for connector sourceA from the config topic"
+                ),
+                stages
+        );
     }
 
     @Test
@@ -1428,10 +1494,13 @@ public class DistributedHerderTest {
 
     @Test
     public void testRequestProcessingOrder() {
-        final DistributedHerder.DistributedHerderRequest req1 = herder.addRequest(100, null, null);
-        final DistributedHerder.DistributedHerderRequest req2 = herder.addRequest(10, null, null);
-        final DistributedHerder.DistributedHerderRequest req3 = herder.addRequest(200, null, null);
-        final DistributedHerder.DistributedHerderRequest req4 = herder.addRequest(200, null, null);
+        Callable<Void> action = mock();
+        Callback<Void> callback = mock();
+
+        final DistributedHerder.DistributedHerderRequest req1 = herder.addRequest(100, action, callback);
+        final DistributedHerder.DistributedHerderRequest req2 = herder.addRequest(10, action, callback);
+        final DistributedHerder.DistributedHerderRequest req3 = herder.addRequest(200, action, callback);
+        final DistributedHerder.DistributedHerderRequest req4 = herder.addRequest(200, action, callback);
 
         assertEquals(req2, herder.requests.pollFirst()); // lowest delay
         assertEquals(req1, herder.requests.pollFirst()); // next lowest delay
@@ -2361,11 +2430,16 @@ public class DistributedHerderTest {
         when(member.currentProtocolVersion()).thenReturn(CONNECT_PROTOCOL_V0);
 
         Callback<Void> taskConfigCb = mock(Callback.class);
+        List<String> stages = expectRecordStages(taskConfigCb);
         herder.putTaskConfigs(CONN1, TASK_CONFIGS, taskConfigCb, null);
 
         // Expect a wakeup call after the request to write task configs is added to the herder's request queue
         verify(member).wakeup();
         verifyNoMoreInteractions(member, taskConfigCb);
+        assertEquals(
+                Arrays.asList("awaiting startup"),
+                stages
+        );
     }
 
     @Test
@@ -2373,11 +2447,16 @@ public class DistributedHerderTest {
         when(member.currentProtocolVersion()).thenReturn(CONNECT_PROTOCOL_V1);
 
         Callback<Void> taskConfigCb = mock(Callback.class);
+        List<String> stages = expectRecordStages(taskConfigCb);
         herder.putTaskConfigs(CONN1, TASK_CONFIGS, taskConfigCb, null);
 
         // Expect a wakeup call after the request to write task configs is added to the herder's request queue
         verify(member).wakeup();
         verifyNoMoreInteractions(member, taskConfigCb);
+        assertEquals(
+                Arrays.asList("awaiting startup"),
+                stages
+        );
     }
 
     @Test
@@ -2473,11 +2552,17 @@ public class DistributedHerderTest {
         configUpdateListener.onSessionKeyUpdate(sessionKey);
 
         Callback<Void> taskConfigCb = mock(Callback.class);
+        List<String> stages = expectRecordStages(taskConfigCb);
         herder.putTaskConfigs(CONN1, TASK_CONFIGS, taskConfigCb, signature);
 
         // Expect a wakeup call after the request to write task configs is added to the herder's request queue
         verify(member).wakeup();
         verifyNoMoreInteractions(member, taskConfigCb);
+
+        assertEquals(
+                Arrays.asList("awaiting startup"),
+                stages
+        );
     }
 
     @Test
@@ -3961,6 +4046,20 @@ public class DistributedHerderTest {
         }
     }
 
+    private static List<String> expectRecordStages(Callback<?> callback) {
+        when(callback.chainStaging(any())).thenCallRealMethod();
+        List<String> result = Collections.synchronizedList(new ArrayList<>());
+
+        doAnswer(invocation -> {
+            Stage stage = invocation.getArgument(0);
+            if (stage != null)
+                result.add(stage.description);
+            return null;
+        }).when(callback).recordStage(any());
+
+        return result;
+    }
+
     // We need to use a real class here due to some issue with mocking java.lang.Class
     private abstract class BogusSourceConnector extends SourceConnector {
     }
@@ -4002,6 +4101,20 @@ public class DistributedHerderTest {
         @Override
         public boolean awaitTermination(long timeout, TimeUnit unit) throws InterruptedException {
             return false;
+        }
+    }
+
+    private static class RecordingFutureCallback<T> extends FutureCallback<T> {
+        private final List<String> stageDescriptions = Collections.synchronizedList(new ArrayList<>());
+
+        @Override
+        public void recordStage(Stage stage) {
+            stageDescriptions.add(stage.description);
+            super.recordStage(stage);
+        }
+
+        public List<String> allStages() {
+            return stageDescriptions;
         }
     }
 

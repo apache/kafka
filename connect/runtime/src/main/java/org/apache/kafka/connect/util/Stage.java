@@ -16,33 +16,17 @@
  */
 package org.apache.kafka.connect.util;
 
-/**
- * Generic interface for callbacks
- */
-public interface Callback<V> {
-    /**
-     * Invoked upon completion of the operation.
-     *
-     * @param error the error that caused the operation to fail, or null if no error occurred
-     * @param result the return value, or null if the operation failed
-     */
-    void onCompletion(Throwable error, V result);
+public class Stage {
+    public final String description;
+    public final long started;
 
-    default void recordStage(Stage stage) {
+    public Stage(String description, long started) {
+        this.description = description;
+        this.started = started;
     }
 
-    default <V2> Callback<V2> chainStaging(Callback<V2> chained) {
-        return new Callback<V2>() {
-            @Override
-            public void recordStage(Stage stage) {
-                Callback.this.recordStage(stage);
-            }
-
-            @Override
-            public void onCompletion(Throwable error, V2 result) {
-                chained.onCompletion(error, result);
-            }
-        };
+    @Override
+    public String toString() {
+        return description + "(started " + started + ")";
     }
-
 }
