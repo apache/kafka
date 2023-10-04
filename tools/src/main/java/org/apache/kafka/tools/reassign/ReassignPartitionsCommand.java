@@ -243,12 +243,8 @@ public class ReassignPartitionsCommand {
                                                                                                                List<Tuple2<TopicPartition, List<Integer>>> targets
     ) throws ExecutionException, InterruptedException {
         Tuple2<Map<TopicPartition, PartitionReassignmentState>, Boolean> t0 = findPartitionReassignmentStates(adminClient, targets);
-
-        Map<TopicPartition, PartitionReassignmentState> partStates = t0.v1;
-        Boolean partsOngoing = t0.v2;
-
-        System.out.println(partitionReassignmentStatesToString(partStates));
-        return new Tuple2<>(partStates, partsOngoing);
+        System.out.println(partitionReassignmentStatesToString(t0.v1));
+        return t0;
     }
 
     static int compareTopicPartitions(TopicPartition a, TopicPartition b) {
