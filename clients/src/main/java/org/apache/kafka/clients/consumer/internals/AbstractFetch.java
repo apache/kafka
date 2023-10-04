@@ -199,8 +199,7 @@ public abstract class AbstractFetch implements Closeable {
 
             metricsManager.recordLatency(resp.requestLatencyMs());
         } finally {
-            log.debug("Removing pending request for node {}", fetchTarget);
-            nodesWithPendingFetchRequests.remove(fetchTarget.id());
+            removePendingFetchRequest(fetchTarget, data.metadata().sessionId());
         }
     }
 
@@ -208,9 +207,12 @@ public abstract class AbstractFetch implements Closeable {
      * Implements the core logic for a failed fetch request/response.
      *
      * @param fetchTarget {@link Node} from which the fetch data was requested
-     * @param t {@link Throwable} representing the error that resulted in the failure
+     * @param data        {@link FetchSessionHandler.FetchRequestData} from request
+     * @param t           {@link Throwable} representing the error that resulted in the failure
      */
-    protected void handleFetchResponse(final Node fetchTarget, final Throwable t) {
+    protected void handleFetchResponse(final Node fetchTarget,
+                                       final FetchSessionHandler.FetchRequestData data,
+                                       final Throwable t) {
         try {
             final FetchSessionHandler handler = sessionHandler(fetchTarget.id());
 
@@ -219,14 +221,15 @@ public abstract class AbstractFetch implements Closeable {
                 handler.sessionTopicPartitions().forEach(subscriptions::clearPreferredReadReplica);
             }
         } finally {
-            log.debug("Removing pending request for node {}", fetchTarget);
-            nodesWithPendingFetchRequests.remove(fetchTarget.id());
+            removePendingFetchRequest(fetchTarget, data.metadata().sessionId());
         }
     }
 
     protected void handleCloseFetchSessionResponse(final Node fetchTarget,
-                                                   final FetchSessionHandler.FetchRequestData data) {
+                                                   final FetchSessionHandler.FetchRequestData data,
+                                                   final ClientResponse ignored) {
         int sessionId = data.metadata().sessionId();
+        removePendingFetchRequest(fetchTarget, sessionId);
         log.debug("Successfully sent a close message for fetch session: {} to node: {}", sessionId, fetchTarget);
     }
 
@@ -234,8 +237,14 @@ public abstract class AbstractFetch implements Closeable {
                                                 final FetchSessionHandler.FetchRequestData data,
                                                 final Throwable t) {
         int sessionId = data.metadata().sessionId();
-        log.debug("Unable to a close message for fetch session: {} to node: {}. " +
+        removePendingFetchRequest(fetchTarget, sessionId);
+        log.debug("Unable to send a close message for fetch session: {} to node: {}. " +
                 "This may result in unnecessary fetch sessions at the broker.", sessionId, fetchTarget, t);
+    }
+
+    private void removePendingFetchRequest(Node fetchTarget, int sessionId) {
+        log.debug("Removing pending request for fetch session: {} for node: {}", sessionId, fetchTarget);
+        nodesWithPendingFetchRequests.remove(fetchTarget.id());
     }
 
     /**
@@ -444,5 +453,18 @@ public abstract class AbstractFetch implements Closeable {
     @Override
     public void close() {
         close(time.timer(Duration.ZERO));
+    }
+
+    /**
+     * Defines the contract for handling fetch responses from brokers.
+     * @param <T> Type of response, usually either {@link ClientResponse} or {@link Throwable}
+     */
+    @FunctionalInterface
+    protected interface ResponseHandler<T> {
+
+        /**
+         * Handle the response from the given {@link Node target}
+         */
+        void handle(Node target, FetchSessionHandler.FetchRequestData data, T response);
     }
 }

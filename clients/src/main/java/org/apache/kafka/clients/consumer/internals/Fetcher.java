@@ -16,8 +16,10 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.FetchSessionHandler;
+import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.IdempotentCloser;
@@ -93,69 +95,39 @@ public class Fetcher<K, V> extends AbstractFetch {
     }
 
     /**
-     * Set-up a fetch request for any node that we have assigned partitions for which doesn't already have
+     * Set up a fetch request for any node that we have assigned partitions for which doesn't already have
      * an in-flight fetch or pending fetch data.
      * @return number of fetches sent
      */
     public synchronized int sendFetches() {
-        Map<Node, FetchSessionHandler.FetchRequestData> fetchRequestMap = prepareFetchRequests();
-
-        for (Map.Entry<Node, FetchSessionHandler.FetchRequestData> entry : fetchRequestMap.entrySet()) {
-            final Node fetchTarget = entry.getKey();
-            final FetchSessionHandler.FetchRequestData data = entry.getValue();
-            final FetchRequest.Builder request = createFetchRequest(fetchTarget, data);
-            RequestFutureListener<ClientResponse> listener = new RequestFutureListener<ClientResponse>() {
-                @Override
-                public void onSuccess(ClientResponse resp) {
+        final Map<Node, FetchSessionHandler.FetchRequestData> fetchRequests = prepareFetchRequests();
+        sendFetchesInternal(
+                fetchRequests,
+                (fetchTarget, data, clientResponse) -> {
                     synchronized (Fetcher.this) {
-                        handleFetchResponse(fetchTarget, data, resp);
+                        handleFetchResponse(fetchTarget, data, clientResponse);
                     }
-                }
-
-                @Override
-                public void onFailure(RuntimeException e) {
+                },
+                (fetchTarget, data, error) -> {
                     synchronized (Fetcher.this) {
-                        handleFetchResponse(fetchTarget, e);
+                        handleFetchResponse(fetchTarget, data, error);
                     }
-                }
-            };
-
-            final RequestFuture<ClientResponse> future = client.send(fetchTarget, request);
-            future.addListener(listener);
-        }
-
-        return fetchRequestMap.size();
+                });
+        return fetchRequests.size();
     }
 
     protected void maybeCloseFetchSessions(final Timer timer) {
-        final List<RequestFuture<ClientResponse>> requestFutures = new ArrayList<>();
-        Map<Node, FetchSessionHandler.FetchRequestData> fetchRequestMap = prepareCloseFetchSessionRequests();
-
-        for (Map.Entry<Node, FetchSessionHandler.FetchRequestData> entry : fetchRequestMap.entrySet()) {
-            final Node fetchTarget = entry.getKey();
-            final FetchSessionHandler.FetchRequestData data = entry.getValue();
-            final FetchRequest.Builder request = createFetchRequest(fetchTarget, data);
-            final RequestFuture<ClientResponse> responseFuture = client.send(fetchTarget, request);
-
-            responseFuture.addListener(new RequestFutureListener<ClientResponse>() {
-                @Override
-                public void onSuccess(ClientResponse value) {
-                    handleCloseFetchSessionResponse(fetchTarget, data);
-                }
-
-                @Override
-                public void onFailure(RuntimeException e) {
-                    handleCloseFetchSessionResponse(fetchTarget, data, e);
-                }
-            });
-
-            requestFutures.add(responseFuture);
-        }
+        final List<RequestFuture<ClientResponse>> requestFutures = sendFetchesInternal(
+                prepareCloseFetchSessionRequests(),
+                this::handleCloseFetchSessionResponse,
+                this::handleCloseFetchSessionResponse
+        );
 
         // Poll to ensure that request has been written to the socket. Wait until either the timer has expired or until
         // all requests have received a response.
         while (timer.notExpired() && !requestFutures.stream().allMatch(RequestFuture::isDone)) {
             client.poll(timer, null, true);
+            timer.update();
         }
 
         if (!requestFutures.stream().allMatch(RequestFuture::isDone)) {
@@ -184,5 +156,45 @@ public class Fetcher<K, V> extends AbstractFetch {
         client.disableWakeups();
         maybeCloseFetchSessions(timer);
         super.closeInternal(timer);
+    }
+
+    /**
+     * Creates the {@link FetchRequest.Builder fetch request},
+     * {@link NetworkClient#send(ClientRequest, long) enqueues/sends it, and adds the {@link RequestFuture callback}
+     * for the response.
+     *
+     * @param fetchRequests  {@link Map} of {@link Node nodes} to their
+     *                       {@link FetchSessionHandler.FetchRequestData request data}
+     * @param successHandler {@link ResponseHandler Handler for successful responses}
+     * @param errorHandler   {@link ResponseHandler Handler for failure responses}
+     * @return List of {@link RequestFuture callbacks}
+     */
+    private List<RequestFuture<ClientResponse>> sendFetchesInternal(Map<Node, FetchSessionHandler.FetchRequestData> fetchRequests,
+                                                                    ResponseHandler<ClientResponse> successHandler,
+                                                                    ResponseHandler<Throwable> errorHandler) {
+        final List<RequestFuture<ClientResponse>> requestFutures = new ArrayList<>();
+
+        for (Map.Entry<Node, FetchSessionHandler.FetchRequestData> entry : fetchRequests.entrySet()) {
+            final Node fetchTarget = entry.getKey();
+            final FetchSessionHandler.FetchRequestData data = entry.getValue();
+            final FetchRequest.Builder request = createFetchRequest(fetchTarget, data);
+            final RequestFuture<ClientResponse> responseFuture = client.send(fetchTarget, request);
+
+            responseFuture.addListener(new RequestFutureListener<ClientResponse>() {
+                @Override
+                public void onSuccess(ClientResponse resp) {
+                    successHandler.handle(fetchTarget, data, resp);
+                }
+
+                @Override
+                public void onFailure(RuntimeException e) {
+                    errorHandler.handle(fetchTarget, data, e);
+                }
+            });
+
+            requestFutures.add(responseFuture);
+        }
+
+        return requestFutures;
     }
 }
