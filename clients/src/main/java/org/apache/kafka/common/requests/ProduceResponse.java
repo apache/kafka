@@ -67,6 +67,8 @@ public class ProduceResponse extends AbstractResponse {
 
     /**
      * Constructor for Version 0
+     * This is deprecated in favor of using the ProduceResponseData constructor, KafkaApis should switch to that
+     * in KAFKA-10730
      * @param responses Produced data grouped by topic-partition
      */
     @Deprecated
@@ -76,6 +78,8 @@ public class ProduceResponse extends AbstractResponse {
 
     /**
      * Constructor for versions <= 9
+     * This is deprecated in favor of using the ProduceResponseData constructor, KafkaApis should switch to that
+     * in KAFKA-10730
      * @param responses Produced data grouped by topic-partition
      * @param throttleTimeMs Time in milliseconds the response was throttled
      */
@@ -86,6 +90,8 @@ public class ProduceResponse extends AbstractResponse {
 
     /**
      * Constructor for the latest version
+     * This is deprecated in favor of using the ProduceResponseData constructor, KafkaApis should switch to that
+     * in KAFKA-10730
      * @param responses Produced data grouped by topic-partition
      * @param throttleTimeMs Time in milliseconds the response was throttled
      * @param nodeEndpoints List of node endpoints
@@ -241,11 +247,7 @@ public class ProduceResponse extends AbstractResponse {
             b.append(", recordErrors: ");
             b.append(recordErrors);
             b.append(", currentLeader: ");
-            if (currentLeader != null) {
-                b.append(currentLeader);
-            } else {
-                b.append("null");
-            }
+            b.append(currentLeader);
             b.append(", errorMessage: ");
             if (errorMessage != null) {
                 b.append(errorMessage);

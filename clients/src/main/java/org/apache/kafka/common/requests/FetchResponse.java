@@ -268,7 +268,6 @@ public class FetchResponse extends AbstractResponse {
                                                Iterator<Map.Entry<TopicIdPartition, FetchResponseData.PartitionData>> partIterator,
                                                List<Node> nodeEndpoints) {
         List<FetchResponseData.FetchableTopicResponse> topicResponseList = new ArrayList<>();
-        FetchResponseData data = new FetchResponseData();
         while (partIterator.hasNext()) {
             Map.Entry<TopicIdPartition, FetchResponseData.PartitionData> entry = partIterator.next();
             FetchResponseData.PartitionData partitionData = entry.getValue();
@@ -289,10 +288,12 @@ public class FetchResponse extends AbstractResponse {
                     .setPartitions(partitionResponses));
             }
         }
+        FetchResponseData data = new FetchResponseData();
         data.setThrottleTimeMs(throttleTimeMs)
                 .setErrorCode(error.code())
                 .setSessionId(sessionId)
                 .setResponses(topicResponseList);
+        // KafkaApis should only pass in node endpoints on error, otherwise this should be an empty list
         nodeEndpoints.forEach(endpoint -> data.nodeEndpoints().add(
                 new FetchResponseData.NodeEndpoint()
                         .setNodeId(endpoint.id())
