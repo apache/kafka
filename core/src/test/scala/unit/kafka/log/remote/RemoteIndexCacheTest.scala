@@ -22,13 +22,14 @@ import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType
 import org.apache.kafka.server.log.remote.storage.{RemoteLogSegmentId, RemoteLogSegmentMetadata, RemoteResourceNotFoundException, RemoteStorageManager}
 import org.apache.kafka.server.util.MockTime
-import org.apache.kafka.storage.internals.log.RemoteIndexCache.{REMOTE_LOG_INDEX_CACHE_CLEANER_THREAD, remoteOffsetIndexFile, remoteOffsetIndexFileName, remoteTimeIndexFile, remoteTimeIndexFileName, remoteTransactionIndexFile, remoteTransactionIndexFileName}
+import org.apache.kafka.storage.internals.log.RemoteIndexCache.{DIR_NAME, REMOTE_LOG_INDEX_CACHE_CLEANER_THREAD, remoteOffsetIndexFile, remoteOffsetIndexFileName, remoteTimeIndexFile, remoteTimeIndexFileName, remoteTransactionIndexFile, remoteTransactionIndexFileName}
 import org.apache.kafka.storage.internals.log.{LogFileUtils, OffsetIndex, OffsetPosition, RemoteIndexCache, TimeIndex, TransactionIndex}
 import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.ArgumentMatchers
 import org.mockito.ArgumentMatchers.any
+import org.mockito.invocation.InvocationOnMock
 import org.mockito.Mockito._
 import org.slf4j.{Logger, LoggerFactory}
 
@@ -132,7 +133,7 @@ class RemoteIndexCacheTest {
     // this call should have invoked fetchOffsetIndex, fetchTimestampIndex once
     val resultPosition = cache.lookupOffset(rlsMetadata, offsetPosition1.offset)
     assertEquals(offsetPosition1.position, resultPosition)
-    verifyFetchIndexInvocation(count = 1, Seq(IndexType.OFFSET, IndexType.TIMESTAMP))
+    verifyFetchIndexInvocation(count = 1, Seq(IndexType.OFFSET))
 
     // this should not cause fetching index from RemoteStorageManager as it is already fetched earlier
     reset(rsm)
@@ -196,13 +197,13 @@ class RemoteIndexCacheTest {
     // Calling getIndex on the same entry should not call rsm#fetchIndex again, but it should retrieve from cache
     cache.getIndexEntry(metadataList.head)
     assertCacheSize(1)
-    verifyFetchIndexInvocation(count = 1)
+    verifyFetchIndexInvocation(count = 1, indexTypes = Seq(IndexType.OFFSET))
 
     // Here a new key metadataList(1) is invoked, that should call rsm#fetchIndex, making the count to 2
     cache.getIndexEntry(metadataList.head)
     cache.getIndexEntry(metadataList(1))
     assertCacheSize(2)
-    verifyFetchIndexInvocation(count = 2)
+    verifyFetchIndexInvocation(count = 2, indexTypes = Seq(IndexType.OFFSET))
 
     // Getting index for metadataList.last should call rsm#fetchIndex
     // to populate this entry one of the other 2 entries will be evicted. We don't know which one since it's based on
@@ -210,7 +211,7 @@ class RemoteIndexCacheTest {
     assertNotNull(cache.getIndexEntry(metadataList.last))
     assertAtLeastOnePresent(cache, metadataList(1).remoteLogSegmentId().id(), metadataList.head.remoteLogSegmentId().id())
     assertCacheSize(2)
-    verifyFetchIndexInvocation(count = 3)
+    verifyFetchIndexInvocation(count = 3, indexTypes = Seq(IndexType.OFFSET))
 
     // getting index for last expired entry should call rsm#fetchIndex as that entry was expired earlier
     val missingEntryOpt = {
@@ -222,7 +223,7 @@ class RemoteIndexCacheTest {
     assertFalse(missingEntryOpt.isEmpty)
     cache.getIndexEntry(missingEntryOpt.get)
     assertCacheSize(2)
-    verifyFetchIndexInvocation(count = 4)
+    verifyFetchIndexInvocation(count = 4, indexTypes = Seq(IndexType.OFFSET))
   }
 
   @Test
@@ -237,7 +238,7 @@ class RemoteIndexCacheTest {
     assertCacheSize(0)
     cache.getIndexEntry(metadataList.head)
     assertCacheSize(1)
-    verifyFetchIndexInvocation(count = 1)
+    verifyFetchIndexInvocation(count = 1, indexTypes = Seq(IndexType.OFFSET))
 
     cache.close()
 
@@ -259,7 +260,7 @@ class RemoteIndexCacheTest {
   }
 
   @Test
-  def testCacheEntryIsDeletedOnInvalidation(): Unit = {
+  def testCacheEntryIsDeletedOnRemoval(): Unit = {
     def getIndexFileFromDisk(suffix: String) = {
       Files.walk(tpDir.toPath)
         .filter(Files.isRegularFile(_))
@@ -281,14 +282,8 @@ class RemoteIndexCacheTest {
     // no expired entries yet
     assertEquals(0, cache.expiredIndexes.size, "expiredIndex queue should be zero at start of test")
 
-    // invalidate the cache. it should async mark the entry for removal
-    cache.internalCache.invalidate(internalIndexKey)
-
-    // wait until entry is marked for deletion
-    TestUtils.waitUntilTrue(() => cacheEntry.isMarkedForCleanup,
-      "Failed to mark cache entry for cleanup after invalidation")
-    TestUtils.waitUntilTrue(() => cacheEntry.isCleanStarted,
-      "Failed to cleanup cache entry after invalidation")
+    // call remove function to mark the entry for removal
+    cache.remove(internalIndexKey)
 
     // first it will be marked for cleanup, second time markForCleanup is called when cleanup() is called
     verify(cacheEntry, times(2)).markForCleanup()
@@ -378,7 +373,7 @@ class RemoteIndexCacheTest {
     // getIndex for first time will call rsm#fetchIndex
     cache.getIndexEntry(metadataList.head)
     assertCacheSize(1)
-    verifyFetchIndexInvocation(count = 1, Seq(IndexType.OFFSET, IndexType.TIMESTAMP))
+    verifyFetchIndexInvocation(count = 1, Seq(IndexType.OFFSET))
     reset(rsm)
 
     // Simulate a concurrency situation where one thread is reading the entry already present in the cache (cache hit)
@@ -443,7 +438,7 @@ class RemoteIndexCacheTest {
     // Calling getIndex on the same entry should not call rsm#fetchIndex again, but it should retrieve from cache
     cache.getIndexEntry(metadataList.head)
     assertCacheSize(1)
-    verifyFetchIndexInvocation(count = 1)
+    verifyFetchIndexInvocation(count = 1, indexTypes = Seq(IndexType.OFFSET))
 
     // Here a new key metadataList(1) is invoked, that should call rsm#fetchIndex, making the count to 2
     cache.getIndexEntry(metadataList(1))
@@ -451,7 +446,7 @@ class RemoteIndexCacheTest {
     // Calling getIndex on the same entry should not call rsm#fetchIndex again, but it should retrieve from cache
     cache.getIndexEntry(metadataList(1))
     assertCacheSize(2)
-    verifyFetchIndexInvocation(count = 2)
+    verifyFetchIndexInvocation(count = 2, indexTypes = Seq(IndexType.OFFSET))
 
     // Here a new key metadataList(2) is invoked, that should call rsm#fetchIndex
     // The cache max size is 2, it will remove one entry and keep the overall size to 2
@@ -460,7 +455,7 @@ class RemoteIndexCacheTest {
     // Calling getIndex on the same entry should not call rsm#fetchIndex again, but it should retrieve from cache
     cache.getIndexEntry(metadataList(2))
     assertCacheSize(2)
-    verifyFetchIndexInvocation(count = 3)
+    verifyFetchIndexInvocation(count = 3, indexTypes = Seq(IndexType.OFFSET))
 
     // Close the cache
     cache.close()
@@ -538,7 +533,75 @@ class RemoteIndexCacheTest {
     assertEquals(RemoteIndexCache.DIR_NAME, offsetIndexFile.getParent.getFileName.toString,
       s"offsetIndex=$offsetIndexFile is not overwrite under incorrect parent")
     // file is corrupted it should fetch from remote storage again
-    verifyFetchIndexInvocation(count = 1)
+    verifyFetchIndexInvocation(count = 1, indexTypes = Seq(IndexType.OFFSET))
+  }
+
+  @Test
+  def testConcurrentRemoveReadForCache(): Unit = {
+    // Create a spy Cache Entry
+    val rlsMetadata = new RemoteLogSegmentMetadata(RemoteLogSegmentId.generateNew(idPartition), baseOffset, lastOffset,
+      time.milliseconds(), brokerId, time.milliseconds(), segmentSize, Collections.singletonMap(0, 0L))
+
+    val timeIndex = spy(createTimeIndexForSegmentMetadata(rlsMetadata))
+    val txIndex = spy(createTxIndexForSegmentMetadata(rlsMetadata))
+    val offsetIndex = spy(createOffsetIndexForSegmentMetadata(rlsMetadata))
+
+    val spyEntry = spy(new RemoteIndexCache.Entry(offsetIndex, timeIndex, txIndex))
+    cache.internalCache.put(rlsMetadata.remoteLogSegmentId().id(), spyEntry)
+
+    assertCacheSize(1)
+
+    val latchForCacheRead = new CountDownLatch(1)
+    val latchForCacheRemove = new CountDownLatch(1)
+    val latchForTestWait = new CountDownLatch(1)
+
+    var markForCleanupCallCount = 0
+
+    doAnswer((invocation: InvocationOnMock) => {
+      markForCleanupCallCount += 1
+
+      if (markForCleanupCallCount == 1) {
+        // Signal the CacheRead to unblock itself
+        latchForCacheRead.countDown()
+        // Wait for signal to start renaming the files
+        latchForCacheRemove.await()
+        // Calling the markForCleanup() actual method to start renaming the files
+        invocation.callRealMethod()
+        // Signal TestWait to unblock itself so that test can be completed
+        latchForTestWait.countDown()
+      } else {
+        // Subsequent call for markForCleanup method
+        latchForCacheRead.countDown()
+        latchForCacheRemove.countDown()
+      }
+    }).when(spyEntry).markForCleanup()
+
+    val removeCache = (() => {
+      cache.remove(rlsMetadata.remoteLogSegmentId().id())
+    }): Runnable
+
+    val readCache = (() => {
+      // Wait for signal to start CacheRead
+      latchForCacheRead.await()
+      cache.getIndexEntry(rlsMetadata)
+      // Signal the CacheRemove to start renaming the files
+      latchForCacheRemove.countDown()
+    }): Runnable
+
+    val executor = Executors.newFixedThreadPool(2)
+    try {
+      executor.submit(removeCache: Runnable)
+      executor.submit(readCache: Runnable)
+
+      // Wait for signal to complete the test
+      latchForTestWait.await()
+      assertCacheSize(1)
+      val entry = cache.getIndexEntry(rlsMetadata)
+      assertTrue(Files.exists(entry.offsetIndex().file().toPath))
+    } finally {
+      executor.shutdownNow()
+    }
+
   }
 
   private def generateSpyCacheEntry(remoteLogSegmentId: RemoteLogSegmentId
@@ -568,27 +631,26 @@ class RemoteIndexCacheTest {
   }
 
   private def verifyFetchIndexInvocation(count: Int,
-                                         indexTypes: Seq[IndexType] =
-                                         Seq(IndexType.OFFSET, IndexType.TIMESTAMP, IndexType.TRANSACTION)): Unit = {
+                                         indexTypes: Seq[IndexType]): Unit = {
     for (indexType <- indexTypes) {
       verify(rsm, times(count)).fetchIndex(any(classOf[RemoteLogSegmentMetadata]), ArgumentMatchers.eq(indexType))
     }
   }
 
   private def createTxIndexForSegmentMetadata(metadata: RemoteLogSegmentMetadata): TransactionIndex = {
-    val txnIdxFile = remoteTransactionIndexFile(tpDir, metadata)
+    val txnIdxFile = remoteTransactionIndexFile(new File(tpDir, DIR_NAME), metadata)
     txnIdxFile.createNewFile()
     new TransactionIndex(metadata.startOffset(), txnIdxFile)
   }
 
   private def createTimeIndexForSegmentMetadata(metadata: RemoteLogSegmentMetadata): TimeIndex = {
     val maxEntries = (metadata.endOffset() - metadata.startOffset()).asInstanceOf[Int]
-    new TimeIndex(remoteTimeIndexFile(tpDir, metadata), metadata.startOffset(), maxEntries * 12)
+    new TimeIndex(remoteTimeIndexFile(new File(tpDir, DIR_NAME), metadata), metadata.startOffset(), maxEntries * 12)
   }
 
   private def createOffsetIndexForSegmentMetadata(metadata: RemoteLogSegmentMetadata) = {
     val maxEntries = (metadata.endOffset() - metadata.startOffset()).asInstanceOf[Int]
-    new OffsetIndex(remoteOffsetIndexFile(tpDir, metadata), metadata.startOffset(), maxEntries * 8)
+    new OffsetIndex(remoteOffsetIndexFile(new File(tpDir, DIR_NAME), metadata), metadata.startOffset(), maxEntries * 8)
   }
 
   private def generateRemoteLogSegmentMetadata(size: Int,

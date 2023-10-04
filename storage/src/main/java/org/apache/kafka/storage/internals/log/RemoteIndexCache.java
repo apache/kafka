@@ -134,7 +134,7 @@ public class RemoteIndexCache implements Closeable {
                 .maximumSize(maxSize)
                 // removeListener is invoked when either the entry is invalidated (means manual removal by the caller) or
                 // evicted (means removal due to the policy)
-                .removalListener((Uuid key, Entry entry, RemovalCause cause) -> {
+                .evictionListener((Uuid key, Entry entry, RemovalCause cause) -> {
                     // Mark the entries for cleanup and add them to the queue to be garbage collected later by the background thread.
                     if (entry != null) {
                         try {
@@ -169,7 +169,16 @@ public class RemoteIndexCache implements Closeable {
     public void remove(Uuid key) {
         lock.readLock().lock();
         try {
-            internalCache.invalidate(key);
+            internalCache.asMap().computeIfPresent(key, (k, v) -> {
+                try {
+                    v.markForCleanup();
+                    v.cleanup();
+                } catch (IOException e) {
+                    throw new KafkaException(e);
+                }
+                // Returning null to remove the key from the cache
+                return null;
+            });
         } finally {
             lock.readLock().unlock();
         }
@@ -178,7 +187,16 @@ public class RemoteIndexCache implements Closeable {
     public void removeAll(Collection<Uuid> keys) {
         lock.readLock().lock();
         try {
-            internalCache.invalidateAll(keys);
+            keys.forEach(key -> internalCache.asMap().computeIfPresent(key, (k, v) -> {
+                try {
+                    v.markForCleanup();
+                    v.cleanup();
+                } catch (IOException e) {
+                    throw new KafkaException(e);
+                }
+                // Returning null to remove the key from the cache
+                return null;
+            }));
         } finally {
             lock.readLock().unlock();
         }
