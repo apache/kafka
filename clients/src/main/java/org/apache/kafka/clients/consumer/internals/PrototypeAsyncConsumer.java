@@ -834,8 +834,11 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
 
         fetchBuffer.retainAll(currentTopicPartitions);
 
-        // make sure the offsets of topic partitions the consumer is unsubscribing from
-        // are committed since there will be no following rebalance
+        // assignment change event will trigger autocommit if it is configured and the group id is specified. This is
+        // to make sure offsets of topic partitions the consumer is unsubscribing from are committed since there will
+        // be no following rebalance.
+        //
+        // See the ApplicationEventProcessor.process() method that handles this event for more detail.
         applicationEventHandler.add(new AssignmentChangeApplicationEvent(subscriptions.allConsumed(), time.milliseconds()));
 
         log.info("Assigned to partition(s): {}", join(partitions, ", "));
