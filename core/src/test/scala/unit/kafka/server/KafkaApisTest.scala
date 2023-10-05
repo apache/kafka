@@ -2390,7 +2390,6 @@ class KafkaApisTest {
         any(),
         any(),
         any(),
-        any(),
         any())
       ).thenAnswer(_ => responseCallback.getValue.apply(Map(tp -> new PartitionResponse(Errors.NOT_LEADER_OR_FOLLOWER))))
 
