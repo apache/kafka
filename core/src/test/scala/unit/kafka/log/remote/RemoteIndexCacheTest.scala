@@ -623,12 +623,12 @@ class RemoteIndexCacheTest {
     verifyFetchIndexInvocation(1, Seq(IndexType.OFFSET, IndexType.TIMESTAMP))
     verifyFetchIndexInvocation(0, Seq(IndexType.TRANSACTION))
     // However cache fetch failed
-    // but it has  already created offset and time index file in remote cache dir.
+    // but it has already created offset and time index file in remote cache dir.
     // Current status
-    // ( cache  is null)
+    // (cache is null)
     // RemoteCacheDir contain
-    // 1. Offset Index File which is fine and not corrupted
-    // 2. Time Index File which is corrupted
+    // 1. Offset Index File is fine and not corrupted
+    // 2. Time Index File is corrupted
     // What should be the code flow in next execution
     // 1. No rsm call for fetching OffSet Index File.
     // 2. Time index file should be fetched from remote storage again as it is corrupted in the first execution.
@@ -656,7 +656,7 @@ class RemoteIndexCacheTest {
       })
     cache.getIndexEntry(rlsMetadata)
     // No exception should occur
-    // Offset rsm 0,TimeIndex 1 , TxnIndex 1
+    // rsm should not be called for offset Index
     verifyFetchIndexInvocation(0, Seq(IndexType.OFFSET))
     verifyFetchIndexInvocation(1, Seq(IndexType.TIMESTAMP))
     verifyFetchIndexInvocation(1, Seq(IndexType.TRANSACTION))
@@ -700,10 +700,8 @@ class RemoteIndexCacheTest {
     // validate cache entry for the above key should be null
     assertNull(cache.internalCache().getIfPresent(rlsMetadata.remoteLogSegmentId().id()))
     cache.getIndexEntry(rlsMetadata)
-    // Index  Files already exist
-    // rsm should not be called again
-    // instead files exist on disk
-    // should be used
+    // Index  Files already exist ,rsm should not be called again
+    // instead files exist on disk should be used
     verifyFetchIndexInvocation(count = 1)
     // verify index files on disk
     assertTrue(getRemoteCacheIndexFileFromDisk(LogFileUtils.INDEX_FILE_SUFFIX).isPresent, s"Offset index file should be present on disk at ${remoteIndexCacheDir.toPath}")
