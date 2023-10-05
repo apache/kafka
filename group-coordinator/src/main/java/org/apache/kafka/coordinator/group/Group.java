@@ -19,6 +19,8 @@ package org.apache.kafka.coordinator.group;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 
+import java.util.List;
+
 /**
  * Interface common for all groups.
  */
@@ -90,4 +92,29 @@ public interface Group {
         int memberEpoch,
         long lastCommittedOffset
     ) throws KafkaException;
+
+    /**
+     * Validates the OffsetDelete request.
+     */
+    void validateOffsetDelete() throws KafkaException;
+
+    /**
+     * Validates the DeleteGroups request.
+     */
+    void validateDeleteGroup() throws KafkaException;
+
+    /**
+     * Returns true if the group is actively subscribed to the topic.
+     *
+     * @param topic The topic name.
+     * @return Whether the group is subscribed to the topic.
+     */
+    boolean isSubscribedToTopic(String topic);
+    
+    /**
+     * Populates the list of records with tombstone(s) for deleting the group.
+     *
+     * @param records The list of records.
+     */
+    void createGroupTombstoneRecords(List<Record> records);
 }

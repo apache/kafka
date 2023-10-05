@@ -55,6 +55,7 @@ import org.apache.kafka.common.errors.GroupSubscribedToTopicException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.LogDirNotFoundException;
+import org.apache.kafka.common.errors.MismatchedEndpointTypeException;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.errors.SecurityDisabledException;
@@ -281,6 +282,55 @@ public class KafkaAdminClientTest {
         KafkaException exception = assertThrows(KafkaException.class,
             () -> KafkaAdminClient.createInternal(config, null));
         assertTrue(exception.getCause() instanceof ConfigException);
+    }
+
+    @Test
+    public void testParseDescribeClusterResponseWithError() {
+        assertThrows(MismatchedEndpointTypeException.class,
+            () -> KafkaAdminClient.parseDescribeClusterResponse(new DescribeClusterResponseData().
+                setErrorCode(Errors.MISMATCHED_ENDPOINT_TYPE.code()).
+                setErrorMessage("The request was sent to an endpoint of type BROKER, " +
+                        "but we wanted an endpoint of type CONTROLLER")));
+    }
+
+    @Test
+    public void testParseDescribeClusterResponseWithUnexpectedEndpointType() {
+        assertThrows(MismatchedEndpointTypeException.class,
+            () -> KafkaAdminClient.parseDescribeClusterResponse(new DescribeClusterResponseData().
+                    setEndpointType(EndpointType.BROKER.id())));
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testParseSuccessfulDescribeClusterResponse(boolean includeController) {
+        Cluster cluster = KafkaAdminClient.parseDescribeClusterResponse(new DescribeClusterResponseData().
+            setControllerId(includeController ? 0 : -1).
+            setEndpointType(EndpointType.CONTROLLER.id()).
+            setClusterId("Ek8tjqq1QBWfnaoyHFZqDg").
+            setBrokers(new DescribeClusterResponseData.DescribeClusterBrokerCollection(Arrays.asList(
+                new DescribeClusterBroker().
+                    setBrokerId(0).
+                    setHost("controller0.com").
+                    setPort(9092),
+                new DescribeClusterBroker().
+                    setBrokerId(1).
+                    setHost("controller1.com").
+                    setPort(9092),
+                new DescribeClusterBroker().
+                    setBrokerId(2).
+                    setHost("controller2.com").
+                    setPort(9092)).iterator())));
+        if (includeController) {
+            assertNotNull(cluster.controller());
+            assertEquals(0, cluster.controller().id());
+        } else {
+            assertNull(cluster.controller());
+        }
+        assertEquals("Ek8tjqq1QBWfnaoyHFZqDg", cluster.clusterResource().clusterId());
+        assertEquals(new HashSet<>(Arrays.asList(
+            new Node(0, "controller0.com", 9092),
+            new Node(1, "controller1.com", 9092),
+            new Node(2, "controller2.com", 9092))), new HashSet<>(cluster.nodes()));
     }
 
     @Test

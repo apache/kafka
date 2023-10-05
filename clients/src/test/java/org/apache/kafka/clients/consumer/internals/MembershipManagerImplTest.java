@@ -190,7 +190,7 @@ public class MembershipManagerImplTest {
 
     private ConsumerGroupHeartbeatResponseData.Assignment createAssignment() {
         return new ConsumerGroupHeartbeatResponseData.Assignment()
-                .setAssignedTopicPartitions(Arrays.asList(
+                .setTopicPartitions(Arrays.asList(
                         new ConsumerGroupHeartbeatResponseData.TopicPartitions()
                                 .setTopicId(Uuid.randomUuid())
                                 .setPartitions(Arrays.asList(0, 1, 2)),

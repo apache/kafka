@@ -20,6 +20,7 @@ package kafka.server
 import kafka.network.RequestChannel
 import kafka.raft.RaftManager
 import kafka.server.QuotaFactory.QuotaManagers
+import kafka.server.metadata.KRaftMetadataCache
 import kafka.test.MockController
 import kafka.utils.NotNothing
 import org.apache.kafka.clients.admin.AlterConfigOp
@@ -60,6 +61,7 @@ import org.junit.jupiter.params.provider.ValueSource
 import org.mockito.ArgumentMatchers._
 import org.mockito.Mockito._
 import org.mockito.{ArgumentCaptor, ArgumentMatchers}
+import org.slf4j.LoggerFactory
 
 import java.net.InetAddress
 import java.util
@@ -72,6 +74,8 @@ import scala.jdk.CollectionConverters._
 import scala.reflect.ClassTag
 
 class ControllerApisTest {
+  val logger = LoggerFactory.getLogger(classOf[ControllerApisTest])
+
   object MockControllerMutationQuota {
     val errorMessage = "quota exceeded in test"
     var throttleTimeMs = 1000
@@ -117,6 +121,7 @@ class ControllerApisTest {
   )
   private val replicaQuotaManager: ReplicationQuotaManager = mock(classOf[ReplicationQuotaManager])
   private val raftManager: RaftManager[ApiMessageAndVersion] = mock(classOf[RaftManager[ApiMessageAndVersion]])
+  private val metadataCache: KRaftMetadataCache = MetadataCache.kRaftMetadataCache(0)
 
   private val quotasNeverThrottleControllerMutations = QuotaManagers(
     clientQuotaManager,
@@ -160,7 +165,8 @@ class ControllerApisTest {
         ListenerType.CONTROLLER,
         true,
         false,
-        () => Features.fromKRaftVersion(MetadataVersion.latest()))
+        () => Features.fromKRaftVersion(MetadataVersion.latest())),
+      metadataCache
     )
   }
 
@@ -487,16 +493,17 @@ class ControllerApisTest {
       response.data().responses().asScala.toSet)
   }
 
-  @Test
-  def testInvalidIncrementalAlterConfigsResources(): Unit = {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(false, true))
+  def testInvalidIncrementalAlterConfigsResources(denyAllAuthorizer: Boolean): Unit = {
     val requestData = new IncrementalAlterConfigsRequestData().setResources(
       new AlterConfigsResourceCollection(util.Arrays.asList(
         new AlterConfigsResource().
           setResourceName("1").
           setResourceType(ConfigResource.Type.BROKER_LOGGER.id()).
           setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
-            setName("kafka.server.KafkaConfig").
-            setValue("TRACE").
+            setName("kafka.server.ControllerApisTest").
+            setValue("DEBUG").
             setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator())),
         new AlterConfigsResource().
           setResourceName("3").
@@ -521,7 +528,12 @@ class ControllerApisTest {
             setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator())),
         ).iterator()))
     val request = buildRequest(new IncrementalAlterConfigsRequest.Builder(requestData).build(0))
-    createControllerApis(Some(createDenyAllAuthorizer()),
+    val authorizer = if (denyAllAuthorizer) {
+      Some(createDenyAllAuthorizer())
+    } else {
+      None
+    }
+    createControllerApis(authorizer,
       new MockController.Builder().build()).handleIncrementalAlterConfigs(request)
     val capturedResponse: ArgumentCaptor[AbstractResponse] =
       ArgumentCaptor.forClass(classOf[AbstractResponse])
@@ -533,8 +545,8 @@ class ControllerApisTest {
     val response = capturedResponse.getValue.asInstanceOf[IncrementalAlterConfigsResponse]
     assertEquals(Set(
       new AlterConfigsResourceResponse().
-        setErrorCode(INVALID_REQUEST.code()).
-        setErrorMessage("Unexpected resource type BROKER_LOGGER.").
+        setErrorCode(if (denyAllAuthorizer) CLUSTER_AUTHORIZATION_FAILED.code() else NONE.code()).
+        setErrorMessage(if (denyAllAuthorizer) CLUSTER_AUTHORIZATION_FAILED.message() else null).
         setResourceName("1").
         setResourceType(ConfigResource.Type.BROKER_LOGGER.id()),
       new AlterConfigsResourceResponse().

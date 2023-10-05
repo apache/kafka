@@ -150,7 +150,7 @@ abstract class AbstractLogCleanerIntegrationTest {
       // move LSO forward to increase compaction bound
       log.updateHighWatermark(log.logEndOffset)
       incCounter()
-      (key, value, appendInfo.firstOffset.get.messageOffset)
+      (key, value, appendInfo.firstOffset)
     }
   }
 

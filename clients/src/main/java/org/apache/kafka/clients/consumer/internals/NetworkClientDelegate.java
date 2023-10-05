@@ -43,6 +43,7 @@ import java.util.Optional;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.BiConsumer;
 
 /**
  * A wrapper around the {@link org.apache.kafka.clients.NetworkClient} to handle network poll and send operations.
@@ -211,17 +212,19 @@ public class NetworkClientDelegate implements AutoCloseable {
         private Optional<Node> node; // empty if random node can be chosen
         private Timer timer;
 
-        public UnsentRequest(final AbstractRequest.Builder<?> requestBuilder, final Optional<Node> node) {
-            this(requestBuilder, node, new FutureCompletionHandler());
+        public UnsentRequest(final AbstractRequest.Builder<?> requestBuilder,
+                             final Optional<Node> node) {
+            Objects.requireNonNull(requestBuilder);
+            this.requestBuilder = requestBuilder;
+            this.node = node;
+            this.handler = new FutureCompletionHandler();
         }
 
         public UnsentRequest(final AbstractRequest.Builder<?> requestBuilder,
                              final Optional<Node> node,
-                             final FutureCompletionHandler handler) {
-            Objects.requireNonNull(requestBuilder);
-            this.requestBuilder = requestBuilder;
-            this.node = node;
-            this.handler = handler;
+                             final BiConsumer<ClientResponse, Throwable> callback) {
+            this(requestBuilder, node);
+            this.handler.future.whenComplete(callback);
         }
 
         public void setTimer(final Time time, final long requestTimeoutMs) {
@@ -263,10 +266,6 @@ public class NetworkClientDelegate implements AutoCloseable {
             future.completeExceptionally(e);
         }
 
-        public CompletableFuture<ClientResponse> future() {
-            return future;
-        }
-
         @Override
         public void onComplete(final ClientResponse response) {
             if (response.authenticationException() != null) {
@@ -280,5 +279,4 @@ public class NetworkClientDelegate implements AutoCloseable {
             }
         }
     }
-
 }
