@@ -103,7 +103,7 @@ public abstract class EventProcessor<T> implements Closeable {
      */
     private void closeInternal() {
         String eventClassName = getEventClass().getSimpleName();
-        log.debug("Closing {} processor", eventClassName);
+        log.trace("Closing {} processor", eventClassName);
         List<T> incompleteEvents = drain();
 
         if (incompleteEvents.isEmpty())

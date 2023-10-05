@@ -234,7 +234,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
             // the Thread.join method means "wait forever" which isn't what we want.
             try {
                 long remainingMs = timer.remainingMs();
-                log.warn("Waiting up to {} ms for the thread to complete", remainingMs);
+                log.debug("Waiting up to {} ms for the thread to complete", remainingMs);
                 join(remainingMs);
             } catch (InterruptedException e) {
                 throw new InterruptException(e);
