@@ -1980,6 +1980,28 @@ These metrics are reported on both Controllers and Brokers in a KRaft Cluster
     <td>The average fraction of time the client's poll() is idle as opposed to waiting for the user code to process records.</td>
     <td>kafka.server:type=raft-metrics,name=poll-idle-ratio-avg</td>
   </tr>
+  <tr>
+    <td>Current Metadata Version</td>
+    <td>Outputs the feature level of the current effective metadata version.</td>
+    <td>kafka.server:type=MetadataLoader,name=CurrentMetadataVersion</td>
+  </tr>
+  <tr>
+    <td>Metadata Snapshot Load Count</td>
+    <td>The total number of times we have loaded a KRaft snapshot since the process was started.</td>
+    <td>kafka.server:type=MetadataLoader,name=HandleLoadSnapshotCount</td>
+  </tr>
+  <tr>
+    <td>Latest Metadata Snapshot Size</td>
+    <td>The total size in bytes of the latest snapshot that the node has generated. If none have been generated yet, this is the size
+    of the latest snapshot that was loaded. If no snapshots have been generated or loaded, this is 0.</td>
+    <td>kafka.server:type=SnapshotEmitter,name=LatestSnapshotGeneratedBytes</td>
+  </tr>
+  <tr>
+    <td>Latest Metadata Snapshot Age</td>
+    <td>The interval in milliseconds since the latest snapshot that the node has generated. 
+    If none have been generated yet, this is approximately the time delta since the process was started.</td>
+    <td>kafka.server:type=SnapshotEmitter,name=LatestSnapshotGeneratedAgeMs</td>
+  </tr>
   </tbody>
 </table>
 <h5 class="anchor-heading"><a id="kraft_controller_monitoring" class="anchor-link"></a><a href="#kraft_controller_monitoring">KRaft Controller Monitoring Metrics</a></h5>
@@ -2060,6 +2082,44 @@ These metrics are reported on both Controllers and Brokers in a KRaft Cluster
     <td>The difference between now and the timestamp of the last record from the cluster metadata partition that was applied by the controller.
     For active Controllers the value of this lag is always zero.</td>
     <td>kafka.controller:type=KafkaController,name=LastAppliedRecordLagMs</td>
+  </tr>
+  <tr>
+    <td>ZooKeeper Write Behind Lag</td>
+    <td>The amount of lag in records that ZooKeeper is behind relative to the highest committed record in the metadata log. 
+    This metric will only be reported by the active KRaft controller.</td>
+    <td>kafka.controller:type=KafkaController,name=ZkWriteBehindLag</td>
+  </tr>
+  <tr>
+    <td>ZooKeeper Metadata Snapshot Write Time</td>
+    <td>The number of milliseconds the KRaft controller took reconciling a snapshot into ZooKeeper.</td>
+    <td>kafka.controller:type=KafkaController,name=ZkWriteSnapshotTimeMs</td>
+  </tr>
+  <tr>
+    <td>ZooKeeper Metadata Delta Write Time</td>
+    <td>The number of milliseconds the KRaft controller took writing a delta into ZK.</td>
+    <td>kafka.controller:type=KafkaController,name=ZkWriteDeltaTimeMs</td>
+  </tr>
+  <tr>
+    <td>Timed-out Broker Heartbeat Count</td>
+    <td>The number of broker heartbeats that timed out on this controller since the process was started. Note that only 
+    active controllers handle heartbeats, so only they will see increases in this metric.</td>
+    <td>kafka.controller:type=KafkaController,name=TimedOutBrokerHeartbeatCount</td>
+  </tr>
+  <tr>
+    <td>Number Of Operations Started In Event Queue</td>
+    <td>The total number of controller event queue operations that were started. This includes deferred operations.</td>
+    <td>kafka.controller:type=KafkaController,name=EventQueueOperationsStartedCount</td>
+  </tr>
+  <tr>
+    <td>Number of Operations Timed Out In Event Queue</td>
+    <td>The total number of controller event queue operations that timed out before they could be performed.</td>
+    <td>kafka.controller:type=KafkaController,name=EventQueueOperationsTimedOutCount</td>
+  </tr>
+  <tr>
+    <td>Number Of New Controller Elections</td>
+    <td>Counts the number of times this node has seen a new controller elected. A transition to the "no leader" state 
+    is not counted here. If the same controller as before becomes active, that still counts.</td>
+    <td>kafka.controller:type=KafkaController,name=NewActiveControllersCount</td>
   </tr>
   </tbody>
 </table>

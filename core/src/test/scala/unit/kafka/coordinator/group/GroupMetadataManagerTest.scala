@@ -50,6 +50,8 @@ import org.apache.kafka.server.util.{KafkaScheduler, MockTime}
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, FetchIsolation, LogAppendInfo, LogOffsetMetadata}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.EnumSource
 import org.mockito.{ArgumentCaptor, ArgumentMatchers}
 import org.mockito.ArgumentMatchers.{any, anyInt, anyLong, anyShort}
 import org.mockito.Mockito.{mock, reset, times, verify, when}
@@ -1311,6 +1313,7 @@ class GroupMetadataManagerTest {
     val offset = 37
     val producerId = 232L
     val producerEpoch = 0.toShort
+    val transactionalId = "txnId"
 
     groupMetadataManager.addOwnedPartition(groupPartitionId)
 
@@ -1327,7 +1330,7 @@ class GroupMetadataManagerTest {
       commitErrors = Some(errors)
     }
 
-    groupMetadataManager.storeOffsets(group, memberId, offsets, callback, producerId, producerEpoch)
+    groupMetadataManager.storeOffsets(group, memberId, offsets, callback, transactionalId, producerId, producerEpoch)
     assertTrue(group.hasOffsets)
     assertTrue(group.allOffsets.isEmpty)
 
@@ -1340,7 +1343,7 @@ class GroupMetadataManagerTest {
       any[Option[ReentrantLock]],
       any(),
       any(),
-      any(),
+      ArgumentMatchers.eq(transactionalId),
       any())
     verify(replicaManager).getMagic(any())
     capturedResponseCallback.getValue.apply(Map(groupTopicPartition ->
@@ -1362,6 +1365,7 @@ class GroupMetadataManagerTest {
     val offset = 37
     val producerId = 232L
     val producerEpoch = 0.toShort
+    val transactionalId = "txnId"
 
     groupMetadataManager.addOwnedPartition(groupPartitionId)
 
@@ -1377,7 +1381,7 @@ class GroupMetadataManagerTest {
       commitErrors = Some(errors)
     }
 
-    groupMetadataManager.storeOffsets(group, memberId, offsets, callback, producerId, producerEpoch)
+    groupMetadataManager.storeOffsets(group, memberId, offsets, callback, transactionalId, producerId, producerEpoch)
     assertTrue(group.hasOffsets)
     assertTrue(group.allOffsets.isEmpty)
     val capturedResponseCallback = verifyAppendAndCaptureCallback()
@@ -1400,7 +1404,7 @@ class GroupMetadataManagerTest {
       any[Option[ReentrantLock]],
       any(),
       any(),
-      any(),
+      ArgumentMatchers.eq(transactionalId),
       any())
     verify(replicaManager).getMagic(any())
   }
@@ -1412,6 +1416,7 @@ class GroupMetadataManagerTest {
     val offset = 37
     val producerId = 232L
     val producerEpoch = 0.toShort
+    val transactionalId = "txnId"
 
     groupMetadataManager.addOwnedPartition(groupPartitionId)
 
@@ -1427,7 +1432,7 @@ class GroupMetadataManagerTest {
       commitErrors = Some(errors)
     }
 
-    groupMetadataManager.storeOffsets(group, memberId, offsets, callback, producerId, producerEpoch)
+    groupMetadataManager.storeOffsets(group, memberId, offsets, callback, transactionalId, producerId, producerEpoch)
     assertTrue(group.hasOffsets)
     assertTrue(group.allOffsets.isEmpty)
     val capturedResponseCallback = verifyAppendAndCaptureCallback()
@@ -1450,7 +1455,61 @@ class GroupMetadataManagerTest {
       any[Option[ReentrantLock]],
       any(),
       any(),
+      ArgumentMatchers.eq(transactionalId),
+      any())
+    verify(replicaManager).getMagic(any())
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = classOf[Errors], names = Array("INVALID_TXN_STATE", "INVALID_PRODUCER_ID_MAPPING"))
+  def testTransactionalCommitOffsetTransactionalErrors(error: Errors): Unit = {
+    val memberId = ""
+    val topicIdPartition = new TopicIdPartition(Uuid.randomUuid(), 0, "foo")
+    val offset = 37
+    val producerId = 232L
+    val producerEpoch = 0.toShort
+    val transactionalId = "txnId"
+
+    groupMetadataManager.addOwnedPartition(groupPartitionId)
+
+    val group = new GroupMetadata(groupId, Empty, time)
+    groupMetadataManager.addGroup(group)
+
+    val offsets = immutable.Map(topicIdPartition -> OffsetAndMetadata(offset, "", time.milliseconds()))
+
+    when(replicaManager.getMagic(any())).thenReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
+
+    var commitErrors: Option[immutable.Map[TopicIdPartition, Errors]] = None
+    def callback(errors: immutable.Map[TopicIdPartition, Errors]): Unit = {
+      commitErrors = Some(errors)
+    }
+
+    groupMetadataManager.storeOffsets(group, memberId, offsets, callback, transactionalId, producerId, producerEpoch)
+    assertTrue(group.hasOffsets)
+    assertTrue(group.allOffsets.isEmpty)
+    val capturedResponseCallback = verifyAppendAndCaptureCallback()
+    capturedResponseCallback.getValue.apply(Map(groupTopicPartition ->
+      new PartitionResponse(error, 0L, RecordBatch.NO_TIMESTAMP, 0L)))
+
+    assertFalse(group.hasOffsets)
+    assertTrue(group.allOffsets.isEmpty)
+
+    group.completePendingTxnOffsetCommit(producerId, isCommit = false)
+    assertFalse(group.hasOffsets)
+    assertTrue(group.allOffsets.isEmpty)
+    assertFalse(commitErrors.contains(topicIdPartition))
+    assertEquals(error, commitErrors.get(topicIdPartition))
+
+    verify(replicaManager).appendRecords(anyLong(),
+      anyShort(),
+      internalTopicsAllowed = ArgumentMatchers.eq(true),
+      origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
+      any[Map[TopicPartition, MemoryRecords]],
       any(),
+      any[Option[ReentrantLock]],
+      any(),
+      any(),
+      ArgumentMatchers.eq(transactionalId),
       any())
     verify(replicaManager).getMagic(any())
   }

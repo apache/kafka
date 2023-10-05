@@ -235,7 +235,7 @@
               files="(EosV2UpgradeIntegrationTest|KStreamKStreamJoinTest|KTableKTableForeignKeyJoinIntegrationTest|KTableKTableForeignKeyVersionedJoinIntegrationTest|RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest|RelationalSmokeTest|MockProcessorContextStateStoreTest).java"/>
 
     <suppress checks="JavaNCSS"
-              files="(EosV2UpgradeIntegrationTest|KStreamKStreamJoinTest|StreamThreadTest|TaskManagerTest).java"/>
+              files="(EosV2UpgradeIntegrationTest|KStreamKStreamJoinTest|StreamThreadTest|TaskManagerTest|StreamTaskTest).java"/>
 
     <suppress checks="NPathComplexity"
               files="(EosV2UpgradeIntegrationTest|EosTestDriver|KStreamKStreamJoinTest|KTableKTableForeignKeyJoinIntegrationTest|KTableKTableForeignKeyVersionedJoinIntegrationTest|RelationalSmokeTest|MockProcessorContextStateStoreTest|TopologyTestDriverTest).java"/>
@@ -326,11 +326,11 @@
     <suppress checks="(NPathComplexity|MethodLength)"
               files="(GroupMetadataManager|ConsumerGroupTest|GroupMetadataManagerTest).java"/>
     <suppress checks="ClassFanOutComplexity"
-              files="(GroupMetadataManager|GroupMetadataManagerTest|GroupCoordinatorServiceTest).java"/>
+              files="(GroupMetadataManager|GroupMetadataManagerTest|GroupCoordinatorService|GroupCoordinatorServiceTest).java"/>
     <suppress checks="ParameterNumber"
               files="(ConsumerGroupMember|GroupMetadataManager).java"/>
     <suppress checks="ClassDataAbstractionCouplingCheck"
-              files="(RecordHelpersTest|GroupMetadataManager|GroupMetadataManagerTest|GroupCoordinatorServiceTest).java"/>
+              files="(RecordHelpersTest|GroupMetadataManager|GroupMetadataManagerTest|GroupCoordinatorServiceTest|GroupCoordinatorShardTest).java"/>
     <suppress checks="JavaNCSS"
               files="GroupMetadataManagerTest.java"/>
 
