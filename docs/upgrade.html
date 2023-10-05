@@ -146,7 +146,7 @@
         </li>
         <li>Note that cluster metadata downgrade is not supported, although it might be possible to do a safe downgrade in some cases.
             Every <a href="https://github.com/apache/kafka/blob/trunk/server-common/src/main/java/org/apache/kafka/server/common/MetadataVersion.java">MetadataVersion</a>
-            after 3.2.x has a boolean parameter that indicates if there are metadata changes (i.e. <code>IBP_3_3_IV3(7, "3.3", "IV3", true)</code>).
+            after 3.2.x has a boolean parameter that indicates if there are metadata changes (i.e. <code>IBP_3_3_IV3(7, "3.3", "IV3", true)</code> means this version has metadata changes).
             Given your current and target versions, a downgrade is only possible if no version in between has metadata changes.</li>
     </ol>
 
@@ -209,7 +209,7 @@
         </li>
         <li>Note that cluster metadata downgrade is not supported, although it might be possible to do a safe downgrade in some cases.
             Every <a href="https://github.com/apache/kafka/blob/trunk/server-common/src/main/java/org/apache/kafka/server/common/MetadataVersion.java">MetadataVersion</a>
-            after 3.2.x has a boolean parameter that indicates if there are metadata changes (i.e. <code>IBP_3_3_IV3(7, "3.3", "IV3", true)</code>).
+            after 3.2.x has a boolean parameter that indicates if there are metadata changes (i.e. <code>IBP_3_3_IV3(7, "3.3", "IV3", true)</code> means this version has metadata changes).
             Given your current and target versions, a downgrade is only possible if no version in between has metadata changes.</li>
     </ol>
 
@@ -279,7 +279,7 @@
     </li>
     <li>Note that cluster metadata downgrade is not supported, although it might be possible to do a safe downgrade in some cases.
         Every <a href="https://github.com/apache/kafka/blob/trunk/server-common/src/main/java/org/apache/kafka/server/common/MetadataVersion.java">MetadataVersion</a>
-        after 3.2.x has a boolean parameter that indicates if there are metadata changes (i.e. <code>IBP_3_3_IV3(7, "3.3", "IV3", true)</code>).
+        after 3.2.x has a boolean parameter that indicates if there are metadata changes (i.e. <code>IBP_3_3_IV3(7, "3.3", "IV3", true)</code> means this version has metadata changes).
         Given your current and target versions, a downgrade is only possible if no version in between has metadata changes.</li>
 </ol>
 
