@@ -357,7 +357,7 @@ public class ReassignPartitionsCommand {
         foundResults.forEach(e -> allResults.put(e.v1, e.v2));
         notFoundResults.forEach(e -> allResults.put(e.v1, e.v2));
 
-        return new Tuple2<>(allResults, currentReassignments.size() > 0);
+        return new Tuple2<>(allResults, !currentReassignments.isEmpty());
     }
 
     private static PartitionReassignmentState topicDescriptionFutureToState(int partition,
@@ -493,8 +493,7 @@ public class ReassignPartitionsCommand {
     private static void clearAllThrottles(Admin adminClient,
                                           List<Tuple2<TopicPartition, List<Integer>>> targetParts
     ) throws ExecutionException, InterruptedException {
-        Set<Integer> activeBrokers = adminClient.describeCluster().nodes().get().stream().map(Node::id).collect(Collectors.toSet());
-        Set<Integer> brokers = new HashSet<>(activeBrokers);
+        Set<Integer> brokers = adminClient.describeCluster().nodes().get().stream().map(Node::id).collect(Collectors.toSet());
         targetParts.forEach(t -> brokers.addAll(t.v2));
 
         System.out.printf("Clearing broker-level throttles on broker%s %s%n",
@@ -646,13 +645,13 @@ public class ReassignPartitionsCommand {
                                                                                 Set<TopicPartition> partitions
     ) throws ExecutionException, InterruptedException {
         Map<TopicPartition, List<Integer>> res = new HashMap<>();
-        describeTopics(adminClient, partitions.stream().map(TopicPartition::topic).collect(Collectors.toSet())).forEach((topicName, topicDescription) -> {
+        describeTopics(adminClient, partitions.stream().map(TopicPartition::topic).collect(Collectors.toSet())).forEach((topicName, topicDescription) ->
             topicDescription.partitions().forEach(info -> {
                 TopicPartition tp = new TopicPartition(topicName, info.partition());
                 if (partitions.contains(tp))
                     res.put(tp, info.replicas().stream().map(Node::id).collect(Collectors.toList()));
-            });
-        });
+            })
+        );
         return res;
     }
 
@@ -800,8 +799,7 @@ public class ReassignPartitionsCommand {
                                      Time time
     ) throws InterruptedException, TerseException {
         long startTimeMs = time.milliseconds();
-        Map<TopicPartitionReplica, String> pendingReplicas = new HashMap<>();
-        pendingReplicas.putAll(proposedReplicas);
+        Map<TopicPartitionReplica, String> pendingReplicas = new HashMap<>(proposedReplicas);
         boolean done = false;
         do {
             Set<TopicPartitionReplica> completed = alterReplicaLogDirs(adminClient, pendingReplicas);
@@ -919,12 +917,7 @@ public class ReassignPartitionsCommand {
     static Map<TopicPartition, Throwable> alterPartitionReassignments(Admin adminClient,
                                                                       Map<TopicPartition, List<Integer>> reassignments) throws InterruptedException {
         Map<TopicPartition, Optional<NewPartitionReassignment>> args = new HashMap<>();
-        reassignments.entrySet().forEach(e -> {
-            TopicPartition part = e.getKey();
-            List<Integer> replicas = e.getValue();
-
-            args.put(part, Optional.of(new NewPartitionReassignment(replicas)));
-        });
+        reassignments.forEach((part, replicas) -> args.put(part, Optional.of(new NewPartitionReassignment(replicas))));
         Map<TopicPartition, KafkaFuture<Void>> results = adminClient.alterPartitionReassignments(args).values();
         Map<TopicPartition, Throwable> errors = new HashMap<>();
         for (Map.Entry<TopicPartition, KafkaFuture<Void>> e :  results.entrySet()) {
@@ -968,16 +961,14 @@ public class ReassignPartitionsCommand {
     private static Map<String, Map<Integer, PartitionMove>> calculateCurrentMoveMap(Map<TopicPartition, PartitionReassignment> currentReassignments) {
         Map<String, Map<Integer, PartitionMove>> moveMap = new HashMap<>();
         // Add the current reassignments to the move map.
-        currentReassignments.entrySet().forEach(e -> {
-            TopicPartition part = e.getKey();
-            PartitionReassignment reassignment = e.getValue();
+        currentReassignments.forEach((part, reassignment) -> {
 
             List<Integer> allReplicas = reassignment.replicas();
             List<Integer> addingReplicas = reassignment.addingReplicas();
 
             // The addingReplicas is included in the replicas during reassignment
             Set<Integer> sources = new HashSet<>(allReplicas);
-            sources.removeAll(addingReplicas);
+            addingReplicas.forEach(sources::remove);
 
             Set<Integer> destinations = new HashSet<>(addingReplicas);
 
@@ -1075,12 +1066,10 @@ public class ReassignPartitionsCommand {
      */
     static Set<Integer> calculateReassigningBrokers(Map<String, Map<Integer, PartitionMove>> moveMap) {
         Set<Integer> reassigningBrokers = new TreeSet<>();
-        moveMap.values().forEach(partMoveMap -> {
-            partMoveMap.values().forEach(partMove -> {
-                reassigningBrokers.addAll(partMove.sources);
-                reassigningBrokers.addAll(partMove.destinations);
-            });
-        });
+        moveMap.values().forEach(partMoveMap -> partMoveMap.values().forEach(partMove -> {
+            reassigningBrokers.addAll(partMove.sources);
+            reassigningBrokers.addAll(partMove.destinations);
+        }));
         return reassigningBrokers;
     }
 
