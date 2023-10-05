@@ -68,27 +68,27 @@ public class HeartbeatRequestManager implements RequestManager {
     private final int rebalanceTimeoutMs;
 
     /**
-     * Manages finding and updating the connection to the group coordinator
+     * CoordinatorRequestManager manages the connection to the group coordinator
      */
     private final CoordinatorRequestManager coordinatorRequestManager;
 
     /**
-     * The subscription state
+     * SubscriptionState tracks the topic, partition and offset of the member
      */
     private final SubscriptionState subscriptions;
 
     /**
-     * Manages heartbeat request timing and retries
+     * HeartbeatRequestState manages heartbeat request timing and retries
      */
     private final HeartbeatRequestState heartbeatRequestState;
 
     /**
-     * Manages the rebalance state of the member
+     * MembershipManager manages member's essential attributes like epoch and id, and its rebalance state
      */
     private final MembershipManager membershipManager;
 
     /**
-     * Allows the background thread to propagate errors back to the user
+     * ErrorEventHandler allows the background thread to propagate errors back to the user
      */
     private final ErrorEventHandler nonRetriableErrorHandler;
 
@@ -319,7 +319,7 @@ public class HeartbeatRequestManager implements RequestManager {
      */
     static class HeartbeatRequestState extends RequestState {
         /**
-         *  Timer that tracks the time since the last heartbeat was sent
+         *  heartbeatTimer tracks the time since the last heartbeat was sent
          */
         private final Timer heartbeatTimer;
 
