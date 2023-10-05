@@ -24,10 +24,12 @@ import org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType
 import org.apache.kafka.server.log.remote.storage.{RemoteLogSegmentId, RemoteLogSegmentMetadata, RemoteResourceNotFoundException, RemoteStorageManager}
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.log.RemoteIndexCache.{REMOTE_LOG_INDEX_CACHE_CLEANER_THREAD, remoteOffsetIndexFile, remoteOffsetIndexFileName, remoteTimeIndexFile, remoteTimeIndexFileName, remoteTransactionIndexFile, remoteTransactionIndexFileName}
-import org.apache.kafka.storage.internals.log.{CorruptIndexException, LogFileUtils, OffsetIndex, OffsetPosition, RemoteIndexCache, TimeIndex, TransactionIndex}
+import org.apache.kafka.storage.internals.log.{AbortedTxn, CorruptIndexException, LogFileUtils, OffsetIndex, OffsetPosition, RemoteIndexCache, TimeIndex, TransactionIndex}
 import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.EnumSource
 import org.mockito.ArgumentMatchers
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito._
@@ -555,19 +557,41 @@ class RemoteIndexCacheTest {
     assertTrue(cache.internalCache().estimatedSize() == 0)
   }
 
-  @Test
-  def testCorruptOffsetIndexFileExistsButNotInCache(): Unit = {
-    // create Corrupt Offset Index File
-    createCorruptRemoteIndexCacheOffsetFile()
+  @ParameterizedTest
+  @EnumSource(value = classOf[IndexType], names = Array("OFFSET", "TIMESTAMP", "TRANSACTION"))
+  def testCorruptCacheIndexFileExistsButNotInCache(indexType: IndexType): Unit = {
+    // create Corrupt  Index File in remote index cache
+    if (indexType == IndexType.OFFSET) {
+      createCorruptOffsetIndexFile(cache.cacheDir())
+    }
+    else if (indexType == IndexType.TIMESTAMP) {
+      createCorruptTimeIndexOffsetFile(cache.cacheDir())
+    }
+    else if (indexType == IndexType.TRANSACTION) {
+      createCorruptTxnIndexForSegmentMetadata(cache.cacheDir(), rlsMetadata)
+    }
     val entry = cache.getIndexEntry(rlsMetadata)
     // Test would fail if it throws corrupt Exception
-    val expectedOffsetIndexFileName: String = remoteOffsetIndexFileName(rlsMetadata)
     val offsetIndexFile = entry.offsetIndex.file().toPath
+    val txnIndexFile = entry.txnIndex.file().toPath
+    val timeIndexFile = entry.timeIndex.file().toPath
+
+    val expectedOffsetIndexFileName: String = remoteOffsetIndexFileName(rlsMetadata)
+    val expectedTimeIndexFileName: String = remoteTimeIndexFileName(rlsMetadata)
+    val expectedTxnIndexFileName: String = remoteTransactionIndexFileName(rlsMetadata)
 
     assertEquals(expectedOffsetIndexFileName, offsetIndexFile.getFileName.toString)
+    assertEquals(expectedTxnIndexFileName, txnIndexFile.getFileName.toString)
+    assertEquals(expectedTimeIndexFileName, timeIndexFile.getFileName.toString)
+
     // assert that parent directory for the index files is correct
     assertEquals(RemoteIndexCache.DIR_NAME, offsetIndexFile.getParent.getFileName.toString,
-      s"offsetIndex=$offsetIndexFile is not overwrite under incorrect parent")
+      s"offsetIndex=entry.offsetIndex().file().toPath is created under incorrect parent")
+    assertEquals(RemoteIndexCache.DIR_NAME, txnIndexFile.getParent.getFileName.toString,
+      s"txnIndex=$txnIndexFile is created under incorrect parent")
+    assertEquals(RemoteIndexCache.DIR_NAME, timeIndexFile.getParent.getFileName.toString,
+      s"timeIndex=$timeIndexFile is created under incorrect parent")
+
     // file is corrupted it should fetch from remote storage again
     verifyFetchIndexInvocation(count = 1)
   }
@@ -607,7 +631,7 @@ class RemoteIndexCacheTest {
 
     // restore index files
     renameRemoteCacheIndexFileFromDisk(tempSuffix)
-    // validate cache entry for the above key should be  null
+    // validate cache entry for the above key should be null
     assertNull(cache.internalCache().getIfPresent(rlsMetadata.remoteLogSegmentId().id()))
     cache.getIndexEntry(rlsMetadata)
     // Index  Files already exist
@@ -621,22 +645,27 @@ class RemoteIndexCacheTest {
     assertTrue(getRemoteCacheIndexFileFromDisk(LogFileUtils.TIME_INDEX_FILE_SUFFIX).isPresent, s"Time index file should be present on disk at ${remoteIndexCacheDir.toPath}")
   }
 
-  @Test
-  def testRSMReturnCorruptedIndexFile(): Unit = {
-
+  @ParameterizedTest
+  @EnumSource(value = classOf[IndexType], names = Array("OFFSET", "TIMESTAMP", "TRANSACTION"))
+  def testRSMReturnCorruptedIndexFile(testIndexType: IndexType): Unit = {
     when(rsm.fetchIndex(any(classOf[RemoteLogSegmentMetadata]), any(classOf[IndexType])))
       .thenAnswer(ans => {
         val metadata = ans.getArgument[RemoteLogSegmentMetadata](0)
         val indexType = ans.getArgument[IndexType](1)
-        val pw = new PrintWriter(remoteOffsetIndexFile(tpDir, metadata))
-        pw.write("Hello, world")
-        // The size of the string written in the file is 12 bytes,
-        // but it should be multiple of Offset Index EntrySIZE which is equal to 8.
-        pw.close()
         val offsetIdx = createOffsetIndexForSegmentMetadata(metadata)
         val timeIdx = createTimeIndexForSegmentMetadata(metadata)
-        val txnIdx = createTxIndexForSegmentMetadata(metadata)
+        var txnIdx = createTxIndexForSegmentMetadata(metadata)
         maybeAppendIndexEntries(offsetIdx, timeIdx)
+        // Create corrupt index file return from RSM
+        if (testIndexType == IndexType.OFFSET) {
+          createCorruptOffsetIndexFile(tpDir)
+        }
+        else if (testIndexType == IndexType.TIMESTAMP) {
+          createCorruptTimeIndexOffsetFile(tpDir)
+        }
+        else if (testIndexType == IndexType.TRANSACTION) {
+          txnIdx = createCorruptTxnIndexForSegmentMetadata(tpDir, rlsMetadata)
+        }
         indexType match {
           case IndexType.OFFSET => new FileInputStream(offsetIdx.file)
           case IndexType.TIMESTAMP => new FileInputStream(timeIdx.file)
@@ -737,6 +766,22 @@ class RemoteIndexCacheTest {
     new TransactionIndex(metadata.startOffset(), txnIdxFile)
   }
 
+  private def createCorruptTxnIndexForSegmentMetadata(dir: File, metadata: RemoteLogSegmentMetadata): TransactionIndex = {
+    val txnIdxFile = remoteTransactionIndexFile(dir, metadata)
+    txnIdxFile.createNewFile()
+    val txnIndex = new TransactionIndex(metadata.startOffset(), txnIdxFile)
+    val abortedTxns = List(
+      new AbortedTxn(0L, 0, 10, 11),
+      new AbortedTxn(1L, 5, 15, 13),
+      new AbortedTxn(2L, 18, 35, 25),
+      new AbortedTxn(3L, 32, 50, 40))
+    abortedTxns.foreach(txnIndex.append)
+    txnIndex.close()
+
+    // open the index with a different starting offset to fake invalid data
+    return new TransactionIndex(100L, txnIdxFile)
+  }
+
   private def createTimeIndexForSegmentMetadata(metadata: RemoteLogSegmentMetadata): TimeIndex = {
     val maxEntries = (metadata.endOffset() - metadata.startOffset()).asInstanceOf[Int]
     new TimeIndex(remoteTimeIndexFile(tpDir, metadata), metadata.startOffset(), maxEntries * 12)
@@ -806,11 +851,19 @@ class RemoteIndexCacheTest {
       })
   }
 
-  private def createCorruptRemoteIndexCacheOffsetFile(): Unit = {
-    val pw = new PrintWriter(remoteOffsetIndexFile(cache.cacheDir(), rlsMetadata))
+  private def createCorruptOffsetIndexFile(dir: File): Unit = {
+    val pw = new PrintWriter(remoteOffsetIndexFile(dir, rlsMetadata))
     pw.write("Hello, world")
     // The size of the string written in the file is 12 bytes,
     // but it should be multiple of Offset Index EntrySIZE which is equal to 8.
+    pw.close()
+  }
+
+  private def createCorruptTimeIndexOffsetFile(dir: File): Unit = {
+    val pw = new PrintWriter(remoteTimeIndexFile(dir, rlsMetadata))
+    pw.write("Hello, world1")
+    // The size of the string written in the file is 13 bytes,
+    // but it should be multiple of Time Index EntrySIZE which is equal to 12.
     pw.close()
   }
 }
