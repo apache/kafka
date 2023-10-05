@@ -962,7 +962,6 @@ public class ReassignPartitionsCommand {
         Map<String, Map<Integer, PartitionMove>> moveMap = new HashMap<>();
         // Add the current reassignments to the move map.
         currentReassignments.forEach((part, reassignment) -> {
-
             List<Integer> allReplicas = reassignment.replicas();
             List<Integer> addingReplicas = reassignment.addingReplicas();
 
