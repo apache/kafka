@@ -443,6 +443,13 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         // Keeping same argument validation error thrown by the current consumer implementation
         // to avoid API level changes.
         requireNonNull(timestampsToSearch, "Timestamps to search cannot be null");
+        for (Map.Entry<TopicPartition, Long> entry : timestampsToSearch.entrySet()) {
+            // Exclude the earliest and latest offset here so the timestamp in the returned
+            // OffsetAndTimestamp is always positive.
+            if (entry.getValue() < 0)
+                throw new IllegalArgumentException("The target time for partition " + entry.getKey() + " is " +
+                        entry.getValue() + ". The target time cannot be negative.");
+        }
 
         if (timestampsToSearch.isEmpty()) {
             return Collections.emptyMap();
