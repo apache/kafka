@@ -321,12 +321,12 @@ public class HeartbeatRequestManager implements RequestManager {
         /**
          *  Timer that tracks the time since the last heartbeat was sent
          */
-        final Timer heartbeatTimer;
+        private final Timer heartbeatTimer;
 
         /**
          * The heartbeat interval which is acquired/updated through the heartbeat request
          */
-        long heartbeatIntervalMs;
+        private long heartbeatIntervalMs;
 
         public HeartbeatRequestState(
             final LogContext logContext,
