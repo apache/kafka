@@ -830,8 +830,6 @@ public class ReassignPartitionsCommand {
                 // call.  It can't take effect until the replica is moved to that host.
                 time.sleep(100);
             }
-
-
         } while (!done);
     }
 
