@@ -354,7 +354,6 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         } finally {
             kafkaConsumerMetrics.recordPollEnd(timer.currentTimeMs());
         }
-        // TODO: Once we implement poll(), clear wakeupTrigger in a finally block: wakeupTrigger.clearActiveTask();
     }
 
     /**
