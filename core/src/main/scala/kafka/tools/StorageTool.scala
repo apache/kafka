@@ -280,7 +280,7 @@ object StorageTool extends Logging {
         }
       } else {
         foundDirectories += directoryPath.toString
-        val metaPath = directoryPath.resolve("meta.properties")
+        val metaPath = directoryPath.resolve(KafkaServer.brokerMetaPropsFile)
         if (!Files.exists(metaPath)) {
           problems += s"$directoryPath is not formatted."
         } else {
