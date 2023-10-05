@@ -230,37 +230,41 @@ public class HeartbeatRequestManager implements RequestManager {
         //  assignments.
         switch (error) {
             case NOT_COORDINATOR:
-            case COORDINATOR_NOT_AVAILABLE:
                 // the manager should retry immediately when the coordinator node becomes available again
-                String message = String.format("Coordinator node %s is either not started or not valid. " +
-                        "Will attempt to find the coordinator again and retry",
-                    coordinatorRequestManager.coordinator());
+                String message = String.format("GroupHeartbeatRequest failed because the group coordinator %s is incorrect. " +
+                                "Will attempt to find the coordinator again and retry",
+                        coordinatorRequestManager.coordinator());
+                logInfo(message, response, currentTimeMs);
+                coordinatorRequestManager.markCoordinatorUnknown(errorMessage, currentTimeMs);
+                break;
+            case COORDINATOR_NOT_AVAILABLE:
+                message = String.format("GroupHeartbeatRequest failed because the group coordinator %s is not available. " +
+                                "Will attempt to find the coordinator again and retry",
+                        coordinatorRequestManager.coordinator());
                 logInfo(message, response, currentTimeMs);
                 coordinatorRequestManager.markCoordinatorUnknown(errorMessage, currentTimeMs);
                 break;
 
             case COORDINATOR_LOAD_IN_PROGRESS:
                 // the manager will backoff and retry
-                message = String.format("GroupHeartbeatRequest failed because the group coordinator %s is incorrect. " +
-                        "Will attempt to retry",
-                    coordinatorRequestManager.coordinator());
+                message = String.format("GroupHeartbeatRequest failed because the group coordinator %s is still loading." +
+                                "Will retry",
+                        coordinatorRequestManager.coordinator());
                 logInfo(message, response, currentTimeMs);
                 heartbeatRequestState.onFailedAttempt(currentTimeMs);
                 break;
 
             case GROUP_AUTHORIZATION_FAILED:
                 GroupAuthorizationException exception =
-                    GroupAuthorizationException.forGroupId(membershipManager.groupId());
+                        GroupAuthorizationException.forGroupId(membershipManager.groupId());
                 logger.error("GroupHeartbeatRequest failed due to group authorization failure: {}", exception.getMessage());
-                nonRetriableErrorHandler.handle(error.exception(exception.getMessage()));
-                membershipManager.transitionToFailed();
+                handleFatalFailure(error.exception(exception.getMessage()));
                 break;
 
             case UNRELEASED_INSTANCE_ID:
                 logger.error("GroupHeartbeatRequest failed due to the instance id {} was not released: {}",
-                    membershipManager.groupInstanceId().orElse("null"), errorMessage);
-                nonRetriableErrorHandler.handle(Errors.UNRELEASED_INSTANCE_ID.exception(errorMessage));
-                membershipManager.transitionToFailed();
+                        membershipManager.groupInstanceId().orElse("null"), errorMessage);
+                handleFatalFailure(Errors.UNRELEASED_INSTANCE_ID.exception(errorMessage));
                 break;
 
             case INVALID_REQUEST:
@@ -268,21 +272,20 @@ public class HeartbeatRequestManager implements RequestManager {
             case UNSUPPORTED_ASSIGNOR:
             case UNSUPPORTED_VERSION:
                 logger.error("GroupHeartbeatRequest failed due to error: {}", error);
-                nonRetriableErrorHandler.handle(error.exception(errorMessage));
-                membershipManager.transitionToFailed();
+                handleFatalFailure(error.exception(errorMessage));
                 break;
 
             case FENCED_MEMBER_EPOCH:
                 message = String.format("GroupHeartbeatRequest failed because member epoch %s is invalid. " +
-                        "Will abandon all partitions and rejoin the group",
-                    membershipManager.memberId(), membershipManager.memberEpoch());
+                                "Will abandon all partitions and rejoin the group",
+                        membershipManager.memberId(), membershipManager.memberEpoch());
                 logInfo(message, response, currentTimeMs);
                 membershipManager.transitionToFenced();
                 break;
             case UNKNOWN_MEMBER_ID:
                 message = String.format("GroupHeartbeatRequest failed because member id %s is invalid. " +
-                        "Will abandon all partitions and rejoin the group",
-                    membershipManager.memberId(), membershipManager.memberEpoch());
+                                "Will abandon all partitions and rejoin the group",
+                        membershipManager.memberId(), membershipManager.memberEpoch());
                 logInfo(message, response, currentTimeMs);
                 membershipManager.transitionToFenced();
                 break;
@@ -290,8 +293,7 @@ public class HeartbeatRequestManager implements RequestManager {
             default:
                 // If the manager receives an unknown error - there could be a bug in the code or a new error code
                 logger.error("GroupHeartbeatRequest failed due to unexpected error: {}", error);
-                membershipManager.transitionToFailed();
-                nonRetriableErrorHandler.handle(error.exception(errorMessage));
+                handleFatalFailure(error.exception(errorMessage));
                 break;
         }
     }
@@ -303,6 +305,11 @@ public class HeartbeatRequestManager implements RequestManager {
             message,
             heartbeatRequestState.remainingBackoffMs(currentTimeMs),
             response.data().errorMessage());
+    }
+
+    private void handleFatalFailure(Throwable error) {
+        nonRetriableErrorHandler.handle(error);
+        membershipManager.transitionToFailed();
     }
 
     /**
