@@ -420,7 +420,7 @@ subprojects {
       // connect tests
       "**/KafkaConfigBackingStoreTest.*",
       "**/StandaloneHerderTest.*",
-      "**/WorkerSinkTaskTest.*", "**/WorkerSinkTaskThreadedTest.*"
+      "**/WorkerSinkTaskTest.*"
     ])
   }
 
