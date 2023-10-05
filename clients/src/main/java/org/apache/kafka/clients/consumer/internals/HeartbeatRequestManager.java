@@ -205,9 +205,8 @@ public class HeartbeatRequestManager implements RequestManager {
                 heartbeatRequestState.remainingBackoffMs(responseTimeMs),
                 exception.getMessage());
         } else {
-            logger.error("Heartbeat request failed due to fatal error", exception);
-            membershipManager.transitionToFailed();
-            nonRetriableErrorHandler.handle(exception);
+            logger.error("GroupHeartbeatRequest failed due to fatal error", exception);
+            handleFatalFailure(exception);
         }
     }
 
@@ -237,6 +236,7 @@ public class HeartbeatRequestManager implements RequestManager {
                 logInfo(message, response, currentTimeMs);
                 coordinatorRequestManager.markCoordinatorUnknown(errorMessage, currentTimeMs);
                 break;
+
             case COORDINATOR_NOT_AVAILABLE:
                 message = String.format("GroupHeartbeatRequest failed because the group coordinator %s is not available. " +
                                 "Will attempt to find the coordinator again and retry",
@@ -282,6 +282,7 @@ public class HeartbeatRequestManager implements RequestManager {
                 logInfo(message, response, currentTimeMs);
                 membershipManager.transitionToFenced();
                 break;
+
             case UNKNOWN_MEMBER_ID:
                 message = String.format("GroupHeartbeatRequest failed because member id %s is invalid. " +
                                 "Will abandon all partitions and rejoin the group",
