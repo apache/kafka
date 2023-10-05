@@ -235,15 +235,18 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
      *                                                                defined
      */
     private boolean updateFetchPositionsIfNeeded(final Timer timer) {
-        // If any partitions have been truncated due to a leader change, we need to validate the offsets
+        // Validate positions using the partition leader end offsets, to detect if any partition
+        // has been truncated due to a leader change. This will trigger an OffsetForLeaderEpoch
+        // request, retrieve the partition end offsets, and validate the current position against it.
         ValidatePositionsApplicationEvent validatePositionsEvent = new ValidatePositionsApplicationEvent();
         eventHandler.add(validatePositionsEvent);
 
-        // If there are any partitions which do not have a valid position and are not
-        // awaiting reset, then we need to fetch committed offsets. We will only do a
-        // coordinator lookup if there are partitions which have missing positions, so
-        // a consumer with manually assigned partitions can avoid a coordinator dependence
-        // by always ensuring that assigned partitions have an initial position.
+        // Reset positions using committed offsets retrieved from the group coordinator, for any
+        // partitions which do  not have a valid position and are not awaiting reset. We
+        // will only do a coordinator lookup if there are partitions which have missing
+        // positions, so a consumer with manually assigned partitions can avoid a coordinator
+        // dependence by always ensuring that assigned partitions have an initial position. This
+        // will trigger an OffsetFetch request and update positions with the offsets retrieved.
         if (isCommittedOffsetsManagementEnabled() && !refreshCommittedOffsetsIfNeeded(timer))
             return false;
 
@@ -252,8 +255,10 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         // are partitions with a missing position, then we will raise a NoOffsetForPartitionException exception.
         subscriptions.resetInitializingPositions();
 
-        // Finally send an asynchronous request to look up and update the positions of any
-        // partitions which are awaiting reset.
+        // Reset positions using partitions offsets retrieved from the leader, for any partitions
+        // which are awaiting reset. This will trigger a ListOffset request, retrieve the
+        // partition offsets according to the strategy (ex. earliest, latest), and update the
+        // positions.
         ResetPositionsApplicationEvent resetPositionsEvent = new ResetPositionsApplicationEvent();
         eventHandler.add(resetPositionsEvent);
         return true;
