@@ -214,10 +214,6 @@ public class ChannelBuildersTest {
             super(kerberosShortNamer, sslPrincipalMapper);
         }
 
-        public CustomKafkaPrincipalBuilder() {
-            super(null, null);
-        }
-
         @Override
         public void configure(Map<String, ?> configs) {
             configured = true;
