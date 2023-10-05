@@ -213,7 +213,7 @@ class ZkMigrationClientTest extends ZkMigrationTestHarness {
 
   @Test
   def testReadMigrateAndWriteProducerId(): Unit = {
-    // allocate three blocks like the controller would for three brokers
+    // allocate some producer id blocks
     ZkProducerIdManager.getNewProducerIdBlock(1, zkClient, this)
     ZkProducerIdManager.getNewProducerIdBlock(2, zkClient, this)
     val block = ZkProducerIdManager.getNewProducerIdBlock(3, zkClient, this)
