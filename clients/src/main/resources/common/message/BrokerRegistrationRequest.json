@@ -14,6 +14,8 @@
 // limitations under the License.
 
 // Version 1 adds Zk broker epoch to the request if the broker is migrating from Zk mode to KRaft mode.
+//
+// Version 2 adds the PreviousBrokerEpoch for the KIP-966
 {
   "apiKey":62,
   "type": "request",

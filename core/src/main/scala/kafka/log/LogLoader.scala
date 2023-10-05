@@ -35,19 +35,6 @@ import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Set, mutable}
 import scala.jdk.CollectionConverters._
 
-object LogLoader extends Logging {
-
-  /**
-   * Clean shutdown file that indicates the broker was cleanly shutdown in 0.8 and higher.
-   * This is used to avoid unnecessary recovery after a clean shutdown. In theory this could be
-   * avoided by passing in the recovery point, however finding the correct position to do this
-   * requires accessing the offset index which may not be safe in an unclean shutdown.
-   * For more information see the discussion in PR#2104
-   */
-  val CleanShutdownFile = ".kafka_cleanshutdown"
-}
-
-
 /**
  * @param dir The directory from which log segments need to be loaded
  * @param topicPartition The topic partition associated with the log being loaded

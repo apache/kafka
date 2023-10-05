@@ -129,8 +129,8 @@ class LogManagerTest {
 
       logManagerForTest.get.shutdown(3)
 
-      assertFalse(Files.exists(new File(logDir1, LogLoader.CleanShutdownFile).toPath))
-      assertTrue(Files.exists(new File(logDir2, LogLoader.CleanShutdownFile).toPath))
+      assertFalse(Files.exists(new File(logDir1, CleanShutdownFileHandler.CleanShutdownFileName).toPath))
+      assertTrue(Files.exists(new File(logDir2, CleanShutdownFileHandler.CleanShutdownFileName).toPath))
       assertEquals(-1L, logManagerForTest.get.readBrokerEpochFromCleanShutdownFiles())
     } finally {
       logManagerForTest.foreach(manager => manager.liveLogDirs.foreach(Utils.delete))
@@ -159,8 +159,8 @@ class LogManagerTest {
 
       logManagerForTest.get.shutdown(3)
 
-      assertTrue(Files.exists(new File(logDir1, LogLoader.CleanShutdownFile).toPath))
-      assertTrue(Files.exists(new File(logDir2, LogLoader.CleanShutdownFile).toPath))
+      assertTrue(Files.exists(new File(logDir1, CleanShutdownFileHandler.CleanShutdownFileName).toPath))
+      assertTrue(Files.exists(new File(logDir2, CleanShutdownFileHandler.CleanShutdownFileName).toPath))
       assertEquals(3L, logManagerForTest.get.readBrokerEpochFromCleanShutdownFiles())
     } finally {
       logManagerForTest.foreach(manager => manager.liveLogDirs.foreach(Utils.delete))
@@ -191,7 +191,7 @@ class LogManagerTest {
 
     // 2. simulate unclean shutdown by deleting clean shutdown marker file
     logManager.shutdown()
-    assertTrue(Files.deleteIfExists(new File(logDir, LogLoader.CleanShutdownFile).toPath))
+    assertTrue(Files.deleteIfExists(new File(logDir, CleanShutdownFileHandler.CleanShutdownFileName).toPath))
 
     // 3. create a new LogManager and start it in a different thread
     @volatile var loadLogCalled = 0
@@ -217,7 +217,7 @@ class LogManagerTest {
     logManager = null
 
     // 5. verify that CleanShutdownFile is not created under logDir
-    assertFalse(Files.exists(new File(logDir, LogLoader.CleanShutdownFile).toPath))
+    assertFalse(Files.exists(new File(logDir, CleanShutdownFileHandler.CleanShutdownFileName).toPath))
   }
 
   /**
