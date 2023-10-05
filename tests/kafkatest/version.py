@@ -205,12 +205,14 @@ LATEST_2_5 = V_2_5_1
 V_2_6_0 = KafkaVersion("2.6.0")
 V_2_6_1 = KafkaVersion("2.6.1")
 V_2_6_2 = KafkaVersion("2.6.2")
-LATEST_2_6 = V_2_6_2
+V_2_6_3 = KafkaVersion("2.6.3")
+LATEST_2_6 = V_2_6_3
 
 # 2.7.x versions
 V_2_7_0 = KafkaVersion("2.7.0")
 V_2_7_1 = KafkaVersion("2.7.1")
-LATEST_2_7 = V_2_7_1
+V_2_7_2 = KafkaVersion("2.7.2")
+LATEST_2_7 = V_2_7_2
 
 # 2.8.x versions
 V_2_8_0 = KafkaVersion("2.8.0")
@@ -240,7 +242,8 @@ LATEST_3_2 = V_3_2_3
 # 3.3.x versions
 V_3_3_0 = KafkaVersion("3.3.0")
 V_3_3_1 = KafkaVersion("3.3.1")
-LATEST_3_3 = V_3_3_1
+V_3_3_2 = KafkaVersion("3.3.2")
+LATEST_3_3 = V_3_3_2
 
 # 3.4.x versions
 V_3_4_0 = KafkaVersion("3.4.0")
