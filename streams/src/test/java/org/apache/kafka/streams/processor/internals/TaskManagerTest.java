@@ -590,28 +590,49 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldAssignActiveTaskInTasksRegistryToBeRecycledWithStateUpdaterEnabled() {
-        final StreamTask activeTaskToRecycle = statefulTask(taskId03, taskId03ChangelogPartitions)
-            .inState(State.SUSPENDED)
-            .withInputPartitions(taskId03Partitions).build();
-        final StandbyTask recycledStandbyTask = standbyTask(taskId03, taskId03ChangelogPartitions)
-            .inState(State.CREATED)
-            .withInputPartitions(taskId03Partitions).build();
-        final TasksRegistry tasks = Mockito.mock(TasksRegistry.class);
+    public void shouldAddRecycledStandbyTaskfromActiveToPendingTasksToInitWithStateUpdaterEnabled() {
+        final StreamTask activeTaskToRecycle = statefulTask(taskId01, taskId01ChangelogPartitions)
+            .withInputPartitions(taskId01Partitions)
+            .inState(State.RUNNING).build();
+        final StandbyTask standbyTask = standbyTask(taskId01, taskId01ChangelogPartitions)
+            .withInputPartitions(taskId01Partitions)
+            .inState(State.CREATED).build();
+        final TasksRegistry tasks = mock(TasksRegistry.class);
         when(tasks.allTasks()).thenReturn(mkSet(activeTaskToRecycle));
+        when(standbyTaskCreator.createStandbyTaskFromActive(activeTaskToRecycle, taskId01Partitions))
+            .thenReturn(standbyTask);
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
-        when(standbyTaskCreator.createStandbyTaskFromActive(activeTaskToRecycle, activeTaskToRecycle.inputPartitions()))
-            .thenReturn(recycledStandbyTask);
 
-        taskManager.handleAssignment(
-            Collections.emptyMap(),
-            mkMap(mkEntry(activeTaskToRecycle.id(), activeTaskToRecycle.inputPartitions()))
-        );
+        taskManager.handleAssignment(emptyMap(), mkMap(mkEntry(taskId01, taskId01Partitions)));
 
-        Mockito.verify(activeTaskCreator).closeAndRemoveTaskProducerIfNeeded(activeTaskToRecycle.id());
-        Mockito.verify(activeTaskCreator).createTasks(consumer, Collections.emptyMap());
         Mockito.verify(activeTaskToRecycle).prepareCommit();
-        Mockito.verify(tasks).replaceActiveWithStandby(recycledStandbyTask);
+        Mockito.verify(activeTaskCreator).closeAndRemoveTaskProducerIfNeeded(activeTaskToRecycle.id());
+        Mockito.verify(tasks).addPendingTasksToInit(mkSet(standbyTask));
+        Mockito.verify(tasks).removeTask(activeTaskToRecycle);
+        Mockito.verify(activeTaskCreator).createTasks(consumer, Collections.emptyMap());
+        Mockito.verify(standbyTaskCreator).createTasks(Collections.emptyMap());
+    }
+
+    @Test
+    public void shouldAddRecycledStandbyTaskfromActiveToTaskRegistryWithStateUpdaterDisabled() {
+        final StreamTask activeTaskToRecycle = statefulTask(taskId01, taskId01ChangelogPartitions)
+            .withInputPartitions(taskId01Partitions)
+            .inState(State.RUNNING).build();
+        final StandbyTask standbyTask = standbyTask(taskId01, taskId01ChangelogPartitions)
+            .withInputPartitions(taskId01Partitions)
+            .inState(State.CREATED).build();
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        when(tasks.allTasks()).thenReturn(mkSet(activeTaskToRecycle));
+        when(standbyTaskCreator.createStandbyTaskFromActive(activeTaskToRecycle, taskId01Partitions))
+            .thenReturn(standbyTask);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, false);
+
+        taskManager.handleAssignment(emptyMap(), mkMap(mkEntry(taskId01, taskId01Partitions)));
+
+        Mockito.verify(activeTaskToRecycle).prepareCommit();
+        Mockito.verify(activeTaskCreator).closeAndRemoveTaskProducerIfNeeded(activeTaskToRecycle.id());
+        Mockito.verify(tasks).replaceActiveWithStandby(standbyTask);
+        Mockito.verify(activeTaskCreator).createTasks(consumer, Collections.emptyMap());
         Mockito.verify(standbyTaskCreator).createTasks(Collections.emptyMap());
     }
 

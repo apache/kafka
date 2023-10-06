@@ -572,7 +572,9 @@ public class TaskManager {
         while (iter.hasNext()) {
             final Map.Entry<TaskId, Set<TopicPartition>> entry = iter.next();
             final TaskId taskId = entry.getKey();
-            if (taskId.topologyName() != null && !topologyMetadata.namedTopologiesView().contains(taskId.topologyName())) {
+            final boolean taskIsOwned = tasks.allTaskIds().contains(taskId)
+                || (stateUpdater != null && stateUpdater.getTasks().stream().anyMatch(task -> task.id() == taskId));
+            if (taskId.topologyName() != null && !taskIsOwned && !topologyMetadata.namedTopologiesView().contains(taskId.topologyName())) {
                 log.info("Cannot create the assigned task {} since it's topology name cannot be recognized, will put it " +
                         "aside as pending for now and create later when topology metadata gets refreshed", taskId);
                 pendingTasks.put(taskId, entry.getValue());
@@ -649,7 +651,12 @@ public class TaskManager {
             try {
                 if (oldTask.isActive()) {
                     final StandbyTask standbyTask = convertActiveToStandby((StreamTask) oldTask, inputPartitions);
-                    tasks.replaceActiveWithStandby(standbyTask);
+                    if (stateUpdater != null) {
+                        tasks.removeTask(oldTask);
+                        tasks.addPendingTasksToInit(Collections.singleton(standbyTask));
+                    } else {
+                        tasks.replaceActiveWithStandby(standbyTask);
+                    }
                 } else {
                     final StreamTask activeTask = convertStandbyToActive((StandbyTask) oldTask, inputPartitions);
                     tasks.replaceStandbyWithActive(activeTask);
@@ -915,7 +922,7 @@ public class TaskManager {
     }
 
     private void handleRestoredTasksFromStateUpdater(final long now,
-                                                        final java.util.function.Consumer<Set<TopicPartition>> offsetResetter) {
+                                                     final java.util.function.Consumer<Set<TopicPartition>> offsetResetter) {
         final Map<TaskId, RuntimeException> taskExceptions = new LinkedHashMap<>();
         final Set<Task> tasksToCloseDirty = new TreeSet<>(Comparator.comparing(Task::id));
 
@@ -964,7 +971,7 @@ public class TaskManager {
         final Map<Task, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsPerTask = new HashMap<>();
         final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
 
-        for (final Task task : activeTaskIterable()) {
+        for (final Task task : activeRunningTaskIterable()) {
             if (remainingRevokedPartitions.containsAll(task.inputPartitions())) {
                 // when the task input partitions are included in the revoked list,
                 // this is an active task and should be revoked
@@ -1557,10 +1564,14 @@ public class TaskManager {
             .collect(Collectors.toSet());
     }
 
-    Set<TaskId> standbyTaskIds() {
-        return standbyTaskStream()
+    Set<TaskId> activeRunningTaskIds() {
+        return activeRunningTaskStream()
             .map(Task::id)
             .collect(Collectors.toSet());
+    }
+
+    Set<TaskId> standbyTaskIds() {
+        return standbyTaskStream().map(Task::id).collect(Collectors.toSet());
     }
 
     Map<TaskId, Task> allTasks() {
@@ -1615,7 +1626,21 @@ public class TaskManager {
         return activeTaskStream().collect(Collectors.toList());
     }
 
+    List<Task> activeRunningTaskIterable() {
+        return activeRunningTaskStream().collect(Collectors.toList());
+    }
+
     private Stream<Task> activeTaskStream() {
+        if (stateUpdater != null) {
+            return Stream.concat(
+                activeRunningTaskStream(),
+                stateUpdater.getTasks().stream().filter(Task::isActive)
+            );
+        }
+        return activeRunningTaskStream();
+    }
+
+    private Stream<Task> activeRunningTaskStream() {
         return tasks.allTasks().stream().filter(Task::isActive);
     }
 
@@ -1628,7 +1653,15 @@ public class TaskManager {
     }
 
     private Stream<Task> standbyTaskStream() {
-        return tasks.allTasks().stream().filter(t -> !t.isActive());
+        final Stream<Task> standbyTasksInTaskRegistry = tasks.allTasks().stream().filter(t -> !t.isActive());
+        if (stateUpdater != null) {
+            return Stream.concat(
+                stateUpdater.getStandbyTasks().stream(),
+                standbyTasksInTaskRegistry
+            );
+        } else {
+            return standbyTasksInTaskRegistry;
+        }
     }
 
     // For testing only.
@@ -1704,9 +1737,9 @@ public class TaskManager {
         if (rebalanceInProgress) {
             return -1;
         } else {
-            for (final Task task : activeTaskIterable()) {
+            for (final Task task : activeRunningTaskIterable()) {
                 if (task.commitRequested() && task.commitNeeded()) {
-                    return commit(activeTaskIterable());
+                    return commit(activeRunningTaskIterable());
                 }
             }
             return 0;
@@ -1791,7 +1824,7 @@ public class TaskManager {
     }
 
     void recordTaskProcessRatio(final long totalProcessLatencyMs, final long now) {
-        for (final Task task : activeTaskIterable()) {
+        for (final Task task : activeRunningTaskIterable()) {
             task.recordProcessTimeRatioAndBufferSize(totalProcessLatencyMs, now);
         }
     }
@@ -1815,7 +1848,7 @@ public class TaskManager {
             }
 
             final Map<TopicPartition, RecordsToDelete> recordsToDelete = new HashMap<>();
-            for (final Task task : activeTaskIterable()) {
+            for (final Task task : activeRunningTaskIterable()) {
                 for (final Map.Entry<TopicPartition, Long> entry : task.purgeableOffsets().entrySet()) {
                     recordsToDelete.put(entry.getKey(), RecordsToDelete.beforeOffset(entry.getValue()));
                 }
@@ -1915,7 +1948,7 @@ public class TaskManager {
     }
 
     boolean needsInitializationOrRestoration() {
-        return activeTaskIterable().stream().anyMatch(Task::needsInitializationOrRestoration);
+        return activeTaskStream().anyMatch(Task::needsInitializationOrRestoration);
     }
 
     // for testing only

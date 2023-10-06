@@ -768,10 +768,10 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     // This will ensure that any log data can be recovered with the correct topic ID in the case of failure.
     maybeFlushMetadataFile()
 
-    val appendInfo = analyzeAndValidateRecords(records, origin, ignoreRecordSize, leaderEpoch)
+    val appendInfo = analyzeAndValidateRecords(records, origin, ignoreRecordSize, !validateAndAssignOffsets, leaderEpoch)
 
     // return if we have no valid messages or if this is a duplicate of the last appended entry
-    if (appendInfo.shallowCount == 0) appendInfo
+    if (appendInfo.validBytes <= 0) appendInfo
     else {
 
       // trim any invalid bytes or partial messages before appending it to the on-disk log
@@ -784,13 +784,14 @@ class UnifiedLog(@volatile var logStartOffset: Long,
           if (validateAndAssignOffsets) {
             // assign offsets to the message set
             val offset = PrimitiveRef.ofLong(localLog.logEndOffset)
-            appendInfo.setFirstOffset(Optional.of(new LogOffsetMetadata(offset.value)))
+            appendInfo.setFirstOffset(offset.value)
             val validateAndOffsetAssignResult = try {
+              val targetCompression = BrokerCompressionType.forName(config.compressionType).targetCompressionType(appendInfo.sourceCompression)
               val validator = new LogValidator(validRecords,
                 topicPartition,
                 time,
                 appendInfo.sourceCompression,
-                appendInfo.targetCompression,
+                targetCompression,
                 config.compact,
                 config.recordVersion.value,
                 config.messageTimestampType,
@@ -835,18 +836,14 @@ class UnifiedLog(@volatile var logStartOffset: Long,
             }
           } else {
             // we are taking the offsets we are given
-            if (!appendInfo.offsetsMonotonic)
-              throw new OffsetsOutOfOrderException(s"Out of order offsets found in append to $topicPartition: " +
-                records.records.asScala.map(_.offset))
-
             if (appendInfo.firstOrLastOffsetOfFirstBatch < localLog.logEndOffset) {
               // we may still be able to recover if the log is empty
               // one example: fetching from log start offset on the leader which is not batch aligned,
               // which may happen as a result of AdminClient#deleteRecords()
-              val firstOffset = appendInfo.firstOffset.map[Long](x => x.messageOffset)
-                .orElse(records.batches.iterator().next().baseOffset())
+              val hasFirstOffset = appendInfo.firstOffset != UnifiedLog.UnknownOffset
+              val firstOffset = if (hasFirstOffset) appendInfo.firstOffset else records.batches.iterator().next().baseOffset()
 
-              val firstOrLast = if (appendInfo.firstOffset.isPresent) "First offset" else "Last offset of the first batch"
+              val firstOrLast = if (hasFirstOffset) "First offset" else "Last offset of the first batch"
               throw new UnexpectedAppendOffsetException(
                 s"Unexpected offset in append to $topicPartition. $firstOrLast " +
                   s"${appendInfo.firstOrLastOffsetOfFirstBatch} is less than the next offset ${localLog.logEndOffset}. " +
@@ -892,16 +889,11 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
           maybeDuplicate match {
             case Some(duplicate) =>
-              appendInfo.setFirstOffset(Optional.of(new LogOffsetMetadata(duplicate.firstOffset)))
+              appendInfo.setFirstOffset(duplicate.firstOffset)
               appendInfo.setLastOffset(duplicate.lastOffset)
               appendInfo.setLogAppendTime(duplicate.timestamp)
               appendInfo.setLogStartOffset(logStartOffset)
             case None =>
-              // Before appending update the first offset metadata to include segment information
-              appendInfo.setFirstOffset(appendInfo.firstOffset.map { offsetMetadata =>
-                new LogOffsetMetadata(offsetMetadata.messageOffset, segment.baseOffset, segment.size)
-              })
-
               // Append the records, and increment the local log end offset immediately after the append because a
               // write to the transaction index below may fail and we want to ensure that the offsets
               // of future appends still grow monotonically. The resulting transaction index inconsistency
@@ -1097,7 +1089,8 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    * <ol>
    * <li> each message matches its CRC
    * <li> each message size is valid (if ignoreRecordSize is false)
-   * <li> that the sequence numbers of the incoming record batches are consistent with the existing state and with each other.
+   * <li> that the sequence numbers of the incoming record batches are consistent with the existing state and with each other
+   * <li> that the offsets are monotonically increasing (if requireOffsetsMonotonic is true)
    * </ol>
    *
    * Also compute the following quantities:
@@ -1113,10 +1106,10 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   private def analyzeAndValidateRecords(records: MemoryRecords,
                                         origin: AppendOrigin,
                                         ignoreRecordSize: Boolean,
+                                        requireOffsetsMonotonic: Boolean,
                                         leaderEpoch: Int): LogAppendInfo = {
-    var shallowMessageCount = 0
     var validBytesCount = 0
-    var firstOffset: Optional[LogOffsetMetadata] = Optional.empty()
+    var firstOffset = UnifiedLog.UnknownOffset
     var lastOffset = -1L
     var lastLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH
     var sourceCompression = CompressionType.NONE
@@ -1143,7 +1136,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
       // Also indicate whether we have the accurate first offset or not
       if (!readFirstMessage) {
         if (batch.magic >= RecordBatch.MAGIC_VALUE_V2)
-          firstOffset = Optional.of(new LogOffsetMetadata(batch.baseOffset))
+          firstOffset = batch.baseOffset
         lastOffsetOfFirstBatch = batch.lastOffset
         readFirstMessage = true
       }
@@ -1176,7 +1169,6 @@ class UnifiedLog(@volatile var logStartOffset: Long,
         offsetOfMaxTimestamp = lastOffset
       }
 
-      shallowMessageCount += 1
       validBytesCount += batchSize
 
       val batchCompression = CompressionType.forId(batch.compressionType.id)
@@ -1184,17 +1176,18 @@ class UnifiedLog(@volatile var logStartOffset: Long,
         sourceCompression = batchCompression
     }
 
-    // Apply broker-side compression if any
-    val targetCompression = BrokerCompressionType.forName(config.compressionType).targetCompressionType(sourceCompression)
+    if (requireOffsetsMonotonic && !monotonic)
+        throw new OffsetsOutOfOrderException(s"Out of order offsets found in append to $topicPartition: " +
+          records.records.asScala.map(_.offset))
+
     val lastLeaderEpochOpt: OptionalInt = if (lastLeaderEpoch != RecordBatch.NO_PARTITION_LEADER_EPOCH)
       OptionalInt.of(lastLeaderEpoch)
     else
       OptionalInt.empty()
 
     new LogAppendInfo(firstOffset, lastOffset, lastLeaderEpochOpt, maxTimestamp, offsetOfMaxTimestamp,
-      RecordBatch.NO_TIMESTAMP, logStartOffset, RecordConversionStats.EMPTY, sourceCompression, targetCompression,
-      shallowMessageCount, validBytesCount, monotonic, lastOffsetOfFirstBatch, Collections.emptyList[RecordError], null,
-      LeaderHwChange.NONE)
+      RecordBatch.NO_TIMESTAMP, logStartOffset, RecordConversionStats.EMPTY, sourceCompression,
+      validBytesCount, lastOffsetOfFirstBatch, Collections.emptyList[RecordError], LeaderHwChange.NONE)
   }
 
   /**
@@ -1588,10 +1581,10 @@ class UnifiedLog(@volatile var logStartOffset: Long,
         Note that this is only required for pre-V2 message formats because these do not store the first message offset
         in the header.
       */
-      val rollOffset = appendInfo
-        .firstOffset
-        .map[Long](_.messageOffset)
-        .orElse(maxOffsetInMessages - Integer.MAX_VALUE)
+      val rollOffset = if (appendInfo.firstOffset == UnifiedLog.UnknownOffset)
+        maxOffsetInMessages - Integer.MAX_VALUE
+      else
+        appendInfo.firstOffset
 
       roll(Some(rollOffset))
     } else {
