@@ -124,12 +124,12 @@ public interface Group {
     /**
      * @return Whether the group can be deleted or not.
      */
-    boolean isGroupEmpty();
+    boolean isEmpty();
 
     /**
-     * See {@link org.apache.kafka.coordinator.group.OffsetMetadataManager.OffsetExpirationCondition}
+     * See {@link OffsetExpirationCondition}
      *
      * @return The offset expiration condition for the group or Empty of no such condition exists.
      */
-    Optional<OffsetMetadataManager.OffsetExpirationCondition> offsetExpirationCondition();
+    Optional<OffsetExpirationCondition> offsetExpirationCondition();
 }

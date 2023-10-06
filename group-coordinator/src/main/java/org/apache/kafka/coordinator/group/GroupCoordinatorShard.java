@@ -449,12 +449,11 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
      */
     public CoordinatorResult<Void, Record> cleanupGroupMetadata() {
         List<Record> records = new ArrayList<>();
-        groupMetadataManager.groupIds()
-            .forEach(groupId -> {
-                if (offsetMetadataManager.cleanupExpiredOffsets(groupId, records)) {
-                    groupMetadataManager.maybeDeleteGroup(groupId, records);
-                }
-            });
+        groupMetadataManager.groupIds().forEach(groupId -> {
+            if (offsetMetadataManager.cleanupExpiredOffsets(groupId, records)) {
+                groupMetadataManager.maybeDeleteGroup(groupId, records);
+            }
+        });
 
         // Reschedule the next cycle.
         scheduleGroupMetadataExpiration();

@@ -70,7 +70,6 @@ import java.util.OptionalInt;
 import java.util.OptionalLong;
 
 import static org.apache.kafka.common.requests.OffsetFetchResponse.INVALID_OFFSET;
-import static org.apache.kafka.coordinator.group.OffsetMetadataManager.OffsetExpirationCondition.DEFAULT_OFFSET_EXPIRATION_CONDITION;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -293,7 +292,6 @@ public class OffsetMetadataManagerTest {
             return response.topics();
         }
 
-
         public List<MockCoordinatorTimer.ExpiredTimeout<Void, Record>> sleep(long ms) {
             time.sleep(ms);
             List<MockCoordinatorTimer.ExpiredTimeout<Void, Record>> timeouts = timer.poll();
@@ -315,6 +313,7 @@ public class OffsetMetadataManagerTest {
             commitOffset(groupId, topic, partition, offset, leaderEpoch, time.milliseconds());
 
         }
+
         public void commitOffset(
             String groupId,
             String topic,
@@ -1804,31 +1803,6 @@ public class OffsetMetadataManagerTest {
     }
 
     @Test
-    public void testIsExpiredOffset() {
-        long currentTimestamp = 1000L;
-        long baseTimestamp = 500L;
-        OptionalLong expireTimestampMs = OptionalLong.of(1500);
-        long offsetsRetentionMs = 500L;
-
-        // Current timestamp >= expire timestamp => should expire
-        assertFalse(OffsetMetadataManager.isExpiredOffset(currentTimestamp, baseTimestamp, expireTimestampMs, offsetsRetentionMs));
-
-        // Current timestamp < expire timestamp => should not expire
-        currentTimestamp = 499;
-        assertFalse(OffsetMetadataManager.isExpiredOffset(currentTimestamp, baseTimestamp, expireTimestampMs, offsetsRetentionMs));
-
-        // Expire timestamp does not exist (current version with no per partition retention)
-        // Current timestamp - base timestamp >= offsets retention => should expire
-        expireTimestampMs = OptionalLong.empty();
-        currentTimestamp = 1000L;
-        assertTrue(OffsetMetadataManager.isExpiredOffset(currentTimestamp, baseTimestamp, expireTimestampMs, offsetsRetentionMs));
-
-        // Current timestamp - base timestamp < offsets retention => should not expire
-        currentTimestamp = 999L;
-        assertFalse(OffsetMetadataManager.isExpiredOffset(currentTimestamp, baseTimestamp, expireTimestampMs, offsetsRetentionMs));
-    }
-
-    @Test
     public void testCleanupExpiredOffsetsGroupDoesNotExist() {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder()
             .build();
@@ -1839,7 +1813,7 @@ public class OffsetMetadataManagerTest {
     }
 
     @Test
-    public void testCleanupExpiredOffsetsGroupEmptyOffsetExpirationCondition() {
+    public void testCleanupExpiredOffsetsEmptyOffsetExpirationCondition() {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         Group group = mock(Group.class);
 
@@ -1883,7 +1857,8 @@ public class OffsetMetadataManagerTest {
         );
 
         when(groupMetadataManager.group("group-id")).thenReturn(group);
-        when(group.offsetExpirationCondition()).thenReturn(Optional.of(DEFAULT_OFFSET_EXPIRATION_CONDITION));
+        when(group.offsetExpirationCondition()).thenReturn(Optional.of(
+            new OffsetExpirationConditionImpl(offsetAndMetadata -> offsetAndMetadata.commitTimestampMs)));
         when(group.isSubscribedToTopic("firstTopic", false)).thenReturn(true);
         when(group.isSubscribedToTopic("secondTopic", false)).thenReturn(false);
 

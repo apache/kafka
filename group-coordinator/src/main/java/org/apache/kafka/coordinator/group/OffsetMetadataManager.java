@@ -67,35 +67,6 @@ import static org.apache.kafka.common.requests.OffsetFetchResponse.INVALID_OFFSE
  */
 public class OffsetMetadataManager {
 
-    /**
-     * An offset is considered expired based on different factors, such as the state of the group
-     * and/or the GroupMetadata record version (for generic groups). This class is used to check
-     * how offsets for the group should be expired.
-     */
-    public interface OffsetExpirationCondition {
-        /**
-         * The default expiration condition. An offset is considered expired if the difference between
-         * the offset commit timestamp and the offset expired timestamp exceeds the offsets' retention period.
-         */
-        OffsetExpirationCondition DEFAULT_OFFSET_EXPIRATION_CONDITION =
-            (offsetAndMetadata, currentTimestamp, offsetsRetentionMs) -> isExpiredOffset(
-                currentTimestamp,
-                offsetAndMetadata.commitTimestampMs,
-                offsetAndMetadata.expireTimestampMs,
-                offsetsRetentionMs);
-
-        /**
-         * Given an offset metadata and offsets retention, return whether the offset is expired or not.
-         *
-         * @param offset               The offset metadata.
-         * @param currentTimestamp     The current timestamp.
-         * @param offsetsRetentionMs   The offset retention.
-         *
-         * @return Whether the offset is considered expired or not.
-         */
-        boolean isOffsetExpired(OffsetAndMetadata offset, long currentTimestamp, long offsetsRetentionMs);
-    }
-
     public static class Builder {
         private LogContext logContext = null;
         private SnapshotRegistry snapshotRegistry = null;
@@ -620,35 +591,11 @@ public class OffsetMetadataManager {
             }
         });
 
-        log.debug("[GroupId {}] Expiring offsets: {}", groupId, expiredPartitions);
-        return hasAllOffsetsExpired.get();
-    }
-
-    /**
-     * Determine whether an offset is expired. Older versions have an expire timestamp per partition. If this
-     * exists, compare against the current timestamp. Otherwise, use the base timestamp (either commit timestamp
-     * or current state timestamp if group is empty) and check whether the offset has exceeded the offset retention.
-     *
-     * @param currentTimestamp    The current timestamp.
-     * @param baseTimestamp       The base timestamp. Either commit timestamp or current state timestamp.
-     * @param expireTimestampMs   The expire timestamp. Included in older versions.
-     * @param offsetsRetentionMs  The offsets retention in milliseconds.
-     *
-     * @return Whether the given offset is expired or not.
-     */
-    public static boolean isExpiredOffset(
-        long currentTimestamp,
-        long baseTimestamp,
-        OptionalLong expireTimestampMs,
-        long offsetsRetentionMs
-    ) {
-        if (expireTimestampMs.isPresent()) {
-            // Older versions with explicit expire_timestamp field => old expiration semantics is used
-            return currentTimestamp >= expireTimestampMs.getAsLong();
-        } else {
-            // Current version with no per partition retention
-            return currentTimestamp - baseTimestamp >= offsetsRetentionMs;
+        if (!expiredPartitions.isEmpty()) {
+            log.info("[GroupId {}] Expiring offsets: {}", groupId, expiredPartitions);
         }
+
+        return hasAllOffsetsExpired.get();
     }
 
     /**

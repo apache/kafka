@@ -3095,7 +3095,7 @@ public class GroupMetadataManager {
      */
     public void maybeDeleteGroup(String groupId, List<Record> records) {
         Group group = groups.get(groupId);
-        if (group != null && group.isGroupEmpty()) {
+        if (group != null && group.isEmpty()) {
             deleteGroup(groupId, records);
         }
     }

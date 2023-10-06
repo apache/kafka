@@ -33,7 +33,8 @@ import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.Group;
-import org.apache.kafka.coordinator.group.OffsetMetadataManager;
+import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
+import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
 import org.apache.kafka.coordinator.group.Record;
 import org.apache.kafka.coordinator.group.RecordHelpers;
 import org.slf4j.Logger;
@@ -54,7 +55,6 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
-import static org.apache.kafka.coordinator.group.OffsetMetadataManager.OffsetExpirationCondition.DEFAULT_OFFSET_EXPIRATION_CONDITION;
 import static org.apache.kafka.coordinator.group.generic.GenericGroupState.COMPLETING_REBALANCE;
 import static org.apache.kafka.coordinator.group.generic.GenericGroupState.DEAD;
 import static org.apache.kafka.coordinator.group.generic.GenericGroupState.EMPTY;
@@ -901,7 +901,7 @@ public class GenericGroup implements Group {
     }
 
     @Override
-    public boolean isGroupEmpty() {
+    public boolean isEmpty() {
         return isInState(EMPTY);
     }
 
@@ -909,12 +909,12 @@ public class GenericGroup implements Group {
      * Return the offset expiration condition to be used for this group. This is based on several factors
      * such as the group state, the protocol type, and the GroupMetadata record version.
      *
-     * See {@link org.apache.kafka.coordinator.group.OffsetMetadataManager.OffsetExpirationCondition}
+     * See {@link org.apache.kafka.coordinator.group.OffsetExpirationCondition}
      *
      * @return The offset expiration condition for the group or Empty of no such condition exists.
      */
     @Override
-    public Optional<OffsetMetadataManager.OffsetExpirationCondition> offsetExpirationCondition() {
+    public Optional<OffsetExpirationCondition> offsetExpirationCondition() {
         if (protocolType.isPresent()) {
             if (isInState(EMPTY)) {
                 // No consumer exists in the group =>
@@ -922,25 +922,19 @@ public class GenericGroup implements Group {
                 //   expire all offsets with no pending offset commit;
                 // - If there is no current state timestamp (old group metadata schema) and retention period has passed
                 //   since the last commit timestamp, expire the offset
-                return Optional.of(
-                    (offsetAndMetadata, currentTimestamp, offsetsRetentionMs) -> OffsetMetadataManager.isExpiredOffset(
-                        currentTimestamp,
-                        currentStateTimestamp.orElse(offsetAndMetadata.commitTimestampMs),
-                        offsetAndMetadata.expireTimestampMs,
-                        offsetsRetentionMs
-                    )
-                );
+                return Optional.of(new OffsetExpirationConditionImpl(
+                    offsetAndMetadata -> currentStateTimestamp.orElse(offsetAndMetadata.commitTimestampMs)));
             } else if (usesConsumerGroupProtocol() && subscribedTopics.isPresent() && isInState(STABLE)) {
                 // Consumers exist in the group and group is Stable =>
                 // - If the group is aware of the subscribed topics and retention period had passed since the
                 //   last commit timestamp, expire the offset. offset with pending offset commit are not
                 //   expired
-                return Optional.of(DEFAULT_OFFSET_EXPIRATION_CONDITION);
+                return Optional.of(new OffsetExpirationConditionImpl(offsetAndMetadata -> offsetAndMetadata.commitTimestampMs));
             }
         } else {
             // protocolType is None => standalone (simple) consumer, that uses Kafka for offset storage only
             // expire offsets where retention period has passed since their last commit
-            return Optional.of(DEFAULT_OFFSET_EXPIRATION_CONDITION);
+            return Optional.of(new OffsetExpirationConditionImpl(offsetAndMetadata -> offsetAndMetadata.commitTimestampMs));
         }
         // If none of the conditions above are met, do not expire any offsets.
         return Optional.empty();
