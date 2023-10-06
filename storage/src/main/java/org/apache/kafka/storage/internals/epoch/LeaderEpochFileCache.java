@@ -56,6 +56,7 @@ public class LeaderEpochFileCache {
      * @param topicPartition the associated topic partition
      * @param checkpoint     the checkpoint file
      */
+    @SuppressWarnings("this-escape")
     public LeaderEpochFileCache(TopicPartition topicPartition, LeaderEpochCheckpoint checkpoint) {
         this.checkpoint = checkpoint;
         this.topicPartition = topicPartition;

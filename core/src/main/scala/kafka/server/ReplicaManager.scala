@@ -33,7 +33,6 @@ import kafka.utils._
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
-import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.{AddPartitionsToTxnTopic, AddPartitionsToTxnTopicCollection, AddPartitionsToTxnTransaction}
 import org.apache.kafka.common.message.DeleteRecordsResponseData.DeleteRecordsPartitionResult
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.message.LeaderAndIsrResponseData.{LeaderAndIsrPartitionError, LeaderAndIsrTopicError}
@@ -711,7 +710,6 @@ class ReplicaManager(val config: KafkaConfig,
    * @param recordConversionStatsCallback callback for updating stats on record conversions
    * @param requestLocal                  container for the stateful instances scoped to this request
    * @param transactionalId               transactional ID if the request is from a producer and the producer is transactional
-   * @param transactionStatePartition     partition that holds the transactional state if transactionalId is present
    * @param actionQueue                   the action queue to use. ReplicaManager#actionQueue is used by default.
    */
   def appendRecords(timeout: Long,
@@ -724,14 +722,13 @@ class ReplicaManager(val config: KafkaConfig,
                     recordConversionStatsCallback: Map[TopicPartition, RecordConversionStats] => Unit = _ => (),
                     requestLocal: RequestLocal = RequestLocal.NoCaching,
                     transactionalId: String = null,
-                    transactionStatePartition: Option[Int] = None,
                     actionQueue: ActionQueue = this.actionQueue): Unit = {
     if (isValidRequiredAcks(requiredAcks)) {
       val sTime = time.milliseconds
 
       val verificationGuards: mutable.Map[TopicPartition, Object] = mutable.Map[TopicPartition, Object]()
       val (verifiedEntriesPerPartition, notYetVerifiedEntriesPerPartition, errorsPerPartition) =
-        if (transactionStatePartition.isEmpty || !config.transactionPartitionVerificationEnable)
+        if (transactionalId == null || !config.transactionPartitionVerificationEnable)
           (entriesPerPartition, Map.empty[TopicPartition, MemoryRecords], Map.empty[TopicPartition, Errors])
         else {
           val verifiedEntries = mutable.Map[TopicPartition, MemoryRecords]()
@@ -753,38 +750,55 @@ class ReplicaManager(val config: KafkaConfig,
         val localProduceResults = appendToLocalLog(internalTopicsAllowed = internalTopicsAllowed,
           origin, verifiedEntries, requiredAcks, requestLocal, verificationGuards.toMap)
         debug("Produce to local log in %d ms".format(time.milliseconds - sTime))
-        
-        val unverifiedResults = unverifiedEntries.map { case (topicPartition, error) =>
-          val message = if (error == Errors.INVALID_TXN_STATE) "Partition was not added to the transaction" else error.message()
-          topicPartition -> LogAppendResult(
-            LogAppendInfo.UNKNOWN_LOG_APPEND_INFO,
-            Some(error.exception(message))
-          )
-        }
 
-        val errorResults = errorsPerPartition.map { case (topicPartition, error) =>
-          topicPartition -> LogAppendResult(
-            LogAppendInfo.UNKNOWN_LOG_APPEND_INFO,
-            Some(error.exception())
-          )
+        def produceStatusResult(appendResult: Map[TopicPartition, LogAppendResult],
+                                useCustomMessage: Boolean): Map[TopicPartition, ProducePartitionStatus] = {
+          appendResult.map { case (topicPartition, result) =>
+            topicPartition -> ProducePartitionStatus(
+              result.info.lastOffset + 1, // required offset
+              new PartitionResponse(
+                result.error,
+                result.info.firstOffset.map[Long](_.messageOffset).orElse(-1L),
+                result.info.lastOffset,
+                result.info.logAppendTime,
+                result.info.logStartOffset,
+                result.info.recordErrors,
+                if (useCustomMessage) result.exception.get.getMessage else result.info.errorMessage
+              )
+            ) // response status
+          }
         }
         
-        val allResults = localProduceResults ++ unverifiedResults ++ errorResults
-
-        val produceStatus = allResults.map { case (topicPartition, result) =>
-          topicPartition -> ProducePartitionStatus(
-            result.info.lastOffset + 1, // required offset
-            new PartitionResponse(
-              result.error,
-              result.info.firstOffset.map[Long](_.messageOffset).orElse(-1L),
-              result.info.lastOffset,
-              result.info.logAppendTime,
-              result.info.logStartOffset,
-              result.info.recordErrors,
-              result.info.errorMessage
+        val unverifiedResults = unverifiedEntries.map {
+          case (topicPartition, error) =>
+            val finalException =
+              error match {
+                case Errors.INVALID_TXN_STATE => error.exception("Partition was not added to the transaction")
+                case Errors.CONCURRENT_TRANSACTIONS |
+                     Errors.COORDINATOR_LOAD_IN_PROGRESS |
+                     Errors.COORDINATOR_NOT_AVAILABLE |
+                     Errors.NOT_COORDINATOR => new NotEnoughReplicasException(
+                         s"Unable to verify the partition has been added to the transaction. Underlying error: ${error.toString}")
+                case _ => error.exception()
+            }
+            topicPartition -> LogAppendResult(
+              LogAppendInfo.UNKNOWN_LOG_APPEND_INFO,
+              Some(finalException)
             )
-          ) // response status
         }
+
+        val errorResults = errorsPerPartition.map {
+          case (topicPartition, error) =>
+            topicPartition -> LogAppendResult(
+              LogAppendInfo.UNKNOWN_LOG_APPEND_INFO,
+              Some(error.exception())
+            )
+        }
+
+        val produceStatus = Set((localProduceResults, false), (unverifiedResults, true), (errorResults, false)).flatMap {
+          case (results, useCustomError) => produceStatusResult(results, useCustomError)
+        }.toMap
+        val allResults = localProduceResults ++ unverifiedResults ++ errorResults
 
         actionQueue.add {
           () => allResults.foreach { case (topicPartition, result) =>
@@ -829,31 +843,15 @@ class ReplicaManager(val config: KafkaConfig,
         appendEntries(verifiedEntriesPerPartition)(Map.empty)
       } else {
         // For unverified entries, send a request to verify. When verified, the append process will proceed via the callback.
-        val (error, node) = getTransactionCoordinator(transactionStatePartition.get)
-
-        if (error != Errors.NONE) {
-          throw error.exception() // Can throw coordinator not available -- which is retriable
-        }
-
-        val topicGrouping = notYetVerifiedEntriesPerPartition.keySet.groupBy(tp => tp.topic())
-        val topicCollection = new AddPartitionsToTxnTopicCollection()
-        topicGrouping.foreach { case (topic, tps) =>
-          topicCollection.add(new AddPartitionsToTxnTopic()
-            .setName(topic)
-            .setPartitions(tps.map(tp => Integer.valueOf(tp.partition())).toList.asJava))
-        }
-
-        // Map not yet verified partitions to a request object.
         // We verify above that all partitions use the same producer ID.
         val batchInfo = notYetVerifiedEntriesPerPartition.head._2.firstBatch()
-        val notYetVerifiedTransaction = new AddPartitionsToTxnTransaction()
-          .setTransactionalId(transactionalId)
-          .setProducerId(batchInfo.producerId())
-          .setProducerEpoch(batchInfo.producerEpoch())
-          .setVerifyOnly(true)
-          .setTopics(topicCollection)
-
-        addPartitionsToTxnManager.foreach(_.addTxnData(node, notYetVerifiedTransaction, KafkaRequestHandler.wrap(appendEntries(entriesPerPartition)(_))))
+        addPartitionsToTxnManager.foreach(_.verifyTransaction(
+          transactionalId = transactionalId,
+          producerId = batchInfo.producerId,
+          producerEpoch = batchInfo.producerEpoch,
+          topicPartitions = notYetVerifiedEntriesPerPartition.keySet.toSeq,
+          callback = KafkaRequestHandler.wrap(appendEntries(entriesPerPartition)(_))
+        ))
       }
     } else {
       // If required.acks is outside accepted range, something is wrong with the client
@@ -2622,34 +2620,6 @@ class ReplicaManager(val config: KafkaConfig,
         case e: Throwable =>
           stateChangeLogger.error(s"Unable to delete stray replica $topicPartition because " +
             s"we got an unexpected ${e.getClass.getName} exception: ${e.getMessage}", e)
-      }
-    }
-  }
-
-  private[server] def getTransactionCoordinator(partition: Int): (Errors, Node) = {
-    val listenerName = config.interBrokerListenerName
-
-    val topicMetadata = metadataCache.getTopicMetadata(Set(Topic.TRANSACTION_STATE_TOPIC_NAME), listenerName)
-
-    if (topicMetadata.headOption.isEmpty) {
-      // If topic is not created, then the transaction is definitely not started.
-      (Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode)
-    } else {
-      if (topicMetadata.head.errorCode != Errors.NONE.code) {
-        (Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode)
-      } else {
-        val coordinatorEndpoint = topicMetadata.head.partitions.asScala
-          .find(_.partitionIndex == partition)
-          .filter(_.leaderId != MetadataResponse.NO_LEADER_ID)
-          .flatMap(metadata => metadataCache.
-            getAliveBrokerNode(metadata.leaderId, listenerName))
-
-        coordinatorEndpoint match {
-          case Some(endpoint) =>
-            (Errors.NONE, endpoint)
-          case _ =>
-            (Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode)
-        }
       }
     }
   }

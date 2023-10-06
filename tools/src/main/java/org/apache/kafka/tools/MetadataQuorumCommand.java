@@ -20,15 +20,16 @@ import net.sourceforge.argparse4j.ArgumentParsers;
 import net.sourceforge.argparse4j.impl.Arguments;
 import net.sourceforge.argparse4j.inf.ArgumentGroup;
 import net.sourceforge.argparse4j.inf.ArgumentParser;
+import net.sourceforge.argparse4j.inf.MutuallyExclusiveGroup;
 import net.sourceforge.argparse4j.inf.Namespace;
 import net.sourceforge.argparse4j.inf.Subparser;
 import net.sourceforge.argparse4j.inf.Subparsers;
 import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.QuorumInfo;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.server.util.CommandLineUtils;
 
 import java.io.File;
 import java.io.IOException;
@@ -75,12 +76,12 @@ public class MetadataQuorumCommand {
             .newArgumentParser("kafka-metadata-quorum")
             .defaultHelp(true)
             .description("This tool describes kraft metadata quorum status.");
-        parser
-            .addArgument("--bootstrap-server")
-            .help("A comma-separated list of host:port pairs to use for establishing the connection to the Kafka cluster.")
-            .required(true);
-        parser
-            .addArgument("--command-config")
+        MutuallyExclusiveGroup connectionOptions = parser.addMutuallyExclusiveGroup().required(true);
+        connectionOptions.addArgument("--bootstrap-server")
+            .help("A comma-separated list of host:port pairs to use for establishing the connection to the Kafka cluster.");
+        connectionOptions.addArgument("--bootstrap-controller")
+            .help("A comma-separated list of host:port pairs to use for establishing the connection to the Kafka controllers.");
+        parser.addArgument("--command-config")
             .type(Arguments.fileType())
             .help("Property file containing configs to be passed to Admin Client.");
         addDescribeSubParser(parser);
@@ -92,7 +93,9 @@ public class MetadataQuorumCommand {
 
             File optionalCommandConfig = namespace.get("command_config");
             final Properties props = getProperties(optionalCommandConfig);
-            props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, namespace.getString("bootstrap_server"));
+            CommandLineUtils.initializeBootstrapProperties(props,
+                Optional.ofNullable(namespace.getString("bootstrap_server")),
+                Optional.ofNullable(namespace.getString("bootstrap_controller")));
             admin = Admin.create(props);
 
             if (command.equals("describe")) {

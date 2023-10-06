@@ -27,7 +27,6 @@ import kafka.utils.{Exit, Logging, PasswordEncoder}
 import kafka.utils.Implicits._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.admin.{Admin, AlterClientQuotasOptions, AlterConfigOp, AlterConfigsOptions, ConfigEntry, DescribeClusterOptions, DescribeConfigsOptions, ListTopicsOptions, ScramCredentialInfo, UserScramCredentialDeletion, UserScramCredentialUpsertion, Config => JConfig, ScramMechanism => PublicScramMechanism}
-import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.errors.InvalidConfigurationException
@@ -317,7 +316,11 @@ object ConfigCommand extends Logging {
       Utils.loadProps(opts.options.valueOf(opts.commandConfigOpt))
     else
       new Properties()
-    props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, opts.options.valueOf(opts.bootstrapServerOpt))
+    CommandLineUtils.initializeBootstrapProperties(opts.parser,
+      opts.options,
+      props,
+      opts.bootstrapServerOpt,
+      opts.bootstrapControllerOpt)
     val adminClient = Admin.create(props)
 
     if (opts.options.has(opts.alterOpt) && opts.entityTypes.size != opts.entityNames.size)
@@ -762,10 +765,13 @@ object ConfigCommand extends Logging {
       .withRequiredArg
       .describedAs("urls")
       .ofType(classOf[String])
-    val bootstrapServerOpt = parser.accepts("bootstrap-server", "The Kafka server to connect to. " +
-      "This is required for describing and altering broker configs.")
+    val bootstrapServerOpt = parser.accepts("bootstrap-server", "The Kafka servers to connect to.")
       .withRequiredArg
       .describedAs("server to connect to")
+      .ofType(classOf[String])
+    val bootstrapControllerOpt = parser.accepts("bootstrap-controller", "The Kafka controllers to connect to.")
+      .withRequiredArg
+      .describedAs("controller to connect to")
       .ofType(classOf[String])
     val commandConfigOpt = parser.accepts("command-config", "Property file containing configs to be passed to Admin Client. " +
       "This is used only with --bootstrap-server option for describing and altering broker configs.")
@@ -873,14 +879,14 @@ object ConfigCommand extends Logging {
       if (entityTypeVals.size != entityTypeVals.distinct.size)
         throw new IllegalArgumentException(s"Duplicate entity type(s) specified: ${entityTypeVals.diff(entityTypeVals.distinct).mkString(",")}")
 
-      val (allowedEntityTypes, connectOptString) = if (options.has(bootstrapServerOpt))
-        (BrokerSupportedConfigTypes, "--bootstrap-server")
+      val (allowedEntityTypes, connectOptString) = if (options.has(bootstrapServerOpt) || options.has(bootstrapControllerOpt))
+        (BrokerSupportedConfigTypes, "--bootstrap-server or --bootstrap-controller")
       else
         (ZkSupportedConfigTypes, "--zookeeper")
 
       entityTypeVals.foreach(entityTypeVal =>
         if (!allowedEntityTypes.contains(entityTypeVal))
-          throw new IllegalArgumentException(s"Invalid entity type $entityTypeVal, the entity type must be one of ${allowedEntityTypes.mkString(", ")} with the $connectOptString argument")
+          throw new IllegalArgumentException(s"Invalid entity type $entityTypeVal, the entity type must be one of ${allowedEntityTypes.mkString(", ")} with a $connectOptString argument")
       )
       if (entityTypeVals.isEmpty)
         throw new IllegalArgumentException("At least one entity type must be specified")
@@ -894,21 +900,20 @@ object ConfigCommand extends Logging {
       val hasEntityName = entityNames.exists(_.nonEmpty)
       val hasEntityDefault = entityNames.exists(_.isEmpty)
 
-      if (!options.has(bootstrapServerOpt) && !options.has(zkConnectOpt))
-        throw new IllegalArgumentException("One of the required --bootstrap-server or --zookeeper arguments must be specified")
-      else if (options.has(bootstrapServerOpt) && options.has(zkConnectOpt))
-        throw new IllegalArgumentException("Only one of --bootstrap-server or --zookeeper must be specified")
+      val numConnectOptions = (if (options.has(bootstrapServerOpt)) 1 else 0) +
+        (if (options.has(bootstrapControllerOpt)) 1 else 0) +
+        (if (options.has(zkConnectOpt)) 1 else 0)
+      if (numConnectOptions == 0)
+        throw new IllegalArgumentException("One of the required --bootstrap-server, --boostrap-controller, or --zookeeper arguments must be specified")
+      else if (numConnectOptions > 1)
+        throw new IllegalArgumentException("Only one of --bootstrap-server, --boostrap-controller, and --zookeeper can be specified")
 
       if (options.has(allOpt) && options.has(zkConnectOpt)) {
         throw new IllegalArgumentException(s"--bootstrap-server must be specified for --all")
       }
-
-      if (options.has(zkTlsConfigFile) && options.has(bootstrapServerOpt)) {
-        throw new IllegalArgumentException("--bootstrap-server doesn't support --zk-tls-config-file option. " +
-          "If you intend the command to communicate directly with ZooKeeper, please use the option --zookeeper instead of --bootstrap-server. " +
-          "Otherwise, remove the --zk-tls-config-file option.")
+      if (options.has(zkTlsConfigFile) && !options.has(zkConnectOpt)) {
+        throw new IllegalArgumentException("Only the --zookeeper option can be used with the --zk-tls-config-file option.")
       }
-
       if (hasEntityName && (entityTypeVals.contains(ConfigType.Broker) || entityTypeVals.contains(BrokerLoggerConfigType))) {
         Seq(entityName, broker, brokerLogger).filter(options.has(_)).map(options.valueOf(_)).foreach { brokerId =>
           try brokerId.toInt catch {

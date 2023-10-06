@@ -14,23 +14,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.consumer.internals;
+package org.apache.kafka.connect.converters;
 
-import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
+import java.util.Map;
+import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.connect.storage.ConverterConfig;
 
 /**
- * Noop event. Intentionally left it here for demonstration purpose.
+ * Configuration options for {@link BooleanConverter} instances.
  */
-public class NoopBackgroundEvent extends BackgroundEvent {
-    public final String message;
+public class BooleanConverterConfig extends ConverterConfig {
 
-    public NoopBackgroundEvent(final String message) {
-        super(EventType.NOOP);
-        this.message = message;
+    private static final ConfigDef CONFIG = ConverterConfig.newConfigDef();
+
+    public static ConfigDef configDef() {
+        return CONFIG;
     }
 
-    @Override
-    public String toString() {
-        return getClass() + "_" + this.message;
+    public BooleanConverterConfig(Map<String, ?> props) {
+        super(CONFIG, props);
     }
 }
