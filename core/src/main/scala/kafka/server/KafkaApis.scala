@@ -136,6 +136,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     )
 
+  val listOffsetsRequestInstrumentation = new ListOffsetsRequestInstrumentation()
+
   def close(): Unit = {
     aclApis.close()
     info("Shutdown complete.")
@@ -1125,6 +1127,16 @@ class KafkaApis(val requestChannel: RequestChannel,
     )
 
     val responseTopics = authorizedRequestInfo.map { topic =>
+      val isClientRequest = offsetRequest.replicaId == ListOffsetsRequest.CONSUMER_REPLICA_ID
+
+      // For the Northguard use case, we want to know what's the load on ListOffsets API used with "search by timestamp".
+      // - Partitions per second requested for listOffset by each type (earliest, by timestamp, latest, etc.)
+      // - Exposes the logging for "what are the principals querying such case"
+      // - Distribution of partitions included per request.
+      if (isClientRequest) {  // Brokers send listOffset requests too to check if truncation needed --- ignore those.
+        listOffsetsRequestInstrumentation.logUsage(request.context.principal, topic)
+      }
+
       val responsePartitions = topic.partitions.asScala.map { partition =>
         val topicPartition = new TopicPartition(topic.name, partition.partitionIndex)
         if (offsetRequest.duplicatePartitions.contains(topicPartition)) {
@@ -1135,7 +1147,6 @@ class KafkaApis(val requestChannel: RequestChannel,
           try {
             val fetchOnlyFromLeader = offsetRequest.replicaId != ListOffsetsRequest.DEBUGGING_REPLICA_ID &&
               offsetRequest.replicaId != ListOffsetsRequest.CONTROLLER_REPLICA_ID
-            val isClientRequest = offsetRequest.replicaId == ListOffsetsRequest.CONSUMER_REPLICA_ID
             val isolationLevelOpt = if (isClientRequest)
               Some(offsetRequest.isolationLevel)
             else
