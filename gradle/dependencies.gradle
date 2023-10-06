@@ -90,7 +90,7 @@ versions += [
   activation: "1.1.1",
   apacheda: "1.0.2",
   apacheds: "2.0.0-M24",
-  argparse4j: "0.7.0",
+  argparse4j: "0.9.0",
   bcpkix: "1.75",
   caffeine: "2.9.3", // 3.x supports JDK 11 and above
   checkstyle: "8.36.2",
