@@ -200,8 +200,9 @@ public class HeartbeatRequestManager implements RequestManager {
         this.heartbeatRequestState.onFailedAttempt(responseTimeMs);
         if (exception instanceof RetriableException) {
             String message = String.format("GroupHeartbeatRequest failed because of the retriable exception. " +
-                    "Will retry in %s ms",
-                heartbeatRequestState.remainingBackoffMs(responseTimeMs));
+                    "Will retry in %s ms: {}",
+                heartbeatRequestState.remainingBackoffMs(responseTimeMs),
+                exception.getMessage());
             logger.debug(message);
         } else {
             logger.error("GroupHeartbeatRequest failed due to fatal error: " + exception.getMessage());
