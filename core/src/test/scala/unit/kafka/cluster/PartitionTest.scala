@@ -418,6 +418,7 @@ class PartitionTest extends AbstractPartitionTest {
       replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
       interBrokerProtocolVersion = MetadataVersion.latest,
       localBrokerId = brokerId,
+      eligibleLeaderReplicasEnabled = true,
       () => defaultBrokerEpoch(brokerId),
       time,
       alterPartitionListener,
@@ -1248,6 +1249,7 @@ class PartitionTest extends AbstractPartitionTest {
       replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
       interBrokerProtocolVersion = interBrokerProtocolVersion,
       localBrokerId = brokerId,
+      eligibleLeaderReplicasEnabled = interBrokerProtocolVersion.isElrSupported,
       () => defaultBrokerEpoch(brokerId),
       time,
       alterPartitionListener,
@@ -1339,6 +1341,7 @@ class PartitionTest extends AbstractPartitionTest {
       replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
       interBrokerProtocolVersion = interBrokerProtocolVersion,
       localBrokerId = brokerId,
+      eligibleLeaderReplicasEnabled = interBrokerProtocolVersion.isElrSupported,
       () => defaultBrokerEpoch(brokerId),
       time,
       alterPartitionListener,
@@ -1571,6 +1574,7 @@ class PartitionTest extends AbstractPartitionTest {
       replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
       interBrokerProtocolVersion = MetadataVersion.latest,
       localBrokerId = brokerId,
+      eligibleLeaderReplicasEnabled = true,
       () => defaultBrokerEpoch(brokerId),
       time,
       alterPartitionListener,
@@ -1688,6 +1692,7 @@ class PartitionTest extends AbstractPartitionTest {
       replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
       interBrokerProtocolVersion = MetadataVersion.latest,
       localBrokerId = brokerId,
+      eligibleLeaderReplicasEnabled = true,
       () => defaultBrokerEpoch(brokerId),
       time,
       alterPartitionListener,
@@ -1795,6 +1800,7 @@ class PartitionTest extends AbstractPartitionTest {
       replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
       interBrokerProtocolVersion = MetadataVersion.latest,
       localBrokerId = brokerId,
+      eligibleLeaderReplicasEnabled = true,
       () => defaultBrokerEpoch(brokerId),
       time,
       alterPartitionListener,
@@ -1887,6 +1893,7 @@ class PartitionTest extends AbstractPartitionTest {
       replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
       interBrokerProtocolVersion = MetadataVersion.latest,
       localBrokerId = brokerId,
+      eligibleLeaderReplicasEnabled = true,
       () => defaultBrokerEpoch(brokerId),
       time,
       alterPartitionListener,
@@ -1953,6 +1960,7 @@ class PartitionTest extends AbstractPartitionTest {
       replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
       interBrokerProtocolVersion = MetadataVersion.latest,
       localBrokerId = brokerId,
+      eligibleLeaderReplicasEnabled = true,
       () => defaultBrokerEpoch(brokerId),
       time,
       alterPartitionListener,
@@ -2109,6 +2117,7 @@ class PartitionTest extends AbstractPartitionTest {
       replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
       interBrokerProtocolVersion = MetadataVersion.latest,
       localBrokerId = brokerId,
+      eligibleLeaderReplicasEnabled = true,
       () => defaultBrokerEpoch(brokerId),
       time,
       alterPartitionListener,
@@ -2168,6 +2177,67 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(alterPartitionManager.isrUpdates.size, 0)
     assertEquals(Set(brokerId, remoteBrokerId1), partition.partitionState.isr)
     assertEquals(Set(brokerId, remoteBrokerId1), partition.partitionState.maximalIsr)
+    assertEquals(log.logEndOffset, partition.localLogOrException.highWatermark)
+  }
+
+  @Test
+  def testHighWatermarkAdvanceShouldNotAdvanceWhenUnderMinISR(): Unit = {
+    configRepository.setTopicConfig(topicPartition.topic, TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "3")
+    val log = logManager.getOrCreateLog(topicPartition, topicId = None)
+    seedLogData(log, numRecords = 10, leaderEpoch = 4)
+
+    val controllerEpoch = 0
+    val leaderEpoch = 5
+    val remoteBrokerId1 = brokerId + 1
+    val remoteBrokerId2 = brokerId + 2
+    val replicas = Seq(brokerId, remoteBrokerId1, remoteBrokerId2)
+    val isr = Seq(brokerId, remoteBrokerId1)
+
+    val metadataCache = mock(classOf[KRaftMetadataCache])
+    addBrokerEpochToMockMetadataCache(metadataCache, replicas.toList)
+
+    val partition = new Partition(
+      topicPartition,
+      replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
+      interBrokerProtocolVersion = MetadataVersion.IBP_3_7_IV1,
+      localBrokerId = brokerId,
+      eligibleLeaderReplicasEnabled = true,
+      () => defaultBrokerEpoch(brokerId),
+      time,
+      alterPartitionListener,
+      delayedOperations,
+      metadataCache,
+      logManager,
+      alterPartitionManager
+    )
+    partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
+
+    assertTrue(partition.makeLeader(
+      new LeaderAndIsrPartitionState()
+        .setControllerEpoch(controllerEpoch)
+        .setLeader(brokerId)
+        .setLeaderEpoch(leaderEpoch)
+        .setIsr(isr.toList.map(Int.box).asJava)
+        .setPartitionEpoch(1)
+        .setReplicas(replicas.map(Int.box).asJava)
+        .setIsNew(true),
+      offsetCheckpoints, None), "Expected become leader transition to succeed")
+
+    assertTrue(partition.isUnderMinIsr)
+    assertEquals(0L, partition.localLogOrException.highWatermark)
+
+    fetchFollower(partition, replicaId = remoteBrokerId1, fetchOffset = log.logEndOffset)
+    assertEquals(0L, partition.localLogOrException.highWatermark)
+
+    // Though the maximum ISR has been larger than min ISR, the HWM can't advance.
+    fetchFollower(partition, replicaId = remoteBrokerId2, fetchOffset = log.logEndOffset)
+    assertEquals(0L, partition.localLogOrException.highWatermark)
+    assertEquals(3, partition.partitionState.maximalIsr.size)
+    assertEquals(1, alterPartitionManager.isrUpdates.size)
+
+    // Update the ISR to size 3
+    alterPartitionManager.completeIsrUpdate(2)
+    assertFalse(partition.isUnderMinIsr)
     assertEquals(log.logEndOffset, partition.localLogOrException.highWatermark)
   }
 
@@ -2510,6 +2580,7 @@ class PartitionTest extends AbstractPartitionTest {
       replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
       interBrokerProtocolVersion = interBrokerProtocolVersion,
       localBrokerId = brokerId,
+      eligibleLeaderReplicasEnabled = interBrokerProtocolVersion.isElrSupported,
       () => defaultBrokerEpoch(brokerId),
       time,
       alterPartitionListener,
@@ -2630,6 +2701,7 @@ class PartitionTest extends AbstractPartitionTest {
       replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
       interBrokerProtocolVersion = IBP_2_6_IV0, // shouldn't matter, but set this to a ZK isr version
       localBrokerId = brokerId,
+      eligibleLeaderReplicasEnabled = false,
       () => defaultBrokerEpoch(brokerId),
       time,
       alterPartitionListener,
@@ -2722,6 +2794,7 @@ class PartitionTest extends AbstractPartitionTest {
       replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
       interBrokerProtocolVersion = MetadataVersion.latest,
       localBrokerId = brokerId,
+      eligibleLeaderReplicasEnabled = true,
       () => defaultBrokerEpoch(brokerId),
       time,
       alterPartitionListener,
@@ -2767,6 +2840,7 @@ class PartitionTest extends AbstractPartitionTest {
       replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
       interBrokerProtocolVersion = MetadataVersion.latest,
       localBrokerId = brokerId,
+      eligibleLeaderReplicasEnabled = true,
       () => defaultBrokerEpoch(brokerId),
       time,
       alterPartitionListener,
@@ -2848,7 +2922,8 @@ class PartitionTest extends AbstractPartitionTest {
   def testUpdateAssignmentAndIsr(): Unit = {
     val topicPartition = new TopicPartition("test", 1)
     val partition = new Partition(
-      topicPartition, 1000, MetadataVersion.latest, 0, () => defaultBrokerEpoch(0),
+      topicPartition, 1000, MetadataVersion.latest, 0,
+      eligibleLeaderReplicasEnabled = true, () => defaultBrokerEpoch(0),
       new SystemTime(), mock(classOf[AlterPartitionListener]), mock(classOf[DelayedOperations]),
       mock(classOf[MetadataCache]), mock(classOf[LogManager]), mock(classOf[AlterPartitionManager]))
 
@@ -2925,6 +3000,7 @@ class PartitionTest extends AbstractPartitionTest {
       replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
       interBrokerProtocolVersion = MetadataVersion.latest,
       localBrokerId = brokerId,
+      eligibleLeaderReplicasEnabled = true,
       () => defaultBrokerEpoch(brokerId),
       time,
       alterPartitionListener,
@@ -2964,6 +3040,7 @@ class PartitionTest extends AbstractPartitionTest {
       replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
       interBrokerProtocolVersion = MetadataVersion.latest,
       localBrokerId = brokerId,
+      eligibleLeaderReplicasEnabled = true,
       () => defaultBrokerEpoch(brokerId),
       time,
       alterPartitionListener,
@@ -3006,6 +3083,7 @@ class PartitionTest extends AbstractPartitionTest {
       replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
       interBrokerProtocolVersion = MetadataVersion.latest,
       localBrokerId = brokerId,
+      eligibleLeaderReplicasEnabled = true,
       () => defaultBrokerEpoch(brokerId),
       time,
       alterPartitionListener,

@@ -273,6 +273,7 @@ class PartitionLockTest extends Logging {
       replicaLagTimeMaxMs = kafka.server.Defaults.ReplicaLagTimeMaxMs,
       interBrokerProtocolVersion = MetadataVersion.latest,
       localBrokerId = brokerId,
+      eligibleLeaderReplicasEnabled = true,
       () => 1L,
       mockTime,
       isrChangeListener,

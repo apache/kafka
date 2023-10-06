@@ -83,6 +83,7 @@ class AbstractPartitionTest {
       replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
       interBrokerProtocolVersion = interBrokerProtocolVersion,
       localBrokerId = brokerId,
+      eligibleLeaderReplicasEnabled = interBrokerProtocolVersion.isElrSupported,
       () => defaultBrokerEpoch(brokerId),
       time,
       alterPartitionListener,

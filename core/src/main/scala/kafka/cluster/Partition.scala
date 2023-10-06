@@ -131,6 +131,7 @@ object Partition {
       replicaLagTimeMaxMs = replicaManager.config.replicaLagTimeMaxMs,
       interBrokerProtocolVersion = replicaManager.config.interBrokerProtocolVersion,
       localBrokerId = replicaManager.config.brokerId,
+      eligibleLeaderReplicasEnabled = replicaManager.config.elrEnabled,
       localBrokerEpochSupplier = replicaManager.brokerEpochSupplier,
       time = time,
       alterPartitionListener = isrChangeListener,
@@ -284,6 +285,7 @@ class Partition(val topicPartition: TopicPartition,
                 val replicaLagTimeMaxMs: Long,
                 interBrokerProtocolVersion: MetadataVersion,
                 localBrokerId: Int,
+                eligibleLeaderReplicasEnabled: Boolean,
                 localBrokerEpochSupplier: () => Long,
                 time: Time,
                 alterPartitionListener: AlterPartitionListener,
@@ -359,10 +361,14 @@ class Partition(val topicPartition: TopicPartition,
   // a false positive under min isr check, it has to check the leaderReplicaIdOpt again. Though it can still be affected
   // by ABA problems when leader->follower->leader, but it should be good enough for a metric.
   def isUnderMinIsr: Boolean = {
-    leaderLogIfLocal.exists { partitionState.isr.size < _.config.minInSyncReplicas } && isLeader
+    leaderLogIfLocal.exists{partitionState.isr.size < effectiveMinIsr(_) } && isLeader
   }
 
-  def isAtMinIsr: Boolean = leaderLogIfLocal.exists { partitionState.isr.size == _.config.minInSyncReplicas }
+  private def effectiveMinIsr(leaderLog: UnifiedLog): Int = {
+      leaderLog.config.minInSyncReplicas.min(remoteReplicasMap.size + 1)
+  }
+
+  def isAtMinIsr: Boolean = leaderLogIfLocal.exists { partitionState.isr.size == effectiveMinIsr(_) }
 
   def isReassigning: Boolean = assignmentState.isInstanceOf[OngoingReassignmentState]
 
@@ -1065,7 +1071,7 @@ class Partition(val topicPartition: TopicPartition,
             s"awaiting ${awaitingReplicas.map(logEndOffsetString)}")
         }
 
-        val minIsr = leaderLog.config.minInSyncReplicas
+        val minIsr = effectiveMinIsr(leaderLog)
         if (leaderLog.highWatermark >= requiredOffset) {
           /*
            * The topic may be configured not to accept messages if there are not enough replicas in ISR
@@ -1096,6 +1102,9 @@ class Partition(val topicPartition: TopicPartition,
    * advancing the HW, the follower's log end offset may keep falling behind the HW (determined by the leader's log end
    * offset) and therefore will never be added to ISR.
    *
+   * Note, If KIP-966 is enabled, the HW can only advance if the ISR size is equal or large than the
+   * min ISR(min.insync.replicas).
+   *
    * With the addition of AlterPartition, we also consider newly added replicas as part of the ISR when advancing
    * the HW. These replicas have not yet been committed to the ISR by the controller, so we could revert to the previously
    * committed ISR. However, adding additional replicas to the ISR makes it more restrictive and therefore safe. We call
@@ -1106,6 +1115,9 @@ class Partition(val topicPartition: TopicPartition,
    * @return true if the HW was incremented, and false otherwise.
    */
   private def maybeIncrementLeaderHW(leaderLog: UnifiedLog, currentTimeMs: Long = time.milliseconds): Boolean = {
+    if (isUnderMinIsr && metadataCache.isInstanceOf[KRaftMetadataCache] && interBrokerProtocolVersion.isElrSupported) {
+      return false
+    }
     // maybeIncrementLeaderHW is in the hot path, the following code is written to
     // avoid unnecessary collection generation
     val leaderLogEndOffset = leaderLog.logEndOffsetMetadata
@@ -1305,7 +1317,7 @@ class Partition(val topicPartition: TopicPartition,
     val (info, leaderHWIncremented) = inReadLock(leaderIsrUpdateLock) {
       leaderLogIfLocal match {
         case Some(leaderLog) =>
-          val minIsr = leaderLog.config.minInSyncReplicas
+          val minIsr = effectiveMinIsr(leaderLog)
           val inSyncSize = partitionState.isr.size
 
           // Avoid writing to leader if there are not enough insync replicas to make it safe
