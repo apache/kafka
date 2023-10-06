@@ -17,7 +17,6 @@
 package org.apache.kafka.coordinator.group.consumer;
 
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.StaleMemberEpochException;
@@ -46,8 +45,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
-import static org.apache.kafka.coordinator.group.generic.GenericGroupState.EMPTY;
-import static org.apache.kafka.coordinator.group.generic.GenericGroupState.STABLE;
+import static org.apache.kafka.coordinator.group.OffsetMetadataManager.OffsetExpirationCondition.DEFAULT_OFFSET_EXPIRATION_CONDITION;
 
 /**
  * A Consumer Group. All the metadata in this class are backed by
@@ -355,10 +353,13 @@ public class ConsumerGroup implements Group {
     /**
      * Returns true if the consumer group is actively subscribed to the topic.
      *
-     * @param topic The topic name.
-     * @return whether the group is subscribed to the topic.
+     * @param topic                            The topic name.
+     * @param isSubscribedIfEmptySubscriptions Whether to consider an empty topic subscriptions subscribed or not.
+     *
+     * @return Whether the group is subscribed to the topic.
      */
-    public boolean isSubscribedToTopic(String topic) {
+    @Override
+    public boolean isSubscribedToTopic(String topic, boolean isSubscribedIfEmptySubscriptions) {
         return subscribedTopicNames.containsKey(topic);
     }
 
@@ -642,16 +643,13 @@ public class ConsumerGroup implements Group {
     }
 
     @Override
-    public boolean isEligibleForDeletion() {
+    public boolean isGroupEmpty() {
         return state() == ConsumerGroupState.EMPTY;
     }
 
     @Override
-    public OffsetMetadataManager.ExpirationCondition expirationCondition() {
-        return new OffsetMetadataManager.ExpirationCondition(
-            offsetAndMetadata -> offsetAndMetadata.commitTimestampMs,
-            subscribedTopicNames()
-        );
+    public Optional<OffsetMetadataManager.OffsetExpirationCondition> offsetExpirationCondition() {
+        return Optional.of(DEFAULT_OFFSET_EXPIRATION_CONDITION);
     }
 
     /**

@@ -72,7 +72,6 @@ import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.record.BrokerCompressionType;
 import org.apache.kafka.server.util.FutureUtils;
-import org.apache.kafka.server.util.KafkaScheduler;
 import org.apache.kafka.server.util.timer.Timer;
 import org.slf4j.Logger;
 

@@ -17,12 +17,10 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.ListGroupsResponseData;
-import org.apache.kafka.timeline.TimelineHashMap;
 
 import java.util.List;
-import java.util.Map;
+import java.util.Optional;
 
 /**
  * Interface common for all groups.
@@ -109,10 +107,12 @@ public interface Group {
     /**
      * Returns true if the group is actively subscribed to the topic.
      *
-     * @param topic The topic name.
+     * @param topic                            The topic name.
+     * @param isSubscribedIfEmptySubscriptions Whether to consider an empty topic subscriptions subscribed or not.
+     *
      * @return Whether the group is subscribed to the topic.
      */
-    boolean isSubscribedToTopic(String topic);
+    boolean isSubscribedToTopic(String topic, boolean isSubscribedIfEmptySubscriptions);
     
     /**
      * Populates the list of records with tombstone(s) for deleting the group.
@@ -124,12 +124,12 @@ public interface Group {
     /**
      * @return Whether the group can be deleted or not.
      */
-    boolean isEligibleForDeletion();
+    boolean isGroupEmpty();
 
     /**
-     * See {@link org.apache.kafka.coordinator.group.OffsetMetadataManager.ExpirationCondition}
+     * See {@link org.apache.kafka.coordinator.group.OffsetMetadataManager.OffsetExpirationCondition}
      *
-     * @return The expiration condition for the group.
+     * @return The expiration condition for the group or Empty of no such condition exists.
      */
-    OffsetMetadataManager.ExpirationCondition expirationCondition();
+    Optional<OffsetMetadataManager.OffsetExpirationCondition> offsetExpirationCondition();
 }

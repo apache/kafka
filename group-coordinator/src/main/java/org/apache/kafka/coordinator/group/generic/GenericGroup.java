@@ -59,6 +59,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.coordinator.group.OffsetMetadataManager.OffsetExpirationCondition.DEFAULT_OFFSET_EXPIRATION_CONDITION;
 import static org.apache.kafka.coordinator.group.generic.GenericGroupState.COMPLETING_REBALANCE;
 import static org.apache.kafka.coordinator.group.generic.GenericGroupState.DEAD;
 import static org.apache.kafka.coordinator.group.generic.GenericGroupState.EMPTY;
@@ -905,19 +906,19 @@ public class GenericGroup implements Group {
     }
 
     @Override
-    public boolean isEligibleForDeletion() {
-        return isInState(EMPTY) && generationId > 0;
+    public boolean isGroupEmpty() {
+        return isInState(EMPTY);
     }
 
     /**
-     * Return the expiration condition to be used for this group. This is based on several factors
+     * Return the offset expiration condition to be used for this group. This is based on several factors
      * such as the group state, the protocol type, and the GroupMetadata record version.
-     * See {@link org.apache.kafka.coordinator.group.OffsetMetadataManager.ExpirationCondition}
+     * See {@link org.apache.kafka.coordinator.group.OffsetMetadataManager.OffsetExpirationCondition}
      *
      * @return The expiration condition.
      */
     @Override
-    public OffsetMetadataManager.ExpirationCondition expirationCondition() {
+    public Optional<OffsetMetadataManager.OffsetExpirationCondition> offsetExpirationCondition() {
         if (protocolType.isPresent()) {
             if (isInState(EMPTY)) {
                 // No consumer exists in the group =>
@@ -925,30 +926,28 @@ public class GenericGroup implements Group {
                 //   expire all offsets with no pending offset commit;
                 // - If there is no current state timestamp (old group metadata schema) and retention period has passed
                 //   since the last commit timestamp, expire the offset
-                return new OffsetMetadataManager.ExpirationCondition(
-                    offsetAndMetadata -> currentStateTimestamp.orElse(offsetAndMetadata.commitTimestampMs),
-                    Collections.emptySet());
-            } else if (ConsumerProtocol.PROTOCOL_TYPE.equals(protocolType.get()) &&
-                subscribedTopics.isPresent() && isInState(STABLE)) {
+                return Optional.of(
+                    (offsetAndMetadata, currentTimestamp, offsetsRetentionMs) -> OffsetMetadataManager.isExpiredOffset(
+                        currentTimestamp,
+                        currentStateTimestamp.orElse(offsetAndMetadata.commitTimestampMs),
+                        offsetAndMetadata.expireTimestampMs,
+                        offsetsRetentionMs
+                    )
+                );
+            } else if (usesConsumerGroupProtocol() && subscribedTopics.isPresent() && isInState(STABLE)) {
                 // Consumers exist in the group and group is Stable =>
                 // - If the group is aware of the subscribed topics and retention period had passed since the
                 //   last commit timestamp, expire the offset. offset with pending offset commit are not
                 //   expired
-                return new OffsetMetadataManager.ExpirationCondition(
-                    offsetAndMetadata -> offsetAndMetadata.commitTimestampMs,
-                    subscribedTopics.orElse(Collections.emptySet()));
+                return Optional.of(DEFAULT_OFFSET_EXPIRATION_CONDITION);
             }
         } else {
             // protocolType is None => standalone (simple) consumer, that uses Kafka for offset storage only
-            // expire offsets with no pending offset commit that retention period has passed since their last commit
-            return new OffsetMetadataManager.ExpirationCondition(
-                offsetAndMetadata -> offsetAndMetadata.commitTimestampMs,
-                Collections.emptySet());
+            // expire offsets where retention period has passed since their last commit
+            return Optional.of(DEFAULT_OFFSET_EXPIRATION_CONDITION);
         }
-
         // If none of the conditions above are met, do not expire any offsets.
-        return new OffsetMetadataManager.ExpirationCondition(offsetAndMetadata -> Long.MAX_VALUE, Collections.emptySet());
-
+        return Optional.empty();
     }
 
     /**
@@ -1120,12 +1119,14 @@ public class GenericGroup implements Group {
      * group does not know, because the information is not available yet or because it has
      * failed to parse the Consumer Protocol, it returns true to be safe.
      *
-     * @param topic The topic name.
+     * @param topic                            The topic name.
+     * @param isSubscribedIfEmptySubscriptions Whether to consider an empty topic subscriptions subscribed or not.
+     *
      * @return whether the group is subscribed to the topic.
      */
-    public boolean isSubscribedToTopic(String topic) {
+    public boolean isSubscribedToTopic(String topic, boolean isSubscribedIfEmptySubscriptions) {
         return subscribedTopics.map(topics -> topics.contains(topic))
-            .orElse(true);
+            .orElse(isSubscribedIfEmptySubscriptions);
     }
 
     /**

@@ -162,7 +162,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
                 .withSnapshotRegistry(snapshotRegistry)
                 .withTime(time)
                 .withGroupMetadataManager(groupMetadataManager)
-                .withOffsetMetadataMaxSize(config.offsetMetadataMaxSize)
+                .withGroupCoordinatorConfig(config)
                 .build();
 
             return new GroupCoordinatorShard(
@@ -177,8 +177,10 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
 
     /**
      * The group/offsets expiration key to schedule a timer task.
+     *
+     * Visible for testing.
      */
-    private static final String GROUP_EXPIRATION_KEY = "expire-group-metadata";
+    static final String GROUP_EXPIRATION_KEY = "expire-group-metadata";
 
     /**
      * The logger.
@@ -450,12 +452,12 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
      */
     public CoordinatorResult<Void, Record> cleanupGroupMetadata() {
         List<Record> records = new ArrayList<>();
-        Set<String> groupsWithEmptyOffsets = new HashSet<>();
         groupMetadataManager.groupIds()
-            .forEach(groupId -> offsetMetadataManager.cleanupExpiredOffsets(groupId, records, config.offsetsRetentionMs)
-                .ifPresent(groupsWithEmptyOffsets::add));
-
-        groupsWithEmptyOffsets.forEach(groupId -> groupMetadataManager.maybeDeleteGroup(groupId, records));
+            .forEach(groupId -> {
+                if (offsetMetadataManager.cleanupExpiredOffsets(groupId, records)) {
+                    groupMetadataManager.maybeDeleteGroup(groupId, records);
+                }
+            });
 
         // Reschedule the next cycle.
         scheduleGroupMetadataExpiration();

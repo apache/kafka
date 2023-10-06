@@ -3088,14 +3088,14 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Delete the group if it exists and is eligible for deletion.
+     * Delete the group if it exists and is in Empty state.
      *
      * @param groupId The group id.
      * @param records The list of records to append the group metadata tombstone records.
      */
     public void maybeDeleteGroup(String groupId, List<Record> records) {
         Group group = groups.get(groupId);
-        if (group != null && group.isEligibleForDeletion()) {
+        if (group != null && group.isGroupEmpty()) {
             deleteGroup(groupId, records);
         }
     }
@@ -3118,7 +3118,7 @@ public class GroupMetadataManager {
     }
 
     public Set<String> groupIds() {
-        return this.groups.keySet();
+        return Collections.unmodifiableSet(this.groups.keySet());
     }
 
     /**

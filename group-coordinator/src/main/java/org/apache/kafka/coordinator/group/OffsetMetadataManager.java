@@ -73,21 +73,27 @@ public class OffsetMetadataManager {
      * and/or the GroupMetadata record version (for generic groups). This class is used to check
      * how offsets for the group should be expired.
      */
-    public static class ExpirationCondition {
+    public interface OffsetExpirationCondition {
         /**
-         * Given an offset metadata, return the base timestamp that will be used to calculate expiration.
+         * The default expiration condition. An offset is considered expired if the difference between
+         * the offset commit timestamp and the offset expired timestamp exceeds the offsets' retention period.
          */
-        final Function<OffsetAndMetadata, Long> baseTimestamp;
+        OffsetExpirationCondition DEFAULT_OFFSET_EXPIRATION_CONDITION =
+            (offsetAndMetadata, currentTimestamp, offsetsRetentionMs) -> isExpiredOffset(
+                currentTimestamp,
+                offsetAndMetadata.commitTimestampMs,
+                offsetAndMetadata.expireTimestampMs,
+                offsetsRetentionMs);
 
         /**
-         * The set of subscribed topics a group should check against for an offset commit to be eligible for expiration.
+         * Given an offset metadata and offsets retention, return whether the offset is expired or not.
+         *
+         * @param offset               The offset metadata.
+         * @param offsetsRetentionMs   The offset retention.
+         *
+         * @return Whether the offset is considered expired or not.
          */
-        final Set<String> subscribedTopics;
-
-        public ExpirationCondition(Function<OffsetAndMetadata, Long> baseTimestamp, Set<String> subscribedTopics) {
-            this.baseTimestamp = baseTimestamp;
-            this.subscribedTopics = subscribedTopics;
-        }
+        boolean isOffsetExpired(OffsetAndMetadata offset, long currentTimestamp, long offsetsRetentionMs);
     }
 
     public static class Builder {
@@ -95,8 +101,8 @@ public class OffsetMetadataManager {
         private SnapshotRegistry snapshotRegistry = null;
         private Time time = null;
         private GroupMetadataManager groupMetadataManager = null;
-        private int offsetMetadataMaxSize = 4096;
         private MetadataImage metadataImage = null;
+        private GroupCoordinatorConfig config = null;
 
         Builder withLogContext(LogContext logContext) {
             this.logContext = logContext;
@@ -118,13 +124,13 @@ public class OffsetMetadataManager {
             return this;
         }
 
-        Builder withOffsetMetadataMaxSize(int offsetMetadataMaxSize) {
-            this.offsetMetadataMaxSize = offsetMetadataMaxSize;
+        Builder withMetadataImage(MetadataImage metadataImage) {
+            this.metadataImage = metadataImage;
             return this;
         }
 
-        Builder withMetadataImage(MetadataImage metadataImage) {
-            this.metadataImage = metadataImage;
+        Builder withGroupCoordinatorConfig(GroupCoordinatorConfig config) {
+            this.config = config;
             return this;
         }
 
@@ -144,7 +150,7 @@ public class OffsetMetadataManager {
                 time,
                 metadataImage,
                 groupMetadataManager,
-                offsetMetadataMaxSize
+                config
             );
         }
     }
@@ -175,9 +181,9 @@ public class OffsetMetadataManager {
     private final GroupMetadataManager groupMetadataManager;
 
     /**
-     * The maximum allowed metadata for any offset commit.
+     * The group coordinator config.
      */
-    private final int offsetMetadataMaxSize;
+    private final GroupCoordinatorConfig config;
 
     /**
      * The offsets keyed by group id, topic name and partition id.
@@ -190,14 +196,14 @@ public class OffsetMetadataManager {
         Time time,
         MetadataImage metadataImage,
         GroupMetadataManager groupMetadataManager,
-        int offsetMetadataMaxSize
+        GroupCoordinatorConfig config
     ) {
         this.snapshotRegistry = snapshotRegistry;
         this.log = logContext.logger(OffsetMetadataManager.class);
         this.time = time;
         this.metadataImage = metadataImage;
         this.groupMetadataManager = groupMetadataManager;
-        this.offsetMetadataMaxSize = offsetMetadataMaxSize;
+        this.config = config;
         this.offsetsByGroup = new TimelineHashMap<>(snapshotRegistry, 0);
     }
 
@@ -345,7 +351,7 @@ public class OffsetMetadataManager {
             response.topics().add(topicResponse);
 
             topic.partitions().forEach(partition -> {
-                if (partition.committedMetadata() != null && partition.committedMetadata().length() > offsetMetadataMaxSize) {
+                if (partition.committedMetadata() != null && partition.committedMetadata().length() > config.offsetMetadataMaxSize) {
                     topicResponse.partitions().add(new OffsetCommitResponsePartition()
                         .setPartitionIndex(partition.partitionIndex())
                         .setErrorCode(Errors.OFFSET_METADATA_TOO_LARGE.code()));
@@ -400,7 +406,7 @@ public class OffsetMetadataManager {
             final OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection responsePartitionCollection =
                 new OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection();
 
-            if (group.isSubscribedToTopic(topic.name())) {
+            if (group.isSubscribedToTopic(topic.name(), true)) {
                 topic.partitions().forEach(partition ->
                     responsePartitionCollection.add(new OffsetDeleteResponseData.OffsetDeleteResponsePartition()
                         .setPartitionIndex(partition.partitionIndex())
@@ -578,52 +584,59 @@ public class OffsetMetadataManager {
      *
      * @param groupId The group id.
      * @param records The list of records to populate with offset commit tombstone records.
-     * @param offsetsRetentionMs The offset retention in milliseconds.
      *
-     * @return The group id if the group no longer has any offsets remaining, empty otherwise.
+     * @return True if no offsets exist or if all offsets expired, false otherwise.
      */
-    public Optional<String> cleanupExpiredOffsets(String groupId, List<Record> records, long offsetsRetentionMs) {
+    public boolean cleanupExpiredOffsets(String groupId, List<Record> records) {
         TimelineHashMap<String, TimelineHashMap<Integer, OffsetAndMetadata>> offsetsByTopic = offsetsByGroup.get(groupId);
         if (offsetsByTopic == null) {
-            return Optional.of(groupId);
+            return true;
         }
-        try {
-            Group group = groupMetadataManager.group(groupId);
-            ExpirationCondition expirationCondition = group.expirationCondition();
-            Set<TopicPartition> expiredPartitions = new HashSet<>();
-            long currentTimestamp = time.milliseconds();
-            AtomicBoolean hasAllOffsetsExpired = new AtomicBoolean(true);
-            offsetsByTopic.forEach((topic, partitions) -> {
-                if (!expirationCondition.subscribedTopics.contains(topic)) {
-                    partitions.forEach((partition, offsetAndMetadata) -> {
-                        OptionalLong expireTimestampMs = offsetAndMetadata.expireTimestampMs;
-                        if (expireTimestampMs.isPresent()) {
-                            // Older versions with explicit expire_timestamp field => old expiration semantics is used
-                            if (currentTimestamp >= expireTimestampMs.getAsLong()) {
-                                expiredPartitions.add(addOffsetCommitTombstone(groupId, topic, partition, records));
-                            }
-                            // Current version with no per partition retention
-                        } else if (currentTimestamp - expirationCondition.baseTimestamp.apply(offsetAndMetadata) >= offsetsRetentionMs) {
-                            expiredPartitions.add(addOffsetCommitTombstone(groupId, topic, partition, records));
-                        } else {
-                            hasAllOffsetsExpired.set(false);
-                        }
-                    });
-                }
-            });
-            log.debug("[GroupId {}] Expiring offsets: {}", groupId, expiredPartitions);
 
-            if (hasAllOffsetsExpired.get()) {
-                // All offsets were expired for this group. Remove the group.
-                return Optional.of(groupId);
+        // We expect the group to exist.
+        Group group = groupMetadataManager.group(groupId);
+        Set<TopicPartition> expiredPartitions = new HashSet<>();
+        long currentTimestamp = time.milliseconds();
+        Optional<OffsetExpirationCondition> offsetExpirationCondition = group.offsetExpirationCondition();
+
+        if (!offsetExpirationCondition.isPresent()) {
+            return false;
+        }
+
+        AtomicBoolean hasAllOffsetsExpired = new AtomicBoolean(true);
+        OffsetExpirationCondition condition = offsetExpirationCondition.get();
+
+        offsetsByTopic.forEach((topic, partitions) -> {
+            if (!group.isSubscribedToTopic(topic, false)) {
+                partitions.forEach((partition, offsetAndMetadata) -> {
+                    if (condition.isOffsetExpired(offsetAndMetadata, currentTimestamp, config.offsetsRetentionMs)) {
+                        expiredPartitions.add(appendOffsetCommitTombstone(groupId, topic, partition, records));
+                    } else {
+                        hasAllOffsetsExpired.set(false);
+                    }
+                });
+            } else {
+                hasAllOffsetsExpired.set(false);
             }
+        });
 
-        } catch (GroupIdNotFoundException e) {
-            // groups in offsets should exist.
-            log.warn("GroupId {} should exist.", groupId);
+        log.debug("[GroupId {}] Expiring offsets: {}", groupId, expiredPartitions);
+        return hasAllOffsetsExpired.get();
+    }
+
+    public static boolean isExpiredOffset(
+        long currentTimestamp,
+        long baseTimestamp,
+        OptionalLong expireTimestampMs,
+        long offsetsRetentionMs
+    ) {
+        if (expireTimestampMs.isPresent()) {
+            // Older versions with explicit expire_timestamp field => old expiration semantics is used
+            return currentTimestamp >= expireTimestampMs.getAsLong();
+        } else {
+            // Current version with no per partition retention
+            return currentTimestamp - baseTimestamp >= offsetsRetentionMs;
         }
-
-        return Optional.empty();
     }
 
     /**
@@ -636,7 +649,7 @@ public class OffsetMetadataManager {
      *
      * @return The topic partition of the corresponding tombstone.
      */
-    private TopicPartition addOffsetCommitTombstone(
+    private TopicPartition appendOffsetCommitTombstone(
         String groupId,
         String topic,
         int partition, 

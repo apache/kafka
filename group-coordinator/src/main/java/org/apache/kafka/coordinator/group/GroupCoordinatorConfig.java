@@ -126,7 +126,7 @@ public class GroupCoordinatorConfig {
         int genericGroupMinSessionTimeoutMs,
         int genericGroupMaxSessionTimeoutMs,
         long offsetsRetentionCheckIntervalMs,
-        int offsetsRententionMinutes
+        long offsetsRetentionMs
     ) {
         this.numThreads = numThreads;
         this.consumerGroupSessionTimeoutMs = consumerGroupSessionTimeoutMs;
@@ -141,6 +141,6 @@ public class GroupCoordinatorConfig {
         this.genericGroupMinSessionTimeoutMs = genericGroupMinSessionTimeoutMs;
         this.genericGroupMaxSessionTimeoutMs = genericGroupMaxSessionTimeoutMs;
         this.offsetsRetentionCheckIntervalMs = offsetsRetentionCheckIntervalMs;
-        this.offsetsRetentionMs = offsetsRententionMinutes * 60 * 1000L;
+        this.offsetsRetentionMs = offsetsRetentionMs;
     }
 }
