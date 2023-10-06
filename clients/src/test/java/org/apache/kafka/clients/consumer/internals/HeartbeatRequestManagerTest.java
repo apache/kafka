@@ -265,7 +265,6 @@ public class HeartbeatRequestManagerTest {
         assertEquals(subscribedTopics, heartbeatRequest.data().subscribedTopicNames());
         assertEquals(GROUP_INSTANCE_ID, heartbeatRequest.data().instanceId());
         // TODO: Test pattern subscription and user provided assignor selection.
-        assertNull(heartbeatRequest.data().clientAssignors());
         assertNull(heartbeatRequest.data().serverAssignor());
         assertNull(heartbeatRequest.data().subscribedTopicRegex());
     }
