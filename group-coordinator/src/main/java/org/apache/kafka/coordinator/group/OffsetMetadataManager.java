@@ -53,7 +53,6 @@ import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Function;
 
 import static org.apache.kafka.common.requests.OffsetFetchResponse.INVALID_OFFSET;
 
@@ -89,6 +88,7 @@ public class OffsetMetadataManager {
          * Given an offset metadata and offsets retention, return whether the offset is expired or not.
          *
          * @param offset               The offset metadata.
+         * @param currentTimestamp     The current timestamp.
          * @param offsetsRetentionMs   The offset retention.
          *
          * @return Whether the offset is considered expired or not.
@@ -124,13 +124,13 @@ public class OffsetMetadataManager {
             return this;
         }
 
-        Builder withMetadataImage(MetadataImage metadataImage) {
-            this.metadataImage = metadataImage;
+        Builder withGroupCoordinatorConfig(GroupCoordinatorConfig config) {
+            this.config = config;
             return this;
         }
 
-        Builder withGroupCoordinatorConfig(GroupCoordinatorConfig config) {
-            this.config = config;
+        Builder withMetadataImage(MetadataImage metadataImage) {
+            this.metadataImage = metadataImage;
             return this;
         }
 
@@ -624,6 +624,18 @@ public class OffsetMetadataManager {
         return hasAllOffsetsExpired.get();
     }
 
+    /**
+     * Determine whether an offset is expired. Older versions have an expire timestamp per partition. If this
+     * exists, compare against the current timestamp. Otherwise, use the base timestamp (either commit timestamp
+     * or current state timestamp if group is empty) and check whether the offset has exceeded the offset retention.
+     *
+     * @param currentTimestamp    The current timestamp.
+     * @param baseTimestamp       The base timestamp. Either commit timestamp or current state timestamp.
+     * @param expireTimestampMs   The expire timestamp. Included in older versions.
+     * @param offsetsRetentionMs  The offsets retention in milliseconds.
+     *
+     * @return Whether the given offset is expired or not.
+     */
     public static boolean isExpiredOffset(
         long currentTimestamp,
         long baseTimestamp,

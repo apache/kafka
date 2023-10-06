@@ -3117,6 +3117,9 @@ public class GroupMetadataManager {
             && !groupProtocolTypeOrName.equals(protocolTypeOrName);
     }
 
+    /**
+     * @return The set of all groups' ids.
+     */
     public Set<String> groupIds() {
         return Collections.unmodifiableSet(this.groups.keySet());
     }

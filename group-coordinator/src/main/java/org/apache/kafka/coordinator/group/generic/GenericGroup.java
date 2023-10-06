@@ -17,7 +17,6 @@
 package org.apache.kafka.coordinator.group.generic;
 
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
@@ -34,11 +33,9 @@ import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.Group;
-import org.apache.kafka.coordinator.group.OffsetAndMetadata;
 import org.apache.kafka.coordinator.group.OffsetMetadataManager;
 import org.apache.kafka.coordinator.group.Record;
 import org.apache.kafka.coordinator.group.RecordHelpers;
-import org.apache.kafka.timeline.TimelineHashMap;
 import org.slf4j.Logger;
 
 import java.nio.ByteBuffer;
@@ -52,11 +49,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.OptionalLong;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.coordinator.group.OffsetMetadataManager.OffsetExpirationCondition.DEFAULT_OFFSET_EXPIRATION_CONDITION;
@@ -913,9 +908,10 @@ public class GenericGroup implements Group {
     /**
      * Return the offset expiration condition to be used for this group. This is based on several factors
      * such as the group state, the protocol type, and the GroupMetadata record version.
+     *
      * See {@link org.apache.kafka.coordinator.group.OffsetMetadataManager.OffsetExpirationCondition}
      *
-     * @return The expiration condition.
+     * @return The offset expiration condition for the group or Empty of no such condition exists.
      */
     @Override
     public Optional<OffsetMetadataManager.OffsetExpirationCondition> offsetExpirationCondition() {

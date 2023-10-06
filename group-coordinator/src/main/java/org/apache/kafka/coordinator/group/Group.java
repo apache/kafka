@@ -129,7 +129,7 @@ public interface Group {
     /**
      * See {@link org.apache.kafka.coordinator.group.OffsetMetadataManager.OffsetExpirationCondition}
      *
-     * @return The expiration condition for the group or Empty of no such condition exists.
+     * @return The offset expiration condition for the group or Empty of no such condition exists.
      */
     Optional<OffsetMetadataManager.OffsetExpirationCondition> offsetExpirationCondition();
 }

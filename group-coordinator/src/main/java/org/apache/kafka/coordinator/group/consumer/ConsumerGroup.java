@@ -24,7 +24,6 @@ import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.coordinator.group.Group;
-import org.apache.kafka.coordinator.group.OffsetAndMetadata;
 import org.apache.kafka.coordinator.group.OffsetMetadataManager;
 import org.apache.kafka.coordinator.group.Record;
 import org.apache.kafka.coordinator.group.RecordHelpers;
@@ -647,6 +646,11 @@ public class ConsumerGroup implements Group {
         return state() == ConsumerGroupState.EMPTY;
     }
 
+    /**
+     * See {@link org.apache.kafka.coordinator.group.OffsetMetadataManager.OffsetExpirationCondition}
+     *
+     * @return The offset expiration condition for the group or Empty of no such condition exists.
+     */
     @Override
     public Optional<OffsetMetadataManager.OffsetExpirationCondition> offsetExpirationCondition() {
         return Optional.of(DEFAULT_OFFSET_EXPIRATION_CONDITION);
