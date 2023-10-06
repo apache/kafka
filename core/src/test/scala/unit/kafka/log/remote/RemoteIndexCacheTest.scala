@@ -560,16 +560,8 @@ class RemoteIndexCacheTest {
   @ParameterizedTest
   @EnumSource(value = classOf[IndexType], names = Array("OFFSET", "TIMESTAMP", "TRANSACTION"))
   def testCorruptCacheIndexFileExistsButNotInCache(indexType: IndexType): Unit = {
-    // create Corrupt  Index File in remote index cache
-    if (indexType == IndexType.OFFSET) {
-      createCorruptOffsetIndexFile(cache.cacheDir())
-    }
-    else if (indexType == IndexType.TIMESTAMP) {
-      createCorruptTimeIndexOffsetFile(cache.cacheDir())
-    }
-    else if (indexType == IndexType.TRANSACTION) {
-      createCorruptTxnIndexForSegmentMetadata(cache.cacheDir(), rlsMetadata)
-    }
+    // create Corrupted Index File in remote index cache
+    createCorruptedIndexFile(indexType,cache.cacheDir())
     val entry = cache.getIndexEntry(rlsMetadata)
     // Test would fail if it throws corrupt Exception
     val offsetIndexFile = entry.offsetIndex.file().toPath
@@ -586,7 +578,7 @@ class RemoteIndexCacheTest {
 
     // assert that parent directory for the index files is correct
     assertEquals(RemoteIndexCache.DIR_NAME, offsetIndexFile.getParent.getFileName.toString,
-      s"offsetIndex=entry.offsetIndex().file().toPath is created under incorrect parent")
+      s"offsetIndex=$offsetIndexFile is created under incorrect parent")
     assertEquals(RemoteIndexCache.DIR_NAME, txnIndexFile.getParent.getFileName.toString,
       s"txnIndex=$txnIndexFile is created under incorrect parent")
     assertEquals(RemoteIndexCache.DIR_NAME, timeIndexFile.getParent.getFileName.toString,
@@ -607,7 +599,7 @@ class RemoteIndexCacheTest {
         val timeIdx = createTimeIndexForSegmentMetadata(metadata)
         val txnIdx = createTxIndexForSegmentMetadata(metadata)
         maybeAppendIndexEntries(offsetIdx, timeIdx)
-        // Create corrupt index file which would be returned by rsm
+        // Create corrupted index file
         createCorruptTimeIndexOffsetFile(tpDir)
         indexType match {
           case IndexType.OFFSET => new FileInputStream(offsetIdx.file)
@@ -622,8 +614,6 @@ class RemoteIndexCacheTest {
     assertNull(cache.internalCache().getIfPresent(rlsMetadata.remoteLogSegmentId().id()))
     verifyFetchIndexInvocation(1, Seq(IndexType.OFFSET, IndexType.TIMESTAMP))
     verifyFetchIndexInvocation(0, Seq(IndexType.TRANSACTION))
-    // However cache fetch failed
-    // but it has already created offset and time index file in remote cache dir.
     // Current status
     // (cache is null)
     // RemoteCacheDir contain
@@ -632,6 +622,7 @@ class RemoteIndexCacheTest {
     // What should be the code flow in next execution
     // 1. No rsm call for fetching OffSet Index File.
     // 2. Time index file should be fetched from remote storage again as it is corrupted in the first execution.
+    // 3. Transaction index file should be fetched from remote storage.
     reset(rsm)
     // delete all files created in tpDir
     Files.walk(tpDir.toPath, 1)
@@ -655,8 +646,7 @@ class RemoteIndexCacheTest {
         }
       })
     cache.getIndexEntry(rlsMetadata)
-    // No exception should occur
-    // rsm should not be called for offset Index
+    // rsm should not be called to fetch offset Index
     verifyFetchIndexInvocation(0, Seq(IndexType.OFFSET))
     verifyFetchIndexInvocation(1, Seq(IndexType.TIMESTAMP))
     verifyFetchIndexInvocation(1, Seq(IndexType.TRANSACTION))
@@ -682,6 +672,7 @@ class RemoteIndexCacheTest {
     }
 
     val entry = cache.getIndexEntry(rlsMetadata)
+    verifyFetchIndexInvocation(count = 1)
     // copy files with temporary name
     Files.copy(entry.offsetIndex().file().toPath(), Paths.get(Utils.replaceSuffix(entry.offsetIndex().file().getPath(), "", tempSuffix)))
     Files.copy(entry.txnIndex().file().toPath(), Paths.get(Utils.replaceSuffix(entry.txnIndex().file().getPath(), "", tempSuffix)))
@@ -700,8 +691,7 @@ class RemoteIndexCacheTest {
     // validate cache entry for the above key should be null
     assertNull(cache.internalCache().getIfPresent(rlsMetadata.remoteLogSegmentId().id()))
     cache.getIndexEntry(rlsMetadata)
-    // Index  Files already exist ,rsm should not be called again
-    // instead files exist on disk should be used
+    // Index  Files already exist ,rsm should not fetch them again.
     verifyFetchIndexInvocation(count = 1)
     // verify index files on disk
     assertTrue(getRemoteCacheIndexFileFromDisk(LogFileUtils.INDEX_FILE_SUFFIX).isPresent, s"Offset index file should be present on disk at ${remoteIndexCacheDir.toPath}")
@@ -718,18 +708,10 @@ class RemoteIndexCacheTest {
         val indexType = ans.getArgument[IndexType](1)
         val offsetIdx = createOffsetIndexForSegmentMetadata(metadata)
         val timeIdx = createTimeIndexForSegmentMetadata(metadata)
-        var txnIdx = createTxIndexForSegmentMetadata(metadata)
+        val txnIdx = createTxIndexForSegmentMetadata(metadata)
         maybeAppendIndexEntries(offsetIdx, timeIdx)
         // Create corrupt index file return from RSM
-        if (testIndexType == IndexType.OFFSET) {
-          createCorruptOffsetIndexFile(tpDir)
-        }
-        else if (testIndexType == IndexType.TIMESTAMP) {
-          createCorruptTimeIndexOffsetFile(tpDir)
-        }
-        else if (testIndexType == IndexType.TRANSACTION) {
-          txnIdx = createCorruptTxnIndexForSegmentMetadata(tpDir, rlsMetadata)
-        }
+        createCorruptedIndexFile(testIndexType,tpDir)
         indexType match {
           case IndexType.OFFSET => new FileInputStream(offsetIdx.file)
           case IndexType.TIMESTAMP => new FileInputStream(timeIdx.file)
@@ -929,5 +911,14 @@ class RemoteIndexCacheTest {
     // The size of the string written in the file is 13 bytes,
     // but it should be multiple of Time Index EntrySIZE which is equal to 12.
     pw.close()
+  }
+  private def createCorruptedIndexFile(indexType: IndexType, dir: File): Unit = {
+    if (indexType == IndexType.OFFSET) {
+      createCorruptOffsetIndexFile(dir)
+    } else if (indexType == IndexType.TIMESTAMP) {
+      createCorruptTimeIndexOffsetFile(dir)
+    } else if (indexType == IndexType.TRANSACTION) {
+      createCorruptTxnIndexForSegmentMetadata(dir, rlsMetadata)
+    }
   }
 }
