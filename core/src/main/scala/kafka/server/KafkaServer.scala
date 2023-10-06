@@ -69,6 +69,8 @@ import scala.jdk.CollectionConverters._
 
 object KafkaServer {
 
+  val brokerMetaPropsFile = "meta.properties"
+
   def zkClientConfigFromKafkaConfig(config: KafkaConfig, forceZkSslClientEnable: Boolean = false): ZKClientConfig = {
     val clientConfig = new ZKClientConfig
     if (config.zkSslClientEnable || forceZkSslClientEnable) {
@@ -165,9 +167,8 @@ class KafkaServer(
   private var configRepository: ZkConfigRepository = _
 
   val correlationId: AtomicInteger = new AtomicInteger(0)
-  val brokerMetaPropsFile = "meta.properties"
   val brokerMetadataCheckpoints = config.logDirs.map { logDir =>
-    (logDir, new BrokerMetadataCheckpoint(new File(logDir + File.separator + brokerMetaPropsFile)))
+    (logDir, new BrokerMetadataCheckpoint(new File(logDir + File.separator + KafkaServer.brokerMetaPropsFile)))
   }.toMap
 
   private var _clusterId: String = _

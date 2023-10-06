@@ -117,6 +117,9 @@ class LogManager(logDirs: Seq[File],
   }
 
   private val dirLocks = lockLogDirs(liveLogDirs)
+  private val dirIds = directoryIds(liveLogDirs)
+  // visible for testing
+  private[log] val directoryIds: Set[Uuid] = dirIds.values.toSet
   @volatile private var recoveryPointCheckpoints = liveLogDirs.map(dir =>
     (dir, new OffsetCheckpointFile(new File(dir, RecoveryPointCheckpointFile), logDirFailureChannel))).toMap
   @volatile private var logStartOffsetCheckpoints = liveLogDirs.map(dir =>
@@ -259,6 +262,40 @@ class LogManager(logDirs: Seq[File],
           None
       }
     }
+  }
+
+  /**
+   * Retrieves the Uuid for the directory, given its absolute path.
+   */
+  def directoryId(dir: String): Option[Uuid] = dirIds.get(dir)
+
+  /**
+   * Determine directory ID for each directory with a meta.properties.
+   * If meta.properties does not include a directory ID, one is generated and persisted back to meta.properties.
+   * Directories without a meta.properties don't get a directory ID assigned.
+   */
+  private def directoryIds(dirs: Seq[File]): Map[String, Uuid] = {
+    dirs.flatMap { dir =>
+      try {
+        val metadataCheckpoint = new BrokerMetadataCheckpoint(new File(dir, KafkaServer.brokerMetaPropsFile))
+        metadataCheckpoint.read().map { props =>
+          val rawMetaProperties = new RawMetaProperties(props)
+          val uuid = rawMetaProperties.directoryId match {
+            case Some(uuidStr) => Uuid.fromString(uuidStr)
+            case None =>
+              val uuid = Uuid.randomUuid()
+              rawMetaProperties.directoryId = uuid.toString
+              metadataCheckpoint.write(rawMetaProperties.props)
+              uuid
+          }
+          dir.getAbsolutePath -> uuid
+        }.toMap
+      } catch {
+        case e: IOException =>
+          logDirFailureChannel.maybeAddOfflineLogDir(dir.getAbsolutePath, s"Disk error while loading ID $dir", e)
+          None
+      }
+    }.toMap
   }
 
   private def addLogToBeDeleted(log: UnifiedLog): Unit = {
