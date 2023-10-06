@@ -198,12 +198,11 @@ public class HeartbeatRequestManager implements RequestManager {
 
     private void onFailure(final Throwable exception, final long responseTimeMs) {
         this.heartbeatRequestState.onFailedAttempt(responseTimeMs);
-        logger.warn("Failed to send heartbeat to coordinator node {} due to error: {}",
-                coordinatorRequestManager.coordinator(), exception.getMessage());
         if (exception instanceof RetriableException) {
-            logger.debug("Retrying heartbeat request in {}ms due to {}",
-                heartbeatRequestState.remainingBackoffMs(responseTimeMs),
-                exception.getMessage());
+            String message = String.format("GroupHeartbeatRequest failed because of the retriable exception. " +
+                    "Will retry in %s ms",
+                heartbeatRequestState.remainingBackoffMs(responseTimeMs));
+            logger.debug(message, exception);
         } else {
             logger.error("GroupHeartbeatRequest failed due to fatal error", exception);
             handleFatalFailure(exception);
