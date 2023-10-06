@@ -393,7 +393,7 @@ public class StreamThread extends Thread {
             log,
             stateUpdaterEnabled,
             proceessingThreadsEnabled
-            );
+        );
         final StandbyTaskCreator standbyTaskCreator = new StandbyTaskCreator(
             topologyMetadata,
             config,
