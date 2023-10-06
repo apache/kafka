@@ -30,6 +30,7 @@ import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnsupportedAssignorException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.HeartbeatRequestData;
 import org.apache.kafka.common.message.HeartbeatResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol;
@@ -445,6 +446,59 @@ public class GroupMetadataManager {
     }
 
     /**
+     * Handles a DescribeGroup request.
+     *
+     * @param groupIds          The IDs of the groups to describe.
+     * @param committedOffset   A specified committed offset corresponding to this shard.
+     *
+     * @return A list containing the DescribeGroupsResponseData.DescribedGroup.
+     */
+    public List<DescribeGroupsResponseData.DescribedGroup> describeGroups(
+        List<String> groupIds,
+        long committedOffset
+    ) {
+        final List<DescribeGroupsResponseData.DescribedGroup> describedGroups = new ArrayList<>();
+        groupIds.forEach(groupId -> {
+            try {
+                GenericGroup group = genericGroup(groupId, committedOffset);
+
+                if (group.isInState(STABLE)) {
+                    if (!group.protocolName().isPresent()) {
+                        throw new IllegalStateException("Invalid null group protocol for stable group");
+                    }
+
+                    describedGroups.add(new DescribeGroupsResponseData.DescribedGroup()
+                        .setGroupId(groupId)
+                        .setGroupState(group.stateAsString())
+                        .setProtocolType(group.protocolType().orElse(""))
+                        .setProtocolData(group.protocolName().get())
+                        .setMembers(group.allMembers().stream()
+                            .map(member -> member.describe(group.protocolName().get()))
+                            .collect(Collectors.toList())
+                        )
+                    );
+                } else {
+                    describedGroups.add(new DescribeGroupsResponseData.DescribedGroup()
+                        .setGroupId(groupId)
+                        .setGroupState(group.stateAsString())
+                        .setProtocolType(group.protocolType().orElse(""))
+                        .setMembers(group.allMembers().stream()
+                            .map(member -> member.describeNoMetadata())
+                            .collect(Collectors.toList())
+                        )
+                    );
+                }
+            } catch (GroupIdNotFoundException exception) {
+                describedGroups.add(new DescribeGroupsResponseData.DescribedGroup()
+                    .setGroupId(groupId)
+                    .setGroupState(DEAD.toString())
+                );
+            }
+        });
+        return describedGroups;
+    }
+
+    /**
      * Gets or maybe creates a consumer group.
      *
      * @param groupId           The group id.
@@ -518,6 +572,31 @@ public class GroupMetadataManager {
                 throw new GroupIdNotFoundException(String.format("Group %s is not a generic group.",
                     groupId));
             }
+        }
+    }
+
+    /**
+     * Gets a generic group by committed offset.
+     *
+     * @param groupId           The group id.
+     * @param committedOffset   A specified committed offset corresponding to this shard.
+     *
+     * @return A GenericGroup.
+     * @throws GroupIdNotFoundException if the group does not exist or is not a generic group.
+     */
+    public GenericGroup genericGroup(
+        String groupId,
+        long committedOffset
+    ) throws GroupIdNotFoundException {
+        Group group = group(groupId, committedOffset);
+
+        if (group.type() == GENERIC) {
+            return (GenericGroup) group;
+        } else {
+            // We don't support upgrading/downgrading between protocols at the moment so
+            // we throw an exception if a group exists with the wrong type.
+            throw new GroupIdNotFoundException(String.format("Group %s is not a generic group.",
+                groupId));
         }
     }
 
