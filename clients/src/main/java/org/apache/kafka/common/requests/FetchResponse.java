@@ -289,10 +289,6 @@ public class FetchResponse extends AbstractResponse {
             }
         }
         FetchResponseData data = new FetchResponseData();
-        data.setThrottleTimeMs(throttleTimeMs)
-                .setErrorCode(error.code())
-                .setSessionId(sessionId)
-                .setResponses(topicResponseList);
         // KafkaApis should only pass in node endpoints on error, otherwise this should be an empty list
         nodeEndpoints.forEach(endpoint -> data.nodeEndpoints().add(
                 new FetchResponseData.NodeEndpoint()
@@ -300,6 +296,9 @@ public class FetchResponse extends AbstractResponse {
                         .setHost(endpoint.host())
                         .setPort(endpoint.port())
                         .setRack(endpoint.rack())));
-        return data;
+        return data.setThrottleTimeMs(throttleTimeMs)
+                .setErrorCode(error.code())
+                .setSessionId(sessionId)
+                .setResponses(topicResponseList);
     }
 }

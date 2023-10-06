@@ -77,7 +77,6 @@ public class ProduceResponse extends AbstractResponse {
     }
 
     /**
-     * Constructor for versions <= 9
      * This is deprecated in favor of using the ProduceResponseData constructor, KafkaApis should switch to that
      * in KAFKA-10730
      * @param responses Produced data grouped by topic-partition
