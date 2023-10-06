@@ -28,6 +28,10 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.function.Consumer;
 
+import static java.util.Collections.emptySet;
+import static org.apache.kafka.common.utils.Utils.mkSet;
+import static org.apache.kafka.test.StreamsTestUtils.TaskBuilder.standbyTask;
+import static org.apache.kafka.test.StreamsTestUtils.TaskBuilder.statefulTask;
 import static org.apache.kafka.test.StreamsTestUtils.TaskBuilder.statelessTask;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -41,6 +45,7 @@ class ReadOnlyTaskTest {
             add("inputPartitions");
             add("changelogPartitions");
             add("commitRequested");
+            add("commitNeeded");
             add("isActive");
             add("changelogOffsets");
             add("state");
@@ -127,6 +132,28 @@ class ReadOnlyTaskTest {
     }
 
     @Test
+    public void shouldDelegateCommitNeededIfStandby() {
+        final StandbyTask standbyTask =
+            standbyTask(new TaskId(1, 0), mkSet(new TopicPartition("topic", 0))).build();
+        final ReadOnlyTask readOnlyTask = new ReadOnlyTask(standbyTask);
+
+        readOnlyTask.commitNeeded();
+
+        verify(standbyTask).commitNeeded();
+    }
+
+    @Test
+    public void shouldThrowUnsupportedOperationExceptionForCommitNeededIfActive() {
+        final StreamTask statefulTask =
+            statefulTask(new TaskId(1, 0), mkSet(new TopicPartition("topic", 0))).build();
+        final ReadOnlyTask readOnlyTask = new ReadOnlyTask(statefulTask);
+
+        final Exception exception = assertThrows(UnsupportedOperationException.class, readOnlyTask::commitNeeded);
+
+        assertEquals("This task is read-only", exception.getMessage());
+    }
+
+    @Test
     public void shouldThrowUnsupportedOperationExceptionForForbiddenMethods() {
         final ReadOnlyTask readOnlyTask = new ReadOnlyTask(task);
         for (final Method method : ReadOnlyTask.class.getMethods()) {
@@ -166,10 +193,10 @@ class ReadOnlyTaskTest {
                     parameters[i] = 0;
                     break;
                 case "java.util.Set":
-                    parameters[i] = Collections.emptySet();
+                    parameters[i] = emptySet();
                     break;
                 case "java.util.Collection":
-                    parameters[i] = Collections.emptySet();
+                    parameters[i] = emptySet();
                     break;
                 case "java.util.Map":
                     parameters[i] = Collections.emptyMap();
@@ -184,7 +211,7 @@ class ReadOnlyTaskTest {
                     parameters[i] = (Consumer) ignored -> { };
                     break;
                 case "java.lang.Iterable":
-                    parameters[i] = Collections.emptySet();
+                    parameters[i] = emptySet();
                     break;
                 case "org.apache.kafka.common.utils.Time":
                     parameters[i] = Time.SYSTEM;
