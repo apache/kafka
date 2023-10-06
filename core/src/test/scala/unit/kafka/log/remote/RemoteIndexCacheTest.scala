@@ -561,7 +561,7 @@ class RemoteIndexCacheTest {
   @EnumSource(value = classOf[IndexType], names = Array("OFFSET", "TIMESTAMP", "TRANSACTION"))
   def testCorruptCacheIndexFileExistsButNotInCache(indexType: IndexType): Unit = {
     // create Corrupted Index File in remote index cache
-    createCorruptedIndexFile(indexType,cache.cacheDir())
+    createCorruptedIndexFile(indexType, cache.cacheDir())
     val entry = cache.getIndexEntry(rlsMetadata)
     // Test would fail if it throws corrupt Exception
     val offsetIndexFile = entry.offsetIndex.file().toPath
@@ -711,7 +711,7 @@ class RemoteIndexCacheTest {
         val txnIdx = createTxIndexForSegmentMetadata(metadata)
         maybeAppendIndexEntries(offsetIdx, timeIdx)
         // Create corrupt index file return from RSM
-        createCorruptedIndexFile(testIndexType,tpDir)
+        createCorruptedIndexFile(testIndexType, tpDir)
         indexType match {
           case IndexType.OFFSET => new FileInputStream(offsetIdx.file)
           case IndexType.TIMESTAMP => new FileInputStream(timeIdx.file)
@@ -912,6 +912,7 @@ class RemoteIndexCacheTest {
     // but it should be multiple of Time Index EntrySIZE which is equal to 12.
     pw.close()
   }
+
   private def createCorruptedIndexFile(indexType: IndexType, dir: File): Unit = {
     if (indexType == IndexType.OFFSET) {
       createCorruptOffsetIndexFile(dir)

@@ -186,7 +186,7 @@ public class RemoteIndexCache implements Closeable {
     }
 
     // Visible for testing
-    public File cacheDir () {
+    public File cacheDir() {
         return cacheDir;
     }
 
