@@ -184,7 +184,7 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
     }
 
     private void process(final FetchEvent event) {
-        requestManagers.fetchRequestManager.requestFetch(event.future());
+        // This is currently unused.
     }
 
     /**

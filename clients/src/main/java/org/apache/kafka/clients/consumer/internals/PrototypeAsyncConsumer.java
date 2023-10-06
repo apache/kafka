@@ -84,7 +84,6 @@ import java.util.Set;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -124,6 +123,13 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     private final String clientId;
     private final BackgroundEventProcessor backgroundEventProcessor;
     private final Deserializers<K, V> deserializers;
+
+    /**
+     * A thread-safe {@link FetchBuffer fetch buffer} for the results that are populated in the
+     * {@link ConsumerNetworkThread network thread} when the results are available. Because of the interaction
+     * of the fetch buffer in the application thread and the network I/O thread, this is shared between the
+     * two threads and is thus designed to be thread-safe.
+     */
     private final FetchBuffer fetchBuffer;
     private final FetchCollector<K, V> fetchCollector;
     private final ConsumerInterceptors<K, V> interceptors;
@@ -140,15 +146,6 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     // to keep from repeatedly scanning subscriptions in poll(), cache the result during metadata updates
     private boolean cachedSubscriptionHasAllFetchPositions;
     private final WakeupTrigger wakeupTrigger = new WakeupTrigger();
-
-    /**
-     * A thread-safe {@link BlockingQueue queue} for the results that are populated in the
-     * {@link ConsumerNetworkThread network thread} when the fetch results are available. Because
-     * the {@link #fetchBuffer fetch buffer} is not thread-safe, we need to separate the results
-     * collection that we provide to the network thread from the collection that
-     * we read from on the application thread.
-     */
-    private final BlockingQueue<CompletedFetch> fetchResults = new LinkedBlockingQueue<>();
 
     public PrototypeAsyncConsumer(final Properties properties,
                                   final Deserializer<K> keyDeserializer,
@@ -212,6 +209,9 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
             ApiVersions apiVersions = new ApiVersions();
             final BlockingQueue<ApplicationEvent> applicationEventQueue = new LinkedBlockingQueue<>();
             final BlockingQueue<BackgroundEvent> backgroundEventQueue = new LinkedBlockingQueue<>();
+
+            // This FetchBuffer is shared between the application and network threads.
+            this.fetchBuffer = new FetchBuffer(logContext);
             final Supplier<NetworkClientDelegate> networkClientDelegateSupplier = NetworkClientDelegate.supplier(time,
                     logContext,
                     metadata,
@@ -224,6 +224,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
                     backgroundEventQueue,
                     metadata,
                     subscriptions,
+                    fetchBuffer,
                     config,
                     groupRebalanceConfig,
                     apiVersions,
@@ -250,8 +251,8 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
                 config.ignore(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG);
                 //config.ignore(ConsumerConfig.THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED);
             }
-            // These are specific to the foreground thread
-            this.fetchBuffer = new FetchBuffer(logContext);
+
+            // The FetchCollector is only used on the application thread.
             this.fetchCollector = new FetchCollector<>(logContext,
                     metadata,
                     subscriptions,
@@ -902,18 +903,11 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
 
     /**
      * Send the requests for fetch data to the {@link ConsumerNetworkThread network thread} and set up to
-     * collect the results in {@link #fetchResults}.
+     * collect the results in {@link #fetchBuffer}.
      */
     private void sendFetches() {
         FetchEvent event = new FetchEvent();
         applicationEventHandler.add(event);
-
-        event.future().whenComplete((completedFetches, error) -> {
-            if (error != null)
-                log.warn("An error occurred during poll: {}", error.getMessage(), error);
-            else
-                fetchResults.addAll(completedFetches);
-        });
     }
 
     private Fetch<K, V> pollForFetches(Timer timer) {
@@ -945,15 +939,8 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         // data may not be immediately available, but the calling method (poll) will correctly
         // handle the overall timeout.
         try {
-            while (pollTimer.notExpired()) {
-                CompletedFetch completedFetch = fetchResults.poll(pollTimer.remainingMs(), TimeUnit.MILLISECONDS);
-
-                if (completedFetch != null)
-                    fetchBuffer.add(completedFetch);
-
-                pollTimer.update();
-            }
-        } catch (InterruptedException e) {
+            fetchBuffer.awaitNotEmpty(pollTimer);
+        } catch (InterruptException e) {
             log.trace("Timeout during fetch", e);
         } finally {
             timer.update(pollTimer.currentTimeMs());

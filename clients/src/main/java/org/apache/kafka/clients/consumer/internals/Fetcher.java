@@ -68,7 +68,7 @@ public class Fetcher<K, V> extends AbstractFetch {
                    Deserializers<K, V> deserializers,
                    FetchMetricsManager metricsManager,
                    Time time) {
-        super(logContext, metadata, subscriptions, fetchConfig, metricsManager, time);
+        super(logContext, metadata, subscriptions, fetchConfig, new FetchBuffer(logContext), metricsManager, time);
         this.log = logContext.logger(Fetcher.class);
         this.client = client;
         this.fetchCollector = new FetchCollector<>(logContext,

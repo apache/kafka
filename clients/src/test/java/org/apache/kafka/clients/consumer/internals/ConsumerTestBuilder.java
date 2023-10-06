@@ -69,6 +69,7 @@ public class ConsumerTestBuilder implements Closeable {
     final SubscriptionState subscriptions;
     final ConsumerMetadata metadata;
     final FetchConfig fetchConfig;
+    final FetchBuffer fetchBuffer;
     final Metrics metrics;
     final FetchMetricsManager metricsManager;
     final NetworkClientDelegate networkClientDelegate;
@@ -151,11 +152,13 @@ public class ConsumerTestBuilder implements Closeable {
                 config,
                 coordinatorRequestManager,
                 groupState));
+        this.fetchBuffer = new FetchBuffer(logContext);
         this.fetchRequestManager = spy(new FetchRequestManager(logContext,
                 time,
                 metadata,
                 subscriptions,
                 fetchConfig,
+                fetchBuffer,
                 metricsManager,
                 networkClientDelegate));
         this.topicMetadataRequestManager = spy(new TopicMetadataRequestManager(logContext,

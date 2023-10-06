@@ -106,6 +106,7 @@ public class RequestManagers implements Closeable {
                                                      final BlockingQueue<BackgroundEvent> backgroundEventQueue,
                                                      final ConsumerMetadata metadata,
                                                      final SubscriptionState subscriptions,
+                                                     final FetchBuffer fetchBuffer,
                                                      final ConsumerConfig config,
                                                      final GroupRebalanceConfig groupRebalanceConfig,
                                                      final ApiVersions apiVersions,
@@ -134,6 +135,7 @@ public class RequestManagers implements Closeable {
                         metadata,
                         subscriptions,
                         fetchConfig,
+                        fetchBuffer,
                         fetchMetricsManager,
                         networkClientDelegate);
                 final TopicMetadataRequestManager topic = new TopicMetadataRequestManager(

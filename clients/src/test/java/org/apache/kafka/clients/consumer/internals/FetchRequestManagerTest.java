@@ -3390,6 +3390,7 @@ public class FetchRequestManagerTest {
                 metadata,
                 subscriptionState,
                 fetchConfig,
+                new FetchBuffer(logContext),
                 metricsManager,
                 networkClientDelegate,
                 fetchCollector));
@@ -3447,10 +3448,11 @@ public class FetchRequestManagerTest {
                                            ConsumerMetadata metadata,
                                            SubscriptionState subscriptions,
                                            FetchConfig fetchConfig,
+                                           FetchBuffer fetchBuffer,
                                            FetchMetricsManager metricsManager,
                                            NetworkClientDelegate networkClientDelegate,
                                            FetchCollector<K, V> fetchCollector) {
-            super(logContext, time, metadata, subscriptions, fetchConfig, metricsManager, networkClientDelegate);
+            super(logContext, time, metadata, subscriptions, fetchConfig, fetchBuffer, metricsManager, networkClientDelegate);
             this.fetchCollector = fetchCollector;
         }
 

@@ -74,6 +74,7 @@ public abstract class AbstractFetch implements Closeable {
                          final ConsumerMetadata metadata,
                          final SubscriptionState subscriptions,
                          final FetchConfig fetchConfig,
+                         final FetchBuffer fetchBuffer,
                          final FetchMetricsManager metricsManager,
                          final Time time) {
         this.log = logContext.logger(AbstractFetch.class);
@@ -81,8 +82,8 @@ public abstract class AbstractFetch implements Closeable {
         this.metadata = metadata;
         this.subscriptions = subscriptions;
         this.fetchConfig = fetchConfig;
+        this.fetchBuffer = fetchBuffer;
         this.decompressionBufferSupplier = BufferSupplier.create();
-        this.fetchBuffer = new FetchBuffer(logContext);
         this.sessionHandlers = new HashMap<>();
         this.nodesWithPendingFetchRequests = new HashSet<>();
         this.metricsManager = metricsManager;
