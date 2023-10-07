@@ -529,7 +529,7 @@ public class RemoteIndexCache implements Closeable {
             return entrySizeBytes;
         }
 
-        public long estimatedEntrySize() {
+        private long estimatedEntrySize() {
             lock.readLock().lock();
             try {
                 return offsetIndex.sizeInBytes() + timeIndex.sizeInBytes() + Files.size(txnIndex.file().toPath());
