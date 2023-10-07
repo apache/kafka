@@ -1140,12 +1140,14 @@ class DynamicRemoteLogConfig(server: KafkaBroker) extends BrokerReconfigurable w
   override def validateReconfiguration(newConfig: KafkaConfig): Unit = {
     newConfig.values.forEach { (k, v) =>
       if (reconfigurableConfigs.contains(k)) {
-        val newValue = v.asInstanceOf[Long]
-        val oldValue = getValue(server.config, k)
-        if (newValue != oldValue) {
-          val errorMsg = s"Dynamic remote log manager config update validation failed for $k=$v"
-          if (newValue <= 0)
-            throw new ConfigException(s"$errorMsg, value should be at least 1")
+        if (k.equals(RemoteLogManagerConfig.REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP)) {
+          val newValue = v.asInstanceOf[Long]
+          val oldValue = getValue(server.config, k)
+          if (newValue != oldValue) {
+            val errorMsg = s"Dynamic remote log manager config update validation failed for $k=$v"
+            if (newValue <= 0)
+              throw new ConfigException(s"$errorMsg, value should be at least 1")
+          }
         }
       }
     }
