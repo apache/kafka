@@ -32,6 +32,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.utils.ExponentialBackoff;
@@ -650,7 +651,7 @@ public class RecordAccumulator {
      * into the set of ready nodes.  If partition has no leader, add the topic to the set of topics with
      * no leader.  This function also calculates stats for adaptive partitioning.
      *
-     * @param cluster The cluster metadata
+     * @param metadata The cluster metadata
      * @param nowMs The current time
      * @param topic The topic
      * @param topicInfo The topic info
@@ -659,14 +660,14 @@ public class RecordAccumulator {
      * @param unknownLeaderTopics The set of topics with no leader (to be filled in)
      * @return The delay for next check
      */
-    private long partitionReady(Cluster cluster, long nowMs, String topic,
+    private long partitionReady(Metadata metadata, long nowMs, String topic,
                                 TopicInfo topicInfo,
                                 long nextReadyCheckDelayMs, Set<Node> readyNodes, Set<String> unknownLeaderTopics) {
         ConcurrentMap<Integer, Deque<ProducerBatch>> batches = topicInfo.batches;
         // Collect the queue sizes for available partitions to be used in adaptive partitioning.
         int[] queueSizes = null;
         int[] partitionIds = null;
-        if (enableAdaptivePartitioning && batches.size() >= cluster.partitionsForTopic(topic).size()) {
+        if (enableAdaptivePartitioning && batches.size() >= metadata.fetch().partitionsForTopic(topic).size()) {
             // We don't do adaptive partitioning until we scheduled at least a batch for all
             // partitions (i.e. we have the corresponding entries in the batches map), we just
             // do uniform.  The reason is that we build queue sizes from the batches map,
@@ -682,7 +683,9 @@ public class RecordAccumulator {
             TopicPartition part = new TopicPartition(topic, entry.getKey());
             // Advance queueSizesIndex so that we properly index available
             // partitions.  Do it here so that it's done for all code paths.
-            Node leader = cluster.leaderFor(part);
+
+            Metadata.LeaderAndEpoch leaderAndEpoch = metadata.currentLeader(part);
+            Node leader = leaderAndEpoch.leader.orElse(null);
             if (leader != null && queueSizes != null) {
                 ++queueSizesIndex;
                 assert queueSizesIndex < queueSizes.length;
@@ -712,7 +715,8 @@ public class RecordAccumulator {
                 }
 
                 waitedTimeMs = batch.waitedTimeMs(nowMs);
-                backingOff = shouldBackoff(batch, waitedTimeMs);
+                batch.maybeUpdateLeaderEpoch(leaderAndEpoch.epoch);
+                backingOff = shouldBackoff(batch.hasLeaderChangedForTheOngoingRetry(), batch, waitedTimeMs);
                 backoffAttempts = batch.attempts();
                 dequeSize = deque.size();
                 full = dequeSize > 1 || batch.isFull();
@@ -772,7 +776,7 @@ public class RecordAccumulator {
      * </ul>
      * </ol>
      */
-    public ReadyCheckResult ready(Cluster cluster, long nowMs) {
+    public ReadyCheckResult ready(Metadata metadata, long nowMs) {
         Set<Node> readyNodes = new HashSet<>();
         long nextReadyCheckDelayMs = Long.MAX_VALUE;
         Set<String> unknownLeaderTopics = new HashSet<>();
@@ -780,7 +784,7 @@ public class RecordAccumulator {
         // cumulative frequency table (used in partitioner).
         for (Map.Entry<String, TopicInfo> topicInfoEntry : this.topicInfoMap.entrySet()) {
             final String topic = topicInfoEntry.getKey();
-            nextReadyCheckDelayMs = partitionReady(cluster, nowMs, topic, topicInfoEntry.getValue(), nextReadyCheckDelayMs, readyNodes, unknownLeaderTopics);
+            nextReadyCheckDelayMs = partitionReady(metadata, nowMs, topic, topicInfoEntry.getValue(), nextReadyCheckDelayMs, readyNodes, unknownLeaderTopics);
         }
         return new ReadyCheckResult(readyNodes, nextReadyCheckDelayMs, unknownLeaderTopics);
     }
@@ -800,8 +804,17 @@ public class RecordAccumulator {
         return false;
     }
 
-    private boolean shouldBackoff(final ProducerBatch batch, final long waitedTimeMs) {
-        return batch.attempts() > 0 && waitedTimeMs < retryBackoff.backoff(batch.attempts() - 1);
+    private boolean shouldBackoff(boolean hasLeaderChanged, final ProducerBatch batch, final long waitedTimeMs) {
+        boolean shouldWaitMore = batch.attempts() > 0 && waitedTimeMs < retryBackoff.backoff(batch.attempts() - 1);
+        boolean shouldBackoff = !hasLeaderChanged && shouldWaitMore;
+        if (shouldBackoff) {
+            log.trace(
+                "For {}, will backoff", batch);
+        } else {
+            log.trace(
+                "For {}, will not backoff, shouldWaitMore {}, hasLeaderChanged {}", batch, shouldWaitMore, hasLeaderChanged);
+        }
+        return shouldBackoff;
     }
 
     private boolean shouldStopDrainBatchesForPartition(ProducerBatch first, TopicPartition tp) {
@@ -842,22 +855,31 @@ public class RecordAccumulator {
         return false;
     }
 
-    private List<ProducerBatch> drainBatchesForOneNode(Cluster cluster, Node node, int maxSize, long now) {
+    private List<ProducerBatch> drainBatchesForOneNode(Metadata metadata, Node node, int maxSize, long now) {
         int size = 0;
-        List<PartitionInfo> parts = cluster.partitionsForNode(node.id());
+        List<PartitionInfo> parts = metadata.fetch().partitionsForNode(node.id());
         List<ProducerBatch> ready = new ArrayList<>();
+        if (parts.isEmpty())
+            return ready;
         /* to make starvation less likely each node has it's own drainIndex */
         int drainIndex = getDrainIndex(node.idString());
         int start = drainIndex = drainIndex % parts.size();
         do {
             PartitionInfo part = parts.get(drainIndex);
+
             TopicPartition tp = new TopicPartition(part.topic(), part.partition());
             updateDrainIndex(node.idString(), drainIndex);
             drainIndex = (drainIndex + 1) % parts.size();
             // Only proceed if the partition has no in-flight batches.
             if (isMuted(tp))
                 continue;
-
+            Metadata.LeaderAndEpoch leaderAndEpoch = metadata.currentLeader(tp);
+            // Although a small chance, but skip this partition if leader has changed since the partition -> node assignment obtained from outside the loop.
+            // In this case, skip sending it to the old leader, as it would return aa NO_LEADER_OR_FOLLOWER error.
+            if (!leaderAndEpoch.leader.isPresent())
+                continue;
+            if (!node.equals(leaderAndEpoch.leader.get()))
+                continue;
             Deque<ProducerBatch> deque = getDeque(tp);
             if (deque == null)
                 continue;
@@ -871,7 +893,8 @@ public class RecordAccumulator {
 
                 // first != null
                 // Only drain the batch if it is not during backoff period.
-                if (shouldBackoff(first, first.waitedTimeMs(now)))
+                first.maybeUpdateLeaderEpoch(leaderAndEpoch.epoch);
+                if (shouldBackoff(first.hasLeaderChangedForTheOngoingRetry(), first, first.waitedTimeMs(now)))
                     continue;
 
                 if (size + first.estimatedSizeInBytes() > maxSize && !ready.isEmpty()) {
@@ -937,19 +960,19 @@ public class RecordAccumulator {
      * Drain all the data for the given nodes and collate them into a list of batches that will fit within the specified
      * size on a per-node basis. This method attempts to avoid choosing the same topic-node over and over.
      *
-     * @param cluster The current cluster metadata
+     * @param metadata The current cluster metadata
      * @param nodes The list of node to drain
      * @param maxSize The maximum number of bytes to drain
      * @param now The current unix time in milliseconds
      * @return A list of {@link ProducerBatch} for each node specified with total size less than the requested maxSize.
      */
-    public Map<Integer, List<ProducerBatch>> drain(Cluster cluster, Set<Node> nodes, int maxSize, long now) {
+    public Map<Integer, List<ProducerBatch>> drain(Metadata metadata, Set<Node> nodes, int maxSize, long now) {
         if (nodes.isEmpty())
             return Collections.emptyMap();
 
         Map<Integer, List<ProducerBatch>> batches = new HashMap<>();
         for (Node node : nodes) {
-            List<ProducerBatch> ready = drainBatchesForOneNode(cluster, node, maxSize, now);
+            List<ProducerBatch> ready = drainBatchesForOneNode(metadata, node, maxSize, now);
             batches.put(node.id(), ready);
         }
         return batches;

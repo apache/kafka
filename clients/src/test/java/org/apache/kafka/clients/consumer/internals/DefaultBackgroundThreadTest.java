@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.LogTruncationException;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
@@ -27,7 +28,11 @@ import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
 import org.apache.kafka.clients.consumer.internals.events.NoopApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.ResetPositionsApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.TopicMetadataApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.ValidatePositionsApplicationEvent;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -53,15 +58,18 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.RETRY_BACKOFF_MS_
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+@SuppressWarnings("ClassDataAbstractionCoupling")
 public class DefaultBackgroundThreadTest {
     private static final long RETRY_BACKOFF_MS = 100;
     private final Properties properties = new Properties();
@@ -77,6 +85,7 @@ public class DefaultBackgroundThreadTest {
     private final int requestTimeoutMs = 500;
     private GroupState groupState;
     private CommitRequestManager commitManager;
+    private TopicMetadataRequestManager topicMetadataRequestManager;
 
     @BeforeEach
     @SuppressWarnings("unchecked")
@@ -101,6 +110,7 @@ public class DefaultBackgroundThreadTest {
                 true);
         this.groupState = new GroupState(rebalanceConfig);
         this.commitManager = mock(CommitRequestManager.class);
+        this.topicMetadataRequestManager = mock(TopicMetadataRequestManager.class);
     }
 
     @Test
@@ -108,6 +118,7 @@ public class DefaultBackgroundThreadTest {
         when(coordinatorManager.poll(anyLong())).thenReturn(mockPollCoordinatorResult());
         when(commitManager.poll(anyLong())).thenReturn(mockPollCommitResult());
         when(offsetsRequestManager.poll(anyLong())).thenReturn(emptyPollOffsetsRequestResult());
+        when(topicMetadataRequestManager.poll(anyLong())).thenReturn(emptyPollOffsetsRequestResult());
         DefaultBackgroundThread backgroundThread = mockBackgroundThread();
         backgroundThread.start();
         TestUtils.waitForCondition(backgroundThread::isRunning, "Failed awaiting for the background thread to be running");
@@ -119,9 +130,10 @@ public class DefaultBackgroundThreadTest {
     public void testApplicationEvent() {
         this.applicationEventsQueue = new LinkedBlockingQueue<>();
         this.backgroundEventsQueue = new LinkedBlockingQueue<>();
-        when(coordinatorManager.poll(anyLong())).thenReturn(mockPollCoordinatorResult());
-        when(commitManager.poll(anyLong())).thenReturn(mockPollCommitResult());
-        when(offsetsRequestManager.poll(anyLong())).thenReturn(emptyPollOffsetsRequestResult());
+        when(this.coordinatorManager.poll(anyLong())).thenReturn(mockPollCoordinatorResult());
+        when(this.commitManager.poll(anyLong())).thenReturn(mockPollCommitResult());
+        when(this.offsetsRequestManager.poll(anyLong())).thenReturn(emptyPollOffsetsRequestResult());
+        when(this.topicMetadataRequestManager.poll(anyLong())).thenReturn(emptyPollOffsetsRequestResult());
         DefaultBackgroundThread backgroundThread = mockBackgroundThread();
         ApplicationEvent e = new NoopApplicationEvent("noop event");
         this.applicationEventsQueue.add(e);
@@ -138,9 +150,10 @@ public class DefaultBackgroundThreadTest {
                 this.backgroundEventsQueue,
                 mockRequestManagers(),
                 metadata);
-        when(coordinatorManager.poll(anyLong())).thenReturn(mockPollCoordinatorResult());
-        when(commitManager.poll(anyLong())).thenReturn(mockPollCommitResult());
-        when(offsetsRequestManager.poll(anyLong())).thenReturn(emptyPollOffsetsRequestResult());
+        when(this.coordinatorManager.poll(anyLong())).thenReturn(mockPollCoordinatorResult());
+        when(this.commitManager.poll(anyLong())).thenReturn(mockPollCommitResult());
+        when(this.offsetsRequestManager.poll(anyLong())).thenReturn(emptyPollOffsetsRequestResult());
+        when(this.topicMetadataRequestManager.poll(anyLong())).thenReturn(emptyPollOffsetsRequestResult());
         DefaultBackgroundThread backgroundThread = mockBackgroundThread();
         ApplicationEvent e = new NewTopicsMetadataUpdateRequestEvent();
         this.applicationEventsQueue.add(e);
@@ -153,9 +166,10 @@ public class DefaultBackgroundThreadTest {
     public void testCommitEvent() {
         this.applicationEventsQueue = new LinkedBlockingQueue<>();
         this.backgroundEventsQueue = new LinkedBlockingQueue<>();
-        when(coordinatorManager.poll(anyLong())).thenReturn(mockPollCoordinatorResult());
-        when(commitManager.poll(anyLong())).thenReturn(mockPollCommitResult());
-        when(offsetsRequestManager.poll(anyLong())).thenReturn(emptyPollOffsetsRequestResult());
+        when(this.coordinatorManager.poll(anyLong())).thenReturn(mockPollCoordinatorResult());
+        when(this.commitManager.poll(anyLong())).thenReturn(mockPollCommitResult());
+        when(this.offsetsRequestManager.poll(anyLong())).thenReturn(emptyPollOffsetsRequestResult());
+        when(this.topicMetadataRequestManager.poll(anyLong())).thenReturn(emptyPollOffsetsRequestResult());
         DefaultBackgroundThread backgroundThread = mockBackgroundThread();
         ApplicationEvent e = new CommitApplicationEvent(new HashMap<>());
         this.applicationEventsQueue.add(e);
@@ -170,6 +184,7 @@ public class DefaultBackgroundThreadTest {
         when(coordinatorManager.poll(anyLong())).thenReturn(mockPollCoordinatorResult());
         when(commitManager.poll(anyLong())).thenReturn(mockPollCommitResult());
         when(offsetsRequestManager.poll(anyLong())).thenReturn(emptyPollOffsetsRequestResult());
+        when(this.topicMetadataRequestManager.poll(anyLong())).thenReturn(emptyPollOffsetsRequestResult());
         this.applicationEventsQueue = new LinkedBlockingQueue<>();
         this.backgroundEventsQueue = new LinkedBlockingQueue<>();
         DefaultBackgroundThread backgroundThread = mockBackgroundThread();
@@ -181,6 +196,89 @@ public class DefaultBackgroundThreadTest {
         assertTrue(applicationEventsQueue.isEmpty());
         backgroundThread.close();
     }
+
+    @Test
+    public void testResetPositionsEventIsProcessed() {
+        when(coordinatorManager.poll(anyLong())).thenReturn(mockPollCoordinatorResult());
+        when(commitManager.poll(anyLong())).thenReturn(mockPollCommitResult());
+        when(offsetsRequestManager.poll(anyLong())).thenReturn(emptyPollOffsetsRequestResult());
+        when(this.topicMetadataRequestManager.poll(anyLong())).thenReturn(emptyPollOffsetsRequestResult());
+        this.applicationEventsQueue = new LinkedBlockingQueue<>();
+        this.backgroundEventsQueue = new LinkedBlockingQueue<>();
+        DefaultBackgroundThread backgroundThread = mockBackgroundThread();
+        ResetPositionsApplicationEvent e = new ResetPositionsApplicationEvent();
+        this.applicationEventsQueue.add(e);
+        backgroundThread.runOnce();
+        verify(applicationEventProcessor).process(any(ResetPositionsApplicationEvent.class));
+        assertTrue(applicationEventsQueue.isEmpty());
+        backgroundThread.close();
+    }
+
+    @Test
+    public void testResetPositionsProcessFailure() {
+        when(coordinatorManager.poll(anyLong())).thenReturn(mockPollCoordinatorResult());
+        when(commitManager.poll(anyLong())).thenReturn(mockPollCommitResult());
+        when(offsetsRequestManager.poll(anyLong())).thenReturn(emptyPollOffsetsRequestResult());
+        this.applicationEventsQueue = new LinkedBlockingQueue<>();
+        this.backgroundEventsQueue = new LinkedBlockingQueue<>();
+        applicationEventProcessor = spy(new ApplicationEventProcessor(
+                this.backgroundEventsQueue,
+                mockRequestManagers(),
+                metadata));
+        DefaultBackgroundThread backgroundThread = mockBackgroundThread();
+
+        TopicAuthorizationException authException = new TopicAuthorizationException("Topic authorization failed");
+        doThrow(authException).when(offsetsRequestManager).resetPositionsIfNeeded();
+
+        ResetPositionsApplicationEvent event = new ResetPositionsApplicationEvent();
+        this.applicationEventsQueue.add(event);
+        assertThrows(TopicAuthorizationException.class, backgroundThread::runOnce);
+
+        verify(applicationEventProcessor).process(any(ResetPositionsApplicationEvent.class));
+        backgroundThread.close();
+    }
+
+    @Test
+    public void testValidatePositionsEventIsProcessed() {
+        when(coordinatorManager.poll(anyLong())).thenReturn(mockPollCoordinatorResult());
+        when(commitManager.poll(anyLong())).thenReturn(mockPollCommitResult());
+        when(offsetsRequestManager.poll(anyLong())).thenReturn(emptyPollOffsetsRequestResult());
+        when(topicMetadataRequestManager.poll(anyLong())).thenReturn(emptyPollOffsetsRequestResult());
+        this.applicationEventsQueue = new LinkedBlockingQueue<>();
+        this.backgroundEventsQueue = new LinkedBlockingQueue<>();
+        DefaultBackgroundThread backgroundThread = mockBackgroundThread();
+        ValidatePositionsApplicationEvent e = new ValidatePositionsApplicationEvent();
+        this.applicationEventsQueue.add(e);
+        backgroundThread.runOnce();
+        verify(applicationEventProcessor).process(any(ValidatePositionsApplicationEvent.class));
+        assertTrue(applicationEventsQueue.isEmpty());
+        backgroundThread.close();
+    }
+
+    @Test
+    public void testValidatePositionsProcessFailure() {
+        when(coordinatorManager.poll(anyLong())).thenReturn(mockPollCoordinatorResult());
+        when(commitManager.poll(anyLong())).thenReturn(mockPollCommitResult());
+        when(offsetsRequestManager.poll(anyLong())).thenReturn(emptyPollOffsetsRequestResult());
+        this.applicationEventsQueue = new LinkedBlockingQueue<>();
+        this.backgroundEventsQueue = new LinkedBlockingQueue<>();
+        applicationEventProcessor = spy(new ApplicationEventProcessor(
+                this.backgroundEventsQueue,
+                mockRequestManagers(),
+                metadata));
+        DefaultBackgroundThread backgroundThread = mockBackgroundThread();
+
+        LogTruncationException logTruncationException = new LogTruncationException(Collections.emptyMap(), Collections.emptyMap());
+        doThrow(logTruncationException).when(offsetsRequestManager).validatePositionsIfNeeded();
+
+        ValidatePositionsApplicationEvent event = new ValidatePositionsApplicationEvent();
+        this.applicationEventsQueue.add(event);
+        assertThrows(LogTruncationException.class, backgroundThread::runOnce);
+
+        verify(applicationEventProcessor).process(any(ValidatePositionsApplicationEvent.class));
+        backgroundThread.close();
+    }
+
     @Test
     public void testAssignmentChangeEvent() {
         this.applicationEventsQueue = new LinkedBlockingQueue<>();
@@ -188,7 +286,7 @@ public class DefaultBackgroundThreadTest {
         this.applicationEventProcessor = spy(new ApplicationEventProcessor(
                 this.backgroundEventsQueue,
                 mockRequestManagers(),
-            metadata));
+                metadata));
 
         DefaultBackgroundThread backgroundThread = mockBackgroundThread();
         HashMap<TopicPartition, OffsetAndMetadata> offset = mockTopicPartitionOffset();
@@ -200,6 +298,7 @@ public class DefaultBackgroundThreadTest {
         when(this.coordinatorManager.poll(anyLong())).thenReturn(mockPollCoordinatorResult());
         when(this.commitManager.poll(anyLong())).thenReturn(mockPollCommitResult());
         when(this.offsetsRequestManager.poll(anyLong())).thenReturn(emptyPollOffsetsRequestResult());
+        when(this.topicMetadataRequestManager.poll(anyLong())).thenReturn(emptyPollOffsetsRequestResult());
 
         backgroundThread.runOnce();
         verify(applicationEventProcessor).process(any(AssignmentChangeApplicationEvent.class));
@@ -216,9 +315,24 @@ public class DefaultBackgroundThreadTest {
         when(this.coordinatorManager.poll(anyLong())).thenReturn(mockPollCoordinatorResult());
         when(this.commitManager.poll(anyLong())).thenReturn(mockPollCommitResult());
         when(this.offsetsRequestManager.poll(anyLong())).thenReturn(emptyPollOffsetsRequestResult());
+        when(this.topicMetadataRequestManager.poll(anyLong())).thenReturn(emptyPollOffsetsRequestResult());
         backgroundThread.runOnce();
         Mockito.verify(coordinatorManager, times(1)).poll(anyLong());
         Mockito.verify(networkClient, times(1)).poll(anyLong(), anyLong());
+        backgroundThread.close();
+    }
+
+    @Test
+    void testFetchTopicMetadata() {
+        this.applicationEventsQueue = new LinkedBlockingQueue<>();
+        DefaultBackgroundThread backgroundThread = mockBackgroundThread();
+        when(this.coordinatorManager.poll(anyLong())).thenReturn(mockPollCoordinatorResult());
+        when(this.commitManager.poll(anyLong())).thenReturn(mockPollCommitResult());
+        when(this.offsetsRequestManager.poll(anyLong())).thenReturn(emptyPollOffsetsRequestResult());
+        when(this.topicMetadataRequestManager.poll(anyLong())).thenReturn(emptyPollOffsetsRequestResult());
+        this.applicationEventsQueue.add(new TopicMetadataApplicationEvent("topic"));
+        backgroundThread.runOnce();
+        verify(applicationEventProcessor).process(any(TopicMetadataApplicationEvent.class));
         backgroundThread.close();
     }
 
@@ -249,6 +363,7 @@ public class DefaultBackgroundThreadTest {
     private RequestManagers mockRequestManagers() {
         return new RequestManagers(
                 offsetsRequestManager,
+                topicMetadataRequestManager,
                 Optional.of(coordinatorManager),
                 Optional.of(commitManager));
     }
@@ -285,19 +400,20 @@ public class DefaultBackgroundThreadTest {
                 this.groupState,
                 this.coordinatorManager,
                 this.commitManager,
-                this.offsetsRequestManager);
+                this.offsetsRequestManager,
+                this.topicMetadataRequestManager);
     }
 
     private NetworkClientDelegate.PollResult mockPollCoordinatorResult() {
         return new NetworkClientDelegate.PollResult(
-                RETRY_BACKOFF_MS,
-                Collections.singletonList(findCoordinatorUnsentRequest(time, requestTimeoutMs)));
+            RETRY_BACKOFF_MS,
+            Collections.singletonList(findCoordinatorUnsentRequest(time, requestTimeoutMs)));
     }
 
     private NetworkClientDelegate.PollResult mockPollCommitResult() {
         return new NetworkClientDelegate.PollResult(
-                RETRY_BACKOFF_MS,
-                Collections.singletonList(findCoordinatorUnsentRequest(time, requestTimeoutMs)));
+            RETRY_BACKOFF_MS,
+            Collections.singletonList(findCoordinatorUnsentRequest(time, requestTimeoutMs)));
     }
 
     private NetworkClientDelegate.PollResult emptyPollOffsetsRequestResult() {

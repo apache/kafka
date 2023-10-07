@@ -22,10 +22,12 @@ import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.CoordinatorLoadInProgressException;
 import org.apache.kafka.common.errors.InvalidFetchSizeException;
 import org.apache.kafka.common.errors.KafkaStorageException;
+import org.apache.kafka.common.errors.NotCoordinatorException;
 import org.apache.kafka.common.errors.NotEnoughReplicasException;
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.errors.RecordBatchTooLargeException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
+import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
@@ -51,6 +53,8 @@ import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.DescribeGroupsRequest;
+import org.apache.kafka.common.requests.DeleteGroupsRequest;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.TransactionResult;
@@ -72,13 +76,19 @@ import org.apache.kafka.server.util.FutureUtils;
 import org.apache.kafka.server.util.timer.Timer;
 import org.slf4j.Logger;
 
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.OptionalInt;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.IntSupplier;
+import java.util.stream.Collectors;
 
 /**
  * The group coordinator service.
@@ -302,7 +312,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
             return responseFuture;
         }
 
-        runtime.scheduleWriteOperation("generic-group-join",
+        runtime.scheduleWriteOperation(
+            "generic-group-join",
             topicPartitionFor(request.groupId()),
             coordinator -> coordinator.genericGroupJoin(context, request, responseFuture)
         ).exceptionally(exception -> {
@@ -341,7 +352,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
 
         CompletableFuture<SyncGroupResponseData> responseFuture = new CompletableFuture<>();
 
-        runtime.scheduleWriteOperation("generic-group-sync",
+        runtime.scheduleWriteOperation(
+            "generic-group-sync",
             topicPartitionFor(request.groupId()),
             coordinator -> coordinator.genericGroupSync(context, request, responseFuture)
         ).exceptionally(exception -> {
@@ -411,9 +423,37 @@ public class GroupCoordinatorService implements GroupCoordinator {
             return FutureUtils.failedFuture(Errors.COORDINATOR_NOT_AVAILABLE.exception());
         }
 
-        return FutureUtils.failedFuture(Errors.UNSUPPORTED_VERSION.exception(
-            "This API is not implemented yet."
-        ));
+        if (!isGroupIdNotEmpty(request.groupId())) {
+            return CompletableFuture.completedFuture(new LeaveGroupResponseData()
+                .setErrorCode(Errors.INVALID_GROUP_ID.code()));
+        }
+
+        return runtime.scheduleWriteOperation(
+            "generic-group-leave",
+            topicPartitionFor(request.groupId()),
+            coordinator -> coordinator.genericGroupLeave(context, request)
+        ).exceptionally(exception -> {
+            if (!(exception instanceof KafkaException)) {
+                log.error("LeaveGroup request {} hit an unexpected exception: {}",
+                    request, exception.getMessage());
+            }
+
+            if (exception instanceof UnknownMemberIdException) {
+                // Group was not found.
+                List<LeaveGroupResponseData.MemberResponse> memberResponses = request.members().stream()
+                    .map(member -> new LeaveGroupResponseData.MemberResponse()
+                        .setMemberId(member.memberId())
+                        .setGroupInstanceId(member.groupInstanceId())
+                        .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code()))
+                    .collect(Collectors.toList());
+
+                return new LeaveGroupResponseData()
+                    .setMembers(memberResponses);
+            }
+
+            return new LeaveGroupResponseData()
+                .setErrorCode(Errors.forException(exception).code());
+        });
     }
 
     /**
@@ -428,9 +468,33 @@ public class GroupCoordinatorService implements GroupCoordinator {
             return FutureUtils.failedFuture(Errors.COORDINATOR_NOT_AVAILABLE.exception());
         }
 
-        return FutureUtils.failedFuture(Errors.UNSUPPORTED_VERSION.exception(
-            "This API is not implemented yet."
-        ));
+        final CompletableFuture<ListGroupsResponseData> future = new CompletableFuture<>();
+        final List<ListGroupsResponseData.ListedGroup> results = new ArrayList<>();
+        final Set<TopicPartition> existingPartitionSet = runtime.partitions();
+        final AtomicInteger cnt = new AtomicInteger(existingPartitionSet.size());
+
+        for (TopicPartition tp : existingPartitionSet) {
+            runtime.scheduleReadOperation(
+                "list-groups",
+                tp,
+                (coordinator, lastCommittedOffset) -> coordinator.listGroups(request.statesFilter(), lastCommittedOffset)
+            ).handle((groups, exception) -> {
+                if (exception == null) {
+                    synchronized (results) {
+                        results.addAll(groups);
+                    }
+                } else {
+                    if (!(exception instanceof NotCoordinatorException)) {
+                        future.complete(new ListGroupsResponseData().setErrorCode(Errors.forException(exception).code()));
+                    }
+                }
+                if (cnt.decrementAndGet() == 0) {
+                    future.complete(new ListGroupsResponseData().setGroups(results));
+                }
+                return null;
+            });
+        }
+        return future;
     }
 
     /**
@@ -445,9 +509,52 @@ public class GroupCoordinatorService implements GroupCoordinator {
             return FutureUtils.failedFuture(Errors.COORDINATOR_NOT_AVAILABLE.exception());
         }
 
-        return FutureUtils.failedFuture(Errors.UNSUPPORTED_VERSION.exception(
-            "This API is not implemented yet."
-        ));
+        final List<CompletableFuture<List<DescribeGroupsResponseData.DescribedGroup>>> futures =
+            new ArrayList<>(groupIds.size());
+        final Map<TopicPartition, List<String>> groupsByTopicPartition = new HashMap<>();
+        groupIds.forEach(groupId -> {
+            // For backwards compatibility, we support DescribeGroups for the empty group id.
+            if (groupId == null) {
+                futures.add(CompletableFuture.completedFuture(Collections.singletonList(
+                    new DescribeGroupsResponseData.DescribedGroup()
+                        .setGroupId(null)
+                        .setErrorCode(Errors.INVALID_GROUP_ID.code())
+                )));
+            } else {
+                final TopicPartition topicPartition = topicPartitionFor(groupId);
+                groupsByTopicPartition
+                    .computeIfAbsent(topicPartition, __ -> new ArrayList<>())
+                    .add(groupId);
+            }
+        });
+
+        groupsByTopicPartition.forEach((topicPartition, groupList) -> {
+            CompletableFuture<List<DescribeGroupsResponseData.DescribedGroup>> future =
+                runtime.scheduleReadOperation(
+                    "describe-groups",
+                    topicPartition,
+                    (coordinator, lastCommittedOffset) -> coordinator.describeGroups(context, groupList, lastCommittedOffset)
+                ).exceptionally(exception -> {
+                    if (!(exception instanceof KafkaException)) {
+                        log.error("DescribeGroups request {} hit an unexpected exception: {}",
+                            groupList, exception.getMessage());
+                    }
+
+                    return DescribeGroupsRequest.getErrorDescribedGroupList(
+                        groupList,
+                        Errors.forException(exception)
+                    );
+                });
+
+            futures.add(future);
+        });
+
+        final CompletableFuture<Void> allFutures = CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]));
+        return allFutures.thenApply(v -> {
+            final List<DescribeGroupsResponseData.DescribedGroup> res = new ArrayList<>();
+            futures.forEach(future -> res.addAll(future.join()));
+            return res;
+        });
     }
 
     /**
@@ -463,9 +570,50 @@ public class GroupCoordinatorService implements GroupCoordinator {
             return FutureUtils.failedFuture(Errors.COORDINATOR_NOT_AVAILABLE.exception());
         }
 
-        return FutureUtils.failedFuture(Errors.UNSUPPORTED_VERSION.exception(
-            "This API is not implemented yet."
-        ));
+        final List<CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection>> futures =
+            new ArrayList<>(groupIds.size());
+
+        final Map<TopicPartition, List<String>> groupsByTopicPartition = new HashMap<>();
+        groupIds.forEach(groupId -> {
+            // For backwards compatibility, we support DeleteGroups for the empty group id.
+            if (groupId == null) {
+                futures.add(CompletableFuture.completedFuture(DeleteGroupsRequest.getErrorResultCollection(
+                    Collections.singletonList(null),
+                    Errors.INVALID_GROUP_ID
+                )));
+            } else {
+                final TopicPartition topicPartition = topicPartitionFor(groupId);
+                groupsByTopicPartition
+                    .computeIfAbsent(topicPartition, __ -> new ArrayList<>())
+                    .add(groupId);
+            }
+        });
+
+        groupsByTopicPartition.forEach((topicPartition, groupList) -> {
+            CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> future =
+                runtime.scheduleWriteOperation(
+                    "delete-groups",
+                    topicPartition,
+                    coordinator -> coordinator.deleteGroups(context, groupList)
+                ).exceptionally(exception ->
+                    DeleteGroupsRequest.getErrorResultCollection(groupList, normalizeException(exception))
+                );
+
+            futures.add(future);
+        });
+
+        final CompletableFuture<Void> allFutures = CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]));
+        return allFutures.thenApply(__ -> {
+            final DeleteGroupsResponseData.DeletableGroupResultCollection res = new DeleteGroupsResponseData.DeletableGroupResultCollection();
+            futures.forEach(future ->
+                // We don't use res.addAll(future.join()) because DeletableGroupResultCollection is an ImplicitLinkedHashMultiCollection,
+                // which has requirements for adding elements (see ImplicitLinkedHashCollection.java#add).
+                future.join().forEach(result ->
+                    res.add(result.duplicate())
+                )
+            );
+            return res;
+        });
     }
 
     /**
@@ -581,37 +729,9 @@ public class GroupCoordinatorService implements GroupCoordinator {
             "commit-offset",
             topicPartitionFor(request.groupId()),
             coordinator -> coordinator.commitOffset(context, request)
-        ).exceptionally(exception -> {
-            if (exception instanceof UnknownTopicOrPartitionException ||
-                exception instanceof NotEnoughReplicasException) {
-                return OffsetCommitRequest.getErrorResponse(
-                    request,
-                    Errors.COORDINATOR_NOT_AVAILABLE
-                );
-            }
-
-            if (exception instanceof NotLeaderOrFollowerException ||
-                exception instanceof KafkaStorageException) {
-                return OffsetCommitRequest.getErrorResponse(
-                    request,
-                    Errors.NOT_COORDINATOR
-                );
-            }
-
-            if (exception instanceof RecordTooLargeException ||
-                exception instanceof RecordBatchTooLargeException ||
-                exception instanceof InvalidFetchSizeException) {
-                return OffsetCommitRequest.getErrorResponse(
-                    request,
-                    Errors.INVALID_COMMIT_OFFSET_SIZE
-                );
-            }
-
-            return OffsetCommitRequest.getErrorResponse(
-                request,
-                Errors.forException(exception)
-            );
-        });
+        ).exceptionally(exception ->
+            OffsetCommitRequest.getErrorResponse(request, normalizeException(exception))
+        );
     }
 
     /**
@@ -645,9 +765,20 @@ public class GroupCoordinatorService implements GroupCoordinator {
             return FutureUtils.failedFuture(Errors.COORDINATOR_NOT_AVAILABLE.exception());
         }
 
-        return FutureUtils.failedFuture(Errors.UNSUPPORTED_VERSION.exception(
-            "This API is not implemented yet."
-        ));
+        if (!isGroupIdNotEmpty(request.groupId())) {
+            return CompletableFuture.completedFuture(new OffsetDeleteResponseData()
+                .setErrorCode(Errors.INVALID_GROUP_ID.code())
+            );
+        }
+
+        return runtime.scheduleWriteOperation(
+            "delete-offsets",
+            topicPartitionFor(request.groupId()),
+            coordinator -> coordinator.deleteOffsets(context, request)
+        ).exceptionally(exception ->
+            new OffsetDeleteResponseData()
+                .setErrorCode(normalizeException(exception).code())
+        );
     }
 
     /**
@@ -766,5 +897,29 @@ public class GroupCoordinatorService implements GroupCoordinator {
 
     private static boolean isGroupIdNotEmpty(String groupId) {
         return groupId != null && !groupId.isEmpty();
+    }
+
+    /**
+     * Handles the exception in the scheduleWriteOperation.
+     * @return The Errors instance associated with the given exception.
+     */
+    private static Errors normalizeException(Throwable exception) {
+        if (exception instanceof UnknownTopicOrPartitionException ||
+            exception instanceof NotEnoughReplicasException) {
+            return Errors.COORDINATOR_NOT_AVAILABLE;
+        }
+
+        if (exception instanceof NotLeaderOrFollowerException ||
+            exception instanceof KafkaStorageException) {
+            return Errors.NOT_COORDINATOR;
+        }
+
+        if (exception instanceof RecordTooLargeException ||
+            exception instanceof RecordBatchTooLargeException ||
+            exception instanceof InvalidFetchSizeException) {
+            return Errors.UNKNOWN_SERVER_ERROR;
+        }
+
+        return Errors.forException(exception);
     }
 }

@@ -18,18 +18,26 @@ package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.DescribeGroupsResponseData;
+import org.apache.kafka.common.message.DeleteGroupsResponseData;
 import org.apache.kafka.common.message.HeartbeatRequestData;
 import org.apache.kafka.common.message.HeartbeatResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
+import org.apache.kafka.common.message.LeaveGroupRequestData;
+import org.apache.kafka.common.message.LeaveGroupResponseData;
+import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
+import org.apache.kafka.common.message.OffsetDeleteRequestData;
+import org.apache.kafka.common.message.OffsetDeleteResponseData;
 import org.apache.kafka.common.message.OffsetFetchRequestData;
 import org.apache.kafka.common.message.OffsetFetchResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.protocol.ApiMessage;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -57,7 +65,10 @@ import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.timeline.SnapshotRegistry;
+import org.slf4j.Logger;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -152,11 +163,17 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
                 .build();
 
             return new GroupCoordinatorShard(
+                logContext,
                 groupMetadataManager,
                 offsetMetadataManager
             );
         }
     }
+
+    /**
+     * The logger.
+     */
+    private final Logger log;
 
     /**
      * The group metadata manager.
@@ -171,13 +188,16 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
     /**
      * Constructor.
      *
+     * @param logContext            The log context.
      * @param groupMetadataManager  The group metadata manager.
      * @param offsetMetadataManager The offset metadata manager.
      */
     GroupCoordinatorShard(
+        LogContext logContext,
         GroupMetadataManager groupMetadataManager,
         OffsetMetadataManager offsetMetadataManager
     ) {
+        this.log = logContext.logger(GroupCoordinatorShard.class);
         this.groupMetadataManager = groupMetadataManager;
         this.offsetMetadataManager = offsetMetadataManager;
     }
@@ -259,6 +279,51 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
     }
 
     /**
+     * Handles a DeleteGroups request.
+     *
+     * @param context   The request context.
+     * @param groupIds  The groupIds of the groups to be deleted
+     * @return A Result containing the DeleteGroupsResponseData.DeletableGroupResultCollection response and
+     *         a list of records to update the state machine.
+     */
+    public CoordinatorResult<DeleteGroupsResponseData.DeletableGroupResultCollection, Record> deleteGroups(
+        RequestContext context,
+        List<String> groupIds
+    ) throws ApiException {
+        final DeleteGroupsResponseData.DeletableGroupResultCollection resultCollection =
+            new DeleteGroupsResponseData.DeletableGroupResultCollection(groupIds.size());
+        final List<Record> records = new ArrayList<>();
+        int numDeletedOffsets = 0;
+        final List<String> deletedGroups = new ArrayList<>();
+
+        for (String groupId : groupIds) {
+            try {
+                groupMetadataManager.validateDeleteGroup(groupId);
+                numDeletedOffsets += offsetMetadataManager.deleteAllOffsets(groupId, records);
+                groupMetadataManager.deleteGroup(groupId, records);
+                deletedGroups.add(groupId);
+
+                resultCollection.add(
+                    new DeleteGroupsResponseData.DeletableGroupResult()
+                        .setGroupId(groupId)
+                );
+            } catch (ApiException exception) {
+                resultCollection.add(
+                    new DeleteGroupsResponseData.DeletableGroupResult()
+                        .setGroupId(groupId)
+                        .setErrorCode(Errors.forException(exception).code())
+                );
+            }
+        }
+
+        log.info("The following groups were deleted: {}. A total of {} offsets were removed.",
+            String.join(", ", deletedGroups),
+            numDeletedOffsets
+        );
+        return new CoordinatorResult<>(records, resultCollection);
+    }
+
+    /**
      * Fetch offsets for a given set of partitions and a given group.
      *
      * @param request   The OffsetFetchRequestGroup request.
@@ -291,7 +356,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
     }
 
     /**
-     * Handles a OffsetCommit request.
+     * Handles an OffsetCommit request.
      *
      * @param context The request context.
      * @param request The actual OffsetCommit request.
@@ -304,6 +369,70 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
         OffsetCommitRequestData request
     ) throws ApiException {
         return offsetMetadataManager.commitOffset(context, request);
+    }
+
+    /**
+     * Handles a ListGroups request.
+     *
+     * @param statesFilter    The states of the groups we want to list.
+     *                        If empty all groups are returned with their state.
+     * @param committedOffset A specified committed offset corresponding to this shard
+     * @return A list containing the ListGroupsResponseData.ListedGroup
+     */
+    public List<ListGroupsResponseData.ListedGroup> listGroups(
+        List<String> statesFilter,
+        long committedOffset
+    ) throws ApiException {
+        return groupMetadataManager.listGroups(statesFilter, committedOffset);
+    }
+
+    /**
+     * Handles a DescribeGroups request.
+     *
+     * @param context           The request context.
+     * @param groupIds          The IDs of the groups to describe.
+     * @param committedOffset   A specified committed offset corresponding to this shard.
+     *
+     * @return A list containing the DescribeGroupsResponseData.DescribedGroup.
+     */
+    public List<DescribeGroupsResponseData.DescribedGroup> describeGroups(
+        RequestContext context,
+        List<String> groupIds,
+        long committedOffset
+    ) {
+        return groupMetadataManager.describeGroups(groupIds, committedOffset);
+    }
+
+    /**
+     * Handles a LeaveGroup request.
+     *
+     * @param context The request context.
+     * @param request The actual LeaveGroup request.
+     *
+     * @return A Result containing the LeaveGroup response and
+     *         a list of records to update the state machine.
+     */
+    public CoordinatorResult<LeaveGroupResponseData, Record> genericGroupLeave(
+        RequestContext context,
+        LeaveGroupRequestData request
+    ) throws ApiException {
+        return groupMetadataManager.genericGroupLeave(context, request);
+    }
+
+    /**
+     * Handles a OffsetDelete request.
+     *
+     * @param context The request context.
+     * @param request The actual OffsetDelete request.
+     *
+     * @return A Result containing the OffsetDeleteResponse response and
+     *         a list of records to update the state machine.
+     */
+    public CoordinatorResult<OffsetDeleteResponseData, Record> deleteOffsets(
+        RequestContext context,
+        OffsetDeleteRequestData request
+    ) throws ApiException {
+        return offsetMetadataManager.deleteOffsets(request);
     }
 
     /**

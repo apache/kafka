@@ -20,6 +20,8 @@ import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
+import org.apache.kafka.common.errors.GroupIdNotFoundException;
+import org.apache.kafka.common.errors.GroupNotEmptyException;
 import org.apache.kafka.common.errors.IllegalGenerationException;
 import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
@@ -45,6 +47,7 @@ import static org.apache.kafka.coordinator.group.generic.GenericGroupState.DEAD;
 import static org.apache.kafka.coordinator.group.generic.GenericGroupState.EMPTY;
 import static org.apache.kafka.coordinator.group.generic.GenericGroupState.PREPARING_REBALANCE;
 import static org.apache.kafka.coordinator.group.generic.GenericGroupState.STABLE;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -776,7 +779,7 @@ public class GenericGroupTest {
             protocolType,
             protocols
         );
-        
+
         group.add(member);
         assertTrue(group.hasMemberId(memberId));
         assertTrue(group.hasStaticMember(groupInstanceId));
@@ -1024,6 +1027,62 @@ public class GenericGroupTest {
         // This should fail with CoordinatorNotAvailableException.
         assertThrows(CoordinatorNotAvailableException.class,
             () -> group.validateOffsetCommit("member-id", "new-instance-id", 1));
+    }
+
+    @Test
+    public void testValidateOffsetDelete() {
+        assertFalse(group.usesConsumerGroupProtocol());
+        group.transitionTo(PREPARING_REBALANCE);
+        assertThrows(GroupNotEmptyException.class, group::validateOffsetDelete);
+        group.transitionTo(COMPLETING_REBALANCE);
+        assertThrows(GroupNotEmptyException.class, group::validateOffsetDelete);
+        group.transitionTo(STABLE);
+        assertThrows(GroupNotEmptyException.class, group::validateOffsetDelete);
+
+        JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestProtocolCollection();
+        protocols.add(new JoinGroupRequestProtocol()
+            .setName("roundrobin")
+            .setMetadata(new byte[0]));
+        GenericGroupMember member = new GenericGroupMember(
+            memberId,
+            Optional.of(groupInstanceId),
+            clientId,
+            clientHost,
+            rebalanceTimeoutMs,
+            sessionTimeoutMs,
+            protocolType,
+            protocols
+        );
+        group.add(member);
+
+        assertTrue(group.usesConsumerGroupProtocol());
+        group.transitionTo(PREPARING_REBALANCE);
+        assertDoesNotThrow(group::validateOffsetDelete);
+        group.transitionTo(COMPLETING_REBALANCE);
+        assertDoesNotThrow(group::validateOffsetDelete);
+        group.transitionTo(STABLE);
+        assertDoesNotThrow(group::validateOffsetDelete);
+
+        group.transitionTo(PREPARING_REBALANCE);
+        group.transitionTo(EMPTY);
+        assertDoesNotThrow(group::validateOffsetDelete);
+        group.transitionTo(DEAD);
+        assertThrows(GroupIdNotFoundException.class, group::validateOffsetDelete);
+    }
+
+    @Test
+    public void testValidateDeleteGroup() {
+        group.transitionTo(PREPARING_REBALANCE);
+        assertThrows(GroupNotEmptyException.class, group::validateDeleteGroup);
+        group.transitionTo(COMPLETING_REBALANCE);
+        assertThrows(GroupNotEmptyException.class, group::validateDeleteGroup);
+        group.transitionTo(STABLE);
+        assertThrows(GroupNotEmptyException.class, group::validateDeleteGroup);
+        group.transitionTo(PREPARING_REBALANCE);
+        group.transitionTo(EMPTY);
+        assertDoesNotThrow(group::validateDeleteGroup);
+        group.transitionTo(DEAD);
+        assertThrows(GroupIdNotFoundException.class, group::validateDeleteGroup);
     }
 
     private void assertState(GenericGroup group, GenericGroupState targetState) {

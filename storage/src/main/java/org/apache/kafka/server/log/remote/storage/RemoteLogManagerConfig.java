@@ -61,11 +61,11 @@ public final class RemoteLogManagerConfig {
     public static final boolean DEFAULT_REMOTE_LOG_STORAGE_SYSTEM_ENABLE = false;
 
     public static final String REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP = "remote.log.storage.manager.class.name";
-    public static final String REMOTE_STORAGE_MANAGER_CLASS_NAME_DOC = "Fully qualified class name of `RemoteLogStorageManager` implementation.";
+    public static final String REMOTE_STORAGE_MANAGER_CLASS_NAME_DOC = "Fully qualified class name of `RemoteStorageManager` implementation.";
 
     public static final String REMOTE_STORAGE_MANAGER_CLASS_PATH_PROP = "remote.log.storage.manager.class.path";
-    public static final String REMOTE_STORAGE_MANAGER_CLASS_PATH_DOC = "Class path of the `RemoteLogStorageManager` implementation. " +
-            "If specified, the RemoteLogStorageManager implementation and its dependent libraries will be loaded by a dedicated " +
+    public static final String REMOTE_STORAGE_MANAGER_CLASS_PATH_DOC = "Class path of the `RemoteStorageManager` implementation. " +
+            "If specified, the RemoteStorageManager implementation and its dependent libraries will be loaded by a dedicated " +
             "classloader which searches this class path before the Kafka broker class path. The syntax of this parameter is same " +
             "as the standard Java class path string.";
 

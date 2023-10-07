@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group.consumer;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.GroupNotEmptyException;
 import org.apache.kafka.common.errors.StaleMemberEpochException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.utils.LogContext;
@@ -35,6 +36,7 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
 import static org.apache.kafka.coordinator.group.RecordHelpersTest.mkMapOfPartitionRacks;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -633,6 +635,20 @@ public class ConsumerGroupTest {
     }
 
     @Test
+    public void testAsListedGroup() {
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
+        ConsumerGroup group = new ConsumerGroup(snapshotRegistry, "group-foo");
+        snapshotRegistry.getOrCreateSnapshot(0);
+        assertEquals(ConsumerGroup.ConsumerGroupState.EMPTY.toString(), group.stateAsString(0));
+        group.updateMember(new ConsumerGroupMember.Builder("member1")
+            .setSubscribedTopicNames(Collections.singletonList("foo"))
+            .build());
+        snapshotRegistry.getOrCreateSnapshot(1);
+        assertEquals(ConsumerGroup.ConsumerGroupState.EMPTY.toString(), group.stateAsString(0));
+        assertEquals(ConsumerGroup.ConsumerGroupState.STABLE.toString(), group.stateAsString(1));
+    }
+
+    @Test
     public void testValidateOffsetFetch() {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         ConsumerGroup group = new ConsumerGroup(snapshotRegistry, "group-foo");
@@ -658,5 +674,33 @@ public class ConsumerGroupTest {
 
         // This should succeed.
         group.validateOffsetFetch("member-id", 0, Long.MAX_VALUE);
+    }
+
+    @Test
+    public void testValidateDeleteGroup() {
+        ConsumerGroup consumerGroup = createConsumerGroup("foo");
+
+        assertEquals(ConsumerGroup.ConsumerGroupState.EMPTY, consumerGroup.state());
+        assertDoesNotThrow(consumerGroup::validateDeleteGroup);
+
+        ConsumerGroupMember member1 = new ConsumerGroupMember.Builder("member1")
+            .setMemberEpoch(1)
+            .setPreviousMemberEpoch(0)
+            .setTargetMemberEpoch(1)
+            .build();
+        consumerGroup.updateMember(member1);
+
+        assertEquals(ConsumerGroup.ConsumerGroupState.RECONCILING, consumerGroup.state());
+        assertThrows(GroupNotEmptyException.class, consumerGroup::validateDeleteGroup);
+
+        consumerGroup.setGroupEpoch(1);
+
+        assertEquals(ConsumerGroup.ConsumerGroupState.ASSIGNING, consumerGroup.state());
+        assertThrows(GroupNotEmptyException.class, consumerGroup::validateDeleteGroup);
+
+        consumerGroup.setTargetAssignmentEpoch(1);
+
+        assertEquals(ConsumerGroup.ConsumerGroupState.STABLE, consumerGroup.state());
+        assertThrows(GroupNotEmptyException.class, consumerGroup::validateDeleteGroup);
     }
 }

@@ -74,13 +74,28 @@ public abstract class SslFactoryTest {
         Map<String, Object> serverSslConfig = sslConfigsBuilder(Mode.SERVER)
                 .createNewTrustStore(trustStoreFile)
                 .build();
-        SslFactory sslFactory = new SslFactory(Mode.SERVER);
-        sslFactory.configure(serverSslConfig);
-        //host and port are hints
-        SSLEngine engine = sslFactory.createSslEngine("localhost", 0);
-        assertNotNull(engine);
-        assertEquals(Utils.mkSet(tlsProtocol), Utils.mkSet(engine.getEnabledProtocols()));
-        assertFalse(engine.getUseClientMode());
+        try (SslFactory sslFactory = new SslFactory(Mode.SERVER, null, true)) {
+            sslFactory.configure(serverSslConfig);
+            //host and port are hints
+            SSLEngine engine = sslFactory.createSslEngine("localhost", 0);
+            assertNotNull(engine);
+            assertEquals(Utils.mkSet(tlsProtocol), Utils.mkSet(engine.getEnabledProtocols()));
+            assertFalse(engine.getUseClientMode());
+        }
+    }
+
+    @Test
+    public void testSslFactoryConfigWithManyKeyStoreEntries() throws Exception {
+        //generate server configs for keystore with multiple certificate chain
+        Map<String, Object> serverSslConfig = TestSslUtils.generateConfigsWithCertificateChains(tlsProtocol);
+
+        try (SslFactory sslFactory = new SslFactory(Mode.SERVER, null, true)) {
+            sslFactory.configure(serverSslConfig);
+            SSLEngine engine = sslFactory.createSslEngine("localhost", 0);
+            assertNotNull(engine);
+            assertEquals(Utils.mkSet(tlsProtocol), Utils.mkSet(engine.getEnabledProtocols()));
+            assertFalse(engine.getUseClientMode());
+        }
     }
 
     @Test

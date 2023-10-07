@@ -29,6 +29,7 @@ import kafka.server.MetaProperties;
 import kafka.tools.StorageTool;
 import kafka.utils.Logging;
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.network.ListenerName;
@@ -446,51 +447,96 @@ public class KafkaClusterTestKit implements AutoCloseable {
             "Failed to wait for publisher to publish the metadata update to each broker.");
     }
 
-    public Properties controllerClientProperties() throws ExecutionException, InterruptedException {
-        Properties properties = new Properties();
-        if (!controllers.isEmpty()) {
-            Collection<Node> controllerNodes = RaftConfig.voterConnectionsToNodes(
-                controllerQuorumVotersFutureManager.future.get());
-
-            StringBuilder bld = new StringBuilder();
-            String prefix = "";
-            for (Node node : controllerNodes) {
-                bld.append(prefix).append(node.id()).append('@');
-                bld.append(node.host()).append(":").append(node.port());
-                prefix = ",";
-            }
-            properties.setProperty(RaftConfig.QUORUM_VOTERS_CONFIG, bld.toString());
-            properties.setProperty(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG,
-                controllerNodes.stream().map(n -> n.host() + ":" + n.port()).
-                    collect(Collectors.joining(",")));
+    public String quorumVotersConfig() throws ExecutionException, InterruptedException {
+        Collection<Node> controllerNodes = RaftConfig.voterConnectionsToNodes(
+            controllerQuorumVotersFutureManager.future.get());
+        StringBuilder bld = new StringBuilder();
+        String prefix = "";
+        for (Node node : controllerNodes) {
+            bld.append(prefix).append(node.id()).append('@');
+            bld.append(node.host()).append(":").append(node.port());
+            prefix = ",";
         }
-        return properties;
+        return bld.toString();
+    }
+
+    public class ClientPropertiesBuilder {
+        private Properties properties;
+        private boolean usingBootstrapControllers = false;
+
+        public ClientPropertiesBuilder() {
+            this.properties = new Properties();
+        }
+
+        public ClientPropertiesBuilder(Properties properties) {
+            this.properties = properties;
+        }
+
+        public ClientPropertiesBuilder setUsingBootstrapControllers(boolean usingBootstrapControllers) {
+            this.usingBootstrapControllers = usingBootstrapControllers;
+            return this;
+        }
+
+        public Properties build() {
+            if (usingBootstrapControllers) {
+                properties.setProperty(AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG, bootstrapControllers());
+                properties.remove(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG);
+            } else {
+                properties.setProperty(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
+                properties.remove(AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG);
+            }
+            return properties;
+        }
+    }
+
+    public ClientPropertiesBuilder newClientPropertiesBuilder(Properties properties) {
+        return new ClientPropertiesBuilder(properties);
+    }
+
+    public ClientPropertiesBuilder newClientPropertiesBuilder() {
+        return new ClientPropertiesBuilder();
     }
 
     public Properties clientProperties() {
-        return clientProperties(new Properties());
+        return new ClientPropertiesBuilder().build();
     }
 
-    public Properties clientProperties(Properties configOverrides) {
-        if (!brokers.isEmpty()) {
-            StringBuilder bld = new StringBuilder();
-            String prefix = "";
-            for (Entry<Integer, BrokerServer> entry : brokers.entrySet()) {
-                int brokerId = entry.getKey();
-                BrokerServer broker = entry.getValue();
-                ListenerName listenerName = nodes.externalListenerName();
-                int port = broker.boundPort(listenerName);
-                if (port <= 0) {
-                    throw new RuntimeException("Broker " + brokerId + " does not yet " +
+    public String bootstrapServers() {
+        StringBuilder bld = new StringBuilder();
+        String prefix = "";
+        for (Entry<Integer, BrokerServer> entry : brokers.entrySet()) {
+            int brokerId = entry.getKey();
+            BrokerServer broker = entry.getValue();
+            ListenerName listenerName = nodes.externalListenerName();
+            int port = broker.boundPort(listenerName);
+            if (port <= 0) {
+                throw new RuntimeException("Broker " + brokerId + " does not yet " +
+                    "have a bound port for " + listenerName + ".  Did you start " +
+                    "the cluster yet?");
+            }
+            bld.append(prefix).append("localhost:").append(port);
+            prefix = ",";
+        }
+        return bld.toString();
+    }
+
+    public String bootstrapControllers() {
+        StringBuilder bld = new StringBuilder();
+        String prefix = "";
+        for (Entry<Integer, ControllerServer> entry : controllers.entrySet()) {
+            int id = entry.getKey();
+            ControllerServer controller = entry.getValue();
+            ListenerName listenerName = nodes.controllerListenerName();
+            int port = controller.socketServer().boundPort(listenerName);
+            if (port <= 0) {
+                throw new RuntimeException("Controller " + id + " does not yet " +
                         "have a bound port for " + listenerName + ".  Did you start " +
                         "the cluster yet?");
-                }
-                bld.append(prefix).append("localhost:").append(port);
-                prefix = ",";
             }
-            configOverrides.putIfAbsent(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, bld.toString());
+            bld.append(prefix).append("localhost:").append(port);
+            prefix = ",";
         }
-        return configOverrides;
+        return bld.toString();
     }
 
     public Map<Integer, ControllerServer> controllers() {

@@ -185,6 +185,10 @@ public class TestKitNodes {
         return new ListenerName("EXTERNAL");
     }
 
+    public ListenerName controllerListenerName() {
+        return new ListenerName("CONTROLLER");
+    }
+
     public TestKitNodes copyWithAbsolutePaths(String baseDirectory) {
         NavigableMap<Integer, ControllerNode> newControllerNodes = new TreeMap<>();
         NavigableMap<Integer, BrokerNode> newBrokerNodes = new TreeMap<>();
