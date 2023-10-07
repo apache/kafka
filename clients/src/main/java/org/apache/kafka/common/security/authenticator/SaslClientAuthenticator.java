@@ -167,6 +167,7 @@ public class SaslClientAuthenticator implements Authenticator {
     // Version of SaslHandshake request/responses
     private short saslHandshakeVersion;
 
+    @SuppressWarnings("this-escape")
     public SaslClientAuthenticator(Map<String, ?> configs,
                                    AuthenticateCallbackHandler callbackHandler,
                                    String node,

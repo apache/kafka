@@ -101,6 +101,7 @@ public class NioEchoServer extends Thread {
                 new DelegationTokenCache(ScramMechanism.mechanismNames()));
     }
 
+    @SuppressWarnings("this-escape")
     public NioEchoServer(ListenerName listenerName, SecurityProtocol securityProtocol, AbstractConfig config,
             String serverHost, ChannelBuilder channelBuilder, CredentialCache credentialCache,
             int failedAuthenticationDelayMs, Time time, DelegationTokenCache tokenCache) throws Exception {

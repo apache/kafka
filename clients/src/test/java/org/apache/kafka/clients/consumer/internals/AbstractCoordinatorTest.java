@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
@@ -90,6 +91,7 @@ public class AbstractCoordinatorTest {
     private static final int SESSION_TIMEOUT_MS = 10000;
     private static final int HEARTBEAT_INTERVAL_MS = 3000;
     private static final int RETRY_BACKOFF_MS = 100;
+    private static final int RETRY_BACKOFF_MAX_MS = 1000;
     private static final int REQUEST_TIMEOUT_MS = 40000;
     private static final String GROUP_ID = "dummy-group";
     private static final String METRIC_GROUP_PREFIX = "consumer";
@@ -115,19 +117,19 @@ public class AbstractCoordinatorTest {
     }
 
     private void setupCoordinator() {
-        setupCoordinator(RETRY_BACKOFF_MS, REBALANCE_TIMEOUT_MS,
+        setupCoordinator(RETRY_BACKOFF_MS, RETRY_BACKOFF_MAX_MS, REBALANCE_TIMEOUT_MS,
             Optional.empty());
     }
 
-    private void setupCoordinator(int retryBackoffMs) {
-        setupCoordinator(retryBackoffMs, REBALANCE_TIMEOUT_MS,
+    private void setupCoordinator(int retryBackoffMs, int retryBackoffMaxMs) {
+        setupCoordinator(retryBackoffMs, retryBackoffMaxMs, REBALANCE_TIMEOUT_MS,
             Optional.empty());
     }
 
-    private void setupCoordinator(int retryBackoffMs, int rebalanceTimeoutMs, Optional<String> groupInstanceId) {
+    private void setupCoordinator(int retryBackoffMs, int retryBackoffMaxMs, int rebalanceTimeoutMs, Optional<String> groupInstanceId) {
         LogContext logContext = new LogContext();
         this.mockTime = new MockTime();
-        ConsumerMetadata metadata = new ConsumerMetadata(retryBackoffMs, 60 * 60 * 1000L,
+        ConsumerMetadata metadata = new ConsumerMetadata(retryBackoffMs, retryBackoffMaxMs, 60 * 60 * 1000L,
                 false, false, new SubscriptionState(logContext, OffsetResetStrategy.EARLIEST),
                 logContext, new ClusterResourceListeners());
 
@@ -151,6 +153,7 @@ public class AbstractCoordinatorTest {
                                                                         GROUP_ID,
                                                                         groupInstanceId,
                                                                         retryBackoffMs,
+                                                                        retryBackoffMaxMs,
                                                                         !groupInstanceId.isPresent());
         this.coordinator = new DummyCoordinator(rebalanceConfig,
                                                 consumerClient,
@@ -255,21 +258,34 @@ public class AbstractCoordinatorTest {
     }
 
     @Test
-    public void testCoordinatorDiscoveryBackoff() {
-        setupCoordinator();
+    public void testCoordinatorDiscoveryExponentialBackoff() {
+        // With exponential backoff, we will get retries at 10, 20, 40, 80, 100 ms (with jitter)
+        int shortRetryBackoffMs = 10;
+        int shortRetryBackoffMaxMs = 100;
+        setupCoordinator(shortRetryBackoffMs, shortRetryBackoffMaxMs);
 
-        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
-        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        for (int i = 0; i < 5; i++) {
+            mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        }
 
-        // cut out the coordinator for 10 milliseconds to simulate a disconnect.
+        // cut out the coordinator for 100 milliseconds to simulate a disconnect.
         // after backing off, we should be able to connect.
-        mockClient.backoff(coordinatorNode, 10L);
+        mockClient.backoff(coordinatorNode, 100L);
 
         long initialTime = mockTime.milliseconds();
         coordinator.ensureCoordinatorReady(mockTime.timer(Long.MAX_VALUE));
         long endTime = mockTime.milliseconds();
 
-        assertTrue(endTime - initialTime >= RETRY_BACKOFF_MS);
+        long lowerBoundBackoffMs = 0;
+        long upperBoundBackoffMs = 0;
+        for (int i = 0; i < 4; i++) {
+            lowerBoundBackoffMs += (long) (shortRetryBackoffMs * Math.pow(CommonClientConfigs.RETRY_BACKOFF_EXP_BASE, i) * (1 - CommonClientConfigs.RETRY_BACKOFF_JITTER));
+            upperBoundBackoffMs += (long) (shortRetryBackoffMs * Math.pow(CommonClientConfigs.RETRY_BACKOFF_EXP_BASE, i) * (1 + CommonClientConfigs.RETRY_BACKOFF_JITTER));
+        }
+
+        long timeElapsed = endTime - initialTime;
+        assertTrue(timeElapsed >= lowerBoundBackoffMs);
+        assertTrue(timeElapsed <= upperBoundBackoffMs + shortRetryBackoffMs);
     }
 
     @Test
@@ -331,7 +347,7 @@ public class AbstractCoordinatorTest {
 
     @Test
     public void testJoinGroupRequestTimeout() {
-        setupCoordinator(RETRY_BACKOFF_MS, REBALANCE_TIMEOUT_MS,
+        setupCoordinator(RETRY_BACKOFF_MS, RETRY_BACKOFF_MAX_MS, REBALANCE_TIMEOUT_MS,
             Optional.empty());
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady(mockTime.timer(0));
@@ -349,7 +365,7 @@ public class AbstractCoordinatorTest {
     @Test
     public void testJoinGroupRequestTimeoutLowerBoundedByDefaultRequestTimeout() {
         int rebalanceTimeoutMs = REQUEST_TIMEOUT_MS - 10000;
-        setupCoordinator(RETRY_BACKOFF_MS, rebalanceTimeoutMs, Optional.empty());
+        setupCoordinator(RETRY_BACKOFF_MS, RETRY_BACKOFF_MAX_MS, rebalanceTimeoutMs, Optional.empty());
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady(mockTime.timer(0));
 
@@ -368,7 +384,7 @@ public class AbstractCoordinatorTest {
     public void testJoinGroupRequestMaxTimeout() {
         // Ensure we can handle the maximum allowed rebalance timeout
 
-        setupCoordinator(RETRY_BACKOFF_MS, Integer.MAX_VALUE,
+        setupCoordinator(RETRY_BACKOFF_MS, RETRY_BACKOFF_MAX_MS, Integer.MAX_VALUE,
             Optional.empty());
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady(mockTime.timer(0));
@@ -1077,7 +1093,7 @@ public class AbstractCoordinatorTest {
     }
 
     private void checkLeaveGroupRequestSent(Optional<String> groupInstanceId) {
-        setupCoordinator(RETRY_BACKOFF_MS, Integer.MAX_VALUE, groupInstanceId);
+        setupCoordinator(RETRY_BACKOFF_MS, RETRY_BACKOFF_MAX_MS, Integer.MAX_VALUE, groupInstanceId);
 
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         mockClient.prepareResponse(joinGroupFollowerResponse(1, memberId, leaderId, Errors.NONE));
@@ -1172,7 +1188,7 @@ public class AbstractCoordinatorTest {
     private RequestFuture<Void> setupLeaveGroup(LeaveGroupResponse leaveGroupResponse,
                                                 String leaveReason,
                                                 String expectedLeaveReason) {
-        setupCoordinator(RETRY_BACKOFF_MS, Integer.MAX_VALUE, Optional.empty());
+        setupCoordinator(RETRY_BACKOFF_MS, RETRY_BACKOFF_MAX_MS, Integer.MAX_VALUE, Optional.empty());
 
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         mockClient.prepareResponse(joinGroupFollowerResponse(1, memberId, leaderId, Errors.NONE));
@@ -1235,7 +1251,8 @@ public class AbstractCoordinatorTest {
     @Test
     public void testPollHeartbeatAwakesHeartbeatThread() throws Exception {
         final int longRetryBackoffMs = 10000;
-        setupCoordinator(longRetryBackoffMs);
+        final int longRetryBackoffMaxMs = 10000;
+        setupCoordinator(longRetryBackoffMs, longRetryBackoffMaxMs);
 
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         mockClient.prepareResponse(joinGroupFollowerResponse(1, memberId, leaderId, Errors.NONE));
@@ -1578,7 +1595,7 @@ public class AbstractCoordinatorTest {
         long currentTimeMs = System.currentTimeMillis();
         this.mockTime.setCurrentTimeMs(System.currentTimeMillis());
 
-        setupCoordinator(); // note: uses 100ms backoff
+        setupCoordinator();
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady(mockTime.timer(0));
 
@@ -1588,7 +1605,8 @@ public class AbstractCoordinatorTest {
         mockClient.prepareResponse(syncGroupResponse(Errors.NONE));
         coordinator.joinGroupIfNeeded(mockTime.timer(REQUEST_TIMEOUT_MS));
 
-        assertEquals(100, mockTime.milliseconds() - currentTimeMs, 1);
+        assertEquals(RETRY_BACKOFF_MS, mockTime.milliseconds() - currentTimeMs,
+                (int) (RETRY_BACKOFF_MS * CommonClientConfigs.RETRY_BACKOFF_JITTER) + 1);
     }
 
     @Test

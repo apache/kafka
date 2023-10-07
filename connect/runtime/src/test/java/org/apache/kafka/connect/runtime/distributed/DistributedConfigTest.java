@@ -21,9 +21,12 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.junit.MockitoJUnitRunner;
 
 import javax.crypto.KeyGenerator;
 import javax.crypto.Mac;
+import java.security.InvalidParameterException;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -49,7 +52,9 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class DistributedConfigTest {
 
     public Map<String, String> configs() {
@@ -91,10 +96,7 @@ public class DistributedConfigTest {
         doReturn(fakeKeyGenerator)
                 .when(crypto).keyGenerator(fakeKeyGenerationAlgorithm);
 
-        // And for the signature algorithm
-        doThrow(new NoSuchAlgorithmException())
-                .when(crypto).mac(DistributedConfig.INTER_WORKER_SIGNATURE_ALGORITHM_DEFAULT);
-        // Likewise for key verification algorithms
+        // And for the key verification algorithms
         for (String verificationAlgorithm : DistributedConfig.INTER_WORKER_VERIFICATION_ALGORITHMS_DEFAULT) {
             doThrow(new NoSuchAlgorithmException())
                     .when(crypto).mac(verificationAlgorithm);
@@ -194,10 +196,15 @@ public class DistributedConfigTest {
     }
 
     @Test
-    public void shouldFailWithInvalidKeySize() {
+    public void shouldFailWithInvalidKeySize() throws NoSuchAlgorithmException {
         Map<String, String> configs = configs();
+        Crypto crypto = mock(Crypto.class);
+        KeyGenerator keygen = mock(KeyGenerator.class);
+        when(crypto.keyGenerator(DistributedConfig.INTER_WORKER_KEY_GENERATION_ALGORITHM_DEFAULT)).thenReturn(keygen);
+        // Some implementations of KeyGenerator don't fail with 0 keysize, so mock the error
+        doThrow(InvalidParameterException.class).when(keygen).init(0);
         configs.put(DistributedConfig.INTER_WORKER_KEY_SIZE_CONFIG, "0");
-        assertThrows(ConfigException.class, () -> new DistributedConfig(configs));
+        assertThrows(ConfigException.class, () -> new DistributedConfig(crypto, configs));
     }
 
     @Test

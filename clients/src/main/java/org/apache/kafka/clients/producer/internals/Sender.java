@@ -23,7 +23,6 @@ import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NetworkClientUtils;
 import org.apache.kafka.clients.RequestCompletionHandler;
-import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
@@ -359,9 +358,8 @@ public class Sender implements Runnable {
     }
 
     private long sendProducerData(long now) {
-        Cluster cluster = metadata.fetch();
         // get the list of partitions with data ready to send
-        RecordAccumulator.ReadyCheckResult result = this.accumulator.ready(cluster, now);
+        RecordAccumulator.ReadyCheckResult result = this.accumulator.ready(metadata, now);
 
         // if there are any partitions whose leaders are not known yet, force metadata update
         if (!result.unknownLeaderTopics.isEmpty()) {
@@ -373,7 +371,7 @@ public class Sender implements Runnable {
 
             log.debug("Requesting metadata update due to unknown leader topics from the batched records: {}",
                 result.unknownLeaderTopics);
-            this.metadata.requestUpdate();
+            this.metadata.requestUpdate(false);
         }
 
         // remove any nodes we aren't ready to send to
@@ -396,7 +394,7 @@ public class Sender implements Runnable {
         }
 
         // create produce requests
-        Map<Integer, List<ProducerBatch>> batches = this.accumulator.drain(cluster, result.readyNodes, this.maxRequestSize, now);
+        Map<Integer, List<ProducerBatch>> batches = this.accumulator.drain(metadata, result.readyNodes, this.maxRequestSize, now);
         addToInflightBatches(batches);
         if (guaranteeMessageOrder) {
             // Mute all the partitions drained
@@ -524,7 +522,7 @@ public class Sender implements Runnable {
         } else {
             // For non-coordinator requests, sleep here to prevent a tight loop when no node is available
             time.sleep(retryBackoffMs);
-            metadata.requestUpdate();
+            metadata.requestUpdate(false);
         }
 
         transactionManager.retry(nextRequestHandler);
@@ -687,7 +685,7 @@ public class Sender implements Runnable {
                             "to request metadata update now", batch.topicPartition,
                             error.exception(response.errorMessage).toString());
                 }
-                metadata.requestUpdate();
+                metadata.requestUpdate(false);
             }
         } else {
             completeBatch(batch, response);
@@ -793,19 +791,18 @@ public class Sender implements Runnable {
         Function<Integer, RuntimeException> recordExceptions,
         boolean adjustSequenceNumbers
     ) {
-        if (transactionManager != null) {
-            try {
-                // This call can throw an exception in the rare case that there's an invalid state transition
-                // attempted. Catch these so as not to interfere with the rest of the logic.
-                transactionManager.handleFailedBatch(batch, topLevelException, adjustSequenceNumbers);
-            } catch (Exception e) {
-                log.debug("Encountered error when handling a failed batch", e);
-            }
-        }
-
         this.sensors.recordErrors(batch.topicPartition.topic(), batch.recordCount);
 
         if (batch.completeExceptionally(topLevelException, recordExceptions)) {
+            if (transactionManager != null) {
+                try {
+                    // This call can throw an exception in the rare case that there's an invalid state transition
+                    // attempted. Catch these so as not to interfere with the rest of the logic.
+                    transactionManager.handleFailedBatch(batch, topLevelException, adjustSequenceNumbers);
+                } catch (Exception e) {
+                    log.debug("Encountered error when transaction manager was handling a failed batch", e);
+                }
+            }
             maybeRemoveAndDeallocateBatch(batch);
         }
     }

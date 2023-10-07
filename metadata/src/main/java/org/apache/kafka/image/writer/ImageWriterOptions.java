@@ -29,6 +29,7 @@ import java.util.function.Consumer;
 public final class ImageWriterOptions {
     public static class Builder {
         private MetadataVersion metadataVersion;
+        private MetadataVersion requestedMetadataVersion;
         private Consumer<UnwritableMetadataException> lossHandler = e -> {
             throw e;
         };
@@ -42,6 +43,7 @@ public final class ImageWriterOptions {
         }
 
         public Builder setMetadataVersion(MetadataVersion metadataVersion) {
+            setRequestedMetadataVersion(metadataVersion);
             if (metadataVersion.isLessThan(MetadataVersion.MINIMUM_BOOTSTRAP_VERSION)) {
                 // When writing an image, all versions less than 3.3-IV0 are treated as 3.0-IV1.
                 // This is because those versions don't support FeatureLevelRecord.
@@ -58,8 +60,16 @@ public final class ImageWriterOptions {
             return this;
         }
 
+        public void setRequestedMetadataVersion(MetadataVersion orgMetadataVersion) {
+            this.requestedMetadataVersion = orgMetadataVersion;
+        }
+
         public MetadataVersion metadataVersion() {
             return metadataVersion;
+        }
+
+        public MetadataVersion requestedMetadataVersion() {
+            return requestedMetadataVersion;
         }
 
         public Builder setLossHandler(Consumer<UnwritableMetadataException> lossHandler) {
@@ -68,19 +78,22 @@ public final class ImageWriterOptions {
         }
 
         public ImageWriterOptions build() {
-            return new ImageWriterOptions(metadataVersion, lossHandler);
+            return new ImageWriterOptions(metadataVersion, lossHandler, requestedMetadataVersion);
         }
     }
 
     private final MetadataVersion metadataVersion;
+    private final MetadataVersion requestedMetadataVersion;
     private final Consumer<UnwritableMetadataException> lossHandler;
 
     private ImageWriterOptions(
         MetadataVersion metadataVersion,
-        Consumer<UnwritableMetadataException> lossHandler
+        Consumer<UnwritableMetadataException> lossHandler,
+        MetadataVersion orgMetadataVersion
     ) {
         this.metadataVersion = metadataVersion;
         this.lossHandler = lossHandler;
+        this.requestedMetadataVersion = orgMetadataVersion;
     }
 
     public MetadataVersion metadataVersion() {
@@ -88,7 +101,7 @@ public final class ImageWriterOptions {
     }
 
     public void handleLoss(String loss) {
-        lossHandler.accept(new UnwritableMetadataException(metadataVersion, loss));
+        lossHandler.accept(new UnwritableMetadataException(requestedMetadataVersion, loss));
     }
 }
 

@@ -95,6 +95,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -133,7 +134,7 @@ public class ReplicaFetcherThreadBenchmark {
         KafkaConfig config = new KafkaConfig(props);
         LogConfig logConfig = createLogConfig();
 
-        BrokerTopicStats brokerTopicStats = new BrokerTopicStats();
+        BrokerTopicStats brokerTopicStats = new BrokerTopicStats(Optional.empty());
         LogDirFailureChannel logDirFailureChannel = Mockito.mock(LogDirFailureChannel.class);
         List<File> logDirs = Collections.singletonList(logDir);
         logManager = new LogManagerBuilder().

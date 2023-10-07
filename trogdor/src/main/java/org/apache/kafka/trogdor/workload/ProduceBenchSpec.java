@@ -74,6 +74,7 @@ public class ProduceBenchSpec extends TaskSpec {
     private final boolean useConfiguredPartitioner;
     private final boolean skipFlush;
 
+    @SuppressWarnings("this-escape")
     @JsonCreator
     public ProduceBenchSpec(@JsonProperty("startMs") long startMs,
                          @JsonProperty("durationMs") long durationMs,

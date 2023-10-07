@@ -409,7 +409,7 @@ public final class MessageDataGenerator implements MessageClassGenerator {
                                      Versions parentVersions) {
         headerGenerator.addImport(MessageGenerator.READABLE_CLASS);
         buffer.printf("@Override%n");
-        buffer.printf("public void read(Readable _readable, short _version) {%n");
+        buffer.printf("public final void read(Readable _readable, short _version) {%n");
         buffer.incrementIndent();
         VersionConditional.forVersions(parentVersions, struct.versions()).
             allowMembershipCheckAlwaysFalse(false).

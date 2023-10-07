@@ -34,7 +34,13 @@ public class GroupCoordinatorConfigTest {
             10,
             55,
             Collections.singletonList(assignor),
-            2222
+            2222,
+            3333,
+            60,
+            3000,
+            5 * 60 * 1000,
+            120,
+            10 * 60 * 1000
         );
 
         assertEquals(10, config.numThreads);
@@ -43,5 +49,11 @@ public class GroupCoordinatorConfigTest {
         assertEquals(55, config.consumerGroupMaxSize);
         assertEquals(Collections.singletonList(assignor), config.consumerGroupAssignors);
         assertEquals(2222, config.offsetsTopicSegmentBytes);
+        assertEquals(3333, config.offsetMetadataMaxSize);
+        assertEquals(60, config.genericGroupMaxSize);
+        assertEquals(3000, config.genericGroupInitialRebalanceDelayMs);
+        assertEquals(5 * 60 * 1000, config.genericGroupNewMemberJoinTimeoutMs);
+        assertEquals(120, config.genericGroupMinSessionTimeoutMs);
+        assertEquals(10 * 60 * 1000, config.genericGroupMaxSessionTimeoutMs);
     }
 }
