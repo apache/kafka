@@ -124,6 +124,7 @@ import static org.apache.kafka.clients.admin.AdminClientConfig.RETRY_BACKOFF_MS_
 import static org.apache.kafka.clients.consumer.ConsumerConfig.ISOLATION_LEVEL_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.TRANSACTIONAL_ID_CONFIG;
+import static org.apache.kafka.connect.json.JsonConverterConfig.SCHEMAS_ENABLE_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLIENT_ADMIN_OVERRIDES_PREFIX;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX;
@@ -1918,6 +1919,7 @@ public class WorkerTest {
     public void testAlterOffsetsConnectorDoesNotSupportOffsetAlteration() {
         mockKafkaClusterId();
 
+        mockInternalConverters();
         worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, Executors.newSingleThreadExecutor(),
                 allConnectorClientConfigOverridePolicy, null);
         worker.start();
@@ -1946,6 +1948,7 @@ public class WorkerTest {
     @SuppressWarnings("unchecked")
     public void testAlterOffsetsSourceConnector() throws Exception {
         mockKafkaClusterId();
+        mockInternalConverters();
         worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, Executors.newSingleThreadExecutor(),
                 allConnectorClientConfigOverridePolicy, null);
         worker.start();
@@ -1982,6 +1985,7 @@ public class WorkerTest {
     @SuppressWarnings("unchecked")
     public void testAlterOffsetsSourceConnectorError() throws Exception {
         mockKafkaClusterId();
+        mockInternalConverters();
         worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, Executors.newSingleThreadExecutor(),
                 allConnectorClientConfigOverridePolicy, null);
         worker.start();
@@ -2013,6 +2017,28 @@ public class WorkerTest {
         verify(offsetWriter).doFlush(any());
         verify(offsetStore, timeout(1000)).stop();
         verifyKafkaClusterId();
+    }
+
+    @Test
+    public void testNormalizeSourceConnectorOffsets() throws Exception {
+        Map<Map<String, ?>, Map<String, ?>> offsets = Collections.singletonMap(
+                Collections.singletonMap("filename", "/path/to/filename"),
+                Collections.singletonMap("position", 20)
+        );
+
+        assertTrue(offsets.values().iterator().next().get("position") instanceof Integer);
+
+        mockInternalConverters();
+
+        mockKafkaClusterId();
+        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, executorService,
+                noneConnectorClientConfigOverridePolicy, null);
+
+        Map<Map<String, ?>, Map<String, ?>> normalizedOffsets = worker.normalizeSourceConnectorOffsets(offsets);
+        assertEquals(1, normalizedOffsets.size());
+
+        // The integer value 20 gets deserialized as a long value by the JsonConverter
+        assertTrue(normalizedOffsets.values().iterator().next().get("position") instanceof Long);
     }
 
     @Test
@@ -2266,6 +2292,7 @@ public class WorkerTest {
         workerProps.put("status.storage.topic", "connect-statuses");
         config = new DistributedConfig(workerProps);
         mockKafkaClusterId();
+        mockInternalConverters();
         worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, Executors.newSingleThreadExecutor(),
                 allConnectorClientConfigOverridePolicy, null);
         worker.start();
@@ -2277,8 +2304,8 @@ public class WorkerTest {
         OffsetStorageWriter offsetWriter = mock(OffsetStorageWriter.class);
 
         Set<Map<String, Object>> connectorPartitions = new HashSet<>();
-        connectorPartitions.add(Collections.singletonMap("partitionKey1", new Object()));
-        connectorPartitions.add(Collections.singletonMap("partitionKey2", new Object()));
+        connectorPartitions.add(Collections.singletonMap("partitionKey", "partitionValue1"));
+        connectorPartitions.add(Collections.singletonMap("partitionKey", "partitionValue2"));
         when(offsetStore.connectorPartitions(eq(CONNECTOR_ID))).thenReturn(connectorPartitions);
         when(offsetWriter.doFlush(any())).thenAnswer(invocation -> {
             invocation.getArgument(0, Callback.class).onCompletion(null, null);
@@ -2382,6 +2409,7 @@ public class WorkerTest {
     public void testModifySourceConnectorOffsetsTimeout() throws Exception {
         mockKafkaClusterId();
         Time time = new MockTime();
+        mockInternalConverters();
         worker = new Worker(WORKER_ID, time, plugins, config, offsetBackingStore, Executors.newSingleThreadExecutor(),
                 allConnectorClientConfigOverridePolicy, null);
         worker.start();
@@ -2498,14 +2526,14 @@ public class WorkerTest {
     }
 
     private void mockInternalConverters() {
-        Converter internalKeyConverter = mock(JsonConverter.class);
-        Converter internalValueConverter = mock(JsonConverter.class);
+        JsonConverter jsonConverter = new JsonConverter();
+        jsonConverter.configure(Collections.singletonMap(SCHEMAS_ENABLE_CONFIG, false), false);
 
         when(plugins.newInternalConverter(eq(true), anyString(), anyMap()))
-                       .thenReturn(internalKeyConverter);
+                       .thenReturn(jsonConverter);
 
         when(plugins.newInternalConverter(eq(false), anyString(), anyMap()))
-                       .thenReturn(internalValueConverter);
+                       .thenReturn(jsonConverter);
     }
 
     private void verifyConverters() {

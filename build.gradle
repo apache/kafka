@@ -31,14 +31,15 @@ buildscript {
 }
 
 plugins {
-  id 'com.github.ben-manes.versions' version '0.46.0'
+  id 'com.github.ben-manes.versions' version '0.48.0'
   id 'idea'
+  id 'jacoco'
   id 'java-library'
   id 'org.owasp.dependencycheck' version '8.2.1'
-  id 'org.nosphere.apache.rat' version "0.8.0"
-  id "io.swagger.core.v3.swagger-gradle-plugin" version "2.2.8"
+  id 'org.nosphere.apache.rat' version "0.8.1"
+  id "io.swagger.core.v3.swagger-gradle-plugin" version "2.2.8" // keep aligned with the swagger version used in gradle/dependencies.gradle
 
-  id "com.github.spotbugs" version '5.0.13' apply false
+  id "com.github.spotbugs" version '5.1.3' apply false
   id 'org.scoverage' version '7.0.1' apply false
   id 'com.github.johnrengelman.shadow' version '8.1.1' apply false
   id 'com.diffplug.spotless' version '6.14.0' apply false // 6.14.1 and newer require Java 11 at compile time, so we can't upgrade until AK 4.0
@@ -231,7 +232,10 @@ subprojects {
 
   apply plugin: 'java-library'
   apply plugin: 'checkstyle'
-  apply plugin: "com.github.spotbugs"
+
+  // spotbugs doesn't support Java 21 yet
+  if (!JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_21))
+    apply plugin: "com.github.spotbugs"
 
   // We use the shadow plugin for the jmh-benchmarks module and the `-all` jar can get pretty large, so
   // don't publish it
@@ -414,9 +418,8 @@ subprojects {
   if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_16)) {
     testsToExclude.addAll([
       // connect tests
-      "**/DistributedHerderTest.*",
       "**/KafkaConfigBackingStoreTest.*",
-      "**/KafkaBasedLogTest.*", "**/StandaloneHerderTest.*",
+      "**/StandaloneHerderTest.*",
       "**/WorkerSinkTaskTest.*", "**/WorkerSinkTaskThreadedTest.*"
     ])
   }
@@ -685,7 +688,7 @@ subprojects {
   }
 
   checkstyle {
-    configFile = new File(rootDir, "checkstyle/checkstyle.xml")
+    configDirectory = rootProject.layout.projectDirectory.dir("checkstyle")
     configProperties = checkstyleConfigProperties("import-control.xml")
     toolVersion = versions.checkstyle
   }
@@ -702,12 +705,15 @@ subprojects {
 
   test.dependsOn('checkstyleMain', 'checkstyleTest')
 
-  spotbugs {
-    toolVersion = versions.spotbugs
-    excludeFilter = file("$rootDir/gradle/spotbugs-exclude.xml")
-    ignoreFailures = false
+  // spotbugs doesn't support Java 21 yet
+  if (!JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_21)) {
+    spotbugs {
+      toolVersion = versions.spotbugs
+      excludeFilter = file("$rootDir/gradle/spotbugs-exclude.xml")
+      ignoreFailures = false
+    }
+    test.dependsOn('spotbugsMain')
   }
-  test.dependsOn('spotbugsMain')
 
   tasks.withType(com.github.spotbugs.snom.SpotBugsTask) {
     reports {
@@ -735,9 +741,9 @@ subprojects {
         dependsOn tasks.test
         sourceSets sourceSets.main
         reports {
-          html.enabled = true
-          xml.enabled = true
-          csv.enabled = false
+          html.required = true
+          xml.required = true
+          csv.required = false
         }
       }
 
@@ -749,6 +755,9 @@ subprojects {
     task reportCoverage(dependsOn: [coverageGen])
   }
 
+  dependencyCheck {
+    suppressionFile = "$rootDir/gradle/resources/dependencycheck-suppressions.xml"
+  }
 }
 
 gradle.taskGraph.whenReady { taskGraph ->
@@ -789,9 +798,7 @@ def fineTuneEclipseClasspathFile(eclipse, project) {
 }
 
 def checkstyleConfigProperties(configFileName) {
-  [importControlFile: "$rootDir/checkstyle/$configFileName",
-   suppressionsFile: "$rootDir/checkstyle/suppressions.xml",
-   headerFile: "$rootDir/checkstyle/java.header"]
+  [importControlFile: "$configFileName"]
 }
 
 // Aggregates all jacoco results into the root project directory
@@ -808,10 +815,9 @@ if (userEnableTestCoverage) {
     executionData.from = javaProjects.jacocoTestReport.executionData
 
     reports {
-      html.enabled = true
-      xml.enabled = true
+      html.required = true
+      xml.required = true
     }
-
     // workaround to ignore projects that don't have any tests at all
     onlyIf = { true }
     doFirst {
@@ -830,6 +836,7 @@ def connectPkgs = [
     'connect:file',
     'connect:json',
     'connect:runtime',
+    'connect:test-plugins',
     'connect:transforms',
     'connect:mirror',
     'connect:mirror-client'
@@ -866,7 +873,7 @@ project(':core') {
     implementation project(':server-common')
     implementation project(':group-coordinator')
     implementation project(':metadata')
-    implementation project(':storage:api')
+    implementation project(':storage:storage-api')
     implementation project(':tools:tools-api')
     implementation project(':raft')
     implementation project(':storage')
@@ -893,6 +900,10 @@ project(':core') {
       implementation libs.dropwizardMetrics
       exclude module: 'slf4j-log4j12'
       exclude module: 'log4j'
+      // Both Kafka and Zookeeper use slf4j. ZooKeeper moved from log4j to logback in v3.8.0, but Kafka relies on reload4j.
+      // We are removing Zookeeper's dependency on logback so we have a singular logging backend.
+      exclude module: 'logback-classic'
+      exclude module: 'logback-core'
     }
     // ZooKeeperMain depends on commons-cli but declares the dependency as `provided`
     implementation libs.commonsCli
@@ -904,10 +915,9 @@ project(':core') {
     testImplementation project(':metadata').sourceSets.test.output
     testImplementation project(':raft').sourceSets.test.output
     testImplementation project(':server-common').sourceSets.test.output
-    testImplementation project(':storage:api').sourceSets.test.output
+    testImplementation project(':storage:storage-api').sourceSets.test.output
     testImplementation libs.bcpkix
     testImplementation libs.mockitoCore
-    testImplementation libs.mockitoInline // supports mocking static methods, final classes, etc.
     testImplementation(libs.apacheda) {
       exclude group: 'xml-apis', module: 'xml-apis'
       // `mina-core` is a transitive dependency for `apacheds` and `apacheda`.
@@ -1070,7 +1080,8 @@ project(':core') {
                                ':streams:genStreamsConfigDocs', 'genConsumerMetricsDocs', 'genProducerMetricsDocs',
                                ':connect:runtime:genConnectMetricsDocs', ':connect:runtime:genConnectOpenAPIDocs',
                                ':connect:mirror:genMirrorSourceConfigDocs', ':connect:mirror:genMirrorCheckpointConfigDocs',
-                               ':connect:mirror:genMirrorHeartbeatConfigDocs'], type: Tar) {
+                               ':connect:mirror:genMirrorHeartbeatConfigDocs', ':connect:mirror:genMirrorConnectorConfigDocs',
+                               ':storage:genRemoteLogManagerConfigDoc', ':storage:genRemoteLogMetadataManagerConfigDoc'], type: Tar) {
     archiveClassifier = 'site-docs'
     compression = Compression.GZIP
     from project.file("$rootDir/docs")
@@ -1191,7 +1202,6 @@ project(':metadata') {
     testImplementation libs.jqwik
     testImplementation libs.hamcrest
     testImplementation libs.mockitoCore
-    testImplementation libs.mockitoInline
     testImplementation libs.slf4jlog4j
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':raft').sourceSets.test.output
@@ -1351,7 +1361,7 @@ project(':clients') {
     testImplementation libs.jose4j
     testImplementation libs.junitJupiter
     testImplementation libs.log4j
-    testImplementation libs.mockitoInline
+    testImplementation libs.mockitoCore
 
     testRuntimeOnly libs.slf4jlog4j
     testRuntimeOnly libs.jacksonDatabind
@@ -1569,13 +1579,13 @@ project(':server-common') {
     implementation libs.slf4jApi
     implementation libs.metrics
     implementation libs.joptSimple
+    implementation libs.jacksonDatabind
     implementation libs.pcollections
 
     testImplementation project(':clients')
     testImplementation project(':clients').sourceSets.test.output
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
-    testImplementation libs.mockitoInline // supports mocking static methods, final classes, etc.
     testImplementation libs.hamcrest
 
     testRuntimeOnly libs.slf4jlog4j
@@ -1628,11 +1638,13 @@ project(':server-common') {
   }
 }
 
-project(':storage:api') {
+project(':storage:storage-api') {
   archivesBaseName = "kafka-storage-api"
 
   dependencies {
     implementation project(':clients')
+    implementation project(':server-common')
+    implementation libs.metrics
     implementation libs.slf4jApi
 
     testImplementation project(':clients')
@@ -1688,6 +1700,10 @@ project(':storage:api') {
   javadoc {
     include "**/org/apache/kafka/server/log/remote/storage/*"
   }
+
+  checkstyle {
+    configProperties = checkstyleConfigProperties("import-control-storage.xml")
+  }
 }
 
 project(':storage') {
@@ -1698,12 +1714,13 @@ project(':storage') {
   }
 
   dependencies {
-    implementation project(':storage:api')
+    implementation project(':storage:storage-api')
     implementation project(':server-common')
     implementation project(':clients')
     implementation libs.caffeine
     implementation libs.slf4jApi
     implementation libs.jacksonDatabind
+    implementation libs.metrics
 
     testImplementation project(':clients')
     testImplementation project(':clients').sourceSets.test.output
@@ -1711,6 +1728,7 @@ project(':storage') {
     testImplementation project(':core').sourceSets.test.output
     testImplementation project(':server-common')
     testImplementation project(':server-common').sourceSets.test.output
+    testImplementation libs.hamcrest
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation libs.bcpkix
@@ -1753,6 +1771,20 @@ project(':storage') {
     outputs.dir("src/generated/java/org/apache/kafka/server/log/remote/metadata/storage/generated")
   }
 
+  task genRemoteLogManagerConfigDoc(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig'
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    standardOutput = new File(generatedDocsDir, "remote_log_manager_config.html").newOutputStream()
+  }
+
+  task genRemoteLogMetadataManagerConfigDoc(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig'
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    standardOutput = new File(generatedDocsDir, "remote_log_metadata_manager_config.html").newOutputStream()
+  }
+
   sourceSets {
     main {
       java {
@@ -1788,6 +1820,10 @@ project(':storage') {
 
   javadoc {
     enabled = false
+  }
+
+  checkstyle {
+    configProperties = checkstyleConfigProperties("import-control-storage.xml")
   }
 }
 
@@ -1852,6 +1888,8 @@ project(':tools') {
   dependencies {
     implementation project(':clients')
     implementation project(':server-common')
+    implementation project(':connect:api')
+    implementation project(':connect:runtime')
     implementation project(':log4j-appender')
     implementation project(':tools:tools-api')
     implementation libs.argparse4j
@@ -1870,8 +1908,12 @@ project(':tools') {
     testImplementation project(':core').sourceSets.test.output
     testImplementation project(':server-common')
     testImplementation project(':server-common').sourceSets.test.output
+    testImplementation project(':connect:api')
+    testImplementation project(':connect:runtime')
+    testImplementation project(':connect:runtime').sourceSets.test.output
+    testImplementation project(':storage:storage-api').sourceSets.main.output
     testImplementation libs.junitJupiter
-    testImplementation libs.mockitoInline // supports mocking static methods, final classes, etc.
+    testImplementation libs.mockitoCore
     testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
     testImplementation libs.bcpkix // required by the clients test module, but we have to specify it explicitly as gradle does not include the transitive test dependency automatically
     testRuntimeOnly libs.slf4jlog4j
@@ -1922,7 +1964,7 @@ project(':trogdor') {
     testImplementation project(':clients')
     testImplementation libs.junitJupiter
     testImplementation project(':clients').sourceSets.test.output
-    testImplementation libs.mockitoInline // supports mocking static methods, final classes, etc.
+    testImplementation libs.mockitoCore
 
     testRuntimeOnly libs.slf4jlog4j
   }
@@ -2026,7 +2068,7 @@ project(':streams') {
     testImplementation libs.powermockEasymock
     testImplementation libs.bcpkix
     testImplementation libs.hamcrest
-    testImplementation libs.mockitoInline // supports mocking static methods, final classes, etc.
+    testImplementation libs.mockitoCore
     testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
 
     testRuntimeOnly project(':streams:test-utils')
@@ -2740,8 +2782,6 @@ project(':connect:runtime') {
     api project(':connect:json')
     api project(':connect:transforms')
 
-    implementation project(':tools')
-
     implementation libs.slf4jApi
     implementation libs.log4j
     implementation libs.jose4j                    // for SASL/OAUTHBEARER JWT validation
@@ -2767,13 +2807,15 @@ project(':connect:runtime') {
     testImplementation project(':core')
     testImplementation project(':metadata')
     testImplementation project(':core').sourceSets.test.output
+    testImplementation project(':server-common')
+    testImplementation project(':connect:test-plugins')
 
     testImplementation libs.easymock
     testImplementation libs.junitJupiterApi
     testImplementation libs.junitVintageEngine
     testImplementation libs.powermockJunit4
     testImplementation libs.powermockEasymock
-    testImplementation libs.mockitoInline
+    testImplementation libs.mockitoCore
     testImplementation libs.httpclient
 
     testRuntimeOnly libs.slf4jlog4j
@@ -2878,6 +2920,10 @@ project(':connect:file') {
 
     testRuntimeOnly libs.slf4jlog4j
     testImplementation project(':clients').sourceSets.test.output
+    testImplementation project(':connect:runtime')
+    testImplementation project(':connect:runtime').sourceSets.test.output
+    testImplementation project(':core')
+    testImplementation project(':core').sourceSets.test.output
   }
 
   javadoc {
@@ -2996,6 +3042,13 @@ project(':connect:mirror') {
     duplicatesStrategy 'exclude'
   }
 
+  task genMirrorConnectorConfigDocs(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'org.apache.kafka.connect.mirror.MirrorConnectorConfig'
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    standardOutput = new File(generatedDocsDir, "mirror_connector_config.html").newOutputStream()
+  }
+
   task genMirrorSourceConfigDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'org.apache.kafka.connect.mirror.MirrorSourceConfig'
@@ -3054,6 +3107,18 @@ project(':connect:mirror-client') {
 
   jar {
     dependsOn copyDependantLibs
+  }
+}
+
+project(':connect:test-plugins') {
+  archivesBaseName = "connect-test-plugins"
+
+  dependencies {
+    api project(':connect:api')
+
+    implementation project(':server-common')
+    implementation libs.slf4jApi
+    implementation libs.jacksonDatabind
   }
 }
 

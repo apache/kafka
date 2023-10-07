@@ -124,7 +124,7 @@ object StressTestLog {
   class WriterThread(val log: UnifiedLog) extends WorkerThread with LogProgress {
     override def work(): Unit = {
       val logAppendInfo = log.appendAsLeader(TestUtils.singletonRecords(currentOffset.toString.getBytes), 0)
-      require((!logAppendInfo.firstOffset.isPresent || logAppendInfo.firstOffset.get().messageOffset == currentOffset)
+      require((logAppendInfo.firstOffset == -1 || logAppendInfo.firstOffset == currentOffset)
         && logAppendInfo.lastOffset == currentOffset)
       currentOffset += 1
       if (currentOffset % 1000 == 0)

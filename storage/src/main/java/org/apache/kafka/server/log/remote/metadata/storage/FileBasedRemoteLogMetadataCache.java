@@ -38,6 +38,7 @@ public class FileBasedRemoteLogMetadataCache extends RemoteLogMetadataCache {
     private final RemoteLogMetadataSnapshotFile snapshotFile;
     private final TopicIdPartition topicIdPartition;
 
+    @SuppressWarnings("this-escape")
     public FileBasedRemoteLogMetadataCache(TopicIdPartition topicIdPartition,
                                            Path partitionDir) {
         if (!partitionDir.toFile().exists() || !partitionDir.toFile().isDirectory()) {
@@ -54,7 +55,7 @@ public class FileBasedRemoteLogMetadataCache extends RemoteLogMetadataCache {
         }
     }
 
-    protected void loadRemoteLogSegmentMetadata(RemoteLogMetadataSnapshotFile.Snapshot snapshot) {
+    protected final void loadRemoteLogSegmentMetadata(RemoteLogMetadataSnapshotFile.Snapshot snapshot) {
         log.info("Loading snapshot for partition {} is: {}", topicIdPartition, snapshot);
         for (RemoteLogSegmentMetadataSnapshot metadataSnapshot : snapshot.remoteLogSegmentMetadataSnapshots()) {
             switch (metadataSnapshot.state()) {
@@ -77,7 +78,8 @@ public class FileBasedRemoteLogMetadataCache extends RemoteLogMetadataCache {
     private RemoteLogSegmentMetadata createRemoteLogSegmentMetadata(RemoteLogSegmentMetadataSnapshot snapshot) {
         return new RemoteLogSegmentMetadata(new RemoteLogSegmentId(topicIdPartition, snapshot.segmentId()), snapshot.startOffset(),
                                             snapshot.endOffset(), snapshot.maxTimestampMs(), snapshot.brokerId(), snapshot.eventTimestampMs(),
-                                            snapshot.segmentSizeInBytes(), snapshot.state(), snapshot.segmentLeaderEpochs());
+                                            snapshot.segmentSizeInBytes(), snapshot.customMetadata(), snapshot.state(), snapshot.segmentLeaderEpochs()
+        );
     }
 
     /**
