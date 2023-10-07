@@ -314,7 +314,6 @@ public class HeartbeatRequestManager implements RequestManager {
     }
 
     /**
-     * 
      * Represents the state of a heartbeat request, including logic for timing, retries, and exponential backoff. The
      * object extends {@link RequestState} to enable exponential backoff and duplicated request handling. The two fields
      * that it holds are:
