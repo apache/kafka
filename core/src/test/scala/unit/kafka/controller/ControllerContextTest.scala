@@ -29,7 +29,7 @@ import org.mockito.ArgumentMatchers
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.{mockConstruction, verify, verifyNoMoreInteractions}
 
-import scala.jdk.CollectionConverters.CollectionHasAsScala
+import scala.jdk.CollectionConverters._
 
 
 class ControllerContextTest {
