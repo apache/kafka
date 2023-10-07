@@ -3461,7 +3461,7 @@ public class FetchRequestManagerTest {
         }
 
         private int sendFetches() {
-            NetworkClientDelegate.PollResult pollResult = fetcher.poll(time.milliseconds());
+            NetworkClientDelegate.PollResult pollResult = poll(time.milliseconds());
             networkClientDelegate.addAll(pollResult.unsentRequests);
             return pollResult.unsentRequests.size();
         }
