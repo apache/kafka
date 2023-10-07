@@ -102,11 +102,11 @@ class UnifiedLogTest {
       val logEndOffset = 0L
       doReturn(tmpRelativeDir, tmpRelativeDir).when(localLog).dir
       doReturn(mock(classOf[LogDirFailureChannel]), mock(classOf[LogDirFailureChannel])).when(localLog).logDirFailureChannel
-      doReturn(recoveryPoint, recoveryPoint).when(localLog).recoveryPoint
+      doReturn(recoveryPoint.asInstanceOf[AnyRef], recoveryPoint.asInstanceOf[AnyRef]).when(localLog).recoveryPoint
       doReturn(topicPartition, topicPartition).when(localLog).topicPartition
-      doReturn(isFuture, isFuture).when(localLog).isFuture
+      doReturn(isFuture.asInstanceOf[AnyRef], isFuture.asInstanceOf[AnyRef]).when(localLog).isFuture
       doReturn(segments, segments).when(localLog).segments
-      doReturn(logEndOffset, logEndOffset).when(localLog).logEndOffset
+      doReturn(logEndOffset.asInstanceOf[AnyRef], logEndOffset.asInstanceOf[AnyRef]).when(localLog).logEndOffset
       doReturn(scheduler, scheduler).when(localLog).scheduler
       doNothing().when(localLog).checkIfMemoryMappedBufferClosed()
       doReturn(Optional.empty(), Optional.empty()).when(producerStateManager).firstUnstableOffset()
