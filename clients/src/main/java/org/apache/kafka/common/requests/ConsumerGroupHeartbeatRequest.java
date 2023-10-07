@@ -26,11 +26,20 @@ import java.nio.ByteBuffer;
 
 public class ConsumerGroupHeartbeatRequest extends AbstractRequest {
 
+    /**
+     * A member epoch of <code>-1</code> means that the member wants to leave the group.
+     */
+    public static final int LEAVE_GROUP_MEMBER_EPOCH = -1;
+
     public static class Builder extends AbstractRequest.Builder<ConsumerGroupHeartbeatRequest> {
         private final ConsumerGroupHeartbeatRequestData data;
 
         public Builder(ConsumerGroupHeartbeatRequestData data) {
-            super(ApiKeys.CONSUMER_GROUP_HEARTBEAT);
+            this(data, false);
+        }
+
+        public Builder(ConsumerGroupHeartbeatRequestData data, boolean enableUnstableLastVersion) {
+            super(ApiKeys.CONSUMER_GROUP_HEARTBEAT, enableUnstableLastVersion);
             this.data = data;
         }
 

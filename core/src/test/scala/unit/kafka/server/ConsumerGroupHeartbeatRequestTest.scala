@@ -42,7 +42,8 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) {
   @ClusterTest
   def testConsumerGroupHeartbeatIsDisabledByDefault(): Unit = {
     val consumerGroupHeartbeatRequest = new ConsumerGroupHeartbeatRequest.Builder(
-      new ConsumerGroupHeartbeatRequestData()
+      new ConsumerGroupHeartbeatRequestData(),
+      true
     ).build()
     assertThrows(classOf[EOFException], () => connectAndReceive(consumerGroupHeartbeatRequest))
   }
@@ -50,7 +51,8 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) {
   @ClusterTest(serverProperties = Array(new ClusterConfigProperty(key = "unstable.api.versions.enable", value = "true")))
   def testConsumerGroupHeartbeatIsAccessibleWhenEnabled(): Unit = {
     val consumerGroupHeartbeatRequest = new ConsumerGroupHeartbeatRequest.Builder(
-      new ConsumerGroupHeartbeatRequestData()
+      new ConsumerGroupHeartbeatRequestData(),
+      true
     ).build()
 
     val consumerGroupHeartbeatResponse = connectAndReceive(consumerGroupHeartbeatRequest)
@@ -83,7 +85,8 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) {
         .setMemberEpoch(0)
         .setRebalanceTimeoutMs(5 * 60 * 1000)
         .setSubscribedTopicNames(List("foo").asJava)
-        .setTopicPartitions(List.empty.asJava)
+        .setTopicPartitions(List.empty.asJava),
+      true
     ).build()
 
     // Send the request until receiving a successful response. There is a delay
@@ -111,12 +114,13 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       new ConsumerGroupHeartbeatRequestData()
         .setGroupId("grp")
         .setMemberId(consumerGroupHeartbeatResponse.data.memberId)
-        .setMemberEpoch(consumerGroupHeartbeatResponse.data.memberEpoch)
+        .setMemberEpoch(consumerGroupHeartbeatResponse.data.memberEpoch),
+      true
     ).build()
 
     // This is the expected assignment.
     val expectedAssignment = new ConsumerGroupHeartbeatResponseData.Assignment()
-      .setAssignedTopicPartitions(List(new ConsumerGroupHeartbeatResponseData.TopicPartitions()
+      .setTopicPartitions(List(new ConsumerGroupHeartbeatResponseData.TopicPartitions()
         .setTopicId(topicId)
         .setPartitions(List[Integer](0, 1, 2).asJava)).asJava)
 
@@ -137,7 +141,8 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       new ConsumerGroupHeartbeatRequestData()
         .setGroupId("grp")
         .setMemberId(consumerGroupHeartbeatResponse.data.memberId)
-        .setMemberEpoch(-1)
+        .setMemberEpoch(-1),
+      true
     ).build()
 
     consumerGroupHeartbeatResponse = connectAndReceive(consumerGroupHeartbeatRequest)
