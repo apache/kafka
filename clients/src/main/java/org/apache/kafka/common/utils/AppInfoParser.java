@@ -60,8 +60,13 @@ public class AppInfoParser {
     public static synchronized void registerAppInfo(String prefix, String id, Metrics metrics, long nowMs) {
         try {
             ObjectName name = new ObjectName(prefix + ":type=app-info,id=" + Sanitizer.jmxSanitize(id));
+            MBeanServer server = ManagementFactory.getPlatformMBeanServer();
+            if (server.isRegistered(name)) {
+                log.info("The mbean of App info: [{}], id: [{}] already exists, so skipping a new mbean creation.", prefix, id);
+                return;
+            }
             AppInfo mBean = new AppInfo(nowMs);
-            ManagementFactory.getPlatformMBeanServer().registerMBean(mBean, name);
+            server.registerMBean(mBean, name);
 
             registerMetrics(metrics, mBean); // prefix will be added later by JmxReporter
         } catch (JMException e) {

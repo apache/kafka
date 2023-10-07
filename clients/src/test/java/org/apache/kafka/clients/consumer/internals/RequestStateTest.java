@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.common.utils.LogContext;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -25,6 +26,8 @@ public class RequestStateTest {
     @Test
     public void testRequestStateSimple() {
         RequestState state = new RequestState(
+                new LogContext(),
+                this.getClass().getSimpleName(),
                 100,
                 2,
                 1000,
