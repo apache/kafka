@@ -16,6 +16,11 @@
  */
 package org.apache.kafka.coordinator.group;
 
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.message.ListGroupsResponseData;
+
+import java.util.List;
+
 /**
  * Interface common for all groups.
  */
@@ -47,7 +52,69 @@ public interface Group {
     String stateAsString();
 
     /**
+     * @return The {{@link GroupType}}'s String representation based on the committed offset.
+     */
+    String stateAsString(long committedOffset);
+
+    /**
+     * @return the group formatted as a list group response based on the committed offset.
+     */
+    public ListGroupsResponseData.ListedGroup asListedGroup(long committedOffset);
+
+    /**
      * @return The group id.
      */
     String groupId();
+
+    /**
+     * Validates the OffsetCommit request.
+     *
+     * @param memberId                  The member id.
+     * @param groupInstanceId           The group instance id.
+     * @param generationIdOrMemberEpoch The generation id for genetic groups or the member epoch
+     *                                  for consumer groups.
+     */
+    void validateOffsetCommit(
+        String memberId,
+        String groupInstanceId,
+        int generationIdOrMemberEpoch
+    ) throws KafkaException;
+
+    /**
+     * Validates the OffsetFetch request.
+     *
+     * @param memberId              The member id for consumer groups.
+     * @param memberEpoch           The member epoch for consumer groups.
+     * @param lastCommittedOffset   The last committed offsets in the timeline.
+     */
+    void validateOffsetFetch(
+        String memberId,
+        int memberEpoch,
+        long lastCommittedOffset
+    ) throws KafkaException;
+
+    /**
+     * Validates the OffsetDelete request.
+     */
+    void validateOffsetDelete() throws KafkaException;
+
+    /**
+     * Validates the DeleteGroups request.
+     */
+    void validateDeleteGroup() throws KafkaException;
+
+    /**
+     * Returns true if the group is actively subscribed to the topic.
+     *
+     * @param topic The topic name.
+     * @return Whether the group is subscribed to the topic.
+     */
+    boolean isSubscribedToTopic(String topic);
+    
+    /**
+     * Populates the list of records with tombstone(s) for deleting the group.
+     *
+     * @param records The list of records.
+     */
+    void createGroupTombstoneRecords(List<Record> records);
 }

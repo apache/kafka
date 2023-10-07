@@ -39,6 +39,7 @@ class CapturingMigrationClient implements MigrationClient {
         TopicMigrationClient topicMigrationClient = new CapturingTopicMigrationClient();
         ConfigMigrationClient configMigrationClient = new CapturingConfigMigrationClient();
         AclMigrationClient aclMigrationClient = new CapturingAclMigrationClient();
+        DelegationTokenMigrationClient delegationTokenMigrationClient = new CapturingDelegationTokenMigrationClient();
 
         public Builder setBrokersInZk(int... brokerIds) {
             brokersInZk = IntStream.of(brokerIds).boxed().collect(Collectors.toSet());
@@ -60,12 +61,18 @@ class CapturingMigrationClient implements MigrationClient {
             return this;
         }
 
+        public Builder setDelegationTokenMigrationClient(DelegationTokenMigrationClient delegationTokenMigrationClient) {
+            this.delegationTokenMigrationClient = delegationTokenMigrationClient;
+            return this;
+        }
+
         public CapturingMigrationClient build() {
             return new CapturingMigrationClient(
                 brokersInZk,
                 topicMigrationClient,
                 configMigrationClient,
-                aclMigrationClient
+                aclMigrationClient,
+                delegationTokenMigrationClient
             );
         }
     }
@@ -74,6 +81,7 @@ class CapturingMigrationClient implements MigrationClient {
     private final TopicMigrationClient topicMigrationClient;
     private final ConfigMigrationClient configMigrationClient;
     private final AclMigrationClient aclMigrationClient;
+    private final DelegationTokenMigrationClient delegationTokenMigrationClient;
 
     private ZkMigrationLeadershipState state = null;
 
@@ -81,12 +89,14 @@ class CapturingMigrationClient implements MigrationClient {
         Set<Integer> brokerIdsInZk,
         TopicMigrationClient topicMigrationClient,
         ConfigMigrationClient configMigrationClient,
-        AclMigrationClient aclMigrationClient
+        AclMigrationClient aclMigrationClient,
+        DelegationTokenMigrationClient delegationTokenMigrationClient
     ) {
         this.brokerIds = brokerIdsInZk;
         this.topicMigrationClient = topicMigrationClient;
         this.configMigrationClient = configMigrationClient;
         this.aclMigrationClient = aclMigrationClient;
+        this.delegationTokenMigrationClient = delegationTokenMigrationClient;
     }
 
     @Override
@@ -129,6 +139,11 @@ class CapturingMigrationClient implements MigrationClient {
     @Override
     public AclMigrationClient aclClient() {
         return aclMigrationClient;
+    }
+
+    @Override
+    public DelegationTokenMigrationClient delegationTokenClient() {
+        return delegationTokenMigrationClient;
     }
 
     @Override

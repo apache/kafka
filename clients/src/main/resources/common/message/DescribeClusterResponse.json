@@ -17,7 +17,11 @@
   "apiKey": 60,
   "type": "response",
   "name": "DescribeClusterResponse",
-  "validVersions": "0",
+  //
+  // Version 1 adds the EndpointType field, and makes MISMATCHED_ENDPOINT_TYPE and
+  // UNSUPPORTED_ENDPOINT_TYPE valid top-level response error codes.
+  //
+  "validVersions": "0-1",
   "flexibleVersions": "0+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",
@@ -26,6 +30,8 @@
       "about": "The top-level error code, or 0 if there was no error" },
     { "name": "ErrorMessage", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": "null",
       "about": "The top-level error message, or null if there was no error." },
+    { "name": "EndpointType", "type": "int8", "versions": "1+", "default": "1",
+      "about": "The endpoint type that was described. 1=brokers, 2=controllers." },
     { "name": "ClusterId", "type": "string", "versions": "0+",
       "about": "The cluster ID that responding broker belongs to." },
     { "name": "ControllerId", "type": "int32", "versions": "0+", "default": "-1", "entityType": "brokerId",

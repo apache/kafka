@@ -68,7 +68,7 @@ public class NodeApiVersions {
      */
     public static NodeApiVersions create(Collection<ApiVersion> overrides) {
         List<ApiVersion> apiVersions = new LinkedList<>(overrides);
-        for (ApiKeys apiKey : ApiKeys.zkBrokerApis()) {
+        for (ApiKeys apiKey : ApiKeys.clientApis()) {
             boolean exists = false;
             for (ApiVersion apiVersion : apiVersions) {
                 if (apiVersion.apiKey() == apiKey.id) {
@@ -129,7 +129,7 @@ public class NodeApiVersions {
      */
     public short latestUsableVersion(ApiKeys apiKey, short oldestAllowedVersion, short latestAllowedVersion) {
         if (!supportedVersions.containsKey(apiKey))
-            throw new UnsupportedVersionException("The broker does not support " + apiKey);
+            throw new UnsupportedVersionException("The node does not support " + apiKey);
         ApiVersion supportedVersion = supportedVersions.get(apiKey);
         Optional<ApiVersion> intersectVersion = ApiVersionsResponse.intersect(supportedVersion,
             new ApiVersion()
@@ -140,7 +140,7 @@ public class NodeApiVersions {
         if (intersectVersion.isPresent())
             return intersectVersion.get().maxVersion();
         else
-            throw new UnsupportedVersionException("The broker does not support " + apiKey +
+            throw new UnsupportedVersionException("The node does not support " + apiKey +
                 " with version in range [" + oldestAllowedVersion + "," + latestAllowedVersion + "]. The supported" +
                 " range is [" + supportedVersion.minVersion() + "," + supportedVersion.maxVersion() + "].");
     }
@@ -172,7 +172,7 @@ public class NodeApiVersions {
 
         // Also handle the case where some apiKey types are not specified at all in the given ApiVersions,
         // which may happen when the remote is too old.
-        for (ApiKeys apiKey : ApiKeys.zkBrokerApis()) {
+        for (ApiKeys apiKey : ApiKeys.clientApis()) {
             if (!apiKeysText.containsKey(apiKey.id)) {
                 StringBuilder bld = new StringBuilder();
                 bld.append(apiKey.name).append("(").

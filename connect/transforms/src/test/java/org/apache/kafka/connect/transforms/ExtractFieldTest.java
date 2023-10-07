@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.transforms;
 
+import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
@@ -113,4 +114,10 @@ public class ExtractFieldTest {
             assertEquals("Unknown field: nonexistent", iae.getMessage());
         }
     }
+
+    @Test
+    public void testExtractFieldVersionRetrievedFromAppInfoParser() {
+        assertEquals(AppInfoParser.getVersion(), xform.version());
+    }
+
 }

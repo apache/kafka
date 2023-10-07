@@ -187,7 +187,7 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
   def createConsumer[K, V](keyDeserializer: Deserializer[K] = new ByteArrayDeserializer,
                            valueDeserializer: Deserializer[V] = new ByteArrayDeserializer,
                            configOverrides: Properties = new Properties,
-                           configsToRemove: List[String] = List()): KafkaConsumer[K, V] = {
+                           configsToRemove: List[String] = List()): Consumer[K, V] = {
     val props = new Properties
     props ++= consumerConfig
     props ++= configOverrides

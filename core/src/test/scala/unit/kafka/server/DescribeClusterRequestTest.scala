@@ -19,16 +19,18 @@ package kafka.server
 
 import java.lang.{Byte => JByte}
 import java.util.Properties
-
 import kafka.network.SocketServer
 import kafka.security.authorizer.AclEntry
+import kafka.utils.TestInfoUtils
 import org.apache.kafka.common.message.{DescribeClusterRequestData, DescribeClusterResponseData}
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.{DescribeClusterRequest, DescribeClusterResponse}
 import org.apache.kafka.common.resource.ResourceType
 import org.apache.kafka.common.utils.Utils
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.{BeforeEach, TestInfo}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 import scala.jdk.CollectionConverters._
 
@@ -45,26 +47,33 @@ class DescribeClusterRequestTest extends BaseRequestTest {
     doSetup(testInfo, createOffsetsTopic = false)
   }
 
-  @Test
-  def testDescribeClusterRequestIncludingClusterAuthorizedOperations(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testDescribeClusterRequestIncludingClusterAuthorizedOperations(quorum: String): Unit = {
     testDescribeClusterRequest(true)
   }
 
-  @Test
-  def testDescribeClusterRequestExcludingClusterAuthorizedOperations(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testDescribeClusterRequestExcludingClusterAuthorizedOperations(quorum: String): Unit = {
     testDescribeClusterRequest(false)
   }
 
   def testDescribeClusterRequest(includeClusterAuthorizedOperations: Boolean): Unit = {
-    val expectedBrokers = servers.map { server =>
+    val expectedBrokers = brokers.map { server =>
       new DescribeClusterResponseData.DescribeClusterBroker()
         .setBrokerId(server.config.brokerId)
         .setHost("localhost")
         .setPort(server.socketServer.boundPort(listenerName))
         .setRack(server.config.rack.orNull)
     }.toSet
-    val expectedControllerId = servers.filter(_.kafkaController.isActive).last.config.brokerId
-    val expectedClusterId = servers.last.clusterId
+
+    var expectedControllerId = 0
+    if (!isKRaftTest()) {
+      // in KRaft mode DescribeClusterRequest will return a random broker id as the controllerId (KIP-590)
+      expectedControllerId = servers.filter(_.kafkaController.isActive).last.config.brokerId
+    }
+    val expectedClusterId = brokers.last.clusterId
 
     val expectedClusterAuthorizedOperations = if (includeClusterAuthorizedOperations) {
       Utils.to32BitField(
@@ -80,7 +89,11 @@ class DescribeClusterRequestTest extends BaseRequestTest {
         .build(version.toShort)
       val describeClusterResponse = sentDescribeClusterRequest(describeClusterRequest)
 
-      assertEquals(expectedControllerId, describeClusterResponse.data.controllerId)
+      if (isKRaftTest()) {
+        assertTrue(0 to brokerCount contains describeClusterResponse.data.controllerId)
+      } else {
+        assertEquals(expectedControllerId, describeClusterResponse.data.controllerId)
+      }
       assertEquals(expectedClusterId, describeClusterResponse.data.clusterId)
       assertEquals(expectedClusterAuthorizedOperations, describeClusterResponse.data.clusterAuthorizedOperations)
       assertEquals(expectedBrokers, describeClusterResponse.data.brokers.asScala.toSet)

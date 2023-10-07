@@ -48,6 +48,7 @@ import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.OptionalInt;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -265,6 +266,38 @@ final public class KafkaRaftClientSnapshotTest {
             assertEquals(secondSnapshotId, snapshot.snapshotId());
             SnapshotWriterReaderTest.assertSnapshot(Arrays.asList(), snapshot);
         }
+    }
+
+    @Test
+    public void testLeaderImmediatelySendsSnapshotId() throws Exception {
+        int localId = 0;
+        int otherNodeId = 1;
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
+        OffsetAndEpoch snapshotId = new OffsetAndEpoch(3, 4);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withUnknownLeader(snapshotId.epoch())
+            .appendToLog(snapshotId.epoch(), Arrays.asList("a", "b", "c"))
+            .appendToLog(snapshotId.epoch(), Arrays.asList("d", "e", "f"))
+            .appendToLog(snapshotId.epoch(), Arrays.asList("g", "h", "i"))
+            .withEmptySnapshot(snapshotId)
+            .deleteBeforeSnapshot(snapshotId)
+            .build();
+
+        context.becomeLeader();
+        int epoch = context.currentEpoch();
+
+        // Send a fetch request for an end offset and epoch which has been snapshotted
+        context.deliverRequest(context.fetchRequest(epoch, otherNodeId, 6, 2, 500));
+        context.client.poll();
+
+        // Expect that the leader replies immediately with a snapshot id
+        FetchResponseData.PartitionData partitionResponse = context.assertSentFetchPartitionResponse();
+        assertEquals(Errors.NONE, Errors.forCode(partitionResponse.errorCode()));
+        assertEquals(epoch, partitionResponse.currentLeader().leaderEpoch());
+        assertEquals(localId, partitionResponse.currentLeader().leaderId());
+        assertEquals(snapshotId.epoch(), partitionResponse.snapshotId().epoch());
+        assertEquals(snapshotId.offset(), partitionResponse.snapshotId().endOffset());
     }
 
     @Test
@@ -1832,12 +1865,12 @@ final public class KafkaRaftClientSnapshotTest {
     private final static class MemorySnapshotWriter implements RawSnapshotWriter {
         private final OffsetAndEpoch snapshotId;
         private ByteBuffer data;
-        private boolean frozen;
+        private AtomicLong frozenPosition;
 
         public MemorySnapshotWriter(OffsetAndEpoch snapshotId) {
             this.snapshotId = snapshotId;
             this.data = ByteBuffer.allocate(0);
-            this.frozen = false;
+            this.frozenPosition = new AtomicLong(-1L);
         }
 
         @Override
@@ -1847,16 +1880,13 @@ final public class KafkaRaftClientSnapshotTest {
 
         @Override
         public long sizeInBytes() {
-            if (frozen) {
-                throw new RuntimeException("Snapshot is already frozen " + snapshotId);
-            }
-
-            return data.position();
+            long position = frozenPosition.get();
+            return (position < 0) ? data.position() : position;
         }
 
         @Override
         public void append(UnalignedMemoryRecords records) {
-            if (frozen) {
+            if (isFrozen()) {
                 throw new RuntimeException("Snapshot is already frozen " + snapshotId);
             }
             append(records.buffer());
@@ -1864,7 +1894,7 @@ final public class KafkaRaftClientSnapshotTest {
 
         @Override
         public void append(MemoryRecords records) {
-            if (frozen) {
+            if (isFrozen()) {
                 throw new RuntimeException("Snapshot is already frozen " + snapshotId);
             }
             append(records.buffer());
@@ -1885,16 +1915,14 @@ final public class KafkaRaftClientSnapshotTest {
 
         @Override
         public boolean isFrozen() {
-            return frozen;
+            return frozenPosition.get() >= 0;
         }
 
         @Override
         public void freeze() {
-            if (frozen) {
+            if (!frozenPosition.compareAndSet(-1L, data.position())) {
                 throw new RuntimeException("Snapshot is already frozen " + snapshotId);
             }
-
-            frozen = true;
             data.flip();
         }
 

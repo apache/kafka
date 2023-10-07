@@ -49,7 +49,7 @@ import java.util.Properties;
 import java.util.regex.Pattern;
 
 /**
- * {@code StreamsBuilder} provide the high-level Kafka Streams DSL to specify a Kafka Streams topology.
+ * {@code StreamsBuilder} provides the high-level Kafka Streams DSL to specify a Kafka Streams topology.
  *
  * <p>
  * It is a requirement that the processing logic ({@link Topology}) be defined in a deterministic way,
@@ -85,6 +85,7 @@ public class StreamsBuilder {
      *
      * @param topologyConfigs    the streams configs that apply at the topology level. Please refer to {@link TopologyConfig} for more detail
      */
+    @SuppressWarnings("this-escape")
     public StreamsBuilder(final TopologyConfig topologyConfigs) {
         topology = getNewTopology(topologyConfigs);
         internalTopologyBuilder = topology.internalTopologyBuilder;

@@ -355,7 +355,12 @@ class Partition(val topicPartition: TopicPartition,
 
   def isUnderReplicated: Boolean = isLeader && (assignmentState.replicationFactor - partitionState.isr.size) > 0
 
-  def isUnderMinIsr: Boolean = leaderLogIfLocal.exists { partitionState.isr.size < _.config.minInSyncReplicas }
+  // In the makeFollower process, it will first change the leaderReplicaIdOpt then clear the ISR. In order not to get
+  // a false positive under min isr check, it has to check the leaderReplicaIdOpt again. Though it can still be affected
+  // by ABA problems when leader->follower->leader, but it should be good enough for a metric.
+  def isUnderMinIsr: Boolean = {
+    leaderLogIfLocal.exists { partitionState.isr.size < _.config.minInSyncReplicas } && isLeader
+  }
 
   def isAtMinIsr: Boolean = leaderLogIfLocal.exists { partitionState.isr.size == _.config.minInSyncReplicas }
 
@@ -576,8 +581,12 @@ class Partition(val topicPartition: TopicPartition,
     }
   }
 
-  def hasOngoingTransaction(producerId: Long): Boolean = {
-    leaderLogIfLocal.exists(leaderLog => leaderLog.hasOngoingTransaction(producerId))
+  // Returns a verification guard object if we need to verify. This starts or continues the verification process. Otherwise return null.
+  def maybeStartTransactionVerification(producerId: Long, sequence: Int, epoch: Short): Object = {
+    leaderLogIfLocal match {
+      case Some(log) => log.maybeStartTransactionVerification(producerId, sequence, epoch)
+      case None => throw new NotLeaderOrFollowerException();
+    }
   }
 
   // Return true if the future replica exists and it has caught up with the current replica for this partition
@@ -794,6 +803,14 @@ class Partition(val topicPartition: TopicPartition,
       // to maintain the decision maker controller's epoch in the zookeeper path
       controllerEpoch = partitionState.controllerEpoch
 
+      val isNewLeaderEpoch = partitionState.leaderEpoch > leaderEpoch
+      // The leader should be updated before updateAssignmentAndIsr where we clear the ISR. Or it is possible to meet
+      // the under min isr condition during the makeFollower process and emits the wrong metric.
+      leaderReplicaIdOpt = Option(partitionState.leader)
+      leaderEpoch = partitionState.leaderEpoch
+      leaderEpochStartOffsetOpt = None
+      partitionEpoch = partitionState.partitionEpoch
+
       updateAssignmentAndIsr(
         replicas = partitionState.replicas.asScala.iterator.map(_.toInt).toSeq,
         isLeader = false,
@@ -813,8 +830,6 @@ class Partition(val topicPartition: TopicPartition,
       }
 
       val followerLog = localLogOrException
-      val isNewLeaderEpoch = partitionState.leaderEpoch > leaderEpoch
-
       if (isNewLeaderEpoch) {
         val leaderEpochEndOffset = followerLog.logEndOffset
         stateChangeLogger.info(s"Follower $topicPartition starts at leader epoch ${partitionState.leaderEpoch} from " +
@@ -825,11 +840,6 @@ class Partition(val topicPartition: TopicPartition,
         stateChangeLogger.info(s"Skipped the become-follower state change for $topicPartition with topic id $topicId " +
           s"and partition state $partitionState since it is already a follower with leader epoch $leaderEpoch.")
       }
-
-      leaderReplicaIdOpt = Option(partitionState.leader)
-      leaderEpoch = partitionState.leaderEpoch
-      leaderEpochStartOffsetOpt = None
-      partitionEpoch = partitionState.partitionEpoch
 
       // We must restart the fetchers when the leader epoch changed regardless of
       // whether the leader changed as well.
@@ -994,7 +1004,14 @@ class Partition(val topicPartition: TopicPartition,
       // 3. Its metadata cached broker epoch matches its Fetch request broker epoch. Or the Fetch
       //    request broker epoch is -1 which bypasses the epoch verification.
       case kRaftMetadataCache: KRaftMetadataCache =>
-        val storedBrokerEpoch = remoteReplicasMap.get(followerReplicaId).stateSnapshot.brokerEpoch
+        val mayBeReplica = getReplica(followerReplicaId)
+        // The topic is already deleted and we don't have any replica information. In this case, we can return false
+        // so as to avoid NPE
+        if (mayBeReplica.isEmpty) {
+          warn(s"The replica state of replica ID:[$followerReplicaId] doesn't exist in the leader node. It might because the topic is already deleted.")
+          return false
+        }
+        val storedBrokerEpoch = mayBeReplica.get.stateSnapshot.brokerEpoch
         val cachedBrokerEpoch = kRaftMetadataCache.getAliveBrokerEpoch(followerReplicaId)
         !kRaftMetadataCache.isBrokerFenced(followerReplicaId) &&
           !kRaftMetadataCache.isBrokerShuttingDown(followerReplicaId) &&
@@ -1279,7 +1296,7 @@ class Partition(val topicPartition: TopicPartition,
   }
 
   def appendRecordsToLeader(records: MemoryRecords, origin: AppendOrigin, requiredAcks: Int,
-                            requestLocal: RequestLocal): LogAppendInfo = {
+                            requestLocal: RequestLocal, verificationGuard: Object = null): LogAppendInfo = {
     val (info, leaderHWIncremented) = inReadLock(leaderIsrUpdateLock) {
       leaderLogIfLocal match {
         case Some(leaderLog) =>
@@ -1293,7 +1310,7 @@ class Partition(val topicPartition: TopicPartition,
           }
 
           val info = leaderLog.appendAsLeader(records, leaderEpoch = this.leaderEpoch, origin,
-            interBrokerProtocolVersion, requestLocal)
+            interBrokerProtocolVersion, requestLocal, verificationGuard)
 
           // we may need to increment high watermark since ISR could be down to 1
           (info, maybeIncrementLeaderHW(leaderLog))
@@ -1629,12 +1646,15 @@ class Partition(val topicPartition: TopicPartition,
     *
     * @param newOffset The new offset to start the log with
     * @param isFuture True iff the truncation should be performed on the future log of this partition
+    * @param logStartOffsetOpt The log start offset to set for the log. If None, the new offset will be used.
     */
-  def truncateFullyAndStartAt(newOffset: Long, isFuture: Boolean): Unit = {
+  def truncateFullyAndStartAt(newOffset: Long,
+                              isFuture: Boolean,
+                              logStartOffsetOpt: Option[Long] = None): Unit = {
     // The read lock is needed to prevent the follower replica from being truncated while ReplicaAlterDirThread
     // is executing maybeReplaceCurrentWithFutureReplica() to replace follower replica with the future replica.
     inReadLock(leaderIsrUpdateLock) {
-      logManager.truncateFullyAndStartAt(topicPartition, newOffset, isFuture = isFuture)
+      logManager.truncateFullyAndStartAt(topicPartition, newOffset, isFuture = isFuture, logStartOffsetOpt)
     }
   }
 

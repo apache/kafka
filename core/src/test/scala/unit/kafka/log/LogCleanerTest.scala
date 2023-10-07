@@ -54,7 +54,6 @@ class LogCleanerTest {
   logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, 1024: java.lang.Integer)
   logProps.put(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, 1024: java.lang.Integer)
   logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT)
-  logProps.put(TopicConfig.MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG, Long.MaxValue.toString)
   val logConfig = new LogConfig(logProps)
   val time = new MockTime()
   val throttler = new Throttler(desiredRatePerSec = Double.MaxValue, checkIntervalMs = Long.MaxValue, time = time)
@@ -77,6 +76,12 @@ class LogCleanerTest {
         logDirFailureChannel = new LogDirFailureChannel(1),
         time = time)
 
+      val metricsToVerify = new java.util.HashMap[String, java.util.List[java.util.Map[String, String]]]()
+      logCleaner.cleanerManager.gaugeMetricNameWithTag.asScala.foreach { metricNameAndTags =>
+        val tags = new java.util.ArrayList[java.util.Map[String, String]]()
+        metricNameAndTags._2.asScala.foreach(tags.add)
+        metricsToVerify.put(metricNameAndTags._1, tags)
+      }
       // shutdown logCleaner so that metrics are removed
       logCleaner.shutdown()
 
@@ -90,17 +95,17 @@ class LogCleanerTest {
       // verify that each metric in `LogCleanerManager` is removed
       val mockLogCleanerManagerMetricsGroup = mockMetricsGroupCtor.constructed.get(1)
       LogCleanerManager.GaugeMetricNameNoTag.foreach(metricName => verify(mockLogCleanerManagerMetricsGroup).newGauge(ArgumentMatchers.eq(metricName), any()))
-      LogCleanerManager.GaugeMetricNameWithTag.asScala.foreach(metricNameAndTags => {
-        metricNameAndTags._2.asScala.foreach(tags => {
+      metricsToVerify.asScala.foreach { metricNameAndTags =>
+        metricNameAndTags._2.asScala.foreach { tags =>
           verify(mockLogCleanerManagerMetricsGroup).newGauge(ArgumentMatchers.eq(metricNameAndTags._1), any(), ArgumentMatchers.eq(tags))
-        })
-      })
+        }
+      }
       LogCleanerManager.GaugeMetricNameNoTag.foreach(verify(mockLogCleanerManagerMetricsGroup).removeMetric(_))
-      LogCleanerManager.GaugeMetricNameWithTag.asScala.foreach(metricNameAndTags => {
-        metricNameAndTags._2.asScala.foreach(tags => {
+      metricsToVerify.asScala.foreach { metricNameAndTags =>
+        metricNameAndTags._2.asScala.foreach { tags =>
           verify(mockLogCleanerManagerMetricsGroup).removeMetric(ArgumentMatchers.eq(metricNameAndTags._1), ArgumentMatchers.eq(tags))
-        })
-      })
+        }
+      }
 
       // assert that we have verified all invocations on
       verifyNoMoreInteractions(mockMetricsGroup)
@@ -290,17 +295,17 @@ class LogCleanerTest {
 
     // check duplicate append from producer 1
     var logAppendInfo = appendIdempotentAsLeader(log, pid1, producerEpoch)(Seq(1, 2, 3))
-    assertEquals(0L, logAppendInfo.firstOffset.get.messageOffset)
+    assertEquals(0L, logAppendInfo.firstOffset)
     assertEquals(2L, logAppendInfo.lastOffset)
 
     // check duplicate append from producer 3
     logAppendInfo = appendIdempotentAsLeader(log, pid3, producerEpoch)(Seq(1, 4))
-    assertEquals(6L, logAppendInfo.firstOffset.get.messageOffset)
+    assertEquals(6L, logAppendInfo.firstOffset)
     assertEquals(7L, logAppendInfo.lastOffset)
 
     // check duplicate append from producer 2
     logAppendInfo = appendIdempotentAsLeader(log, pid2, producerEpoch)(Seq(3, 1, 4))
-    assertEquals(3L, logAppendInfo.firstOffset.get.messageOffset)
+    assertEquals(3L, logAppendInfo.firstOffset)
     assertEquals(5L, logAppendInfo.lastOffset)
 
     // do one more append and a round of cleaning to force another deletion from producer 1's batch
@@ -316,7 +321,7 @@ class LogCleanerTest {
 
     // duplicate append from producer1 should still be fine
     logAppendInfo = appendIdempotentAsLeader(log, pid1, producerEpoch)(Seq(1, 2, 3))
-    assertEquals(0L, logAppendInfo.firstOffset.get.messageOffset)
+    assertEquals(0L, logAppendInfo.firstOffset)
     assertEquals(2L, logAppendInfo.lastOffset)
   }
 
@@ -2043,7 +2048,7 @@ class LogCleanerTest {
 
   private def writeToLog(log: UnifiedLog, seq: Iterable[(Int, Int)]): Iterable[Long] = {
     for ((key, value) <- seq)
-      yield log.appendAsLeader(record(key, value), leaderEpoch = 0).firstOffset.get.messageOffset
+      yield log.appendAsLeader(record(key, value), leaderEpoch = 0).firstOffset
   }
 
   private def key(id: Long) = ByteBuffer.wrap(id.toString.getBytes)

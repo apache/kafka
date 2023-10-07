@@ -502,7 +502,7 @@ class GroupCoordinatorAdapterTest {
     val ctx = makeContext(ApiKeys.OFFSET_FETCH, ApiKeys.OFFSET_FETCH.latestVersion)
     val future = adapter.fetchAllOffsets(
       ctx,
-      "group",
+      new OffsetFetchRequestData.OffsetFetchRequestGroup().setGroupId("group"),
       true
     )
 
@@ -537,9 +537,10 @@ class GroupCoordinatorAdapterTest {
         ).asJava)
     )
 
+    assertEquals("group", future.get().groupId)
     assertEquals(
       expectedResponse.sortWith(_.name > _.name),
-      future.get().asScala.toList.sortWith(_.name > _.name)
+      future.get().topics.asScala.toList.sortWith(_.name > _.name)
     )
   }
 
@@ -583,15 +584,15 @@ class GroupCoordinatorAdapterTest {
     val ctx = makeContext(ApiKeys.OFFSET_FETCH, ApiKeys.OFFSET_FETCH.latestVersion)
     val future = adapter.fetchOffsets(
       ctx,
-      "group",
-      List(
-        new OffsetFetchRequestData.OffsetFetchRequestTopics()
-          .setName(foo0.topic)
-          .setPartitionIndexes(List[Integer](foo0.partition, foo1.partition).asJava),
-        new OffsetFetchRequestData.OffsetFetchRequestTopics()
-          .setName(bar1.topic)
-          .setPartitionIndexes(List[Integer](bar1.partition).asJava),
-      ).asJava,
+      new OffsetFetchRequestData.OffsetFetchRequestGroup()
+        .setGroupId("group")
+        .setTopics(List(
+          new OffsetFetchRequestData.OffsetFetchRequestTopics()
+            .setName(foo0.topic)
+            .setPartitionIndexes(List[Integer](foo0.partition, foo1.partition).asJava),
+          new OffsetFetchRequestData.OffsetFetchRequestTopics()
+            .setName(bar1.topic)
+            .setPartitionIndexes(List[Integer](bar1.partition).asJava)).asJava),
       true
     )
 
@@ -626,9 +627,10 @@ class GroupCoordinatorAdapterTest {
         ).asJava)
     )
 
+    assertEquals("group", future.get().groupId)
     assertEquals(
       expectedResponse.sortWith(_.name > _.name),
-      future.get().asScala.toList.sortWith(_.name > _.name)
+      future.get().topics.asScala.toList.sortWith(_.name > _.name)
     )
   }
 
@@ -644,7 +646,7 @@ class GroupCoordinatorAdapterTest {
     val data = new OffsetCommitRequestData()
       .setGroupId("group")
       .setMemberId("member")
-      .setGenerationId(10)
+      .setGenerationIdOrMemberEpoch(10)
       .setRetentionTimeMs(1000)
       .setTopics(List(
         new OffsetCommitRequestData.OffsetCommitRequestTopic()
@@ -669,7 +671,7 @@ class GroupCoordinatorAdapterTest {
       ArgumentMatchers.eq(data.groupId),
       ArgumentMatchers.eq(data.memberId),
       ArgumentMatchers.eq(None),
-      ArgumentMatchers.eq(data.generationId),
+      ArgumentMatchers.eq(data.generationIdOrMemberEpoch),
       ArgumentMatchers.eq(Map(
         new TopicIdPartition(Uuid.ZERO_UUID, 0 , "foo") -> new OffsetAndMetadata(
           offset = 100,
@@ -737,6 +739,7 @@ class GroupCoordinatorAdapterTest {
 
     verify(groupCoordinator).handleTxnCommitOffsets(
       ArgumentMatchers.eq(data.groupId),
+      ArgumentMatchers.eq(data.transactionalId),
       ArgumentMatchers.eq(data.producerId),
       ArgumentMatchers.eq(data.producerEpoch),
       ArgumentMatchers.eq(data.memberId),

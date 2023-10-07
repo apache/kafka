@@ -26,6 +26,7 @@ import org.apache.kafka.shell.state.MetadataShellState;
 import org.jline.reader.Candidate;
 
 import java.io.PrintWriter;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -103,7 +104,9 @@ public final class FindCommandHandler implements Commands.Handler {
     private void find(PrintWriter writer, String path, MetadataNode node) {
         writer.println(path);
         if (node.isDirectory()) {
-            for (String name : node.childNames()) {
+            ArrayList<String> childNames = new ArrayList<>(node.childNames());
+            childNames.sort(String::compareTo);
+            for (String name : childNames) {
                 String nextPath = path.equals("/") ? path + name : path + "/" + name;
                 MetadataNode child = node.child(name);
                 if (child == null) {
