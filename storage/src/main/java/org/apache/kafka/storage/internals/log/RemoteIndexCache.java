@@ -138,9 +138,8 @@ public class RemoteIndexCache implements Closeable {
     public void resizeCacheSize(long remoteLogIndexFileCacheSize) {
         lock.writeLock().lock();
         try {
-            internalCache.policy().eviction().orElseThrow(() -> {
-                throw new NoSuchElementException("No eviction policy is set for the remote index cache.");
-            }).setMaximum(remoteLogIndexFileCacheSize);
+            internalCache.policy().eviction().orElseThrow(() -> new NoSuchElementException("No eviction policy is set for the remote index cache.")
+            ).setMaximum(remoteLogIndexFileCacheSize);
         } finally {
             lock.writeLock().unlock();
         }
