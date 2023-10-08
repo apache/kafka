@@ -19,7 +19,6 @@ package org.apache.kafka.controller;
 
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -29,7 +28,6 @@ import java.util.stream.Collectors;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.AlterPartitionRequestData.BrokerState;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.metadata.LeaderRecoveryState;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.Replicas;
@@ -139,7 +137,6 @@ public class PartitionChangeBuilder {
         return this;
     }
 
-    // TODO(KIP-966) To actually use this field during broker registration.
     public PartitionChangeBuilder setUncleanShutdownReplicas(List<Integer> uncleanShutdownReplicas) {
         this.uncleanShutdownReplicas = uncleanShutdownReplicas;
         return this;
@@ -358,6 +355,7 @@ public class PartitionChangeBuilder {
 
         triggerLeaderEpochBumpIfNeeded(record);
 
+        // During the leader election, it can set the record isr if an unclean leader election happens.
         boolean isCleanLeaderElection = record.isr() == null;
 
         // Clean the ELR related fields if it is an unclean election or ELR is disabled.
@@ -377,7 +375,6 @@ public class PartitionChangeBuilder {
         // 1. Set the new ISR if it is different from the current ISR.
         // 2. Set the new ELR/LastKnowElr if it is different from the current ones.
         if (isCleanLeaderElection) {
-            // TODO(KIP-966) If ELR is enabled, the ISR is allowed to be empty.
             if (!targetIsr.isEmpty() && !targetIsr.equals(Replicas.toList(partition.isr))) {
                 record.setIsr(targetIsr);
             }
@@ -416,27 +413,24 @@ public class PartitionChangeBuilder {
             return;
         }
 
-        Set<Integer> currentIsrSet = Arrays.stream(partition.isr).boxed().collect(Collectors.toSet());
-        Set<Integer> targetIsrSet = targetIsr.stream().collect(Collectors.toSet());
-        Set<Integer> currentElrSet = Arrays.stream(partition.elr).boxed().collect(Collectors.toSet());
-        Set<Integer> currentLastKnownElrSet = Arrays.stream(partition.lastKnownElr).boxed().collect(Collectors.toSet());
 
+        Set<Integer> targetIsrSet = targetIsr.stream().collect(Collectors.toSet());
         // Tracking the ELR. The new elr is expected to
         // 1. Include the current ISR
         // 2. Exclude the duplicate replicas between elr and target ISR.
         // 3. Exclude unclean shutdown replicas.
         // To do that, we first union the current ISR and current elr, then filter out the target ISR and unclean shutdown
         // Replicas.
-        Set<Integer> elrCandidates = Utils.union(HashSet::new, currentElrSet, currentIsrSet);
-        Set<Integer> newElr = elrCandidates.stream()
+        Set<Integer> candidateSet = Arrays.stream(partition.elr).boxed().collect(Collectors.toSet());
+        Arrays.stream(partition.isr).boxed().forEach(ii -> candidateSet.add(ii));
+        targetElr = candidateSet.stream()
             .filter(replica -> !targetIsrSet.contains(replica) && (uncleanShutdownReplicas == null || !uncleanShutdownReplicas.contains(replica)))
-            .collect(Collectors.toSet());
-        targetElr = newElr.stream().collect(Collectors.toList());
+            .collect(Collectors.toList());
 
-        // Tracking the last known ELR. Includes any ISR members since the ISR size drops below min ISR.
-        // In order to reduce the metadata usage, the last known ELR excludes the members in ELR.
-        Set<Integer> newLastKnownElr = Utils.union(HashSet::new, currentIsrSet, currentLastKnownElrSet, currentElrSet);
-        targetLastKnownElr =  newLastKnownElr.stream()
+        // Calculate the new last known ELR. Includes any ISR members since the ISR size drops below min ISR.
+        // In order to reduce the metadata usage, the last known ELR excludes the members in ELR and current ISR.
+        Arrays.stream(partition.lastKnownElr).boxed().forEach(ii -> candidateSet.add(ii));
+        targetLastKnownElr =  candidateSet.stream()
             .filter(replica -> !targetIsrSet.contains(replica) && !targetElr.contains(replica)).collect(Collectors.toList());
     }
 

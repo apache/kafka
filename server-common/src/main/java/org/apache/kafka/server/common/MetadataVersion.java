@@ -293,7 +293,6 @@ public enum MetadataVersion {
         return this.featureLevel > 0;
     }
 
-    // TODO(KIP-966): Add new metadata version to enable ELR.
     public boolean isElrSupported() {
         return this.equals(IBP_ELR_testing);
     }
@@ -535,7 +534,7 @@ public enum MetadataVersion {
         }
     }
 
-    // TODO(KIP-966) Move back the latest version to be VERSIONS.length - 1
+    // Move back the latest version to VERSIONS.length - 1 when KIP-966 ELR part is finished.
     public static MetadataVersion latest() {
         return VERSIONS[VERSIONS.length - 2];
     }

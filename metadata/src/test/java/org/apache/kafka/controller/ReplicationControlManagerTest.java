@@ -957,6 +957,21 @@ public class ReplicationControlManagerTest {
         assertTrue(Arrays.equals(new int[]{}, partition.lastKnownElr), partition.toString());
     }
 
+    @Test
+    public void testEligibleLeaderReplicas_EffectiveMinIsr() throws Exception {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().setMetadataVersion(MetadataVersion.IBP_ELR_testing).build();
+        ReplicationControlManager replicationControl = ctx.replicationControl;
+        ctx.registerBrokers(0, 1, 2);
+        ctx.unfenceBrokers(0, 1, 2);
+        CreatableTopicResult createTopicResult = ctx.createTestTopic("foo",
+                new int[][]{new int[]{0, 1, 2}});
+
+        TopicIdPartition topicIdPartition = new TopicIdPartition(createTopicResult.topicId(), 0);
+        assertEquals(OptionalInt.of(0), ctx.currentLeader(topicIdPartition));
+        ctx.alterTopicConfig("foo", TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "5");
+        assertEquals(3, replicationControl.getTopicEffectiveMinIsr("foo"));
+    }
+
     @ParameterizedTest
     @ApiKeyVersionsSource(apiKey = ApiKeys.ALTER_PARTITION)
     public void testAlterPartitionHandleUnknownTopicIdOrName(short version) throws Exception {

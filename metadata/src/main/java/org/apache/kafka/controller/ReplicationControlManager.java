@@ -1026,7 +1026,7 @@ public class ReplicationControlManager {
                     partitionId,
                     clusterControl::isActive,
                     featureControl.metadataVersion(),
-                    Integer.parseInt(configurationControl.getTopicConfigs(topic.name).getOrDefault(MIN_IN_SYNC_REPLICAS_CONFIG, String.valueOf(defaultMinInSyncIsr)))
+                    getTopicEffectiveMinIsr(topic.name)
                 );
                 builder.setZkMigrationEnabled(clusterControl.zkRegistrationAllowed());
                 if (configurationControl.uncleanLeaderElectionEnabledForTopic(topic.name())) {
@@ -1415,7 +1415,7 @@ public class ReplicationControlManager {
             partitionId,
             clusterControl::isActive,
             featureControl.metadataVersion(),
-            Integer.parseInt(configurationControl.getTopicConfigs(topic).getOrDefault(MIN_IN_SYNC_REPLICAS_CONFIG, String.valueOf(defaultMinInSyncIsr)))
+            getTopicEffectiveMinIsr(topic)
         );
         builder.setElection(election).setZkMigrationEnabled(clusterControl.zkRegistrationAllowed());
         Optional<ApiMessageAndVersion> record = builder.build();
@@ -1551,7 +1551,7 @@ public class ReplicationControlManager {
                 topicPartition.partitionId(),
                 clusterControl::isActive,
                 featureControl.metadataVersion(),
-                Integer.parseInt(configurationControl.getTopicConfigs(topic.name).getOrDefault(MIN_IN_SYNC_REPLICAS_CONFIG, String.valueOf(defaultMinInSyncIsr)))
+                getTopicEffectiveMinIsr(topic.name)
             );
             builder.setElection(PartitionChangeBuilder.Election.PREFERRED)
                 .setZkMigrationEnabled(clusterControl.zkRegistrationAllowed());
@@ -1765,7 +1765,7 @@ public class ReplicationControlManager {
                 topicIdPart.partitionId(),
                 isAcceptableLeader,
                 featureControl.metadataVersion(),
-                Integer.parseInt(configurationControl.getTopicConfigs(topic.name).getOrDefault(MIN_IN_SYNC_REPLICAS_CONFIG, String.valueOf(defaultMinInSyncIsr)))
+                getTopicEffectiveMinIsr(topic.name)
             );
             builder.setZkMigrationEnabled(clusterControl.zkRegistrationAllowed());
             if (configurationControl.uncleanLeaderElectionEnabledForTopic(topic.name)) {
@@ -1879,7 +1879,7 @@ public class ReplicationControlManager {
             tp.partitionId(),
             clusterControl::isActive,
             featureControl.metadataVersion(),
-            Integer.parseInt(configurationControl.getTopicConfigs(topicName).getOrDefault(MIN_IN_SYNC_REPLICAS_CONFIG, String.valueOf(defaultMinInSyncIsr)))
+            getTopicEffectiveMinIsr(topicName)
         );
         builder.setZkMigrationEnabled(clusterControl.zkRegistrationAllowed());
         if (configurationControl.uncleanLeaderElectionEnabledForTopic(topicName)) {
@@ -1938,7 +1938,7 @@ public class ReplicationControlManager {
             tp.partitionId(),
             clusterControl::isActive,
             featureControl.metadataVersion(),
-            Integer.parseInt(configurationControl.getTopicConfigs(topics.get(tp.topicId()).name.toString()).getOrDefault(MIN_IN_SYNC_REPLICAS_CONFIG, String.valueOf(defaultMinInSyncIsr)))
+            getTopicEffectiveMinIsr(topics.get(tp.topicId()).name.toString())
         );
         builder.setZkMigrationEnabled(clusterControl.zkRegistrationAllowed());
         if (!reassignment.replicas().equals(currentReplicas)) {
@@ -2006,6 +2006,20 @@ public class ReplicationControlManager {
             setRemovingReplicas(Replicas.toList(partition.removingReplicas)).
             setPartitionIndex(partitionId).
             setReplicas(Replicas.toList(partition.replicas)));
+    }
+
+    // Make it public to be visible in test.
+    public Integer getTopicEffectiveMinIsr(String topicName) {
+        Integer currentMinIsr = Integer.parseInt(configurationControl.getTopicConfigs(topicName)
+            .getOrDefault(MIN_IN_SYNC_REPLICAS_CONFIG, String.valueOf(defaultMinInSyncIsr)));
+        Integer replicationFactor = (int) defaultReplicationFactor;
+        try {
+            Uuid topicId = topicsByName.get(topicName);
+            replicationFactor = topics.get(topicId).parts.get(0).replicas.length;
+        } catch (Exception e) {
+            log.debug("Can't find the replication factor for topic: " + topicName);
+        }
+        return Math.min(currentMinIsr, replicationFactor);
     }
 
     private static final class IneligibleReplica {
