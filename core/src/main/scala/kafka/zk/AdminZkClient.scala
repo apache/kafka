@@ -16,11 +16,11 @@
 */
 package kafka.zk
 
-import java.util.{Optional, Properties}
+import java.util.{Collections, Optional, Properties}
 import kafka.admin.RackAwareMode
 import kafka.common.TopicAlreadyMarkedForDeletionException
 import kafka.controller.ReplicaAssignment
-import kafka.server.{ConfigEntityName, ConfigType, DynamicConfig}
+import kafka.server.{ConfigEntityName, ConfigType, DynamicConfig, KafkaConfig}
 import kafka.utils._
 import kafka.utils.Implicits._
 import org.apache.kafka.admin.{AdminUtils, BrokerMetadata}
@@ -40,7 +40,8 @@ import scala.collection.{Map, Seq}
  * This is an internal class and no compatibility guarantees are provided,
  * see org.apache.kafka.clients.admin.AdminClient for publicly supported APIs.
  */
-class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
+class AdminZkClient(zkClient: KafkaZkClient,
+                    kafkaConfig: Option[KafkaConfig] = None) extends Logging {
 
   /**
    * Creates the topic with given configuration
@@ -159,7 +160,9 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
         partitionReplicaAssignment.keys.filter(_ >= 0).sum != sequenceSum)
         throw new InvalidReplicaAssignmentException("partitions should be a consecutive 0-based integer sequence")
 
-    LogConfig.validate(config)
+    LogConfig.validate(config,
+      kafkaConfig.map(_.extractLogConfigMap).getOrElse(Collections.emptyMap()),
+      kafkaConfig.exists(_.isRemoteLogStorageSystemEnabled))
   }
 
   private def writeTopicPartitionAssignment(topic: String, replicaAssignment: Map[Int, ReplicaAssignment],
@@ -475,7 +478,9 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
     if (!zkClient.topicExists(topic))
       throw new UnknownTopicOrPartitionException(s"Topic '$topic' does not exist.")
     // remove the topic overrides
-    LogConfig.validate(configs)
+    LogConfig.validate(configs,
+      kafkaConfig.map(_.extractLogConfigMap).getOrElse(Collections.emptyMap()),
+      kafkaConfig.exists(_.isRemoteLogStorageSystemEnabled))
   }
 
   /**

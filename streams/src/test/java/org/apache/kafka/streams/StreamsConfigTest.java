@@ -31,6 +31,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.internals.UpgradeFromValues;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
@@ -1072,8 +1073,8 @@ public class StreamsConfigTest {
     public void shouldLogWarningWhenEosAlphaIsUsed() {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
 
-        LogCaptureAppender.setClassLoggerToDebug(StreamsConfig.class);
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
+            appender.setClassLoggerToDebug(StreamsConfig.class);
             new StreamsConfig(props);
 
             assertThat(
@@ -1092,8 +1093,8 @@ public class StreamsConfigTest {
     public void shouldLogWarningWhenEosBetaIsUsed() {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
 
-        LogCaptureAppender.setClassLoggerToDebug(StreamsConfig.class);
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
+            appender.setClassLoggerToDebug(StreamsConfig.class);
             new StreamsConfig(props);
 
             assertThat(
@@ -1110,8 +1111,8 @@ public class StreamsConfigTest {
     public void shouldLogWarningWhenRetriesIsUsed() {
         props.put(StreamsConfig.RETRIES_CONFIG, 0);
 
-        LogCaptureAppender.setClassLoggerToDebug(StreamsConfig.class);
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
+            appender.setClassLoggerToDebug(StreamsConfig.class);
             new StreamsConfig(props);
 
             assertThat(
@@ -1391,13 +1392,13 @@ public class StreamsConfigTest {
     @Test
     public void shouldReturnDefaultRackAwareAssignmentConfig() {
         final String strategy = streamsConfig.getString(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG);
-        assertEquals("NONE", strategy);
+        assertEquals("none", strategy);
     }
 
     @Test
     public void shouldtSetMinTrafficRackAwareAssignmentConfig() {
         props.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG, StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC);
-        assertEquals("MIN_TRAFFIC", new StreamsConfig(props).getString(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG));
+        assertEquals("min_traffic", new StreamsConfig(props).getString(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG));
     }
 
     @Test
@@ -1440,6 +1441,18 @@ public class StreamsConfigTest {
     public void shouldThrowOnInvalidClientSupplier() {
         props.put(StreamsConfig.DEFAULT_CLIENT_SUPPLIER_CONFIG, "invalid.class");
         assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+    }
+
+    @Test
+    public void shouldSupportAllUpgradeFromValues() {
+        for (final UpgradeFromValues upgradeFrom : UpgradeFromValues.values()) {
+            props.put(StreamsConfig.UPGRADE_FROM_CONFIG, upgradeFrom.toString());
+            try {
+                new StreamsConfig(props);
+            } catch (final Exception fatal) {
+                throw new AssertionError("StreamsConfig did not accept `upgrade.from` config value `" + upgradeFrom + "`");
+            }
+        }
     }
 
     static class MisconfiguredSerde implements Serde<Object> {

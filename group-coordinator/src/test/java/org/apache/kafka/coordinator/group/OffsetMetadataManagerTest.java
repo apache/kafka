@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.coordinator.group;
 
-import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.IllegalGenerationException;
@@ -27,6 +27,10 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
+import org.apache.kafka.common.message.OffsetDeleteRequestData;
+import org.apache.kafka.common.message.OffsetDeleteResponseData;
+import org.apache.kafka.common.message.OffsetFetchRequestData;
+import org.apache.kafka.common.message.OffsetFetchResponseData;
 import org.apache.kafka.common.network.ClientInformation;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -50,11 +54,14 @@ import org.apache.kafka.coordinator.group.generic.GenericGroupState;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorResult;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.net.InetAddress;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -62,11 +69,13 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
 
+import static org.apache.kafka.common.requests.OffsetFetchResponse.INVALID_OFFSET;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class OffsetMetadataManagerTest {
     static class OffsetMetadataManagerTestContext {
@@ -174,6 +183,88 @@ public class OffsetMetadataManagerTest {
             return result;
         }
 
+        public CoordinatorResult<OffsetDeleteResponseData, Record> deleteOffsets(
+            OffsetDeleteRequestData request
+        ) {
+            CoordinatorResult<OffsetDeleteResponseData, Record> result = offsetMetadataManager.deleteOffsets(request);
+            result.records().forEach(this::replay);
+            return result;
+        }
+
+        public int deleteAllOffsets(
+            String groupId,
+            List<Record> records
+        ) {
+            List<Record> addedRecords = new ArrayList<>();
+            int numDeletedOffsets = offsetMetadataManager.deleteAllOffsets(groupId, addedRecords);
+            addedRecords.forEach(this::replay);
+
+            records.addAll(addedRecords);
+            return numDeletedOffsets;
+        }
+
+        public List<OffsetFetchResponseData.OffsetFetchResponseTopics> fetchOffsets(
+            String groupId,
+            List<OffsetFetchRequestData.OffsetFetchRequestTopics> topics,
+            long committedOffset
+        ) {
+            return fetchOffsets(
+                groupId,
+                null,
+                -1,
+                topics,
+                committedOffset
+            );
+        }
+
+        public List<OffsetFetchResponseData.OffsetFetchResponseTopics> fetchOffsets(
+            String groupId,
+            String memberId,
+            int memberEpoch,
+            List<OffsetFetchRequestData.OffsetFetchRequestTopics> topics,
+            long committedOffset
+        ) {
+            OffsetFetchResponseData.OffsetFetchResponseGroup response = offsetMetadataManager.fetchOffsets(
+                new OffsetFetchRequestData.OffsetFetchRequestGroup()
+                    .setGroupId(groupId)
+                    .setMemberId(memberId)
+                    .setMemberEpoch(memberEpoch)
+                    .setTopics(topics),
+                committedOffset
+            );
+            assertEquals(groupId, response.groupId());
+            return response.topics();
+        }
+
+        public List<OffsetFetchResponseData.OffsetFetchResponseTopics> fetchAllOffsets(
+            String groupId,
+            long committedOffset
+        ) {
+            return fetchAllOffsets(
+                groupId,
+                null,
+                -1,
+                committedOffset
+            );
+        }
+
+        public List<OffsetFetchResponseData.OffsetFetchResponseTopics> fetchAllOffsets(
+            String groupId,
+            String memberId,
+            int memberEpoch,
+            long committedOffset
+        ) {
+            OffsetFetchResponseData.OffsetFetchResponseGroup response = offsetMetadataManager.fetchAllOffsets(
+                new OffsetFetchRequestData.OffsetFetchRequestGroup()
+                    .setGroupId(groupId)
+                    .setMemberId(memberId)
+                    .setMemberEpoch(memberEpoch),
+                committedOffset
+            );
+            assertEquals(groupId, response.groupId());
+            return response.topics();
+        }
+
         public List<MockCoordinatorTimer.ExpiredTimeout<Void, Record>> sleep(long ms) {
             time.sleep(ms);
             List<MockCoordinatorTimer.ExpiredTimeout<Void, Record>> timeouts = timer.poll();
@@ -183,6 +274,40 @@ public class OffsetMetadataManagerTest {
                 }
             });
             return timeouts;
+        }
+
+        public void commitOffset(
+            String groupId,
+            String topic,
+            int partition,
+            long offset,
+            int leaderEpoch
+        ) {
+            replay(RecordHelpers.newOffsetCommitRecord(
+                groupId,
+                topic,
+                partition,
+                new OffsetAndMetadata(
+                    offset,
+                    OptionalInt.of(leaderEpoch),
+                    "metadata",
+                    time.milliseconds(),
+                    OptionalLong.empty()
+                ),
+                MetadataVersion.latest()
+            ));
+        }
+
+        public void deleteOffset(
+            String groupId,
+            String topic,
+            int partition
+        ) {
+            replay(RecordHelpers.newOffsetCommitTombstoneRecord(
+                groupId,
+                topic,
+                partition
+            ));
         }
 
         private ApiMessage messageOrNull(ApiMessageAndVersion apiMessageAndVersion) {
@@ -196,6 +321,8 @@ public class OffsetMetadataManagerTest {
         private void replay(
             Record record
         ) {
+            snapshotRegistry.getOrCreateSnapshot(lastWrittenOffset);
+
             ApiMessageAndVersion key = record.key();
             ApiMessageAndVersion value = record.value();
 
@@ -217,6 +344,63 @@ public class OffsetMetadataManagerTest {
             }
 
             lastWrittenOffset++;
+        }
+
+        public void testOffsetDeleteWith(
+            String groupId,
+            String topic,
+            int partition,
+            Errors expectedError
+        ) {
+            final OffsetDeleteRequestData.OffsetDeleteRequestTopicCollection requestTopicCollection =
+                new OffsetDeleteRequestData.OffsetDeleteRequestTopicCollection(Collections.singletonList(
+                    new OffsetDeleteRequestData.OffsetDeleteRequestTopic()
+                        .setName(topic)
+                        .setPartitions(Collections.singletonList(
+                            new OffsetDeleteRequestData.OffsetDeleteRequestPartition().setPartitionIndex(partition)
+                        ))
+                ).iterator());
+
+            final OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection expectedResponsePartitionCollection =
+                new OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection();
+            if (hasOffset(groupId, topic, partition)) {
+                expectedResponsePartitionCollection.add(
+                    new OffsetDeleteResponseData.OffsetDeleteResponsePartition()
+                        .setPartitionIndex(partition)
+                        .setErrorCode(expectedError.code())
+                );
+            }
+
+            final OffsetDeleteResponseData.OffsetDeleteResponseTopicCollection expectedResponseTopicCollection =
+                new OffsetDeleteResponseData.OffsetDeleteResponseTopicCollection(Collections.singletonList(
+                    new OffsetDeleteResponseData.OffsetDeleteResponseTopic()
+                        .setName(topic)
+                        .setPartitions(expectedResponsePartitionCollection)
+                ).iterator());
+
+            List<Record> expectedRecords = Collections.emptyList();
+            if (hasOffset(groupId, topic, partition) && expectedError == Errors.NONE) {
+                expectedRecords = Collections.singletonList(
+                    RecordHelpers.newOffsetCommitTombstoneRecord(groupId, topic, partition)
+                );
+            }
+
+            final CoordinatorResult<OffsetDeleteResponseData, Record> coordinatorResult = deleteOffsets(
+                new OffsetDeleteRequestData()
+                    .setGroupId(groupId)
+                    .setTopics(requestTopicCollection)
+            );
+
+            assertEquals(new OffsetDeleteResponseData().setTopics(expectedResponseTopicCollection), coordinatorResult.response());
+            assertEquals(expectedRecords, coordinatorResult.records());
+        }
+
+        public boolean hasOffset(
+            String groupId,
+            String topic,
+            int partition
+        ) {
+            return offsetMetadataManager.offset(groupId, topic, partition) != null;
         }
     }
 
@@ -1041,6 +1225,566 @@ public class OffsetMetadataManagerTest {
     }
 
     @Test
+    public void testGenericGroupFetchOffsetsWithDeadGroup() {
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
+
+        // Create a dead group.
+        GenericGroup group = context.groupMetadataManager.getOrMaybeCreateGenericGroup(
+            "group",
+            true
+        );
+        group.transitionTo(GenericGroupState.DEAD);
+
+        List<OffsetFetchRequestData.OffsetFetchRequestTopics> request = Arrays.asList(
+            new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                .setName("foo")
+                .setPartitionIndexes(Arrays.asList(0, 1)),
+            new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                .setName("bar")
+                .setPartitionIndexes(Collections.singletonList(0))
+        );
+
+        List<OffsetFetchResponseData.OffsetFetchResponseTopics> expectedResponse = Arrays.asList(
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                .setName("foo")
+                .setPartitions(Arrays.asList(
+                    mkInvalidOffsetPartitionResponse(0),
+                    mkInvalidOffsetPartitionResponse(1)
+                )),
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                .setName("bar")
+                .setPartitions(Collections.singletonList(
+                    mkInvalidOffsetPartitionResponse(0)
+                ))
+        );
+
+        assertEquals(expectedResponse, context.fetchOffsets("group", request, Long.MAX_VALUE));
+    }
+
+    @Test
+    public void testFetchOffsetsWithUnknownGroup() {
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
+
+        List<OffsetFetchRequestData.OffsetFetchRequestTopics> request = Arrays.asList(
+            new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                .setName("foo")
+                .setPartitionIndexes(Arrays.asList(0, 1)),
+            new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                .setName("bar")
+                .setPartitionIndexes(Collections.singletonList(0))
+        );
+
+        List<OffsetFetchResponseData.OffsetFetchResponseTopics> expectedResponse = Arrays.asList(
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                .setName("foo")
+                .setPartitions(Arrays.asList(
+                    mkInvalidOffsetPartitionResponse(0),
+                    mkInvalidOffsetPartitionResponse(1)
+                )),
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                .setName("bar")
+                .setPartitions(Collections.singletonList(
+                    mkInvalidOffsetPartitionResponse(0)
+                ))
+        );
+
+        assertEquals(expectedResponse, context.fetchOffsets("group", request, Long.MAX_VALUE));
+    }
+
+    @Test
+    public void testFetchOffsetsAtDifferentCommittedOffset() {
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
+
+        context.groupMetadataManager.getOrMaybeCreateConsumerGroup("group", true);
+
+        assertEquals(0, context.lastWrittenOffset);
+        context.commitOffset("group", "foo", 0, 100L, 1);
+        assertEquals(1, context.lastWrittenOffset);
+        context.commitOffset("group", "foo", 1, 110L, 1);
+        assertEquals(2, context.lastWrittenOffset);
+        context.commitOffset("group", "bar", 0, 200L, 1);
+        assertEquals(3, context.lastWrittenOffset);
+        context.commitOffset("group", "foo", 1, 111L, 2);
+        assertEquals(4, context.lastWrittenOffset);
+        context.commitOffset("group", "bar", 1, 210L, 2);
+        assertEquals(5, context.lastWrittenOffset);
+
+        // Always use the same request.
+        List<OffsetFetchRequestData.OffsetFetchRequestTopics> request = Arrays.asList(
+            new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                .setName("foo")
+                .setPartitionIndexes(Arrays.asList(0, 1)),
+            new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                .setName("bar")
+                .setPartitionIndexes(Arrays.asList(0, 1))
+        );
+
+        // Fetching with 0 should return all invalid offsets.
+        assertEquals(Arrays.asList(
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                .setName("foo")
+                .setPartitions(Arrays.asList(
+                    mkInvalidOffsetPartitionResponse(0),
+                    mkInvalidOffsetPartitionResponse(1)
+                )),
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                .setName("bar")
+                .setPartitions(Arrays.asList(
+                    mkInvalidOffsetPartitionResponse(0),
+                    mkInvalidOffsetPartitionResponse(1)
+                ))
+        ), context.fetchOffsets("group", request, 0L));
+
+        // Fetching with 1 should return data up to offset 1.
+        assertEquals(Arrays.asList(
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                .setName("foo")
+                .setPartitions(Arrays.asList(
+                    mkOffsetPartitionResponse(0, 100L, 1, "metadata"),
+                    mkInvalidOffsetPartitionResponse(1)
+                )),
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                .setName("bar")
+                .setPartitions(Arrays.asList(
+                    mkInvalidOffsetPartitionResponse(0),
+                    mkInvalidOffsetPartitionResponse(1)
+                ))
+        ), context.fetchOffsets("group", request, 1L));
+
+        // Fetching with 2 should return data up to offset 2.
+        assertEquals(Arrays.asList(
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                .setName("foo")
+                .setPartitions(Arrays.asList(
+                    mkOffsetPartitionResponse(0, 100L, 1, "metadata"),
+                    mkOffsetPartitionResponse(1, 110L, 1, "metadata")
+                )),
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                .setName("bar")
+                .setPartitions(Arrays.asList(
+                    mkInvalidOffsetPartitionResponse(0),
+                    mkInvalidOffsetPartitionResponse(1)
+                ))
+        ), context.fetchOffsets("group", request, 2L));
+
+        // Fetching with 3 should return data up to offset 3.
+        assertEquals(Arrays.asList(
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                .setName("foo")
+                .setPartitions(Arrays.asList(
+                    mkOffsetPartitionResponse(0, 100L, 1, "metadata"),
+                    mkOffsetPartitionResponse(1, 110L, 1, "metadata")
+                )),
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                .setName("bar")
+                .setPartitions(Arrays.asList(
+                    mkOffsetPartitionResponse(0, 200L, 1, "metadata"),
+                    mkInvalidOffsetPartitionResponse(1)
+                ))
+        ), context.fetchOffsets("group", request, 3L));
+
+        // Fetching with 4 should return data up to offset 4.
+        assertEquals(Arrays.asList(
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                .setName("foo")
+                .setPartitions(Arrays.asList(
+                    mkOffsetPartitionResponse(0, 100L, 1, "metadata"),
+                    mkOffsetPartitionResponse(1, 111L, 2, "metadata")
+                )),
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                .setName("bar")
+                .setPartitions(Arrays.asList(
+                    mkOffsetPartitionResponse(0, 200L, 1, "metadata"),
+                    mkInvalidOffsetPartitionResponse(1)
+                ))
+        ), context.fetchOffsets("group", request, 4L));
+
+        // Fetching with 5 should return data up to offset 5.
+        assertEquals(Arrays.asList(
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                .setName("foo")
+                .setPartitions(Arrays.asList(
+                    mkOffsetPartitionResponse(0, 100L, 1, "metadata"),
+                    mkOffsetPartitionResponse(1, 111L, 2, "metadata")
+                )),
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                .setName("bar")
+                .setPartitions(Arrays.asList(
+                    mkOffsetPartitionResponse(0, 200L, 1, "metadata"),
+                    mkOffsetPartitionResponse(1, 210L, 2, "metadata")
+                ))
+        ), context.fetchOffsets("group", request, 5L));
+
+        // Fetching with Long.MAX_VALUE should return all offsets.
+        assertEquals(Arrays.asList(
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                .setName("foo")
+                .setPartitions(Arrays.asList(
+                    mkOffsetPartitionResponse(0, 100L, 1, "metadata"),
+                    mkOffsetPartitionResponse(1, 111L, 2, "metadata")
+                )),
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                .setName("bar")
+                .setPartitions(Arrays.asList(
+                    mkOffsetPartitionResponse(0, 200L, 1, "metadata"),
+                    mkOffsetPartitionResponse(1, 210L, 2, "metadata")
+                ))
+        ), context.fetchOffsets("group", request, Long.MAX_VALUE));
+    }
+
+    @Test
+    public void testGenericGroupFetchAllOffsetsWithDeadGroup() {
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
+
+        // Create a dead group.
+        GenericGroup group = context.groupMetadataManager.getOrMaybeCreateGenericGroup(
+            "group",
+            true
+        );
+        group.transitionTo(GenericGroupState.DEAD);
+
+        assertEquals(Collections.emptyList(), context.fetchAllOffsets("group", Long.MAX_VALUE));
+    }
+
+    @Test
+    public void testFetchAllOffsetsWithUnknownGroup() {
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
+        assertEquals(Collections.emptyList(), context.fetchAllOffsets("group", Long.MAX_VALUE));
+    }
+
+    @Test
+    public void testFetchAllOffsetsAtDifferentCommittedOffset() {
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
+
+        context.groupMetadataManager.getOrMaybeCreateConsumerGroup("group", true);
+
+        assertEquals(0, context.lastWrittenOffset);
+        context.commitOffset("group", "foo", 0, 100L, 1);
+        assertEquals(1, context.lastWrittenOffset);
+        context.commitOffset("group", "foo", 1, 110L, 1);
+        assertEquals(2, context.lastWrittenOffset);
+        context.commitOffset("group", "bar", 0, 200L, 1);
+        assertEquals(3, context.lastWrittenOffset);
+        context.commitOffset("group", "foo", 1, 111L, 2);
+        assertEquals(4, context.lastWrittenOffset);
+        context.commitOffset("group", "bar", 1, 210L, 2);
+        assertEquals(5, context.lastWrittenOffset);
+
+        // Fetching with 0 should no offsets.
+        assertEquals(Collections.emptyList(), context.fetchAllOffsets("group", 0L));
+
+        // Fetching with 1 should return data up to offset 1.
+        assertEquals(Arrays.asList(
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                .setName("foo")
+                .setPartitions(Arrays.asList(
+                    mkOffsetPartitionResponse(0, 100L, 1, "metadata")
+                ))
+        ), context.fetchAllOffsets("group", 1L));
+
+        // Fetching with 2 should return data up to offset 2.
+        assertEquals(Arrays.asList(
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                .setName("foo")
+                .setPartitions(Arrays.asList(
+                    mkOffsetPartitionResponse(0, 100L, 1, "metadata"),
+                    mkOffsetPartitionResponse(1, 110L, 1, "metadata")
+                ))
+        ), context.fetchAllOffsets("group", 2L));
+
+        // Fetching with 3 should return data up to offset 3.
+        assertEquals(Arrays.asList(
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                .setName("bar")
+                .setPartitions(Arrays.asList(
+                    mkOffsetPartitionResponse(0, 200L, 1, "metadata")
+                )),
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                .setName("foo")
+                .setPartitions(Arrays.asList(
+                    mkOffsetPartitionResponse(0, 100L, 1, "metadata"),
+                    mkOffsetPartitionResponse(1, 110L, 1, "metadata")
+                ))
+        ), context.fetchAllOffsets("group", 3L));
+
+        // Fetching with 4 should return data up to offset 4.
+        assertEquals(Arrays.asList(
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                .setName("bar")
+                .setPartitions(Arrays.asList(
+                    mkOffsetPartitionResponse(0, 200L, 1, "metadata")
+                )),
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                .setName("foo")
+                .setPartitions(Arrays.asList(
+                    mkOffsetPartitionResponse(0, 100L, 1, "metadata"),
+                    mkOffsetPartitionResponse(1, 111L, 2, "metadata")
+                ))
+        ), context.fetchAllOffsets("group", 4L));
+
+        // Fetching with Long.MAX_VALUE should return all offsets.
+        assertEquals(Arrays.asList(
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                .setName("bar")
+                .setPartitions(Arrays.asList(
+                    mkOffsetPartitionResponse(0, 200L, 1, "metadata"),
+                    mkOffsetPartitionResponse(1, 210L, 2, "metadata")
+                )),
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                .setName("foo")
+                .setPartitions(Arrays.asList(
+                    mkOffsetPartitionResponse(0, 100L, 1, "metadata"),
+                    mkOffsetPartitionResponse(1, 111L, 2, "metadata")
+                ))
+        ), context.fetchAllOffsets("group", Long.MAX_VALUE));
+    }
+
+    @Test
+    public void testConsumerGroupOffsetFetchWithMemberIdAndEpoch() {
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
+        // Create consumer group.
+        ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreateConsumerGroup("group", true);
+        // Create member.
+        group.getOrMaybeCreateMember("member", true);
+        // Commit offset.
+        context.commitOffset("group", "foo", 0, 100L, 1);
+
+        // Fetch offsets case.
+        List<OffsetFetchRequestData.OffsetFetchRequestTopics> topics = Collections.singletonList(
+            new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                .setName("foo")
+                .setPartitionIndexes(Collections.singletonList(0))
+        );
+
+        assertEquals(Collections.singletonList(
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                .setName("foo")
+                .setPartitions(Collections.singletonList(
+                    mkOffsetPartitionResponse(0, 100L, 1, "metadata")
+                ))
+        ), context.fetchOffsets("group", "member", 0, topics, Long.MAX_VALUE));
+
+        // Fetch all offsets case.
+        assertEquals(Collections.singletonList(
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                .setName("foo")
+                .setPartitions(Collections.singletonList(
+                    mkOffsetPartitionResponse(0, 100L, 1, "metadata")
+                ))
+        ), context.fetchAllOffsets("group", "member", 0, Long.MAX_VALUE));
+    }
+
+    @Test
+    public void testConsumerGroupOffsetFetchFromAdminClient() {
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
+        // Create consumer group.
+        ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreateConsumerGroup("group", true);
+        // Create member.
+        group.getOrMaybeCreateMember("member", true);
+        // Commit offset.
+        context.commitOffset("group", "foo", 0, 100L, 1);
+
+        // Fetch offsets case.
+        List<OffsetFetchRequestData.OffsetFetchRequestTopics> topics = Collections.singletonList(
+            new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                .setName("foo")
+                .setPartitionIndexes(Collections.singletonList(0))
+        );
+
+        assertEquals(Collections.singletonList(
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                .setName("foo")
+                .setPartitions(Collections.singletonList(
+                    mkOffsetPartitionResponse(0, 100L, 1, "metadata")
+                ))
+        ), context.fetchOffsets("group", topics, Long.MAX_VALUE));
+
+        // Fetch all offsets case.
+        assertEquals(Collections.singletonList(
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                .setName("foo")
+                .setPartitions(Collections.singletonList(
+                    mkOffsetPartitionResponse(0, 100L, 1, "metadata")
+                ))
+        ), context.fetchAllOffsets("group", Long.MAX_VALUE));
+    }
+
+    @Test
+    public void testConsumerGroupOffsetFetchWithUnknownMemberId() {
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
+        context.groupMetadataManager.getOrMaybeCreateConsumerGroup("group", true);
+
+        // Fetch offsets case.
+        List<OffsetFetchRequestData.OffsetFetchRequestTopics> topics = Collections.singletonList(
+            new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                .setName("foo")
+                .setPartitionIndexes(Collections.singletonList(0))
+        );
+
+        // Fetch offsets cases.
+        assertThrows(UnknownMemberIdException.class,
+            () -> context.fetchOffsets("group", "", 0, topics, Long.MAX_VALUE));
+        assertThrows(UnknownMemberIdException.class,
+            () -> context.fetchOffsets("group", "member", 0, topics, Long.MAX_VALUE));
+
+        // Fetch all offsets cases.
+        assertThrows(UnknownMemberIdException.class,
+            () -> context.fetchAllOffsets("group", "", 0, Long.MAX_VALUE));
+        assertThrows(UnknownMemberIdException.class,
+            () -> context.fetchAllOffsets("group", "member", 0, Long.MAX_VALUE));
+    }
+
+    @Test
+    public void testConsumerGroupOffsetFetchWithStaleMemberEpoch() {
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
+        ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreateConsumerGroup("group", true);
+        group.getOrMaybeCreateMember("member", true);
+
+        // Fetch offsets case.
+        List<OffsetFetchRequestData.OffsetFetchRequestTopics> topics = Collections.singletonList(
+            new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                .setName("foo")
+                .setPartitionIndexes(Collections.singletonList(0))
+        );
+
+        // Fetch offsets case.
+        assertThrows(StaleMemberEpochException.class,
+            () -> context.fetchOffsets("group", "member", 10, topics, Long.MAX_VALUE));
+
+        // Fetch all offsets case.
+        assertThrows(StaleMemberEpochException.class,
+            () -> context.fetchAllOffsets("group", "member", 10, Long.MAX_VALUE));
+    }
+
+    @Test
+    public void testGenericGroupOffsetDelete() {
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
+        GenericGroup group = context.groupMetadataManager.getOrMaybeCreateGenericGroup(
+            "foo",
+            true
+        );
+        context.commitOffset("foo", "bar", 0, 100L, 0);
+        group.setSubscribedTopics(Optional.of(Collections.emptySet()));
+        context.testOffsetDeleteWith("foo", "bar", 0, Errors.NONE);
+    }
+
+    @Test
+    public void testGenericGroupOffsetDeleteWithErrors() {
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
+        GenericGroup group = context.groupMetadataManager.getOrMaybeCreateGenericGroup(
+            "foo",
+            true
+        );
+        group.setSubscribedTopics(Optional.of(Collections.singleton("bar")));
+        context.commitOffset("foo", "bar", 0, 100L, 0);
+
+        // Delete the offset whose topic partition doesn't exist.
+        context.testOffsetDeleteWith("foo", "bar1", 0, Errors.NONE);
+        // Delete the offset from the topic that the group is subscribed to.
+        context.testOffsetDeleteWith("foo", "bar", 0, Errors.GROUP_SUBSCRIBED_TO_TOPIC);
+    }
+
+    @Test
+    public void testConsumerGroupOffsetDelete() {
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
+        ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreateConsumerGroup(
+            "foo",
+            true
+        );
+        context.commitOffset("foo", "bar", 0, 100L, 0);
+        assertFalse(group.isSubscribedToTopic("bar"));
+        context.testOffsetDeleteWith("foo", "bar", 0, Errors.NONE);
+    }
+
+    @Test
+    public void testConsumerGroupOffsetDeleteWithErrors() {
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
+        ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreateConsumerGroup(
+            "foo",
+            true
+        );
+        MetadataImage image = new GroupMetadataManagerTest.MetadataImageBuilder()
+            .addTopic(Uuid.randomUuid(), "foo", 1)
+            .addRacks()
+            .build();
+        ConsumerGroupMember member1 = new ConsumerGroupMember.Builder("member1")
+            .setSubscribedTopicNames(Collections.singletonList("bar"))
+            .build();
+        group.computeSubscriptionMetadata(
+            null,
+            member1,
+            image.topics(),
+            image.cluster()
+        );
+        group.updateMember(member1);
+        context.commitOffset("foo", "bar", 0, 100L, 0);
+        assertTrue(group.isSubscribedToTopic("bar"));
+
+        // Delete the offset whose topic partition doesn't exist.
+        context.testOffsetDeleteWith("foo", "bar1", 0, Errors.NONE);
+        // Delete the offset from the topic that the group is subscribed to.
+        context.testOffsetDeleteWith("foo", "bar", 0, Errors.GROUP_SUBSCRIBED_TO_TOPIC);
+    }
+
+    @ParameterizedTest
+    @EnumSource(Group.GroupType.class)
+    public void testDeleteGroupAllOffsets(Group.GroupType groupType) {
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
+        switch (groupType) {
+            case GENERIC:
+                context.groupMetadataManager.getOrMaybeCreateGenericGroup(
+                    "foo",
+                    true
+                );
+                break;
+            case CONSUMER:
+                context.groupMetadataManager.getOrMaybeCreateConsumerGroup(
+                    "foo",
+                    true
+                );
+                break;
+            default:
+                throw new IllegalArgumentException("Invalid group type: " + groupType);
+        }
+        context.commitOffset("foo", "bar-0", 0, 100L, 0);
+        context.commitOffset("foo", "bar-0", 1, 100L, 0);
+        context.commitOffset("foo", "bar-1", 0, 100L, 0);
+
+        List<Record> expectedRecords = Arrays.asList(
+            RecordHelpers.newOffsetCommitTombstoneRecord("foo", "bar-1", 0),
+            RecordHelpers.newOffsetCommitTombstoneRecord("foo", "bar-0", 0),
+            RecordHelpers.newOffsetCommitTombstoneRecord("foo", "bar-0", 1)
+        );
+
+        List<Record> records = new ArrayList<>();
+        int numDeleteOffsets = context.deleteAllOffsets("foo", records);
+
+        assertEquals(expectedRecords, records);
+        assertEquals(3, numDeleteOffsets);
+    }
+
+    static private OffsetFetchResponseData.OffsetFetchResponsePartitions mkOffsetPartitionResponse(
+        int partition,
+        long offset,
+        int leaderEpoch,
+        String metadata
+    ) {
+        return new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+            .setPartitionIndex(partition)
+            .setCommittedOffset(offset)
+            .setCommittedLeaderEpoch(leaderEpoch)
+            .setMetadata(metadata);
+    }
+
+    static private OffsetFetchResponseData.OffsetFetchResponsePartitions mkInvalidOffsetPartitionResponse(int partition) {
+        return new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+            .setPartitionIndex(partition)
+            .setCommittedOffset(INVALID_OFFSET)
+            .setCommittedLeaderEpoch(-1)
+            .setMetadata("");
+    }
+
+    @Test
     public void testReplay() {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
 
@@ -1098,7 +1842,7 @@ public class OffsetMetadataManagerTest {
         ));
 
         // Verify that the offset is gone.
-        assertNull(context.offsetMetadataManager.offset("foo", new TopicPartition("bar", 0)));
+        assertNull(context.offsetMetadataManager.offset("foo", "bar", 0));
     }
 
     private void verifyReplay(
@@ -1118,7 +1862,8 @@ public class OffsetMetadataManagerTest {
 
         assertEquals(offsetAndMetadata, context.offsetMetadataManager.offset(
             groupId,
-            new TopicPartition(topic, partition)
+            topic,
+            partition
         ));
     }
 

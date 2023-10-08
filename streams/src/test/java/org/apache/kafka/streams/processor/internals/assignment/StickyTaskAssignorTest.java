@@ -915,7 +915,7 @@ public class StickyTaskAssignorTest {
         final Set<TaskId> statefulTasks = statefulAndStatelessTasks.get(0);
         final Set<TaskId> statelessTasks = statefulAndStatelessTasks.get(1);
         final SortedMap<UUID, ClientState> clientStateMap = getRandomClientState(clientSize,
-            tpSize, maxCapacity, partitionSize, false, statefulTasks);
+            tpSize, partitionSize, maxCapacity, false, statefulTasks);
 
 
         final boolean probing = new StickyTaskAssignor().assign(
@@ -981,7 +981,7 @@ public class StickyTaskAssignorTest {
         final List<Set<TaskId>> statefulAndStatelessTasks = getRandomSubset(taskIds, 2);
         final Set<TaskId> statefulTasks = statefulAndStatelessTasks.get(0);
         final SortedMap<UUID, ClientState> clientStateMap = getRandomClientState(clientSize,
-            tpSize, maxCapacity, partitionSize, false, statefulTasks);
+            tpSize, partitionSize, maxCapacity, false, statefulTasks);
         final SortedMap<UUID, ClientState> clientStateMapCopy = copyClientStateMap(clientStateMap);
 
         new StickyTaskAssignor().assign(

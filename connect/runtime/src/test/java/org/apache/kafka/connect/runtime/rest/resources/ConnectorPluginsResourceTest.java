@@ -34,6 +34,8 @@ import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.SampleSinkConnector;
 import org.apache.kafka.connect.runtime.SampleSourceConnector;
 import org.apache.kafka.connect.runtime.distributed.DistributedHerder;
+import org.apache.kafka.connect.runtime.isolation.DelegatingClassLoaderTest;
+import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
 import org.apache.kafka.connect.runtime.isolation.PluginDesc;
 import org.apache.kafka.connect.runtime.isolation.PluginType;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
@@ -62,9 +64,11 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.junit.MockitoJUnitRunner;
 
 import javax.ws.rs.BadRequestException;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -120,6 +124,7 @@ public class ConnectorPluginsResourceTest {
     static {
         try {
             ClassLoader classLoader = ConnectorPluginsResourceTest.class.getClassLoader();
+            ClassLoader pluginClassLoader = new PluginClassLoader(DelegatingClassLoaderTest.ARBITRARY_URL, new URL[]{}, classLoader);
             String appVersion = AppInfoParser.getVersion();
             SINK_CONNECTOR_PLUGINS.add(new PluginDesc<>(VerifiableSinkConnector.class, appVersion, PluginType.SINK, classLoader));
             SINK_CONNECTOR_PLUGINS.add(new PluginDesc<>(MockSinkConnector.class, appVersion, PluginType.SINK, classLoader));
@@ -129,17 +134,21 @@ public class ConnectorPluginsResourceTest {
             SOURCE_CONNECTOR_PLUGINS.add(new PluginDesc<>(SchemaSourceConnector.class, appVersion, PluginType.SOURCE, classLoader));
             SOURCE_CONNECTOR_PLUGINS.add(new PluginDesc<>(ConnectorPluginsResourceTestConnector.class, appVersion, PluginType.SOURCE, classLoader));
 
-            CONVERTER_PLUGINS.add(new PluginDesc<>(StringConverter.class, PluginDesc.UNDEFINED_VERSION, PluginType.CONVERTER, classLoader));
-            CONVERTER_PLUGINS.add(new PluginDesc<>(LongConverter.class, PluginDesc.UNDEFINED_VERSION, PluginType.CONVERTER, classLoader));
+            CONVERTER_PLUGINS.add(new PluginDesc<>(StringConverter.class, appVersion, PluginType.CONVERTER, classLoader));
+            CONVERTER_PLUGINS.add(new PluginDesc<>(LongConverter.class, appVersion, PluginType.CONVERTER, classLoader));
 
-            HEADER_CONVERTER_PLUGINS.add(new PluginDesc<>(StringConverter.class, PluginDesc.UNDEFINED_VERSION, PluginType.HEADER_CONVERTER, classLoader));
-            HEADER_CONVERTER_PLUGINS.add(new PluginDesc<>(LongConverter.class, PluginDesc.UNDEFINED_VERSION, PluginType.HEADER_CONVERTER, classLoader));
+            // Same class, version, and type, but loaded from a different classloader
+            CONVERTER_PLUGINS.add(new PluginDesc<>(StringConverter.class, appVersion, PluginType.CONVERTER, pluginClassLoader));
+            CONVERTER_PLUGINS.add(new PluginDesc<>(LongConverter.class, appVersion, PluginType.CONVERTER, pluginClassLoader));
 
-            TRANSFORMATION_PLUGINS.add(new PluginDesc<>(RegexRouter.class, PluginDesc.UNDEFINED_VERSION, PluginType.TRANSFORMATION, classLoader));
-            TRANSFORMATION_PLUGINS.add(new PluginDesc<>(TimestampConverter.Key.class, PluginDesc.UNDEFINED_VERSION, PluginType.TRANSFORMATION, classLoader));
+            HEADER_CONVERTER_PLUGINS.add(new PluginDesc<>(StringConverter.class, appVersion, PluginType.HEADER_CONVERTER, classLoader));
+            HEADER_CONVERTER_PLUGINS.add(new PluginDesc<>(LongConverter.class, appVersion, PluginType.HEADER_CONVERTER, classLoader));
 
-            PREDICATE_PLUGINS.add(new PluginDesc<>(HasHeaderKey.class, PluginDesc.UNDEFINED_VERSION, PluginType.PREDICATE, classLoader));
-            PREDICATE_PLUGINS.add(new PluginDesc<>(RecordIsTombstone.class, PluginDesc.UNDEFINED_VERSION, PluginType.PREDICATE, classLoader));
+            TRANSFORMATION_PLUGINS.add(new PluginDesc<>(RegexRouter.class, appVersion, PluginType.TRANSFORMATION, classLoader));
+            TRANSFORMATION_PLUGINS.add(new PluginDesc<>(TimestampConverter.Key.class, appVersion, PluginType.TRANSFORMATION, classLoader));
+
+            PREDICATE_PLUGINS.add(new PluginDesc<>(HasHeaderKey.class, appVersion, PluginType.PREDICATE, classLoader));
+            PREDICATE_PLUGINS.add(new PluginDesc<>(RecordIsTombstone.class, appVersion, PluginType.PREDICATE, classLoader));
         } catch (Exception e) {
             e.printStackTrace();
             fail("Failed setting up plugins");
@@ -342,12 +351,8 @@ public class ConnectorPluginsResourceTest {
 
     @Test
     public void testListConnectorPlugins() {
-        Set<Class<?>> excludes = Stream.of(ConnectorPluginsResource.SINK_CONNECTOR_EXCLUDES, ConnectorPluginsResource.SOURCE_CONNECTOR_EXCLUDES)
-                .flatMap(Collection::stream)
-                .collect(Collectors.toSet());
         Set<PluginInfo> expectedConnectorPlugins = Stream.of(SINK_CONNECTOR_PLUGINS, SOURCE_CONNECTOR_PLUGINS)
                 .flatMap(Collection::stream)
-                .filter(p -> !excludes.contains(p.pluginClass()))
                 .map(PluginInfo::new)
                 .collect(Collectors.toSet());
         Set<PluginInfo> actualConnectorPlugins = new HashSet<>(connectorPluginsResource.listConnectorPlugins(true));
@@ -390,12 +395,7 @@ public class ConnectorPluginsResourceTest {
 
     @Test
     public void testListAllPlugins() {
-        Set<Class<?>> excludes = Stream.of(
-                        ConnectorPluginsResource.SINK_CONNECTOR_EXCLUDES,
-                        ConnectorPluginsResource.SOURCE_CONNECTOR_EXCLUDES
-                ).flatMap(Collection::stream)
-                .collect(Collectors.toSet());
-        Set<PluginInfo> expectedConnectorPlugins = Stream.of(
+        List<PluginInfo> expectedConnectorPlugins = Stream.of(
                         SINK_CONNECTOR_PLUGINS,
                         SOURCE_CONNECTOR_PLUGINS,
                         CONVERTER_PLUGINS,
@@ -403,10 +403,15 @@ public class ConnectorPluginsResourceTest {
                         TRANSFORMATION_PLUGINS,
                         PREDICATE_PLUGINS
                 ).flatMap(Collection::stream)
-                .filter(p -> !excludes.contains(p.pluginClass()))
                 .map(PluginInfo::new)
-                .collect(Collectors.toSet());
-        Set<PluginInfo> actualConnectorPlugins = new HashSet<>(connectorPluginsResource.listConnectorPlugins(false));
+                .distinct()
+                .collect(Collectors.toList());
+        List<PluginInfo> actualConnectorPlugins = new ArrayList<>(connectorPluginsResource.listConnectorPlugins(false));
+        Comparator<PluginInfo> compare = Comparator.comparing(PluginInfo::className)
+                .thenComparing(PluginInfo::type)
+                .thenComparing(PluginInfo::version);
+        actualConnectorPlugins.sort(compare);
+        expectedConnectorPlugins.sort(compare);
         assertEquals(expectedConnectorPlugins, actualConnectorPlugins);
         verify(herder, atLeastOnce()).plugins();
     }

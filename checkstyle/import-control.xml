@@ -247,35 +247,6 @@
 
     <!-- This is required to make AlterConfigPolicyTest work. -->
     <allow pkg="org.apache.kafka.server.policy" />
-
-    <subpackage name="log">
-      <allow pkg="com.fasterxml.jackson" />
-      <allow pkg="kafka.api" />
-      <allow pkg="kafka.utils" />
-      <allow pkg="org.apache.kafka.clients" />
-      <allow pkg="org.apache.kafka.server.common" />
-      <allow pkg="org.apache.kafka.server.config" />
-      <allow pkg="org.apache.kafka.server.log" />
-      <allow pkg="org.apache.kafka.server.record" />
-      <allow pkg="org.apache.kafka.test" />
-      <allow pkg="org.apache.kafka.storage"/>
-      <subpackage name="remote">
-        <allow pkg="scala.collection" />
-        <subpackage name="storage">
-          <allow pkg="com.yammer.metrics.core" />
-          <allow pkg="org.apache.kafka.server.metrics" />
-        </subpackage>
-      </subpackage>
-
-    </subpackage>
-  </subpackage>
-
-  <subpackage name="storage.internals">
-    <allow pkg="com.yammer.metrics.core" />
-    <allow pkg="org.apache.kafka.server"/>
-    <allow pkg="org.apache.kafka.storage.internals"/>
-    <allow pkg="org.apache.kafka.common" />
-    <allow pkg="com.github.benmanes.caffeine.cache" />
   </subpackage>
 
   <subpackage name="shell">
@@ -308,6 +279,8 @@
     <allow pkg="org.apache.kafka.clients.producer" />
     <allow pkg="org.apache.kafka.clients.consumer" />
     <allow pkg="org.apache.kafka.test" />
+    <allow pkg="org.apache.kafka.connect.runtime" />
+    <allow pkg="org.apache.kafka.connect.runtime.isolation" />
     <allow pkg="com.fasterxml.jackson" />
     <allow pkg="org.jose4j" />
     <allow pkg="net.sourceforge.argparse4j" />
@@ -317,6 +290,16 @@
     <allow pkg="javax.rmi.ssl"/>
     <allow pkg="kafka.utils" />
     <allow pkg="scala.collection" />
+
+    <subpackage name="reassign">
+      <allow pkg="org.apache.kafka.admin"/>
+      <allow pkg="org.apache.kafka.tools"/>
+      <allow pkg="kafka.admin" />
+      <allow pkg="kafka.cluster" />
+      <allow pkg="kafka.log" />
+      <allow pkg="kafka.server" />
+      <allow pkg="scala" />
+    </subpackage>
   </subpackage>
 
   <subpackage name="trogdor">
@@ -570,6 +553,8 @@
       <allow pkg="javax.ws.rs" />
       <allow pkg="org.apache.http"/>
       <allow pkg="org.eclipse.jetty.util"/>
+      <!-- for tests -->
+      <allow pkg="org.apache.kafka.server.util" />
     </subpackage>
 
     <subpackage name="json">
@@ -589,6 +574,7 @@
 
     <subpackage name="tools">
       <allow pkg="org.apache.kafka.connect" />
+      <allow pkg="org.apache.kafka.server.util" />
       <allow pkg="com.fasterxml.jackson" />
     </subpackage>
 

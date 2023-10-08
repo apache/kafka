@@ -65,10 +65,11 @@ public class Plugins {
     }
 
     // VisibleForTesting
+    @SuppressWarnings("this-escape")
     Plugins(Map<String, String> props, ClassLoader parent, ClassLoaderFactory factory) {
         String pluginPath = WorkerConfig.pluginPath(props);
         PluginDiscoveryMode discoveryMode = WorkerConfig.pluginDiscovery(props);
-        Set<Path> pluginLocations = PluginUtils.pluginLocations(pluginPath);
+        Set<Path> pluginLocations = PluginUtils.pluginLocations(pluginPath, false);
         delegatingLoader = factory.newDelegatingClassLoader(parent);
         Set<PluginSource> pluginSources = PluginUtils.pluginSources(pluginLocations, delegatingLoader, factory);
         scanResult = initLoaders(pluginSources, discoveryMode);

@@ -20,7 +20,6 @@
 
 
 from collections import defaultdict
-import operator
 import os
 import re
 
@@ -28,7 +27,7 @@ import re
 def prompt_for_user():
     while True:
         try:
-            user_input = input("\nName or email (case insensitive): ") 
+            user_input = input("\nName or email (case insensitive): ")
         except (KeyboardInterrupt, EOFError):
             return None
         clean_input = user_input.strip().lower()
@@ -38,7 +37,7 @@ def prompt_for_user():
 
 if __name__ == "__main__":
     print("Utility to help generate 'Reviewers' string for Pull Requests. Use Ctrl+D or Ctrl+C to exit")
-    
+
     stream = os.popen("git log | grep Reviewers")
     lines = stream.readlines()
     all_reviewers = defaultdict(int)
@@ -46,7 +45,7 @@ if __name__ == "__main__":
         stripped = line.strip().lstrip("Reviewers: ")
         reviewers = stripped.split(",")
         for reviewer in reviewers:
-            all_reviewers[reviewer.strip()] += 1 
+            all_reviewers[reviewer.strip()] += 1
     parsed_reviewers = []
 
     for item in all_reviewers.items():
@@ -54,7 +53,7 @@ if __name__ == "__main__":
         if m is not None and len(m.groups()) == 2:
             if item[1] > 2:
                 parsed_reviewers.append((m.group("name"), m.group("email"), item[1]))
-    
+
     selected_reviewers = []
     while True:
         if selected_reviewers:
@@ -90,5 +89,5 @@ if __name__ == "__main__":
         out += ", ".join([f"{name} <{email}>" for name, email, _ in selected_reviewers])
         out += "\n"
         print(out)
-        
+
 

@@ -91,7 +91,7 @@ class KafkaRaftServerTest {
     logDir: File,
     metaProperties: MetaProperties
   ): Unit = {
-    val metaPropertiesFile = new File(logDir.getAbsolutePath, "meta.properties")
+    val metaPropertiesFile = new File(logDir.getAbsolutePath, KafkaServer.brokerMetaPropsFile)
     val checkpoint = new BrokerMetadataCheckpoint(metaPropertiesFile)
     checkpoint.write(metaProperties.toProperties)
   }
