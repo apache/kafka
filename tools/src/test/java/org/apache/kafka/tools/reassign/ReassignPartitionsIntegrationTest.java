@@ -395,11 +395,11 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
         waitForVerifyAssignment(cluster.adminClient, assignment, true,
             new VerifyAssignmentResult(partStates, true, Collections.emptyMap(), false));
         // Cancel the reassignment.
-        assertEquals(new Tuple2<>(set(foo0, baz1), set()), runCancelAssignment(cluster.adminClient, assignment, true));
+        assertEquals(new Tuple2<>(new HashSet<>(Arrays.asList(foo0, baz1)), Collections.emptySet()), runCancelAssignment(cluster.adminClient, assignment, true));
         // Broker throttles are still active because we passed --preserve-throttles
         waitForInterBrokerThrottle(Arrays.asList(0, 1, 2, 3), interBrokerThrottle);
         // Cancelling the reassignment again should reveal nothing to cancel.
-        assertEquals(new Tuple2<>(set(), set()), runCancelAssignment(cluster.adminClient, assignment, false));
+        assertEquals(new Tuple2<>(Collections.emptySet(), Collections.emptySet()), runCancelAssignment(cluster.adminClient, assignment, false));
         // This time, the broker throttles were removed.
         waitForBrokerLevelThrottles(unthrottledBrokerConfigs);
         // Verify that there are no ongoing reassignments.
@@ -446,7 +446,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
         );
 
         // Now cancel the assignment and verify that the partition is removed from cancelled replicas
-        assertEquals(new Tuple2<>(set(foo0), set()), runCancelAssignment(cluster.adminClient, assignment, true));
+        assertEquals(new Tuple2<>(Collections.singleton(foo0), Collections.emptySet()), runCancelAssignment(cluster.adminClient, assignment, true));
         verifyReplicaDeleted(foo0, 3);
         verifyReplicaDeleted(foo0, 4);
     }
@@ -862,11 +862,6 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
                 servers.clear();
             }
         }
-    }
-
-    @SuppressWarnings("unchecked")
-    static <T> Set<T> set(final T... set) {
-        return new HashSet<>(Arrays.asList(set));
     }
 
     @SuppressWarnings({"deprecation", "unchecked"})
