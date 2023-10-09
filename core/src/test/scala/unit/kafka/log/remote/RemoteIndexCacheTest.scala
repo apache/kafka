@@ -279,6 +279,8 @@ class RemoteIndexCacheTest {
       "Failed to mark cache entry for cleanup after invalidation")
     TestUtils.waitUntilTrue(() => cacheEntry.isCleanStarted,
       "Failed to cleanup cache entry after invalidation")
+    TestUtils.waitUntilTrue(() => cacheEntry.isCleanFinished,
+      "Failed to finish cleanup cache entry after invalidation")
 
     // first it will be marked for cleanup, second time markForCleanup is called when cleanup() is called
     verify(cacheEntry, times(2)).markForCleanup()
@@ -543,6 +545,8 @@ class RemoteIndexCacheTest {
       "Failed to mark cache entry for cleanup after resizing cache.")
     TestUtils.waitUntilTrue(() => cacheEntry.isCleanStarted,
       "Failed to cleanup cache entry after resizing cache.")
+    TestUtils.waitUntilTrue(() => cacheEntry.isCleanFinished,
+      "Failed to finish cleanup cache entry after resizing cache.")
 
     // verify no index files on remote cache dir
     TestUtils.waitUntilTrue(() => !getIndexFileFromRemoteCacheDir(LogFileUtils.INDEX_FILE_SUFFIX).isPresent,
@@ -687,6 +691,8 @@ class RemoteIndexCacheTest {
       "Failed to mark cache entry for cleanup after invalidation")
     TestUtils.waitUntilTrue(() => entry.isCleanStarted,
       "Failed to cleanup cache entry after invalidation")
+    TestUtils.waitUntilTrue(() => entry.isCleanFinished,
+      "Failed to finish cleanup cache entry after invalidation")
 
     // restore index files
     renameRemoteCacheIndexFileFromDisk(tempSuffix)
@@ -762,6 +768,8 @@ class RemoteIndexCacheTest {
       "Failed to mark cache entry for cleanup after invalidation")
     TestUtils.waitUntilTrue(() => entry.isCleanStarted,
       "Failed to cleanup cache entry after invalidation")
+    TestUtils.waitUntilTrue(() => entry.isCleanFinished,
+      "Failed to finish cleanup cache entry after invalidation")
 
     // verify no index files on disk
     waitUntilTrue(() => !getRemoteCacheIndexFileFromDisk(LogFileUtils.INDEX_FILE_SUFFIX).isPresent,

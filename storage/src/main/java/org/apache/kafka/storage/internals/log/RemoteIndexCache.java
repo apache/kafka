@@ -489,6 +489,8 @@ public class RemoteIndexCache implements Closeable {
 
         private boolean cleanStarted = false;
 
+        private boolean cleanFinished = false;
+
         private boolean markedForCleanup = false;
 
         private final long entrySizeBytes;
@@ -518,6 +520,11 @@ public class RemoteIndexCache implements Closeable {
         // Visible for testing
         public boolean isCleanStarted() {
             return cleanStarted;
+        }
+
+        // Visible for testing
+        public boolean isCleanFinished() {
+            return cleanFinished;
         }
 
         // Visible for testing
@@ -597,6 +604,7 @@ public class RemoteIndexCache implements Closeable {
                     });
 
                     tryAll(actions);
+                    cleanFinished = true;
                 }
             } finally {
                 lock.writeLock().unlock();
