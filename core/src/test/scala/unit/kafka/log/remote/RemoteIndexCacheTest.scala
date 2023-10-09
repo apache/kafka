@@ -577,7 +577,7 @@ class RemoteIndexCacheTest {
     assertTrue(getIndexFileFromRemoteCacheDir(LogFileUtils.TXN_INDEX_FILE_SUFFIX).isPresent)
     assertTrue(getIndexFileFromRemoteCacheDir(LogFileUtils.TIME_INDEX_FILE_SUFFIX).isPresent)
 
-    // Reduce the cache limit to 1 to ensure that all are evicted.
+    // Reduce the cache size to 1 byte to ensure that all the entries are evicted from it.
     cache.resizeCacheSize(1L)
 
     // wait until entry is marked for deletion
@@ -602,62 +602,46 @@ class RemoteIndexCacheTest {
     cache.resizeCacheSize(2 * estimateEntryBytesSize)
     assertCacheSize(0)
 
-    val cacheEntrys = new mutable.HashMap[Uuid, RemoteIndexCache.Entry]()
-    cacheEntrys.put(metadataList(0).remoteLogSegmentId().id(), cache.getIndexEntry(metadataList(0)))
-    cacheEntrys.put(metadataList(1).remoteLogSegmentId().id(), cache.getIndexEntry(metadataList(1)))
-    cacheEntrys.put(metadataList(2).remoteLogSegmentId().id(), cache.getIndexEntry(metadataList(2)))
-
+    val entry0 = cache.getIndexEntry(metadataList(0))
+    val entry1 = cache.getIndexEntry(metadataList(1))
+    cache.getIndexEntry(metadataList(2))
     assertCacheSize(2)
-    val missingMetadataOpt = {
-      metadataList.find(segmentMetadata => {
-        val segmentId = segmentMetadata.remoteLogSegmentId().id()
-        !cache.internalCache.asMap().containsKey(segmentId)
-      })
-    }
-    assertFalse(missingMetadataOpt.isEmpty)
-    val missingEntry = cacheEntrys.find(entry => entry._1.equals(missingMetadataOpt.get.remoteLogSegmentId().id())).get._2
+    val missingMetadata = metadataList(0)
+    val missingEntry = entry0
     // wait until evicted entry is marked for deletion
     TestUtils.waitUntilTrue(() => missingEntry.isMarkedForCleanup,
       "Failed to mark evicted cache entry for cleanup after resizing cache.")
     TestUtils.waitUntilTrue(() => missingEntry.isCleanStarted,
       "Failed to cleanup evicted cache entry after resizing cache.")
     // verify no index files for `missingEntry` on remote cache dir
-    TestUtils.waitUntilTrue(() => !getIndexFileFromRemoteCacheDir(remoteOffsetIndexFileName(missingMetadataOpt.get)).isPresent,
+    TestUtils.waitUntilTrue(() => !getIndexFileFromRemoteCacheDir(remoteOffsetIndexFileName(missingMetadata)).isPresent,
       s"Offset index file for evicted entry should not be present on disk at ${cache.cacheDir()}")
-    TestUtils.waitUntilTrue(() => !getIndexFileFromRemoteCacheDir(remoteTimeIndexFileName(missingMetadataOpt.get)).isPresent,
+    TestUtils.waitUntilTrue(() => !getIndexFileFromRemoteCacheDir(remoteTimeIndexFileName(missingMetadata)).isPresent,
       s"Time index file for evicted entry should not be present on disk at ${cache.cacheDir()}")
-    TestUtils.waitUntilTrue(() => !getIndexFileFromRemoteCacheDir(remoteTransactionIndexFileName(missingMetadataOpt.get)).isPresent,
+    TestUtils.waitUntilTrue(() => !getIndexFileFromRemoteCacheDir(remoteTransactionIndexFileName(missingMetadata)).isPresent,
       s"Txn index file for evicted entry should not be present on disk at ${cache.cacheDir()}")
-    TestUtils.waitUntilTrue(() => !getIndexFileFromRemoteCacheDir(remoteDeletedSuffixIndexFileName(missingMetadataOpt.get)).isPresent,
+    TestUtils.waitUntilTrue(() => !getIndexFileFromRemoteCacheDir(remoteDeletedSuffixIndexFileName(missingMetadata)).isPresent,
       s"Index file marked for deletion for evicted entry should not be present on disk at ${cache.cacheDir()}")
-
-    val cacheMetadataList = metadataList.filter(segmentMetadata => segmentMetadata.remoteLogSegmentId().id() != missingMetadataOpt.get.remoteLogSegmentId().id())
 
     // Reduce cache capacity to only store 1 entries
     cache.resizeCacheSize(1 * estimateEntryBytesSize)
     assertCacheSize(1)
 
-    val nextMissingMetadataOpt = {
-      cacheMetadataList.find(segmentMetadata => {
-        val segmentId = segmentMetadata.remoteLogSegmentId().id()
-        !cache.internalCache.asMap().containsKey(segmentId)
-      })
-    }
-    assertFalse(nextMissingMetadataOpt.isEmpty)
-    val nextMissingEntry = cacheEntrys.find(entry => entry._1.equals(nextMissingMetadataOpt.get.remoteLogSegmentId().id())).get._2
+    val nextMissingMetadata = metadataList(1)
+    val nextMissingEntry = entry1
     // wait until evicted entry is marked for deletion
     TestUtils.waitUntilTrue(() => nextMissingEntry.isMarkedForCleanup,
       "Failed to mark evicted cache entry for cleanup after resizing cache.")
     TestUtils.waitUntilTrue(() => nextMissingEntry.isCleanStarted,
       "Failed to cleanup evicted cache entry after resizing cache.")
     // verify no index files for `nextMissingEntry` on remote cache dir
-    TestUtils.waitUntilTrue(() => !getIndexFileFromRemoteCacheDir(remoteOffsetIndexFileName(nextMissingMetadataOpt.get)).isPresent,
+    TestUtils.waitUntilTrue(() => !getIndexFileFromRemoteCacheDir(remoteOffsetIndexFileName(nextMissingMetadata)).isPresent,
       s"Offset index file for evicted entry should not be present on disk at ${cache.cacheDir()}")
-    TestUtils.waitUntilTrue(() => !getIndexFileFromRemoteCacheDir(remoteTimeIndexFileName(nextMissingMetadataOpt.get)).isPresent,
+    TestUtils.waitUntilTrue(() => !getIndexFileFromRemoteCacheDir(remoteTimeIndexFileName(nextMissingMetadata)).isPresent,
       s"Time index file for evicted entry should not be present on disk at ${cache.cacheDir()}")
-    TestUtils.waitUntilTrue(() => !getIndexFileFromRemoteCacheDir(remoteTransactionIndexFileName(nextMissingMetadataOpt.get)).isPresent,
+    TestUtils.waitUntilTrue(() => !getIndexFileFromRemoteCacheDir(remoteTransactionIndexFileName(nextMissingMetadata)).isPresent,
       s"Txn index file for evicted entry should not be present on disk at ${cache.cacheDir()}")
-    TestUtils.waitUntilTrue(() => !getIndexFileFromRemoteCacheDir(remoteDeletedSuffixIndexFileName(nextMissingMetadataOpt.get)).isPresent,
+    TestUtils.waitUntilTrue(() => !getIndexFileFromRemoteCacheDir(remoteDeletedSuffixIndexFileName(nextMissingMetadata)).isPresent,
       s"Index file marked for deletion for evicted entry should not be present on disk at ${cache.cacheDir()}")
 
     assertTrue(cache.internalCache().estimatedSize() == 1)
