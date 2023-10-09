@@ -22,6 +22,8 @@ import org.apache.kafka.common.config.SslClientAuth;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
+import org.apache.kafka.common.security.auth.KerberosPrincipalBuilder;
+import org.apache.kafka.common.security.auth.SSLPrincipalBuilder;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder;
@@ -244,6 +246,14 @@ public class ChannelBuilders {
 
         if (principalBuilderClass == null || principalBuilderClass == DefaultKafkaPrincipalBuilder.class) {
             builder = new DefaultKafkaPrincipalBuilder(kerberosShortNamer, sslPrincipalMapper);
+        } else if (SSLPrincipalBuilder.class.isAssignableFrom(principalBuilderClass)) {
+            SSLPrincipalBuilder sslPrincipalBuilder = (SSLPrincipalBuilder) Utils.newInstance(principalBuilderClass);
+            sslPrincipalBuilder.buildSSLPrincipalBuilder(sslPrincipalMapper);
+            builder = sslPrincipalBuilder;
+        } else if (KerberosPrincipalBuilder.class.isAssignableFrom(principalBuilderClass)) {
+            KerberosPrincipalBuilder kerberosPrincipalBuilder = (KerberosPrincipalBuilder) Utils.newInstance(principalBuilderClass);
+            kerberosPrincipalBuilder.buildKerberosPrincipalBuilder(kerberosShortNamer);
+            builder = kerberosPrincipalBuilder;
         } else if (KafkaPrincipalBuilder.class.isAssignableFrom(principalBuilderClass)) {
             builder = (KafkaPrincipalBuilder) Utils.newInstance(principalBuilderClass);
         } else if (org.apache.kafka.common.security.auth.PrincipalBuilder.class.isAssignableFrom(principalBuilderClass)) {

@@ -20,14 +20,24 @@ import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.security.TestSecurityConfig;
-import org.apache.kafka.common.security.auth.AuthenticationContext;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.KafkaPrincipalBuilder;
 import org.apache.kafka.common.security.auth.PlaintextAuthenticationContext;
+import org.apache.kafka.common.security.auth.SslAuthenticationContext;
+import org.apache.kafka.common.security.auth.AuthenticationContext;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder;
+import org.apache.kafka.common.security.authenticator.DefaultKerberosPrincipalBuilder;
+import org.apache.kafka.common.security.authenticator.DefaultSSLPrincipalBuilder;
+import org.apache.kafka.common.security.kerberos.KerberosShortNamer;
+import org.apache.kafka.common.security.ssl.SslPrincipalMapper;
 import org.junit.jupiter.api.Test;
 
+import javax.net.ssl.SSLPeerUnverifiedException;
+import javax.net.ssl.SSLSession;
+import javax.security.auth.x500.X500Principal;
 import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.security.Principal;
 import java.util.HashMap;
 import java.util.Map;
@@ -38,6 +48,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class ChannelBuildersTest {
 
@@ -66,6 +77,46 @@ public class ChannelBuildersTest {
         KafkaPrincipalBuilder builder = ChannelBuilders.createPrincipalBuilder(configs, null, null, null, null);
         assertTrue(builder instanceof ConfigurableKafkaPrincipalBuilder);
         assertTrue(((ConfigurableKafkaPrincipalBuilder) builder).configured);
+    }
+
+    @Test
+    public void testCreateCustomSSLPrincipalBuilder() throws UnknownHostException, SSLPeerUnverifiedException {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, CustomKafkaSSLPrincipalBuilder.class);
+        KerberosShortNamer kerberosShortNamer = mock(KerberosShortNamer.class);
+        SslPrincipalMapper sslPrincipalMapper = SslPrincipalMapper.fromRules("DEFAULT");
+
+        KafkaPrincipalBuilder builder = ChannelBuilders.createPrincipalBuilder(configs, null, null, kerberosShortNamer, sslPrincipalMapper);
+        assertTrue(builder instanceof CustomKafkaSSLPrincipalBuilder);
+        assertTrue(((CustomKafkaSSLPrincipalBuilder) builder).configured);
+
+        SSLSession session = mock(SSLSession.class);
+        X500Principal x500Principal = new X500Principal("CN=Wmt, OU=ServiceUsers, O=Org, C=US");
+        when(session.getPeerPrincipal()).thenReturn(x500Principal);
+        SslAuthenticationContext sslContext = new SslAuthenticationContext(session, InetAddress.getLocalHost(), SecurityProtocol.PLAINTEXT.name());
+
+        KafkaPrincipal principal = builder.build(sslContext);
+        assertEquals(x500Principal.getName(), principal.getName());
+        assertEquals(KafkaPrincipal.USER_TYPE, principal.getPrincipalType());
+    }
+
+    @Test
+    public void testCreateCustomKerberosPrincipalBuilder() throws UnknownHostException, SSLPeerUnverifiedException {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, CustomKafkaKerberosPrincipalBuilder.class);
+        KerberosShortNamer kerberosShortNamer = mock(KerberosShortNamer.class);
+        KafkaPrincipalBuilder builder = ChannelBuilders.createPrincipalBuilder(configs, null, null, kerberosShortNamer, null);
+        assertTrue(builder instanceof CustomKafkaKerberosPrincipalBuilder);
+        assertTrue(((CustomKafkaKerberosPrincipalBuilder) builder).configured);
+    }
+
+    @Test
+    public void testCreateCustomKafkaPrincipalBuilderWithDefaultConstructor() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, CustomKafkaPrincipalBuilderWithDefaultConstructor.class);
+        KafkaPrincipalBuilder builder = ChannelBuilders.createPrincipalBuilder(configs, null, null, null, null);
+        assertTrue(builder instanceof CustomKafkaPrincipalBuilderWithDefaultConstructor);
+        assertTrue(((CustomKafkaPrincipalBuilderWithDefaultConstructor) builder).configured);
     }
 
     @Test
@@ -167,4 +218,36 @@ public class ChannelBuildersTest {
             return null;
         }
     }
+
+    public static class CustomKafkaSSLPrincipalBuilder extends DefaultSSLPrincipalBuilder implements Configurable {
+        private boolean configured = false;
+
+        @Override
+        public void configure(Map<String, ?> configs) {
+            configured = true;
+        }
+    }
+
+    public static class CustomKafkaKerberosPrincipalBuilder extends DefaultKerberosPrincipalBuilder implements Configurable {
+        private boolean configured = false;
+
+        @Override
+        public void configure(Map<String, ?> configs) {
+            configured = true;
+        }
+    }
+
+    public static class CustomKafkaPrincipalBuilderWithDefaultConstructor extends DefaultKafkaPrincipalBuilder implements Configurable {
+        private boolean configured = false;
+
+        public CustomKafkaPrincipalBuilderWithDefaultConstructor() {
+            super(null, null);
+        }
+
+        @Override
+        public void configure(Map<String, ?> configs) {
+            configured = true;
+        }
+    }
+
 }
