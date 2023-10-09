@@ -81,14 +81,17 @@ object KafkaRequestHandler {
 /**
  * A thread that answers kafka requests.
  */
-class KafkaRequestHandler(id: Int,
-                          brokerId: Int,
-                          val aggregateIdleMeter: Meter,
-                          val totalHandlerThreads: AtomicInteger,
-                          val requestChannel: RequestChannel,
-                          apis: ApiRequestHandler,
-                          time: Time) extends Runnable with Logging {
-  this.logIdent = s"[Kafka Request Handler $id on Broker $brokerId], "
+class KafkaRequestHandler(
+  id: Int,
+  brokerId: Int,
+  val aggregateIdleMeter: Meter,
+  val totalHandlerThreads: AtomicInteger,
+  val requestChannel: RequestChannel,
+  apis: ApiRequestHandler,
+  time: Time,
+  nodeName: String = "broker"
+) extends Runnable with Logging {
+  this.logIdent = s"[Kafka Request Handler $id on ${nodeName.capitalize} $brokerId], "
   private val shutdownComplete = new CountDownLatch(1)
   private val requestLocal = RequestLocal.withThreadConfinedCaching
   @volatile private var stopped = false
@@ -184,13 +187,16 @@ class KafkaRequestHandler(id: Int,
 
 }
 
-class KafkaRequestHandlerPool(val brokerId: Int,
-                              val requestChannel: RequestChannel,
-                              val apis: ApiRequestHandler,
-                              time: Time,
-                              numThreads: Int,
-                              requestHandlerAvgIdleMetricName: String,
-                              logAndThreadNamePrefix : String) extends Logging {
+class KafkaRequestHandlerPool(
+  val brokerId: Int,
+  val requestChannel: RequestChannel,
+  val apis: ApiRequestHandler,
+  time: Time,
+  numThreads: Int,
+  requestHandlerAvgIdleMetricName: String,
+  logAndThreadNamePrefix : String,
+  nodeName: String = "broker"
+) extends Logging {
   private val metricsGroup = new KafkaMetricsGroup(this.getClass)
 
   private val threadPoolSize: AtomicInteger = new AtomicInteger(numThreads)
@@ -204,7 +210,7 @@ class KafkaRequestHandlerPool(val brokerId: Int,
   }
 
   def createHandler(id: Int): Unit = synchronized {
-    runnables += new KafkaRequestHandler(id, brokerId, aggregateIdleMeter, threadPoolSize, requestChannel, apis, time)
+    runnables += new KafkaRequestHandler(id, brokerId, aggregateIdleMeter, threadPoolSize, requestChannel, apis, time, nodeName)
     KafkaThread.daemon(logAndThreadNamePrefix + "-kafka-request-handler-" + id, runnables(id)).start()
   }
 

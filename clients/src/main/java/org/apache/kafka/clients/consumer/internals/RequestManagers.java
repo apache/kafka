@@ -48,6 +48,7 @@ public class RequestManagers implements Closeable {
     private final Logger log;
     public final Optional<CoordinatorRequestManager> coordinatorRequestManager;
     public final Optional<CommitRequestManager> commitRequestManager;
+    public final Optional<HeartbeatRequestManager> heartbeatRequestManager;
     public final OffsetsRequestManager offsetsRequestManager;
     public final TopicMetadataRequestManager topicMetadataRequestManager;
     public final FetchRequestManager fetchRequestManager;
@@ -59,17 +60,20 @@ public class RequestManagers implements Closeable {
                            TopicMetadataRequestManager topicMetadataRequestManager,
                            FetchRequestManager fetchRequestManager,
                            Optional<CoordinatorRequestManager> coordinatorRequestManager,
-                           Optional<CommitRequestManager> commitRequestManager) {
+                           Optional<CommitRequestManager> commitRequestManager,
+                           Optional<HeartbeatRequestManager> heartbeatRequestManager) {
         this.log = logContext.logger(RequestManagers.class);
         this.offsetsRequestManager = requireNonNull(offsetsRequestManager, "OffsetsRequestManager cannot be null");
         this.coordinatorRequestManager = coordinatorRequestManager;
         this.commitRequestManager = commitRequestManager;
         this.topicMetadataRequestManager = topicMetadataRequestManager;
         this.fetchRequestManager = fetchRequestManager;
+        this.heartbeatRequestManager = heartbeatRequestManager;
 
         List<Optional<? extends RequestManager>> list = new ArrayList<>();
         list.add(coordinatorRequestManager);
         list.add(commitRequestManager);
+        list.add(heartbeatRequestManager);
         list.add(Optional.of(offsetsRequestManager));
         list.add(Optional.of(topicMetadataRequestManager));
         list.add(Optional.of(fetchRequestManager));
@@ -94,7 +98,8 @@ public class RequestManagers implements Closeable {
                             .forEach(c -> closeQuietly(c, c.getClass().getSimpleName()));
                     log.debug("RequestManagers has been closed");
                 },
-                () -> log.debug("RequestManagers was already closed"));
+                () -> log.debug("RequestManagers was already closed")
+        );
     }
 
     /**
@@ -141,6 +146,7 @@ public class RequestManagers implements Closeable {
                 final TopicMetadataRequestManager topic = new TopicMetadataRequestManager(
                         logContext,
                         config);
+                HeartbeatRequestManager heartbeatRequestManager = null;
                 CoordinatorRequestManager coordinator = null;
                 CommitRequestManager commit = null;
 
@@ -153,14 +159,26 @@ public class RequestManagers implements Closeable {
                             backgroundEventHandler,
                             groupState.groupId);
                     commit = new CommitRequestManager(time, logContext, subscriptions, config, coordinator, groupState);
+                    MembershipManager membershipManager = new MembershipManagerImpl(groupState.groupId);
+                    heartbeatRequestManager = new HeartbeatRequestManager(
+                            time,
+                            logContext,
+                            config,
+                            coordinator,
+                            subscriptions,
+                            membershipManager,
+                            backgroundEventHandler);
                 }
 
-                return new RequestManagers(logContext,
+                return new RequestManagers(
+                        logContext,
                         listOffsets,
                         topic,
                         fetch,
                         Optional.ofNullable(coordinator),
-                        Optional.ofNullable(commit));
+                        Optional.ofNullable(commit),
+                        Optional.ofNullable(heartbeatRequestManager)
+                );
             }
         };
     }

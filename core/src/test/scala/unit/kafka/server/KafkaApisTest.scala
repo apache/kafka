@@ -1595,6 +1595,7 @@ class KafkaApisTest {
     val requestChannelRequest = buildRequest(new TxnOffsetCommitRequest.Builder(txnOffsetCommitRequest).build())
 
     val future = new CompletableFuture[TxnOffsetCommitResponseData]()
+    when(txnCoordinator.partitionFor(txnOffsetCommitRequest.transactionalId)).thenReturn(0)
     when(groupCoordinator.commitTransactionalOffsets(
       requestChannelRequest.context,
       txnOffsetCommitRequest,
@@ -1639,6 +1640,7 @@ class KafkaApisTest {
     val requestChannelRequest = buildRequest(new TxnOffsetCommitRequest.Builder(txnOffsetCommitRequest).build())
 
     val future = new CompletableFuture[TxnOffsetCommitResponseData]()
+    when(txnCoordinator.partitionFor(txnOffsetCommitRequest.transactionalId)).thenReturn(0)
     when(groupCoordinator.commitTransactionalOffsets(
       requestChannelRequest.context,
       txnOffsetCommitRequest,
@@ -1710,7 +1712,7 @@ class KafkaApisTest {
     val requestChannelRequest = buildRequest(new TxnOffsetCommitRequest.Builder(txnOffsetCommitRequest).build())
 
     // This is the request expected by the group coordinator.
-    val expectedTnxOffsetCommitRequest = new TxnOffsetCommitRequestData()
+    val expectedTxnOffsetCommitRequest = new TxnOffsetCommitRequestData()
       .setGroupId("group")
       .setMemberId("member")
       .setTopics(List(
@@ -1735,9 +1737,10 @@ class KafkaApisTest {
               .setCommittedOffset(50)).asJava)).asJava)
 
     val future = new CompletableFuture[TxnOffsetCommitResponseData]()
+    when(txnCoordinator.partitionFor(expectedTxnOffsetCommitRequest.transactionalId)).thenReturn(0)
     when(groupCoordinator.commitTransactionalOffsets(
       requestChannelRequest.context,
-      expectedTnxOffsetCommitRequest,
+      expectedTxnOffsetCommitRequest,
       RequestLocal.NoCaching.bufferSupplier
     )).thenReturn(future)
 
@@ -1836,6 +1839,7 @@ class KafkaApisTest {
 
     val requestLocal = RequestLocal.withThreadConfinedCaching
     val future = new CompletableFuture[TxnOffsetCommitResponseData]()
+    when(txnCoordinator.partitionFor(offsetCommitRequest.data.transactionalId)).thenReturn(0)
     when(groupCoordinator.commitTransactionalOffsets(
       request.context,
       offsetCommitRequest.data,

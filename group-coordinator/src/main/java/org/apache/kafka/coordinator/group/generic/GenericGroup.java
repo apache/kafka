@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group.generic;
 
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
+import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
@@ -32,6 +33,8 @@ import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.Group;
+import org.apache.kafka.coordinator.group.Record;
+import org.apache.kafka.coordinator.group.RecordHelpers;
 import org.slf4j.Logger;
 
 import java.nio.ByteBuffer;
@@ -54,6 +57,7 @@ import static org.apache.kafka.coordinator.group.generic.GenericGroupState.COMPL
 import static org.apache.kafka.coordinator.group.generic.GenericGroupState.DEAD;
 import static org.apache.kafka.coordinator.group.generic.GenericGroupState.EMPTY;
 import static org.apache.kafka.coordinator.group.generic.GenericGroupState.PREPARING_REBALANCE;
+import static org.apache.kafka.coordinator.group.generic.GenericGroupState.STABLE;
 
 /**
  * This class holds metadata for a generic group where the
@@ -850,6 +854,51 @@ public class GenericGroup implements Group {
     }
 
     /**
+     * Validates the OffsetDelete request.
+     */
+    @Override
+    public void validateOffsetDelete() throws ApiException {
+        switch (currentState()) {
+            case DEAD:
+                throw new GroupIdNotFoundException(String.format("Group %s is in dead state.", groupId));
+            case STABLE:
+            case PREPARING_REBALANCE:
+            case COMPLETING_REBALANCE:
+                if (!usesConsumerGroupProtocol()) {
+                    throw Errors.NON_EMPTY_GROUP.exception();
+                }
+                break;
+            default:
+        }
+    }
+
+    /**
+     * Validates the DeleteGroups request.
+     */
+    @Override
+    public void validateDeleteGroup() throws ApiException {
+        switch (currentState()) {
+            case DEAD:
+                throw new GroupIdNotFoundException(String.format("Group %s is in dead state.", groupId));
+            case STABLE:
+            case PREPARING_REBALANCE:
+            case COMPLETING_REBALANCE:
+                throw Errors.NON_EMPTY_GROUP.exception();
+            default:
+        }
+    }
+
+    /**
+     * Populates the list of records with tombstone(s) for deleting the group.
+     *
+     * @param records The list of records.
+     */
+    @Override
+    public void createGroupTombstoneRecords(List<Record> records) {
+        records.add(RecordHelpers.newGroupMetadataTombstoneRecord(groupId()));
+    }
+
+    /**
      * Verify the member id is up to date for static members. Return true if both conditions met:
      *   1. given member is a known static member to group
      *   2. group stored member id doesn't match with given member id
@@ -1015,10 +1064,10 @@ public class GenericGroup implements Group {
 
     /**
      * Returns true if the consumer group is actively subscribed to the topic. When the consumer
-     * group does not know, because the information is not available yet or because the it has
+     * group does not know, because the information is not available yet or because it has
      * failed to parse the Consumer Protocol, it returns true to be safe.
      *
-     * @param topic the topic name.
+     * @param topic The topic name.
      * @return whether the group is subscribed to the topic.
      */
     public boolean isSubscribedToTopic(String topic) {

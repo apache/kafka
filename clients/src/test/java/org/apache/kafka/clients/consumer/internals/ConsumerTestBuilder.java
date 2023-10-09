@@ -76,6 +76,7 @@ public class ConsumerTestBuilder implements Closeable {
     final OffsetsRequestManager offsetsRequestManager;
     final CoordinatorRequestManager coordinatorRequestManager;
     final CommitRequestManager commitRequestManager;
+    final HeartbeatRequestManager heartbeatRequestManager;
     final TopicMetadataRequestManager topicMetadataRequestManager;
     final FetchRequestManager fetchRequestManager;
     final RequestManagers requestManagers;
@@ -152,6 +153,15 @@ public class ConsumerTestBuilder implements Closeable {
                 config,
                 coordinatorRequestManager,
                 groupState));
+        MembershipManager membershipManager = new MembershipManagerImpl(groupState.groupId);
+        this.heartbeatRequestManager = new HeartbeatRequestManager(
+                time,
+                logContext,
+                config,
+                coordinatorRequestManager,
+                subscriptions,
+                membershipManager,
+                backgroundEventHandler);
         this.fetchBuffer = new FetchBuffer(logContext);
         this.fetchRequestManager = spy(new FetchRequestManager(logContext,
                 time,
@@ -168,7 +178,8 @@ public class ConsumerTestBuilder implements Closeable {
                 topicMetadataRequestManager,
                 fetchRequestManager,
                 Optional.of(coordinatorRequestManager),
-                Optional.of(commitRequestManager));
+                Optional.of(commitRequestManager),
+                Optional.of(heartbeatRequestManager));
         this.applicationEventProcessor = spy(new ApplicationEventProcessor(
                 logContext,
                 applicationEventQueue,

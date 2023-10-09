@@ -1196,9 +1196,8 @@ public class RequestResponseTest {
             .setThrottleTimeMs(1000)
             .setMemberId("memberid")
             .setMemberEpoch(11)
-            .setShouldComputeAssignment(false)
             .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()
-                .setAssignedTopicPartitions(Arrays.asList(
+                .setTopicPartitions(Arrays.asList(
                     new ConsumerGroupHeartbeatResponseData.TopicPartitions()
                         .setTopicId(Uuid.randomUuid())
                         .setPartitions(Arrays.asList(0, 1, 2)),
