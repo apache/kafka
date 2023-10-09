@@ -19,10 +19,10 @@ package kafka.tools
 
 import java.io.PrintStream
 import java.nio.file.{Files, Paths}
-import kafka.server.{BrokerMetadataCheckpoint, KafkaConfig, MetaProperties, RawMetaProperties}
+import kafka.server.{BrokerMetadataCheckpoint, KafkaConfig, KafkaServer, MetaProperties, RawMetaProperties}
 import kafka.utils.{Exit, Logging}
 import net.sourceforge.argparse4j.ArgumentParsers
-import net.sourceforge.argparse4j.impl.Arguments.{store, storeTrue, append}
+import net.sourceforge.argparse4j.impl.Arguments.{append, store, storeTrue}
 import net.sourceforge.argparse4j.inf.Namespace
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.utils.Utils
@@ -32,7 +32,6 @@ import org.apache.kafka.common.metadata.FeatureLevelRecord
 import org.apache.kafka.common.metadata.UserScramCredentialRecord
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.scram.internals.ScramFormatter
-
 
 import java.util
 import java.util.Base64
@@ -281,7 +280,7 @@ object StorageTool extends Logging {
         }
       } else {
         foundDirectories += directoryPath.toString
-        val metaPath = directoryPath.resolve("meta.properties")
+        val metaPath = directoryPath.resolve(KafkaServer.brokerMetaPropsFile)
         if (!Files.exists(metaPath)) {
           problems += s"$directoryPath is not formatted."
         } else {
@@ -410,7 +409,7 @@ object StorageTool extends Logging {
     }
 
     val unformattedDirectories = directories.filter(directory => {
-      if (!Files.isDirectory(Paths.get(directory)) || !Files.exists(Paths.get(directory, "meta.properties"))) {
+      if (!Files.isDirectory(Paths.get(directory)) || !Files.exists(Paths.get(directory, KafkaServer.brokerMetaPropsFile))) {
           true
       } else if (!ignoreFormatted) {
         throw new TerseFailure(s"Log directory $directory is already formatted. " +
@@ -429,9 +428,9 @@ object StorageTool extends Logging {
         case e: Throwable => throw new TerseFailure(s"Unable to create storage " +
           s"directory $directory: ${e.getMessage}")
       }
-      val metaPropertiesPath = Paths.get(directory, "meta.properties")
+      val metaPropertiesPath = Paths.get(directory, KafkaServer.brokerMetaPropsFile)
       val checkpoint = new BrokerMetadataCheckpoint(metaPropertiesPath.toFile)
-      checkpoint.write(metaProperties.toProperties)
+      checkpoint.write(metaProperties.toPropertiesWithDirectoryId(Uuid.randomUuid().toString))
 
       val bootstrapDirectory = new BootstrapDirectory(directory, Optional.empty())
       bootstrapDirectory.writeBinaryFile(bootstrapMetadata)
