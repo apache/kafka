@@ -37,19 +37,19 @@ public class OffsetExpirationConditionImpl implements OffsetExpirationCondition 
      * exceeded the offset retention.
      *
      * @param offset              The offset and metadata.
-     * @param currentTimestamp    The current timestamp.
+     * @param currentTimestampMs    The current timestamp.
      * @param offsetsRetentionMs  The offsets retention in milliseconds.
      *
      * @return Whether the given offset is expired or not.
      */
     @Override
-    public boolean isOffsetExpired(OffsetAndMetadata offset, long currentTimestamp, long offsetsRetentionMs) {
+    public boolean isOffsetExpired(OffsetAndMetadata offset, long currentTimestampMs, long offsetsRetentionMs) {
         if (offset.expireTimestampMs.isPresent()) {
             // Older versions with explicit expire_timestamp field => old expiration semantics is used
-            return currentTimestamp >= offset.expireTimestampMs.getAsLong();
+            return currentTimestampMs >= offset.expireTimestampMs.getAsLong();
         } else {
             // Current version with no per partition retention
-            return currentTimestamp - baseTimestamp.apply(offset) >= offsetsRetentionMs;
+            return currentTimestampMs - baseTimestamp.apply(offset) >= offsetsRetentionMs;
         }
     }
 

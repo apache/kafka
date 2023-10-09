@@ -1116,7 +1116,7 @@ public class GenericGroup implements Group {
      */
     public boolean isSubscribedToTopic(String topic, boolean isSubscribedIfEmptySubscriptions) {
         return subscribedTopics.map(topics -> topics.contains(topic))
-            .orElse(isSubscribedIfEmptySubscriptions);
+            .orElse(usesConsumerGroupProtocol());
     }
 
     /**

@@ -567,7 +567,7 @@ public class OffsetMetadataManager {
         // We expect the group to exist.
         Group group = groupMetadataManager.group(groupId);
         Set<TopicPartition> expiredPartitions = new HashSet<>();
-        long currentTimestamp = time.milliseconds();
+        long currentTimestampMs = time.milliseconds();
         Optional<OffsetExpirationCondition> offsetExpirationCondition = group.offsetExpirationCondition();
 
         if (!offsetExpirationCondition.isPresent()) {
@@ -580,7 +580,7 @@ public class OffsetMetadataManager {
         offsetsByTopic.forEach((topic, partitions) -> {
             if (!group.isSubscribedToTopic(topic, false)) {
                 partitions.forEach((partition, offsetAndMetadata) -> {
-                    if (condition.isOffsetExpired(offsetAndMetadata, currentTimestamp, config.offsetsRetentionMs)) {
+                    if (condition.isOffsetExpired(offsetAndMetadata, currentTimestampMs, config.offsetsRetentionMs)) {
                         expiredPartitions.add(appendOffsetCommitTombstone(groupId, topic, partition, records));
                     } else {
                         hasAllOffsetsExpired.set(false);

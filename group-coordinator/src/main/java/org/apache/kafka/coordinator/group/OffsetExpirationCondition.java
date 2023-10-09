@@ -27,10 +27,11 @@ public interface OffsetExpirationCondition {
      * Given an offset metadata and offsets retention, return whether the offset is expired or not.
      *
      * @param offset               The offset metadata.
-     * @param currentTimestamp     The current timestamp.
+     * @param currentTimestampMs     The current timestamp.
      * @param offsetsRetentionMs   The offset retention.
      *
      * @return Whether the offset is considered expired or not.
      */
-    boolean isOffsetExpired(OffsetAndMetadata offset, long currentTimestamp, long offsetsRetentionMs);
+    boolean isOffsetExpired(OffsetAndMetadata offset, long currentTimestampMs, long offsetsRetentionMs);
+
 }
