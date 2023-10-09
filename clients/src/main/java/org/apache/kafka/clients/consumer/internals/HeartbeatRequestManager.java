@@ -60,6 +60,7 @@ import java.util.Collections;
  * <p>See {@link HeartbeatRequestState} for more details.</p>
  */
 public class HeartbeatRequestManager implements RequestManager {
+
     private final Logger logger;
     private final Time time;
 
@@ -95,8 +96,8 @@ public class HeartbeatRequestManager implements RequestManager {
     private final BackgroundEventHandler backgroundEventHandler;
 
     public HeartbeatRequestManager(
-        final Time time,
         final LogContext logContext,
+        final Time time,
         final ConsumerConfig config,
         final CoordinatorRequestManager coordinatorRequestManager,
         final SubscriptionState subscriptions,
@@ -148,18 +149,14 @@ public class HeartbeatRequestManager implements RequestManager {
      */
     @Override
     public NetworkClientDelegate.PollResult poll(long currentTimeMs) {
-        if (!coordinatorRequestManager.coordinator().isPresent() || !membershipManager.shouldSendHeartbeat()) {
-            return new NetworkClientDelegate.PollResult(
-                Long.MAX_VALUE, Collections.emptyList());
-        }
+        if (!coordinatorRequestManager.coordinator().isPresent() || !membershipManager.shouldSendHeartbeat())
+            return NetworkClientDelegate.PollResult.EMPTY;
 
         // TODO: We will need to send a heartbeat response after partitions being revoke. This needs to be
         //  implemented either with or after the partition reconciliation logic.
-        if (!heartbeatRequestState.canSendRequest(currentTimeMs)) {
-            return new NetworkClientDelegate.PollResult(
-                heartbeatRequestState.nextHeartbeatMs(currentTimeMs),
-                Collections.emptyList());
-        }
+        if (!heartbeatRequestState.canSendRequest(currentTimeMs))
+            return new NetworkClientDelegate.PollResult(heartbeatRequestState.nextHeartbeatMs(currentTimeMs));
+
         this.heartbeatRequestState.onSendAttempt(currentTimeMs);
         NetworkClientDelegate.UnsentRequest request = makeHeartbeatRequest();
         return new NetworkClientDelegate.PollResult(heartbeatRequestState.heartbeatIntervalMs, Collections.singletonList(request));

@@ -51,6 +51,7 @@ import java.util.Queue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 
+import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_REQUEST_TIMEOUT_MS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -88,8 +89,8 @@ public class ConsumerNetworkThreadTest {
         client = testBuilder.client;
         applicationEventsQueue = testBuilder.applicationEventQueue;
         applicationEventProcessor = testBuilder.applicationEventProcessor;
-        coordinatorManager = testBuilder.coordinatorRequestManager;
-        commitManager = testBuilder.commitRequestManager;
+        coordinatorManager = testBuilder.coordinatorRequestManager.orElseThrow(IllegalStateException::new);
+        commitManager = testBuilder.commitRequestManager.orElseThrow(IllegalStateException::new);
         offsetsRequestManager = testBuilder.offsetsRequestManager;
         consumerNetworkThread = testBuilder.consumerNetworkThread;
         consumerNetworkThread.initializeResources();
@@ -231,7 +232,7 @@ public class ConsumerNetworkThreadTest {
                                 .setKeyType(FindCoordinatorRequest.CoordinatorType.TRANSACTION.id())
                                 .setKey("foobar")),
                 Optional.empty());
-        req.setTimer(time, ConsumerTestBuilder.REQUEST_TIMEOUT_MS);
+        req.setTimer(time, DEFAULT_REQUEST_TIMEOUT_MS);
 
         // purposely setting a non-MAX time to ensure it is returning Long.MAX_VALUE upon success
         NetworkClientDelegate.PollResult success = new NetworkClientDelegate.PollResult(

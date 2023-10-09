@@ -161,8 +161,8 @@ public class RequestManagers implements Closeable {
                     commit = new CommitRequestManager(time, logContext, subscriptions, config, coordinator, groupState);
                     MembershipManager membershipManager = new MembershipManagerImpl(groupState.groupId);
                     heartbeatRequestManager = new HeartbeatRequestManager(
-                            time,
                             logContext,
+                            time,
                             config,
                             coordinator,
                             subscriptions,

@@ -71,14 +71,19 @@ import static org.mockito.Mockito.when;
 public class PrototypeAsyncConsumerTest {
 
     private PrototypeAsyncConsumer<?, ?> consumer;
-    private static final Optional<String> DEFAULT_GROUP_ID = Optional.of("group.id");
-
     private ConsumerTestBuilder.PrototypeAsyncConsumerTestBuilder testBuilder;
     private ApplicationEventHandler applicationEventHandler;
 
     @BeforeEach
     public void setup() {
-        setup(DEFAULT_GROUP_ID);
+        // By default, the consumer is part of a group.
+        setup(ConsumerTestBuilder.createDefaultGroupInformation());
+    }
+
+    private void setup(Optional<ConsumerTestBuilder.GroupInformation> groupInfo) {
+        testBuilder = new ConsumerTestBuilder.PrototypeAsyncConsumerTestBuilder(groupInfo);
+        applicationEventHandler = testBuilder.applicationEventHandler;
+        consumer = testBuilder.consumer;
     }
 
     @AfterEach
@@ -88,10 +93,10 @@ public class PrototypeAsyncConsumerTest {
         }
     }
 
-    private void setup(Optional<String> groupIdOpt) {
-        testBuilder = new ConsumerTestBuilder.PrototypeAsyncConsumerTestBuilder(groupIdOpt);
-        applicationEventHandler = testBuilder.applicationEventHandler;
-        consumer = testBuilder.consumer;
+    private void resetWithEmptyGroupId() {
+        // Create a consumer that is not configured as part of a group.
+        cleanup();
+        setup(Optional.empty());
     }
 
     @Test
@@ -101,8 +106,8 @@ public class PrototypeAsyncConsumerTest {
 
     @Test
     public void testInvalidGroupId() {
-        cleanup();
-        setup(Optional.empty());
+        // Create consumer without group id
+        resetWithEmptyGroupId();
         assertThrows(InvalidGroupIdException.class, () -> consumer.committed(new HashSet<>()));
     }
 
@@ -336,19 +341,13 @@ public class PrototypeAsyncConsumerTest {
 
     @Test
     public void testRefreshCommittedOffsetsShouldNotResetIfFailedWithTimeout() {
-        // Create consumer with group id to enable committed offset usage
-        cleanup();
-        setup(Optional.of("consumer-group-1"));
-
         testUpdateFetchPositionsWithFetchCommittedOffsetsTimeout(true);
     }
 
     @Test
     public void testRefreshCommittedOffsetsNotCalledIfNoGroupId() {
         // Create consumer without group id so committed offsets are not used for updating positions
-        cleanup();
-        setup(Optional.empty());
-
+        resetWithEmptyGroupId();
         testUpdateFetchPositionsWithFetchCommittedOffsetsTimeout(false);
     }
 
@@ -383,10 +382,6 @@ public class PrototypeAsyncConsumerTest {
                                                     Map<TopicPartition, OffsetAndMetadata> committedOffsets) {
         CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> committedFuture = new CompletableFuture<>();
         committedFuture.complete(committedOffsets);
-
-        // Create consumer with group id to enable committed offset usage
-        cleanup();
-        setup(Optional.of("consumer-group-id"));
         consumer.assign(partitions);
 
         try (MockedConstruction<OffsetFetchApplicationEvent> ignored = offsetFetchEventMocker(committedFuture)) {
