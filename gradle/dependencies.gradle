@@ -159,9 +159,6 @@ versions += [
   slf4j: "1.7.36",
   snappy: "1.1.10.5",
   spotbugs: "4.7.3",
-  // New version of Swagger 2.2.14 requires minimum JDK 11.
-  swaggerAnnotations: "2.2.8",
-  swaggerJaxrs2: "2.2.8",
   zinc: "1.9.2",
   zookeeper: "3.8.2",
   zstd: "1.5.5-6"
@@ -254,8 +251,8 @@ libs += [
   slf4jApi: "org.slf4j:slf4j-api:$versions.slf4j",
   slf4jlog4j: "org.slf4j:slf4j-log4j12:$versions.slf4j",
   snappy: "org.xerial.snappy:snappy-java:$versions.snappy",
-  swaggerAnnotations: "io.swagger.core.v3:swagger-annotations:$versions.swaggerAnnotations",
-  swaggerJaxrs2: "io.swagger.core.v3:swagger-jaxrs2:$versions.swaggerJaxrs2",
+  swaggerAnnotations: "io.swagger.core.v3:swagger-annotations:$swaggerVersion",
+  swaggerJaxrs2: "io.swagger.core.v3:swagger-jaxrs2:$swaggerVersion",
   zookeeper: "org.apache.zookeeper:zookeeper:$versions.zookeeper",
   jfreechart: "jfreechart:jfreechart:$versions.jfreechart",
   mavenArtifact: "org.apache.maven:maven-artifact:$versions.mavenArtifact",
