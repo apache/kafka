@@ -563,7 +563,7 @@ class RemoteIndexCacheTest {
     // create Corrupted Index File in remote index cache
     createCorruptedIndexFile(indexType, cache.cacheDir())
     val entry = cache.getIndexEntry(rlsMetadata)
-    // Test would fail if it throws corrupt Exception
+    // Test would fail if it throws Exception other than CorruptIndexException
     val offsetIndexFile = entry.offsetIndex.file().toPath
     val txnIndexFile = entry.txnIndex.file().toPath
     val timeIndexFile = entry.timeIndex.file().toPath
@@ -649,6 +649,8 @@ class RemoteIndexCacheTest {
     // rsm should not be called to fetch offset Index
     verifyFetchIndexInvocation(0, Seq(IndexType.OFFSET))
     verifyFetchIndexInvocation(1, Seq(IndexType.TIMESTAMP))
+    // Transaction index would be fetched again
+    // as previous getIndexEntry failed before fetchTransactionIndex
     verifyFetchIndexInvocation(1, Seq(IndexType.TRANSACTION))
   }
 
