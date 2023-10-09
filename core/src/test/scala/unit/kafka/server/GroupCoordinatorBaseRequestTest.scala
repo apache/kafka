@@ -21,10 +21,13 @@ import kafka.test.junit.RaftClusterInvocationContext.RaftClusterInstance
 import kafka.test.junit.ZkClusterInvocationContext.ZkClusterInstance
 import kafka.utils.{NotNothing, TestUtils}
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.message.DeleteGroupsResponseData.{DeletableGroupResult, DeletableGroupResultCollection}
 import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroup
-import org.apache.kafka.common.message.{ConsumerGroupHeartbeatRequestData, DescribeGroupsRequestData, JoinGroupRequestData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetFetchResponseData, SyncGroupRequestData}
+import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
+import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse
+import org.apache.kafka.common.message.{ConsumerGroupHeartbeatRequestData, ConsumerGroupHeartbeatResponseData, DeleteGroupsRequestData, DeleteGroupsResponseData, DescribeGroupsRequestData, JoinGroupRequestData, LeaveGroupResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetFetchResponseData, SyncGroupRequestData}
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, ConsumerGroupHeartbeatRequest, ConsumerGroupHeartbeatResponse, DescribeGroupsRequest, DescribeGroupsResponse, JoinGroupRequest, JoinGroupResponse, OffsetCommitRequest, OffsetCommitResponse, OffsetFetchRequest, OffsetFetchResponse, SyncGroupRequest, SyncGroupResponse}
+import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, ConsumerGroupHeartbeatRequest, ConsumerGroupHeartbeatResponse, DeleteGroupsRequest, DeleteGroupsResponse, DescribeGroupsRequest, DescribeGroupsResponse, JoinGroupRequest, JoinGroupResponse, LeaveGroupRequest, LeaveGroupResponse, OffsetCommitRequest, OffsetCommitResponse, OffsetFetchRequest, OffsetFetchResponse, SyncGroupRequest, SyncGroupResponse}
 import org.junit.jupiter.api.Assertions.{assertEquals, fail}
 
 import java.util.Comparator
@@ -286,6 +289,128 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     val describeGroupsResponse = connectAndReceive[DescribeGroupsResponse](describeGroupsRequest)
 
     describeGroupsResponse.data().groups().asScala.toList
+  }
+
+  protected def consumerGroupHeartbeat(
+    groupId: String,
+    memberId: String,
+    memberEpoch: Int,
+    instanceId: String,
+    rackId: String,
+    rebalanceTimeoutMs: Int,
+    serverAssignor: String,
+    subscribedTopicNames: List[String],
+    subscribedTopicRegex: String,
+    topicPartitions: List[ConsumerGroupHeartbeatRequestData.TopicPartitions]
+  ): ConsumerGroupHeartbeatResponseData = {
+    val consumerGroupHeartbeatRequest = new ConsumerGroupHeartbeatRequest.Builder(
+      new ConsumerGroupHeartbeatRequestData()
+        .setGroupId(groupId)
+        .setMemberId(memberId)
+        .setMemberEpoch(memberEpoch)
+        .setInstanceId(instanceId)
+        .setRackId(rackId)
+        .setRebalanceTimeoutMs(rebalanceTimeoutMs)
+        .setSubscribedTopicNames(subscribedTopicNames.asJava)
+        .setSubscribedTopicRegex(subscribedTopicRegex)
+        .setServerAssignor(serverAssignor)
+        .setTopicPartitions(topicPartitions.asJava),
+      true
+    ).build()
+
+    // Send the request until receiving a successful response. There is a delay
+    // here because the group coordinator is loaded in the background.
+    var consumerGroupHeartbeatResponse: ConsumerGroupHeartbeatResponse = null
+    TestUtils.waitUntilTrue(() => {
+      consumerGroupHeartbeatResponse = connectAndReceive[ConsumerGroupHeartbeatResponse](consumerGroupHeartbeatRequest)
+      consumerGroupHeartbeatResponse.data.errorCode == Errors.NONE.code
+    }, msg = s"Could not heartbeat successfully. Last response $consumerGroupHeartbeatResponse.")
+
+    consumerGroupHeartbeatResponse.data()
+  }
+
+  protected def leaveGroupWithNewProtocol(
+    groupId: String,
+    memberId: String
+  ): ConsumerGroupHeartbeatResponseData = {
+    consumerGroupHeartbeat(
+      groupId = groupId,
+      memberId = memberId,
+      memberEpoch = ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH,
+      instanceId = null,
+      rackId = null,
+      rebalanceTimeoutMs = -1,
+      subscribedTopicNames = null,
+      subscribedTopicRegex = null,
+      serverAssignor = null,
+      topicPartitions = null,
+      enableUnstableLastVersion = true
+    )
+  }
+
+  protected def leaveGroupWithOldProtocol(
+    groupId: String,
+    memberIds: List[String],
+    expectedLeaveGroupError: Errors,
+    expectedMemberErrors: List[Errors]
+  ): Unit = {
+    if (memberIds.size != expectedMemberErrors.size) {
+      fail("genericGroupLeave: memberIds and expectedMemberErrors have unmatched sizes.")
+    }
+
+    val leaveGroupRequest = new LeaveGroupRequest.Builder(
+      groupId,
+      memberIds.map(memberId => new MemberIdentity().setMemberId(memberId)).asJava
+    ).build()
+
+    val expectedResponseData = new LeaveGroupResponseData()
+      .setErrorCode(expectedLeaveGroupError.code())
+      .setMembers(List.tabulate(memberIds.length) { i =>
+        new MemberResponse()
+          .setMemberId(memberIds(i))
+          .setGroupInstanceId(null)
+          .setErrorCode(expectedMemberErrors(i).code())
+      }.asJava)
+
+    val leaveGroupResponse = connectAndReceive[LeaveGroupResponse](leaveGroupRequest)
+    assertEquals(expectedResponseData, leaveGroupResponse.data())
+  }
+
+  protected def leaveGroup(
+    groupId: String,
+    memberId: String,
+    useNewProtocol: Boolean
+  ): Unit = {
+    if (useNewProtocol) {
+      leaveGroupWithNewProtocol(groupId, memberId)
+    } else {
+      leaveGroupWithOldProtocol(groupId, List(memberId), Errors.NONE, List(Errors.NONE))
+    }
+  }
+
+  protected def deleteGroups(
+    groupIds: List[String],
+    expectedErrors: List[Errors],
+    version: Short
+  ): Unit = {
+    if (groupIds.size != expectedErrors.size) {
+      fail("deleteGroups: groupIds and expectedErrors have unmatched sizes.")
+    }
+
+    val deleteGroupsRequest = new DeleteGroupsRequest.Builder(
+      new DeleteGroupsRequestData()
+        .setGroupsNames(groupIds.asJava)
+    ).build(version)
+
+    val expectedResponseData = new DeleteGroupsResponseData()
+      .setResults(new DeletableGroupResultCollection(List.tabulate(groupIds.length) { i =>
+        new DeletableGroupResult()
+          .setGroupId(groupIds(i))
+          .setErrorCode(expectedErrors(i).code())
+      }.asJava.iterator()))
+
+    val deleteGroupsResponse = connectAndReceive[DeleteGroupsResponse](deleteGroupsRequest)
+    assertEquals(expectedResponseData.results().asScala.toSet, deleteGroupsResponse.data().results().asScala.toSet)
   }
 
   protected def connectAndReceive[T <: AbstractResponse](
