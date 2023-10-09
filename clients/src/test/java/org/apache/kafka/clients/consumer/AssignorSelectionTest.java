@@ -23,6 +23,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class AssignorSelectionTest {
 
@@ -51,6 +52,7 @@ public class AssignorSelectionTest {
         String assignorName = "uniform";
         AssignorSelection selection = AssignorSelection.newServerAssignor(assignorName);
         assertEquals(AssignorSelection.Type.SERVER, selection.type());
-        assertEquals(assignorName, selection.serverAssignor());
+        assertTrue(selection.serverAssignor().isPresent());
+        assertEquals(assignorName, selection.serverAssignor().get());
     }
 }
