@@ -33,5 +33,4 @@ public interface OffsetExpirationCondition {
      * @return Whether the offset is considered expired or not.
      */
     boolean isOffsetExpired(OffsetAndMetadata offset, long currentTimestampMs, long offsetsRetentionMs);
-
 }

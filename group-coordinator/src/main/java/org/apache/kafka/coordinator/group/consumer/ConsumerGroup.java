@@ -352,12 +352,11 @@ public class ConsumerGroup implements Group {
      * Returns true if the consumer group is actively subscribed to the topic.
      *
      * @param topic                            The topic name.
-     * @param isSubscribedIfEmptySubscriptions Whether to consider an empty topic subscriptions subscribed or not.
      *
      * @return Whether the group is subscribed to the topic.
      */
     @Override
-    public boolean isSubscribedToTopic(String topic, boolean isSubscribedIfEmptySubscriptions) {
+    public boolean isSubscribedToTopic(String topic) {
         return subscribedTopicNames.containsKey(topic);
     }
 

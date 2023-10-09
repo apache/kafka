@@ -1107,14 +1107,13 @@ public class GenericGroup implements Group {
     /**
      * Returns true if the consumer group is actively subscribed to the topic. When the generic
      * group does not know, because the information is not available yet or because it has
-     * failed to parse the Consumer Protocol, it returns true to be safe.
+     * failed to parse the Consumer Protocol, it returns whether the group is using the consumer protocol.
      *
      * @param topic                            The topic name.
-     * @param isSubscribedIfEmptySubscriptions Whether to consider an empty topic subscriptions subscribed or not.
      *
      * @return whether the group is subscribed to the topic.
      */
-    public boolean isSubscribedToTopic(String topic, boolean isSubscribedIfEmptySubscriptions) {
+    public boolean isSubscribedToTopic(String topic) {
         return subscribedTopics.map(topics -> topics.contains(topic))
             .orElse(usesConsumerGroupProtocol());
     }

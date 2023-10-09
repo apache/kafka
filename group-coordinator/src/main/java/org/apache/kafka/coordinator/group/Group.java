@@ -108,11 +108,10 @@ public interface Group {
      * Returns true if the group is actively subscribed to the topic.
      *
      * @param topic                            The topic name.
-     * @param isSubscribedIfEmptySubscriptions Whether to consider an empty topic subscriptions subscribed or not.
      *
      * @return Whether the group is subscribed to the topic.
      */
-    boolean isSubscribedToTopic(String topic, boolean isSubscribedIfEmptySubscriptions);
+    boolean isSubscribedToTopic(String topic);
     
     /**
      * Populates the list of records with tombstone(s) for deleting the group.

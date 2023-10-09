@@ -1731,7 +1731,7 @@ public class OffsetMetadataManagerTest {
             true
         );
         context.commitOffset("foo", "bar", 0, 100L, 0);
-        assertFalse(group.isSubscribedToTopic("bar", true));
+        assertFalse(group.isSubscribedToTopic("bar"));
         context.testOffsetDeleteWith("foo", "bar", 0, Errors.NONE);
     }
 
@@ -1757,7 +1757,7 @@ public class OffsetMetadataManagerTest {
         );
         group.updateMember(member1);
         context.commitOffset("foo", "bar", 0, 100L, 0);
-        assertTrue(group.isSubscribedToTopic("bar", true));
+        assertTrue(group.isSubscribedToTopic("bar"));
 
         // Delete the offset whose topic partition doesn't exist.
         context.testOffsetDeleteWith("foo", "bar1", 0, Errors.NONE);
@@ -1803,13 +1803,25 @@ public class OffsetMetadataManagerTest {
     }
 
     @Test
-    public void testCleanupExpiredOffsetsGroupDoesNotExist() {
+    public void testCleanupExpiredOffsetsGroupHasNoOffsets() {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder()
             .build();
 
         List<Record> records = new ArrayList<>();
         assertTrue(context.cleanupExpiredOffsets("unknown-group-id", records));
         assertEquals(Collections.emptyList(), records);
+    }
+
+    @Test
+    public void testCleanupExpiredOffsetsGroupDoesNotExist() {
+        GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder()
+            .withGroupMetadataManager(groupMetadataManager)
+            .build();
+
+        when(groupMetadataManager.group("unknown-group-id")).thenThrow(GroupIdNotFoundException.class);
+        context.commitOffset("unknown-group-id", "topic", 0, 100L, 0);
+        assertThrows(GroupIdNotFoundException.class, () -> context.cleanupExpiredOffsets("unknown-group-id", new ArrayList<>()));
     }
 
     @Test
@@ -1859,8 +1871,8 @@ public class OffsetMetadataManagerTest {
         when(groupMetadataManager.group("group-id")).thenReturn(group);
         when(group.offsetExpirationCondition()).thenReturn(Optional.of(
             new OffsetExpirationConditionImpl(offsetAndMetadata -> offsetAndMetadata.commitTimestampMs)));
-        when(group.isSubscribedToTopic("firstTopic", false)).thenReturn(true);
-        when(group.isSubscribedToTopic("secondTopic", false)).thenReturn(false);
+        when(group.isSubscribedToTopic("firstTopic")).thenReturn(true);
+        when(group.isSubscribedToTopic("secondTopic")).thenReturn(false);
 
         List<Record> records = new ArrayList<>();
         assertFalse(context.cleanupExpiredOffsets("group-id", records));
@@ -1877,7 +1889,7 @@ public class OffsetMetadataManagerTest {
         assertEquals(expectedRecords, records);
 
         // Add 2 more commits, then expire all.
-        when(group.isSubscribedToTopic("firstTopic", false)).thenReturn(false);
+        when(group.isSubscribedToTopic("firstTopic")).thenReturn(false);
         context.commitOffset("group-id", "firstTopic", 1, 100L, 0, commitTimestamp + 500);
         context.commitOffset("group-id", "secondTopic", 0, 101L, 0, commitTimestamp + 500);
 

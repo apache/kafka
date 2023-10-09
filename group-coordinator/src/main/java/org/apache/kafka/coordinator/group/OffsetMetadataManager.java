@@ -377,7 +377,7 @@ public class OffsetMetadataManager {
             final OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection responsePartitionCollection =
                 new OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection();
 
-            if (group.isSubscribedToTopic(topic.name(), true)) {
+            if (group.isSubscribedToTopic(topic.name())) {
                 topic.partitions().forEach(partition ->
                     responsePartitionCollection.add(new OffsetDeleteResponseData.OffsetDeleteResponsePartition()
                         .setPartitionIndex(partition.partitionIndex())
@@ -566,7 +566,7 @@ public class OffsetMetadataManager {
 
         // We expect the group to exist.
         Group group = groupMetadataManager.group(groupId);
-        Set<TopicPartition> expiredPartitions = new HashSet<>();
+        Set<String> expiredPartitions = new HashSet<>();
         long currentTimestampMs = time.milliseconds();
         Optional<OffsetExpirationCondition> offsetExpirationCondition = group.offsetExpirationCondition();
 
@@ -578,10 +578,10 @@ public class OffsetMetadataManager {
         OffsetExpirationCondition condition = offsetExpirationCondition.get();
 
         offsetsByTopic.forEach((topic, partitions) -> {
-            if (!group.isSubscribedToTopic(topic, false)) {
+            if (!group.isSubscribedToTopic(topic)) {
                 partitions.forEach((partition, offsetAndMetadata) -> {
                     if (condition.isOffsetExpired(offsetAndMetadata, currentTimestampMs, config.offsetsRetentionMs)) {
-                        expiredPartitions.add(appendOffsetCommitTombstone(groupId, topic, partition, records));
+                        expiredPartitions.add(appendOffsetCommitTombstone(groupId, topic, partition, records).toString());
                     } else {
                         hasAllOffsetsExpired.set(false);
                     }
@@ -592,7 +592,8 @@ public class OffsetMetadataManager {
         });
 
         if (!expiredPartitions.isEmpty()) {
-            log.info("[GroupId {}] Expiring offsets: {}", groupId, expiredPartitions);
+            log.info("[GroupId {}] hasAllOffsetsExpired={}; Expiring offsets of partitions: {}",
+                groupId, hasAllOffsetsExpired, String.join(", ", expiredPartitions));
         }
 
         return hasAllOffsetsExpired.get();
