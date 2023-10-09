@@ -75,8 +75,6 @@ public class ToolsTestUtils {
         }
     }
 
-    public static final String TEST_WITH_PARAMETERIZED_QUORUM_NAME = "{displayName}.quorum={0}";
-
     public static List<Properties> createBrokerProperties(int numConfigs, String zkConnect,
                                                           Map<Integer, String> rackInfo,
                                                           int numPartitions,
