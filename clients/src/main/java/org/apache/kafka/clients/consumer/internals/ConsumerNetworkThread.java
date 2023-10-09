@@ -128,8 +128,6 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
      * </ol>
      */
     void runOnce() {
-        closer.assertOpen("Cannot process consumer application events because the network thread is closed");
-
         // If there are errors processing any events, the error will be thrown immediately. This will have
         // the effect of closing the background thread.
         applicationEventProcessor.process();
