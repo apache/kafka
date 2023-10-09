@@ -43,6 +43,8 @@ import kafka.server.builders.KafkaApisBuilder;
 import kafka.server.metadata.MockConfigRepository;
 import kafka.server.metadata.ZkMetadataCache;
 import kafka.zk.KafkaZkClient;
+
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.message.ApiMessageType;
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataBroker;
@@ -77,6 +79,8 @@ import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.annotations.Warmup;
 import scala.Option;
+import scala.collection.Seq;
+import scala.collection.Seq$;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -112,8 +116,10 @@ public class MetadataRequestBenchmark {
     private KafkaZkClient kafkaZkClient = Mockito.mock(KafkaZkClient.class);
     private Metrics metrics = new Metrics();
     private int brokerId = 1;
+    @SuppressWarnings("unchecked")
     private ZkMetadataCache metadataCache = MetadataCache.zkMetadataCache(brokerId,
-        MetadataVersion.latest(), BrokerFeatures.createEmpty(), null);
+                                                                          MetadataVersion.latest(), BrokerFeatures.createEmpty(),
+                                                                          (Seq<Node>) Seq$.MODULE$.empty());
     private ClientQuotaManager clientQuotaManager = Mockito.mock(ClientQuotaManager.class);
     private ClientRequestQuotaManager clientRequestQuotaManager = Mockito.mock(ClientRequestQuotaManager.class);
     private ControllerMutationQuotaManager controllerMutationQuotaManager = Mockito.mock(ControllerMutationQuotaManager.class);

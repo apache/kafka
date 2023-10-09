@@ -22,6 +22,8 @@ import kafka.server.AlterPartitionManager;
 import kafka.server.BrokerFeatures;
 import kafka.server.BrokerTopicStats;
 import kafka.server.KafkaConfig;
+
+import org.apache.kafka.common.Node;
 import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
 import org.apache.kafka.storage.internals.log.LogConfig;
@@ -63,6 +65,8 @@ import java.util.stream.Collectors;
 
 import scala.collection.JavaConverters;
 import scala.Option;
+import scala.collection.Seq;
+import scala.collection.Seq$;
 
 @Warmup(iterations = 5)
 @Measurement(iterations = 5)
@@ -112,10 +116,11 @@ public class CheckpointBench {
                         1024 * 1024, 32 * 1024 * 1024, Double.MAX_VALUE, 15 * 1000, true), time, MetadataVersion.latest(), 4, false, Option.empty());
         scheduler.startup();
         final BrokerTopicStats brokerTopicStats = new BrokerTopicStats(Optional.empty());
+        @SuppressWarnings("unchecked")
         final MetadataCache metadataCache =
                 MetadataCache.zkMetadataCache(this.brokerProperties.brokerId(),
-                    this.brokerProperties.interBrokerProtocolVersion(),
-                    BrokerFeatures.createEmpty(), null);
+                                              this.brokerProperties.interBrokerProtocolVersion(),
+                                              BrokerFeatures.createEmpty(), (Seq<Node>) Seq$.MODULE$.empty());
         this.quotaManagers =
                 QuotaFactory.instantiate(this.brokerProperties,
                         this.metrics,
