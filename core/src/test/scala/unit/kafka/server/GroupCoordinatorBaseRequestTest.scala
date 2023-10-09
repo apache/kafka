@@ -6,7 +6,7 @@
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -21,9 +21,10 @@ import kafka.test.junit.RaftClusterInvocationContext.RaftClusterInstance
 import kafka.test.junit.ZkClusterInvocationContext.ZkClusterInstance
 import kafka.utils.{NotNothing, TestUtils}
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.message.{ConsumerGroupHeartbeatRequestData, JoinGroupRequestData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetFetchResponseData, SyncGroupRequestData}
+import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroup
+import org.apache.kafka.common.message.{ConsumerGroupHeartbeatRequestData, DescribeGroupsRequestData, JoinGroupRequestData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetFetchResponseData, SyncGroupRequestData}
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, ConsumerGroupHeartbeatRequest, ConsumerGroupHeartbeatResponse, JoinGroupRequest, JoinGroupResponse, OffsetCommitRequest, OffsetCommitResponse, OffsetFetchRequest, OffsetFetchResponse, SyncGroupRequest, SyncGroupResponse}
+import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, ConsumerGroupHeartbeatRequest, ConsumerGroupHeartbeatResponse, DescribeGroupsRequest, DescribeGroupsResponse, JoinGroupRequest, JoinGroupResponse, OffsetCommitRequest, OffsetCommitResponse, OffsetFetchRequest, OffsetFetchResponse, SyncGroupRequest, SyncGroupResponse}
 import org.junit.jupiter.api.Assertions.{assertEquals, fail}
 
 import java.util.Comparator
@@ -190,7 +191,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     }
   }
 
-  protected def joinConsumerGroupWithOldProtocol(groupId: String): (String, Int) = {
+  protected def joinConsumerGroupWithOldProtocol(groupId: String, completeRebalance: Boolean): (String, Int) = {
     val joinGroupRequestData = new JoinGroupRequestData()
       .setGroupId(groupId)
       .setRebalanceTimeoutMs(5 * 50 * 1000)
@@ -200,7 +201,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
         List(
           new JoinGroupRequestData.JoinGroupRequestProtocol()
             .setName("consumer-range")
-            .setMetadata(Array.empty)
+            .setMetadata(Array(1, 2, 3))
         ).asJava.iterator
       ))
 
@@ -220,18 +221,20 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     joinGroupResponse = connectAndReceive[JoinGroupResponse](joinGroupRequest)
     assertEquals(Errors.NONE.code, joinGroupResponse.data.errorCode)
 
-    val syncGroupRequestData = new SyncGroupRequestData()
-      .setGroupId(groupId)
-      .setMemberId(joinGroupResponse.data.memberId)
-      .setGenerationId(joinGroupResponse.data.generationId)
-      .setProtocolType("consumer")
-      .setProtocolName("consumer-range")
-      .setAssignments(List.empty.asJava)
+    if (completeRebalance) {
+      val syncGroupRequestData = new SyncGroupRequestData()
+        .setGroupId(groupId)
+        .setMemberId(joinGroupResponse.data.memberId)
+        .setGenerationId(joinGroupResponse.data.generationId)
+        .setProtocolType("consumer")
+        .setProtocolName("consumer-range")
+        .setAssignments(List.empty.asJava)
 
-    // Send the sync group request to complete the rebalance.
-    val syncGroupRequest = new SyncGroupRequest.Builder(syncGroupRequestData).build()
-    val syncGroupResponse = connectAndReceive[SyncGroupResponse](syncGroupRequest)
-    assertEquals(Errors.NONE.code, syncGroupResponse.data.errorCode)
+      // Send the sync group request to complete the rebalance.
+      val syncGroupRequest = new SyncGroupRequest.Builder(syncGroupRequestData).build()
+      val syncGroupResponse = connectAndReceive[SyncGroupResponse](syncGroupRequest)
+      assertEquals(Errors.NONE.code, syncGroupResponse.data.errorCode)
+    }
 
     (joinGroupResponse.data.memberId, joinGroupResponse.data.generationId)
   }
@@ -267,8 +270,22 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     } else {
       // Note that we don't heartbeat and assume  that the test will
       // complete within the session timeout.
-      joinConsumerGroupWithOldProtocol(groupId)
+      joinConsumerGroupWithOldProtocol(groupId, completeRebalance = true)
     }
+  }
+
+  protected def describeGroups(
+    groupIds: List[String],
+    version: Short
+  ): List[DescribedGroup] = {
+    val describeGroupsRequest = new DescribeGroupsRequest.Builder(
+      new DescribeGroupsRequestData()
+        .setGroups(groupIds.asJava)
+    ).build(version)
+
+    val describeGroupsResponse = connectAndReceive[DescribeGroupsResponse](describeGroupsRequest)
+
+    describeGroupsResponse.data().groups().asScala.toList
   }
 
   protected def connectAndReceive[T <: AbstractResponse](
