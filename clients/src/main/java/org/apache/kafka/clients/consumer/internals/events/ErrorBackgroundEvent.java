@@ -50,8 +50,8 @@ public class ErrorBackgroundEvent extends BackgroundEvent {
     @Override
     public String toString() {
         return "ErrorBackgroundEvent{" +
-                toStringBase() +
-                ", error=" + error +
-                '}';
+            toStringBase() +
+            ", error=" + error +
+            '}';
     }
 }

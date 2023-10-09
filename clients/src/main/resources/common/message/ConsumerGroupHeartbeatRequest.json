@@ -36,7 +36,7 @@
     { "name": "RackId", "type": "string", "versions": "0+",  "nullableVersions": "0+", "default": "null",
       "about": "null if not provided or if it didn't change since the last heartbeat; the rack ID of consumer otherwise." },
     { "name": "RebalanceTimeoutMs", "type": "int32", "versions": "0+", "default": -1,
-      "about": "-1 if it didn't chance since the last heartbeat; the maximum time in milliseconds that the coordinator will wait on the member to revoke its partitions otherwise." },
+      "about": "-1 if it didn't change since the last heartbeat; the maximum time in milliseconds that the coordinator will wait on the member to revoke its partitions otherwise." },
     { "name": "SubscribedTopicNames", "type": "[]string", "versions": "0+", "nullableVersions": "0+", "default": "null", "entityType": "topicName",
       "about": "null if it didn't change since the last heartbeat; the subscribed topic names otherwise." },
     { "name": "SubscribedTopicRegex", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": "null",
