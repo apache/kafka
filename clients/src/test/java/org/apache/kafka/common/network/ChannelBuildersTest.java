@@ -27,6 +27,8 @@ import org.apache.kafka.common.security.auth.SslAuthenticationContext;
 import org.apache.kafka.common.security.auth.AuthenticationContext;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder;
+import org.apache.kafka.common.security.authenticator.DefaultKerberosPrincipalBuilder;
+import org.apache.kafka.common.security.authenticator.DefaultSSLPrincipalBuilder;
 import org.apache.kafka.common.security.kerberos.KerberosShortNamer;
 import org.apache.kafka.common.security.ssl.SslPrincipalMapper;
 import org.junit.jupiter.api.Test;
@@ -78,15 +80,15 @@ public class ChannelBuildersTest {
     }
 
     @Test
-    public void testCreateCustomKafkaPrincipalBuilder() throws UnknownHostException, SSLPeerUnverifiedException {
+    public void testCreateCustomSSLPrincipalBuilder() throws UnknownHostException, SSLPeerUnverifiedException {
         Map<String, Object> configs = new HashMap<>();
-        configs.put(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, CustomKafkaPrincipalBuilder.class);
+        configs.put(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, CustomKafkaSSLPrincipalBuilder.class);
         KerberosShortNamer kerberosShortNamer = mock(KerberosShortNamer.class);
         SslPrincipalMapper sslPrincipalMapper = SslPrincipalMapper.fromRules("DEFAULT");
 
         KafkaPrincipalBuilder builder = ChannelBuilders.createPrincipalBuilder(configs, null, null, kerberosShortNamer, sslPrincipalMapper);
-        assertTrue(builder instanceof CustomKafkaPrincipalBuilder);
-        assertTrue(((CustomKafkaPrincipalBuilder) builder).configured);
+        assertTrue(builder instanceof CustomKafkaSSLPrincipalBuilder);
+        assertTrue(((CustomKafkaSSLPrincipalBuilder) builder).configured);
 
         SSLSession session = mock(SSLSession.class);
         X500Principal x500Principal = new X500Principal("CN=Wmt, OU=ServiceUsers, O=Org, C=US");
@@ -96,6 +98,16 @@ public class ChannelBuildersTest {
         KafkaPrincipal principal = builder.build(sslContext);
         assertEquals(x500Principal.getName(), principal.getName());
         assertEquals(KafkaPrincipal.USER_TYPE, principal.getPrincipalType());
+    }
+
+    @Test
+    public void testCreateCustomKerberosPrincipalBuilder() throws UnknownHostException, SSLPeerUnverifiedException {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, CustomKafkaKerberosPrincipalBuilder.class);
+        KerberosShortNamer kerberosShortNamer = mock(KerberosShortNamer.class);
+        KafkaPrincipalBuilder builder = ChannelBuilders.createPrincipalBuilder(configs, null, null, kerberosShortNamer, null);
+        assertTrue(builder instanceof CustomKafkaKerberosPrincipalBuilder);
+        assertTrue(((CustomKafkaKerberosPrincipalBuilder) builder).configured);
     }
 
     @Test
@@ -207,12 +219,17 @@ public class ChannelBuildersTest {
         }
     }
 
-    public static class CustomKafkaPrincipalBuilder extends DefaultKafkaPrincipalBuilder implements Configurable {
+    public static class CustomKafkaSSLPrincipalBuilder extends DefaultSSLPrincipalBuilder implements Configurable {
         private boolean configured = false;
 
-        public CustomKafkaPrincipalBuilder(KerberosShortNamer kerberosShortNamer, SslPrincipalMapper sslPrincipalMapper) {
-            super(kerberosShortNamer, sslPrincipalMapper);
+        @Override
+        public void configure(Map<String, ?> configs) {
+            configured = true;
         }
+    }
+
+    public static class CustomKafkaKerberosPrincipalBuilder extends DefaultKerberosPrincipalBuilder implements Configurable {
+        private boolean configured = false;
 
         @Override
         public void configure(Map<String, ?> configs) {
