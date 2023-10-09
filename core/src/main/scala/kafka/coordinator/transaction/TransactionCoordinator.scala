@@ -452,8 +452,8 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
     txnMarkerChannelManager.removeMarkersForTxnTopicPartition(txnTopicPartitionId)
 
     // Now load the partition.
-    txnManager.loadTransactionsForTxnTopicPartition(txnTopicPartitionId, coordinatorEpoch,
-      txnMarkerChannelManager.addTxnMarkersToSend, txnManager.hasTxnStateLoaded(txnTopicPartitionId))
+    txnManager.maybeLoadTransactionsAndBumpEpochForTxnTopicPartition(txnTopicPartitionId, coordinatorEpoch,
+      txnMarkerChannelManager.addTxnMarkersToSend, txnManager.txnStateLoaded(txnTopicPartitionId))
   }
 
   /**

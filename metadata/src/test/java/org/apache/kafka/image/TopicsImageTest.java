@@ -221,7 +221,7 @@ public class TopicsImageTest {
                 changes.electedLeaders().keySet()
         );
         assertEquals(
-                new HashSet<>(Arrays.asList(new TopicPartition("baz", 0))),
+            new HashSet<>(Arrays.asList(new TopicPartition("baz", 0))),
                 changes.updatedLeaders().keySet()
         );
         assertEquals(
@@ -282,6 +282,7 @@ public class TopicsImageTest {
         imageRecords.addAll(topicRecords);
         testToImage(finalImage, Optional.of(imageRecords));
     }
+
     @Test
     public void testUpdatedLeaders() {
         int localId = 3;
