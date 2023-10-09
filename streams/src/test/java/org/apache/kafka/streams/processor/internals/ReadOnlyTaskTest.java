@@ -28,7 +28,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.function.Consumer;
 
-import static java.util.Collections.emptySet;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.test.StreamsTestUtils.TaskBuilder.standbyTask;
 import static org.apache.kafka.test.StreamsTestUtils.TaskBuilder.statefulTask;
@@ -193,10 +192,10 @@ class ReadOnlyTaskTest {
                     parameters[i] = 0;
                     break;
                 case "java.util.Set":
-                    parameters[i] = emptySet();
+                    parameters[i] = Collections.emptySet();
                     break;
                 case "java.util.Collection":
-                    parameters[i] = emptySet();
+                    parameters[i] = Collections.emptySet();
                     break;
                 case "java.util.Map":
                     parameters[i] = Collections.emptyMap();
@@ -211,7 +210,7 @@ class ReadOnlyTaskTest {
                     parameters[i] = (Consumer) ignored -> { };
                     break;
                 case "java.lang.Iterable":
-                    parameters[i] = emptySet();
+                    parameters[i] = Collections.emptySet();
                     break;
                 case "org.apache.kafka.common.utils.Time":
                     parameters[i] = Time.SYSTEM;
