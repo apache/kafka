@@ -113,12 +113,15 @@ class Replica(val brokerId: Int, val topicPartition: TopicPartition, val metadat
     brokerEpoch: Long
   ): Unit = {
     replicaState.updateAndGet { currentReplicaState =>
-      val cachedBrokerEpoch = if (metadataCache.isInstanceOf[KRaftMetadataCache])
-        metadataCache.asInstanceOf[KRaftMetadataCache].getAliveBrokerEpoch(brokerId) else Option(-1L)
-      // Fence the update if it provides a stale broker epoch.
-      if (brokerEpoch != -1 && cachedBrokerEpoch.exists(_ > brokerEpoch)) {
-        throw new NotLeaderOrFollowerException(s"Received stale fetch state update. broker epoch=$brokerEpoch " +
-          s"vs expected=${cachedBrokerEpoch.get}")
+      metadataCache match {
+        case kRaftMetadataCache: KRaftMetadataCache =>
+          val cachedBrokerEpoch = kRaftMetadataCache.getAliveBrokerEpoch(brokerId)
+          // Fence the update if it provides a stale broker epoch.
+          if (brokerEpoch != -1 && cachedBrokerEpoch.exists(_ != brokerEpoch)) {
+            throw new NotLeaderOrFollowerException(s"Received stale fetch state update. broker epoch=$brokerEpoch " +
+              s"vs expected=${cachedBrokerEpoch.get}")
+          }
+        case _ =>
       }
 
       val lastCaughtUpTime = if (followerFetchOffsetMetadata.messageOffset >= leaderEndOffset) {
