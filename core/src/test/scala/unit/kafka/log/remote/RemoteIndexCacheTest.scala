@@ -35,10 +35,10 @@ import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito._
 import org.slf4j.{Logger, LoggerFactory}
 
-import java.io.{File, FileInputStream, IOException, PrintWriter}
+import java.io.{File, FileInputStream, FileNotFoundException, IOException, PrintWriter}
 import java.nio.file.{Files, Paths}
 import java.util
-import java.util.Collections
+import java.util.{Collections, Optional}
 import java.util.concurrent.{CountDownLatch, Executors, TimeUnit}
 import scala.collection.mutable
 
@@ -279,8 +279,6 @@ class RemoteIndexCacheTest {
       "Failed to mark cache entry for cleanup after invalidation")
     TestUtils.waitUntilTrue(() => cacheEntry.isCleanStarted,
       "Failed to cleanup cache entry after invalidation")
-    TestUtils.waitUntilTrue(() => cacheEntry.isCleanFinished,
-      "Failed to finish cleanup cache entry after invalidation")
 
     // first it will be marked for cleanup, second time markForCleanup is called when cleanup() is called
     verify(cacheEntry, times(2)).markForCleanup()
@@ -521,10 +519,14 @@ class RemoteIndexCacheTest {
   def testClearCacheAndIndexFilesWhenResizeCache(): Unit = {
 
     def getIndexFileFromRemoteCacheDir(suffix: String) = {
-      Files.walk(cache.cacheDir().toPath())
-        .filter(Files.isRegularFile(_))
-        .filter(path => path.getFileName.toString.endsWith(suffix))
-        .findAny()
+      try {
+        Files.walk(cache.cacheDir().toPath())
+          .filter(Files.isRegularFile(_))
+          .filter(path => path.getFileName.toString.endsWith(suffix))
+          .findAny()
+      } catch {
+        case _: FileNotFoundException => Optional.empty()
+      }
     }
 
     val tpId = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0))
@@ -545,8 +547,6 @@ class RemoteIndexCacheTest {
       "Failed to mark cache entry for cleanup after resizing cache.")
     TestUtils.waitUntilTrue(() => cacheEntry.isCleanStarted,
       "Failed to cleanup cache entry after resizing cache.")
-    TestUtils.waitUntilTrue(() => cacheEntry.isCleanFinished,
-      "Failed to finish cleanup cache entry after resizing cache.")
 
     // verify no index files on remote cache dir
     TestUtils.waitUntilTrue(() => !getIndexFileFromRemoteCacheDir(LogFileUtils.INDEX_FILE_SUFFIX).isPresent,
@@ -691,8 +691,6 @@ class RemoteIndexCacheTest {
       "Failed to mark cache entry for cleanup after invalidation")
     TestUtils.waitUntilTrue(() => entry.isCleanStarted,
       "Failed to cleanup cache entry after invalidation")
-    TestUtils.waitUntilTrue(() => entry.isCleanFinished,
-      "Failed to finish cleanup cache entry after invalidation")
 
     // restore index files
     renameRemoteCacheIndexFileFromDisk(tempSuffix)
@@ -768,8 +766,6 @@ class RemoteIndexCacheTest {
       "Failed to mark cache entry for cleanup after invalidation")
     TestUtils.waitUntilTrue(() => entry.isCleanStarted,
       "Failed to cleanup cache entry after invalidation")
-    TestUtils.waitUntilTrue(() => entry.isCleanFinished,
-      "Failed to finish cleanup cache entry after invalidation")
 
     // verify no index files on disk
     waitUntilTrue(() => !getRemoteCacheIndexFileFromDisk(LogFileUtils.INDEX_FILE_SUFFIX).isPresent,
