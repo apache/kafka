@@ -26,6 +26,7 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerInterceptor;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.consumer.internals.events.RebalanceCallbackEvent;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.KafkaException;
@@ -50,6 +51,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.SortedSet;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -221,4 +223,44 @@ public final class ConsumerUtils {
             throw new TimeoutException(e);
         }
     }
+
+    static void processRebalanceCallback(final ConsumerRebalanceListenerInvoker invoker,
+                                         final RebalanceCallbackEvent event) {
+        SortedSet<TopicPartition> partitions = event.partitions();
+        CompletableFuture<Void> future = event.future();
+        Throwable invocationException;
+
+        try {
+            switch (event.type()) {
+                case REVOKE_PARTITIONS:
+                    invocationException = invoker.invokePartitionsRevoked(partitions);
+                    break;
+
+                case ASSIGN_PARTITIONS:
+                    invocationException = invoker.invokePartitionsAssigned(partitions);
+                    break;
+
+                case LOSE_PARTITIONS:
+                    invocationException = invoker.invokePartitionsLost(partitions);
+                    break;
+
+                default:
+                    invocationException = new IllegalArgumentException("Could not invoke the rebalance callback for unexpected event type " + event.type());
+            }
+        } catch (Throwable t) {
+            invocationException = t;
+        }
+
+        if (invocationException != null) {
+            future.completeExceptionally(invocationException);
+
+            if (invocationException instanceof KafkaException)
+                throw (KafkaException) invocationException;
+            else
+                throw new KafkaException(invocationException);
+        } else {
+            future.complete(null);
+        }
+    }
+
 }

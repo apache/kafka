@@ -31,6 +31,8 @@ import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -56,10 +58,11 @@ public class AssignmentReconcilerTest {
 
     private SubscriptionState subscriptions;
     private BlockingQueue<BackgroundEvent> backgroundEventQueue;
+    private ConsumerRebalanceListenerInvoker callbackInvoker;
     private AssignmentReconciler reconciler;
 
     @Test
-    public void testBasic() {
+    public void testHappyPath() {
         Uuid topicId = Uuid.randomUuid();
         String topicName = "test-topic";
         setup(Collections.singletonMap(topicName, topicId));
@@ -95,7 +98,7 @@ public class AssignmentReconcilerTest {
         // Complete the future to signal to the reconciler that the ConsumerRebalanceListener callback
         // has completed. This will trigger the "commit" of the partition assignment to the SubscriptionState.
         assertEquals(Collections.emptySet(), subscriptions.assignedPartitions());
-        future.complete(null);
+        ConsumerUtils.processRebalanceCallback(callbackInvoker, event);
         assertEquals(newTopicPartitions(topicName, 0, 1, 2, 3), subscriptions.assignedPartitions());
 
         // Call the reconciler and verify that it did "commit" the partition assignment as expected.
@@ -136,6 +139,7 @@ public class AssignmentReconcilerTest {
         setup(topics, new NoOpConsumerRebalanceListener());
     }
     private void setup(Map<String, Uuid> topics, ConsumerRebalanceListener listener) {
+        Time time = new MockTime();
         LogContext logContext = new LogContext();
 
         // Create our SubscriptionState and subscribe to the topics.
@@ -149,17 +153,32 @@ public class AssignmentReconcilerTest {
                 Collections.emptyMap(),
                 topics.keySet().stream().collect(Collectors.toMap(t -> t, t -> 3)),
                 tp -> 0,
-                topics);
+                topics
+        );
         Properties props = new Properties();
         props.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         props.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         ConsumerConfig config = new ConsumerConfig(props);
-        ConsumerMetadata metadata = new ConsumerMetadata(config, subscriptions, logContext, new ClusterResourceListeners());
+        ConsumerMetadata metadata = new ConsumerMetadata(
+                config,
+                subscriptions,
+                logContext,
+                new ClusterResourceListeners()
+        );
         metadata.updateWithCurrentRequestVersion(metadataResponse, false, 0L);
 
         // We need the background event queue to check for the events from the network thread to the application thread
         // to signal the ConsumerRebalanceListener callbacks.
         backgroundEventQueue = new LinkedBlockingQueue<>();
+
+        callbackInvoker = new ConsumerRebalanceListenerInvoker(
+                logContext,
+                subscriptions,
+                time,
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty()
+        );
 
         reconciler = new AssignmentReconciler(logContext, subscriptions, metadata, backgroundEventQueue);
     }
