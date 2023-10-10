@@ -132,8 +132,7 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
             if (outer && record.key() == null && record.value() != null) {
                 context().forward(record.withValue(joiner.apply(record.key(), record.value(), null)));
                 return;
-            } else if (record.key() == null || record.value() == null) {
-                StreamStreamJoinUtil.dropRecord(LOG, droppedRecordsSensor, context());
+            } else if (StreamStreamJoinUtil.skipRecord(record, LOG, droppedRecordsSensor, context())) {
                 return;
             }
 

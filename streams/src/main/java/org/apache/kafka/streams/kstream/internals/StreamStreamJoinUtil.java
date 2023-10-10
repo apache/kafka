@@ -39,26 +39,22 @@ public final class StreamStreamJoinUtil {
         // furthermore, on left/outer joins 'null' in ValueJoiner#apply() indicates a missing record --
         // thus, to be consistent and to avoid ambiguous null semantics, null values are ignored
         if (record.key() == null || record.value() == null) {
-            dropRecord(logger, droppedRecordsSensor, context);
+            if (context.recordMetadata().isPresent()) {
+                final RecordMetadata recordMetadata = context.recordMetadata().get();
+                logger.warn(
+                    "Skipping record due to null key or value. "
+                        + "topic=[{}] partition=[{}] offset=[{}]",
+                    recordMetadata.topic(), recordMetadata.partition(), recordMetadata.offset()
+                );
+            } else {
+                logger.warn(
+                    "Skipping record due to null key or value. Topic, partition, and offset not known."
+                );
+            }
+            droppedRecordsSensor.record();
             return true;
         } else {
             return false;
         }
-    }
-
-    public static <KOut, VOut> void dropRecord(final Logger logger, final Sensor droppedRecordsSensor, final ProcessorContext<KOut, VOut> context) {
-        if (context.recordMetadata().isPresent()) {
-            final RecordMetadata recordMetadata = context.recordMetadata().get();
-            logger.warn(
-                "Skipping record due to null key or value. "
-                    + "topic=[{}] partition=[{}] offset=[{}]",
-                recordMetadata.topic(), recordMetadata.partition(), recordMetadata.offset()
-            );
-        } else {
-            logger.warn(
-                "Skipping record due to null key or value. Topic, partition, and offset not known."
-            );
-        }
-        droppedRecordsSensor.record();
     }
 }
