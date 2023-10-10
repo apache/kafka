@@ -21,7 +21,6 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.RemovalCause;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
@@ -100,6 +99,8 @@ public class RemoteIndexCache implements Closeable {
      * concurrent reads in-progress.
      */
     private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
+    private final RemoteStorageManager remoteStorageManager;
+    private final ShutdownableThread cleanerThread;
 
     /**
      * Actual cache implementation that this file wraps around.
@@ -112,27 +113,50 @@ public class RemoteIndexCache implements Closeable {
      *
      * We use {@link Caffeine} cache instead of implementing a thread safe LRU cache on our own.
      */
-    private final Cache<Uuid, Entry> internalCache;
-    private final RemoteStorageManager remoteStorageManager;
-    private final ShutdownableThread cleanerThread;
-
-    public RemoteIndexCache(RemoteStorageManager remoteStorageManager, String logDir) throws IOException {
-        this(1024, remoteStorageManager, logDir);
-    }
+    private Cache<Uuid, Entry> internalCache;
 
     /**
      * Creates RemoteIndexCache with the given configs.
      *
-     * @param maxSize              maximum number of segment index entries to be cached.
+     * @param maxSize              maximum bytes size of segment index entries to be cached.
      * @param remoteStorageManager RemoteStorageManager instance, to be used in fetching indexes.
      * @param logDir               log directory
      */
-    public RemoteIndexCache(int maxSize, RemoteStorageManager remoteStorageManager, String logDir) throws IOException {
+    public RemoteIndexCache(long maxSize, RemoteStorageManager remoteStorageManager, String logDir) throws IOException {
         this.remoteStorageManager = remoteStorageManager;
         cacheDir = new File(logDir, DIR_NAME);
 
-        internalCache = Caffeine.newBuilder()
-                .maximumSize(maxSize)
+        internalCache = initEmptyCache(maxSize);
+        init();
+
+        // Start cleaner thread that will clean the expired entries.
+        cleanerThread = createCleanerThread();
+        cleanerThread.start();
+    }
+
+    public void resizeCacheSize(long remoteLogIndexFileCacheSize) {
+        lock.writeLock().lock();
+        try {
+            // When resizing the cache, we always start with an empty cache. There are two main reasons:
+            // 1. Resizing the cache is not a high-frequency operation, and there is no need to fill the data in the old
+            // cache to the new cache in time when resizing inside.
+            // 2. Since the eviction of the caffeine cache is cleared asynchronously, it is possible that after the entry
+            // in the old cache is filled in the new cache, the old cache will clear the entry, and the data in the two caches
+            // will be inconsistent.
+            internalCache.invalidateAll();
+            log.info("Invalidated all entries in the cache and triggered the cleaning of all index files in the cache dir.");
+            internalCache = initEmptyCache(remoteLogIndexFileCacheSize);
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    private Cache<Uuid, Entry> initEmptyCache(long maxSize) {
+        return Caffeine.newBuilder()
+                .maximumWeight(maxSize)
+                .weigher((Uuid key, Entry entry) -> {
+                    return (int) entry.entrySizeBytes;
+                })
                 // removeListener is invoked when either the entry is invalidated (means manual removal by the caller) or
                 // evicted (means removal due to the policy)
                 .removalListener((Uuid key, Entry entry, RemovalCause cause) -> {
@@ -150,12 +174,6 @@ public class RemoteIndexCache implements Closeable {
                         log.error("Received entry as null for key {} when the it is removed from the cache.", key);
                     }
                 }).build();
-
-        init();
-
-        // Start cleaner thread that will clean the expired entries.
-        cleanerThread = createCleanerThread();
-        cleanerThread.start();
     }
 
     public Collection<Entry> expiredIndexes() {
@@ -165,6 +183,11 @@ public class RemoteIndexCache implements Closeable {
     // Visible for testing
     public Cache<Uuid, Entry> internalCache() {
         return internalCache;
+    }
+
+    // Visible for testing
+    public Path cacheDir() {
+        return cacheDir.toPath();
     }
 
     public void remove(Uuid key) {
@@ -310,7 +333,7 @@ public class RemoteIndexCache implements Closeable {
         if (Files.exists(indexFile.toPath())) {
             try {
                 index = readIndex.apply(indexFile);
-            } catch (CorruptRecordException ex) {
+            } catch (CorruptIndexException ex) {
                 log.info("Error occurred while loading the stored index file {}", indexFile.getPath(), ex);
             }
         }
@@ -443,7 +466,6 @@ public class RemoteIndexCache implements Closeable {
 
                 // Note that internal cache does not require explicit cleaning/closing. We don't want to invalidate or cleanup
                 // the cache as both would lead to triggering of removal listener.
-
                 log.info("Close completed for RemoteIndexCache");
             } catch (InterruptedException e) {
                 throw new KafkaException(e);
@@ -469,10 +491,13 @@ public class RemoteIndexCache implements Closeable {
 
         private boolean markedForCleanup = false;
 
+        private final long entrySizeBytes;
+
         public Entry(OffsetIndex offsetIndex, TimeIndex timeIndex, TransactionIndex txnIndex) {
             this.offsetIndex = offsetIndex;
             this.timeIndex = timeIndex;
             this.txnIndex = txnIndex;
+            this.entrySizeBytes = estimatedEntrySize();
         }
 
         // Visible for testing
@@ -498,6 +523,22 @@ public class RemoteIndexCache implements Closeable {
         // Visible for testing
         public boolean isMarkedForCleanup() {
             return markedForCleanup;
+        }
+
+        public long entrySizeBytes() {
+            return entrySizeBytes;
+        }
+
+        private long estimatedEntrySize() {
+            lock.readLock().lock();
+            try {
+                return offsetIndex.sizeInBytes() + timeIndex.sizeInBytes() + Files.size(txnIndex.file().toPath());
+            } catch (IOException e) {
+                log.warn("Error occurred when estimating remote index cache entry bytes size, just set 0 firstly.", e);
+                return 0L;
+            } finally {
+                lock.readLock().unlock();
+            }
         }
 
         public OffsetPosition lookupOffset(long targetOffset) {

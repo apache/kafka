@@ -777,7 +777,7 @@ public class StreamsConfig extends AbstractConfig {
     @SuppressWarnings("WeakerAccess")
     public static final String RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_CONFIG = "rack.aware.assignment.non_overlap_cost";
     public static final String RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_DOC = "Cost associated with moving tasks from existing assignment. This config and <code>" + RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_CONFIG + "</code> controls whether the "
-        + "optimization algorithm favors minimizing cross rack traffic or minimize the movement of tasks in existing assignment. If set a larger value <code>" + RackAwareTaskAssignor.class.getName() + "<code/> will "
+        + "optimization algorithm favors minimizing cross rack traffic or minimize the movement of tasks in existing assignment. If set a larger value <code>" + RackAwareTaskAssignor.class.getName() + "</code> will "
         + "optimize to maintain the existing assignment. The default value is null which means it will use default non_overlap cost values in different assignors.";
 
 
@@ -1198,6 +1198,10 @@ public class StreamsConfig extends AbstractConfig {
         // Private API to enable the state updater (i.e. state updating on a dedicated thread)
         public static final String STATE_UPDATER_ENABLED = "__state.updater.enabled__";
 
+        public static boolean getStateUpdaterEnabled(final Map<String, Object> configs) {
+            return InternalConfig.getBoolean(configs, InternalConfig.STATE_UPDATER_ENABLED, true);
+        }
+
         public static boolean getBoolean(final Map<String, Object> configs, final String key, final boolean defaultValue) {
             final Object value = configs.getOrDefault(key, defaultValue);
             if (value instanceof Boolean) {
@@ -1346,6 +1350,7 @@ public class StreamsConfig extends AbstractConfig {
         this(props, true);
     }
 
+    @SuppressWarnings("this-escape")
     protected StreamsConfig(final Map<?, ?> props,
                             final boolean doLog) {
         super(CONFIG, props, doLog);

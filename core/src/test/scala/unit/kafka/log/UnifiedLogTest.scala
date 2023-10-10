@@ -39,6 +39,8 @@ import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
 import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, EpochEntry, FetchIsolation, LogConfig, LogFileUtils, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogStartOffsetIncrementReason, ProducerStateManager, ProducerStateManagerConfig, RecordValidationException}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.EnumSource
 import org.mockito.ArgumentMatchers
 import org.mockito.ArgumentMatchers.anyLong
 import org.mockito.Mockito.{mock, when}
@@ -59,6 +61,7 @@ class UnifiedLogTest {
   val tmpDir = TestUtils.tempDir()
   val logDir = TestUtils.randomPartitionLogDir(tmpDir)
   val mockTime = new MockTime()
+  var logsToClose: Seq[UnifiedLog] = Seq()
   val producerStateManagerConfig = new ProducerStateManagerConfig(kafka.server.Defaults.ProducerIdExpirationMs, false)
   def metricsKeySet = KafkaYammerMetrics.defaultRegistry.allMetrics.keySet.asScala
 
@@ -71,6 +74,7 @@ class UnifiedLogTest {
   @AfterEach
   def tearDown(): Unit = {
     brokerTopicStats.close()
+    logsToClose.foreach(l => Utils.closeQuietly(l, "UnifiedLog"))
     Utils.delete(tmpDir)
   }
 
@@ -156,17 +160,17 @@ class UnifiedLogTest {
     val records = TestUtils.records(simpleRecords)
 
     val firstAppendInfo = log.appendAsLeader(records, leaderEpoch = 0)
-    assertEquals(new LogOffsetMetadata(0, 0, 0), firstAppendInfo.firstOffset.get)
+    assertEquals(0, firstAppendInfo.firstOffset)
 
     val secondAppendInfo = log.appendAsLeader(
       TestUtils.records(simpleRecords),
       leaderEpoch = 0
     )
-    assertEquals(new LogOffsetMetadata(simpleRecords.size, 0, records.sizeInBytes), secondAppendInfo.firstOffset.get)
+    assertEquals(simpleRecords.size, secondAppendInfo.firstOffset)
 
     log.roll()
     val afterRollAppendInfo =  log.appendAsLeader(TestUtils.records(simpleRecords), leaderEpoch = 0)
-    assertEquals(new LogOffsetMetadata(simpleRecords.size * 2, simpleRecords.size * 2, 0), afterRollAppendInfo.firstOffset.get)
+    assertEquals(simpleRecords.size * 2, afterRollAppendInfo.firstOffset)
   }
 
   @Test
@@ -1256,7 +1260,7 @@ class UnifiedLogTest {
     ), producerId = pid, producerEpoch = epoch, sequence = seq)
     val multiEntryAppendInfo = log.appendAsLeader(createRecords, leaderEpoch = 0)
     assertEquals(
-      multiEntryAppendInfo.lastOffset - multiEntryAppendInfo.firstOffset.get.messageOffset + 1,
+      multiEntryAppendInfo.lastOffset - multiEntryAppendInfo.firstOffset + 1,
       3,
       "should have appended 3 entries"
     )
@@ -1264,8 +1268,8 @@ class UnifiedLogTest {
     // Append a Duplicate of the tail, when the entry at the tail has multiple records.
     val dupMultiEntryAppendInfo = log.appendAsLeader(createRecords, leaderEpoch = 0)
     assertEquals(
-      multiEntryAppendInfo.firstOffset.get.messageOffset,
-      dupMultiEntryAppendInfo.firstOffset.get.messageOffset,
+      multiEntryAppendInfo.firstOffset,
+      dupMultiEntryAppendInfo.firstOffset,
       "Somehow appended a duplicate entry with multiple log records to the tail"
     )
     assertEquals(multiEntryAppendInfo.lastOffset, dupMultiEntryAppendInfo.lastOffset,
@@ -1301,8 +1305,8 @@ class UnifiedLogTest {
     val origAppendInfo = log.appendAsLeader(createRecordsWithDuplicate, leaderEpoch = 0)
     val newAppendInfo = log.appendAsLeader(createRecordsWithDuplicate, leaderEpoch = 0)
     assertEquals(
-      origAppendInfo.firstOffset.get.messageOffset,
-      newAppendInfo.firstOffset.get.messageOffset,
+      origAppendInfo.firstOffset,
+      newAppendInfo.firstOffset,
       "Inserted a duplicate records into the log"
     )
     assertEquals(origAppendInfo.lastOffset, newAppendInfo.lastOffset,
@@ -1782,7 +1786,7 @@ class UnifiedLogTest {
         log.appendAsLeader(
           TestUtils.singletonRecords(value = "hello".getBytes, timestamp = mockTime.milliseconds),
           leaderEpoch = 0
-        ).firstOffset.get.messageOffset,
+        ).firstOffset,
         "Should still be able to append and should get the logEndOffset assigned to the new append")
 
       // cleanup the log
@@ -2936,7 +2940,7 @@ class UnifiedLogTest {
       new SimpleRecord("baz".getBytes))
 
     val firstAppendInfo = log.appendAsLeader(records, leaderEpoch = 0)
-    assertEquals(firstAppendInfo.firstOffset.map[Long](_.messageOffset), log.firstUnstableOffset.asJava)
+    assertEquals(Some(firstAppendInfo.firstOffset), log.firstUnstableOffset)
 
     // add more transactional records
     seq += 3
@@ -2944,13 +2948,13 @@ class UnifiedLogTest {
       new SimpleRecord("blah".getBytes)), leaderEpoch = 0)
 
     // LSO should not have changed
-    assertEquals(firstAppendInfo.firstOffset.map[Long](_.messageOffset), log.firstUnstableOffset.asJava)
+    assertEquals(Some(firstAppendInfo.firstOffset), log.firstUnstableOffset)
 
     // now transaction is committed
     val commitAppendInfo = LogTestUtils.appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.COMMIT, mockTime.milliseconds())
 
     // first unstable offset is not updated until the high watermark is advanced
-    assertEquals(firstAppendInfo.firstOffset.map[Long](_.messageOffset), log.firstUnstableOffset.asJava)
+    assertEquals(Some(firstAppendInfo.firstOffset), log.firstUnstableOffset)
     log.updateHighWatermark(commitAppendInfo.lastOffset + 1)
 
     // now there should be no first unstable offset
@@ -3343,7 +3347,7 @@ class UnifiedLogTest {
       new SimpleRecord("a".getBytes),
       new SimpleRecord("b".getBytes),
       new SimpleRecord("c".getBytes)), leaderEpoch = 0)
-    assertEquals(firstAppendInfo.firstOffset.map[Long](_.messageOffset), log.firstUnstableOffset.asJava)
+    assertEquals(Some(firstAppendInfo.firstOffset), log.firstUnstableOffset)
 
     // mix in some non-transactional data
     log.appendAsLeader(MemoryRecords.withRecords(CompressionType.NONE,
@@ -3358,14 +3362,14 @@ class UnifiedLogTest {
       new SimpleRecord("f".getBytes)), leaderEpoch = 0)
 
     // LSO should not have changed
-    assertEquals(firstAppendInfo.firstOffset.map[Long](_.messageOffset), log.firstUnstableOffset.asJava)
+    assertEquals(Some(firstAppendInfo.firstOffset), log.firstUnstableOffset)
 
     // now first producer's transaction is aborted
     val abortAppendInfo = LogTestUtils.appendEndTxnMarkerAsLeader(log, pid1, epoch, ControlRecordType.ABORT, mockTime.milliseconds())
     log.updateHighWatermark(abortAppendInfo.lastOffset + 1)
 
     // LSO should now point to one less than the first offset of the second transaction
-    assertEquals(secondAppendInfo.firstOffset.map[Long](_.messageOffset), log.firstUnstableOffset.asJava)
+    assertEquals(Some(secondAppendInfo.firstOffset), log.firstUnstableOffset)
 
     // commit the second transaction
     val commitAppendInfo = LogTestUtils.appendEndTxnMarkerAsLeader(log, pid2, epoch, ControlRecordType.COMMIT, mockTime.milliseconds())
@@ -3390,7 +3394,7 @@ class UnifiedLogTest {
     val log = createLog(logDir, logConfig)
 
     val firstAppendInfo = log.appendAsLeader(records, leaderEpoch = 0)
-    assertEquals(firstAppendInfo.firstOffset.map[Long](_.messageOffset), log.firstUnstableOffset.asJava)
+    assertEquals(Some(firstAppendInfo.firstOffset), log.firstUnstableOffset)
 
     // this write should spill to the second segment
     seq = 3
@@ -3398,7 +3402,7 @@ class UnifiedLogTest {
       new SimpleRecord("d".getBytes),
       new SimpleRecord("e".getBytes),
       new SimpleRecord("f".getBytes)), leaderEpoch = 0)
-    assertEquals(firstAppendInfo.firstOffset.map[Long](_.messageOffset), log.firstUnstableOffset.asJava)
+    assertEquals(Some(firstAppendInfo.firstOffset), log.firstUnstableOffset)
     assertEquals(3L, log.logEndOffsetMetadata.segmentBaseOffset)
 
     // now abort the transaction
@@ -3723,13 +3727,14 @@ class UnifiedLogTest {
     listener.verify(expectedHighWatermark = 4)
   }
 
-  @Test
-  def testTransactionIsOngoingAndVerificationGuard(): Unit = {
+  @ParameterizedTest
+  @EnumSource(value = classOf[AppendOrigin], names = Array("CLIENT", "COORDINATOR"))
+  def testTransactionIsOngoingAndVerificationGuard(appendOrigin: AppendOrigin): Unit = {
     val producerStateManagerConfig = new ProducerStateManagerConfig(86400000, true)
 
     val producerId = 23L
     val producerEpoch = 1.toShort
-    val sequence = 3
+    var sequence = if (appendOrigin == AppendOrigin.CLIENT) 3 else 0
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 2048 * 5)
     val log = createLog(logDir, logConfig, producerStateManagerConfig = producerStateManagerConfig)
     assertFalse(log.hasOngoingTransaction(producerId))
@@ -3744,32 +3749,36 @@ class UnifiedLogTest {
       new SimpleRecord("2".getBytes)
     )
 
+    // Only clients have nonzero sequences
+    if (appendOrigin == AppendOrigin.CLIENT)
+      sequence = sequence + 2
+
     val transactionalRecords = MemoryRecords.withTransactionalRecords(
       CompressionType.NONE,
       producerId,
       producerEpoch,
-      sequence + 2,
+      sequence,
       new SimpleRecord("1".getBytes),
       new SimpleRecord("2".getBytes)
     )
 
-    val verificationGuard = log.maybeStartTransactionVerification(producerId, sequence + 2, producerEpoch)
+    val verificationGuard = log.maybeStartTransactionVerification(producerId, sequence, producerEpoch)
     assertNotNull(verificationGuard)
 
-    log.appendAsLeader(idempotentRecords, leaderEpoch = 0)
+    log.appendAsLeader(idempotentRecords, origin = appendOrigin, leaderEpoch = 0)
     assertFalse(log.hasOngoingTransaction(producerId))
 
     // Since we wrote idempotent records, we keep verification guard.
     assertEquals(verificationGuard, log.verificationGuard(producerId))
 
     // Now write the transactional records
-    log.appendAsLeader(transactionalRecords, leaderEpoch = 0, verificationGuard = verificationGuard)
+    log.appendAsLeader(transactionalRecords, origin = appendOrigin, leaderEpoch = 0, verificationGuard = verificationGuard)
     assertTrue(log.hasOngoingTransaction(producerId))
     // Verification guard should be cleared now.
     assertNull(log.verificationGuard(producerId))
 
     // A subsequent maybeStartTransactionVerification will be empty since we are already verified.
-    assertNull(log.maybeStartTransactionVerification(producerId, sequence + 2, producerEpoch))
+    assertNull(log.maybeStartTransactionVerification(producerId, sequence, producerEpoch))
 
     val endTransactionMarkerRecord = MemoryRecords.withEndTransactionMarker(
       producerId,
@@ -3781,8 +3790,11 @@ class UnifiedLogTest {
     assertFalse(log.hasOngoingTransaction(producerId))
     assertNull(log.verificationGuard(producerId))
 
+    if (appendOrigin == AppendOrigin.CLIENT)
+      sequence = sequence + 1
+
     // A new maybeStartTransactionVerification will not be empty, as we need to verify the next transaction.
-    val newVerificationGuard = log.maybeStartTransactionVerification(producerId, sequence + 3, producerEpoch)
+    val newVerificationGuard = log.maybeStartTransactionVerification(producerId, sequence, producerEpoch)
     assertNotNull(newVerificationGuard)
     assertNotEquals(verificationGuard, newVerificationGuard)
   }
@@ -3954,10 +3966,12 @@ class UnifiedLogTest {
                         remoteStorageSystemEnable: Boolean = false,
                         remoteLogManager: Option[RemoteLogManager] = None,
                         logOffsetsListener: LogOffsetsListener = LogOffsetsListener.NO_OP_OFFSETS_LISTENER): UnifiedLog = {
-    LogTestUtils.createLog(dir, config, brokerTopicStats, scheduler, time, logStartOffset, recoveryPoint,
+    val log = LogTestUtils.createLog(dir, config, brokerTopicStats, scheduler, time, logStartOffset, recoveryPoint,
       maxTransactionTimeoutMs, producerStateManagerConfig, producerIdExpirationCheckIntervalMs,
       lastShutdownClean, topicId, keepPartitionMetadataFile, new ConcurrentHashMap[String, Int],
       remoteStorageSystemEnable, remoteLogManager, logOffsetsListener)
+    logsToClose = logsToClose :+ log
+    log
   }
 
   private def createLogWithOffsetOverflow(logConfig: LogConfig): (UnifiedLog, LogSegment) = {

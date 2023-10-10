@@ -596,6 +596,8 @@ public class TopologyTestDriver implements Closeable {
         // If the topology only has global tasks, then `task` would be null.
         // For this method, it just means there's nothing to do.
         if (task != null) {
+            task.resumePollingForPartitionsWithAvailableSpace();
+            task.updateLags();
             while (task.hasRecordsQueued() && task.isProcessable(mockWallClockTime.milliseconds())) {
                 // Process the record ...
                 task.process(mockWallClockTime.milliseconds());

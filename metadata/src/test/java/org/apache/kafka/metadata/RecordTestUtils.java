@@ -121,6 +121,24 @@ public class RecordTestUtils {
         }
     }
 
+    public static class ImageDeltaPair<I, D> {
+        private final Supplier<I> imageSupplier;
+        private final Function<I, D> deltaCreator;
+
+        public ImageDeltaPair(Supplier<I> imageSupplier, Function<I, D> deltaCreator) {
+            this.imageSupplier = imageSupplier;
+            this.deltaCreator = deltaCreator;
+        }
+
+        public Supplier<I> imageSupplier() {
+            return imageSupplier;
+        }
+
+        public Function<I, D> deltaCreator() {
+            return deltaCreator;
+        }
+    }
+
     public static class TestThroughAllIntermediateImagesLeadingToFinalImageHelper<D, I> {
         private final Supplier<I> emptyImageSupplier;
         private final Function<I, D> deltaUponImageCreator;
@@ -186,6 +204,18 @@ public class RecordTestUtils {
                     }
                 }
             }
+        }
+
+        /**
+         * Tests applying records in all variations of batch sizes will result in the same image as applying all records in one batch.
+         * @param fromRecords    The list of records to apply.
+         */
+        public void test(List<ApiMessageAndVersion> fromRecords) {
+            D finalImageDelta = createDeltaUponImage(getEmptyImage());
+            RecordTestUtils.replayAll(finalImageDelta, fromRecords);
+            I finalImage = createImageByApplyingDelta(finalImageDelta);
+
+            test(finalImage, fromRecords);
         }
     }
 

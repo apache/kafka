@@ -17,7 +17,6 @@
 
 package org.apache.kafka.controller;
 
-import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.BrokerIdNotRegisteredException;
 import org.apache.kafka.common.errors.DuplicateBrokerRegistrationException;
@@ -29,15 +28,12 @@ import org.apache.kafka.common.message.ControllerRegistrationRequestData;
 import org.apache.kafka.common.metadata.BrokerRegistrationChangeRecord;
 import org.apache.kafka.common.metadata.FenceBrokerRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
-import org.apache.kafka.common.metadata.RegisterBrokerRecord.BrokerEndpoint;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord.BrokerFeature;
 import org.apache.kafka.common.metadata.RegisterControllerRecord;
-import org.apache.kafka.common.metadata.RegisterControllerRecord.ControllerEndpointCollection;
 import org.apache.kafka.common.metadata.RegisterControllerRecord.ControllerFeatureCollection;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
-import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.metadata.BrokerRegistration;
@@ -46,6 +42,7 @@ import org.apache.kafka.metadata.BrokerRegistrationInControlledShutdownChange;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
 import org.apache.kafka.metadata.ControllerRegistration;
 import org.apache.kafka.metadata.FinalizedControllerFeatures;
+import org.apache.kafka.metadata.ListenerInfo;
 import org.apache.kafka.metadata.VersionRange;
 import org.apache.kafka.metadata.placement.ReplicaPlacer;
 import org.apache.kafka.metadata.placement.StripedReplicaPlacer;
@@ -352,20 +349,14 @@ public class ClusterControlManager {
             throw new BrokerIdNotRegisteredException("Controller is in pre-migration mode and cannot register KRaft " +
                 "brokers until the metadata migration is complete.");
         }
-
+        ListenerInfo listenerInfo = ListenerInfo.fromBrokerRegistrationRequest(request.listeners());
         RegisterBrokerRecord record = new RegisterBrokerRecord().
             setBrokerId(brokerId).
             setIsMigratingZkBroker(request.isMigratingZkBroker()).
             setIncarnationId(request.incarnationId()).
             setBrokerEpoch(brokerEpoch).
-            setRack(request.rack());
-        for (BrokerRegistrationRequestData.Listener listener : request.listeners()) {
-            record.endPoints().add(new BrokerEndpoint().
-                setHost(listener.host()).
-                setName(listener.name()).
-                setPort(listener.port()).
-                setSecurityProtocol(listener.securityProtocol()));
-        }
+            setRack(request.rack()).
+            setEndPoints(listenerInfo.toBrokerRegistrationRecord());
         for (BrokerRegistrationRequestData.Feature feature : request.features()) {
             record.features().add(processRegistrationFeature(brokerId, finalizedFeatures, feature));
         }
@@ -392,14 +383,7 @@ public class ClusterControlManager {
             throw new UnsupportedVersionException("The current MetadataVersion is too old to " +
                     "support controller registrations.");
         }
-        ControllerEndpointCollection endpoints = new ControllerEndpointCollection();
-        request.listeners().forEach(listener -> {
-            endpoints.add(new RegisterControllerRecord.ControllerEndpoint().
-                setHost(listener.host()).
-                setName(listener.name()).
-                setPort(listener.port()).
-                setSecurityProtocol(listener.securityProtocol()));
-        });
+        ListenerInfo listenerInfo = ListenerInfo.fromControllerRegistrationRequest(request.listeners());
         ControllerFeatureCollection features = new ControllerFeatureCollection();
         request.features().forEach(feature -> {
             features.add(new RegisterControllerRecord.ControllerFeature().
@@ -412,7 +396,7 @@ public class ClusterControlManager {
             setControllerId(request.controllerId()).
             setIncarnationId(request.incarnationId()).
             setZkMigrationReady(request.zkMigrationReady()).
-            setEndPoints(endpoints).
+            setEndPoints(listenerInfo.toControllerRegistrationRecord()).
             setFeatures(features),
                 (short) 0));
         return ControllerResult.atomicOf(records, null);
@@ -452,23 +436,16 @@ public class ClusterControlManager {
     public void replay(RegisterBrokerRecord record, long offset) {
         registerBrokerRecordOffsets.put(record.brokerId(), offset);
         int brokerId = record.brokerId();
-        List<Endpoint> listeners = new ArrayList<>();
-        for (BrokerEndpoint endpoint : record.endPoints()) {
-            listeners.add(new Endpoint(endpoint.name(),
-                SecurityProtocol.forId(endpoint.securityProtocol()),
-                endpoint.host(), endpoint.port()));
-        }
+        ListenerInfo listenerInfo = ListenerInfo.fromBrokerRegistrationRecord(record.endPoints());
         Map<String, VersionRange> features = new HashMap<>();
         for (BrokerFeature feature : record.features()) {
             features.put(feature.name(), VersionRange.of(
                 feature.minSupportedVersion(), feature.maxSupportedVersion()));
         }
-
-
         // Update broker registrations.
         BrokerRegistration prevRegistration = brokerRegistrations.put(brokerId,
                 new BrokerRegistration(brokerId, record.brokerEpoch(),
-                    record.incarnationId(), listeners, features,
+                    record.incarnationId(), listenerInfo.listeners(), features,
                     Optional.ofNullable(record.rack()), record.fenced(),
                     record.inControlledShutdown(), record.isMigratingZkBroker()));
         if (heartbeatManager != null) {
