@@ -203,7 +203,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                  isolated_kafka=None,
                  controller_num_nodes_override=0,
                  allow_zk_with_kraft=False,
-                 quorum_info_provider=None
+                 quorum_info_provider=None,
+                 use_new_coordinator=None
                  ):
         """
         :param context: test context
@@ -276,6 +277,9 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.controller_quorum = None # will define below if necessary
         self.isolated_controller_quorum = None # will define below if necessary
         self.configured_for_zk_migration = False
+
+        if use_new_coordinator is None :
+            self.use_new_coordinator = self.context.globals.get["use_new_coordinator", False]
 
         if num_nodes < 1:
             raise Exception("Must set a positive number of nodes: %i" % num_nodes)
@@ -407,6 +411,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             kraft_broker_configs = {
                 config_property.PORT: config_property.FIRST_BROKER_PORT,
                 config_property.NODE_ID: self.idx(node),
+                config_property.NEW_GROUP_COORDINATOR_ENABLE: use_new_coordinator
             }
             kraft_broker_plus_zk_configs = kraft_broker_configs.copy()
             kraft_broker_plus_zk_configs.update(zk_broker_configs)
@@ -764,6 +769,9 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             else:
                 override_configs[config_property.ZOOKEEPER_SSL_CLIENT_ENABLE] = 'false'
 
+        if self.use_new_coordinator:
+            override_configs[config_property.NEW_GROUP_COORDINATOR_ENABLE] = 'true'
+    
         for prop in self.server_prop_overrides:
             override_configs[prop[0]] = prop[1]
 

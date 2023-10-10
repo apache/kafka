@@ -23,14 +23,14 @@ from kafkatest.services.trogdor.consume_bench_workload import ConsumeBenchWorklo
 from kafkatest.services.trogdor.task_spec import TaskSpec
 from kafkatest.services.trogdor.trogdor import TrogdorService
 from kafkatest.services.zookeeper import ZookeeperService
-
+from kafkatest.services.kafka.util import skip_if_new_coordinator_and_zk
 
 class ConsumeBenchTest(Test):
     def __init__(self, test_context):
         """:type test_context: ducktape.tests.test.TestContext"""
         super(ConsumeBenchTest, self).__init__(test_context)
         self.zk = ZookeeperService(test_context, num_nodes=3) if quorum.for_test(test_context) == quorum.zk else None
-        self.kafka = KafkaService(test_context, num_nodes=3, zk=self.zk)
+        self.kafka = KafkaService(test_context, num_nodes=3, zk=self.zk,)
         self.producer_workload_service = ProduceBenchWorkloadService(test_context, self.kafka)
         self.consumer_workload_service = ConsumeBenchWorkloadService(test_context, self.kafka)
         self.consumer_workload_service_2 = ConsumeBenchWorkloadService(test_context, self.kafka)
@@ -44,7 +44,6 @@ class ConsumeBenchTest(Test):
         self.trogdor.start()
         if self.zk:
             self.zk.start()
-        self.kafka.start()
 
     def teardown(self):
         self.trogdor.stop()
@@ -68,12 +67,21 @@ class ConsumeBenchTest(Test):
         self.logger.debug("Produce workload finished")
 
     @cluster(num_nodes=10)
-    @matrix(topics=[["consume_bench_topic[0-5]"]], metadata_quorum=quorum.all_non_upgrade) # topic subscription
-    @matrix(topics=[["consume_bench_topic[0-5]:[0-4]"]], metadata_quorum=quorum.all_non_upgrade)  # manual topic assignment
-    def test_consume_bench(self, topics, metadata_quorum=quorum.zk):
+    @matrix(
+        topics=[
+            ["consume_bench_topic[0-5]"],
+            ["consume_bench_topic[0-5]:[0-4]"]
+        ],
+        metadata_quorum=quorum.all_non_upgrade,
+        use_new_coordinator=[True, False]
+    ) # topic subscription
+    @skip_if_new_coordinator_and_zk
+    def test_consume_bench(self, topics, metadata_quorum=quorum.zk, use_new_coordinator=False):
         """
         Runs a ConsumeBench workload to consume messages
         """
+        self.kafka.use_new_coordinator = use_new_coordinator
+        self.kafka.start()
         self.produce_messages(self.active_topics)
         consume_spec = ConsumeBenchWorkloadSpec(0, TaskSpec.MAX_DURATION_MS,
                                                 self.consumer_workload_service.consumer_node,
@@ -91,7 +99,11 @@ class ConsumeBenchTest(Test):
         self.logger.info("TASKS: %s\n" % json.dumps(tasks, sort_keys=True, indent=2))
 
     @cluster(num_nodes=10)
-    @matrix(metadata_quorum=quorum.all_non_upgrade)
+    @matrix(
+        metadata_quorum=quorum.all_non_upgrade,
+        use_new_coordinator=[True, False]
+    )
+    @skip_if_new_coordinator_and_zk
     def test_single_partition(self, metadata_quorum=quorum.zk):
         """
         Run a ConsumeBench against a single partition
@@ -114,7 +126,11 @@ class ConsumeBenchTest(Test):
         self.logger.info("TASKS: %s\n" % json.dumps(tasks, sort_keys=True, indent=2))
 
     @cluster(num_nodes=10)
-    @matrix(metadata_quorum=quorum.all_non_upgrade)
+    @matrix(
+        metadata_quorum=quorum.all_non_upgrade,
+        se_new_coordinator=[True, False]
+    )
+    @skip_if_new_coordinator_and_zk
     def test_multiple_consumers_random_group_topics(self, metadata_quorum=quorum.zk):
         """
         Runs multiple consumers group to read messages from topics.
@@ -138,7 +154,11 @@ class ConsumeBenchTest(Test):
         self.logger.info("TASKS: %s\n" % json.dumps(tasks, sort_keys=True, indent=2))
 
     @cluster(num_nodes=10)
-    @matrix(metadata_quorum=quorum.all_non_upgrade)
+    @matrix(
+        metadata_quorum=quorum.all_non_upgrade,
+        se_new_coordinator=[True, False]
+    )
+    @skip_if_new_coordinator_and_zk
     def test_two_consumers_specified_group_topics(self, metadata_quorum=quorum.zk):
         """
         Runs two consumers in the same consumer group to read messages from topics.
@@ -163,7 +183,11 @@ class ConsumeBenchTest(Test):
         self.logger.info("TASKS: %s\n" % json.dumps(tasks, sort_keys=True, indent=2))
 
     @cluster(num_nodes=10)
-    @matrix(metadata_quorum=quorum.all_non_upgrade)
+    @matrix(
+        metadata_quorum=quorum.all_non_upgrade,
+        se_new_coordinator=[True, False]
+    )
+    @skip_if_new_coordinator_and_zk
     def test_multiple_consumers_random_group_partitions(self, metadata_quorum=quorum.zk):
         """
         Runs multiple consumers in to read messages from specific partitions.
@@ -188,7 +212,11 @@ class ConsumeBenchTest(Test):
         self.logger.info("TASKS: %s\n" % json.dumps(tasks, sort_keys=True, indent=2))
 
     @cluster(num_nodes=10)
-    @matrix(metadata_quorum=quorum.all_non_upgrade)
+    @matrix(
+        metadata_quorum=quorum.all_non_upgrade,
+        se_new_coordinator=[True, False]
+    )
+    @skip_if_new_coordinator_and_zk
     def test_multiple_consumers_specified_group_partitions_should_raise(self, metadata_quorum=quorum.zk):
         """
         Runs multiple consumers in the same group to read messages from specific partitions.
@@ -215,4 +243,3 @@ class ConsumeBenchTest(Test):
             if expected_error_msg not in str(e):
                 raise RuntimeError("Unexpected Exception - " + str(e))
             self.logger.info(e)
-
