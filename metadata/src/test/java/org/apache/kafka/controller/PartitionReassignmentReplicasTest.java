@@ -133,7 +133,7 @@ public class PartitionReassignmentReplicasTest {
     public void testIsReassignmentInProgress() {
         assertTrue(PartitionReassignmentReplicas.isReassignmentInProgress(
             new PartitionRegistration.Builder().
-                setReplicas(new int[]{0, 1, 3, 2}).
+                setReplicasWithUnknownDirs(new int[]{0, 1, 3, 2}).
                 setIsr(new int[]{0, 1, 3, 2}).
                 setRemovingReplicas(new int[]{2}).
                 setAddingReplicas(new int[]{3}).
@@ -144,7 +144,7 @@ public class PartitionReassignmentReplicasTest {
                 build()));
         assertTrue(PartitionReassignmentReplicas.isReassignmentInProgress(
             new PartitionRegistration.Builder().
-                setReplicas(new int[]{0, 1, 3, 2}).
+                setReplicasWithUnknownDirs(new int[]{0, 1, 3, 2}).
                 setIsr(new int[]{0, 1, 3, 2}).
                 setRemovingReplicas(new int[]{2}).
                 setLeader(0).
@@ -154,7 +154,7 @@ public class PartitionReassignmentReplicasTest {
                 build()));
         assertTrue(PartitionReassignmentReplicas.isReassignmentInProgress(
             new PartitionRegistration.Builder().
-                setReplicas(new int[]{0, 1, 3, 2}).
+                setReplicasWithUnknownDirs(new int[]{0, 1, 3, 2}).
                 setIsr(new int[]{0, 1, 3, 2}).
                 setAddingReplicas(new int[]{3}).
                 setLeader(0).
@@ -164,7 +164,7 @@ public class PartitionReassignmentReplicasTest {
                 build()));
         assertFalse(PartitionReassignmentReplicas.isReassignmentInProgress(
             new PartitionRegistration.Builder().
-                setReplicas(new int[]{0, 1, 2}).
+                setReplicasWithUnknownDirs(new int[]{0, 1, 2}).
                 setIsr(new int[]{0, 1, 2}).
                 setLeader(0).
                 setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).

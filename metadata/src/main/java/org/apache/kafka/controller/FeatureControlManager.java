@@ -188,7 +188,7 @@ public class FeatureControlManager {
         }
     }
 
-    MetadataVersion metadataVersion() {
+    public MetadataVersion metadataVersion() {
         return metadataVersion.get();
     }
 

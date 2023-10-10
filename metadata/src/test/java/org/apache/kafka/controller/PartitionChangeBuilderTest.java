@@ -101,7 +101,7 @@ public class PartitionChangeBuilderTest {
     }
 
     private static final PartitionRegistration FOO = new PartitionRegistration.Builder().
-        setReplicas(new int[] {2, 1, 3}).
+        setReplicasWithUnknownDirs(new int[] {2, 1, 3}).
         setIsr(new int[] {2, 1, 3}).
         setLeader(1).
         setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
@@ -124,7 +124,7 @@ public class PartitionChangeBuilderTest {
     }
 
     private static final PartitionRegistration BAR = new PartitionRegistration.Builder().
-        setReplicas(new int[] {1, 2, 3, 4}).
+        setReplicasWithUnknownDirs(new int[] {1, 2, 3, 4}).
         setIsr(new int[] {1, 2, 3}).
         setRemovingReplicas(new int[] {1}).
         setAddingReplicas(new int[] {4}).
@@ -145,7 +145,7 @@ public class PartitionChangeBuilderTest {
     }
 
     private static final PartitionRegistration BAZ = new PartitionRegistration.Builder().
-        setReplicas(new int[] {2, 1, 3}).
+        setReplicasWithUnknownDirs(new int[] {2, 1, 3}).
         setIsr(new int[] {1, 3}).
         setLeader(3).
         setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
@@ -160,7 +160,7 @@ public class PartitionChangeBuilderTest {
     }
 
     private static final PartitionRegistration OFFLINE = new PartitionRegistration.Builder().
-        setReplicas(new int[] {2, 1, 3}).
+        setReplicasWithUnknownDirs(new int[] {2, 1, 3}).
         setIsr(new int[] {3}).
         setLeader(-1).
         setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
@@ -198,7 +198,7 @@ public class PartitionChangeBuilderTest {
             setTargetIsrWithBrokerStates(AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(Arrays.asList(3))), 2, true);
         assertElectLeaderEquals(
             createFooBuilder(version).setElection(Election.UNCLEAN)
-                .setTargetIsrWithBrokerStates(AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(Arrays.asList(4))).setTargetReplicas(Arrays.asList(2, 1, 3, 4)),
+                .setTargetIsrWithBrokerStates(AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(Arrays.asList(4))).setTargetReplicaBrokerIds(Arrays.asList(2, 1, 3, 4)),
             4,
             false
         );
@@ -246,10 +246,10 @@ public class PartitionChangeBuilderTest {
             NO_LEADER_CHANGE
         );
         testTriggerLeaderEpochBumpIfNeededLeader(createFooBuilder(version).
-            setTargetReplicas(Arrays.asList(2, 1, 3, 4)), new PartitionChangeRecord(),
+            setTargetReplicaBrokerIds(Arrays.asList(2, 1, 3, 4)), new PartitionChangeRecord(),
             NO_LEADER_CHANGE);
         testTriggerLeaderEpochBumpIfNeededLeader(createFooBuilder(version).
-            setTargetReplicas(Arrays.asList(2, 1, 3, 4)),
+            setTargetReplicaBrokerIds(Arrays.asList(2, 1, 3, 4)),
             new PartitionChangeRecord().setLeader(2), 2);
 
         // Check that the leader epoch is bump if the ISR shrinks and isSkipLeaderEpochBumpSupported is not supported.
@@ -359,7 +359,7 @@ public class PartitionChangeBuilderTest {
                 setPartitionId(0).
                 setReplicas(Arrays.asList(3, 2, 1)),
                 version)),
-            createFooBuilder(version).setTargetReplicas(Arrays.asList(3, 2, 1)).build());
+            createFooBuilder(version).setTargetReplicaBrokerIds(Arrays.asList(3, 2, 1)).build());
     }
 
     @ParameterizedTest
@@ -392,7 +392,7 @@ public class PartitionChangeBuilderTest {
                 setAddingReplicas(Collections.emptyList()),
                 version)),
             createBarBuilder(version).
-                setTargetReplicas(revert.replicas()).
+                setTargetReplicaBrokerIds(revert.replicas()).
                 setTargetIsrWithBrokerStates(AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(revert.isr())).
                 setTargetRemoving(Collections.emptyList()).
                 setTargetAdding(Collections.emptyList()).
@@ -403,7 +403,7 @@ public class PartitionChangeBuilderTest {
     @MethodSource("partitionChangeRecordVersions")
     public void testRemovingReplicaReassignment(short version) {
         PartitionReassignmentReplicas replicas = new PartitionReassignmentReplicas(
-            new PartitionAssignment(Replicas.toList(FOO.replicas)), new PartitionAssignment(Arrays.asList(1, 2)));
+            new PartitionAssignment(Replicas.brokerIdsList(FOO.replicas)), new PartitionAssignment(Arrays.asList(1, 2)));
         assertEquals(Collections.singletonList(3), replicas.removing());
         assertEquals(Collections.emptyList(), replicas.adding());
         assertEquals(Arrays.asList(1, 2, 3), replicas.replicas());
@@ -415,7 +415,7 @@ public class PartitionChangeBuilderTest {
                 setLeader(1),
                 version)),
             createFooBuilder(version).
-                setTargetReplicas(replicas.replicas()).
+                setTargetReplicaBrokerIds(replicas.replicas()).
                 setTargetRemoving(replicas.removing()).
                 build());
     }
@@ -424,7 +424,7 @@ public class PartitionChangeBuilderTest {
     @MethodSource("partitionChangeRecordVersions")
     public void testAddingReplicaReassignment(short version) {
         PartitionReassignmentReplicas replicas = new PartitionReassignmentReplicas(
-            new PartitionAssignment(Replicas.toList(FOO.replicas)), new PartitionAssignment(Arrays.asList(1, 2, 3, 4)));
+            new PartitionAssignment(Replicas.brokerIdsList(FOO.replicas)), new PartitionAssignment(Arrays.asList(1, 2, 3, 4)));
         assertEquals(Collections.emptyList(), replicas.removing());
         assertEquals(Collections.singletonList(4), replicas.adding());
         assertEquals(Arrays.asList(1, 2, 3, 4), replicas.replicas());
@@ -435,7 +435,7 @@ public class PartitionChangeBuilderTest {
                 setAddingReplicas(Collections.singletonList(4)),
                 version)),
             createFooBuilder(version).
-                setTargetReplicas(replicas.replicas()).
+                setTargetReplicaBrokerIds(replicas.replicas()).
                 setTargetAdding(replicas.adding()).
                 build());
     }
@@ -495,7 +495,7 @@ public class PartitionChangeBuilderTest {
         int leaderId = 1;
         LeaderRecoveryState recoveryState = LeaderRecoveryState.RECOVERING;
         PartitionRegistration registration = new PartitionRegistration.Builder().
-            setReplicas(new int[] {leaderId, leaderId + 1, leaderId + 2}).
+            setReplicasWithUnknownDirs(new int[] {leaderId, leaderId + 1, leaderId + 2}).
             setIsr(new int[] {leaderId}).
             setLeader(leaderId).
             setLeaderRecoveryState(recoveryState).
@@ -560,7 +560,7 @@ public class PartitionChangeBuilderTest {
         final byte noChange = (byte) -1;
         int leaderId = 1;
         PartitionRegistration registration = new PartitionRegistration.Builder().
-            setReplicas(new int[] {leaderId, leaderId + 1, leaderId + 2}).
+            setReplicasWithUnknownDirs(new int[] {leaderId, leaderId + 1, leaderId + 2}).
             setIsr(new int[] {leaderId + 1, leaderId + 2}).
             setLeader(NO_LEADER).
             setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
@@ -624,7 +624,7 @@ public class PartitionChangeBuilderTest {
         int leaderEpoch = 0;
         int partitionEpoch = 0;
         PartitionRegistration part = new PartitionRegistration.Builder().
-            setReplicas(replicas).
+            setReplicasWithUnknownDirs(replicas).
             setIsr(isr).
             setRemovingReplicas(removingReplicas).
             setAddingReplicas(addingReplicas).
@@ -678,7 +678,7 @@ public class PartitionChangeBuilderTest {
     @MethodSource("partitionChangeRecordVersions")
     public void testEligibleLeaderReplicas_IsrShrinkBelowMinISR(short version) {
         PartitionRegistration partition = new PartitionRegistration.Builder()
-            .setReplicas(new int[] {1, 2, 3, 4})
+            .setReplicasWithUnknownDirs(new int[] {1, 2, 3, 4})
             .setIsr(new int[] {1, 2, 3, 4})
             .setLeader(1)
             .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED)
@@ -721,7 +721,7 @@ public class PartitionChangeBuilderTest {
     @MethodSource("partitionChangeRecordVersions")
     public void testEligibleLeaderReplicas_IsrExpandAboveMinISR(short version) {
         PartitionRegistration partition = new PartitionRegistration.Builder()
-            .setReplicas(new int[] {1, 2, 3, 4})
+            .setReplicasWithUnknownDirs(new int[] {1, 2, 3, 4})
             .setIsr(new int[] {1, 2})
             .setElr(new int[] {3})
             .setLastKnownElr(new int[] {4})
@@ -761,7 +761,7 @@ public class PartitionChangeBuilderTest {
     @MethodSource("partitionChangeRecordVersions")
     public void testEligibleLeaderReplicas_IsrAddNewMemberNotInELR(short version) {
         PartitionRegistration partition = new PartitionRegistration.Builder()
-            .setReplicas(new int[] {1, 2, 3, 4})
+            .setReplicasWithUnknownDirs(new int[] {1, 2, 3, 4})
             .setIsr(new int[] {1})
             .setElr(new int[] {3})
             .setLastKnownElr(new int[] {2})
@@ -807,7 +807,7 @@ public class PartitionChangeBuilderTest {
     @MethodSource("partitionChangeRecordVersions")
     public void testEligibleLeaderReplicas_RemoveUncleanShutdownReplicasFromElr(short version) {
         PartitionRegistration partition = new PartitionRegistration.Builder()
-                .setReplicas(new int[] {1, 2, 3, 4})
+                .setReplicasWithUnknownDirs(new int[] {1, 2, 3, 4})
                 .setIsr(new int[] {1})
                 .setElr(new int[] {2, 3})
                 .setLastKnownElr(new int[] {})

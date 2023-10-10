@@ -28,12 +28,11 @@ import org.apache.kafka.common.metadata._
 import org.apache.kafka.common.resource.ResourcePattern
 import org.apache.kafka.common.security.scram.ScramCredential
 import org.apache.kafka.common.{TopicIdPartition, Uuid}
-import org.apache.kafka.metadata.DelegationTokenData
-import org.apache.kafka.metadata.PartitionRegistration
+import org.apache.kafka.metadata.{DelegationTokenData, PartitionRegistration, Replicas}
 import org.apache.kafka.metadata.migration.ConfigMigrationClient.ClientQuotaVisitor
 import org.apache.kafka.metadata.migration.TopicMigrationClient.{TopicVisitor, TopicVisitorInterest}
 import org.apache.kafka.metadata.migration._
-import org.apache.kafka.server.common.{ApiMessageAndVersion, ProducerIdsBlock}
+import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion, ProducerIdsBlock}
 import org.apache.zookeeper.KeeperException
 import org.apache.zookeeper.KeeperException.{AuthFailedException, NoAuthException, SessionClosedRequireAuthException}
 
@@ -49,13 +48,14 @@ object ZkMigrationClient {
 
   def apply(
     zkClient: KafkaZkClient,
-    zkConfigEncoder: PasswordEncoder
+    zkConfigEncoder: PasswordEncoder,
+    metadataVersion: MetadataVersion
   ): ZkMigrationClient = {
-    val topicClient = new ZkTopicMigrationClient(zkClient)
+    val topicClient = new ZkTopicMigrationClient(zkClient, metadataVersion)
     val configClient = new ZkConfigMigrationClient(zkClient, zkConfigEncoder)
     val aclClient = new ZkAclMigrationClient(zkClient)
     val delegationTokenClient = new ZkDelegationTokenMigrationClient(zkClient)
-    new ZkMigrationClient(zkClient, topicClient, configClient, aclClient, delegationTokenClient)
+    new ZkMigrationClient(zkClient, topicClient, configClient, aclClient, delegationTokenClient, metadataVersion)
   }
 
   /**
@@ -99,7 +99,8 @@ class ZkMigrationClient(
   topicClient: TopicMigrationClient,
   configClient: ConfigMigrationClient,
   aclClient: AclMigrationClient,
-  delegationTokenClient: DelegationTokenMigrationClient
+  delegationTokenClient: DelegationTokenMigrationClient,
+  metadataVersion: MetadataVersion
 ) extends MigrationClient with Logging {
 
   override def getOrCreateMigrationRecoveryState(
@@ -175,7 +176,6 @@ class ZkMigrationClient(
           val record = new PartitionRecord()
             .setTopicId(topicIdPartition.topicId())
             .setPartitionId(topicIdPartition.partition())
-            .setReplicas(partitionRegistration.replicas.map(Integer.valueOf).toList.asJava)
             .setAddingReplicas(partitionRegistration.addingReplicas.map(Integer.valueOf).toList.asJava)
             .setRemovingReplicas(partitionRegistration.removingReplicas.map(Integer.valueOf).toList.asJava)
             .setIsr(partitionRegistration.isr.map(Integer.valueOf).toList.asJava)
@@ -183,7 +183,12 @@ class ZkMigrationClient(
             .setLeaderEpoch(partitionRegistration.leaderEpoch)
             .setPartitionEpoch(partitionRegistration.partitionEpoch)
             .setLeaderRecoveryState(partitionRegistration.leaderRecoveryState.value())
-          partitionRegistration.replicas.foreach(brokerIdConsumer.accept(_))
+          if (metadataVersion.isDirectoryAssignmentSupported) {
+            record.setAssignment(Replicas.toPartitionRecordReplicaAssignment(partitionRegistration.replicas))
+          } else {
+            record.setReplicas(partitionRegistration.replicaBrokerIds().map(Integer.valueOf).toList.asJava)
+          }
+          partitionRegistration.replicaBrokerIds().foreach(brokerIdConsumer.accept(_))
           partitionRegistration.addingReplicas.foreach(brokerIdConsumer.accept(_))
           topicBatch.add(new ApiMessageAndVersion(record, 0.toShort))
         }

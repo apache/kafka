@@ -77,6 +77,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AlterPartitionRequest;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.metadata.BrokerRegistrationFencingChange;
@@ -699,7 +700,7 @@ public class ReplicationControlManager {
             ApiError error = maybeCheckCreateTopicPolicy(() -> {
                 Map<Integer, List<Integer>> assignments = new HashMap<>();
                 newParts.entrySet().forEach(e -> assignments.put(e.getKey(),
-                    Replicas.toList(e.getValue().replicas)));
+                    Replicas.brokerIdsList(e.getValue().replicas)));
                 return new CreateTopicPolicy.RequestMetadata(
                     topic.name(), null, null, assignments, creationConfigs);
             });
@@ -791,7 +792,10 @@ public class ReplicationControlManager {
         for (Entry<Integer, PartitionRegistration> partEntry : newParts.entrySet()) {
             int partitionIndex = partEntry.getKey();
             PartitionRegistration info = partEntry.getValue();
-            records.add(info.toRecord(topicId, partitionIndex, featureControl.metadataVersion().partitionRecordVersion()));
+            ImageWriterOptions options = new ImageWriterOptions.Builder().
+                    setMetadataVersion(featureControl.metadataVersion()).
+                    build();
+            records.add(info.toRecord(topicId, partitionIndex, options));
         }
         return ApiError.NONE;
     }
@@ -801,7 +805,7 @@ public class ReplicationControlManager {
         List<Integer> isr
     ) {
         return new PartitionRegistration.Builder().
-            setReplicas(Replicas.toArray(replicas)).
+            setReplicasWithUnknownDirs(Replicas.toArray(replicas)).
             setIsr(Replicas.toArray(isr)).
             setLeader(isr.get(0)).
             setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
@@ -1696,8 +1700,11 @@ public class ReplicationControlManager {
                     "Unable to replicate the partition " + replicationFactor +
                         " time(s): All brokers are currently fenced or in controlled shutdown.");
             }
+            ImageWriterOptions options = new ImageWriterOptions.Builder().
+                    setMetadataVersion(featureControl.metadataVersion()).
+                    build();
             records.add(buildPartitionRegistration(replicas, isr)
-                .toRecord(topicId, partitionId, featureControl.metadataVersion().partitionRecordVersion()));
+                .toRecord(topicId, partitionId, options));
             partitionId++;
         }
     }
@@ -1910,7 +1917,7 @@ public class ReplicationControlManager {
             builder.setElection(PartitionChangeBuilder.Election.UNCLEAN);
         }
         builder.setTargetIsr(revert.isr()).
-            setTargetReplicas(revert.replicas()).
+            setTargetReplicaBrokerIds(revert.replicas()).
             setTargetRemoving(Collections.emptyList()).
             setTargetAdding(Collections.emptyList());
         return builder.build();
@@ -1948,12 +1955,12 @@ public class ReplicationControlManager {
                                                                PartitionRegistration part,
                                                                ReassignablePartition target) {
         // Check that the requested partition assignment is valid.
-        PartitionAssignment currentAssignment = new PartitionAssignment(Replicas.toList(part.replicas));
+        PartitionAssignment currentAssignment = new PartitionAssignment(Replicas.brokerIdsList(part.replicas));
         PartitionAssignment targetAssignment = new PartitionAssignment(target.replicas());
 
         validateManualPartitionAssignment(targetAssignment, OptionalInt.empty());
 
-        List<Integer> currentReplicas = Replicas.toList(part.replicas);
+        List<Integer> currentReplicas = Replicas.brokerIdsList(part.replicas);
         PartitionReassignmentReplicas reassignment =
             new PartitionReassignmentReplicas(currentAssignment, targetAssignment);
         PartitionChangeBuilder builder = new PartitionChangeBuilder(
@@ -1967,7 +1974,7 @@ public class ReplicationControlManager {
         builder.setZkMigrationEnabled(clusterControl.zkRegistrationAllowed());
         builder.setEligibleLeaderReplicasEnabled(isElrEnabled());
         if (!reassignment.replicas().equals(currentReplicas)) {
-            builder.setTargetReplicas(reassignment.replicas());
+            builder.setTargetReplicaBrokerIds(reassignment.replicas());
         }
         if (!reassignment.removing().isEmpty()) {
             builder.setTargetRemoving(reassignment.removing());
@@ -2030,7 +2037,7 @@ public class ReplicationControlManager {
             setAddingReplicas(Replicas.toList(partition.addingReplicas)).
             setRemovingReplicas(Replicas.toList(partition.removingReplicas)).
             setPartitionIndex(partitionId).
-            setReplicas(Replicas.toList(partition.replicas)));
+            setReplicas(Replicas.brokerIdsList(partition.replicas)));
     }
 
     // Visible to test.

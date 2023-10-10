@@ -31,6 +31,7 @@ import org.apache.kafka.common.message.AlterPartitionRequestData.BrokerState;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.metadata.LeaderRecoveryState;
 import org.apache.kafka.metadata.PartitionRegistration;
+import org.apache.kafka.metadata.Replica;
 import org.apache.kafka.metadata.Replicas;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
@@ -82,7 +83,7 @@ public class PartitionChangeBuilder {
     private final IntPredicate isAcceptableLeader;
     private final MetadataVersion metadataVersion;
     private List<Integer> targetIsr;
-    private List<Integer> targetReplicas;
+    private List<Replica> targetReplicas;
     private List<Integer> targetRemoving;
     private List<Integer> targetAdding;
     private List<Integer> targetElr;
@@ -135,13 +136,18 @@ public class PartitionChangeBuilder {
         );
     }
 
-    public PartitionChangeBuilder setTargetReplicas(List<Integer> targetReplicas) {
+    public PartitionChangeBuilder setTargetReplicas(List<Replica> targetReplicas) {
         this.targetReplicas = targetReplicas;
         return this;
     }
 
     public PartitionChangeBuilder setUncleanShutdownReplicas(List<Integer> uncleanShutdownReplicas) {
         this.uncleanShutdownReplicas = uncleanShutdownReplicas;
+        return this;
+    }
+
+    public PartitionChangeBuilder setTargetReplicaBrokerIds(List<Integer> targetReplicaBrokerIds) {
+        this.targetReplicas = Replicas.toList(Replicas.withUnknownDirs(targetReplicaBrokerIds));
         return this;
     }
 
@@ -204,7 +210,7 @@ public class PartitionChangeBuilder {
      * Assumes that the election type is Election.PREFERRED
      */
     private ElectionResult electPreferredLeader() {
-        int preferredReplica = targetReplicas.get(0);
+        int preferredReplica = targetReplicas.get(0).brokerId();
         if (isValidNewLeader(preferredReplica)) {
             return new ElectionResult(preferredReplica, false);
         }
@@ -216,6 +222,7 @@ public class PartitionChangeBuilder {
 
         Optional<Integer> onlineLeader = targetReplicas.stream()
             .skip(1)
+            .map(Replica::brokerId)
             .filter(this::isValidNewLeader)
             .findFirst();
         if (onlineLeader.isPresent()) {
@@ -235,6 +242,7 @@ public class PartitionChangeBuilder {
         }
 
         Optional<Integer> onlineLeader = targetReplicas.stream()
+            .map(Replica::brokerId)
             .filter(this::isValidNewLeader)
             .findFirst();
         if (onlineLeader.isPresent()) {
@@ -244,7 +252,8 @@ public class PartitionChangeBuilder {
         if (election == Election.UNCLEAN) {
             // Attempt unclean leader election
             Optional<Integer> uncleanLeader = targetReplicas.stream()
-                .filter(replica -> isAcceptableLeader.test(replica))
+                .map(Replica::brokerId)
+                .filter(isAcceptableLeader::test)
                 .findFirst();
             if (uncleanLeader.isPresent()) {
                 return new ElectionResult(uncleanLeader.get(), true);
@@ -316,7 +325,7 @@ public class PartitionChangeBuilder {
         if (record.leader() == NO_LEADER_CHANGE) {
             boolean bumpLeaderEpochOnIsrShrink = metadataVersion.isLeaderEpochBumpRequiredOnIsrShrink() || zkMigrationEnabled;
 
-            if (!Replicas.contains(targetReplicas, partition.replicas)) {
+            if (!Replicas.contains(Replicas.brokerIdsList(targetReplicas), Replicas.brokerIds(partition.replicas))) {
                 // Reassignment
                 record.setLeader(partition.leader);
             } else if (bumpLeaderEpochOnIsrShrink && !Replicas.contains(targetIsr, partition.isr)) {
@@ -331,7 +340,7 @@ public class PartitionChangeBuilder {
             new PartitionReassignmentReplicas(
                 targetRemoving,
                 targetAdding,
-                targetReplicas);
+                Replicas.brokerIdsList(targetReplicas));
 
         Optional<PartitionReassignmentReplicas.CompletedReassignment> completedReassignmentOpt =
             reassignmentReplicas.maybeCompleteReassignment(targetIsr);
@@ -342,7 +351,7 @@ public class PartitionChangeBuilder {
         PartitionReassignmentReplicas.CompletedReassignment completedReassignment = completedReassignmentOpt.get();
 
         targetIsr = completedReassignment.isr;
-        targetReplicas = completedReassignment.replicas;
+        targetReplicas = Replicas.toList(Replicas.withUnknownDirs(completedReassignment.replicas));
         targetRemoving = Collections.emptyList();
         targetAdding = Collections.emptyList();
     }
@@ -384,18 +393,12 @@ public class PartitionChangeBuilder {
     private void setAssignmentChanges(PartitionChangeRecord record) {
         if (!targetReplicas.isEmpty() && !targetReplicas.equals(Replicas.toList(partition.replicas))) {
             if (metadataVersion.isDirectoryAssignmentSupported()) {
+                Replica[] merged = Replicas.update(partition.replicas, Replicas.toReplicaArray(targetReplicas));
+                record.setAssignment(Replicas.toPartitionChangeRecordReplicaAssignment(merged));
                 record.setReplicas(null);
-                record.setAssignment(
-                        targetReplicas.stream()
-                                .map(id -> new PartitionChangeRecord.ReplicaAssignment()
-                                        .setBroker(id)
-                                        .setDirectory(Uuid.UNKNOWN_DIR)
-                                )
-                                .collect(Collectors.toList())
-                );
             } else {
                 record.setAssignment(null);
-                record.setReplicas(targetReplicas);
+                record.setReplicas(Replicas.brokerIdsList(targetReplicas));
             }
         }
         if (!targetRemoving.equals(Replicas.toList(partition.removingReplicas))) {

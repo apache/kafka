@@ -502,7 +502,7 @@ public class KRaftMigrationDriverTest {
                 IMAGE1.topicsByName().forEach((topicName, topicImage) -> {
                     Map<Integer, List<Integer>> assignment = new HashMap<>();
                     topicImage.partitions().forEach((partitionId, partitionRegistration) ->
-                        assignment.put(partitionId, IntStream.of(partitionRegistration.replicas).boxed().collect(Collectors.toList()))
+                        assignment.put(partitionId, IntStream.of(partitionRegistration.replicaBrokerIds()).boxed().collect(Collectors.toList()))
                     );
                     visitor.visitTopic(topicName, topicImage.id(), assignment);
 

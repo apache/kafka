@@ -437,7 +437,7 @@ class ReplicaManagerConcurrencyTest {
       delta.replay(new PartitionRecord()
         .setTopicId(topic.topicId)
         .setPartitionId(partitionId)
-        .setReplicas(toList(registration.replicas))
+        .setReplicas(toList(registration.replicaBrokerIds()))
         .setIsr(toList(registration.isr))
         .setLeader(registration.leader)
         .setLeaderEpoch(registration.leaderEpoch)
@@ -465,7 +465,7 @@ class ReplicaManagerConcurrencyTest {
     partitionEpoch: Int = 0
   ): PartitionRegistration = {
     new PartitionRegistration.Builder().
-      setReplicas(replicaIds.toArray).
+      setReplicasWithUnknownDirs(replicaIds.toArray).
       setIsr(isr.toArray).
       setLeader(leader).
       setLeaderRecoveryState(leaderRecoveryState).

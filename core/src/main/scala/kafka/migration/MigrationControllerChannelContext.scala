@@ -33,7 +33,7 @@ object MigrationControllerChannelContext {
   def partitionReplicaAssignment(image: MetadataImage, tp: TopicPartition): collection.Seq[Int] = {
     image.topics().topicsByName().asScala.get(tp.topic()) match {
       case Some(topic) => topic.partitions().asScala.get(tp.partition()) match {
-        case Some(partition) => partition.replicas.toSeq
+        case Some(partition) => partition.replicaBrokerIds().toSeq
         case None => collection.Seq.empty
       }
       case None => collection.Seq.empty

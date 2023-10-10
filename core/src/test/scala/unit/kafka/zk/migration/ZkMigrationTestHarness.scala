@@ -21,6 +21,7 @@ import kafka.utils.PasswordEncoder
 import kafka.zk.ZkMigrationClient
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.metadata.migration.ZkMigrationLeadershipState
+import org.apache.kafka.server.common.MetadataVersion
 import org.junit.jupiter.api.{BeforeEach, TestInfo}
 
 import java.util.Properties
@@ -54,7 +55,7 @@ class ZkMigrationTestHarness extends QuorumTestHarness {
   override def setUp(testInfo: TestInfo): Unit = {
     super.setUp(testInfo)
     zkClient.createControllerEpochRaw(1)
-    migrationClient = ZkMigrationClient(zkClient, encoder)
+    migrationClient = ZkMigrationClient(zkClient, encoder, MetadataVersion.latest())
     migrationState = initialMigrationState
     migrationState = migrationClient.getOrCreateMigrationRecoveryState(migrationState)
   }

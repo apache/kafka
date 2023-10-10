@@ -143,13 +143,13 @@ class MigrationPropagator(
     if (changedZkBrokers.nonEmpty) {
       // For new the brokers, check if there are partition assignments and add LISR appropriately.
       materializePartitions(image.topics()).asScala.foreach { case (tp, partitionRegistration) =>
-        val replicas = partitionRegistration.replicas.toSet
+        val replicas = partitionRegistration.replicaBrokerIds()
         val leaderIsrAndControllerEpochOpt = MigrationControllerChannelContext.partitionLeadershipInfo(image, tp)
-        val newBrokersWithReplicas = replicas.intersect(changedZkBrokers)
+        val newBrokersWithReplicas = replicas.toSet.intersect(changedZkBrokers)
         if (newBrokersWithReplicas.nonEmpty) {
           leaderIsrAndControllerEpochOpt match {
             case Some(leaderIsrAndControllerEpoch) =>
-              val replicaAssignment = ReplicaAssignment(partitionRegistration.replicas,
+              val replicaAssignment = ReplicaAssignment(replicas,
                 partitionRegistration.addingReplicas, partitionRegistration.removingReplicas)
               requestBatch.addLeaderAndIsrRequestForBrokers(newBrokersWithReplicas.toSeq, tp,
                 leaderIsrAndControllerEpoch, replicaAssignment, isNew = true)
@@ -169,14 +169,15 @@ class MigrationPropagator(
       val deletedTopic = delta.image().topics().getTopic(deletedTopicId)
       deletedTopic.partitions().asScala.foreach { case (partition, partitionRegistration) =>
         val tp = new TopicPartition(deletedTopic.name(), partition)
-        val offlineReplicas = partitionRegistration.replicas.filter {
-          MigrationControllerChannelContext.isReplicaOnline(image, _, partitionRegistration.replicas.toSet)
+        val replicas = partitionRegistration.replicaBrokerIds()
+        val offlineReplicas = replicas.filter {
+          MigrationControllerChannelContext.isReplicaOnline(image, _, replicas.toSet)
         }
         val deletedLeaderAndIsr = LeaderAndIsr.duringDelete(partitionRegistration.isr.toList)
-        requestBatch.addStopReplicaRequestForBrokers(partitionRegistration.replicas, tp, deletePartition = true)
+        requestBatch.addStopReplicaRequestForBrokers(replicas, tp, deletePartition = true)
         requestBatch.addUpdateMetadataRequestForBrokers(
           oldZkBrokers.toSeq, zkControllerEpoch, tp, deletedLeaderAndIsr.leader, deletedLeaderAndIsr.leaderEpoch,
-          deletedLeaderAndIsr.partitionEpoch, deletedLeaderAndIsr.isr, partitionRegistration.replicas, offlineReplicas)
+          deletedLeaderAndIsr.partitionEpoch, deletedLeaderAndIsr.isr, replicas, offlineReplicas)
       }
     }
 
@@ -190,7 +191,8 @@ class MigrationPropagator(
         val leaderIsrAndControllerEpochOpt = MigrationControllerChannelContext.partitionLeadershipInfo(image, tp)
         leaderIsrAndControllerEpochOpt match {
           case Some(leaderIsrAndControllerEpoch) =>
-            val replicaAssignment = ReplicaAssignment(partitionRegistration.replicas,
+            val replicas = partitionRegistration.replicaBrokerIds()
+            val replicaAssignment = ReplicaAssignment(replicas,
               partitionRegistration.addingReplicas, partitionRegistration.removingReplicas)
             requestBatch.addLeaderAndIsrRequestForBrokers(replicaAssignment.replicas, tp,
               leaderIsrAndControllerEpoch, replicaAssignment, isNew = true)
@@ -200,9 +202,9 @@ class MigrationPropagator(
         // Check for removed replicas.
         val oldReplicas =
           Option(delta.image().topics().getPartition(topicDelta.id(), tp.partition()))
-            .map(_.replicas.toSet)
+            .map(_.replicaBrokerIds().toSet)
             .getOrElse(Set.empty)
-        val newReplicas = partitionRegistration.replicas.toSet
+        val newReplicas = partitionRegistration.replicaBrokerIds().toSet
         val removedReplicas = oldReplicas -- newReplicas
         if (removedReplicas.nonEmpty) {
           requestBatch.addStopReplicaRequestForBrokers(removedReplicas.toSeq, tp, deletePartition = false)
@@ -233,7 +235,7 @@ class MigrationPropagator(
       val leaderIsrAndControllerEpochOpt = MigrationControllerChannelContext.partitionLeadershipInfo(image, tp)
       leaderIsrAndControllerEpochOpt match {
         case Some(leaderIsrAndControllerEpoch) =>
-          val replicaAssignment = ReplicaAssignment(partitionRegistration.replicas,
+          val replicaAssignment = ReplicaAssignment(partitionRegistration.replicaBrokerIds(),
             partitionRegistration.addingReplicas, partitionRegistration.removingReplicas)
           requestBatch.addLeaderAndIsrRequestForBrokers(replicaAssignment.replicas, tp,
             leaderIsrAndControllerEpoch, replicaAssignment, isNew = true)

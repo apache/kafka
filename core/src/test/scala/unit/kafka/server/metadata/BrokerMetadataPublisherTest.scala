@@ -161,7 +161,7 @@ class BrokerMetadataPublisherTest {
   ): TopicImage = {
     val partitionRegistrations = partitions.map { case (partitionId, replicas) =>
       Int.box(partitionId) -> new PartitionRegistration.Builder().
-        setReplicas(replicas.toArray).
+        setReplicasWithUnknownDirs(replicas.toArray).
         setIsr(replicas.toArray).
         setLeader(replicas.head).
         setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).

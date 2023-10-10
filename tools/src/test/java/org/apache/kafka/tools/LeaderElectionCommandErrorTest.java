@@ -80,7 +80,7 @@ public class LeaderElectionCommandErrorTest {
     public void testInvalidBroker() {
         Throwable e = assertThrows(AdminCommandFailedException.class, () -> LeaderElectionCommand.run(
             Duration.ofSeconds(1),
-            "--bootstrap-server", "example.com:1234",
+            "--bootstrap-server", "localhost:1234",
             "--election-type", "unclean",
             "--all-topic-partitions"
         ));

@@ -21,6 +21,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.image.TopicsDelta;
 import org.apache.kafka.image.TopicsImage;
+import org.apache.kafka.metadata.Replicas;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -80,7 +81,7 @@ public class TopicsImageZonalOutageBenchmark {
                     topicsDelta.replay(new PartitionRecord().
                         setPartitionId(partitionNumber).
                         setTopicId(topicId).
-                        setReplicas(Arrays.stream(partitionRegistration.replicas).boxed().collect(Collectors.toList())).
+                        setAssignment(Replicas.toPartitionRecordReplicaAssignment(partitionRegistration.replicas)).
                         setIsr(newIsr).
                         setRemovingReplicas(Collections.emptyList()).
                         setAddingReplicas(Collections.emptyList()).

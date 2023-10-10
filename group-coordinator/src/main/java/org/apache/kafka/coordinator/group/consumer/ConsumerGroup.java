@@ -499,7 +499,7 @@ public class ConsumerGroup implements Group {
                 Map<Integer, Set<String>> partitionRacks = new HashMap<>();
                 topicImage.partitions().forEach((partition, partitionRegistration) -> {
                     Set<String> racks = new HashSet<>();
-                    for (int replica : partitionRegistration.replicas) {
+                    for (int replica : partitionRegistration.replicaBrokerIds()) {
                         Optional<String> rackOptional = clusterImage.broker(replica).rack();
                         // Only add the rack if it is available for the broker/replica.
                         rackOptional.ifPresent(racks::add);

@@ -34,7 +34,7 @@ public class PartitionReassignmentRevertTest {
     @Test
     public void testNoneAddedOrRemoved() {
         PartitionRegistration registration = new PartitionRegistration.Builder().
-            setReplicas(new int[] {3, 2, 1}).setIsr(new int[] {3, 2}).
+            setReplicasWithUnknownDirs(new int[] {3, 2, 1}).setIsr(new int[] {3, 2}).
             setLeader(3).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(100).setPartitionEpoch(200).build();
         PartitionReassignmentRevert revert = new PartitionReassignmentRevert(registration);
         assertEquals(Arrays.asList(3, 2, 1), revert.replicas());
@@ -45,7 +45,7 @@ public class PartitionReassignmentRevertTest {
     @Test
     public void testSomeRemoving() {
         PartitionRegistration registration = new PartitionRegistration.Builder().
-            setReplicas(new int[] {3, 2, 1}).setIsr(new int[] {3, 2}).
+            setReplicasWithUnknownDirs(new int[] {3, 2, 1}).setIsr(new int[] {3, 2}).
             setRemovingReplicas(new int[]{2, 1}).setLeader(3).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(100).setPartitionEpoch(200).build();
         PartitionReassignmentRevert revert = new PartitionReassignmentRevert(registration);
         assertEquals(Arrays.asList(3, 2, 1), revert.replicas());
@@ -56,7 +56,7 @@ public class PartitionReassignmentRevertTest {
     @Test
     public void testSomeAdding() {
         PartitionRegistration registration = new PartitionRegistration.Builder().
-            setReplicas(new int[] {4, 5, 3, 2, 1}).setIsr(new int[] {4, 5, 2}).
+            setReplicasWithUnknownDirs(new int[] {4, 5, 3, 2, 1}).setIsr(new int[] {4, 5, 2}).
             setAddingReplicas(new int[]{4, 5}).setLeader(3).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(100).setPartitionEpoch(200).build();
         PartitionReassignmentRevert revert = new PartitionReassignmentRevert(registration);
         assertEquals(Arrays.asList(3, 2, 1), revert.replicas());
@@ -67,7 +67,7 @@ public class PartitionReassignmentRevertTest {
     @Test
     public void testSomeRemovingAndAdding() {
         PartitionRegistration registration = new PartitionRegistration.Builder().
-            setReplicas(new int[] {4, 5, 3, 2, 1}).setIsr(new int[] {4, 5, 2}).
+            setReplicasWithUnknownDirs(new int[] {4, 5, 3, 2, 1}).setIsr(new int[] {4, 5, 2}).
             setRemovingReplicas(new int[]{2}).setAddingReplicas(new int[]{4, 5}).setLeader(3).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(100).setPartitionEpoch(200).build();
         PartitionReassignmentRevert revert = new PartitionReassignmentRevert(registration);
         assertEquals(Arrays.asList(3, 2, 1), revert.replicas());
@@ -78,7 +78,7 @@ public class PartitionReassignmentRevertTest {
     @Test
     public void testIsrSpecialCase() {
         PartitionRegistration registration = new PartitionRegistration.Builder().
-            setReplicas(new int[] {4, 5, 3, 2, 1}).setIsr(new int[] {4, 5}).
+            setReplicasWithUnknownDirs(new int[] {4, 5, 3, 2, 1}).setIsr(new int[] {4, 5}).
             setRemovingReplicas(new int[]{2}).setAddingReplicas(new int[]{4, 5}).setLeader(3).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(100).setPartitionEpoch(200).build();
         PartitionReassignmentRevert revert = new PartitionReassignmentRevert(registration);
         assertEquals(Arrays.asList(3, 2, 1), revert.replicas());

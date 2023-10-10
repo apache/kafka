@@ -465,6 +465,7 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
       metadataInstance.partitionLeadershipInfo(partition) match {
         case Some(LeaderIsrAndControllerEpoch(leaderAndIsr, controllerEpoch)) =>
           val replicas = metadataInstance.partitionReplicaAssignment(partition)
+          // TODO KAFKA-15362 offline dirs also need to be considered to determine offlineReplicas
           val offlineReplicas = replicas.filter(!metadataInstance.isReplicaOnline(_, partition))
           val updatedLeaderAndIsr =
             if (beingDeleted) LeaderAndIsr.duringDelete(leaderAndIsr.isr)

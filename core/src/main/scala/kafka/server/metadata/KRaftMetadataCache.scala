@@ -63,6 +63,7 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
                                        brokers: Array[Int],
                                        listenerName: ListenerName,
                                        filterUnavailableEndpoints: Boolean): java.util.List[Integer] = {
+    // TODO KAFKA-15362
     if (!filterUnavailableEndpoints) {
       Replicas.toList(brokers)
     } else {
@@ -90,7 +91,7 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
       case Some(topic) => Some(topic.partitions().entrySet().asScala.map { entry =>
         val partitionId = entry.getKey
         val partition = entry.getValue
-        val filteredReplicas = maybeFilterAliveReplicas(image, partition.replicas,
+        val filteredReplicas = maybeFilterAliveReplicas(image, partition.replicaBrokerIds(),
           listenerName, errorUnavailableEndpoints)
         val filteredIsr = maybeFilterAliveReplicas(image, partition.isr, listenerName,
           errorUnavailableEndpoints)
@@ -143,11 +144,9 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
   private def getOfflineReplicas(image: MetadataImage,
                                  partition: PartitionRegistration,
                                  listenerName: ListenerName): util.List[Integer] = {
-    // TODO: in order to really implement this correctly, we would need JBOD support.
-    // That would require us to track which replicas were offline on a per-replica basis.
-    // See KAFKA-13005.
+    // TODO KAFKA-15362 (consider offline log directories for each replica)
     val offlineReplicas = new util.ArrayList[Integer](0)
-    for (brokerId <- partition.replicas) {
+    for (brokerId <- partition.replicaBrokerIds()) {
       Option(image.cluster().broker(brokerId)) match {
         case None => offlineReplicas.add(brokerId)
         case Some(broker) => if (broker.fenced() || !broker.listeners().containsKey(listenerName.value())) {
@@ -240,7 +239,7 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
         setLeaderEpoch(partition.leaderEpoch).
         setIsr(Replicas.toList(partition.isr)).
         setZkVersion(partition.partitionEpoch).
-        setReplicas(Replicas.toList(partition.replicas))))
+        setReplicas(Replicas.brokerIdsList(partition.replicas))))
   }
 
   override def numPartitions(topicName: String): Option[Int] = {
@@ -279,7 +278,7 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
     val result = new mutable.HashMap[Int, Node]()
     Option(image.topics().getTopic(tp.topic())).foreach { topic =>
       topic.partitions().values().forEach { partition =>
-        partition.replicas.foreach { replicaId =>
+        partition.replicaBrokerIds().foreach { replicaId =>
           result.put(replicaId, Option(image.cluster().broker(replicaId)) match {
             case None => Node.noNode()
             case Some(broker) if broker.fenced() => Node.noNode()
@@ -345,7 +344,7 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
         partitionInfos.add(new PartitionInfo(topic.name(),
           partitionId,
           node(partition.leader),
-          partition.replicas.map(replica => node(replica)),
+          partition.replicaBrokerIds().map(replica => node(replica)),
           partition.isr.map(replica => node(replica)),
           getOfflineReplicas(image, partition, listenerName).asScala.
             map(replica => node(replica)).toArray))

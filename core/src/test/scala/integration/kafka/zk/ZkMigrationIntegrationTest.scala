@@ -128,7 +128,7 @@ class ZkMigrationIntegrationTest {
 
     val underlying = clusterInstance.asInstanceOf[ZkClusterInstance].getUnderlying()
     val zkClient = underlying.zkClient
-    val migrationClient = ZkMigrationClient(zkClient, PasswordEncoder.noop())
+    val migrationClient = ZkMigrationClient(zkClient, PasswordEncoder.noop(), MetadataVersion.latest())
     val verifier = new MetadataDeltaVerifier()
     migrationClient.readAllMetadata(batch => verifier.accept(batch), _ => { })
     verifier.verify { image =>
@@ -238,7 +238,7 @@ class ZkMigrationIntegrationTest {
       case None => PasswordEncoder.noop()
     }
 
-    val migrationClient = ZkMigrationClient(zkClient, zkConfigEncoder)
+    val migrationClient = ZkMigrationClient(zkClient, zkConfigEncoder, MetadataVersion.latest())
     var migrationState = migrationClient.getOrCreateMigrationRecoveryState(ZkMigrationLeadershipState.EMPTY)
     migrationState = migrationState.withNewKRaftController(3000, 42)
     migrationState = migrationClient.claimControllerLeadership(migrationState)

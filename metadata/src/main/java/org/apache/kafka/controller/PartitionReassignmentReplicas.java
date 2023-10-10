@@ -18,7 +18,6 @@
 package org.apache.kafka.controller;
 
 import org.apache.kafka.metadata.PartitionRegistration;
-import org.apache.kafka.metadata.Replicas;
 import org.apache.kafka.metadata.placement.PartitionAssignment;
 
 import java.util.ArrayList;
@@ -75,25 +74,12 @@ class PartitionReassignmentReplicas {
     }
 
     boolean isReassignmentInProgress() {
-        return isReassignmentInProgress(
-            removing,
-            adding);
+        return removing.size() > 0 || adding.size() > 0;
     }
 
     static boolean isReassignmentInProgress(PartitionRegistration part) {
-        return isReassignmentInProgress(
-            Replicas.toList(part.removingReplicas),
-            Replicas.toList(part.addingReplicas));
+        return part.removingReplicas.length > 0 || part.addingReplicas.length > 0;
     }
-
-    private static boolean isReassignmentInProgress(
-        List<Integer> removingReplicas,
-        List<Integer> addingReplicas
-    ) {
-        return removingReplicas.size() > 0
-            || addingReplicas.size() > 0;
-    }
-
 
     Optional<CompletedReassignment> maybeCompleteReassignment(List<Integer> targetIsr) {
         // Check if there is a reassignment to complete.

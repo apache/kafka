@@ -285,7 +285,8 @@ class ControllerServer(
             config.passwordEncoderIterations)
           case None => PasswordEncoder.noop()
         }
-        val migrationClient = ZkMigrationClient(zkClient, zkConfigEncoder)
+        val metadataVersion = controller.asInstanceOf[QuorumController].featureControl().metadataVersion()
+        val migrationClient = ZkMigrationClient(zkClient, zkConfigEncoder, metadataVersion)
         val propagator: LegacyPropagator = new MigrationPropagator(config.nodeId, config)
         val migrationDriver = KRaftMigrationDriver.newBuilder()
           .setNodeId(config.nodeId)

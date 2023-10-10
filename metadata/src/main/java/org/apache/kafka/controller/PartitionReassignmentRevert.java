@@ -40,7 +40,7 @@ class PartitionReassignmentRevert {
             new PartitionReassignmentReplicas(
                 Replicas.toList(registration.removingReplicas),
                 Replicas.toList(registration.addingReplicas),
-                Replicas.toList(registration.replicas)
+                Replicas.brokerIdsList(registration.replicas)
             );
 
         this.replicas = ongoingReassignment.originalReplicas();

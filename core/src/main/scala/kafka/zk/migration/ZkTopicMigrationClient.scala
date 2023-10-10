@@ -29,7 +29,8 @@ import org.apache.kafka.common.metadata.PartitionRecord
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.metadata.migration.TopicMigrationClient.TopicVisitorInterest
 import org.apache.kafka.metadata.migration.{MigrationClientException, TopicMigrationClient, ZkMigrationLeadershipState}
-import org.apache.kafka.metadata.{LeaderRecoveryState, PartitionRegistration}
+import org.apache.kafka.metadata.{LeaderRecoveryState, PartitionRegistration, Replicas}
+import org.apache.kafka.server.common.MetadataVersion
 import org.apache.zookeeper.CreateMode
 import org.apache.zookeeper.KeeperException.Code
 
@@ -39,7 +40,10 @@ import scala.collection.mutable.ArrayBuffer
 import scala.jdk.CollectionConverters._
 
 
-class ZkTopicMigrationClient(zkClient: KafkaZkClient) extends TopicMigrationClient with Logging {
+class ZkTopicMigrationClient(
+    zkClient: KafkaZkClient,
+    metadataVersion: MetadataVersion
+  ) extends TopicMigrationClient with Logging {
   override def iterateTopics(
     interests: util.EnumSet[TopicVisitorInterest],
     visitor: TopicMigrationClient.TopicVisitor,
@@ -60,13 +64,18 @@ class ZkTopicMigrationClient(zkClient: KafkaZkClient) extends TopicMigrationClie
         val partitions = partitionAssignments.keys.toSeq
         val leaderIsrAndControllerEpochs = zkClient.getTopicPartitionStates(partitions)
         partitionAssignments.foreach { case (topicPartition, replicaAssignment) =>
-          val replicaList = replicaAssignment.replicas.map(Integer.valueOf).asJava
           val record = new PartitionRecord()
             .setTopicId(topicIdOpt.get)
             .setPartitionId(topicPartition.partition)
-            .setReplicas(replicaList)
             .setAddingReplicas(replicaAssignment.addingReplicas.map(Integer.valueOf).asJava)
             .setRemovingReplicas(replicaAssignment.removingReplicas.map(Integer.valueOf).asJava)
+          val replicaList = replicaAssignment.replicas.map(Integer.valueOf).asJava
+          if (metadataVersion.isDirectoryAssignmentSupported) {
+            record.setAssignment(Replicas.toPartitionRecordReplicaAssignment(
+              Replicas.withUnknownDirs(replicaList)))
+          } else {
+            record.setReplicas(replicaList)
+          }
           leaderIsrAndControllerEpochs.get(topicPartition) match {
             case Some(leaderIsrAndEpoch) =>
               record
@@ -102,7 +111,7 @@ class ZkTopicMigrationClient(zkClient: KafkaZkClient) extends TopicMigrationClie
 
     val assignments = partitions.asScala.map { case (partitionId, partition) =>
       new TopicPartition(topicName, partitionId) ->
-        ReplicaAssignment(partition.replicas, partition.addingReplicas, partition.removingReplicas)
+        ReplicaAssignment(partition.replicaBrokerIds(), partition.addingReplicas, partition.removingReplicas)
     }
 
     val createTopicZNode = {
@@ -177,7 +186,7 @@ class ZkTopicMigrationClient(zkClient: KafkaZkClient) extends TopicMigrationClie
   ): ZkMigrationLeadershipState = wrapZkException {
     val assignments = partitions.asScala.map { case (partitionId, partition) =>
       new TopicPartition(topicName, partitionId) ->
-        ReplicaAssignment(partition.replicas, partition.addingReplicas, partition.removingReplicas)
+        ReplicaAssignment(partition.replicaBrokerIds(), partition.addingReplicas, partition.removingReplicas)
     }
     val request = SetDataRequest(
       TopicZNode.path(topicName),

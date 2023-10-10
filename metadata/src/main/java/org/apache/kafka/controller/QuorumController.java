@@ -657,8 +657,7 @@ public final class QuorumController implements Controller {
         return clusterControl;
     }
 
-    // Visible for testing
-    FeatureControlManager featureControl() {
+    public FeatureControlManager featureControl() {
         return featureControl;
     }
 

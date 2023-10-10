@@ -22,6 +22,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
+import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.slf4j.Logger;
 
@@ -38,7 +39,7 @@ public class PartitionRegistration {
      * A builder class which creates a PartitionRegistration.
      */
     static public class Builder {
-        private int[] replicas;
+        private Replica[] replicas;
         private int[] isr;
         private int[] removingReplicas = Replicas.NONE;
         private int[] addingReplicas = Replicas.NONE;
@@ -49,7 +50,12 @@ public class PartitionRegistration {
         private Integer leaderEpoch;
         private Integer partitionEpoch;
 
-        public Builder setReplicas(int[] replicas) {
+        public Builder setReplicasWithUnknownDirs(int[] replicas) {
+            this.replicas = Replicas.withUnknownDirs(replicas);
+            return this;
+        }
+
+        public Builder setReplicas(Replica[] replicas) {
             this.replicas = replicas;
             return this;
         }
@@ -137,7 +143,7 @@ public class PartitionRegistration {
         }
     }
 
-    public final int[] replicas;
+    public final Replica[] replicas;
     public final int[] isr;
     public final int[] removingReplicas;
     public final int[] addingReplicas;
@@ -153,7 +159,7 @@ public class PartitionRegistration {
     }
 
     public PartitionRegistration(PartitionRecord record) {
-        this(Replicas.toArray(record.replicas()),
+        this(Replicas.fromRecord(record),
             Replicas.toArray(record.isr()),
             Replicas.toArray(record.removingReplicas()),
             Replicas.toArray(record.addingReplicas()),
@@ -165,7 +171,7 @@ public class PartitionRegistration {
             Replicas.toArray(record.lastKnownELR()));
     }
 
-    private PartitionRegistration(int[] replicas, int[] isr, int[] removingReplicas,
+    private PartitionRegistration(Replica[] replicas, int[] isr, int[] removingReplicas,
                                  int[] addingReplicas, int leader, LeaderRecoveryState leaderRecoveryState,
                                  int leaderEpoch, int partitionEpoch, int[] elr, int[] lastKnownElr) {
         this.replicas = replicas;
@@ -183,8 +189,8 @@ public class PartitionRegistration {
     }
 
     public PartitionRegistration merge(PartitionChangeRecord record) {
-        int[] newReplicas = (record.replicas() == null) ?
-            replicas : Replicas.toArray(record.replicas());
+        Replica[] newReplicas = (record.assignment() == null && record.replicas() == null) ?
+                replicas : Replicas.update(replicas, Replicas.fromRecord(record));
         int[] newIsr = (record.isr() == null) ? isr : Replicas.toArray(record.isr());
         int[] newRemovingReplicas = (record.removingReplicas() == null) ?
             removingReplicas : Replicas.toArray(record.removingReplicas());
@@ -291,18 +297,17 @@ public class PartitionRegistration {
     }
 
     public boolean hasPreferredLeader() {
-        return leader == preferredReplica();
+        return leader == preferredReplicaBrokerId();
     }
 
-    public int preferredReplica() {
-        return replicas.length == 0 ? LeaderConstants.NO_LEADER : replicas[0];
+    public int preferredReplicaBrokerId() {
+        return replicas.length == 0 ? LeaderConstants.NO_LEADER : replicas[0].brokerId;
     }
 
-    public ApiMessageAndVersion toRecord(Uuid topicId, int partitionId, short version) {
+    public ApiMessageAndVersion toRecord(Uuid topicId, int partitionId, ImageWriterOptions options) {
         PartitionRecord record = new PartitionRecord().
             setPartitionId(partitionId).
             setTopicId(topicId).
-            setReplicas(Replicas.toList(replicas)).
             setIsr(Replicas.toList(isr)).
             setRemovingReplicas(Replicas.toList(removingReplicas)).
             setAddingReplicas(Replicas.toList(addingReplicas)).
@@ -310,11 +315,22 @@ public class PartitionRegistration {
             setLeaderRecoveryState(leaderRecoveryState.value()).
             setLeaderEpoch(leaderEpoch).
             setPartitionEpoch(partitionEpoch);
-        if (version > 0) {
+        if (options.metadataVersion().isElrSupported()) {
             record.setEligibleLeaderReplicas(Replicas.toList(elr)).
                 setLastKnownELR(Replicas.toList(lastKnownElr));
         }
-        return new ApiMessageAndVersion(record, version);
+        if (options.metadataVersion().isDirectoryAssignmentSupported()) {
+            record.setAssignment(Replicas.toPartitionRecordReplicaAssignment(replicas));
+        } else {
+            boolean meaningfulStateLoss = Arrays.stream(replicas)
+                    .map(Replica::directory)
+                    .anyMatch(d -> !Uuid.UNKNOWN_DIR.equals(d) && !Uuid.SELECTED_DIR.equals(d));
+            if (meaningfulStateLoss) {
+                options.handleLoss("the directory assignment state of one or more replicas");
+            }
+            record.setReplicas(Replicas.brokerIdsList(replicas));
+        }
+        return new ApiMessageAndVersion(record, options.metadataVersion().partitionRecordVersion());
     }
 
     public LeaderAndIsrPartitionState toLeaderAndIsrPartitionState(TopicPartition tp,
@@ -327,7 +343,7 @@ public class PartitionRegistration {
             setLeaderEpoch(leaderEpoch).
             setIsr(Replicas.toList(isr)).
             setPartitionEpoch(partitionEpoch).
-            setReplicas(Replicas.toList(replicas)).
+            setReplicas(Replicas.brokerIdsList(replicas)).
             setAddingReplicas(Replicas.toList(addingReplicas)).
             setRemovingReplicas(Replicas.toList(removingReplicas)).
             setLeaderRecoveryState(leaderRecoveryState.value()).
@@ -378,5 +394,9 @@ public class PartitionRegistration {
         return Arrays.equals(this.replicas, registration.replicas) &&
             Arrays.equals(this.addingReplicas, registration.addingReplicas) &&
             Arrays.equals(this.removingReplicas, registration.removingReplicas);
+    }
+
+    public int[] replicaBrokerIds() {
+        return Replicas.brokerIds(replicas);
     }
 }

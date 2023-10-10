@@ -79,9 +79,10 @@ object BrokerMetadataPublisher extends Logging {
       val partitionId = log.topicPartition.partition()
       Option(newTopicsImage.getPartition(topicId, partitionId)) match {
         case Some(partition) =>
-          if (!partition.replicas.contains(brokerId)) {
-            info(s"Found stray log dir $log: the current replica assignment ${partition.replicas} " +
-              s"does not contain the local brokerId $brokerId.")
+          val replicas = partition.replicaBrokerIds()
+          if (!replicas.contains(brokerId)) {
+            info(s"Found stray log dir $log: the current replica assignment " +
+              s"${replicas.mkString("(", ", ", ")")} does not contain the local brokerId $brokerId.")
             Some(log.topicPartition)
           } else {
             None

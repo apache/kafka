@@ -72,7 +72,7 @@ public class ControllerMetricsTestUtils {
                 break;
         }
         return new PartitionRegistration.Builder().
-            setReplicas(new int[] {0, 1, 2}).
+            setReplicasWithUnknownDirs(new int[] {0, 1, 2}).
             setIsr(new int[] {0, 1, 2}).
             setLeader(leader).
             setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
