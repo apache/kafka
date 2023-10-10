@@ -670,7 +670,7 @@ public abstract class TopicCommand {
         }
     }
 
-    public static class TopicCommandOptions extends CommandDefaultOptions {
+    public final static class TopicCommandOptions extends CommandDefaultOptions {
         private final ArgumentAcceptingOptionSpec<String> bootstrapServerOpt;
 
         private final ArgumentAcceptingOptionSpec<String> commandConfigOpt;
