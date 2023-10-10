@@ -22,10 +22,8 @@ import java.util.function.BiConsumer;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
-import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.FetchSessionHandler;
-import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.UnsentRequest;
 import org.apache.kafka.common.Node;
@@ -71,8 +69,8 @@ public class FetchRequestManager extends AbstractFetch implements RequestManager
     public PollResult poll(long currentTimeMs) {
         return pollInternal(
                 prepareFetchRequests(),
-                this::handleFetchResponse,
-                this::handleFetchResponse
+                this::handleFetchSuccess,
+                this::handleFetchFailure
         );
     }
 
@@ -83,16 +81,14 @@ public class FetchRequestManager extends AbstractFetch implements RequestManager
     public PollResult pollOnClose() {
         return pollInternal(
                 prepareCloseFetchSessionRequests(),
-                this::handleCloseFetchSessionResponse,
-                this::handleCloseFetchSessionResponse
+                this::handleCloseFetchSessionSuccess,
+                this::handleCloseFetchSessionFailure
         );
     }
 
     /**
      * Creates the {@link PollResult poll result} that contains a list of zero or more
-     * {@link FetchRequest.Builder fetch requests}  fetch request},
-     * {@link NetworkClient#send(ClientRequest, long) enqueues/sends it, and adds the {@link RequestFuture callback}
-     * for the response.
+     * {@link FetchRequest.Builder fetch requests}.
      *
      * @param fetchRequests  {@link Map} of {@link Node nodes} to their {@link FetchSessionHandler.FetchRequestData}
      * @param successHandler {@link ResponseHandler Handler for successful responses}

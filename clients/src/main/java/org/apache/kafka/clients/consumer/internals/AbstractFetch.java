@@ -126,15 +126,15 @@ public abstract class AbstractFetch implements Closeable {
     }
 
     /**
-     * Implements the core logic for a successful fetch request/response.
+     * Implements the core logic for a successful fetch response.
      *
      * @param fetchTarget {@link Node} from which the fetch data was requested
      * @param data {@link FetchSessionHandler.FetchRequestData} that represents the session data
      * @param resp {@link ClientResponse} from which the {@link FetchResponse} will be retrieved
      */
-    protected void handleFetchResponse(final Node fetchTarget,
-                                       final FetchSessionHandler.FetchRequestData data,
-                                       final ClientResponse resp) {
+    protected void handleFetchSuccess(final Node fetchTarget,
+                                      final FetchSessionHandler.FetchRequestData data,
+                                      final ClientResponse resp) {
         try {
             final FetchResponse response = (FetchResponse) resp.responseBody();
             final FetchSessionHandler handler = sessionHandler(fetchTarget.id());
@@ -205,15 +205,15 @@ public abstract class AbstractFetch implements Closeable {
     }
 
     /**
-     * Implements the core logic for a failed fetch request/response.
+     * Implements the core logic for a failed fetch response.
      *
      * @param fetchTarget {@link Node} from which the fetch data was requested
      * @param data        {@link FetchSessionHandler.FetchRequestData} from request
      * @param t           {@link Throwable} representing the error that resulted in the failure
      */
-    protected void handleFetchResponse(final Node fetchTarget,
-                                       final FetchSessionHandler.FetchRequestData data,
-                                       final Throwable t) {
+    protected void handleFetchFailure(final Node fetchTarget,
+                                      final FetchSessionHandler.FetchRequestData data,
+                                      final Throwable t) {
         try {
             final FetchSessionHandler handler = sessionHandler(fetchTarget.id());
 
@@ -226,17 +226,17 @@ public abstract class AbstractFetch implements Closeable {
         }
     }
 
-    protected void handleCloseFetchSessionResponse(final Node fetchTarget,
-                                                   final FetchSessionHandler.FetchRequestData data,
-                                                   final ClientResponse ignored) {
+    protected void handleCloseFetchSessionSuccess(final Node fetchTarget,
+                                                  final FetchSessionHandler.FetchRequestData data,
+                                                  final ClientResponse ignored) {
         int sessionId = data.metadata().sessionId();
         removePendingFetchRequest(fetchTarget, sessionId);
         log.debug("Successfully sent a close message for fetch session: {} to node: {}", sessionId, fetchTarget);
     }
 
-    public void handleCloseFetchSessionResponse(final Node fetchTarget,
-                                                final FetchSessionHandler.FetchRequestData data,
-                                                final Throwable t) {
+    public void handleCloseFetchSessionFailure(final Node fetchTarget,
+                                               final FetchSessionHandler.FetchRequestData data,
+                                               final Throwable t) {
         int sessionId = data.metadata().sessionId();
         removePendingFetchRequest(fetchTarget, sessionId);
         log.debug("Unable to send a close message for fetch session: {} to node: {}. " +

@@ -105,12 +105,12 @@ public class Fetcher<K, V> extends AbstractFetch {
                 fetchRequests,
                 (fetchTarget, data, clientResponse) -> {
                     synchronized (Fetcher.this) {
-                        handleFetchResponse(fetchTarget, data, clientResponse);
+                        handleFetchSuccess(fetchTarget, data, clientResponse);
                     }
                 },
                 (fetchTarget, data, error) -> {
                     synchronized (Fetcher.this) {
-                        handleFetchResponse(fetchTarget, data, error);
+                        handleFetchFailure(fetchTarget, data, error);
                     }
                 });
         return fetchRequests.size();
@@ -119,8 +119,8 @@ public class Fetcher<K, V> extends AbstractFetch {
     protected void maybeCloseFetchSessions(final Timer timer) {
         final List<RequestFuture<ClientResponse>> requestFutures = sendFetchesInternal(
                 prepareCloseFetchSessionRequests(),
-                this::handleCloseFetchSessionResponse,
-                this::handleCloseFetchSessionResponse
+                this::handleCloseFetchSessionSuccess,
+                this::handleCloseFetchSessionFailure
         );
 
         // Poll to ensure that request has been written to the socket. Wait until either the timer has expired or until
