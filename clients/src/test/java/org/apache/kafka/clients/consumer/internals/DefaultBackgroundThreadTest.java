@@ -391,20 +391,21 @@ public class DefaultBackgroundThreadTest {
         properties.put(RETRY_BACKOFF_MS_CONFIG, RETRY_BACKOFF_MS);
 
         return new DefaultBackgroundThread(
-                this.time,
-                new ConsumerConfig(properties),
-                new LogContext(),
-                applicationEventsQueue,
-                backgroundEventsQueue,
-                this.errorEventHandler,
-                applicationEventProcessor,
-                this.metadata,
-                this.networkClient,
-                this.membershipManager,
-                this.coordinatorManager,
-                this.commitManager,
-                this.offsetsRequestManager,
-                this.topicMetadataRequestManager);
+            this.time,
+            new ConsumerConfig(properties),
+            new LogContext(),
+            applicationEventsQueue,
+            backgroundEventsQueue,
+            this.errorEventHandler,
+            applicationEventProcessor,
+            this.metadata,
+            this.networkClient,
+            this.membershipManager,
+            this.coordinatorManager,
+            this.commitManager,
+            this.offsetsRequestManager,
+            this.topicMetadataRequestManager,
+            this.heartbeatRequestManager);
     }
 
     private NetworkClientDelegate.PollResult mockPollCoordinatorResult() {

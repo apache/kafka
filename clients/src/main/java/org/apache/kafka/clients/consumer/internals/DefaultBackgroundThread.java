@@ -180,29 +180,28 @@ public class DefaultBackgroundThread extends KafkaThread {
             if (groupId != null) {
                 membershipManager = Optional.of(new MembershipManagerImpl(groupId));
                 coordinatorRequestManager = new CoordinatorRequestManager(
-                        this.time,
-                        logContext,
-                        retryBackoffMs,
-                        retryBackoffMaxMs,
-                        this.errorEventHandler,
-                        membershipManager.get().groupId());
+                    this.time,
+                    logContext,
+                    retryBackoffMs,
+                    retryBackoffMaxMs,
+                    this.errorEventHandler,
+                    membershipManager.get().groupId());
                 commitRequestManager = new CommitRequestManager(
-                        this.time,
-                        logContext,
-                        subscriptionState,
-                        config,
-                        coordinatorRequestManager,
-                        groupState);
-                MembershipManager membershipManager = new MembershipManagerImpl(groupState.groupId);
+                    this.time,
+                    logContext,
+                    subscriptionState,
+                    config,
+                    coordinatorRequestManager,
+                    membershipManager.get());
+                MembershipManager membershipManager = new MembershipManagerImpl(groupId);
                 heartbeatRequestManager = new HeartbeatRequestManager(
-                        this.time,
-                        logContext,
-                        config,
-                        coordinatorRequestManager,
-                        subscriptionState,
-                        membershipManager,
-                        errorEventHandler);
-                        membershipManager.get());
+                    this.time,
+                    logContext,
+                    config,
+                    coordinatorRequestManager,
+                    subscriptionState,
+                    membershipManager,
+                    errorEventHandler);
             } else {
                 membershipManager = Optional.empty();
             }

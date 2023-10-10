@@ -173,19 +173,22 @@ public class CommitRequestManager implements RequestManager {
     private class OffsetCommitRequestState {
         private final Map<TopicPartition, OffsetAndMetadata> offsets;
         private final String groupId;
-        private final int memberEpoch;
+        private final String memberId;
         private final String groupInstanceId;
         private final CompletableFuture<Void> future;
+        private int memberEpoch;
 
         public OffsetCommitRequestState(final Map<TopicPartition, OffsetAndMetadata> offsets,
                                         final String groupId,
                                         final String groupInstanceId,
-                                        final int memberEpoch) {
+                                        final int memberEpoch,
+                                        final String memberId) {
             this.offsets = offsets;
             this.future = new CompletableFuture<>();
             this.groupId = groupId;
             this.groupInstanceId = groupInstanceId;
             this.memberEpoch = memberEpoch;
+            this.memberId = memberId;
         }
 
         public NetworkClientDelegate.UnsentRequest toUnsentRequest() {
@@ -211,9 +214,9 @@ public class CommitRequestManager implements RequestManager {
 
             OffsetCommitRequest.Builder builder = new OffsetCommitRequest.Builder(
                     new OffsetCommitRequestData()
-                            .setGroupId(this.groupId)
-                            .setGenerationIdOrMemberEpoch(membershipManager.memberEpoch())
-                            .setMemberId(membershipManager.memberId())
+                            .setGroupId(groupId)
+                            .setGenerationIdOrMemberEpoch(memberEpoch)
+                            .setMemberId(memberId)
                             .setGroupInstanceId(groupInstanceId)
                             .setTopics(new ArrayList<>(requestTopicDataMap.values())));
             return new NetworkClientDelegate.UnsentRequest(
@@ -395,10 +398,11 @@ public class CommitRequestManager implements RequestManager {
         CompletableFuture<Void> addOffsetCommitRequest(final Map<TopicPartition, OffsetAndMetadata> offsets) {
             // TODO: Dedupe committing the same offsets to the same partitions
             OffsetCommitRequestState request = new OffsetCommitRequestState(
-                    offsets,
-                    membershipManager.groupId(),
-                    membershipManager.groupInstanceId().orElse(null),
-                    membershipManager.memberEpoch());
+                offsets,
+                membershipManager.groupId(),
+                membershipManager.groupInstanceId().orElse(null),
+                membershipManager.memberEpoch(),
+                membershipManager.memberId());
             unsentOffsetCommits.add(request);
             return request.future;
         }
