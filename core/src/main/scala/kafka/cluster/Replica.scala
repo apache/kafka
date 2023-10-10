@@ -117,7 +117,7 @@ class Replica(val brokerId: Int, val topicPartition: TopicPartition, val metadat
         case kRaftMetadataCache: KRaftMetadataCache =>
           val cachedBrokerEpoch = kRaftMetadataCache.getAliveBrokerEpoch(brokerId)
           // Fence the update if it provides a stale broker epoch.
-          if (brokerEpoch != -1 && cachedBrokerEpoch.exists(_ != brokerEpoch)) {
+          if (brokerEpoch != -1 && cachedBrokerEpoch.exists(_ > brokerEpoch)) {
             throw new NotLeaderOrFollowerException(s"Received stale fetch state update. broker epoch=$brokerEpoch " +
               s"vs expected=${cachedBrokerEpoch.get}")
           }
