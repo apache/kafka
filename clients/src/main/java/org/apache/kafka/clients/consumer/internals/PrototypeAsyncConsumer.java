@@ -293,10 +293,9 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     private void processRebalanceCallback(final RebalanceCallbackEvent event) {
         SortedSet<TopicPartition> partitions = event.partitions();
         CompletableFuture<Void> future = event.future();
-        Throwable invocationException = null;
+        Throwable invocationException;
 
         try {
-
             switch (event.type()) {
                 case REVOKE_PARTITIONS:
                     invocationException = consumerRebalanceListenerInvoker.invokePartitionsRevoked(partitions);
@@ -309,6 +308,9 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
                 case LOSE_PARTITIONS:
                     invocationException = consumerRebalanceListenerInvoker.invokePartitionsLost(partitions);
                     break;
+
+                default:
+                    invocationException = new IllegalArgumentException("Could not invoke the rebalance callback for unexpected event type " + event.type());
             }
         } catch (Throwable t) {
             invocationException = t;
