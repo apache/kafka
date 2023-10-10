@@ -68,8 +68,8 @@ public class MembershipManagerImpl implements MembershipManager {
 
     /**
      * Assignor selection configured for the member, that will be sent out to the server on the
-     * {@link ConsumerGroupHeartbeatRequest}. If empty, then the server will select the assignor
-     * to use.
+     * {@link ConsumerGroupHeartbeatRequest}. This will default to using server-side assignor,
+     * letting the server choose the specific assignor implementation to use.
      */
     private AssignorSelection assignorSelection;
 

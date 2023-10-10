@@ -53,7 +53,6 @@ public class AssignorSelection {
     }
 
     public static AssignorSelection defaultAssignor() {
-        // TODO: review default selection
         return new AssignorSelection(Type.SERVER, null);
     }
 
