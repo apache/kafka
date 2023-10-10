@@ -21,7 +21,8 @@ import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import java.util.Optional;
 
 /**
- * Manages group membership for a single member.
+ * Manages membership of a single member to a consumer group.
+ * <p/>
  * Responsible for:
  * <li>Keeping member state</li>
  * <li>Keeping assignment for the member</li>
@@ -60,14 +61,13 @@ public interface MembershipManager {
      *
      * @param response Heartbeat response to extract member info and errors from.
      */
-    // TODO: rename to indicate that this is for the success path (ex. updateStateOnSuccessfulHeartbeat)
     void updateState(ConsumerGroupHeartbeatResponseData response);
 
     /**
      * Returns the {@link AssignorSelection} configured for the member, that will be sent out to
      * the server to be used. If empty, then the server will select the assignor.
      */
-    Optional<AssignorSelection> assignorSelection();
+    AssignorSelection assignorSelection();
 
     /**
      * Returns the current assignment for the member.
@@ -78,18 +78,24 @@ public interface MembershipManager {
      * Update the assignment for the member, indicating that the provided assignment is the new
      * current assignment.
      */
-    void onTargetAssignmentProcessComplete(Optional<Throwable> error);
+    void onTargetAssignmentProcessComplete(ConsumerGroupHeartbeatResponseData.Assignment assignment);
 
     /**
      * Transition the member to the FENCED state and update the member info as required. This is
      * only invoked when the heartbeat returns a FENCED_MEMBER_EPOCH or UNKNOWN_MEMBER_ID error.
      * code.
      */
-    void fenceMember();
+    void transitionToFenced();
 
     /**
      * Transition the member to the FAILED state and update the member info as required. This is
-     * invoked when the heartbeat returns an UNRELEASED_MEMBER_ID error code.
+     * invoked when un-recoverable errors occur (ex. when the heartbeat returns a non-retriable
+     * error or when errors occur while executing the user-provided callbacks)
      */
-    void failMember();
+    void transitionToFailed();
+
+    /**
+     * Return true if the member should send heartbeat to the coordinator
+     */
+    boolean shouldSendHeartbeat();
 }

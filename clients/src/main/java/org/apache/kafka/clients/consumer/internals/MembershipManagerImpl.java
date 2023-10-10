@@ -71,7 +71,7 @@ public class MembershipManagerImpl implements MembershipManager {
      * {@link ConsumerGroupHeartbeatRequest}. If empty, then the server will select the assignor
      * to use.
      */
-    private Optional<AssignorSelection> assignorSelection;
+    private AssignorSelection assignorSelection;
 
     /**
      * Assignment that the member received from the server and successfully processed.
@@ -97,12 +97,13 @@ public class MembershipManagerImpl implements MembershipManager {
                                  String groupInstanceId,
                                  AssignorSelection assignorSelection,
                                  LogContext logContext) {
-        if (groupId == null) {
-            throw new IllegalArgumentException("Group ID cannot be null.");
-        }
         this.groupId = groupId;
         this.state = MemberState.UNJOINED;
-        this.assignorSelection = Optional.ofNullable(assignorSelection);
+        if (assignorSelection == null) {
+            setAssignorSelection(AssignorSelection.defaultAssignor());
+        } else {
+            setAssignorSelection(assignorSelection);
+        }
         this.groupInstanceId = Optional.ofNullable(groupInstanceId);
         this.targetAssignment = Optional.empty();
         this.log = logContext.logger(MembershipManagerImpl.class);
@@ -116,9 +117,9 @@ public class MembershipManagerImpl implements MembershipManager {
      *                          member.
      * @throws IllegalArgumentException If the provided optional assignor selection is null.
      */
-    public void setAssignorSelection(Optional<AssignorSelection> assignorSelection) {
+    public final void setAssignorSelection(AssignorSelection assignorSelection) {
         if (assignorSelection == null) {
-            throw new IllegalArgumentException("Optional assignor selection cannot be null");
+            throw new IllegalArgumentException("Assignor selection cannot be null");
         }
         this.assignorSelection = assignorSelection;
     }
@@ -134,7 +135,6 @@ public class MembershipManagerImpl implements MembershipManager {
             throw new IllegalStateException(String.format("Invalid state transition from %s to %s",
                     state, nextState));
         }
-        log.trace("Member %s state transition from %s to %s", memberId, state, nextState);
         this.state = nextState;
     }
 
@@ -176,7 +176,11 @@ public class MembershipManagerImpl implements MembershipManager {
     @Override
     public void updateState(ConsumerGroupHeartbeatResponseData response) {
         if (response.errorCode() != Errors.NONE.code()) {
-            throw new IllegalArgumentException("Invalid response with error");
+            String errorMessage = String.format(
+                    "Unexpected error in Heartbeat response. Expected no error, but received: %s",
+                    Errors.forCode(response.errorCode())
+            );
+            throw new IllegalArgumentException(errorMessage);
         }
         this.memberId = response.memberId();
         this.memberEpoch = response.memberEpoch();
@@ -191,7 +195,7 @@ public class MembershipManagerImpl implements MembershipManager {
      * {@inheritDoc}
      */
     @Override
-    public void fenceMember() {
+    public void transitionToFenced() {
         resetEpoch();
         transitionTo(MemberState.FENCED);
     }
@@ -200,8 +204,14 @@ public class MembershipManagerImpl implements MembershipManager {
      * {@inheritDoc}
      */
     @Override
-    public void failMember() {
+    public void transitionToFailed() {
+        log.error("Member {} transitioned to {} state", memberId, MemberState.FAILED);
         transitionTo(MemberState.FAILED);
+    }
+
+    @Override
+    public boolean shouldSendHeartbeat() {
+        return state() != MemberState.FAILED;
     }
 
     /**
@@ -219,15 +229,20 @@ public class MembershipManagerImpl implements MembershipManager {
 
     /**
      * Take new target assignment received from the server and set it as targetAssignment to be
-     * processed. If an assignment is already in process this newTargetAssignment will be ignored
-     * for now.
+     * processed. Following the consumer group protocol, the server won't send a new target
+     * member while a previous one hasn't been acknowledged by the member, so this will fail
+     * if a target assignment already exists.
+     *
+     * @throws IllegalStateException If a target assignment already exists.
      */
     private void setTargetAssignment(ConsumerGroupHeartbeatResponseData.Assignment newTargetAssignment) {
         if (!targetAssignment.isPresent()) {
+            log.debug("Member {} accepted new target assignment {} to reconcile", memberId, newTargetAssignment);
             targetAssignment = Optional.of(newTargetAssignment);
         } else {
-            log.debug("Temporarily ignoring assignment %s received while member %s is still " +
-                    "processing a previous assignment.", newTargetAssignment, memberId);
+            transitionToFailed();
+            throw new IllegalStateException("A target assignment pending to be reconciled already" +
+                    " exists.");
         }
     }
 
@@ -254,7 +269,7 @@ public class MembershipManagerImpl implements MembershipManager {
      * {@inheritDoc}
      */
     @Override
-    public Optional<AssignorSelection> assignorSelection() {
+    public AssignorSelection assignorSelection() {
         return this.assignorSelection;
     }
 
@@ -279,22 +294,26 @@ public class MembershipManagerImpl implements MembershipManager {
      * This indicates that the reconciliation of the target assignment has been successfully
      * completed, so it will make it effective by assigning it to the current assignment.
      *
-     * @params error Exception found while executing the user-provided callbacks to process the
-     * target assignment. Empty optional if no errors occurred.
+     * @params Assignment that has been successfully reconciled. This is expected to
+     * match the target assignment defined in {@link #targetAssignment()}
      */
     @Override
-    public void onTargetAssignmentProcessComplete(Optional<Throwable> error) {
-        if (!targetAssignment.isPresent()) {
-            throw new IllegalStateException("Unexpected empty target assignment when completing " +
-                    "reconciliation process.");
+    public void onTargetAssignmentProcessComplete(ConsumerGroupHeartbeatResponseData.Assignment assignment) {
+        if (assignment == null) {
+            throw new IllegalArgumentException("Assignment cannot be null");
         }
-        if (!error.isPresent()) {
-            this.currentAssignment = targetAssignment.get();
-            targetAssignment = Optional.empty();
-            maybeTransitionToStable();
-        } else {
-            log.debug("Updating state after assignment process failed");
-            transitionTo(MemberState.FAILED);
+        if (!assignment.equals(targetAssignment.orElse(null))) {
+            // This could be simplified to remove the assignment param and just assume that what
+            // was reconciled was the targetAssignment, but keeping it explicit and failing fast
+            // here to uncover any issues in the interaction of the assignment processing logic
+            // and this.
+            throw new IllegalStateException(String.format("Assignment that has been reconciled " +
+                    "does not match the initial target assignment. %n" +
+                    "Target assignment : %s %n" +
+                    "Assignment reconciled: %s", targetAssignment.orElse(null), assignment));
         }
+        this.currentAssignment = assignment;
+        targetAssignment = Optional.empty();
+        maybeTransitionToStable();
     }
 }
