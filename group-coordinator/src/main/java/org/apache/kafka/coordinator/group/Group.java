@@ -121,7 +121,7 @@ public interface Group {
     void createGroupTombstoneRecords(List<Record> records);
 
     /**
-     * @return Whether the group can be deleted or not.
+     * @return Whether the group is in Empty state.
      */
     boolean isEmpty();
 

@@ -442,7 +442,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
     }
 
     /**
-     * For each group, remove all expired offsets. If all offsets for the group is removed and the group is eligible
+     * For each group, remove all expired offsets. If all offsets for the group are removed and the group is eligible
      * for deletion, delete the group.
      *
      * @return The list of tombstones (offset commit and group metadata) to append.

@@ -724,4 +724,50 @@ public class ConsumerGroupTest {
         assertEquals(commitTimestamp, condition.baseTimestamp().apply(offsetAndMetadata));
         assertTrue(condition.isOffsetExpired(offsetAndMetadata, currentTimestamp, offsetsRetentionMs));
     }
+
+    @Test
+    public void testIsSubscribedToTopic() {
+        Uuid fooTopicId = Uuid.randomUuid();
+        Uuid barTopicId = Uuid.randomUuid();
+
+        MetadataImage image = new GroupMetadataManagerTest.MetadataImageBuilder()
+            .addTopic(fooTopicId, "foo", 1)
+            .addTopic(barTopicId, "bar", 2)
+            .addRacks()
+            .build();
+
+        ConsumerGroupMember member1 = new ConsumerGroupMember.Builder("member1")
+            .setSubscribedTopicNames(Collections.singletonList("foo"))
+            .build();
+        ConsumerGroupMember member2 = new ConsumerGroupMember.Builder("member2")
+            .setSubscribedTopicNames(Collections.singletonList("bar"))
+            .build();
+
+        ConsumerGroup consumerGroup = createConsumerGroup("group-foo");
+
+        consumerGroup.updateMember(member1);
+        consumerGroup.updateMember(member2);
+
+        assertEquals(
+            mkMap(
+                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1, mkMapOfPartitionRacks(1))),
+                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2, mkMapOfPartitionRacks(2)))
+            ),
+            consumerGroup.computeSubscriptionMetadata(
+                null,
+                null,
+                image.topics(),
+                image.cluster()
+            )
+        );
+
+        assertTrue(consumerGroup.isSubscribedToTopic("foo"));
+        assertTrue(consumerGroup.isSubscribedToTopic("bar"));
+
+        consumerGroup.removeMember("member1");
+        assertFalse(consumerGroup.isSubscribedToTopic("foo"));
+
+        consumerGroup.removeMember("member2");
+        assertFalse(consumerGroup.isSubscribedToTopic("bar"));
+    }
 }
