@@ -49,21 +49,21 @@ public class Uuid implements Comparable<Uuid> {
     /**
      * A UUID that is used to identify new or unknown dir assignments.
      */
-    public static final Uuid UNKNOWN_DIR = ZERO_UUID;
+    public static final Uuid UNASSIGNED_DIR = ZERO_UUID;
 
     /**
      * A UUID that is used to represent unspecified offline dirs.
      */
-    public static final Uuid OFFLINE_DIR = ONE_UUID;
+    public static final Uuid LOST_DIR = ONE_UUID;
 
     /**
      * A UUID that is used to represent and unspecified log directory,
      * that is expected to have been previously selected to host an
-     * associated replica. This contrasts with {@code UNKNOWN_DIR},
+     * associated replica. This contrasts with {@code UNASSIGNED_DIR},
      * which is associated with (typically new) replicas that may not
      * yet have been placed in any log directory.
      */
-    public static final Uuid SELECTED_DIR = new Uuid(0L, 2L);
+    public static final Uuid MIGRATING_DIR = new Uuid(0L, 2L);
 
     /**
      * The set of reserved UUIDs that will never be returned by the randomUuid method.
@@ -75,9 +75,9 @@ public class Uuid implements Comparable<Uuid> {
                 METADATA_TOPIC_ID,
                 ZERO_UUID,
                 ONE_UUID,
-                UNKNOWN_DIR,
-                OFFLINE_DIR,
-                SELECTED_DIR
+                UNASSIGNED_DIR,
+                LOST_DIR,
+                MIGRATING_DIR
         ));
         // The first 100 UUIDs are reserved for future use.
         for (long i = 0L; i < 100L; i++) {
