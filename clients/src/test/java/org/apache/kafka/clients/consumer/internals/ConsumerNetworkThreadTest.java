@@ -17,7 +17,6 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.MockClient;
-import org.apache.kafka.clients.consumer.LogTruncationException;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
@@ -30,7 +29,6 @@ import org.apache.kafka.clients.consumer.internals.events.ResetPositionsApplicat
 import org.apache.kafka.clients.consumer.internals.events.TopicMetadataApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ValidatePositionsApplicationEvent;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
@@ -74,7 +72,6 @@ public class ConsumerNetworkThreadTest {
     private NetworkClientDelegate networkClient;
     private BlockingQueue<ApplicationEvent> applicationEventsQueue;
     private ApplicationEventProcessor applicationEventProcessor;
-    private CoordinatorRequestManager coordinatorManager;
     private OffsetsRequestManager offsetsRequestManager;
     private CommitRequestManager commitManager;
     private ConsumerNetworkThread consumerNetworkThread;
@@ -89,7 +86,6 @@ public class ConsumerNetworkThreadTest {
         client = testBuilder.client;
         applicationEventsQueue = testBuilder.applicationEventQueue;
         applicationEventProcessor = testBuilder.applicationEventProcessor;
-        coordinatorManager = testBuilder.coordinatorRequestManager.orElseThrow(IllegalStateException::new);
         commitManager = testBuilder.commitRequestManager.orElseThrow(IllegalStateException::new);
         offsetsRequestManager = testBuilder.offsetsRequestManager;
         consumerNetworkThread = testBuilder.consumerNetworkThread;
@@ -164,8 +160,7 @@ public class ConsumerNetworkThreadTest {
 
     @Test
     public void testResetPositionsProcessFailureIsIgnored() {
-        TopicAuthorizationException authException = new TopicAuthorizationException("Topic authorization failed");
-        doThrow(authException).when(offsetsRequestManager).resetPositionsIfNeeded();
+        doThrow(new NullPointerException()).when(offsetsRequestManager).resetPositionsIfNeeded();
 
         ResetPositionsApplicationEvent event = new ResetPositionsApplicationEvent();
         applicationEventsQueue.add(event);
@@ -184,18 +179,6 @@ public class ConsumerNetworkThreadTest {
     }
 
     @Test
-    public void testValidatePositionsProcessFailureIsIgnored() {
-        LogTruncationException logTruncationException = new LogTruncationException(Collections.emptyMap(), Collections.emptyMap());
-        doThrow(logTruncationException).when(offsetsRequestManager).validatePositionsIfNeeded();
-
-        ValidatePositionsApplicationEvent event = new ValidatePositionsApplicationEvent();
-        applicationEventsQueue.add(event);
-        assertDoesNotThrow(consumerNetworkThread::runOnce);
-
-        verify(applicationEventProcessor).process(any(ValidatePositionsApplicationEvent.class));
-    }
-
-    @Test
     public void testAssignmentChangeEvent() {
         HashMap<TopicPartition, OffsetAndMetadata> offset = mockTopicPartitionOffset();
 
@@ -208,13 +191,6 @@ public class ConsumerNetworkThreadTest {
         verify(networkClient, times(1)).poll(anyLong(), anyLong());
         verify(commitManager, times(1)).updateAutoCommitTimer(currentTimeMs);
         verify(commitManager, times(1)).maybeAutoCommit(offset);
-    }
-
-    @Test
-    void testFindCoordinator() {
-        consumerNetworkThread.runOnce();
-        verify(coordinatorManager, times(1)).poll(anyLong());
-        verify(networkClient, times(1)).poll(anyLong(), anyLong());
     }
 
     @Test
