@@ -592,7 +592,7 @@ public class OffsetMetadataManager {
         });
 
         if (!expiredPartitions.isEmpty()) {
-            log.info("[GroupId {}] hasAllOffsetsExpired={}; Expiring offsets of partitions: {}",
+            log.info("[GroupId {}] Expiring offsets of partitions (hasAllOffsetsExpired={}): {}",
                 groupId, hasAllOffsetsExpired, String.join(", ", expiredPartitions));
         }
 

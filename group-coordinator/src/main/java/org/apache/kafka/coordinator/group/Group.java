@@ -107,7 +107,7 @@ public interface Group {
     /**
      * Returns true if the group is actively subscribed to the topic.
      *
-     * @param topic                            The topic name.
+     * @param topic  The topic name.
      *
      * @return Whether the group is subscribed to the topic.
      */

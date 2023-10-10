@@ -42,7 +42,7 @@ public class GroupCoordinatorConfigTest {
             120,
             10 * 60 * 1000,
             600000L,
-            24 * 60 * 1000L
+            24 * 60 * 60 * 1000L
         );
 
         assertEquals(10, config.numThreads);

@@ -37,7 +37,7 @@ public class OffsetExpirationConditionImpl implements OffsetExpirationCondition 
      * exceeded the offset retention.
      *
      * @param offset              The offset and metadata.
-     * @param currentTimestampMs    The current timestamp.
+     * @param currentTimestampMs  The current timestamp.
      * @param offsetsRetentionMs  The offsets retention in milliseconds.
      *
      * @return Whether the given offset is expired or not.

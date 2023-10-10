@@ -923,7 +923,8 @@ public class GenericGroup implements Group {
                 // - If there is no current state timestamp (old group metadata schema) and retention period has passed
                 //   since the last commit timestamp, expire the offset
                 return Optional.of(new OffsetExpirationConditionImpl(
-                    offsetAndMetadata -> currentStateTimestamp.orElse(offsetAndMetadata.commitTimestampMs)));
+                    offsetAndMetadata -> currentStateTimestamp.orElse(offsetAndMetadata.commitTimestampMs))
+                );
             } else if (usesConsumerGroupProtocol() && subscribedTopics.isPresent() && isInState(STABLE)) {
                 // Consumers exist in the group and group is Stable =>
                 // - If the group is aware of the subscribed topics and retention period had passed since the
@@ -1105,11 +1106,12 @@ public class GenericGroup implements Group {
     }
 
     /**
-     * Returns true if the consumer group is actively subscribed to the topic. When the generic
-     * group does not know, because the information is not available yet or because it has
-     * failed to parse the Consumer Protocol, it returns whether the group is using the consumer protocol.
+     * Returns true if the generic group is actively subscribed to the topic. When the generic group does not know,
+     * because the information is not available yet or because it has failed to parse the Consumer Protocol, we
+     * consider the group not subscribed to the topic if the group is not using any protocol or not using the
+     * consumer group protocol.
      *
-     * @param topic                            The topic name.
+     * @param topic  The topic name.
      *
      * @return whether the group is subscribed to the topic.
      */
