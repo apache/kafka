@@ -20,13 +20,13 @@ package kafka.log
 import com.yammer.metrics.core.{Gauge, MetricName}
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.server.metadata.{ConfigRepository, MockConfigRepository}
-import kafka.server.BrokerTopicStats
+import kafka.server.{BrokerMetadataCheckpoint, BrokerTopicStats, KafkaServer, RawMetaProperties}
 import kafka.utils._
 import org.apache.directory.api.util.FileUtils
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.OffsetOutOfRangeException
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.common.{KafkaException, TopicPartition}
+import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.ArgumentMatchers.any
@@ -1009,5 +1009,31 @@ class LogManagerTest {
     assertFalse(LogManager.waitForAllToComplete(Seq(failure, failure), _ => failureCount += 1))
     assertEquals(8, invokedCount)
     assertEquals(4, failureCount)
+  }
+
+  @Test
+  def testLoadDirectoryIds(): Unit = {
+    def writeMetaProperties(dir: File, id: Option[String] = None): Unit = {
+      val rawProps = new RawMetaProperties()
+      rawProps.nodeId = 1
+      rawProps.clusterId = "IVT1Seu3QjacxS7oBTKhDQ"
+      id.foreach(v => rawProps.directoryId = v)
+      new BrokerMetadataCheckpoint(new File(dir, KafkaServer.brokerMetaPropsFile)).write(rawProps.props)
+    }
+    val dirs: Seq[File] = Seq.fill(5)(TestUtils.tempDir())
+    writeMetaProperties(dirs(0))
+    writeMetaProperties(dirs(1), Some("ZwkGXjB0TvSF6mjVh6gO7Q"))
+    // no meta.properties on dirs(2)
+    writeMetaProperties(dirs(3), Some("kQfNPJ2FTHq_6Qlyyv6Jqg"))
+    writeMetaProperties(dirs(4))
+
+    logManager = createLogManager(dirs)
+
+    assertTrue(logManager.directoryId(dirs(0).getAbsolutePath).isDefined)
+    assertEquals(Some(Uuid.fromString("ZwkGXjB0TvSF6mjVh6gO7Q")), logManager.directoryId(dirs(1).getAbsolutePath))
+    assertEquals(None, logManager.directoryId(dirs(2).getAbsolutePath))
+    assertEquals(Some(Uuid.fromString("kQfNPJ2FTHq_6Qlyyv6Jqg")), logManager.directoryId(dirs(3).getAbsolutePath))
+    assertTrue(logManager.directoryId(dirs(4).getAbsolutePath).isDefined)
+    assertEquals(4, logManager.directoryIds.size)
   }
 }

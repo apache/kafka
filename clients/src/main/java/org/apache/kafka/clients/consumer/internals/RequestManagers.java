@@ -32,6 +32,7 @@ public class RequestManagers {
 
     public final Optional<CoordinatorRequestManager> coordinatorRequestManager;
     public final Optional<CommitRequestManager> commitRequestManager;
+    private final Optional<HeartbeatRequestManager> heartbeatRequestManager;
     public final OffsetsRequestManager offsetsRequestManager;
     public final TopicMetadataRequestManager topicMetadataRequestManager;
     private final List<Optional<? extends RequestManager>> entries;
@@ -39,16 +40,19 @@ public class RequestManagers {
     public RequestManagers(OffsetsRequestManager offsetsRequestManager,
                            TopicMetadataRequestManager topicMetadataRequestManager,
                            Optional<CoordinatorRequestManager> coordinatorRequestManager,
-                           Optional<CommitRequestManager> commitRequestManager) {
+                           Optional<CommitRequestManager> commitRequestManager,
+                           Optional<HeartbeatRequestManager> heartbeatRequestManager) {
         this.offsetsRequestManager = requireNonNull(offsetsRequestManager,
                 "OffsetsRequestManager cannot be null");
         this.coordinatorRequestManager = coordinatorRequestManager;
         this.commitRequestManager = commitRequestManager;
         this.topicMetadataRequestManager = topicMetadataRequestManager;
+        this.heartbeatRequestManager = heartbeatRequestManager;
 
         List<Optional<? extends RequestManager>> list = new ArrayList<>();
         list.add(coordinatorRequestManager);
         list.add(commitRequestManager);
+        list.add(heartbeatRequestManager);
         list.add(Optional.of(offsetsRequestManager));
         list.add(Optional.of(topicMetadataRequestManager));
         entries = Collections.unmodifiableList(list);

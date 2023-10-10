@@ -211,7 +211,7 @@ public class ReadOnlyTask implements Task {
 
     @Override
     public StateStore getStore(final String name) {
-        throw new UnsupportedOperationException("This task is read-only");
+        return task.getStore(name);
     }
 
     @Override

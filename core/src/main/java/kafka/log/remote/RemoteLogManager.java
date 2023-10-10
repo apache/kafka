@@ -193,7 +193,7 @@ public class RemoteLogManager implements Closeable {
 
         remoteLogStorageManager = createRemoteStorageManager();
         remoteLogMetadataManager = createRemoteLogMetadataManager();
-        indexCache = new RemoteIndexCache(1024, remoteLogStorageManager, logDir);
+        indexCache = new RemoteIndexCache(rlmConfig.remoteLogIndexFileCacheTotalSizeBytes(), remoteLogStorageManager, logDir);
         delayInMs = rlmConfig.remoteLogManagerTaskIntervalMs();
         rlmScheduledThreadPool = new RLMScheduledThreadPool(rlmConfig.remoteLogManagerThreadPoolSize());
 
@@ -209,6 +209,10 @@ public class RemoteLogManager implements Closeable {
                 rlmConfig.remoteLogReaderThreads(),
                 rlmConfig.remoteLogReaderMaxPendingTasks()
         );
+    }
+
+    public void resizeCacheSize(long remoteLogIndexFileCacheSize) {
+        indexCache.resizeCacheSize(remoteLogIndexFileCacheSize);
     }
 
     private void removeMetrics() {
