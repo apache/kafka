@@ -22,13 +22,28 @@ package org.apache.kafka.tools.SchemaChecker;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
-import net.sourceforge.argparse4j.ArgumentParsers;
-import net.sourceforge.argparse4j.inf.ArgumentParser;
-import net.sourceforge.argparse4j.inf.Namespace;
-import org.apache.kafka.common.protocol.types.Field;
+import org.eclipse.jgit.api.Git;
+import org.eclipse.jgit.api.errors.GitAPIException;
+import org.eclipse.jgit.lib.Constants;
+import org.eclipse.jgit.lib.ObjectId;
+import org.eclipse.jgit.lib.ObjectLoader;
+import org.eclipse.jgit.lib.Repository;
+import org.eclipse.jgit.revwalk.RevCommit;
+import org.eclipse.jgit.revwalk.RevTree;
+import org.eclipse.jgit.revwalk.RevWalk;
+import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider;
+import org.eclipse.jgit.treewalk.TreeWalk;
+import org.eclipse.jgit.treewalk.filter.PathFilter;
 
 
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Objects;
@@ -40,7 +55,7 @@ public class MetadataSchemaChecker {
     static int oldFirstVersion = -1;
     static int newLatestVersion = -1;
     static int newFirstVersion = -1;
-    public static void main(String[] args) throws Exception{
+    public static void main(String[] args) throws Exception {
         /*ArgumentParser par = ArgumentParsers.newArgumentParser("metadata-schema-checker").
                 defaultHelp(true).
                 description("Metadata Schema Checker");
@@ -75,6 +90,9 @@ public class MetadataSchemaChecker {
                 content1.append(line1);
             }
 
+            String gitContent = GetDataFromGit();
+
+
             ObjectMapper objectMapper = new ObjectMapper();
             JsonNode jsonNode1 = objectMapper.readTree(content.toString());
             JsonNode jsonNode2 = objectMapper.readTree(content1.toString());
@@ -88,6 +106,48 @@ public class MetadataSchemaChecker {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    private static String GetDataFromGit() throws IOException, GitAPIException {
+        StringBuilder stringBuilder = new StringBuilder();
+        Path tempDir = Files.createTempDirectory("tempDir");
+        File tempFile = new File(tempDir.toString(), "");
+        if (tempFile.createNewFile()) {
+            System.out.println("temp file created: " + tempFile);
+        }
+        Git git = Git.cloneRepository()
+                .setURI("https://github.com/apache/kafka.git")
+                .setCredentialsProvider(new UsernamePasswordCredentialsProvider("mannoopj", "Olivewinner1!"))
+                .setDirectory(tempFile)
+                .setBranchesToClone(Collections.singleton("refs/heads/trunk"))
+                .call();
+        Repository repository = git.getRepository();
+        ObjectId lastCommitId = repository.resolve(Constants.HEAD);
+        try (RevWalk revWalk = new RevWalk(repository)) {
+            RevCommit commit = revWalk.parseCommit(lastCommitId);
+            RevTree tree = commit.getTree();
+            System.out.println("Having tree: " + tree);
+            try (TreeWalk treeWalk = new TreeWalk(repository)) {
+                treeWalk.addTree(tree);
+                treeWalk.setRecursive(true);
+                treeWalk.setFilter(PathFilter.create("metadata/src/main/resources/common/metadata/BrokerRegistrationChangeRecord.json"));
+                if (!treeWalk.next()) {
+                    throw new IllegalStateException("Did not find expected file /metadata/src/main/resources/common/metadata/BrokerRegistrationChangeRecord.json");
+                }
+                ObjectId objectId = treeWalk.getObjectId(0);
+                ObjectLoader loader = repository.open(objectId);
+
+                // and then one can the loader to read the file
+                String content = new String(loader.getBytes());
+                String[] lines = content.split("\n");
+                for(int i = 15; i < lines.length; i++) {
+                    stringBuilder.append(lines[i]);
+                }
+            }
+            revWalk.dispose();
+        }
+        tempDir.toFile().deleteOnExit();
+        return stringBuilder.toString();
     }
 
     private static void checkApiTypeVersions(JsonNode original, JsonNode edited) {
@@ -116,7 +176,7 @@ public class MetadataSchemaChecker {
         Iterator<JsonNode> iterOldNode = fieldsOrig.iterator();
         boolean isNewField = false;
         JsonNode nodeOrig = null;
-        while(iterOldNode.hasNext() || isNewField) {
+        while (iterOldNode.hasNext() || isNewField) {
             if (!isNewField) {
                 nodeOrig = iterOldNode.next();
             }
@@ -132,42 +192,9 @@ public class MetadataSchemaChecker {
                 continue;
             }
 
-            String oldVersion = String.valueOf(nodeOrig.get("versions"));
-            oldVersion = oldVersion.substring(1, oldVersion.length() - 1);
-            String newVersion = String.valueOf(nodeNew.get("versions"));
-            newVersion = newVersion.substring(1, newVersion.length() - 1);
-
-            if (!Objects.equals(oldVersion, newVersion)) {
-                if (oldVersion.contains("-") && !newVersion.contains("-")) {
-                    int cutoff = Character.getNumericValue(oldVersion.charAt(oldVersion.length() - 1));
-                    if (cutoff > Character.getNumericValue(newVersion.charAt(0))) {
-                        parseNewField(nodeNew);
-                        isNewField = true;
-                        continue;
-                    } else {
-                        throw new RuntimeException("new schema cannot reopen already closed field");
-                    }
-                } else if (oldVersion.contains("-") && newVersion.contains("-")) {
-                    throw new RuntimeException("cannot changed already closed field");
-                } else if (!oldVersion.contains("-") && newVersion.contains("-")) {
-                    if (!Objects.equals(oldVersion.charAt(0), newVersion.charAt(0))) {
-                        throw new RuntimeException("cannot change lower end of ");
-                    }
-                    int cutoffVersion = Character.getNumericValue(newVersion.charAt(newVersion.length() - 1));
-                    if (cutoffVersion != newLatestVersion && cutoffVersion + 1 != newLatestVersion) {
-                        throw new RuntimeException("Invalid closing version for field");
-                    }
-                } else if (!oldVersion.contains("-") && !newVersion.contains("-")) {
-                    int oldInt = Character.getNumericValue(oldVersion.charAt(0));
-                    int newInt = Character.getNumericValue(newVersion.charAt(0));
-                    if (oldInt < newInt) {
-                        parseNewField(nodeNew);
-                        isNewField = true;
-                        continue;
-                    } else {
-                        throw new RuntimeException("new field needs to be on a new version");
-                    }
-                }
+            if (parseVersion(nodeOrig, nodeNew)) {
+                isNewField = true;
+                continue;
             }
 
             if (!Objects.equals(nodeOrig.get("type"), nodeNew.get("type"))) {
@@ -182,6 +209,45 @@ public class MetadataSchemaChecker {
         while (iterNewNode.hasNext()) {
             parseNewField(iterNewNode.next());
         }
+    }
+
+    private static boolean parseVersion(JsonNode nodeOrig, JsonNode nodeNew) {
+        String oldVersion = String.valueOf(nodeOrig.get("versions"));
+        oldVersion = oldVersion.substring(1, oldVersion.length() - 1);
+        String newVersion = String.valueOf(nodeNew.get("versions"));
+        newVersion = newVersion.substring(1, newVersion.length() - 1);
+
+        if (!Objects.equals(oldVersion, newVersion)) {
+            if (oldVersion.contains("-") && !newVersion.contains("-")) {
+                int cutoff = Character.getNumericValue(oldVersion.charAt(oldVersion.length() - 1));
+                if (cutoff > Character.getNumericValue(newVersion.charAt(0))) {
+                    parseNewField(nodeNew);
+                    return true;
+                } else {
+                    throw new RuntimeException("new schema cannot reopen already closed field");
+                }
+            } else if (oldVersion.contains("-") && newVersion.contains("-")) {
+                throw new RuntimeException("cannot changed already closed field");
+            } else if (!oldVersion.contains("-") && newVersion.contains("-")) {
+                if (!Objects.equals(oldVersion.charAt(0), newVersion.charAt(0))) {
+                    throw new RuntimeException("cannot change lower end of ");
+                }
+                int cutoffVersion = Character.getNumericValue(newVersion.charAt(newVersion.length() - 1));
+                if (cutoffVersion != newLatestVersion && cutoffVersion + 1 != newLatestVersion) {
+                    throw new RuntimeException("Invalid closing version for field");
+                }
+            } else if (!oldVersion.contains("-") && !newVersion.contains("-")) {
+                int oldInt = Character.getNumericValue(oldVersion.charAt(0));
+                int newInt = Character.getNumericValue(newVersion.charAt(0));
+                if (oldInt < newInt) {
+                    parseNewField(nodeNew);
+                    return true;
+                } else {
+                    throw new RuntimeException("new field needs to be on a new version");
+                }
+            }
+        }
+        return false;
     }
 
     private static void oldParser(JsonNode nodeOrig, JsonNode nodeNew) {
@@ -227,7 +293,7 @@ public class MetadataSchemaChecker {
                 }
 
                 // use this loop if there are new fields
-                while(iterNew.hasNext()) {
+                while (iterNew.hasNext()) {
                     parseNewField(iterNew.next());
                 }
 
@@ -277,7 +343,7 @@ public class MetadataSchemaChecker {
             if (!node.has("taggedVersions")) {
                 throw new RuntimeException("new tagged field is missing tagged versions");
             }
-            if (Character.getNumericValue(node.get("taggedVersions").asText().charAt(0)) != latestTag + 1) {
+            if (Character.getNumericValue(node.get("tag").asText().charAt(0)) != latestTag + 1) {
                 throw new RuntimeException("new tagged field is not on next sequential tag");
             }
         }
