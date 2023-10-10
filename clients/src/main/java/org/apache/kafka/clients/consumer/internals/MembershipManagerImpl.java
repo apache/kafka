@@ -307,10 +307,8 @@ public class MembershipManagerImpl implements MembershipManager {
             // was reconciled was the targetAssignment, but keeping it explicit and failing fast
             // here to uncover any issues in the interaction of the assignment processing logic
             // and this.
-            throw new IllegalStateException(String.format("Assignment that has been reconciled " +
-                    "does not match the initial target assignment. %n" +
-                    "Target assignment : %s %n" +
-                    "Assignment reconciled: %s", targetAssignment.orElse(null), assignment));
+            throw new IllegalStateException(String.format("Reconciled assignment %s does not " +
+                            "match the initial target assignment %s", assignment, targetAssignment.orElse(null)));
         }
         this.currentAssignment = assignment;
         targetAssignment = Optional.empty();
