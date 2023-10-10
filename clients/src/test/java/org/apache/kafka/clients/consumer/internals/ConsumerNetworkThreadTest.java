@@ -107,7 +107,7 @@ public class ConsumerNetworkThreadTest {
         consumerNetworkThread.start();
 
         TestCondition isStarted = () -> consumerNetworkThread.isRunning();
-        TestCondition isClosed = () ->!(consumerNetworkThread.isRunning() || consumerNetworkThread.isAlive());
+        TestCondition isClosed = () -> !(consumerNetworkThread.isRunning() || consumerNetworkThread.isAlive());
 
         // There's a nonzero amount of time between starting the thread and having it
         // begin to execute our code. Wait for a bit before checking...
