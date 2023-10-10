@@ -135,6 +135,7 @@ public class MembershipManagerImpl implements MembershipManager {
             throw new IllegalStateException(String.format("Invalid state transition from %s to %s",
                     state, nextState));
         }
+        log.trace("Member {} transitioned from {} to {}.", memberId, state, nextState);
         this.state = nextState;
     }
 
