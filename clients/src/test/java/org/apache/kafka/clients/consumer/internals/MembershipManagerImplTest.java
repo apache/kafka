@@ -25,13 +25,12 @@ import org.apache.kafka.common.utils.LogContext;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
-import java.util.Optional;
+import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class MembershipManagerImplTest {
 
@@ -41,26 +40,33 @@ public class MembershipManagerImplTest {
     private final LogContext logContext = new LogContext();
 
     @Test
+    public void testMembershipManagerDefaultAssignor() {
+        MembershipManagerImpl membershipManager = new MembershipManagerImpl(GROUP_ID, logContext);
+        assertEquals(AssignorSelection.defaultAssignor(), membershipManager.assignorSelection());
+
+        membershipManager = new MembershipManagerImpl(GROUP_ID, "instance1", null, logContext);
+        assertEquals(AssignorSelection.defaultAssignor(), membershipManager.assignorSelection());
+    }
+
+    @Test
     public void testMembershipManagerAssignorSelectionUpdate() {
         AssignorSelection firstAssignorSelection = AssignorSelection.newServerAssignor("uniform");
         MembershipManagerImpl membershipManager = new MembershipManagerImpl(GROUP_ID, "instance1",
                 firstAssignorSelection, logContext);
-        assertTrue(membershipManager.assignorSelection().isPresent());
-        assertEquals(firstAssignorSelection, membershipManager.assignorSelection().get());
+        assertEquals(firstAssignorSelection, membershipManager.assignorSelection());
 
         AssignorSelection secondAssignorSelection = AssignorSelection.newServerAssignor("range");
-        membershipManager.setAssignorSelection(Optional.of(secondAssignorSelection));
-        assertTrue(membershipManager.assignorSelection().isPresent());
-        assertEquals(secondAssignorSelection, membershipManager.assignorSelection().get());
+        membershipManager.setAssignorSelection(secondAssignorSelection);
+        assertEquals(secondAssignorSelection, membershipManager.assignorSelection());
 
         assertThrows(IllegalArgumentException.class,
                 () -> membershipManager.setAssignorSelection(null));
     }
 
     @Test
-    public void testMembershipManagerInitSupportsNullGroupInstanceIdAndAssignor() {
+    public void testMembershipManagerInitSupportsEmptyGroupInstanceId() {
         new MembershipManagerImpl(GROUP_ID, logContext);
-        new MembershipManagerImpl(GROUP_ID, null, null, logContext);
+        new MembershipManagerImpl(GROUP_ID, null, AssignorSelection.defaultAssignor(), logContext);
     }
 
     @Test
@@ -77,6 +83,35 @@ public class MembershipManagerImplTest {
                 createConsumerGroupHeartbeatResponse(createAssignment());
         membershipManager.updateState(responseWithAssignment.data());
         assertEquals(MemberState.RECONCILING, membershipManager.state());
+    }
+
+    @Test
+    public void testMemberIdAndEpochResetOnFencedMembers() {
+        MembershipManagerImpl membershipManager = new MembershipManagerImpl(GROUP_ID, logContext);
+        ConsumerGroupHeartbeatResponse heartbeatResponse =
+                createConsumerGroupHeartbeatResponse(null);
+        membershipManager.updateState(heartbeatResponse.data());
+        assertEquals(MemberState.STABLE, membershipManager.state());
+        assertEquals(MEMBER_ID, membershipManager.memberId());
+        assertEquals(MEMBER_EPOCH, membershipManager.memberEpoch());
+
+        membershipManager.transitionToFenced();
+        assertFalse(membershipManager.memberId().isEmpty());
+        assertEquals(0, membershipManager.memberEpoch());
+    }
+
+    @Test
+    public void testTransitionToFailure() {
+        MembershipManagerImpl membershipManager = new MembershipManagerImpl(GROUP_ID, logContext);
+        ConsumerGroupHeartbeatResponse heartbeatResponse =
+                createConsumerGroupHeartbeatResponse(null);
+        membershipManager.updateState(heartbeatResponse.data());
+        assertEquals(MemberState.STABLE, membershipManager.state());
+        assertEquals(MEMBER_ID, membershipManager.memberId());
+        assertEquals(MEMBER_EPOCH, membershipManager.memberEpoch());
+
+        membershipManager.transitionToFailed();
+        assertEquals(MemberState.FAILED, membershipManager.state());
     }
 
     @Test
@@ -124,7 +159,7 @@ public class MembershipManagerImplTest {
 
         // Getting fenced when the member is not part of the group is not expected and should
         // fail with invalid transition.
-        assertThrows(IllegalStateException.class, membershipManager::fenceMember);
+        assertThrows(IllegalStateException.class, membershipManager::transitionToFenced);
     }
 
     @Test
@@ -142,19 +177,20 @@ public class MembershipManagerImplTest {
     public void testAssignmentUpdatedAsReceivedAndProcessed() {
         MembershipManagerImpl membershipManager = new MembershipManagerImpl(GROUP_ID, logContext);
         ConsumerGroupHeartbeatResponseData.Assignment newAssignment = createAssignment();
-        ConsumerGroupHeartbeatResponse heartbeatResponse = createConsumerGroupHeartbeatResponse(newAssignment);
+        ConsumerGroupHeartbeatResponse heartbeatResponse =
+                createConsumerGroupHeartbeatResponse(newAssignment);
         membershipManager.updateState(heartbeatResponse.data());
 
         // Target assignment should be in the process of being reconciled
         checkAssignments(membershipManager, null, newAssignment);
         // Mark assignment processing completed
-        membershipManager.onTargetAssignmentProcessComplete(Optional.empty());
+        membershipManager.onTargetAssignmentProcessComplete(newAssignment);
         // Target assignment should now be the current assignment
         checkAssignments(membershipManager, newAssignment, null);
     }
 
     @Test
-    public void testUpdateAssignmentReceivingAssignmentWhileAnotherInProcess() {
+    public void testMemberFailsIfAssignmentReceivedWhileAnotherOnBeingReconciled() {
         MembershipManagerImpl membershipManager = new MembershipManagerImpl(GROUP_ID, logContext);
         ConsumerGroupHeartbeatResponseData.Assignment newAssignment1 = createAssignment();
         membershipManager.updateState(createConsumerGroupHeartbeatResponse(newAssignment1).data());
@@ -164,8 +200,33 @@ public class MembershipManagerImplTest {
 
         // Second target assignment received while there is another one being reconciled
         ConsumerGroupHeartbeatResponseData.Assignment newAssignment2 = createAssignment();
-        membershipManager.updateState(createConsumerGroupHeartbeatResponse(newAssignment2).data());
-        checkAssignments(membershipManager, null, newAssignment1);
+        assertThrows(IllegalStateException.class,
+                () -> membershipManager.updateState(createConsumerGroupHeartbeatResponse(newAssignment2).data()));
+        assertEquals(MemberState.FAILED, membershipManager.state());
+    }
+
+    @Test
+    public void testAssignmentUpdatedFailsIfAssignmentReconciledDoesNotMatchTargetAssignment() {
+        MembershipManagerImpl membershipManager = new MembershipManagerImpl(GROUP_ID, logContext);
+        ConsumerGroupHeartbeatResponseData.Assignment targetAssignment = new ConsumerGroupHeartbeatResponseData.Assignment()
+                .setTopicPartitions(Collections.singletonList(
+                        new ConsumerGroupHeartbeatResponseData.TopicPartitions()
+                                .setTopicId(Uuid.randomUuid())
+                                .setPartitions(Arrays.asList(0, 1, 2))));
+        ConsumerGroupHeartbeatResponse heartbeatResponse =
+                createConsumerGroupHeartbeatResponse(targetAssignment);
+        membershipManager.updateState(heartbeatResponse.data());
+
+        // Target assignment should be in the process of being reconciled
+        checkAssignments(membershipManager, null, targetAssignment);
+        // Mark assignment processing completed
+        ConsumerGroupHeartbeatResponseData.Assignment reconciled =
+                new ConsumerGroupHeartbeatResponseData.Assignment()
+                        .setTopicPartitions(Collections.singletonList(
+                                new ConsumerGroupHeartbeatResponseData.TopicPartitions()
+                                        .setTopicId(Uuid.randomUuid())
+                                        .setPartitions(Collections.singletonList(0))));
+        assertThrows(IllegalStateException.class, () -> membershipManager.onTargetAssignmentProcessComplete(reconciled));
     }
 
     private void checkAssignments(
@@ -177,7 +238,7 @@ public class MembershipManagerImplTest {
     }
 
     private void testStateUpdateOnFenceError(MembershipManager membershipManager) {
-        membershipManager.fenceMember();
+        membershipManager.transitionToFenced();
         assertEquals(MemberState.FENCED, membershipManager.state());
         // Should reset member epoch and keep member id
         assertFalse(membershipManager.memberId().isEmpty());
@@ -187,7 +248,7 @@ public class MembershipManagerImplTest {
     private void testStateUpdateOnFatalFailure(MembershipManager membershipManager) {
         String initialMemberId = membershipManager.memberId();
         int initialMemberEpoch = membershipManager.memberEpoch();
-        membershipManager.failMember();
+        membershipManager.transitionToFailed();
         assertEquals(MemberState.FAILED, membershipManager.state());
         // Should not reset member id or epoch
         assertEquals(initialMemberId, membershipManager.memberId());
@@ -211,7 +272,7 @@ public class MembershipManagerImplTest {
 
     private ConsumerGroupHeartbeatResponseData.Assignment createAssignment() {
         return new ConsumerGroupHeartbeatResponseData.Assignment()
-                .setAssignedTopicPartitions(Arrays.asList(
+                .setTopicPartitions(Arrays.asList(
                         new ConsumerGroupHeartbeatResponseData.TopicPartitions()
                                 .setTopicId(Uuid.randomUuid())
                                 .setPartitions(Arrays.asList(0, 1, 2)),
