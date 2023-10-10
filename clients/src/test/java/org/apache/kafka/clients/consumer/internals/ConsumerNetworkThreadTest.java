@@ -52,9 +52,9 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_REQUEST_TIMEOUT_MS;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -163,13 +163,13 @@ public class ConsumerNetworkThreadTest {
     }
 
     @Test
-    public void testResetPositionsProcessFailureInterruptsConsumerNetworkThread() {
+    public void testResetPositionsProcessFailureIsIgnored() {
         TopicAuthorizationException authException = new TopicAuthorizationException("Topic authorization failed");
         doThrow(authException).when(offsetsRequestManager).resetPositionsIfNeeded();
 
         ResetPositionsApplicationEvent event = new ResetPositionsApplicationEvent();
         applicationEventsQueue.add(event);
-        assertThrows(TopicAuthorizationException.class, () -> consumerNetworkThread.runOnce());
+        assertDoesNotThrow(() -> consumerNetworkThread.runOnce());
 
         verify(applicationEventProcessor).process(any(ResetPositionsApplicationEvent.class));
     }
@@ -184,13 +184,13 @@ public class ConsumerNetworkThreadTest {
     }
 
     @Test
-    public void testValidatePositionsProcessFailure() {
+    public void testValidatePositionsProcessFailureIsIgnored() {
         LogTruncationException logTruncationException = new LogTruncationException(Collections.emptyMap(), Collections.emptyMap());
         doThrow(logTruncationException).when(offsetsRequestManager).validatePositionsIfNeeded();
 
         ValidatePositionsApplicationEvent event = new ValidatePositionsApplicationEvent();
         applicationEventsQueue.add(event);
-        assertThrows(LogTruncationException.class, consumerNetworkThread::runOnce);
+        assertDoesNotThrow(consumerNetworkThread::runOnce);
 
         verify(applicationEventProcessor).process(any(ValidatePositionsApplicationEvent.class));
     }

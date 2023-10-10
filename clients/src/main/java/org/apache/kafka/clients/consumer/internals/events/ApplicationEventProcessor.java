@@ -26,6 +26,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
+import org.slf4j.Logger;
 
 import java.util.List;
 import java.util.Map;
@@ -40,6 +41,7 @@ import java.util.function.Supplier;
  */
 public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> {
 
+    private final Logger log;
     private final ConsumerMetadata metadata;
     private final RequestManagers requestManagers;
 
@@ -48,20 +50,19 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
                                      final RequestManagers requestManagers,
                                      final ConsumerMetadata metadata) {
         super(logContext, applicationEventQueue);
+        this.log = logContext.logger(ApplicationEventProcessor.class);
         this.requestManagers = requestManagers;
         this.metadata = metadata;
     }
 
     /**
      * Process the events—if any—that were produced by the application thread. It is possible that when processing
-     * an event generates an error. In such cases, the processor will immediately throw an exception, and not
-     * process the remaining events.
+     * an event generates an error. In such cases, the processor will log an exception, but we do not want those
+     * errors to be propagated to the caller.
      */
     @Override
     public void process() {
-        process(error -> {
-            throw error;
-        });
+        process((event, error) -> { });
     }
 
     @Override
@@ -108,7 +109,7 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
                 return;
 
             default:
-                throw new IllegalArgumentException("Application event type " + event.type() + " was not expected");
+                log.warn("Application event type " + event.type() + " was not expected");
         }
     }
 

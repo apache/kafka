@@ -49,11 +49,11 @@ public class BackgroundEventProcessor extends EventProcessor<BackgroundEvent> {
      */
     @Override
     public void process() {
-        AtomicReference<KafkaException> error = new AtomicReference<>();
-        process(t -> error.compareAndSet(null, t));
+        AtomicReference<KafkaException> firstError = new AtomicReference<>();
+        process((event, error) -> firstError.compareAndSet(null, error));
 
-        if (error.get() != null)
-            throw error.get();
+        if (firstError.get() != null)
+            throw firstError.get();
     }
 
     @Override

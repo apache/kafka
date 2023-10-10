@@ -57,16 +57,16 @@ public abstract class EventProcessor<T> implements Closeable {
 
     protected abstract Class<T> getEventClass();
 
-    protected interface ProcessErrorHandler {
+    protected interface ProcessErrorHandler<T> {
 
-        void onError(KafkaException error);
+        void onError(T event, KafkaException error);
     }
 
     /**
      * Drains all available events from the queue, and then processes them in order. If any errors are thrown while
      * processing the individual events, these are submitted to the given {@link ProcessErrorHandler}.
      */
-    protected void process(ProcessErrorHandler processErrorHandler) {
+    protected void process(ProcessErrorHandler<T> processErrorHandler) {
         String eventClassName = getEventClass().getSimpleName();
         closer.assertOpen(() -> String.format("The processor was previously closed, so no further %s processing can occur", eventClassName));
 
@@ -89,7 +89,7 @@ public abstract class EventProcessor<T> implements Closeable {
                     else
                         error = new KafkaException(t);
 
-                    processErrorHandler.onError(error);
+                    processErrorHandler.onError(event, error);
                 }
             }
         } finally {

@@ -54,7 +54,7 @@ public class BackgroundEventHandlerTest {
     @Test
     public void testNoEvents() {
         assertTrue(backgroundEventQueue.isEmpty());
-        backgroundEventProcessor.process(ignored -> { });
+        backgroundEventProcessor.process((event, error) -> { });
         assertTrue(backgroundEventQueue.isEmpty());
     }
 
@@ -63,7 +63,7 @@ public class BackgroundEventHandlerTest {
         BackgroundEvent event = new ErrorBackgroundEvent(new RuntimeException("A"));
         backgroundEventQueue.add(event);
         assertPeeked(event);
-        backgroundEventProcessor.process(ignored -> { });
+        backgroundEventProcessor.process((e, error) -> { });
         assertTrue(backgroundEventQueue.isEmpty());
     }
 
@@ -84,7 +84,7 @@ public class BackgroundEventHandlerTest {
         backgroundEventQueue.add(new ErrorBackgroundEvent(new RuntimeException("C")));
 
         assertPeeked(event1);
-        backgroundEventProcessor.process(ignored -> { });
+        backgroundEventProcessor.process((event, error) -> { });
         assertTrue(backgroundEventQueue.isEmpty());
     }
 
