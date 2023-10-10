@@ -141,6 +141,7 @@ public class MetadataSchemaChecker {
                 String content = new String(loader.getBytes());
                 String[] lines = content.split("\n");
                 for(int i = 15; i < lines.length; i++) {
+                    System.out.println(lines[i]);
                     stringBuilder.append(lines[i]);
                 }
             }
