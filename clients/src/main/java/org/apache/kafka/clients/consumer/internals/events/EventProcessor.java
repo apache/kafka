@@ -70,9 +70,10 @@ public abstract class EventProcessor<T> implements Closeable {
         String eventClassName = getEventClass().getSimpleName();
         closer.assertOpen(() -> String.format("The processor was previously closed, so no further %s processing can occur", eventClassName));
 
+        List<T> events = drain();
+
         try {
-            List<T> events = drain();
-            log.debug("Starting processing of {} {}s", events.size(), eventClassName);
+            log.debug("Starting processing of {} {}(s)", events.size(), eventClassName);
 
             for (T event : events) {
                 try {
@@ -93,7 +94,7 @@ public abstract class EventProcessor<T> implements Closeable {
                 }
             }
         } finally {
-            log.debug("Completed processing of {}s", eventClassName);
+            log.debug("Completed processing of {} {}(s)", events.size(), eventClassName);
         }
     }
 
@@ -103,7 +104,7 @@ public abstract class EventProcessor<T> implements Closeable {
      */
     private void closeInternal() {
         String eventClassName = getEventClass().getSimpleName();
-        log.trace("Closing {} processor", eventClassName);
+        log.trace("Closing event processor for {}", eventClassName);
         List<T> incompleteEvents = drain();
 
         if (incompleteEvents.isEmpty())
@@ -111,19 +112,18 @@ public abstract class EventProcessor<T> implements Closeable {
 
         KafkaException exception = new KafkaException("The consumer is closed");
 
-        // Check each of the events and if it has a Future, complete it exceptionally.
+        // Check each of the events and if it has a Future that is incomplete, complete it exceptionally.
         incompleteEvents
                 .stream()
                 .filter(e -> e instanceof CompletableEvent)
                 .map(e -> ((CompletableEvent<?>) e).future())
+                .filter(f -> !f.isDone())
                 .forEach(f -> {
                     log.debug("Completing {} with exception {}", f, exception.getMessage());
                     f.completeExceptionally(exception);
                 });
 
-        log.debug("Discarding {} {}s because the consumer is closing",
-                incompleteEvents.size(),
-                eventClassName);
+        log.debug("Discarding {} {}s because the consumer is closing", incompleteEvents.size(), eventClassName);
     }
 
     /**

@@ -95,6 +95,7 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_JMX_PREFIX;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP_PREFIX;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.DEFAULT_CLOSE_TIMEOUT_MS;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.configuredConsumerInterceptors;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createFetchMetricsManager;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createLogContext;
@@ -113,7 +114,6 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  * for detail implementation.
  */
 public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
-    static final long DEFAULT_CLOSE_TIMEOUT_MS = 30 * 1000;
 
     private final ApplicationEventHandler applicationEventHandler;
     private final Time time;

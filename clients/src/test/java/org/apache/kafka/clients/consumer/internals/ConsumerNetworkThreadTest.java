@@ -34,6 +34,7 @@ import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -50,6 +51,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_REQUEST_TIMEOUT_MS;
+import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -100,19 +102,22 @@ public class ConsumerNetworkThreadTest {
 
     @Test
     public void testStartupAndTearDown() throws InterruptedException {
+        // The consumer is closed in ConsumerTestBuilder.ConsumerNetworkThreadTestBuilder.close()
+        // which is called from tearDown().
         consumerNetworkThread.start();
-        TestUtils.waitForCondition(consumerNetworkThread::isRunning, "Failed awaiting for the background thread to be running");
+
+        TestCondition isStarted = () -> consumerNetworkThread.isRunning();
+        TestCondition isClosed = () ->!(consumerNetworkThread.isRunning() || consumerNetworkThread.isAlive());
 
         // There's a nonzero amount of time between starting the thread and having it
         // begin to execute our code. Wait for a bit before checking...
-        int maxWaitMs = 1000;
-        TestUtils.waitForCondition(consumerNetworkThread::isRunning,
-                maxWaitMs,
-                "Thread did not start within " + maxWaitMs + " ms");
-        consumerNetworkThread.close(Duration.ofMillis(maxWaitMs));
-        TestUtils.waitForCondition(() -> !consumerNetworkThread.isRunning(),
-                maxWaitMs,
-                "Thread did not stop within " + maxWaitMs + " ms");
+        TestUtils.waitForCondition(isStarted,
+                "The consumer network thread did not start within " + DEFAULT_MAX_WAIT_MS + " ms");
+
+        consumerNetworkThread.close(Duration.ofMillis(DEFAULT_MAX_WAIT_MS));
+
+        TestUtils.waitForCondition(isClosed,
+                "The consumer network thread did not stop within " + DEFAULT_MAX_WAIT_MS + " ms");
     }
 
     @Test
@@ -249,7 +254,7 @@ public class ConsumerNetworkThreadTest {
         assertFalse(future.isDone());
         assertFalse(applicationEventsQueue.isEmpty());
 
-        consumerNetworkThread.close();
+        consumerNetworkThread.cleanup();
         assertTrue(future.isCompletedExceptionally());
         assertTrue(applicationEventsQueue.isEmpty());
     }

@@ -21,7 +21,6 @@ import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.internals.IdempotentCloser;
 import org.apache.kafka.common.requests.AbstractRequest;
@@ -35,11 +34,13 @@ import java.io.Closeable;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.Future;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.DEFAULT_CLOSE_TIMEOUT_MS;
 import static org.apache.kafka.common.utils.Utils.closeQuietly;
 
 /**
@@ -60,6 +61,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
     private RequestManagers requestManagers;
     private volatile boolean running;
     private final IdempotentCloser closer = new IdempotentCloser();
+    private volatile Duration closeTimeout = Duration.ofMillis(DEFAULT_CLOSE_TIMEOUT_MS);
 
     public ConsumerNetworkThread(LogContext logContext,
                                  Time time,
@@ -96,6 +98,8 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         } catch (final Throwable t) {
             log.error("The consumer network thread failed due to unexpected error", t);
             throw new KafkaException(t);
+        } finally {
+            cleanup();
         }
     }
 
@@ -206,41 +210,28 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
 
     @Override
     public void close() {
-        close(Duration.ZERO);
+        close(closeTimeout);
     }
 
     public void close(final Duration timeout) {
+        Objects.requireNonNull(timeout, "Close timeout for consumer network thread must be non-null");
+
         closer.close(
                 () -> closeInternal(timeout),
                 () -> log.warn("The consumer network thread was already closed")
         );
     }
 
-    void closeInternal(final Duration timeout) {
-        log.trace("Closing the consumer network thread");
-        boolean hadStarted = running;
+    private void closeInternal(final Duration timeout) {
+        log.trace("Signaling the consumer network thread to close in {}ms", timeout.toMillis());
         running = false;
+        closeTimeout = timeout;
         wakeup();
+    }
 
-        Timer timer = time.timer(timeout);
-
-        if (hadStarted && timer.remainingMs() > 0) {
-            // If the thread had started, we need to wait for the run method to exit. It may take a little time
-            // for the thread to check the status of the running flag.
-            //
-            // We check the value of remainingMs because this method can be called with a duration of 0, which for
-            // the Thread.join method means "wait forever" which isn't what we want.
-            try {
-                long remainingMs = timer.remainingMs();
-                log.debug("Waiting up to {} ms for the thread to complete", remainingMs);
-                join(remainingMs);
-            } catch (InterruptedException e) {
-                throw new InterruptException(e);
-            } finally {
-                timer.update();
-            }
-        }
-
+    void cleanup() {
+        log.trace("Closing the consumer network thread");
+        Timer timer = time.timer(closeTimeout);
         runAtClose(requestManagers.entries(), networkClientDelegate, timer);
         closeQuietly(requestManagers, "request managers");
         closeQuietly(networkClientDelegate, "network client delegate");

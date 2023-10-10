@@ -56,6 +56,7 @@ import java.util.concurrent.TimeUnit;
 
 public final class ConsumerUtils {
 
+    public static final long DEFAULT_CLOSE_TIMEOUT_MS = 30 * 1000;
     public static final String CONSUMER_JMX_PREFIX = "kafka.consumer";
     public static final String CONSUMER_METRIC_GROUP_PREFIX = "consumer";
 
