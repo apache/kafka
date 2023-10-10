@@ -153,7 +153,7 @@ public class CoordinatorRequestManagerTest {
         assertEquals(1, res.unsentRequests.size());
 
         NetworkClientDelegate.UnsentRequest unsentRequest = res.unsentRequests.get(0);
-        unsentRequest.future().complete(buildResponse(unsentRequest, error));
+        unsentRequest.handler().complete(buildResponse(unsentRequest, error));
 
         boolean expectCoordinatorFound = error == Errors.NONE;
         assertEquals(expectCoordinatorFound, coordinatorManager.coordinator().isPresent());
@@ -182,7 +182,7 @@ public class CoordinatorRequestManagerTest {
             FindCoordinatorResponse.prepareResponse(error, GROUP_ID, node);
         return new ClientResponse(
             new RequestHeader(ApiKeys.FIND_COORDINATOR, findCoordinatorRequest.version(), "", 1),
-            request.callback(),
+            request.handler(),
             node.idString(),
             time.milliseconds(),
             time.milliseconds(),

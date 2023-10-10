@@ -514,8 +514,8 @@ public class OffsetsRequestManagerTest {
                 unsentRequest, Collections.singletonMap(TEST_PARTITION_1, Errors.TOPIC_AUTHORIZATION_FAILED));
         clientResponse.onComplete();
 
-        assertTrue(unsentRequest.future().isDone());
-        assertFalse(unsentRequest.future().isCompletedExceptionally());
+        assertTrue(unsentRequest.handler().isDone());
+        assertFalse(unsentRequest.handler().isCompletedExceptionally());
 
         verify(subscriptionState).requestFailed(any(), anyLong());
         verify(metadata).requestUpdate(false);
@@ -551,8 +551,8 @@ public class OffsetsRequestManagerTest {
         ClientResponse clientResponse = buildOffsetsForLeaderEpochResponse(unsentRequest,
                 Collections.singletonList(tp), expectedEndOffset);
         clientResponse.onComplete();
-        assertTrue(unsentRequest.future().isDone());
-        assertFalse(unsentRequest.future().isCompletedExceptionally());
+        assertTrue(unsentRequest.handler().isDone());
+        assertFalse(unsentRequest.handler().isCompletedExceptionally());
         verify(subscriptionState).maybeCompleteValidation(any(), any(), any());
     }
 
@@ -588,8 +588,8 @@ public class OffsetsRequestManagerTest {
                 buildOffsetsForLeaderEpochResponseWithErrors(unsentRequest, Collections.singletonMap(TEST_PARTITION_1, Errors.TOPIC_AUTHORIZATION_FAILED));
         clientResponse.onComplete();
 
-        assertTrue(unsentRequest.future().isDone());
-        assertFalse(unsentRequest.future().isCompletedExceptionally());
+        assertTrue(unsentRequest.handler().isDone());
+        assertFalse(unsentRequest.handler().isCompletedExceptionally());
 
         // Following validatePositions should raise the previous exception without performing any
         // request
@@ -650,8 +650,8 @@ public class OffsetsRequestManagerTest {
         NetworkClientDelegate.UnsentRequest unsentRequest = pollResult.unsentRequests.get(0);
         ClientResponse clientResponse = buildClientResponse(unsentRequest, expectedOffsets);
         clientResponse.onComplete();
-        assertTrue(unsentRequest.future().isDone());
-        assertFalse(unsentRequest.future().isCompletedExceptionally());
+        assertTrue(unsentRequest.handler().isDone());
+        assertFalse(unsentRequest.handler().isCompletedExceptionally());
     }
 
     private ListOffsetsResponseData.ListOffsetsTopicResponse mockUnknownOffsetResponse(
@@ -820,7 +820,7 @@ public class OffsetsRequestManagerTest {
         OffsetsForLeaderEpochResponse response = new OffsetsForLeaderEpochResponse(data);
         return new ClientResponse(
                 new RequestHeader(ApiKeys.OFFSET_FOR_LEADER_EPOCH, offsetsForLeaderEpochRequest.version(), "", 1),
-                request.callback(),
+                request.handler(),
                 "-1",
                 time.milliseconds(),
                 time.milliseconds(),
@@ -853,7 +853,7 @@ public class OffsetsRequestManagerTest {
         OffsetsForLeaderEpochResponse response = new OffsetsForLeaderEpochResponse(data);
         return new ClientResponse(
                 new RequestHeader(ApiKeys.OFFSET_FOR_LEADER_EPOCH, offsetsForLeaderEpochRequest.version(), "", 1),
-                request.callback(),
+                request.handler(),
                 "-1",
                 time.milliseconds(),
                 time.milliseconds(),
@@ -902,7 +902,7 @@ public class OffsetsRequestManagerTest {
         ListOffsetsResponse response = buildListOffsetsResponse(topicResponses);
         return new ClientResponse(
                 new RequestHeader(ApiKeys.OFFSET_FETCH, offsetFetchRequest.version(), "", 1),
-                request.callback(),
+                request.handler(),
                 "-1",
                 time.milliseconds(),
                 time.milliseconds(),
