@@ -2787,7 +2787,8 @@ public class FetcherTest {
                 fetchConfig,
                 deserializers,
                 metricsManager,
-                time) {
+                time,
+                apiVersions) {
             @Override
             protected FetchSessionHandler sessionHandler(int node) {
                 final FetchSessionHandler handler = super.sessionHandler(node);
@@ -3589,7 +3590,8 @@ public class FetcherTest {
                 fetchConfig,
                 new Deserializers<>(keyDeserializer, valueDeserializer),
                 metricsManager,
-                time));
+                time,
+                apiVersions));
         offsetFetcher = new OffsetFetcher(logContext,
                 consumerClient,
                 metadata,
