@@ -732,8 +732,7 @@ public class KafkaStreams implements AutoCloseable {
         }
 
         @Override
-        public void onRestoreSuspended(TopicPartition topicPartition, String storeName,
-                                       long totalRestored) {
+        public void onRestoreSuspended(final TopicPartition topicPartition, final String storeName, final long totalRestored) {
             if (globalStateRestoreListener != null) {
                 try {
                     globalStateRestoreListener.onRestoreSuspended(topicPartition, storeName, totalRestored);
