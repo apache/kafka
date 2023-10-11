@@ -166,6 +166,11 @@ public class RemoteIndexCache implements Closeable {
         return internalCache;
     }
 
+    // Visible for testing
+    public File cacheDir() {
+        return cacheDir;
+    }
+
     public void remove(Uuid key) {
         lock.readLock().lock();
         try {
