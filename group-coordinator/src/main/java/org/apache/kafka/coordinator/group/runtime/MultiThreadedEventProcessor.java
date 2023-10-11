@@ -134,7 +134,7 @@ public class MultiThreadedEventProcessor implements CoordinatorEventProcessor {
                     try {
                         log.debug("Executing event: {}.", event);
                         long dequeuedTimeMs = time.milliseconds();
-                        metrics.recordEventQueueTime(dequeuedTimeMs - event.enqueueTimeMs());
+                        metrics.recordEventQueueTime(dequeuedTimeMs - event.createdTimeMs());
                         event.run();
                         metrics.recordEventQueueProcessingTime(time.milliseconds() - dequeuedTimeMs);
                     } catch (Throwable t) {
@@ -152,7 +152,7 @@ public class MultiThreadedEventProcessor implements CoordinatorEventProcessor {
             while (event != null) {
                 try {
                     log.debug("Draining event: {}.", event);
-                    metrics.recordEventQueueTime(time.milliseconds() - event.enqueueTimeMs());
+                    metrics.recordEventQueueTime(time.milliseconds() - event.createdTimeMs());
                     event.complete(new RejectedExecutionException("EventProcessor is closed."));
                 } catch (Throwable t) {
                     log.error("Failed to reject event {} due to: {}.", event, t.getMessage(), t);
@@ -208,7 +208,6 @@ public class MultiThreadedEventProcessor implements CoordinatorEventProcessor {
      */
     @Override
     public void enqueue(CoordinatorEvent event) throws RejectedExecutionException {
-        event.setEnqueueTimeMs(time.milliseconds());
         accumulator.add(event);
     }
 

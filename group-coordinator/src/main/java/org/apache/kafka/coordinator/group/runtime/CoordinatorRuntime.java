@@ -622,9 +622,9 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         CoordinatorResult<T, U> result;
 
         /**
-         * The time this event was queued.
+         * The time this event was created.
          */
-        private long enqueueTimeMs;
+        private final long createdTimeMs;
 
         /**
          * Constructor.
@@ -642,6 +642,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             this.name = name;
             this.op = op;
             this.future = new CompletableFuture<>();
+            this.createdTimeMs = time.milliseconds();
         }
 
         /**
@@ -728,13 +729,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         }
 
         @Override
-        public long enqueueTimeMs() {
-            return this.enqueueTimeMs;
-        }
-
-        @Override
-        public void setEnqueueTimeMs(long enqueueTimeMs) {
-            this.enqueueTimeMs = enqueueTimeMs;
+        public long createdTimeMs() {
+            return this.createdTimeMs;
         }
 
         @Override
@@ -797,9 +793,9 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         T response;
 
         /**
-         * The time this event was queued.
+         * The time this event was created.
          */
-        private long enqueueTimeMs;
+        private final long createdTimeMs;
 
         /**
          * Constructor.
@@ -817,6 +813,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             this.name = name;
             this.op = op;
             this.future = new CompletableFuture<>();
+            this.createdTimeMs = time.milliseconds();
         }
 
         /**
@@ -866,13 +863,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         }
 
         @Override
-        public long enqueueTimeMs() {
-            return this.enqueueTimeMs;
-        }
-
-        @Override
-        public void setEnqueueTimeMs(long enqueueTimeMs) {
-            this.enqueueTimeMs = enqueueTimeMs;
+        public long createdTimeMs() {
+            return this.createdTimeMs;
         }
 
         @Override
@@ -901,9 +893,9 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         final Runnable op;
 
         /**
-         * The time this event was queued.
+         * The time this event was created.
          */
-        private long enqueueTimeMs;
+        private final long createdTimeMs;
 
         /**
          * Constructor.
@@ -920,6 +912,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             this.tp = tp;
             this.name = name;
             this.op = op;
+            this.createdTimeMs = time.milliseconds();
         }
 
         /**
@@ -956,13 +949,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         }
 
         @Override
-        public long enqueueTimeMs() {
-            return this.enqueueTimeMs;
-        }
-
-        @Override
-        public void setEnqueueTimeMs(long enqueueTimeMs) {
-            this.enqueueTimeMs = enqueueTimeMs;
+        public long createdTimeMs() {
+            return this.createdTimeMs;
         }
 
         @Override

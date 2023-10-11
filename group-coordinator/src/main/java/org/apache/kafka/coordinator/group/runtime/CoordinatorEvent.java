@@ -37,14 +37,7 @@ public interface CoordinatorEvent extends EventAccumulator.Event<TopicPartition>
     void complete(Throwable exception);
 
     /**
-     * @return The enqueue time in milliseconds.
+     * @return The created time in milliseconds.
      */
-    long enqueueTimeMs();
-
-    /**
-     * Sets the enqueue time.
-     *
-     * @param enqueueTimeMs The enqueue time in milliseconds.
-     */
-    void setEnqueueTimeMs(long enqueueTimeMs);
+    long createdTimeMs();
 }

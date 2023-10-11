@@ -110,7 +110,7 @@ public class MultiThreadedEventProcessorTest {
         private final boolean block;
         private final CountDownLatch latch;
         private final CountDownLatch executed;
-        private long enqueueTimeMs;
+        private long createdTimeMs;
 
         FutureEvent(
             TopicPartition key,
@@ -131,7 +131,7 @@ public class MultiThreadedEventProcessorTest {
             TopicPartition key,
             Supplier<T> supplier,
             boolean block,
-            long enqueueTimeMs
+            long createdTimeMs
         ) {
             this.key = key;
             this.future = new CompletableFuture<>();
@@ -139,7 +139,7 @@ public class MultiThreadedEventProcessorTest {
             this.block = block;
             this.latch = new CountDownLatch(1);
             this.executed = new CountDownLatch(1);
-            this.enqueueTimeMs = enqueueTimeMs;
+            this.createdTimeMs = createdTimeMs;
         }
 
         @Override
@@ -164,13 +164,8 @@ public class MultiThreadedEventProcessorTest {
         }
 
         @Override
-        public long enqueueTimeMs() {
-            return enqueueTimeMs;
-        }
-
-        @Override
-        public void setEnqueueTimeMs(long enqueueTimeMs) {
-            this.enqueueTimeMs = enqueueTimeMs;
+        public long createdTimeMs() {
+            return createdTimeMs;
         }
 
         @Override
@@ -422,14 +417,9 @@ public class MultiThreadedEventProcessorTest {
             new TopicPartition("foo", 0), () -> {
                 mockTime.sleep(4000L);
                 return numEventsExecuted.incrementAndGet();
-            }, true
-        );
-
-        FutureEvent<Integer> otherEvent = new FutureEvent<>(
-            new TopicPartition("foo", 0), () -> {
-                mockTime.sleep(5000L);
-                return numEventsExecuted.incrementAndGet();
-            }
+            },
+            true,
+            mockTime.milliseconds()
         );
 
         try (MultiThreadedEventProcessor eventProcessor = new MultiThreadedEventProcessor(
@@ -448,6 +438,15 @@ public class MultiThreadedEventProcessorTest {
                 "Blocking event not executed.");
 
             // Enqueue the other event.
+            FutureEvent<Integer> otherEvent = new FutureEvent<>(
+                new TopicPartition("foo", 0), () -> {
+                mockTime.sleep(5000L);
+                return numEventsExecuted.incrementAndGet();
+            },
+                false,
+                mockTime.milliseconds()
+            );
+
             eventProcessor.enqueue(otherEvent);
 
             // Pass the time.
