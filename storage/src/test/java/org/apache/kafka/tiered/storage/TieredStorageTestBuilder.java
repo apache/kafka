@@ -323,7 +323,7 @@ public final class TieredStorageTestBuilder {
                                                   Integer partition,
                                                   Long beforeOffset) {
         TopicPartition topicPartition = new TopicPartition(topic, partition);
-        actions.add(new DeleteRecordsAction(topicPartition, beforeOffset));
+        actions.add(new DeleteRecordsAction(topicPartition, beforeOffset, buildDeleteSegmentSpecList(topic)));
         return this;
     }
 
@@ -377,6 +377,10 @@ public final class TieredStorageTestBuilder {
 
     private DeleteTopicAction buildDeleteTopicAction(String topic,
                                                      Boolean shouldDelete) {
+        return new DeleteTopicAction(topic, buildDeleteSegmentSpecList(topic), shouldDelete);
+    }
+
+    private List<RemoteDeleteSegmentSpec> buildDeleteSegmentSpecList(String topic) {
         List<RemoteDeleteSegmentSpec> deleteSegmentSpecList = deletables.entrySet()
                 .stream()
                 .filter(e -> e.getKey().topic().equals(topic))
@@ -389,7 +393,7 @@ public final class TieredStorageTestBuilder {
                 })
                 .collect(Collectors.toList());
         deleteSegmentSpecList.forEach(spec -> deletables.remove(spec.getTopicPartition()));
-        return new DeleteTopicAction(topic, deleteSegmentSpecList, shouldDelete);
+        return deleteSegmentSpecList;
     }
 }
 

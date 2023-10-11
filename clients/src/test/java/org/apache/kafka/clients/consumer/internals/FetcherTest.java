@@ -2912,7 +2912,7 @@ public class FetcherTest {
         assignFromUser(topicPartitions);
         topicPartitions.forEach(tp -> subscriptions.seek(tp, 0L));
 
-        AtomicInteger fetchesRemaining = new AtomicInteger(1000);
+        AtomicInteger fetchesRemaining = new AtomicInteger(400);
         executorService = Executors.newSingleThreadExecutor();
         Future<?> future = executorService.submit(() -> {
             while (fetchesRemaining.get() > 0) {
@@ -3677,7 +3677,7 @@ public class FetcherTest {
                                    LogContext logContext) {
         time = new MockTime(1);
         subscriptions = subscriptionState;
-        metadata = new ConsumerMetadata(0, metadataExpireMs, false, false,
+        metadata = new ConsumerMetadata(0, 0, metadataExpireMs, false, false,
                 subscriptions, logContext, new ClusterResourceListeners());
         client = new MockClient(time, metadata);
         metrics = new Metrics(metricConfig, time);

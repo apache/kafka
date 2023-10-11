@@ -78,6 +78,7 @@ import org.apache.kafka.common.errors.LeaderNotAvailableException;
 import org.apache.kafka.common.errors.ListenerNotFoundException;
 import org.apache.kafka.common.errors.LogDirNotFoundException;
 import org.apache.kafka.common.errors.MemberIdRequiredException;
+import org.apache.kafka.common.errors.MismatchedEndpointTypeException;
 import org.apache.kafka.common.errors.NetworkException;
 import org.apache.kafka.common.errors.NewLeaderElectedException;
 import org.apache.kafka.common.errors.NoReassignmentInProgressException;
@@ -118,6 +119,7 @@ import org.apache.kafka.common.errors.TransactionCoordinatorFencedException;
 import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
 import org.apache.kafka.common.errors.TransactionalIdNotFoundException;
 import org.apache.kafka.common.errors.UnacceptableCredentialException;
+import org.apache.kafka.common.errors.UnknownControllerIdException;
 import org.apache.kafka.common.errors.UnknownLeaderEpochException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnknownProducerIdException;
@@ -129,6 +131,7 @@ import org.apache.kafka.common.errors.UnstableOffsetCommitException;
 import org.apache.kafka.common.errors.UnsupportedAssignorException;
 import org.apache.kafka.common.errors.UnsupportedByAuthenticationException;
 import org.apache.kafka.common.errors.UnsupportedCompressionTypeException;
+import org.apache.kafka.common.errors.UnsupportedEndpointTypeException;
 import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
 import org.apache.kafka.common.errors.UnsupportedSaslMechanismException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
@@ -380,7 +383,10 @@ public enum Errors {
     FENCED_MEMBER_EPOCH(110, "The member epoch is fenced by the group coordinator. The member must abandon all its partitions and rejoin.", FencedMemberEpochException::new),
     UNRELEASED_INSTANCE_ID(111, "The instance ID is still used by another member in the consumer group. That member must leave first.", UnreleasedInstanceIdException::new),
     UNSUPPORTED_ASSIGNOR(112, "The assignor or its version range is not supported by the consumer group.", UnsupportedAssignorException::new),
-    STALE_MEMBER_EPOCH(113, "The member epoch is stale. The member must retry after receiving its updated member epoch via the ConsumerGroupHeartbeat API.", StaleMemberEpochException::new);
+    STALE_MEMBER_EPOCH(113, "The member epoch is stale. The member must retry after receiving its updated member epoch via the ConsumerGroupHeartbeat API.", StaleMemberEpochException::new),
+    MISMATCHED_ENDPOINT_TYPE(114, "The request was sent to an endpoint of the wrong type.", MismatchedEndpointTypeException::new),
+    UNSUPPORTED_ENDPOINT_TYPE(115, "This endpoint type is not supported yet.", UnsupportedEndpointTypeException::new),
+    UNKNOWN_CONTROLLER_ID(116, "This controller ID is not known.", UnknownControllerIdException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 

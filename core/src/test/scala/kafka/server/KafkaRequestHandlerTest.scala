@@ -36,6 +36,7 @@ import org.mockito.Mockito.{mock, when}
 
 import java.net.InetAddress
 import java.nio.ByteBuffer
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.atomic.AtomicInteger
 
 class KafkaRequestHandlerTest {
@@ -53,14 +54,15 @@ class KafkaRequestHandlerTest {
       val request = makeRequest(time, metrics)
       requestChannel.sendRequest(request)
 
-      def callback(ms: Int): Unit = {
-        time.sleep(ms)
-        handler.stop()
-      }
-
       when(apiHandler.handle(ArgumentMatchers.eq(request), any())).thenAnswer { _ =>
         time.sleep(2)
-        KafkaRequestHandler.wrap(callback(_: Int))(1)
+        // Prepare the callback.
+        val callback = KafkaRequestHandler.wrap((ms: Int) => {
+          time.sleep(ms)
+          handler.stop()
+        })
+        // Execute the callback asynchronously.
+        CompletableFuture.runAsync(() => callback(1))
         request.apiLocalCompleteTimeNanos = time.nanoseconds
       }
 
@@ -86,16 +88,17 @@ class KafkaRequestHandlerTest {
     var handledCount = 0
     var tryCompleteActionCount = 0
 
-    def callback(x: Int): Unit = {
-      handler.stop()
-    }
-
     val request = makeRequest(time, metrics)
     requestChannel.sendRequest(request)
 
     when(apiHandler.handle(ArgumentMatchers.eq(request), any())).thenAnswer { _ =>
       handledCount = handledCount + 1
-      KafkaRequestHandler.wrap(callback(_: Int))(1)
+      // Prepare the callback.
+      val callback = KafkaRequestHandler.wrap((ms: Int) => {
+        handler.stop()
+      })
+      // Execute the callback asynchronously.
+      CompletableFuture.runAsync(() => callback(1))
     }
 
     when(apiHandler.tryCompleteActions()).thenAnswer { _ =>
