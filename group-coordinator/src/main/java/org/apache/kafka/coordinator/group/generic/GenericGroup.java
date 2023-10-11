@@ -928,8 +928,7 @@ public class GenericGroup implements Group {
             } else if (usesConsumerGroupProtocol() && subscribedTopics.isPresent() && isInState(STABLE)) {
                 // Consumers exist in the group and group is Stable =>
                 // - If the group is aware of the subscribed topics and retention period has passed since the
-                //   last commit timestamp, expire the offset. Offsets with pending offset commits are not
-                //   expired.
+                //   last commit timestamp, expire the offset.
                 return Optional.of(new OffsetExpirationConditionImpl(offsetAndMetadata -> offsetAndMetadata.commitTimestampMs));
             }
         } else {
