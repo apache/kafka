@@ -83,8 +83,6 @@ public class StateRestoreListerIntegrationTest {
 
     private String outputTopic;
 
-    private String applicationId;
-
     private String safeTestName;
 
     private Properties baseConfiguration;
@@ -107,11 +105,11 @@ public class StateRestoreListerIntegrationTest {
 
         inputTopic = "input-topic-" + safeTestName;
         outputTopic = "output-topic-" + safeTestName;
-        applicationId = "app-" + safeTestName;
 
         CLUSTER.createTopic(inputTopic, 3, 1);
         CLUSTER.createTopic(outputTopic, 3, 1);
 
+        final String applicationId = "app-" + safeTestName;
         baseConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
         baseConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         baseConfiguration.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
