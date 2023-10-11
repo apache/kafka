@@ -128,7 +128,7 @@ public interface Group {
     /**
      * See {@link OffsetExpirationCondition}
      *
-     * @return The offset expiration condition for the group or Empty of no such condition exists.
+     * @return The offset expiration condition for the group or Empty if no such condition exists.
      */
     Optional<OffsetExpirationCondition> offsetExpirationCondition();
 }

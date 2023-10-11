@@ -574,7 +574,7 @@ public class OffsetMetadataManager {
             return false;
         }
 
-        AtomicBoolean hasAllOffsetsExpired = new AtomicBoolean(true);
+        AtomicBoolean allOffsetsExpired = new AtomicBoolean(true);
         OffsetExpirationCondition condition = offsetExpirationCondition.get();
 
         offsetsByTopic.forEach((topic, partitions) -> {
@@ -583,20 +583,20 @@ public class OffsetMetadataManager {
                     if (condition.isOffsetExpired(offsetAndMetadata, currentTimestampMs, config.offsetsRetentionMs)) {
                         expiredPartitions.add(appendOffsetCommitTombstone(groupId, topic, partition, records).toString());
                     } else {
-                        hasAllOffsetsExpired.set(false);
+                        allOffsetsExpired.set(false);
                     }
                 });
             } else {
-                hasAllOffsetsExpired.set(false);
+                allOffsetsExpired.set(false);
             }
         });
 
         if (!expiredPartitions.isEmpty()) {
-            log.info("[GroupId {}] Expiring offsets of partitions (hasAllOffsetsExpired={}): {}",
-                groupId, hasAllOffsetsExpired, String.join(", ", expiredPartitions));
+            log.info("[GroupId {}] Expiring offsets of partitions (allOffsetsExpired={}): {}",
+                groupId, allOffsetsExpired, String.join(", ", expiredPartitions));
         }
 
-        return hasAllOffsetsExpired.get();
+        return allOffsetsExpired.get();
     }
 
     /**

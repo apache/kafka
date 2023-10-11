@@ -911,13 +911,13 @@ public class GenericGroup implements Group {
      *
      * See {@link org.apache.kafka.coordinator.group.OffsetExpirationCondition}
      *
-     * @return The offset expiration condition for the group or Empty of no such condition exists.
+     * @return The offset expiration condition for the group or Empty if no such condition exists.
      */
     @Override
     public Optional<OffsetExpirationCondition> offsetExpirationCondition() {
         if (protocolType.isPresent()) {
             if (isInState(EMPTY)) {
-                // No consumer exists in the group =>
+                // No members exist in the group =>
                 // - If current state timestamp exists and retention period has passed since group became Empty,
                 //   expire all offsets with no pending offset commit;
                 // - If there is no current state timestamp (old group metadata schema) and retention period has passed
@@ -927,14 +927,14 @@ public class GenericGroup implements Group {
                 );
             } else if (usesConsumerGroupProtocol() && subscribedTopics.isPresent() && isInState(STABLE)) {
                 // Consumers exist in the group and group is Stable =>
-                // - If the group is aware of the subscribed topics and retention period had passed since the
-                //   last commit timestamp, expire the offset. offset with pending offset commit are not
-                //   expired
+                // - If the group is aware of the subscribed topics and retention period has passed since the
+                //   last commit timestamp, expire the offset. Offsets with pending offset commits are not
+                //   expired.
                 return Optional.of(new OffsetExpirationConditionImpl(offsetAndMetadata -> offsetAndMetadata.commitTimestampMs));
             }
         } else {
-            // protocolType is None => standalone (simple) consumer, that uses Kafka for offset storage only
-            // expire offsets where retention period has passed since their last commit
+            // protocolType is None => standalone (simple) consumer, that uses Kafka for offset storage. Only
+            // expire offsets where retention period has passed since their last commit.
             return Optional.of(new OffsetExpirationConditionImpl(offsetAndMetadata -> offsetAndMetadata.commitTimestampMs));
         }
         // If none of the conditions above are met, do not expire any offsets.

@@ -647,7 +647,7 @@ public class ConsumerGroup implements Group {
     /**
      * See {@link org.apache.kafka.coordinator.group.OffsetExpirationCondition}
      *
-     * @return The offset expiration condition for the group or Empty of no such condition exists.
+     * @return The offset expiration condition for the group or Empty if no such condition exists.
      */
     @Override
     public Optional<OffsetExpirationCondition> offsetExpirationCondition() {
