@@ -44,6 +44,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.concurrent.BlockingQueue;
@@ -80,32 +81,32 @@ public class AssignmentReconcilerTest {
         // Start the reconciliation process. At this point, since there are no partitions assigned to our
         // subscriptions, we don't need to revoke anything. Validate that after our initial step that we haven't
         // prematurely assigned anything to the SubscriptionState and that our result is RECONCILING.
-        maybeReconcile(initialAssignment, RECONCILING);
-        assertSubscriptionStateEmpty();
+        reconcile(initialAssignment, RECONCILING);
+        assertSubscriptionStateEquals(Collections.emptySet());
 
-        // This is intentionally superfluous. We're just checking that we're in the same state as
+        // This is an intentionally superfluous call. We're just checking that we're in the same state as
         // the last time we called maybeReconcile. Because we haven't executed the ConsumerRebalanceListener,
         // the state of the reconciliation is still in progress.
-        maybeReconcile(initialAssignment, RECONCILING);
+        reconcile(initialAssignment, RECONCILING);
 
         // Grab the background event. Because we didn't remove any partitions, but only added them, jump
         // directly to the assign partitions. Let's verify that there's an appropriate event on the
         // background event queue, it has the correct partitions, and the future is there but not complete.
         AssignPartitionsEvent event = pollBackgroundEvent(AssignPartitionsEvent.class);
-        assertEquals(newTopicPartitions(topicName, 0, 1, 2, 3), event.partitions());
+        assertEventEquals(event, newTopicPartitions(topicName, 0, 1, 2, 3));
 
         // Complete the future to signal to the reconciler that the ConsumerRebalanceListener callback
         // has completed. This will trigger the "commit" of the partition assignment to the SubscriptionState.
-        assertSubscriptionStateEmpty();
+        assertSubscriptionStateEquals(Collections.emptySet());
         ConsumerUtils.processRebalanceCallback(callbackInvoker, event);
         assertSubscriptionStateEquals(newTopicPartitions(topicName, 0, 1, 2, 3));
 
         // Call the reconciler and verify that it did "commit" the partition assignment as expected.
-        maybeReconcile(initialAssignment, APPLIED_LOCALLY);
+        reconcile(initialAssignment, APPLIED_LOCALLY);
 
         // If we ask the reconciler to reconcile a previously reconciled assignment, it should tell us
         // that nothing changed.
-        maybeReconcile(initialAssignment, UNCHANGED);
+        reconcile(initialAssignment, UNCHANGED);
     }
 
     @Test
@@ -120,8 +121,8 @@ public class AssignmentReconcilerTest {
         // Start the reconciliation process. At this point, since there are no partitions assigned to our
         // subscriptions, we don't need to revoke anything. Validate that after our initial step that we haven't
         // prematurely assigned anything to the SubscriptionState and that our result is RECONCILING.
-        maybeReconcile(initialAssignment, RECONCILING);
-        assertSubscriptionStateEmpty();
+        reconcile(initialAssignment, RECONCILING);
+        assertSubscriptionStateEquals(Collections.emptySet());
 
         // Grab the background event. Because we didn't remove any partitions, but only added them, jump
         // directly to the assign partitions. Let's verify that there's an appropriate event on the
@@ -136,14 +137,14 @@ public class AssignmentReconcilerTest {
         assertSubscriptionStateEquals(newTopicPartitions(topicName, 0, 1, 2, 3));
 
         // Call the reconciler and verify that it did "commit" the partition assignment as expected.
-        maybeReconcile(initialAssignment, APPLIED_LOCALLY);
+        reconcile(initialAssignment, APPLIED_LOCALLY);
 
         // Create our follow-up assignment that removes two partitions.
         Optional<Assignment> followupAssignment = newAssignment(newTopicPartitions(topicId, 0, 2));
 
         // Continue the reconciliation process. Since we have partitions assigned, we will need to revoke some
         // old partitions that are no longer part of the target assignment.
-        maybeReconcile(followupAssignment, RECONCILING);
+        reconcile(followupAssignment, RECONCILING);
         assertSubscriptionStateEquals(newTopicPartitions(topicName, 0, 1, 2, 3));
 
         // Grab the background event. We are removing some partitions, so verify that we have the correct event
@@ -158,11 +159,11 @@ public class AssignmentReconcilerTest {
         assertSubscriptionStateEquals(newTopicPartitions(topicName, 0, 2));
 
         // Call the reconciler and verify that it did "commit" the partition assignment as expected.
-        maybeReconcile(followupAssignment, APPLIED_LOCALLY);
+        reconcile(followupAssignment, APPLIED_LOCALLY);
 
         // If we ask the reconciler to reconcile a previously reconciled assignment, it should tell us
         // that nothing changed.
-        maybeReconcile(followupAssignment, UNCHANGED);
+        reconcile(followupAssignment, UNCHANGED);
     }
 
     @Test
@@ -176,8 +177,8 @@ public class AssignmentReconcilerTest {
         // Start the reconciliation process. At this point, since there are no partitions assigned to our
         // subscriptions, we don't need to revoke anything. Validate that after our initial step that we haven't
         // prematurely assigned anything to the SubscriptionState and that our result is RECONCILING.
-        maybeReconcile(initialAssignment, RECONCILING);
-        assertSubscriptionStateEmpty();
+        reconcile(initialAssignment, RECONCILING);
+        assertSubscriptionStateEquals(Collections.emptySet());
 
         // Grab the background event. Because we didn't remove any partitions, but only added them, jump
         // directly to the assign partitions. Let's verify that there's an appropriate event on the
@@ -187,19 +188,15 @@ public class AssignmentReconcilerTest {
         assertFalse(assignPartitionsEvent.future().isDone());
 
         // Call the reconciler and make sure it thinks that we're still reconciling.
-        maybeReconcile(initialAssignment, RECONCILING);
+        reconcile(initialAssignment, RECONCILING);
     }
 
-    void maybeReconcile(Optional<Assignment> assignment, ReconciliationResult expected) {
+    void reconcile(Optional<Assignment> assignment, ReconciliationResult expected) {
         ReconciliationResult result = reconciler.maybeReconcile(assignment);
         assertEquals(expected, result);
     }
 
-    private void assertSubscriptionStateEmpty() {
-        assertTrue(subscriptions.assignedPartitions().isEmpty());
-    }
-
-    private void assertSubscriptionStateEquals(SortedSet<TopicPartition> expected) {
+    private void assertSubscriptionStateEquals(Set<TopicPartition> expected) {
         assertEquals(expected, subscriptions.assignedPartitions());
     }
 
