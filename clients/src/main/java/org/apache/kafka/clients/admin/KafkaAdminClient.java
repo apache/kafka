@@ -1546,9 +1546,8 @@ public class KafkaAdminClient extends AdminClient {
          */
         void call(Call call, long now) {
             if (hardShutdownTimeMs.get() != INVALID_SHUTDOWN_TIME) {
-                log.debug("The AdminClient is not accepting new calls. Timing out {}.", call);
-                call.handleTimeoutFailure(time.milliseconds(),
-                    new TimeoutException("The AdminClient thread is not accepting new calls."));
+                log.debug("Cannot accept new call {} when AdminClient is closing.", call);
+                call.handleFailure(new IllegalStateException("Cannot accept new calls when AdminClient is closing."));
             } else if (metadataManager.usingBootstrapControllers() &&
                     (!call.nodeProvider.supportsUseControllers())) {
                 call.fail(now, new UnsupportedEndpointTypeException("This Admin API is not " +
