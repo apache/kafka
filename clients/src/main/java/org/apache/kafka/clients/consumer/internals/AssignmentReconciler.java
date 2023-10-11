@@ -310,18 +310,17 @@ public class AssignmentReconciler {
                         diffPartitions,
                         error);
                 // TODO: should we proceed or abort?
+            } else {
+                log.debug("{} was successfully executed with the following partitions: {}",
+                        listenerMethodName,
+                        diffPartitions);
             }
-
-            log.debug("{} was successfully executed with the following partitions: {}",
-                    listenerMethodName,
-                    diffPartitions);
 
             SortedSet<TopicPartition> newAssignment = assignmentGenerator.generate(diffPartitions);
 
             // And finally... assign the new set of partitions! In keeping with the existing KafkaConsumer
             // implementation, this can only be done after the callback was successful.
             subscriptions.assignFromSubscribed(newAssignment);
-
         });
 
         return ReconciliationResult.RECONCILING;
