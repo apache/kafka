@@ -91,7 +91,8 @@ public class DefaultBackgroundThread extends KafkaThread {
                             final CoordinatorRequestManager coordinatorManager,
                             final CommitRequestManager commitRequestManager,
                             final OffsetsRequestManager offsetsRequestManager,
-                            final TopicMetadataRequestManager topicMetadataRequestManager) {
+                            final TopicMetadataRequestManager topicMetadataRequestManager,
+                            final HeartbeatRequestManager heartbeatRequestManager) {
         super(BACKGROUND_THREAD_NAME, true);
         this.time = time;
         this.running = true;
@@ -108,7 +109,8 @@ public class DefaultBackgroundThread extends KafkaThread {
                 offsetsRequestManager,
                 topicMetadataRequestManager,
                 Optional.ofNullable(coordinatorManager),
-                Optional.ofNullable(commitRequestManager));
+                Optional.ofNullable(commitRequestManager),
+                Optional.ofNullable(heartbeatRequestManager));
     }
 
     public DefaultBackgroundThread(final Time time,
@@ -138,19 +140,19 @@ public class DefaultBackgroundThread extends KafkaThread {
             this.config = config;
             this.metadata = metadata;
             final NetworkClient networkClient = ClientUtils.createNetworkClient(config,
-                    metrics,
-                    CONSUMER_METRIC_GROUP_PREFIX,
-                    logContext,
-                    apiVersions,
-                    time,
-                    CONSUMER_MAX_INFLIGHT_REQUESTS_PER_CONNECTION,
-                    metadata,
-                    fetcherThrottleTimeSensor);
+                metrics,
+                CONSUMER_METRIC_GROUP_PREFIX,
+                logContext,
+                apiVersions,
+                time,
+                CONSUMER_MAX_INFLIGHT_REQUESTS_PER_CONNECTION,
+                metadata,
+                fetcherThrottleTimeSensor);
             this.networkClientDelegate = new NetworkClientDelegate(
-                    this.time,
-                    this.config,
-                    logContext,
-                    networkClient);
+                this.time,
+                this.config,
+                logContext,
+                networkClient);
             this.running = true;
             this.errorEventHandler = new ErrorEventHandler(this.backgroundEventQueue);
             this.groupState = new GroupState(rebalanceConfig);
@@ -159,22 +161,24 @@ public class DefaultBackgroundThread extends KafkaThread {
             final int requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
 
             OffsetsRequestManager offsetsRequestManager =
-                    new OffsetsRequestManager(
-                            subscriptionState,
-                            metadata,
-                            configuredIsolationLevel(config),
-                            time,
-                            retryBackoffMs,
-                            requestTimeoutMs,
-                            apiVersions,
-                            networkClientDelegate,
-                            logContext);
+                new OffsetsRequestManager(
+                    subscriptionState,
+                    metadata,
+                    configuredIsolationLevel(config),
+                    time,
+                    retryBackoffMs,
+                    requestTimeoutMs,
+                    apiVersions,
+                    networkClientDelegate,
+                    logContext);
             CoordinatorRequestManager coordinatorRequestManager = null;
             CommitRequestManager commitRequestManager = null;
             TopicMetadataRequestManager topicMetadataRequestManger = new TopicMetadataRequestManager(
                 logContext,
                 config);
+            HeartbeatRequestManager heartbeatRequestManager = null;
 
+            // TODO: consolidate groupState and memberState
             if (groupState.groupId != null) {
                 coordinatorRequestManager = new CoordinatorRequestManager(
                         this.time,
@@ -190,13 +194,23 @@ public class DefaultBackgroundThread extends KafkaThread {
                         config,
                         coordinatorRequestManager,
                         groupState);
+                MembershipManager membershipManager = new MembershipManagerImpl(groupState.groupId);
+                heartbeatRequestManager = new HeartbeatRequestManager(
+                        this.time,
+                        logContext,
+                        config,
+                        coordinatorRequestManager,
+                        subscriptionState,
+                        membershipManager,
+                        errorEventHandler);
             }
 
             this.requestManagers = new RequestManagers(
                 offsetsRequestManager,
                 topicMetadataRequestManger,
                 Optional.ofNullable(coordinatorRequestManager),
-                Optional.ofNullable(commitRequestManager));
+                Optional.ofNullable(commitRequestManager),
+                Optional.ofNullable(heartbeatRequestManager));
             this.applicationEventProcessor = new ApplicationEventProcessor(
                 backgroundEventQueue,
                 requestManagers,

@@ -180,8 +180,8 @@ public class RemoteIndexCache implements Closeable {
     }
 
     // Visible for testing
-    public Path cacheDir() {
-        return cacheDir.toPath();
+    public File cacheDir() {
+        return cacheDir;
     }
 
     public void remove(Uuid key) {
