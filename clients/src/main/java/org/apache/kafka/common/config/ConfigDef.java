@@ -57,7 +57,7 @@ import java.util.stream.Collectors;
  * defs.define(&quot;config_with_default&quot;, Type.STRING, &quot;default string value&quot;, Importance.High, &quot;Configuration with default value.&quot;);
  * // check {@link #define(String, Type, Object, Validator, Importance, String)} for more details.
  * defs.define(&quot;config_with_validator&quot;, Type.INT, 42, Range.atLeast(0), Importance.High, &quot;Configuration with user provided validator.&quot;);
- * // check {@link #define(String, Type, Importance, String, String, int, Width, String, List<String>)} for more details.
+ * // check {@link #define(String, Type, Importance, String, String, int, Width, String, List) define(String, Type, Importance, String, String, int, Width, String, List&lt;String&gt;)} for more details.
  * defs.define(&quot;config_with_dependents&quot;, Type.INT, Importance.LOW, &quot;Configuration with dependents.&quot;, &quot;group&quot;, 1, Width.SHORT, &quot;Config With Dependents&quot;, Arrays.asList(&quot;config_with_default&quot;,&quot;config_with_validator&quot;));
  *
  * Map&lt;String, String&gt; props = new HashMap&lt;&gt;();
@@ -802,11 +802,63 @@ public class ConfigDef {
     }
 
     /**
-     * The config types
+     * The type for a configuration value
      */
     public enum Type {
-        BOOLEAN, STRING, INT, SHORT, LONG, DOUBLE, LIST, CLASS, PASSWORD;
+        /**
+         * Used for boolean values. Values can be provided as a Boolean object or as a String with values
+         * <code>true</code> or <code>false</code> (this is not case-sensitive), otherwise a {@link ConfigException} is
+         * thrown.
+         */
+        BOOLEAN,
+        /**
+         * Used for string values. Values must be provided as a String object, otherwise a {@link ConfigException} is
+         * thrown.
+         */
+        STRING,
+        /**
+         * Used for numerical values within the Java Integer range. Values must be provided as a Integer object or as
+         * a String being a valid Integer value, otherwise a {@link ConfigException} is thrown.
+         */
+        INT,
+        /**
+         * Used for numerical values within the Java Short range. Values must be provided as a Short object or as
+         * a String being a valid Short value, otherwise a {@link ConfigException} is thrown.
+         */
+        SHORT,
+        /**
+         * Used for numerical values within the Java Long range. Values must be provided as a Long object, as an Integer
+         * object or as a String being a valid Long value, otherwise a {@link ConfigException} is thrown.
+         */
+        LONG,
+        /**
+         * Used for numerical values within the Java Double range. Values must be provided as a Number object, as a
+         * Double object or as a String being a valid Double value, otherwise a {@link ConfigException} is thrown.
+         */
+        DOUBLE,
+        /**
+         * Used for list values. Values must be provided as a List object, as a String object, otherwise a
+         * {@link ConfigException} is thrown. When the value is provided as a String it must use commas to separate the
+         * different entries (for example: <code>first-entry, second-entry</code>) and an empty String maps to an empty List.
+         */
+        LIST,
+        /**
+         * Used for values that implement a Kafka interface. Values must be provided as a Class object or as a
+         * String object, otherwise a {@link ConfigException} is thrown. When the value is provided as a String it must
+         * be the binary name of the Class.
+         */
+        CLASS,
+        /**
+         * Used for string values containing sensitive data such as a password or key. The values of configurations with
+         * of this type are not included in logs and instead replaced with "[hidden]". Values must be provided as a
+         * String object, otherwise a {@link ConfigException} is thrown.
+         */
+        PASSWORD;
 
+        /**
+         * Whether this type contains sensitive data such as a password or key.
+         * @return true if the type is {@link #PASSWORD}
+         */
         public boolean isSensitive() {
             return this == PASSWORD;
         }
