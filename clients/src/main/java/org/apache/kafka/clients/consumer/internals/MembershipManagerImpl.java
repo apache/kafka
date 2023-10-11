@@ -60,7 +60,7 @@ public class MembershipManagerImpl implements MembershipManager {
 
     public MembershipManagerImpl(String groupId, String groupInstanceId, AssignorSelection assignorSelection) {
         this.groupId = groupId;
-        this.state = MemberState.UNJOINED;
+        this.state = MemberState.NOT_IN_GROUP;
         if (assignorSelection == null) {
             setAssignorSelection(AssignorSelection.defaultAssignor());
         } else {
@@ -143,8 +143,25 @@ public class MembershipManagerImpl implements MembershipManager {
     }
 
     @Override
+    public void tryJoin() {
+        resetEpoch();
+        transitionTo(MemberState.UNJOINED);
+    }
+
+    @Override
+    public void leaveGroup() {
+        resetEpoch();
+        transitionTo(MemberState.NOT_IN_GROUP);
+    }
+
+    @Override
     public boolean shouldSendHeartbeat() {
-        return state() != MemberState.FAILED;
+        return state() != MemberState.FAILED && state() != MemberState.NOT_IN_GROUP;
+    }
+
+    @Override
+    public boolean canCommitOffset() {
+        return state() != MemberState.FAILED && state() != MemberState.FENCED;
     }
 
     /**

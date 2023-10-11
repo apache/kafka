@@ -188,7 +188,7 @@ public class HeartbeatRequestManager implements RequestManager {
             if (response != null) {
                 onResponse((ConsumerGroupHeartbeatResponse) response.responseBody(), response.receivedTimeMs());
             } else {
-                // TODO: Currently, we lack a good way to propage the response time from the network client to the
+                // TODO: Currently, we lack a good way to propagate the response time from the network client to the
                 //  request handler. We will need to store the response time in the handler to make it accessible.
                 onFailure(exception, time.milliseconds());
             }

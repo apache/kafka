@@ -22,9 +22,11 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractRequest;
+import org.apache.kafka.common.requests.ConsumerGroupHeartbeatResponse;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.OffsetFetchRequest;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
@@ -299,6 +301,62 @@ public class CommitRequestManagerTest {
             testRetriable(commitRequestManger, Collections.singletonList(future));
         else
             testNonRetriable(Collections.singletonList(future));
+    }
+
+    @Test
+    public void testOffsetCommitWhenFenced() {
+        CommitRequestManager commitRequestManger = create(true, 100);
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
+        Set<TopicPartition> partitions = new HashSet<>();
+        TopicPartition tp1 = new TopicPartition("t1", 2);
+        TopicPartition tp2 = new TopicPartition("t2", 3);
+        partitions.add(tp1);
+        partitions.add(tp2);
+        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future =
+            commitRequestManger.addOffsetFetchRequest(partitions);
+
+        transitionToFenced();
+
+        NetworkClientDelegate.PollResult res = commitRequestManger.poll(time.milliseconds());
+        assertEquals(0, res.unsentRequests.size());
+    }
+
+    @Test
+    public void testOffsetCommitWhenFailed() {
+        CommitRequestManager commitRequestManger = create(true, 100);
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
+        Set<TopicPartition> partitions = new HashSet<>();
+        TopicPartition tp1 = new TopicPartition("t1", 2);
+        TopicPartition tp2 = new TopicPartition("t2", 3);
+        partitions.add(tp1);
+        partitions.add(tp2);
+        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future =
+            commitRequestManger.addOffsetFetchRequest(partitions);
+
+        transitionToFailed();
+
+        NetworkClientDelegate.PollResult res = commitRequestManger.poll(time.milliseconds());
+        assertEquals(0, res.unsentRequests.size());
+    }
+
+    private void transitionToFenced() {
+        membershipManager.tryJoin();
+        ConsumerGroupHeartbeatResponse rs = new ConsumerGroupHeartbeatResponse(new ConsumerGroupHeartbeatResponseData()
+            .setHeartbeatIntervalMs(0)
+            .setMemberId("member-id")
+            .setMemberEpoch(0));
+        membershipManager.updateState(rs.data());
+        membershipManager.transitionToFenced();
+    }
+
+    private void transitionToFailed() {
+        membershipManager.tryJoin();
+        ConsumerGroupHeartbeatResponse rs = new ConsumerGroupHeartbeatResponse(new ConsumerGroupHeartbeatResponseData()
+            .setHeartbeatIntervalMs(0)
+            .setMemberId("member-id")
+            .setMemberEpoch(0));
+        membershipManager.updateState(rs.data());
+        membershipManager.transitionToFailed();
     }
 
     private static void assertEmptyPendingRequests(CommitRequestManager commitRequestManger) {

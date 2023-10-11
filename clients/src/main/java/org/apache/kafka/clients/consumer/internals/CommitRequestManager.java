@@ -101,6 +101,11 @@ public class CommitRequestManager implements RequestManager {
             return new NetworkClientDelegate.PollResult(Long.MAX_VALUE, Collections.emptyList());
         }
 
+        // TODO: We should purge the unsent commits when the member fails/got fenced
+        if (!membershipManager.canCommitOffset()) {
+            return  new NetworkClientDelegate.PollResult(Long.MAX_VALUE, Collections.emptyList());
+        }
+
         maybeAutoCommit(this.subscriptions.allConsumed());
         if (!pendingRequests.hasUnsentRequests()) {
             return new NetworkClientDelegate.PollResult(Long.MAX_VALUE, Collections.emptyList());
@@ -189,7 +194,7 @@ public class CommitRequestManager implements RequestManager {
             this.groupId = groupId;
             this.groupInstanceId = groupInstanceId;
             this.memberEpoch = memberEpoch;
-            this.memberId = Optional.of(memberId);
+            this.memberId = Optional.ofNullable(memberId);
         }
 
         public NetworkClientDelegate.UnsentRequest toUnsentRequest() {

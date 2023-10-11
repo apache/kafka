@@ -24,10 +24,12 @@ import org.apache.kafka.common.requests.ConsumerGroupHeartbeatResponse;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class MembershipManagerImplTest {
@@ -35,6 +37,27 @@ public class MembershipManagerImplTest {
     private static final String GROUP_ID = "test-group";
     private static final String MEMBER_ID = "test-member-1";
     private static final int MEMBER_EPOCH = 1;
+
+    @Test
+    public void testInitialState() {
+        MembershipManagerImpl membershipManager = new MembershipManagerImpl(GROUP_ID);
+        assertEquals(GROUP_ID, membershipManager.groupId());
+        assertEquals(0, membershipManager.memberEpoch());
+        assertNull(membershipManager.memberId());
+        assertEquals(Optional.empty(), membershipManager.groupInstanceId());
+        assertEquals(MemberState.NOT_IN_GROUP, membershipManager.state());
+    }
+
+    @Test
+    public void testLeaveGroup() {
+        MembershipManagerImpl membershipManager = instantiateMembershipManagerAndJoin();
+        membershipManager.leaveGroup();
+        assertEquals(GROUP_ID, membershipManager.groupId());
+        assertEquals(0, membershipManager.memberEpoch());
+        assertNull(membershipManager.memberId());
+        assertEquals(Optional.empty(), membershipManager.groupInstanceId());
+        assertEquals(MemberState.NOT_IN_GROUP, membershipManager.state());
+    }
 
     @Test
     public void testMembershipManagerDefaultAssignor() {
@@ -68,7 +91,7 @@ public class MembershipManagerImplTest {
 
     @Test
     public void testTransitionToReconcilingOnlyIfAssignmentReceived() {
-        MembershipManagerImpl membershipManager = new MembershipManagerImpl(GROUP_ID);
+        MembershipManagerImpl membershipManager = instantiateMembershipManagerAndJoin();
         assertEquals(MemberState.UNJOINED, membershipManager.state());
 
         ConsumerGroupHeartbeatResponse responseWithoutAssignment =
@@ -84,7 +107,7 @@ public class MembershipManagerImplTest {
 
     @Test
     public void testMemberIdAndEpochResetOnFencedMembers() {
-        MembershipManagerImpl membershipManager = new MembershipManagerImpl(GROUP_ID);
+        MembershipManagerImpl membershipManager = instantiateMembershipManagerAndJoin();
         ConsumerGroupHeartbeatResponse heartbeatResponse =
                 createConsumerGroupHeartbeatResponse(null);
         membershipManager.updateState(heartbeatResponse.data());
@@ -99,7 +122,7 @@ public class MembershipManagerImplTest {
 
     @Test
     public void testTransitionToFailure() {
-        MembershipManagerImpl membershipManager = new MembershipManagerImpl(GROUP_ID);
+        MembershipManagerImpl membershipManager = instantiateMembershipManagerAndJoin();
         ConsumerGroupHeartbeatResponse heartbeatResponse =
                 createConsumerGroupHeartbeatResponse(null);
         membershipManager.updateState(heartbeatResponse.data());
@@ -113,7 +136,7 @@ public class MembershipManagerImplTest {
 
     @Test
     public void testUpdateAssignment() {
-        MembershipManagerImpl membershipManager = new MembershipManagerImpl(GROUP_ID);
+        MembershipManagerImpl membershipManager = instantiateMembershipManagerAndJoin();
         ConsumerGroupHeartbeatResponseData.Assignment newAssignment = createAssignment();
         ConsumerGroupHeartbeatResponse heartbeatResponse =
                 createConsumerGroupHeartbeatResponse(newAssignment);
@@ -125,7 +148,7 @@ public class MembershipManagerImplTest {
 
     @Test
     public void testUpdateAssignmentReceivingAssignmentWhileAnotherInProcess() {
-        MembershipManagerImpl membershipManager = new MembershipManagerImpl(GROUP_ID);
+        MembershipManagerImpl membershipManager = instantiateMembershipManagerAndJoin();
         ConsumerGroupHeartbeatResponseData.Assignment newAssignment1 = createAssignment();
         membershipManager.updateState(createConsumerGroupHeartbeatResponse(newAssignment1).data());
 
@@ -140,7 +163,7 @@ public class MembershipManagerImplTest {
 
     @Test
     public void testNextTargetAssignmentHoldsLatestAssignmentReceivedWhileAnotherInProcess() {
-        MembershipManagerImpl membershipManager = new MembershipManagerImpl(GROUP_ID);
+        MembershipManagerImpl membershipManager = instantiateMembershipManagerAndJoin();
         ConsumerGroupHeartbeatResponseData.Assignment newAssignment1 = createAssignment();
         membershipManager.updateState(createConsumerGroupHeartbeatResponse(newAssignment1).data());
 
@@ -157,6 +180,12 @@ public class MembershipManagerImplTest {
         ConsumerGroupHeartbeatResponseData.Assignment newAssignment3 = createAssignment();
         membershipManager.updateState(createConsumerGroupHeartbeatResponse(newAssignment3).data());
         checkAssignments(membershipManager, null, newAssignment1, newAssignment3);
+    }
+
+    private MembershipManagerImpl instantiateMembershipManagerAndJoin() {
+        MembershipManagerImpl membershipManager = new MembershipManagerImpl(GROUP_ID);
+        membershipManager.tryJoin();
+        return membershipManager;
     }
 
     private void checkAssignments(
@@ -176,13 +205,6 @@ public class MembershipManagerImplTest {
                 .setMemberId(MEMBER_ID)
                 .setMemberEpoch(MEMBER_EPOCH)
                 .setAssignment(assignment));
-    }
-
-    private ConsumerGroupHeartbeatResponse createConsumerGroupHeartbeatResponseWithError(Errors error) {
-        return new ConsumerGroupHeartbeatResponse(new ConsumerGroupHeartbeatResponseData()
-                .setErrorCode(error.code())
-                .setMemberId(MEMBER_ID)
-                .setMemberEpoch(5));
     }
 
     private ConsumerGroupHeartbeatResponseData.Assignment createAssignment() {

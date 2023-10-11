@@ -22,6 +22,10 @@ import java.util.Arrays;
 import java.util.List;
 
 public enum MemberState {
+    /**
+     * Member has left or does not intend to join a group.
+     */
+    NOT_IN_GROUP,
 
     /**
      * Member has not joined a consumer group yet, or has been fenced and needs to re-join.
@@ -59,6 +63,8 @@ public enum MemberState {
 
     static {
         // Valid state transitions
+        NOT_IN_GROUP.previousValidStates = Arrays.asList(UNJOINED, RECONCILING, STABLE, FENCED);
+
         STABLE.previousValidStates = Arrays.asList(UNJOINED, RECONCILING);
 
         RECONCILING.previousValidStates = Arrays.asList(STABLE, UNJOINED);
@@ -67,7 +73,7 @@ public enum MemberState {
 
         FENCED.previousValidStates = Arrays.asList(STABLE, RECONCILING);
 
-        UNJOINED.previousValidStates = Arrays.asList(FENCED);
+        UNJOINED.previousValidStates = Arrays.asList(NOT_IN_GROUP, FENCED);
     }
 
     private List<MemberState> previousValidStates;

@@ -37,6 +37,8 @@ public interface MembershipManager {
 
     int memberEpoch();
 
+    boolean canCommitOffset();
+
     MemberState state();
 
     /**
@@ -71,6 +73,13 @@ public interface MembershipManager {
      */
     void transitionToFailed();
 
+    /**
+     * Transition the meber to UNJOINED state.  This happens when the member starts the rebalance by subscribing to a
+     * topic.
+     */
+    void tryJoin();
+
+    void leaveGroup();
     /**
      * Return true if the member should send heartbeat to the coordinator
      */
