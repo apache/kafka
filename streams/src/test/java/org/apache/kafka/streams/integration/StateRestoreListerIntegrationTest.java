@@ -70,7 +70,7 @@ public class StateRestoreListerIntegrationTest {
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(3);
 
     @BeforeClass
-    public static void startCluster() throws IOException {
+    public static void startCluster() throws Exception {
         CLUSTER.start();
     }
 
@@ -101,7 +101,7 @@ public class StateRestoreListerIntegrationTest {
     private List<Properties> streamsConfigurations;
 
     @Before
-    public void before() throws InterruptedException {
+    public void before() throws Exception {
         baseConfiguration = new Properties();
         streamsConfigurations = new ArrayList<>();
 
@@ -126,7 +126,7 @@ public class StateRestoreListerIntegrationTest {
     }
 
     @After
-    public void whenShuttingDown() throws IOException {
+    public void whenShuttingDown() throws Exception {
         Stream.of(kafkaStreams1, kafkaStreams2)
               .filter(Objects::nonNull)
               .forEach(KafkaStreams::close);
@@ -177,7 +177,6 @@ public class StateRestoreListerIntegrationTest {
 
     private void validateReceivedMessages(final List<KeyValue<Integer, Integer>> expectedRecords,
                                           final String outputTopic) throws Exception {
-        final String safeTestName = safeUniqueTestName(getClass(), testName);
         final Properties consumerProperties = new Properties();
         consumerProperties.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         consumerProperties.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "group-" + safeTestName);
