@@ -174,14 +174,14 @@ public class CommitRequestManager implements RequestManager {
     private class OffsetCommitRequestState {
         private final Map<TopicPartition, OffsetAndMetadata> offsets;
         private final String groupId;
-        private final String memberId;
-        private final String groupInstanceId;
+        private final Optional<String> memberId;
+        private final Optional<String> groupInstanceId;
         private final CompletableFuture<Void> future;
         private int memberEpoch;
 
         public OffsetCommitRequestState(final Map<TopicPartition, OffsetAndMetadata> offsets,
                                         final String groupId,
-                                        final String groupInstanceId,
+                                        final Optional<String> groupInstanceId,
                                         final int memberEpoch,
                                         final String memberId) {
             this.offsets = offsets;
@@ -189,7 +189,7 @@ public class CommitRequestManager implements RequestManager {
             this.groupId = groupId;
             this.groupInstanceId = groupInstanceId;
             this.memberEpoch = memberEpoch;
-            this.memberId = memberId;
+            this.memberId = Optional.of(memberId);
         }
 
         public NetworkClientDelegate.UnsentRequest toUnsentRequest() {
@@ -215,15 +215,15 @@ public class CommitRequestManager implements RequestManager {
 
             OffsetCommitRequestData data = new OffsetCommitRequestData()
                     .setGroupId(groupId)
-                    .setGenerationIdOrMemberEpoch(membershipManager.memberEpoch())
+                    .setGenerationIdOrMemberEpoch(memberEpoch)
                     .setTopics(new ArrayList<>(requestTopicDataMap.values()));
 
-            if (membershipManager.memberId() != null) {
-                data.setMemberId(membershipManager.memberId());
+            if (memberId.isPresent()) {
+                data.setMemberId(memberId.get());
             }
 
-            if (membershipManager.groupInstanceId().isPresent()) {
-                data.setGroupInstanceId(membershipManager.groupInstanceId().get());
+            if (groupInstanceId.isPresent()) {
+                data.setGroupInstanceId(groupInstanceId.get());
             }
 
             return new NetworkClientDelegate.UnsentRequest(
@@ -407,7 +407,7 @@ public class CommitRequestManager implements RequestManager {
             OffsetCommitRequestState request = new OffsetCommitRequestState(
                 offsets,
                 membershipManager.groupId(),
-                membershipManager.groupInstanceId().orElse(null),
+                membershipManager.groupInstanceId(),
                 membershipManager.memberEpoch(),
                 membershipManager.memberId());
             unsentOffsetCommits.add(request);
