@@ -104,10 +104,12 @@ class ConsumeBenchTest(Test):
         use_new_coordinator=[True, False]
     )
     @skip_if_new_coordinator_and_zk
-    def test_single_partition(self, metadata_quorum=quorum.zk):
+    def test_single_partition(self, metadata_quorum=quorum.zk, use_new_coordinator=False):
         """
         Run a ConsumeBench against a single partition
         """
+        self.kafka.use_new_coordinator = use_new_coordinator
+        self.kafka.start()
         active_topics = {"consume_bench_topic": {"numPartitions": 2, "replicationFactor": 3}}
         self.produce_messages(active_topics, 5000)
         consume_spec = ConsumeBenchWorkloadSpec(0, TaskSpec.MAX_DURATION_MS,
@@ -128,14 +130,16 @@ class ConsumeBenchTest(Test):
     @cluster(num_nodes=10)
     @matrix(
         metadata_quorum=quorum.all_non_upgrade,
-        se_new_coordinator=[True, False]
+        use_new_coordinator=[True, False]
     )
     @skip_if_new_coordinator_and_zk
-    def test_multiple_consumers_random_group_topics(self, metadata_quorum=quorum.zk):
+    def test_multiple_consumers_random_group_topics(self, metadata_quorum=quorum.zk, use_new_coordinator=False):
         """
         Runs multiple consumers group to read messages from topics.
         Since a consumerGroup isn't specified, each consumer should read from all topics independently
         """
+        self.kafka.use_new_coordinator = use_new_coordinator
+        self.kafka.start()
         self.produce_messages(self.active_topics, max_messages=5000)
         consume_spec = ConsumeBenchWorkloadSpec(0, TaskSpec.MAX_DURATION_MS,
                                                 self.consumer_workload_service.consumer_node,
@@ -156,14 +160,16 @@ class ConsumeBenchTest(Test):
     @cluster(num_nodes=10)
     @matrix(
         metadata_quorum=quorum.all_non_upgrade,
-        se_new_coordinator=[True, False]
+        use_new_coordinator=[True, False]
     )
     @skip_if_new_coordinator_and_zk
-    def test_two_consumers_specified_group_topics(self, metadata_quorum=quorum.zk):
+    def test_two_consumers_specified_group_topics(self, metadata_quorum=quorum.zk, use_new_coordinator=False):
         """
         Runs two consumers in the same consumer group to read messages from topics.
         Since a consumerGroup is specified, each consumer should dynamically get assigned a partition from group
         """
+        self.kafka.use_new_coordinator = use_new_coordinator
+        self.kafka.start()
         self.produce_messages(self.active_topics)
         consume_spec = ConsumeBenchWorkloadSpec(0, TaskSpec.MAX_DURATION_MS,
                                                 self.consumer_workload_service.consumer_node,
@@ -185,15 +191,17 @@ class ConsumeBenchTest(Test):
     @cluster(num_nodes=10)
     @matrix(
         metadata_quorum=quorum.all_non_upgrade,
-        se_new_coordinator=[True, False]
+        use_new_coordinator=[True, False]
     )
     @skip_if_new_coordinator_and_zk
-    def test_multiple_consumers_random_group_partitions(self, metadata_quorum=quorum.zk):
+    def test_multiple_consumers_random_group_partitions(self, metadata_quorum=quorum.zk, use_new_coordinator=False):
         """
         Runs multiple consumers in to read messages from specific partitions.
         Since a consumerGroup isn't specified, each consumer will get assigned a random group
         and consume from all partitions
         """
+        self.kafka.use_new_coordinator = use_new_coordinator
+        self.kafka.start()
         self.produce_messages(self.active_topics, max_messages=20000)
         consume_spec = ConsumeBenchWorkloadSpec(0, TaskSpec.MAX_DURATION_MS,
                                                 self.consumer_workload_service.consumer_node,
@@ -214,14 +222,16 @@ class ConsumeBenchTest(Test):
     @cluster(num_nodes=10)
     @matrix(
         metadata_quorum=quorum.all_non_upgrade,
-        se_new_coordinator=[True, False]
+        use_new_coordinator=[True, False]
     )
     @skip_if_new_coordinator_and_zk
-    def test_multiple_consumers_specified_group_partitions_should_raise(self, metadata_quorum=quorum.zk):
+    def test_multiple_consumers_specified_group_partitions_should_raise(self, metadata_quorum=quorum.zk, use_new_coordinator=False):
         """
         Runs multiple consumers in the same group to read messages from specific partitions.
         It is an invalid configuration to provide a consumer group and specific partitions.
         """
+        self.kafka.use_new_coordinator = use_new_coordinator
+        self.kafka.start()
         expected_error_msg = 'explicit partition assignment'
         self.produce_messages(self.active_topics, max_messages=20000)
         consume_spec = ConsumeBenchWorkloadSpec(0, TaskSpec.MAX_DURATION_MS,
