@@ -551,7 +551,7 @@ public class OffsetMetadataManager {
     }
 
     /**
-     * Remove expired offsets for group.
+     * Remove expired offsets for the given group.
      *
      * @param groupId The group id.
      * @param records The list of records to populate with offset commit tombstone records.
