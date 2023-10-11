@@ -93,6 +93,7 @@ import java.util.stream.Stream;
 import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.common.utils.Utils.mkObjectProperties;
 import static org.apache.kafka.streams.Topology.AutoOffsetReset.EARLIEST;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.purgeLocalStreamsState;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
@@ -139,7 +140,12 @@ public class RestoreIntegrationTest {
     }
 
     private Properties props(final boolean stateUpdaterEnabled) {
+        return props(mkObjectProperties(mkMap(mkEntry(InternalConfig.STATE_UPDATER_ENABLED, stateUpdaterEnabled))));
+    }
+
+    private Properties props(final Properties extraProperties) {
         final Properties streamsConfiguration = new Properties();
+
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
@@ -148,15 +154,10 @@ public class RestoreIntegrationTest {
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        streamsConfiguration.put(InternalConfig.STATE_UPDATER_ENABLED, stateUpdaterEnabled);
-        streamsConfigurations.add(streamsConfiguration);
-        return streamsConfiguration;
-    }
-
-    private Properties props(final boolean stateUpdaterEnabled, final Map<String, String> extraProperties) {
-        final Properties streamsConfiguration = props(stateUpdaterEnabled);
         streamsConfiguration.putAll(extraProperties);
+
         streamsConfigurations.add(streamsConfiguration);
+
         return streamsConfiguration;
     }
 
@@ -520,15 +521,15 @@ public class RestoreIntegrationTest {
         CLUSTER.createTopic(inputTopic, 5, 1);
         CLUSTER.createTopic(outputTopic, 5, 1);
 
-        final Map<String, String> kafkaStreams1Configuration = mkMap(
+        final Map<String, Object> kafkaStreams1Configuration = mkMap(
             mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId).getPath() + "-ks1"),
             mkEntry(StreamsConfig.consumerPrefix(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG), appId + "-ks1"),
-            mkEntry(StreamsConfig.restoreConsumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), "10")
+            mkEntry(StreamsConfig.restoreConsumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), 10)
         );
-        final Map<String, String> kafkaStreams2Configuration = mkMap(
+        final Map<String, Object> kafkaStreams2Configuration = mkMap(
             mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId).getPath() + "-ks2"),
             mkEntry(StreamsConfig.consumerPrefix(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG), appId + "-ks2"),
-            mkEntry(StreamsConfig.restoreConsumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), "10")
+            mkEntry(StreamsConfig.restoreConsumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), 10)
         );
 
         final StreamsBuilder builder = new StreamsBuilder();
@@ -598,8 +599,8 @@ public class RestoreIntegrationTest {
 
     private KafkaStreams startKafkaStreams(final StreamsBuilder streamsBuilder,
                                            final StateRestoreListener stateRestoreListener,
-                                           final Map<String, String> extraConfiguration) {
-        final Properties streamsConfiguration = props(true, extraConfiguration);
+                                           final Map<String, Object> extraConfiguration) {
+        final Properties streamsConfiguration = props(mkObjectProperties(extraConfiguration));
         streamsConfiguration.put(StreamsConfig.restoreConsumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), 10);
 
         final KafkaStreams kafkaStreams = new KafkaStreams(streamsBuilder.build(), streamsConfiguration);
