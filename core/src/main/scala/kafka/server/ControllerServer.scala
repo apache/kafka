@@ -263,7 +263,8 @@ class ControllerServer(
           setDelegationTokenSecretKey(delegationTokenKeyString).
           setDelegationTokenMaxLifeMs(config.delegationTokenMaxLifeMs).
           setDelegationTokenExpiryTimeMs(config.delegationTokenExpiryTimeMs).
-          setDelegationTokenExpiryCheckIntervalMs(config.delegationTokenExpiryCheckIntervalMs)
+          setDelegationTokenExpiryCheckIntervalMs(config.delegationTokenExpiryCheckIntervalMs).
+          setEligibleLeaderReplicasEnabled(config.elrEnabled)
       }
       controller = controllerBuilder.build()
 

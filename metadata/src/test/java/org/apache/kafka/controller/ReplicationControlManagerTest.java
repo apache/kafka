@@ -160,6 +160,7 @@ public class ReplicationControlManagerTest {
             private Optional<CreateTopicPolicy> createTopicPolicy = Optional.empty();
             private MetadataVersion metadataVersion = MetadataVersion.latest();
             private MockTime mockTime = new MockTime();
+            private boolean isElrEnabled = false;
 
             Builder setCreateTopicPolicy(CreateTopicPolicy createTopicPolicy) {
                 this.createTopicPolicy = Optional.of(createTopicPolicy);
@@ -171,6 +172,11 @@ public class ReplicationControlManagerTest {
                 return this;
             }
 
+            Builder setIsElrEnabled(Boolean isElrEnabled) {
+                this.isElrEnabled = isElrEnabled;
+                return this;
+            }
+
             Builder setMockTime(MockTime mockTime) {
                 this.mockTime = mockTime;
                 return this;
@@ -179,13 +185,15 @@ public class ReplicationControlManagerTest {
             ReplicationControlTestContext build() {
                 return new ReplicationControlTestContext(metadataVersion,
                     createTopicPolicy,
-                    mockTime);
+                    mockTime,
+                    isElrEnabled);
             }
 
             ReplicationControlTestContext build(MetadataVersion metadataVersion) {
                 return new ReplicationControlTestContext(metadataVersion,
-                        createTopicPolicy,
-                        mockTime);
+                    createTopicPolicy,
+                    mockTime,
+                    isElrEnabled);
             }
         }
 
@@ -209,7 +217,8 @@ public class ReplicationControlManagerTest {
         private ReplicationControlTestContext(
             MetadataVersion metadataVersion,
             Optional<CreateTopicPolicy> createTopicPolicy,
-            MockTime time
+            MockTime time,
+            Boolean isElrEnabled
         ) {
             this.time = time;
             this.featureControl = new FeatureControlManager.Builder().
@@ -226,6 +235,7 @@ public class ReplicationControlManagerTest {
                 setSessionTimeoutNs(TimeUnit.MILLISECONDS.convert(BROKER_SESSION_TIMEOUT_MS, TimeUnit.NANOSECONDS)).
                 setReplicaPlacer(new StripedReplicaPlacer(random)).
                 setFeatureControlManager(featureControl).
+                setEligibleLeaderReplicasEnabled(isElrEnabled).
                 build();
 
             this.replicationControl = new ReplicationControlManager.Builder().
@@ -889,7 +899,7 @@ public class ReplicationControlManagerTest {
 
     @Test
     public void testEligibleLeaderReplicas_ShrinkAndExpandIsr() throws Exception {
-        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().setMetadataVersion(MetadataVersion.IBP_ELR_testing).build();
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().setIsElrEnabled(true).build();
         ReplicationControlManager replicationControl = ctx.replicationControl;
         ctx.registerBrokers(0, 1, 2);
         ctx.unfenceBrokers(0, 1, 2);
@@ -928,7 +938,7 @@ public class ReplicationControlManagerTest {
 
     @Test
     public void testEligibleLeaderReplicas_BrokerFence() throws Exception {
-        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().setMetadataVersion(MetadataVersion.IBP_ELR_testing).build();
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().setIsElrEnabled(true).build();
         ReplicationControlManager replicationControl = ctx.replicationControl;
         ctx.registerBrokers(0, 1, 2, 3);
         ctx.unfenceBrokers(0, 1, 2, 3);
@@ -959,7 +969,7 @@ public class ReplicationControlManagerTest {
 
     @Test
     public void testEligibleLeaderReplicas_EffectiveMinIsr() throws Exception {
-        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().setMetadataVersion(MetadataVersion.IBP_ELR_testing).build();
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().setIsElrEnabled(true).build();
         ReplicationControlManager replicationControl = ctx.replicationControl;
         ctx.registerBrokers(0, 1, 2);
         ctx.unfenceBrokers(0, 1, 2);
@@ -1596,7 +1606,7 @@ public class ReplicationControlManagerTest {
                 setReplicas(asList(2, 1, 3)).
                 setLeader(3).
                 setRemovingReplicas(Collections.emptyList()).
-                setAddingReplicas(Collections.emptyList()), MetadataVersion.latest().partitionChangeRecordVersion())),
+                setAddingReplicas(Collections.emptyList()), (short) 0)),
             new AlterPartitionReassignmentsResponseData().setErrorMessage(null).setResponses(asList(
                 new ReassignableTopicResponse().setName("foo").setPartitions(asList(
                     new ReassignablePartitionResponse().setPartitionIndex(0).
@@ -1947,7 +1957,7 @@ public class ReplicationControlManagerTest {
                     setLeader(4).
                     setReplicas(asList(2, 3, 4)).
                     setRemovingReplicas(null).
-                    setAddingReplicas(Collections.emptyList()), MetadataVersion.latest().partitionChangeRecordVersion())),
+                    setAddingReplicas(Collections.emptyList()), (short) 0)),
             new AlterPartitionReassignmentsResponseData().setErrorMessage(null).setResponses(asList(
                 new ReassignableTopicResponse().setName("foo").setPartitions(asList(
                     new ReassignablePartitionResponse().setPartitionIndex(0).
@@ -2279,13 +2289,13 @@ public class ReplicationControlManagerTest {
                         setPartitionId(0).
                         setTopicId(fooId).
                         setLeader(1),
-                    MetadataVersion.latest().partitionChangeRecordVersion()),
+                        (short) 0),
                 new ApiMessageAndVersion(
                     new PartitionChangeRecord().
                         setPartitionId(2).
                         setTopicId(fooId).
                         setLeader(0),
-                    MetadataVersion.latest().partitionChangeRecordVersion())),
+                        (short) 0)),
             election2Result.records());
     }
 
@@ -2328,7 +2338,7 @@ public class ReplicationControlManagerTest {
             .setPartitionId(0)
             .setTopicId(fooId)
             .setLeader(1);
-        assertEquals(asList(new ApiMessageAndVersion(expectedChangeRecord, MetadataVersion.latest().partitionChangeRecordVersion())), balanceResult.records());
+        assertEquals(asList(new ApiMessageAndVersion(expectedChangeRecord, (short) 0)), balanceResult.records());
         assertTrue(replication.arePartitionLeadersImbalanced());
         assertFalse(balanceResult.response());
 
@@ -2360,7 +2370,7 @@ public class ReplicationControlManagerTest {
             .setPartitionId(2)
             .setTopicId(fooId)
             .setLeader(0);
-        assertEquals(asList(new ApiMessageAndVersion(expectedChangeRecord, MetadataVersion.latest().partitionChangeRecordVersion())), balanceResult.records());
+        assertEquals(asList(new ApiMessageAndVersion(expectedChangeRecord, (short) 0)), balanceResult.records());
         assertFalse(replication.arePartitionLeadersImbalanced());
         assertFalse(balanceResult.response());
     }
@@ -2474,7 +2484,7 @@ public class ReplicationControlManagerTest {
                 .setTopicId(topicId)
                 .setIsr(asList(1, 2))
                 .setLeader(1),
-            metadataVersion.partitionChangeRecordVersion()));
+            (short) 0));
 
         assertEquals(expectedRecords, result.records());
     }

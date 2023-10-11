@@ -777,7 +777,7 @@ public class ReplicationControlManager {
         for (Entry<Integer, PartitionRegistration> partEntry : newParts.entrySet()) {
             int partitionIndex = partEntry.getKey();
             PartitionRegistration info = partEntry.getValue();
-            records.add(info.toRecord(topicId, partitionIndex, featureControl.metadataVersion().partitionRecordVersion()));
+            records.add(info.toRecord(topicId, partitionIndex, partitionRecordVersion(clusterControl.eligibleLeaderReplicasAllowed())));
         }
         return ApiError.NONE;
     }
@@ -1028,7 +1028,8 @@ public class ReplicationControlManager {
                     featureControl.metadataVersion(),
                     getTopicEffectiveMinIsr(topic.name)
                 );
-                builder.setZkMigrationEnabled(clusterControl.zkRegistrationAllowed());
+                builder.setZkMigrationEnabled(clusterControl.zkRegistrationAllowed())
+                    .setEligibleLeaderReplicasEnabled(clusterControl.eligibleLeaderReplicasAllowed());
                 if (configurationControl.uncleanLeaderElectionEnabledForTopic(topic.name())) {
                     builder.setElection(PartitionChangeBuilder.Election.UNCLEAN);
                 }
@@ -1417,7 +1418,9 @@ public class ReplicationControlManager {
             featureControl.metadataVersion(),
             getTopicEffectiveMinIsr(topic)
         );
-        builder.setElection(election).setZkMigrationEnabled(clusterControl.zkRegistrationAllowed());
+        builder.setElection(election)
+            .setZkMigrationEnabled(clusterControl.zkRegistrationAllowed())
+            .setEligibleLeaderReplicasEnabled(clusterControl.eligibleLeaderReplicasAllowed());
         Optional<ApiMessageAndVersion> record = builder.build();
         if (!record.isPresent()) {
             if (electionType == ElectionType.PREFERRED) {
@@ -1554,7 +1557,8 @@ public class ReplicationControlManager {
                 getTopicEffectiveMinIsr(topic.name)
             );
             builder.setElection(PartitionChangeBuilder.Election.PREFERRED)
-                .setZkMigrationEnabled(clusterControl.zkRegistrationAllowed());
+                .setZkMigrationEnabled(clusterControl.zkRegistrationAllowed())
+                .setEligibleLeaderReplicasEnabled(clusterControl.eligibleLeaderReplicasAllowed());
             builder.build().ifPresent(records::add);
         }
 
@@ -1675,7 +1679,7 @@ public class ReplicationControlManager {
                         " time(s): All brokers are currently fenced or in controlled shutdown.");
             }
             records.add(buildPartitionRegistration(replicas, isr)
-                .toRecord(topicId, partitionId, featureControl.metadataVersion().partitionRecordVersion()));
+                .toRecord(topicId, partitionId, partitionRecordVersion(clusterControl.eligibleLeaderReplicasAllowed())));
             partitionId++;
         }
     }
@@ -1767,7 +1771,8 @@ public class ReplicationControlManager {
                 featureControl.metadataVersion(),
                 getTopicEffectiveMinIsr(topic.name)
             );
-            builder.setZkMigrationEnabled(clusterControl.zkRegistrationAllowed());
+            builder.setZkMigrationEnabled(clusterControl.zkRegistrationAllowed())
+                .setEligibleLeaderReplicasEnabled(clusterControl.eligibleLeaderReplicasAllowed());
             if (configurationControl.uncleanLeaderElectionEnabledForTopic(topic.name)) {
                 builder.setElection(PartitionChangeBuilder.Election.UNCLEAN);
             }
@@ -1881,7 +1886,8 @@ public class ReplicationControlManager {
             featureControl.metadataVersion(),
             getTopicEffectiveMinIsr(topicName)
         );
-        builder.setZkMigrationEnabled(clusterControl.zkRegistrationAllowed());
+        builder.setZkMigrationEnabled(clusterControl.zkRegistrationAllowed())
+            .setEligibleLeaderReplicasEnabled(clusterControl.eligibleLeaderReplicasAllowed());
         if (configurationControl.uncleanLeaderElectionEnabledForTopic(topicName)) {
             builder.setElection(PartitionChangeBuilder.Election.UNCLEAN);
         }
@@ -1940,7 +1946,8 @@ public class ReplicationControlManager {
             featureControl.metadataVersion(),
             getTopicEffectiveMinIsr(topics.get(tp.topicId()).name.toString())
         );
-        builder.setZkMigrationEnabled(clusterControl.zkRegistrationAllowed());
+        builder.setZkMigrationEnabled(clusterControl.zkRegistrationAllowed())
+            .setEligibleLeaderReplicasEnabled(clusterControl.eligibleLeaderReplicasAllowed());
         if (!reassignment.replicas().equals(currentReplicas)) {
             builder.setTargetReplicas(reassignment.replicas());
         }
@@ -2020,6 +2027,10 @@ public class ReplicationControlManager {
             log.debug("Can't find the replication factor for topic: " + topicName);
         }
         return Math.min(currentMinIsr, replicationFactor);
+    }
+
+    private short partitionRecordVersion(boolean isElrAllowed) {
+        return isElrAllowed ? (short) 1 : (short) 0;
     }
 
     private static final class IneligibleReplica {

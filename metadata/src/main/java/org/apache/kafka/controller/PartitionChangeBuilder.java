@@ -90,6 +90,7 @@ public class PartitionChangeBuilder {
     private Election election = Election.ONLINE;
     private LeaderRecoveryState targetLeaderRecoveryState;
     private boolean zkMigrationEnabled;
+    private boolean eligibleLeaderReplicasEnabled;
     private int minISR;
 
 
@@ -107,6 +108,7 @@ public class PartitionChangeBuilder {
         this.isAcceptableLeader = isAcceptableLeader;
         this.metadataVersion = metadataVersion;
         this.zkMigrationEnabled = false;
+        this.eligibleLeaderReplicasEnabled = false;
         this.minISR = minISR;
 
         this.targetIsr = Replicas.toList(partition.isr);
@@ -164,6 +166,11 @@ public class PartitionChangeBuilder {
 
     public PartitionChangeBuilder setZkMigrationEnabled(boolean zkMigrationEnabled) {
         this.zkMigrationEnabled = zkMigrationEnabled;
+        return this;
+    }
+
+    public PartitionChangeBuilder setEligibleLeaderReplicasEnabled(boolean eligibleLeaderReplicasEnabled) {
+        this.eligibleLeaderReplicasEnabled = eligibleLeaderReplicasEnabled;
         return this;
     }
 
@@ -346,8 +353,7 @@ public class PartitionChangeBuilder {
 
         completeReassignmentIfNeeded();
 
-        boolean isElrEnabled = metadataVersion.isElrSupported();
-        if (isElrEnabled) {
+        if (PartitionChangeBuilder.this.eligibleLeaderReplicasEnabled) {
             populateTargetElr();
         }
 
@@ -359,7 +365,7 @@ public class PartitionChangeBuilder {
         boolean isCleanLeaderElection = record.isr() == null;
 
         // Clean the ELR related fields if it is an unclean election or ELR is disabled.
-        if (!isCleanLeaderElection || !isElrEnabled) {
+        if (!isCleanLeaderElection || !PartitionChangeBuilder.this.eligibleLeaderReplicasEnabled) {
             targetElr = Collections.emptyList();
             targetLastKnownElr = Collections.emptyList();
         }
@@ -389,7 +395,7 @@ public class PartitionChangeBuilder {
         if (changeRecordIsNoOp(record)) {
             return Optional.empty();
         } else {
-            return Optional.of(new ApiMessageAndVersion(record, metadataVersion.partitionChangeRecordVersion()));
+            return Optional.of(new ApiMessageAndVersion(record, eligibleLeaderReplicasEnabled ? (short) 1 : (short) 0));
         }
     }
 

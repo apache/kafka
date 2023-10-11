@@ -88,6 +88,7 @@ public class ClusterControlManager {
         private ReplicaPlacer replicaPlacer = null;
         private FeatureControlManager featureControl = null;
         private boolean zkMigrationEnabled = false;
+        private boolean eligibleLeaderReplicasEnabled = false;
 
         Builder setLogContext(LogContext logContext) {
             this.logContext = logContext;
@@ -129,6 +130,11 @@ public class ClusterControlManager {
             return this;
         }
 
+        Builder setEligibleLeaderReplicasEnabled(boolean eligibleLeaderReplicasEnabled) {
+            this.eligibleLeaderReplicasEnabled = eligibleLeaderReplicasEnabled;
+            return this;
+        }
+
         ClusterControlManager build() {
             if (logContext == null) {
                 logContext = new LogContext();
@@ -152,7 +158,8 @@ public class ClusterControlManager {
                 sessionTimeoutNs,
                 replicaPlacer,
                 featureControl,
-                zkMigrationEnabled
+                zkMigrationEnabled,
+                eligibleLeaderReplicasEnabled
             );
         }
     }
@@ -245,6 +252,11 @@ public class ClusterControlManager {
     private final boolean zkMigrationEnabled;
 
     /**
+     * True if eligible leader replicas is enabled.
+     */
+    private final boolean eligibleLeaderReplicasEnabled;
+
+    /**
      * Maps controller IDs to controller registrations.
      */
     private final TimelineHashMap<Integer, ControllerRegistration> controllerRegistrations;
@@ -257,7 +269,8 @@ public class ClusterControlManager {
         long sessionTimeoutNs,
         ReplicaPlacer replicaPlacer,
         FeatureControlManager featureControl,
-        boolean zkMigrationEnabled
+        boolean zkMigrationEnabled,
+        boolean eligibleLeaderReplicasEnabled
     ) {
         this.logContext = logContext;
         this.clusterId = clusterId;
@@ -271,6 +284,7 @@ public class ClusterControlManager {
         this.readyBrokersFuture = Optional.empty();
         this.featureControl = featureControl;
         this.zkMigrationEnabled = zkMigrationEnabled;
+        this.eligibleLeaderReplicasEnabled = eligibleLeaderReplicasEnabled;
         this.controllerRegistrations = new TimelineHashMap<>(snapshotRegistry, 0);
     }
 
@@ -309,6 +323,10 @@ public class ClusterControlManager {
 
     boolean zkRegistrationAllowed() {
         return zkMigrationEnabled && featureControl.metadataVersion().isMigrationSupported();
+    }
+
+    boolean eligibleLeaderReplicasAllowed() {
+        return eligibleLeaderReplicasEnabled;
     }
 
     /**

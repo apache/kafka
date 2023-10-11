@@ -186,10 +186,7 @@ public enum MetadataVersion {
     IBP_3_6_IV2(14, "3.6", "IV2", true),
 
     // Implement KIP-919 controller registration.
-    IBP_3_7_IV0(15, "3.7", "IV0", true),
-
-    // Testing MV for KIP-966. New MV should be added above and adjust the feature level for IBP_ELR_testing.
-    IBP_ELR_testing(16, "test", "test", true);
+    IBP_3_7_IV0(15, "3.7", "IV0", true);
 
     // NOTES when adding a new version:
     //   Update the default version in @ClusterTest annotation to point to the latest version
@@ -291,25 +288,6 @@ public enum MetadataVersion {
 
     public boolean isKRaftSupported() {
         return this.featureLevel > 0;
-    }
-
-    public boolean isElrSupported() {
-        return this.equals(IBP_ELR_testing);
-    }
-
-    public short partitionChangeRecordVersion() {
-        if (isElrSupported()) {
-            return (short) 1;
-        } else {
-            return (short) 0;
-        }
-    }
-    public short partitionRecordVersion() {
-        if (isElrSupported()) {
-            return (short) 1;
-        } else {
-            return (short) 0;
-        }
     }
 
     public RecordVersion highestSupportedRecordVersion() {
@@ -534,9 +512,8 @@ public enum MetadataVersion {
         }
     }
 
-    // Move back the latest version to VERSIONS.length - 1 when KIP-966 ELR part is finished.
     public static MetadataVersion latest() {
-        return VERSIONS[VERSIONS.length - 2];
+        return VERSIONS[VERSIONS.length - 1];
     }
 
     public static boolean checkIfMetadataChanged(MetadataVersion sourceVersion, MetadataVersion targetVersion) {

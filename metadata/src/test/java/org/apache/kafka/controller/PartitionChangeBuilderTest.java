@@ -96,16 +96,12 @@ public class PartitionChangeBuilderTest {
 
     private final static Uuid FOO_ID = Uuid.fromString("FbrrdcfiR-KC2CPSTHaJrg");
 
-    private static PartitionChangeBuilder createFooBuilder(short version) {
-        return createFooBuilder(metadataVersionForPartitionChangeRecordVersion(version));
-    }
-
-    private static MetadataVersion metadataVersionForPartitionChangeRecordVersion(short version) {
-        return version == 0 ? MetadataVersion.IBP_3_7_IV0 : MetadataVersion.IBP_ELR_testing;
-    }
-
     private static PartitionChangeBuilder createFooBuilder(MetadataVersion metadataVersion) {
         return new PartitionChangeBuilder(FOO, FOO_ID, 0, r -> r != 3, metadataVersion, 2);
+    }
+
+    private static PartitionChangeBuilder createFooBuilder(short version) {
+        return new PartitionChangeBuilder(FOO, FOO_ID, 0, r -> r != 3, MetadataVersion.latest(), 2).setEligibleLeaderReplicasEnabled(isElrEnabled(version));
     }
 
     private static final PartitionRegistration BAR = new PartitionRegistration.Builder().
@@ -121,8 +117,12 @@ public class PartitionChangeBuilderTest {
 
     private final static Uuid BAR_ID = Uuid.fromString("LKfUsCBnQKekvL9O5dY9nw");
 
+    private static boolean isElrEnabled(short partitionChangeRecordVersion) {
+        return partitionChangeRecordVersion > 0;
+    }
+
     private static PartitionChangeBuilder createBarBuilder(short version) {
-        return new PartitionChangeBuilder(BAR, BAR_ID, 0, r -> r != 3, metadataVersionForPartitionChangeRecordVersion(version), 2);
+        return new PartitionChangeBuilder(BAR, BAR_ID, 0, r -> r != 3, MetadataVersion.latest(), 2).setEligibleLeaderReplicasEnabled(isElrEnabled(version));
     }
 
     private static final PartitionRegistration BAZ = new PartitionRegistration.Builder().
@@ -137,7 +137,7 @@ public class PartitionChangeBuilderTest {
     private final static Uuid BAZ_ID = Uuid.fromString("wQzt5gkSTwuQNXZF5gIw7A");
 
     private static PartitionChangeBuilder createBazBuilder(short version) {
-        return new PartitionChangeBuilder(BAZ, BAZ_ID, 0, __ -> true, metadataVersionForPartitionChangeRecordVersion(version), 2);
+        return new PartitionChangeBuilder(BAZ, BAZ_ID, 0, __ -> true, MetadataVersion.latest(), 2).setEligibleLeaderReplicasEnabled(isElrEnabled(version));
     }
 
     private static final PartitionRegistration OFFLINE = new PartitionRegistration.Builder().
@@ -152,7 +152,7 @@ public class PartitionChangeBuilderTest {
     private final static Uuid OFFLINE_ID = Uuid.fromString("LKfUsCBnQKekvL9O5dY9nw");
 
     private static PartitionChangeBuilder createOfflineBuilder(short version) {
-        return new PartitionChangeBuilder(OFFLINE, OFFLINE_ID, 0, r -> r == 1, metadataVersionForPartitionChangeRecordVersion(version), 2);
+        return new PartitionChangeBuilder(OFFLINE, OFFLINE_ID, 0, r -> r == 1, MetadataVersion.latest(), 2).setEligibleLeaderReplicasEnabled(isElrEnabled(version));
     }
 
     private static void assertElectLeaderEquals(PartitionChangeBuilder builder,
@@ -670,7 +670,9 @@ public class PartitionChangeBuilderTest {
             .setPartitionEpoch(200)
             .build();
         Uuid topicId = Uuid.fromString("FbrrdcfiR-KC2CPSTHaJrg");
-        PartitionChangeBuilder builder = new PartitionChangeBuilder(partition, topicId, 0, r -> r != 3, metadataVersionForPartitionChangeRecordVersion(version), 3).setElection(Election.PREFERRED);
+        PartitionChangeBuilder builder = new PartitionChangeBuilder(partition, topicId, 0, r -> r != 3, MetadataVersion.latest(), 3)
+            .setElection(Election.PREFERRED)
+            .setEligibleLeaderReplicasEnabled(isElrEnabled(version));
 
         // Update ISR to {1, 2}
         builder.setTargetIsrWithBrokerStates(AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(Arrays.asList(1, 2)));
@@ -713,7 +715,9 @@ public class PartitionChangeBuilderTest {
             .setPartitionEpoch(200)
             .build();
         Uuid topicId = Uuid.fromString("FbrrdcfiR-KC2CPSTHaJrg");
-        PartitionChangeBuilder builder = new PartitionChangeBuilder(partition, topicId, 0, r -> r != 3, metadataVersionForPartitionChangeRecordVersion(version), 3).setElection(Election.PREFERRED);
+        PartitionChangeBuilder builder = new PartitionChangeBuilder(partition, topicId, 0, r -> r != 3, MetadataVersion.latest(), 3)
+            .setElection(Election.PREFERRED)
+            .setEligibleLeaderReplicasEnabled(isElrEnabled(version));
 
         builder.setTargetIsrWithBrokerStates(AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(Arrays.asList(1, 2, 3)));
         PartitionChangeRecord record = new PartitionChangeRecord()
@@ -750,7 +754,9 @@ public class PartitionChangeBuilderTest {
             .setPartitionEpoch(200)
             .build();
         Uuid topicId = Uuid.fromString("FbrrdcfiR-KC2CPSTHaJrg");
-        PartitionChangeBuilder builder = new PartitionChangeBuilder(partition, topicId, 0, r -> r != 3, metadataVersionForPartitionChangeRecordVersion(version), 3).setElection(Election.PREFERRED);
+        PartitionChangeBuilder builder = new PartitionChangeBuilder(partition, topicId, 0, r -> r != 3, MetadataVersion.latest(), 3)
+            .setElection(Election.PREFERRED)
+            .setEligibleLeaderReplicasEnabled(isElrEnabled(version));
 
         builder.setTargetIsrWithBrokerStates(AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(Arrays.asList(1, 4)));
         PartitionChangeRecord record = new PartitionChangeRecord()
@@ -793,7 +799,9 @@ public class PartitionChangeBuilderTest {
                 .setPartitionEpoch(200)
                 .build();
         Uuid topicId = Uuid.fromString("FbrrdcfiR-KC2CPSTHaJrg");
-        PartitionChangeBuilder builder = new PartitionChangeBuilder(partition, topicId, 0, r -> r != 3, metadataVersionForPartitionChangeRecordVersion(version), 3).setElection(Election.PREFERRED);
+        PartitionChangeBuilder builder = new PartitionChangeBuilder(partition, topicId, 0, r -> r != 3, MetadataVersion.latest(), 3)
+            .setElection(Election.PREFERRED)
+            .setEligibleLeaderReplicasEnabled(isElrEnabled(version));
 
         builder.setUncleanShutdownReplicas(Arrays.asList(3));
 
