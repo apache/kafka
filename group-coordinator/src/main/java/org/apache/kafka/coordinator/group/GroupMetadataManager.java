@@ -899,7 +899,11 @@ public class GroupMetadataManager {
         ConsumerGroupMember updatedMember;
         boolean assignmentUpdated = false;
         if (memberEpoch == 0) {
-            log.info("[GroupId {}] Member {} joins the consumer group.", groupId, memberId);
+            if (instanceId != null) {
+                log.info("[GroupId {}] Member {}, Instance-Id {} joins the consumer group.", groupId, instanceId, memberId);
+            } else {
+                log.info("[GroupId {}] Member {} joins the consumer group.", groupId, memberId);
+            }
         }
 
         int groupEpoch = group.groupEpoch();
