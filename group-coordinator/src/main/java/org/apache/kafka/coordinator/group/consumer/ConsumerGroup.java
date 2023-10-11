@@ -45,6 +45,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
+import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH;
+
 /**
  * A Consumer Group. All the metadata in this class are backed by
  * records in the __consumer_offsets partitions.
@@ -112,7 +114,7 @@ public class ConsumerGroup implements Group {
     /**
      * The static group members.
      */
-    private final Map<String, String> staticMembers;
+    private final TimelineHashMap<String, String> staticMembers;
 
     /**
      * The number of members supporting each server assignor name.
@@ -169,7 +171,7 @@ public class ConsumerGroup implements Group {
         this.state = new TimelineObject<>(snapshotRegistry, ConsumerGroupState.EMPTY);
         this.groupEpoch = new TimelineInteger(snapshotRegistry);
         this.members = new TimelineHashMap<>(snapshotRegistry, 0);
-        this.staticMembers = new HashMap<>();
+        this.staticMembers = new TimelineHashMap<>(snapshotRegistry, 0);
         this.serverAssignors = new TimelineHashMap<>(snapshotRegistry, 0);
         this.subscribedTopicNames = new TimelineHashMap<>(snapshotRegistry, 0);
         this.subscribedTopicMetadata = new TimelineHashMap<>(snapshotRegistry, 0);
@@ -304,6 +306,12 @@ public class ConsumerGroup implements Group {
         return member;
     }
 
+    public ConsumerGroupMember getStaticMember(String instanceId) {
+        String existingMemberId = staticMemberId(instanceId);
+        return existingMemberId == null ? null : getOrMaybeCreateMember(existingMemberId, false);
+    }
+
+
     /**
      * Gets or creates a static member.
      *
@@ -315,9 +323,9 @@ public class ConsumerGroup implements Group {
      * @return A ConsumerGroupMember.
      */
     public ConsumerGroupMember getOrMaybeCreateStaticMember(
-            String memberId,
-            String instanceId,
-            boolean createIfNotExists
+        String memberId,
+        String instanceId,
+        boolean createIfNotExists
     ) {
         ConsumerGroupMember member;
         String existingMemberId = staticMemberId(instanceId);
@@ -337,26 +345,18 @@ public class ConsumerGroup implements Group {
             // No existing member found against this instance id. Creating new.
             if (existingMemberId == null) {
                 member = getOrMaybeCreateMember(memberId, true);
-                staticMembers.put(instanceId, memberId);
-                return member;
             } else {
                 // Get the details of the existing member
                 ConsumerGroupMember existingMember = getOrMaybeCreateMember(existingMemberId, false);
                 int currentMemberEpoch = existingMember.memberEpoch();
-                // A new member with a used instance id joined but the previous member using the same instance id
+                // A new member with joined with an in-use instance id but the previous member using the same instance id
                 // hasn't requested leaving the group.
-                if (currentMemberEpoch != -2 && !existingMemberId.equals(memberId)) {
+                if (currentMemberEpoch != LEAVE_GROUP_STATIC_MEMBER_EPOCH /*&& !existingMemberId.equals(memberId)*/) {
                     throw Errors.UNRELEASED_INSTANCE_ID.exception();
                 }
-                // A new static member is trying to take the place of a departed static member. We will
-                // provide the assignments of the old member to the new one.
-                member = new ConsumerGroupMember.Builder(memberId, existingMember)
-                        .setMemberEpoch(existingMember.targetMemberEpoch())
-                        .setPreviousMemberEpoch(0)
-                        .setTargetMemberEpoch(existingMember.targetMemberEpoch())
-                        .build();
-                updateMember(member);
-                staticMembers.put(instanceId, memberId);
+                // A new static member is trying to take the place of a departed static member. We will create a new
+                // member
+                member = getOrMaybeCreateMember(memberId, true);
             }
         }
         return member;
@@ -376,6 +376,9 @@ public class ConsumerGroup implements Group {
         maybeUpdateServerAssignors(oldMember, newMember);
         maybeUpdatePartitionEpoch(oldMember, newMember);
         maybeUpdateGroupState();
+        if (newMember.instanceId() != null) {
+            staticMembers.put(newMember.instanceId(), newMember.memberId());
+        }
     }
 
     /**
@@ -389,6 +392,9 @@ public class ConsumerGroup implements Group {
         maybeUpdateServerAssignors(oldMember, null);
         maybeRemovePartitionEpoch(oldMember);
         maybeUpdateGroupState();
+        if (oldMember.instanceId() != null) {
+            staticMembers.remove(oldMember.instanceId());
+        }
     }
 
     /**

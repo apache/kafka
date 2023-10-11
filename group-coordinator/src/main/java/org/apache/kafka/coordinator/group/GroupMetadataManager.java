@@ -103,6 +103,7 @@ import static org.apache.kafka.common.protocol.Errors.ILLEGAL_GENERATION;
 import static org.apache.kafka.common.protocol.Errors.NOT_COORDINATOR;
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_SERVER_ERROR;
 import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
+import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH;
 import static org.apache.kafka.common.requests.JoinGroupRequest.UNKNOWN_MEMBER_ID;
 import static org.apache.kafka.coordinator.group.Group.GroupType.CONSUMER;
 import static org.apache.kafka.coordinator.group.Group.GroupType.GENERIC;
@@ -651,8 +652,8 @@ public class GroupMetadataManager {
      * @throws InvalidRequestException
      */
     private void throwIfNull(
-            Object value,
-            String error
+        Object value,
+        String error
     ) throws InvalidRequestException {
         if (value == null) {
             throw new InvalidRequestException(error);
@@ -687,7 +688,7 @@ public class GroupMetadataManager {
             if (request.subscribedTopicNames() == null || request.subscribedTopicNames().isEmpty()) {
                 throw new InvalidRequestException("SubscribedTopicNames must be set in first request.");
             }
-        } else if (request.memberEpoch() == -2) {
+        } else if (request.memberEpoch() == LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
             throwIfEmptyString(request.memberId(), "MemberId can't be empty. GroupId: " + request.groupId());
             throwIfNull(request.instanceId(), "InstanceId can't be null for Static Member. GroupId: "
                     + request.groupId() + " MemberId: " + request.memberId());
@@ -751,6 +752,36 @@ public class GroupMetadataManager {
         }
     }
 
+    private void throwIfStaticMemberValidationFails(
+        String groupId,
+        String instanceId,
+        ConsumerGroupMember existingStaticMember,
+        int memberEpoch,
+        String memberId
+    ) {
+        if (memberEpoch != 0) {
+            // The member joined with a non-zero epoch but we haven't registered this static member
+            // This could be an unknown member for the coordinator.
+            if (existingStaticMember == null) {
+                throw Errors.UNKNOWN_MEMBER_ID.exception("No existing static member found against instance id: " +  instanceId);
+            }
+            // There already exists a different member id for the same instance id.
+            if (!existingStaticMember.memberId().equals(memberId)) {
+                log.info("Request memberId={} for static member with groupInstanceId={} " +
+                        "is fenced by existing memberId={}",
+                    memberId, instanceId, existingStaticMember.memberId());
+                throw Errors.FENCED_INSTANCE_ID.exception();
+            }
+        } else {
+            // A new member with joined with an in-use instance id but the previous member using the same instance id
+            // hasn't requested leaving the group.
+            if (existingStaticMember != null && existingStaticMember.memberEpoch() != LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
+                throw Errors.UNRELEASED_INSTANCE_ID.exception("Member " + memberId + " trying to join group "
+                    +  groupId + " but the instance id " + instanceId + " is already in use by member " + existingStaticMember.memberId());
+            }
+        }
+    }
+
     /**
      * Validates the member epoch provided in the heartbeat request.
      *
@@ -767,6 +798,11 @@ public class GroupMetadataManager {
         List<ConsumerGroupHeartbeatRequestData.TopicPartitions> ownedTopicPartitions
     ) {
         if (receivedMemberEpoch > member.memberEpoch()) {
+            // If a static member rejoins, it's previous epoch would be -2. In such a
+            // case, we don't need to fence the member.
+            if (member.memberEpoch() == LEAVE_GROUP_STATIC_MEMBER_EPOCH && receivedMemberEpoch == 0) {
+                return;
+            }
             throw new FencedMemberEpochException("The consumer group member has a greater member "
                 + "epoch (" + receivedMemberEpoch + ") than the one known by the group coordinator ("
                 + member.memberEpoch() + "). The member must abandon all its partitions and rejoin.");
@@ -849,145 +885,146 @@ public class GroupMetadataManager {
 
         // Get or create the member.
         if (memberId.isEmpty()) memberId = Uuid.randomUuid().toString();
-        final ConsumerGroupMember member = instanceId == null ?
-                group.getOrMaybeCreateMember(memberId, createIfNotExists) :
-                group.getOrMaybeCreateStaticMember(memberId, instanceId, createIfNotExists);
-        throwIfMemberEpochIsInvalid(member, memberEpoch, ownedTopicPartitions);
+        final ConsumerGroupMember member;
+        ConsumerGroupMember existingStaticMember = null;
+        if (instanceId == null) {
+            member = group.getOrMaybeCreateMember(memberId, createIfNotExists);
+        } else {
+            existingStaticMember = group.getStaticMember(instanceId);
+            throwIfStaticMemberValidationFails(groupId, instanceId, existingStaticMember, memberEpoch, memberId);
+            member = group.getOrMaybeCreateMember(memberId, createIfNotExists);
+        }
 
+        throwIfMemberEpochIsInvalid(member, memberEpoch, ownedTopicPartitions);
+        ConsumerGroupMember updatedMember;
+        boolean assignmentUpdated = false;
         if (memberEpoch == 0) {
             log.info("[GroupId {}] Member {} joins the consumer group.", groupId, memberId);
         }
 
-        // 1. Create or update the member. If the member is new or has changed, a ConsumerGroupMemberMetadataValue
-        // record is written to the __consumer_offsets partition to persist the change. If the subscriptions have
-        // changed, the subscription metadata is updated and persisted by writing a ConsumerGroupPartitionMetadataValue
-        // record to the __consumer_offsets partition. Finally, the group epoch is bumped if the subscriptions have
-        // changed, and persisted by writing a ConsumerGroupMetadataValue record to the partition.
         int groupEpoch = group.groupEpoch();
-        Map<String, TopicMetadata> subscriptionMetadata = group.subscriptionMetadata();
-        ConsumerGroupMember updatedMember = new ConsumerGroupMember.Builder(member)
-            .maybeUpdateInstanceId(Optional.ofNullable(instanceId))
-            .maybeUpdateRackId(Optional.ofNullable(rackId))
-            .maybeUpdateRebalanceTimeoutMs(ofSentinel(rebalanceTimeoutMs))
-            .maybeUpdateServerAssignorName(Optional.ofNullable(assignorName))
-            .maybeUpdateSubscribedTopicNames(Optional.ofNullable(subscribedTopicNames))
-            .maybeUpdateSubscribedTopicRegex(Optional.ofNullable(subscribedTopicRegex))
-            .setClientId(clientId)
-            .setClientHost(clientHost)
-            .build();
+        boolean staticMemberReplaced = staticMemberReplaced(memberEpoch, existingStaticMember);
+        // A new static member tries to replace a departed static member
+        if (staticMemberReplaced) {
+            updatedMember = new ConsumerGroupMember.Builder(member)
+                .maybeUpdateInstanceId(Optional.ofNullable(instanceId))
+                .maybeUpdateRackId(Optional.ofNullable(rackId))
+                .maybeUpdateRebalanceTimeoutMs(ofSentinel(rebalanceTimeoutMs))
+                .maybeUpdateServerAssignorName(Optional.ofNullable(assignorName))
+                .maybeUpdateClientAssignors(Optional.ofNullable(existingStaticMember.clientAssignors()))
+                .maybeUpdateSubscribedTopicNames(Optional.ofNullable(subscribedTopicNames))
+                .maybeUpdateSubscribedTopicRegex(Optional.ofNullable(subscribedTopicRegex))
+                .setAssignedPartitions(existingStaticMember.assignedPartitions())
+                .setPartitionsPendingAssignment(existingStaticMember.partitionsPendingAssignment())
+                .setPartitionsPendingRevocation(existingStaticMember.partitionsPendingRevocation())
+                .setClientId(clientId)
+                .setClientHost(clientHost)
+                .setMemberEpoch(group.groupEpoch())
+                .setPreviousMemberEpoch(existingStaticMember.previousMemberEpoch())
+                .setTargetMemberEpoch(groupEpoch) // The target epoch should be at the group epoch
+                .build();
+            replaceStaticMemberInConsumerGroup(groupId, records, group, member, existingStaticMember, updatedMember);
 
-        boolean bumpGroupEpoch = false;
-        if (!updatedMember.equals(member)) {
-            records.add(newMemberSubscriptionRecord(groupId, updatedMember));
-
-            if (!updatedMember.subscribedTopicNames().equals(member.subscribedTopicNames())) {
-                log.info("[GroupId {}] Member {} updated its subscribed topics to: {}.",
-                    groupId, memberId, updatedMember.subscribedTopicNames());
-                bumpGroupEpoch = true;
-            }
-
-            if (!updatedMember.subscribedTopicRegex().equals(member.subscribedTopicRegex())) {
-                log.info("[GroupId {}] Member {} updated its subscribed regex to: {}.",
-                    groupId, memberId, updatedMember.subscribedTopicRegex());
-                bumpGroupEpoch = true;
-            }
         } else {
-            // A new static member replaces an older one with the same instance id, assignments etc.
-            // We will create a new member subscription record for this new member.
-            if (instanceId != null) {
+            // 1. Create or update the member. If the member is new or has changed, a ConsumerGroupMemberMetadataValue
+            // record is written to the __consumer_offsets partition to persist the change. If the subscriptions have
+            // changed, the subscription metadata is updated and persisted by writing a ConsumerGroupPartitionMetadataValue
+            // record to the __consumer_offsets partition. Finally, the group epoch is bumped if the subscriptions have
+            // changed, and persisted by writing a ConsumerGroupMetadataValue record to the partition.
+            updatedMember = new ConsumerGroupMember.Builder(member)
+                .maybeUpdateInstanceId(Optional.ofNullable(instanceId))
+                .maybeUpdateRackId(Optional.ofNullable(rackId))
+                .maybeUpdateRebalanceTimeoutMs(ofSentinel(rebalanceTimeoutMs))
+                .maybeUpdateServerAssignorName(Optional.ofNullable(assignorName))
+                .maybeUpdateSubscribedTopicNames(Optional.ofNullable(subscribedTopicNames))
+                .maybeUpdateSubscribedTopicRegex(Optional.ofNullable(subscribedTopicRegex))
+                .setClientId(clientId)
+                .setClientHost(clientHost)
+                .build();
+
+            boolean bumpGroupEpoch = false;
+            if (!updatedMember.equals(member)) {
                 records.add(newMemberSubscriptionRecord(groupId, updatedMember));
-            }
-        }
+                if (!updatedMember.subscribedTopicNames().equals(member.subscribedTopicNames())) {
+                    log.info("[GroupId {}] Member {} updated its subscribed topics to: {}.",
+                        groupId, memberId, updatedMember.subscribedTopicNames());
+                    bumpGroupEpoch = true;
+                }
 
-        if (bumpGroupEpoch || group.hasMetadataExpired(currentTimeMs)) {
-            // The subscription metadata is updated in two cases:
-            // 1) The member has updated its subscriptions;
-            // 2) The refresh deadline has been reached.
-            subscriptionMetadata = group.computeSubscriptionMetadata(
-                member,
-                updatedMember,
-                metadataImage.topics(),
-                metadataImage.cluster()
-            );
-
-            if (!subscriptionMetadata.equals(group.subscriptionMetadata())) {
-                log.info("[GroupId {}] Computed new subscription metadata: {}.",
-                    groupId, subscriptionMetadata);
-                bumpGroupEpoch = true;
-                records.add(newGroupSubscriptionMetadataRecord(groupId, subscriptionMetadata));
+                if (!updatedMember.subscribedTopicRegex().equals(member.subscribedTopicRegex())) {
+                    log.info("[GroupId {}] Member {} updated its subscribed regex to: {}.",
+                        groupId, memberId, updatedMember.subscribedTopicRegex());
+                    bumpGroupEpoch = true;
+                }
             }
 
-            if (bumpGroupEpoch) {
-                groupEpoch += 1;
-                records.add(newGroupEpochRecord(groupId, groupEpoch));
-                log.info("[GroupId {}] Bumped group epoch to {}.", groupId, groupEpoch);
+            if (bumpGroupEpoch || group.hasMetadataExpired(currentTimeMs)) {
+                // The subscription metadata is updated in two cases:
+                // 1) The member has updated its subscriptions;
+                // 2) The refresh deadline has been reached.
+                Map<String, TopicMetadata> subscriptionMetadata = group.computeSubscriptionMetadata(
+                    member,
+                    updatedMember,
+                    metadataImage.topics(),
+                    metadataImage.cluster()
+                );
+
+                if (!subscriptionMetadata.equals(group.subscriptionMetadata())) {
+                    log.info("[GroupId {}] Computed new subscription metadata: {}.",
+                        groupId, subscriptionMetadata);
+                    bumpGroupEpoch = true;
+                    records.add(newGroupSubscriptionMetadataRecord(groupId, subscriptionMetadata));
+                }
+
+                if (bumpGroupEpoch) {
+                    groupEpoch += 1;
+                    records.add(newGroupEpochRecord(groupId, groupEpoch));
+                    log.info("[GroupId {}] Bumped group epoch to {}.", groupId, groupEpoch);
+                }
+
+                group.setMetadataRefreshDeadline(currentTimeMs + consumerGroupMetadataRefreshIntervalMs, groupEpoch);
             }
 
-            group.setMetadataRefreshDeadline(currentTimeMs + consumerGroupMetadataRefreshIntervalMs, groupEpoch);
-        }
-
-        // 2. Update the target assignment if the group epoch is larger than the target assignment epoch. The
-        // delta between the existing and the new target assignment is persisted to the partition.
-        int targetAssignmentEpoch = group.assignmentEpoch();
-        Assignment targetAssignment = group.targetAssignment(memberId);
-        if (groupEpoch > targetAssignmentEpoch) {
-            String preferredServerAssignor = group.computePreferredServerAssignor(
-                member,
-                updatedMember
-            ).orElse(defaultAssignor.name());
-
-            try {
-                TargetAssignmentBuilder.TargetAssignmentResult assignmentResult =
-                    new TargetAssignmentBuilder(groupId, groupEpoch, assignors.get(preferredServerAssignor))
-                        .withMembers(group.members())
-                        .withSubscriptionMetadata(subscriptionMetadata)
-                        .withTargetAssignment(group.targetAssignment())
-                        .addOrUpdateMember(memberId, updatedMember)
-                        .build();
-
-                log.info("[GroupId {}] Computed a new target assignment for epoch {}: {}.",
-                    groupId, groupEpoch, assignmentResult.targetAssignment());
-
+            // 2. Update the target assignment if the group epoch is larger than the target assignment epoch. The
+            // delta between the existing and the new target assignment is persisted to the partition.
+            int targetAssignmentEpoch = group.assignmentEpoch();
+            Assignment targetAssignment = group.targetAssignment(memberId);
+            if (groupEpoch > targetAssignmentEpoch) {
+                TargetAssignmentBuilder.TargetAssignmentResult assignmentResult = computeTargetAssignment(group, groupEpoch, member, updatedMember);
                 records.addAll(assignmentResult.records());
                 targetAssignment = assignmentResult.targetAssignment().get(memberId);
                 targetAssignmentEpoch = groupEpoch;
-            } catch (PartitionAssignorException ex) {
-                String msg = String.format("Failed to compute a new target assignment for epoch %d: %s",
-                    groupEpoch, ex.getMessage());
-                log.error("[GroupId {}] {}.", groupId, msg);
-                throw new UnknownServerException(msg, ex);
             }
-        }
 
-        // 3. Reconcile the member's assignment with the target assignment. This is only required if
-        // the member is not stable or if a new target assignment has been installed.
-        boolean assignmentUpdated = false;
-        if (updatedMember.state() != ConsumerGroupMember.MemberState.STABLE || updatedMember.targetMemberEpoch() != targetAssignmentEpoch) {
-            ConsumerGroupMember prevMember = updatedMember;
-            updatedMember = new CurrentAssignmentBuilder(updatedMember)
-                .withTargetAssignment(targetAssignmentEpoch, targetAssignment)
-                .withCurrentPartitionEpoch(group::currentPartitionEpoch)
-                .withOwnedTopicPartitions(ownedTopicPartitions)
-                .build();
+            // 3. Reconcile the member's assignment with the target assignment. This is only required if
+            // the member is not stable or if a new target assignment has been installed.
+            if (updatedMember.state() != ConsumerGroupMember.MemberState.STABLE || updatedMember.targetMemberEpoch() != targetAssignmentEpoch) {
+                ConsumerGroupMember prevMember = updatedMember;
+                updatedMember = new CurrentAssignmentBuilder(updatedMember)
+                    .withTargetAssignment(targetAssignmentEpoch, targetAssignment)
+                    .withCurrentPartitionEpoch(group::currentPartitionEpoch)
+                    .withOwnedTopicPartitions(ownedTopicPartitions)
+                    .build();
 
-            // Checking the reference is enough here because a new instance
-            // is created only when the state has changed.
-            if (updatedMember != prevMember) {
-                assignmentUpdated = true;
-                records.add(newCurrentAssignmentRecord(groupId, updatedMember));
+                // Checking the reference is enough here because a new instance
+                // is created only when the state has changed.
+                if (updatedMember != prevMember) {
+                    assignmentUpdated = true;
+                    records.add(newCurrentAssignmentRecord(groupId, updatedMember));
 
-                log.info("[GroupId {}] Member {} transitioned from {} to {}.",
-                    groupId, memberId, member.currentAssignmentSummary(), updatedMember.currentAssignmentSummary());
+                    log.info("[GroupId {}] Member {} transitioned from {} to {}.",
+                        groupId, memberId, member.currentAssignmentSummary(), updatedMember.currentAssignmentSummary());
 
-                if (updatedMember.state() == ConsumerGroupMember.MemberState.REVOKING) {
-                    scheduleConsumerGroupRevocationTimeout(
-                        groupId,
-                        memberId,
-                        updatedMember.rebalanceTimeoutMs(),
-                        updatedMember.memberEpoch()
-                    );
-                } else {
-                    cancelConsumerGroupRevocationTimeout(groupId, memberId);
+                    if (updatedMember.state() == ConsumerGroupMember.MemberState.REVOKING) {
+                        scheduleConsumerGroupRevocationTimeout(
+                            groupId,
+                            memberId,
+                            updatedMember.rebalanceTimeoutMs(),
+                            updatedMember.memberEpoch()
+                        );
+                    } else {
+                        cancelConsumerGroupRevocationTimeout(groupId, memberId);
+                    }
                 }
             }
         }
@@ -1011,6 +1048,65 @@ public class GroupMetadataManager {
         return new CoordinatorResult<>(records, response);
     }
 
+    private void replaceStaticMemberInConsumerGroup(
+        String groupId,
+        List<Record> records,
+        ConsumerGroup group,
+        ConsumerGroupMember member,
+        ConsumerGroupMember existingStaticMember,
+        ConsumerGroupMember updatedMember
+    ) {
+        // Write tombstones for the departed static member. Follow the same order as the one followed when fencing
+        // a member
+        records.add(newCurrentAssignmentTombstoneRecord(group.groupId(), existingStaticMember.memberId()));
+        records.add(newTargetAssignmentTombstoneRecord(group.groupId(), existingStaticMember.memberId()));
+        records.add(newMemberSubscriptionTombstoneRecord(group.groupId(), existingStaticMember.memberId()));
+        // Cancel all the timers of the departed static member.
+        cancelConsumerGroupSessionTimeout(group.groupId(), existingStaticMember.memberId());
+        cancelConsumerGroupRevocationTimeout(group.groupId(), existingStaticMember.memberId());
+        // Write a record corresponding to the new member
+        records.add(newMemberSubscriptionRecord(groupId, updatedMember));
+        TargetAssignmentBuilder.TargetAssignmentResult assignmentResult = computeTargetAssignment(group, group.groupEpoch(), member, updatedMember);
+        records.addAll(assignmentResult.records());
+        records.add(newCurrentAssignmentRecord(groupId, updatedMember));
+    }
+
+    private TargetAssignmentBuilder.TargetAssignmentResult computeTargetAssignment(
+        ConsumerGroup group,
+        int groupEpoch,
+        ConsumerGroupMember member,
+        ConsumerGroupMember updatedMember) {
+        String preferredServerAssignor = group.computePreferredServerAssignor(
+            member,
+            updatedMember
+        ).orElse(defaultAssignor.name());
+
+        String groupId = group.groupId();
+        Map<String, TopicMetadata> subscriptionMetadata = group.subscriptionMetadata();
+        String memberId = member.memberId();
+        try {
+            TargetAssignmentBuilder.TargetAssignmentResult assignmentResult =
+                new TargetAssignmentBuilder(groupId, groupEpoch, assignors.get(preferredServerAssignor))
+                    .withMembers(group.members())
+                    .withSubscriptionMetadata(subscriptionMetadata)
+                    .withTargetAssignment(group.targetAssignment())
+                    .addOrUpdateMember(memberId, updatedMember)
+                    .build();
+            log.info("[GroupId {}] Computed a new target assignment for epoch {}: {}.",
+                groupId, groupEpoch, assignmentResult.targetAssignment());
+            return assignmentResult;
+        } catch (PartitionAssignorException ex) {
+            String msg = String.format("Failed to compute a new target assignment for epoch %d: %s",
+                groupEpoch, ex.getMessage());
+            log.error("[GroupId {}] {}.", groupId, msg);
+            throw new UnknownServerException(msg, ex);
+        }
+    }
+
+    private boolean staticMemberReplaced(int memberEpoch, ConsumerGroupMember existingStaticMember) {
+        return memberEpoch == 0 && existingStaticMember != null && existingStaticMember.memberEpoch() == LEAVE_GROUP_STATIC_MEMBER_EPOCH;
+    }
+
     /**
      * Handles leave request from a consumer group member.
      * @param groupId       The group id from the request.
@@ -1027,21 +1123,16 @@ public class GroupMetadataManager {
         int memberEpoch
     ) throws ApiException {
         ConsumerGroup group = getOrMaybeCreateConsumerGroup(groupId, false);
-        ConsumerGroupMember member = memberEpoch == -2 ?
-                group.getOrMaybeCreateStaticMember(memberId, instanceId, false) :
+        ConsumerGroupMember member = memberEpoch == LEAVE_GROUP_STATIC_MEMBER_EPOCH ?
+                group.getStaticMember(instanceId) :
                 group.getOrMaybeCreateMember(memberId, false);
 
         List<Record> records = new ArrayList<>();
-        // The departing member is a static one. We don't need to fence this member because it is
-        // expected to come back within session timeout
-        if (memberEpoch == -2) {
+        if (memberEpoch == LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
+            throwIfStaticMemberValidationFails(groupId, instanceId, member, memberEpoch, memberId);
             log.info("[GroupId {}] Member {} with instance id {} is a static member and will not be fenced from the group",
-                    groupId, memberId, member.instanceId());
-            // We will write a member epoch of -2 for this departing static member.
-            ConsumerGroupMember leavingStaticMember = new ConsumerGroupMember.Builder(member)
-                    .setMemberEpoch(-2)
-                    .build();
-            records.add(newCurrentAssignmentRecord(group.groupId(), leavingStaticMember));
+                    group.groupId(), member.memberId(), member.instanceId());
+            records.addAll(consumerGroupStaticMemberGroupLeave(group, member, memberId));
         } else {
             log.info("[GroupId {}] Member {} left the consumer group.", groupId, memberId);
             records.addAll(consumerGroupFenceMember(group, member));
@@ -1049,6 +1140,33 @@ public class GroupMetadataManager {
         return new CoordinatorResult<>(records, new ConsumerGroupHeartbeatResponseData()
             .setMemberId(memberId)
             .setMemberEpoch(memberEpoch));
+    }
+
+    /**
+     * Handles the case when a static member decides to leave the group.
+     * The member is not actually fenced from the group, and instead it's
+     * member epoch is updated to -2 to reflect that a member using the given
+     * instance id decided to leave the group and would be back within session
+     * timeout.
+     *
+     * @param group       The group.
+     * @param existingStaticMember      The member.
+     *
+     * @return A list of records to be applied to the state.
+     */
+    private List<Record> consumerGroupStaticMemberGroupLeave(
+        ConsumerGroup group,
+        ConsumerGroupMember existingStaticMember,
+        String memberId
+    ) {
+        throwIfStaticMemberValidationFails(group.groupId(), existingStaticMember.instanceId(), existingStaticMember, LEAVE_GROUP_STATIC_MEMBER_EPOCH, memberId);
+        List<Record> records = new ArrayList<>();
+        // We will write a member epoch of -2 for this departing static member.
+        ConsumerGroupMember leavingStaticMember = new ConsumerGroupMember.Builder(existingStaticMember)
+            .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH)
+            .build();
+        records.add(newCurrentAssignmentRecord(group.groupId(), leavingStaticMember));
+        return records;
     }
 
     /**
@@ -1208,7 +1326,7 @@ public class GroupMetadataManager {
     ) throws ApiException {
         throwIfConsumerGroupHeartbeatRequestIsInvalid(request);
 
-        if (request.memberEpoch() == LEAVE_GROUP_MEMBER_EPOCH || request.memberEpoch() == -2) {
+        if (request.memberEpoch() == LEAVE_GROUP_MEMBER_EPOCH || request.memberEpoch() == LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
             // -1 means that the member wants to leave the group.
             // -2 means that a static member wants to leave the group.
             return consumerGroupLeave(
@@ -1255,9 +1373,7 @@ public class GroupMetadataManager {
         Set<String> oldSubscribedTopicNames = new HashSet<>(consumerGroup.subscribedTopicNames());
 
         if (value != null) {
-            ConsumerGroupMember oldMember = value.instanceId() != null ?
-                    consumerGroup.getOrMaybeCreateStaticMember(memberId, value.instanceId(), true) :
-                    consumerGroup.getOrMaybeCreateMember(memberId, true);
+            ConsumerGroupMember oldMember = consumerGroup.getOrMaybeCreateMember(memberId, true);
             consumerGroup.updateMember(new ConsumerGroupMember.Builder(oldMember)
                 .updateWith(value)
                 .build());

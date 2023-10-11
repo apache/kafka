@@ -1926,127 +1926,127 @@ public class GroupMetadataManagerTest {
 
         // Consumer group with two static members.
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-                .withAssignors(Collections.singletonList(assignor))
-                .withMetadataImage(new MetadataImageBuilder()
-                        .addTopic(fooTopicId, fooTopicName, 6)
-                        .addTopic(barTopicId, barTopicName, 3)
-                        .addRacks()
-                        .build())
-                .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
-                        .withMember(new ConsumerGroupMember.Builder(memberId1)
-                                .setInstanceId(memberId1)
-                                .setMemberEpoch(10)
-                                .setPreviousMemberEpoch(9)
-                                .setTargetMemberEpoch(10)
-                                .setClientId("client")
-                                .setClientHost("localhost/127.0.0.1")
-                                .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
-                                .setServerAssignorName("range")
-                                .setAssignedPartitions(mkAssignment(
-                                        mkTopicAssignment(fooTopicId, 0, 1, 2),
-                                        mkTopicAssignment(barTopicId, 0, 1)))
-                                .build())
-                        .withMember(new ConsumerGroupMember.Builder(memberId2)
-                                .setInstanceId(memberId2)
-                                .setMemberEpoch(10)
-                                .setPreviousMemberEpoch(9)
-                                .setTargetMemberEpoch(10)
-                                .setClientId("client")
-                                .setClientHost("localhost/127.0.0.1")
-                                // Use zar only here to ensure that metadata needs to be recomputed.
-                                .setSubscribedTopicNames(Arrays.asList("foo", "bar", "zar"))
-                                .setServerAssignorName("range")
-                                .setAssignedPartitions(mkAssignment(
-                                        mkTopicAssignment(fooTopicId, 3, 4, 5),
-                                        mkTopicAssignment(barTopicId, 2)))
-                                .build())
-                        .withAssignment(memberId1, mkAssignment(
-                                mkTopicAssignment(fooTopicId, 0, 1, 2),
-                                mkTopicAssignment(barTopicId, 0, 1)))
-                        .withAssignment(memberId2, mkAssignment(
-                                mkTopicAssignment(fooTopicId, 3, 4, 5),
-                                mkTopicAssignment(barTopicId, 2)))
-                        .withAssignmentEpoch(10))
-                .build();
+            .withAssignors(Collections.singletonList(assignor))
+            .withMetadataImage(new MetadataImageBuilder()
+                .addTopic(fooTopicId, fooTopicName, 6)
+                .addTopic(barTopicId, barTopicName, 3)
+                .addRacks()
+                .build())
+            .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
+                .withMember(new ConsumerGroupMember.Builder(memberId1)
+                    .setInstanceId(memberId1)
+                    .setMemberEpoch(10)
+                    .setPreviousMemberEpoch(9)
+                    .setTargetMemberEpoch(10)
+                    .setClientId("client")
+                    .setClientHost("localhost/127.0.0.1")
+                    .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+                    .setServerAssignorName("range")
+                    .setAssignedPartitions(mkAssignment(
+                        mkTopicAssignment(fooTopicId, 0, 1, 2),
+                        mkTopicAssignment(barTopicId, 0, 1)))
+                    .build())
+                .withMember(new ConsumerGroupMember.Builder(memberId2)
+                    .setInstanceId(memberId2)
+                    .setMemberEpoch(10)
+                    .setPreviousMemberEpoch(9)
+                    .setTargetMemberEpoch(10)
+                    .setClientId("client")
+                    .setClientHost("localhost/127.0.0.1")
+                    // Use zar only here to ensure that metadata needs to be recomputed.
+                    .setSubscribedTopicNames(Arrays.asList("foo", "bar", "zar"))
+                    .setServerAssignorName("range")
+                    .setAssignedPartitions(mkAssignment(
+                        mkTopicAssignment(fooTopicId, 3, 4, 5),
+                        mkTopicAssignment(barTopicId, 2)))
+                    .build())
+                .withAssignment(memberId1, mkAssignment(
+                    mkTopicAssignment(fooTopicId, 0, 1, 2),
+                    mkTopicAssignment(barTopicId, 0, 1)))
+                .withAssignment(memberId2, mkAssignment(
+                    mkTopicAssignment(fooTopicId, 3, 4, 5),
+                    mkTopicAssignment(barTopicId, 2)))
+                .withAssignmentEpoch(10))
+            .build();
 
         assignor.prepareGroupAssignment(new GroupAssignment(
-                new HashMap<String, MemberAssignment>() {
-                    {
-                        put(memberId1, new MemberAssignment(mkAssignment(
-                                mkTopicAssignment(fooTopicId, 0, 1),
-                                mkTopicAssignment(barTopicId, 0)
-                        )));
-                        put(memberId2, new MemberAssignment(mkAssignment(
-                                mkTopicAssignment(fooTopicId, 2, 3),
-                                mkTopicAssignment(barTopicId, 1)
-                        )));
-                        put(memberId3, new MemberAssignment(mkAssignment(
-                                mkTopicAssignment(fooTopicId, 4, 5),
-                                mkTopicAssignment(barTopicId, 2)
-                        )));
-                    }
+            new HashMap<String, MemberAssignment>() {
+                {
+                    put(memberId1, new MemberAssignment(mkAssignment(
+                        mkTopicAssignment(fooTopicId, 0, 1),
+                        mkTopicAssignment(barTopicId, 0)
+                    )));
+                    put(memberId2, new MemberAssignment(mkAssignment(
+                        mkTopicAssignment(fooTopicId, 2, 3),
+                        mkTopicAssignment(barTopicId, 1)
+                    )));
+                    put(memberId3, new MemberAssignment(mkAssignment(
+                        mkTopicAssignment(fooTopicId, 4, 5),
+                        mkTopicAssignment(barTopicId, 2)
+                    )));
                 }
-        ));
+            }
+            ));
 
         // Member 3 joins the consumer group.
         CoordinatorResult<ConsumerGroupHeartbeatResponseData, Record> result = context.consumerGroupHeartbeat(
-                new ConsumerGroupHeartbeatRequestData()
-                        .setGroupId(groupId)
-                        .setMemberId(memberId3)
-                        .setInstanceId(memberId3)
-                        .setMemberEpoch(0)
-                        .setRebalanceTimeoutMs(5000)
-                        .setServerAssignor("range")
-                        .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
-                        .setTopicPartitions(Collections.emptyList()));
+            new ConsumerGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId3)
+                .setInstanceId(memberId3)
+                .setMemberEpoch(0)
+                .setRebalanceTimeoutMs(5000)
+                .setServerAssignor("range")
+                .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+                .setTopicPartitions(Collections.emptyList()));
 
         assertResponseEquals(
-                new ConsumerGroupHeartbeatResponseData()
-                        .setMemberId(memberId3)
-                        .setMemberEpoch(11)
-                        .setHeartbeatIntervalMs(5000)
-                        .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()),
-                result.response()
+            new ConsumerGroupHeartbeatResponseData()
+                .setMemberId(memberId3)
+                .setMemberEpoch(11)
+                .setHeartbeatIntervalMs(5000)
+                .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()),
+            result.response()
         );
 
         ConsumerGroupMember expectedMember3 = new ConsumerGroupMember.Builder(memberId3)
-                .setMemberEpoch(11)
-                .setInstanceId(memberId3)
-                .setPreviousMemberEpoch(0)
-                .setTargetMemberEpoch(11)
-                .setClientId("client")
-                .setClientHost("localhost/127.0.0.1")
-                .setRebalanceTimeoutMs(5000)
-                .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
-                .setServerAssignorName("range")
-                .setPartitionsPendingAssignment(mkAssignment(
-                        mkTopicAssignment(fooTopicId, 4, 5),
-                        mkTopicAssignment(barTopicId, 2)))
-                .build();
+            .setMemberEpoch(11)
+            .setInstanceId(memberId3)
+            .setPreviousMemberEpoch(0)
+            .setTargetMemberEpoch(11)
+            .setClientId("client")
+            .setClientHost("localhost/127.0.0.1")
+            .setRebalanceTimeoutMs(5000)
+            .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+            .setServerAssignorName("range")
+            .setPartitionsPendingAssignment(mkAssignment(
+                mkTopicAssignment(fooTopicId, 4, 5),
+                mkTopicAssignment(barTopicId, 2)))
+            .build();
 
         List<Record> expectedRecords = Arrays.asList(
-                RecordHelpers.newMemberSubscriptionRecord(groupId, expectedMember3),
-                RecordHelpers.newGroupSubscriptionMetadataRecord(groupId, new HashMap<String, TopicMetadata>() {
-                    {
-                        put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6, mkMapOfPartitionRacks(6)));
-                        put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 3, mkMapOfPartitionRacks(3)));
-                    }
-                }),
-                RecordHelpers.newGroupEpochRecord(groupId, 11),
-                RecordHelpers.newTargetAssignmentRecord(groupId, memberId1, mkAssignment(
-                        mkTopicAssignment(fooTopicId, 0, 1),
-                        mkTopicAssignment(barTopicId, 0)
-                )),
-                RecordHelpers.newTargetAssignmentRecord(groupId, memberId2, mkAssignment(
-                        mkTopicAssignment(fooTopicId, 2, 3),
-                        mkTopicAssignment(barTopicId, 1)
-                )),
-                RecordHelpers.newTargetAssignmentRecord(groupId, memberId3, mkAssignment(
-                        mkTopicAssignment(fooTopicId, 4, 5),
-                        mkTopicAssignment(barTopicId, 2)
-                )),
-                RecordHelpers.newTargetAssignmentEpochRecord(groupId, 11),
-                RecordHelpers.newCurrentAssignmentRecord(groupId, expectedMember3)
+            RecordHelpers.newMemberSubscriptionRecord(groupId, expectedMember3),
+            RecordHelpers.newGroupSubscriptionMetadataRecord(groupId, new HashMap<String, TopicMetadata>() {
+                {
+                    put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6, mkMapOfPartitionRacks(6)));
+                    put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 3, mkMapOfPartitionRacks(3)));
+                }
+            }),
+            RecordHelpers.newGroupEpochRecord(groupId, 11),
+            RecordHelpers.newTargetAssignmentRecord(groupId, memberId1, mkAssignment(
+                mkTopicAssignment(fooTopicId, 0, 1),
+                mkTopicAssignment(barTopicId, 0)
+            )),
+            RecordHelpers.newTargetAssignmentRecord(groupId, memberId2, mkAssignment(
+                mkTopicAssignment(fooTopicId, 2, 3),
+                mkTopicAssignment(barTopicId, 1)
+            )),
+            RecordHelpers.newTargetAssignmentRecord(groupId, memberId3, mkAssignment(
+                mkTopicAssignment(fooTopicId, 4, 5),
+                mkTopicAssignment(barTopicId, 2)
+            )),
+            RecordHelpers.newTargetAssignmentEpochRecord(groupId, 11),
+            RecordHelpers.newCurrentAssignmentRecord(groupId, expectedMember3)
         );
 
         assertRecordsEquals(expectedRecords.subList(0, 3), result.records().subList(0, 3));
@@ -2069,97 +2069,97 @@ public class GroupMetadataManagerTest {
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         ConsumerGroupMember member1 = new ConsumerGroupMember.Builder(memberId1)
-                .setInstanceId(memberId1)
-                .setMemberEpoch(10)
-                .setPreviousMemberEpoch(9)
-                .setTargetMemberEpoch(10)
-                .setClientId("client")
-                .setClientHost("localhost/127.0.0.1")
-                .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
-                .setServerAssignorName("range")
-                .setAssignedPartitions(mkAssignment(
-                        mkTopicAssignment(fooTopicId, 0, 1, 2),
-                        mkTopicAssignment(barTopicId, 0, 1)))
-                .build();
+            .setInstanceId(memberId1)
+            .setMemberEpoch(10)
+            .setPreviousMemberEpoch(9)
+            .setTargetMemberEpoch(10)
+            .setClientId("client")
+            .setClientHost("localhost/127.0.0.1")
+            .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+            .setServerAssignorName("range")
+            .setAssignedPartitions(mkAssignment(
+                mkTopicAssignment(fooTopicId, 0, 1, 2),
+                mkTopicAssignment(barTopicId, 0, 1)))
+            .build();
         ConsumerGroupMember member2 = new ConsumerGroupMember.Builder(memberId2)
-                .setInstanceId(memberId2)
-                .setMemberEpoch(10)
-                .setPreviousMemberEpoch(9)
-                .setTargetMemberEpoch(10)
-                .setRebalanceTimeoutMs(5000)
-                .setClientId("client")
-                .setClientHost("localhost/127.0.0.1")
-                .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
-                .setServerAssignorName("range")
-                .setAssignedPartitions(mkAssignment(
-                        mkTopicAssignment(fooTopicId, 3, 4, 5),
-                        mkTopicAssignment(barTopicId, 2)))
-                .build();
+            .setInstanceId(memberId2)
+            .setMemberEpoch(10)
+            .setPreviousMemberEpoch(9)
+            .setTargetMemberEpoch(10)
+            .setRebalanceTimeoutMs(5000)
+            .setClientId("client")
+            .setClientHost("localhost/127.0.0.1")
+            .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+            .setServerAssignorName("range")
+            .setAssignedPartitions(mkAssignment(
+                    mkTopicAssignment(fooTopicId, 3, 4, 5),
+                    mkTopicAssignment(barTopicId, 2)))
+            .build();
 
         // Consumer group with two static members.
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-                .withAssignors(Collections.singletonList(assignor))
-                .withMetadataImage(new MetadataImageBuilder()
-                        .addTopic(fooTopicId, fooTopicName, 6)
-                        .addTopic(barTopicId, barTopicName, 3)
-                        .addRacks()
-                        .build())
-                .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
-                        .withMember(member1)
-                        .withMember(member2)
-                        .withAssignment(memberId1, mkAssignment(
-                                mkTopicAssignment(fooTopicId, 0, 1, 2),
-                                mkTopicAssignment(barTopicId, 0, 1)))
-                        .withAssignment(memberId2, mkAssignment(
-                                mkTopicAssignment(fooTopicId, 3, 4, 5),
-                                mkTopicAssignment(barTopicId, 2)))
-                        .withAssignmentEpoch(10))
-                .build();
+            .withAssignors(Collections.singletonList(assignor))
+            .withMetadataImage(new MetadataImageBuilder()
+                .addTopic(fooTopicId, fooTopicName, 6)
+                .addTopic(barTopicId, barTopicName, 3)
+                .addRacks()
+                .build())
+            .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
+                .withMember(member1)
+                .withMember(member2)
+                .withAssignment(memberId1, mkAssignment(
+                    mkTopicAssignment(fooTopicId, 0, 1, 2),
+                    mkTopicAssignment(barTopicId, 0, 1)))
+                .withAssignment(memberId2, mkAssignment(
+                    mkTopicAssignment(fooTopicId, 3, 4, 5),
+                    mkTopicAssignment(barTopicId, 2)))
+                .withAssignmentEpoch(10))
+            .build();
 
         assignor.prepareGroupAssignment(new GroupAssignment(
-                new HashMap<String, MemberAssignment>() {
-                    {
-                        put(memberId1, new MemberAssignment(mkAssignment(
-                                mkTopicAssignment(fooTopicId, 0, 1, 2),
-                                mkTopicAssignment(barTopicId, 0, 1)
-                        )));
-                        put(memberId2, new MemberAssignment(mkAssignment(
-                                mkTopicAssignment(fooTopicId, 3, 4, 5),
-                                mkTopicAssignment(barTopicId, 2)
-                        )));
-                        // When the member rejoins, it gets the same assignments.
-                        put(member2RejoinId, new MemberAssignment(mkAssignment(
-                                mkTopicAssignment(fooTopicId, 3, 4, 5),
-                                mkTopicAssignment(barTopicId, 2)
-                        )));
-                    }
+            new HashMap<String, MemberAssignment>() {
+                {
+                    put(memberId1, new MemberAssignment(mkAssignment(
+                        mkTopicAssignment(fooTopicId, 0, 1, 2),
+                        mkTopicAssignment(barTopicId, 0, 1)
+                    )));
+                    put(memberId2, new MemberAssignment(mkAssignment(
+                        mkTopicAssignment(fooTopicId, 3, 4, 5),
+                        mkTopicAssignment(barTopicId, 2)
+                    )));
+                    // When the member rejoins, it gets the same assignments.
+                    put(member2RejoinId, new MemberAssignment(mkAssignment(
+                        mkTopicAssignment(fooTopicId, 3, 4, 5),
+                        mkTopicAssignment(barTopicId, 2)
+                    )));
                 }
+            }
         ));
 
         // Member 2 leaves the consumer group.
         CoordinatorResult<ConsumerGroupHeartbeatResponseData, Record> result = context.consumerGroupHeartbeat(
-                new ConsumerGroupHeartbeatRequestData()
-                        .setGroupId(groupId)
-                        .setMemberId(memberId2)
-                        .setInstanceId(memberId2)
-                        .setMemberEpoch(-2)
-                        .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
-                        .setTopicPartitions(Collections.emptyList()));
+            new ConsumerGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId2)
+                .setInstanceId(memberId2)
+                .setMemberEpoch(-2)
+                .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+                .setTopicPartitions(Collections.emptyList()));
 
         // member epoch of the response would be set to -2
         assertResponseEquals(
-                new ConsumerGroupHeartbeatResponseData()
-                        .setMemberId(memberId2)
-                        .setMemberEpoch(-2),
-                result.response()
+            new ConsumerGroupHeartbeatResponseData()
+                .setMemberId(memberId2)
+                .setMemberEpoch(-2),
+            result.response()
         );
 
         ConsumerGroupMember member2UpdatedEpoch = new ConsumerGroupMember.Builder(member2)
-                .setMemberEpoch(-2)
-                .build();
+            .setMemberEpoch(-2)
+            .build();
         // The departing static member will have it's epoch set to -2.
         List<Record> expectedRecords = Collections.singletonList(
-                RecordHelpers.newCurrentAssignmentRecord(groupId, member2UpdatedEpoch)
+            RecordHelpers.newCurrentAssignmentRecord(groupId, member2UpdatedEpoch)
         );
 
         assertEquals(result.records(), expectedRecords);
@@ -2168,64 +2168,58 @@ public class GroupMetadataManagerTest {
 
         // member 2 rejoins the group with the same instance id
         CoordinatorResult<ConsumerGroupHeartbeatResponseData, Record> rejoinResult = context.consumerGroupHeartbeat(
-                new ConsumerGroupHeartbeatRequestData()
-                        .setMemberId(member2RejoinId)
-                        .setGroupId(groupId)
-                        .setInstanceId(memberId2)
-                        .setMemberEpoch(0)
-                        .setRebalanceTimeoutMs(5000)
-                        .setServerAssignor("range")
-                        .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
-                        .setTopicPartitions(Collections.emptyList()));
+            new ConsumerGroupHeartbeatRequestData()
+                .setMemberId(member2RejoinId)
+                .setGroupId(groupId)
+                .setInstanceId(memberId2)
+                .setMemberEpoch(0)
+                .setRebalanceTimeoutMs(5000)
+                .setServerAssignor("range")
+                .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+                .setTopicPartitions(Collections.emptyList()));
 
         assertResponseEquals(
-                new ConsumerGroupHeartbeatResponseData()
-                        .setMemberId(member2RejoinId)
-                        .setMemberEpoch(11)
-                        .setHeartbeatIntervalMs(5000)
-                        .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()
-                                .setTopicPartitions(Arrays.asList(
-                                        new ConsumerGroupHeartbeatResponseData.TopicPartitions()
-                                                .setTopicId(fooTopicId)
-                                                .setPartitions(Arrays.asList(3, 4, 5)),
-                                        new ConsumerGroupHeartbeatResponseData.TopicPartitions()
-                                                .setTopicId(barTopicId)
-                                                .setPartitions(Collections.singletonList(2))
-                                ))),
+            new ConsumerGroupHeartbeatResponseData()
+                .setMemberId(member2RejoinId)
+                .setMemberEpoch(10)
+                .setHeartbeatIntervalMs(5000)
+                .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()
+                    .setTopicPartitions(Arrays.asList(
+                        new ConsumerGroupHeartbeatResponseData.TopicPartitions()
+                            .setTopicId(fooTopicId)
+                            .setPartitions(Arrays.asList(3, 4, 5)),
+                        new ConsumerGroupHeartbeatResponseData.TopicPartitions()
+                            .setTopicId(barTopicId)
+                            .setPartitions(Collections.singletonList(2))
+                    ))),
                 rejoinResult.response()
         );
 
         ConsumerGroupMember expectedRejoinedMember = new ConsumerGroupMember.Builder(member2RejoinId)
-                .setMemberEpoch(11)
-                .setInstanceId(memberId2)
-                .setPreviousMemberEpoch(10)
-                .setTargetMemberEpoch(11)
-                .setClientId("client")
-                .setClientHost("localhost/127.0.0.1")
-                .setRebalanceTimeoutMs(5000)
-                .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
-                .setServerAssignorName("range")
-                .setAssignedPartitions(mkAssignment(
-                        mkTopicAssignment(fooTopicId, 3, 4, 5),
-                        mkTopicAssignment(barTopicId, 2)))
-                .build();
+            .setMemberEpoch(10)
+            .setInstanceId(memberId2)
+            .setPreviousMemberEpoch(9)
+            .setTargetMemberEpoch(10)
+            .setClientId("client")
+            .setClientHost("localhost/127.0.0.1")
+            .setRebalanceTimeoutMs(5000)
+            .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+            .setServerAssignorName("range")
+            .setAssignedPartitions(mkAssignment(
+                    mkTopicAssignment(fooTopicId, 3, 4, 5),
+                    mkTopicAssignment(barTopicId, 2)))
+            .build();
 
         List<Record> expectedRecordsAfterRejoin = Arrays.asList(
-                RecordHelpers.newMemberSubscriptionRecord(groupId, expectedRejoinedMember),
-                RecordHelpers.newGroupSubscriptionMetadataRecord(groupId, new HashMap<String, TopicMetadata>() {
-                    {
-                        put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6, mkMapOfPartitionRacks(6)));
-                        put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 3, mkMapOfPartitionRacks(3)));
-                    }
-                }),
-                // A Group epoch bump seems imminent here
-                RecordHelpers.newGroupEpochRecord(groupId, 11),
-                RecordHelpers.newTargetAssignmentRecord(groupId, member2RejoinId, mkAssignment(
-                        mkTopicAssignment(fooTopicId, 3, 4, 5),
-                        mkTopicAssignment(barTopicId, 2)
-                )),
-                RecordHelpers.newTargetAssignmentEpochRecord(groupId, 11),
-                RecordHelpers.newCurrentAssignmentRecord(groupId, expectedRejoinedMember)
+            RecordHelpers.newCurrentAssignmentTombstoneRecord(groupId, memberId2),
+            RecordHelpers.newTargetAssignmentTombstoneRecord(groupId, memberId2),
+            RecordHelpers.newMemberSubscriptionTombstoneRecord(groupId, memberId2),
+            RecordHelpers.newMemberSubscriptionRecord(groupId, expectedRejoinedMember),
+            RecordHelpers.newTargetAssignmentRecord(groupId, member2RejoinId, mkAssignment(
+                mkTopicAssignment(fooTopicId, 3, 4, 5),
+                mkTopicAssignment(barTopicId, 2))),
+            RecordHelpers.newTargetAssignmentEpochRecord(groupId, 10),
+            RecordHelpers.newCurrentAssignmentRecord(groupId, expectedRejoinedMember)
         );
 
         assertRecordsEquals(expectedRecordsAfterRejoin, rejoinResult.records());
@@ -2248,75 +2242,75 @@ public class GroupMetadataManagerTest {
 
         // Consumer group with two static members.
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-                .withAssignors(Collections.singletonList(assignor))
-                .withMetadataImage(new MetadataImageBuilder()
-                        .addTopic(fooTopicId, fooTopicName, 6)
-                        .addTopic(barTopicId, barTopicName, 3)
-                        .addRacks()
-                        .build())
-                .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
-                        .withMember(new ConsumerGroupMember.Builder(memberId1)
-                                .setInstanceId(memberId1)
-                                .setMemberEpoch(10)
-                                .setPreviousMemberEpoch(9)
-                                .setTargetMemberEpoch(10)
-                                .setClientId("client")
-                                .setClientHost("localhost/127.0.0.1")
-                                .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
-                                .setServerAssignorName("range")
-                                .setAssignedPartitions(mkAssignment(
-                                        mkTopicAssignment(fooTopicId, 0, 1, 2),
-                                        mkTopicAssignment(barTopicId, 0, 1)))
-                                .build())
-                        .withMember(new ConsumerGroupMember.Builder(memberId2)
-                                .setInstanceId(memberId2)
-                                .setMemberEpoch(10)
-                                .setPreviousMemberEpoch(9)
-                                .setTargetMemberEpoch(10)
-                                .setClientId("client")
-                                .setClientHost("localhost/127.0.0.1")
-                                // Use zar only here to ensure that metadata needs to be recomputed.
-                                .setSubscribedTopicNames(Arrays.asList("foo", "bar", "zar"))
-                                .setServerAssignorName("range")
-                                .setAssignedPartitions(mkAssignment(
-                                        mkTopicAssignment(fooTopicId, 3, 4, 5),
-                                        mkTopicAssignment(barTopicId, 2)))
-                                .build())
-                        .withAssignment(memberId1, mkAssignment(
-                                mkTopicAssignment(fooTopicId, 0, 1, 2),
-                                mkTopicAssignment(barTopicId, 0, 1)))
-                        .withAssignment(memberId2, mkAssignment(
-                                mkTopicAssignment(fooTopicId, 3, 4, 5),
-                                mkTopicAssignment(barTopicId, 2)))
-                        .withAssignmentEpoch(10))
-                .build();
+            .withAssignors(Collections.singletonList(assignor))
+            .withMetadataImage(new MetadataImageBuilder()
+                .addTopic(fooTopicId, fooTopicName, 6)
+                .addTopic(barTopicId, barTopicName, 3)
+                .addRacks()
+                .build())
+            .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
+                .withMember(new ConsumerGroupMember.Builder(memberId1)
+                    .setInstanceId(memberId1)
+                    .setMemberEpoch(10)
+                    .setPreviousMemberEpoch(9)
+                    .setTargetMemberEpoch(10)
+                    .setClientId("client")
+                    .setClientHost("localhost/127.0.0.1")
+                    .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+                    .setServerAssignorName("range")
+                    .setAssignedPartitions(mkAssignment(
+                        mkTopicAssignment(fooTopicId, 0, 1, 2),
+                        mkTopicAssignment(barTopicId, 0, 1)))
+                    .build())
+                .withMember(new ConsumerGroupMember.Builder(memberId2)
+                    .setInstanceId(memberId2)
+                    .setMemberEpoch(10)
+                    .setPreviousMemberEpoch(9)
+                    .setTargetMemberEpoch(10)
+                    .setClientId("client")
+                    .setClientHost("localhost/127.0.0.1")
+                    // Use zar only here to ensure that metadata needs to be recomputed.
+                    .setSubscribedTopicNames(Arrays.asList("foo", "bar", "zar"))
+                    .setServerAssignorName("range")
+                    .setAssignedPartitions(mkAssignment(
+                        mkTopicAssignment(fooTopicId, 3, 4, 5),
+                        mkTopicAssignment(barTopicId, 2)))
+                    .build())
+                .withAssignment(memberId1, mkAssignment(
+                    mkTopicAssignment(fooTopicId, 0, 1, 2),
+                    mkTopicAssignment(barTopicId, 0, 1)))
+                .withAssignment(memberId2, mkAssignment(
+                    mkTopicAssignment(fooTopicId, 3, 4, 5),
+                    mkTopicAssignment(barTopicId, 2)))
+                .withAssignmentEpoch(10))
+            .build();
 
         assignor.prepareGroupAssignment(new GroupAssignment(
-                new HashMap<String, MemberAssignment>() {
-                    {
-                        put(memberId1, new MemberAssignment(mkAssignment(
-                                mkTopicAssignment(fooTopicId, 0, 1),
-                                mkTopicAssignment(barTopicId, 0)
-                        )));
-                        put(memberId2, new MemberAssignment(mkAssignment(
-                                mkTopicAssignment(fooTopicId, 2, 3),
-                                mkTopicAssignment(barTopicId, 1)
-                        )));
-                    }
+            new HashMap<String, MemberAssignment>() {
+                {
+                    put(memberId1, new MemberAssignment(mkAssignment(
+                        mkTopicAssignment(fooTopicId, 0, 1),
+                        mkTopicAssignment(barTopicId, 0)
+                    )));
+                    put(memberId2, new MemberAssignment(mkAssignment(
+                        mkTopicAssignment(fooTopicId, 2, 3),
+                        mkTopicAssignment(barTopicId, 1)
+                    )));
                 }
-        ));
+            }
+            ));
 
         // Member 3 joins the consumer group with an in-use instance id.
         assertThrows(UnreleasedInstanceIdException.class, () -> context.consumerGroupHeartbeat(
-                new ConsumerGroupHeartbeatRequestData()
-                        .setGroupId(groupId)
-                        .setMemberId(memberId3)
-                        .setInstanceId(memberId2)
-                        .setMemberEpoch(0)
-                        .setRebalanceTimeoutMs(5000)
-                        .setServerAssignor("range")
-                        .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
-                        .setTopicPartitions(Collections.emptyList())));
+            new ConsumerGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId3)
+                .setInstanceId(memberId2)
+                .setMemberEpoch(0)
+                .setRebalanceTimeoutMs(5000)
+                .setServerAssignor("range")
+                .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+                .setTopicPartitions(Collections.emptyList())));
     }
 
     @Test
@@ -2333,75 +2327,75 @@ public class GroupMetadataManagerTest {
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         ConsumerGroupMember member1 = new ConsumerGroupMember.Builder(memberId1)
-                .setInstanceId(memberId1)
-                .setMemberEpoch(10)
-                .setPreviousMemberEpoch(9)
-                .setTargetMemberEpoch(10)
-                .setClientId("client")
-                .setClientHost("localhost/127.0.0.1")
-                .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
-                .setServerAssignorName("range")
-                .setAssignedPartitions(mkAssignment(
-                        mkTopicAssignment(fooTopicId, 0, 1, 2),
-                        mkTopicAssignment(barTopicId, 0, 1)))
-                .build();
+            .setInstanceId(memberId1)
+            .setMemberEpoch(10)
+            .setPreviousMemberEpoch(9)
+            .setTargetMemberEpoch(10)
+            .setClientId("client")
+            .setClientHost("localhost/127.0.0.1")
+            .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+            .setServerAssignorName("range")
+            .setAssignedPartitions(mkAssignment(
+                mkTopicAssignment(fooTopicId, 0, 1, 2),
+                mkTopicAssignment(barTopicId, 0, 1)))
+            .build();
         ConsumerGroupMember member2 = new ConsumerGroupMember.Builder(memberId2)
-                .setInstanceId(memberId2)
-                .setMemberEpoch(10)
-                .setPreviousMemberEpoch(9)
-                .setTargetMemberEpoch(10)
-                .setClientId("client")
-                .setClientHost("localhost/127.0.0.1")
-                // Use zar only here to ensure that metadata needs to be recomputed.
-                .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
-                .setServerAssignorName("range")
-                .setAssignedPartitions(mkAssignment(
-                        mkTopicAssignment(fooTopicId, 3, 4, 5),
-                        mkTopicAssignment(barTopicId, 2)))
-                .build();
+            .setInstanceId(memberId2)
+            .setMemberEpoch(10)
+            .setPreviousMemberEpoch(9)
+            .setTargetMemberEpoch(10)
+            .setClientId("client")
+            .setClientHost("localhost/127.0.0.1")
+            // Use zar only here to ensure that metadata needs to be recomputed.
+            .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+            .setServerAssignorName("range")
+            .setAssignedPartitions(mkAssignment(
+                mkTopicAssignment(fooTopicId, 3, 4, 5),
+                mkTopicAssignment(barTopicId, 2)))
+            .build();
 
         // Consumer group with two static members.
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-                .withAssignors(Collections.singletonList(assignor))
-                .withMetadataImage(new MetadataImageBuilder()
-                        .addTopic(fooTopicId, fooTopicName, 6)
-                        .addTopic(barTopicId, barTopicName, 3)
-                        .addRacks()
-                        .build())
-                .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
-                        .withMember(member1)
-                        .withMember(member2)
-                        .withAssignment(memberId1, mkAssignment(
-                                mkTopicAssignment(fooTopicId, 0, 1, 2),
-                                mkTopicAssignment(barTopicId, 0, 1)))
-                        .withAssignment(memberId2, mkAssignment(
-                                mkTopicAssignment(fooTopicId, 3, 4, 5),
-                                mkTopicAssignment(barTopicId, 2)))
-                        .withAssignmentEpoch(10))
-                .build();
+            .withAssignors(Collections.singletonList(assignor))
+            .withMetadataImage(new MetadataImageBuilder()
+                .addTopic(fooTopicId, fooTopicName, 6)
+                .addTopic(barTopicId, barTopicName, 3)
+                .addRacks()
+                .build())
+            .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
+                .withMember(member1)
+                .withMember(member2)
+                .withAssignment(memberId1, mkAssignment(
+                    mkTopicAssignment(fooTopicId, 0, 1, 2),
+                    mkTopicAssignment(barTopicId, 0, 1)))
+                .withAssignment(memberId2, mkAssignment(
+                    mkTopicAssignment(fooTopicId, 3, 4, 5),
+                    mkTopicAssignment(barTopicId, 2)))
+                .withAssignmentEpoch(10))
+            .build();
 
         // Member 2 leaves the consumer group.
         CoordinatorResult<ConsumerGroupHeartbeatResponseData, Record> result = context.consumerGroupHeartbeat(
-                new ConsumerGroupHeartbeatRequestData()
-                        .setGroupId(groupId)
-                        .setMemberId(memberId2)
-                        .setInstanceId(memberId2)
-                        .setMemberEpoch(-2)
-                        .setRebalanceTimeoutMs(5000)
-                        .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
-                        .setTopicPartitions(Collections.emptyList()));
+            new ConsumerGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId2)
+                .setInstanceId(memberId2)
+                .setMemberEpoch(-2)
+                .setRebalanceTimeoutMs(5000)
+                .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+                .setTopicPartitions(Collections.emptyList()));
 
         // member epoch of the response would be set to -2
         assertResponseEquals(
-                new ConsumerGroupHeartbeatResponseData()
-                        .setMemberId(memberId2)
-                        .setMemberEpoch(-2),
-                result.response()
+            new ConsumerGroupHeartbeatResponseData()
+                .setMemberId(memberId2)
+                .setMemberEpoch(-2),
+            result.response()
         );
 
         ConsumerGroupMember member2UpdatedEpoch = new ConsumerGroupMember.Builder(member2).setMemberEpoch(-2).build();
         List<Record> expectedRecords = Collections.singletonList(
-                RecordHelpers.newCurrentAssignmentRecord(groupId, member2UpdatedEpoch)
+            RecordHelpers.newCurrentAssignmentRecord(groupId, member2UpdatedEpoch)
         );
 
         assertEquals(result.records(), expectedRecords);
@@ -2425,59 +2419,59 @@ public class GroupMetadataManagerTest {
 
         // Consumer group with two static members.
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-                .withAssignors(Collections.singletonList(assignor))
-                .withMetadataImage(new MetadataImageBuilder()
-                        .addTopic(fooTopicId, fooTopicName, 6)
-                        .addTopic(barTopicId, barTopicName, 3)
-                        .addTopic(zarTopicId, zarTopicName, 1)
-                        .addRacks()
-                        .build())
-                .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
-                        .withMember(new ConsumerGroupMember.Builder(memberId1)
-                                .setInstanceId(memberId1)
-                                .setMemberEpoch(10)
-                                .setPreviousMemberEpoch(9)
-                                .setTargetMemberEpoch(10)
-                                .setClientId("client")
-                                .setClientHost("localhost/127.0.0.1")
-                                .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
-                                .setServerAssignorName("range")
-                                .setAssignedPartitions(mkAssignment(
-                                        mkTopicAssignment(fooTopicId, 0, 1, 2),
-                                        mkTopicAssignment(barTopicId, 0, 1)))
-                                .build())
-                        .withMember(new ConsumerGroupMember.Builder(memberId2)
-                                .setInstanceId(memberId2)
-                                .setMemberEpoch(10)
-                                .setPreviousMemberEpoch(9)
-                                .setTargetMemberEpoch(10)
-                                .setClientId("client")
-                                .setClientHost("localhost/127.0.0.1")
-                                // Use zar only here to ensure that metadata needs to be recomputed.
-                                .setSubscribedTopicNames(Arrays.asList("foo", "bar", "zar"))
-                                .setServerAssignorName("range")
-                                .setAssignedPartitions(mkAssignment(
-                                        mkTopicAssignment(fooTopicId, 3, 4, 5),
-                                        mkTopicAssignment(barTopicId, 2)))
-                                .build())
-                        .withAssignment(memberId1, mkAssignment(
-                                mkTopicAssignment(fooTopicId, 0, 1, 2),
-                                mkTopicAssignment(barTopicId, 0, 1)))
-                        .withAssignment(memberId2, mkAssignment(
-                                mkTopicAssignment(fooTopicId, 3, 4, 5),
-                                mkTopicAssignment(barTopicId, 2)))
-                        .withAssignmentEpoch(10))
-                .build();
+            .withAssignors(Collections.singletonList(assignor))
+            .withMetadataImage(new MetadataImageBuilder()
+                .addTopic(fooTopicId, fooTopicName, 6)
+                .addTopic(barTopicId, barTopicName, 3)
+                .addTopic(zarTopicId, zarTopicName, 1)
+                .addRacks()
+                .build())
+            .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
+                .withMember(new ConsumerGroupMember.Builder(memberId1)
+                    .setInstanceId(memberId1)
+                    .setMemberEpoch(10)
+                    .setPreviousMemberEpoch(9)
+                    .setTargetMemberEpoch(10)
+                    .setClientId("client")
+                    .setClientHost("localhost/127.0.0.1")
+                    .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+                    .setServerAssignorName("range")
+                    .setAssignedPartitions(mkAssignment(
+                        mkTopicAssignment(fooTopicId, 0, 1, 2),
+                        mkTopicAssignment(barTopicId, 0, 1)))
+                    .build())
+                .withMember(new ConsumerGroupMember.Builder(memberId2)
+                    .setInstanceId(memberId2)
+                    .setMemberEpoch(10)
+                    .setPreviousMemberEpoch(9)
+                    .setTargetMemberEpoch(10)
+                    .setClientId("client")
+                    .setClientHost("localhost/127.0.0.1")
+                    // Use zar only here to ensure that metadata needs to be recomputed.
+                    .setSubscribedTopicNames(Arrays.asList("foo", "bar", "zar"))
+                    .setServerAssignorName("range")
+                    .setAssignedPartitions(mkAssignment(
+                        mkTopicAssignment(fooTopicId, 3, 4, 5),
+                        mkTopicAssignment(barTopicId, 2)))
+                    .build())
+                .withAssignment(memberId1, mkAssignment(
+                    mkTopicAssignment(fooTopicId, 0, 1, 2),
+                    mkTopicAssignment(barTopicId, 0, 1)))
+                .withAssignment(memberId2, mkAssignment(
+                    mkTopicAssignment(fooTopicId, 3, 4, 5),
+                    mkTopicAssignment(barTopicId, 2)))
+                .withAssignmentEpoch(10))
+            .build();
 
         assertThrows(UnknownMemberIdException.class, () -> context.consumerGroupHeartbeat(
-                new ConsumerGroupHeartbeatRequestData()
-                        .setGroupId(groupId)
-                        .setMemberId(memberId2)
-                        .setInstanceId("unknown-" + memberId2)
-                        .setMemberEpoch(-2)
-                        .setRebalanceTimeoutMs(5000)
-                        .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
-                        .setTopicPartitions(Collections.emptyList())));
+            new ConsumerGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId2)
+                .setInstanceId("unknown-" + memberId2)
+                .setMemberEpoch(-2)
+                .setRebalanceTimeoutMs(5000)
+                .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+                .setTopicPartitions(Collections.emptyList())));
     }
 
     @Test
@@ -2498,59 +2492,59 @@ public class GroupMetadataManagerTest {
 
         // Consumer group with two static members.
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-                .withAssignors(Collections.singletonList(assignor))
-                .withMetadataImage(new MetadataImageBuilder()
-                        .addTopic(fooTopicId, fooTopicName, 6)
-                        .addTopic(barTopicId, barTopicName, 3)
-                        .addTopic(zarTopicId, zarTopicName, 1)
-                        .addRacks()
-                        .build())
-                .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
-                        .withMember(new ConsumerGroupMember.Builder(memberId1)
-                                .setInstanceId(memberId1)
-                                .setMemberEpoch(10)
-                                .setPreviousMemberEpoch(9)
-                                .setTargetMemberEpoch(10)
-                                .setClientId("client")
-                                .setClientHost("localhost/127.0.0.1")
-                                .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
-                                .setServerAssignorName("range")
-                                .setAssignedPartitions(mkAssignment(
-                                        mkTopicAssignment(fooTopicId, 0, 1, 2),
-                                        mkTopicAssignment(barTopicId, 0, 1)))
-                                .build())
-                        .withMember(new ConsumerGroupMember.Builder(memberId2)
-                                .setInstanceId(memberId2)
-                                .setMemberEpoch(10)
-                                .setPreviousMemberEpoch(9)
-                                .setTargetMemberEpoch(10)
-                                .setClientId("client")
-                                .setClientHost("localhost/127.0.0.1")
-                                // Use zar only here to ensure that metadata needs to be recomputed.
-                                .setSubscribedTopicNames(Arrays.asList("foo", "bar", "zar"))
-                                .setServerAssignorName("range")
-                                .setAssignedPartitions(mkAssignment(
-                                        mkTopicAssignment(fooTopicId, 3, 4, 5),
-                                        mkTopicAssignment(barTopicId, 2)))
-                                .build())
-                        .withAssignment(memberId1, mkAssignment(
-                                mkTopicAssignment(fooTopicId, 0, 1, 2),
-                                mkTopicAssignment(barTopicId, 0, 1)))
-                        .withAssignment(memberId2, mkAssignment(
-                                mkTopicAssignment(fooTopicId, 3, 4, 5),
-                                mkTopicAssignment(barTopicId, 2)))
-                        .withAssignmentEpoch(10))
-                .build();
+            .withAssignors(Collections.singletonList(assignor))
+            .withMetadataImage(new MetadataImageBuilder()
+                .addTopic(fooTopicId, fooTopicName, 6)
+                .addTopic(barTopicId, barTopicName, 3)
+                .addTopic(zarTopicId, zarTopicName, 1)
+                .addRacks()
+                .build())
+            .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
+                .withMember(new ConsumerGroupMember.Builder(memberId1)
+                    .setInstanceId(memberId1)
+                    .setMemberEpoch(10)
+                    .setPreviousMemberEpoch(9)
+                    .setTargetMemberEpoch(10)
+                    .setClientId("client")
+                    .setClientHost("localhost/127.0.0.1")
+                    .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+                    .setServerAssignorName("range")
+                    .setAssignedPartitions(mkAssignment(
+                        mkTopicAssignment(fooTopicId, 0, 1, 2),
+                        mkTopicAssignment(barTopicId, 0, 1)))
+                    .build())
+                .withMember(new ConsumerGroupMember.Builder(memberId2)
+                    .setInstanceId(memberId2)
+                    .setMemberEpoch(10)
+                    .setPreviousMemberEpoch(9)
+                    .setTargetMemberEpoch(10)
+                    .setClientId("client")
+                    .setClientHost("localhost/127.0.0.1")
+                    // Use zar only here to ensure that metadata needs to be recomputed.
+                    .setSubscribedTopicNames(Arrays.asList("foo", "bar", "zar"))
+                    .setServerAssignorName("range")
+                    .setAssignedPartitions(mkAssignment(
+                        mkTopicAssignment(fooTopicId, 3, 4, 5),
+                        mkTopicAssignment(barTopicId, 2)))
+                    .build())
+                .withAssignment(memberId1, mkAssignment(
+                    mkTopicAssignment(fooTopicId, 0, 1, 2),
+                    mkTopicAssignment(barTopicId, 0, 1)))
+                .withAssignment(memberId2, mkAssignment(
+                    mkTopicAssignment(fooTopicId, 3, 4, 5),
+                    mkTopicAssignment(barTopicId, 2)))
+                .withAssignmentEpoch(10))
+            .build();
 
         assertThrows(FencedInstanceIdException.class, () -> context.consumerGroupHeartbeat(
-                new ConsumerGroupHeartbeatRequestData()
-                        .setGroupId(groupId)
-                        .setMemberId("unknown-" + memberId2)
-                        .setInstanceId(memberId2)
-                        .setMemberEpoch(-2)
-                        .setRebalanceTimeoutMs(5000)
-                        .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
-                        .setTopicPartitions(Collections.emptyList())));
+            new ConsumerGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId("unknown-" + memberId2)
+                .setInstanceId(memberId2)
+                .setMemberEpoch(-2)
+                .setRebalanceTimeoutMs(5000)
+                .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+                .setTopicPartitions(Collections.emptyList())));
     }
 
     @Test
@@ -2571,59 +2565,59 @@ public class GroupMetadataManagerTest {
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
 
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-                .withAssignors(Collections.singletonList(assignor))
-                .withMetadataImage(new MetadataImageBuilder()
-                        .addTopic(fooTopicId, fooTopicName, 6)
-                        .addTopic(barTopicId, barTopicName, 3)
-                        .addTopic(zarTopicId, zarTopicName, 1)
-                        .addRacks()
-                        .build())
-                .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
-                        .withMember(new ConsumerGroupMember.Builder(memberId1)
-                                .setInstanceId(memberId1)
-                                .setMemberEpoch(10)
-                                .setPreviousMemberEpoch(9)
-                                .setTargetMemberEpoch(10)
-                                .setClientId("client")
-                                .setClientHost("localhost/127.0.0.1")
-                                .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
-                                .setServerAssignorName("range")
-                                .setAssignedPartitions(mkAssignment(
-                                        mkTopicAssignment(fooTopicId, 0, 1, 2),
-                                        mkTopicAssignment(barTopicId, 0, 1)))
-                                .build())
-                        .withMember(new ConsumerGroupMember.Builder(memberId2)
-                                .setInstanceId(memberId2)
-                                .setMemberEpoch(10)
-                                .setPreviousMemberEpoch(9)
-                                .setTargetMemberEpoch(10)
-                                .setClientId("client")
-                                .setClientHost("localhost/127.0.0.1")
-                                // Use zar only here to ensure that metadata needs to be recomputed.
-                                .setSubscribedTopicNames(Arrays.asList("foo", "bar", "zar"))
-                                .setServerAssignorName("range")
-                                .setAssignedPartitions(mkAssignment(
-                                        mkTopicAssignment(fooTopicId, 3, 4, 5),
-                                        mkTopicAssignment(barTopicId, 2)))
-                                .build())
-                        .withAssignment(memberId1, mkAssignment(
-                                mkTopicAssignment(fooTopicId, 0, 1, 2),
-                                mkTopicAssignment(barTopicId, 0, 1)))
-                        .withAssignment(memberId2, mkAssignment(
-                                mkTopicAssignment(fooTopicId, 3, 4, 5),
-                                mkTopicAssignment(barTopicId, 2)))
-                        .withAssignmentEpoch(10))
-                .build();
+            .withAssignors(Collections.singletonList(assignor))
+            .withMetadataImage(new MetadataImageBuilder()
+                .addTopic(fooTopicId, fooTopicName, 6)
+                .addTopic(barTopicId, barTopicName, 3)
+                .addTopic(zarTopicId, zarTopicName, 1)
+                .addRacks()
+                .build())
+            .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
+                .withMember(new ConsumerGroupMember.Builder(memberId1)
+                    .setInstanceId(memberId1)
+                    .setMemberEpoch(10)
+                    .setPreviousMemberEpoch(9)
+                    .setTargetMemberEpoch(10)
+                    .setClientId("client")
+                    .setClientHost("localhost/127.0.0.1")
+                    .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+                    .setServerAssignorName("range")
+                    .setAssignedPartitions(mkAssignment(
+                            mkTopicAssignment(fooTopicId, 0, 1, 2),
+                            mkTopicAssignment(barTopicId, 0, 1)))
+                    .build())
+                .withMember(new ConsumerGroupMember.Builder(memberId2)
+                    .setInstanceId(memberId2)
+                    .setMemberEpoch(10)
+                    .setPreviousMemberEpoch(9)
+                    .setTargetMemberEpoch(10)
+                    .setClientId("client")
+                    .setClientHost("localhost/127.0.0.1")
+                    // Use zar only here to ensure that metadata needs to be recomputed.
+                    .setSubscribedTopicNames(Arrays.asList("foo", "bar", "zar"))
+                    .setServerAssignorName("range")
+                    .setAssignedPartitions(mkAssignment(
+                            mkTopicAssignment(fooTopicId, 3, 4, 5),
+                            mkTopicAssignment(barTopicId, 2)))
+                    .build())
+                .withAssignment(memberId1, mkAssignment(
+                    mkTopicAssignment(fooTopicId, 0, 1, 2),
+                    mkTopicAssignment(barTopicId, 0, 1)))
+                .withAssignment(memberId2, mkAssignment(
+                    mkTopicAssignment(fooTopicId, 3, 4, 5),
+                    mkTopicAssignment(barTopicId, 2)))
+                .withAssignmentEpoch(10))
+            .build();
 
 
         assertThrows(InvalidRequestException.class, () -> context.consumerGroupHeartbeat(
-                new ConsumerGroupHeartbeatRequestData()
-                        .setGroupId(groupId)
-                        .setMemberId(memberId2)
-                        .setMemberEpoch(-2)
-                        .setRebalanceTimeoutMs(5000)
-                        .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
-                        .setTopicPartitions(Collections.emptyList())));
+            new ConsumerGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId2)
+                .setMemberEpoch(-2)
+                .setRebalanceTimeoutMs(5000)
+                .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+                .setTopicPartitions(Collections.emptyList())));
     }
 
     @Test
