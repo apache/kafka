@@ -2095,10 +2095,9 @@ public class ReplicationControlManagerTest {
         assertElectLeadersResponse(expectedResponse, result.response());
     }
 
-    @ParameterizedTest
-    @EnumSource(value = MetadataVersion.class, names = {"IBP_3_6_IV1"})
-    public void testPreferredElectionDoesNotTriggerUncleanElection(MetadataVersion metadataVersion) throws Exception {
-        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().build(metadataVersion);
+    @Test
+    public void testPreferredElectionDoesNotTriggerUncleanElection() throws Exception {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().build();
         ReplicationControlManager replication = ctx.replicationControl;
         ctx.registerBrokers(1, 2, 3, 4);
         ctx.unfenceBrokers(1, 2, 3, 4);
@@ -2289,13 +2288,13 @@ public class ReplicationControlManagerTest {
                         setPartitionId(0).
                         setTopicId(fooId).
                         setLeader(1),
-                        (short) 0),
+                    (short) 0),
                 new ApiMessageAndVersion(
                     new PartitionChangeRecord().
                         setPartitionId(2).
                         setTopicId(fooId).
                         setLeader(0),
-                        (short) 0)),
+                    (short) 0)),
             election2Result.records());
     }
 
