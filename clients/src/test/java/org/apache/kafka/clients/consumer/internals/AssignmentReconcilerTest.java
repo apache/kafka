@@ -22,6 +22,8 @@ import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.AssignmentReconciler.ReconciliationResult;
 import org.apache.kafka.clients.consumer.internals.events.AssignPartitionsEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.events.RebalanceCallbackEvent;
+import org.apache.kafka.clients.consumer.internals.events.RevokePartitionsEvent;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
@@ -35,8 +37,10 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
@@ -49,10 +53,13 @@ import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
+import static org.apache.kafka.clients.consumer.internals.AssignmentReconciler.ReconciliationResult.APPLIED_LOCALLY;
 import static org.apache.kafka.clients.consumer.internals.AssignmentReconciler.ReconciliationResult.RECONCILING;
+import static org.apache.kafka.clients.consumer.internals.AssignmentReconciler.ReconciliationResult.UNCHANGED;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class AssignmentReconcilerTest {
 
@@ -62,48 +69,142 @@ public class AssignmentReconcilerTest {
     private AssignmentReconciler reconciler;
 
     @Test
-    public void testHappyPath() {
+    public void testInitialAssignment() {
         Uuid topicId = Uuid.randomUuid();
         String topicName = "test-topic";
         setup(Collections.singletonMap(topicName, topicId));
 
-        // Create our test partitions
-        TopicPartitions testPartitions = newTopicPartitions(topicId, 0, 1, 2, 3);
-
-        // Create our assignment with the partitions from set A
-        Optional<Assignment> assignment = newAssignment(testPartitions);
+        // Create our initial assignment
+        Optional<Assignment> initialAssignment = newAssignment(newTopicPartitions(topicId, 0, 1, 2, 3));
 
         // Start the reconciliation process. At this point, since there are no partitions assigned to our
         // subscriptions, we don't need to revoke anything. Validate that after our initial step that we haven't
         // prematurely assigned anything to the SubscriptionState and that our result is RECONCILING.
-        ReconciliationResult result = reconciler.maybeReconcile(assignment);
-        assertEquals(Collections.emptySet(), subscriptions.assignedPartitions());
-        assertEquals(result, RECONCILING);
+        maybeReconcile(initialAssignment, RECONCILING);
+        assertSubscriptionStateEmpty();
 
         // This is intentionally superfluous. We're just checking that we're in the same state as
         // the last time we called maybeReconcile. Because we haven't executed the ConsumerRebalanceListener,
         // the state of the reconciliation is still in progress.
-        result = reconciler.maybeReconcile(assignment);
-        assertEquals(result, RECONCILING);
+        maybeReconcile(initialAssignment, RECONCILING);
 
         // Grab the background event. Because we didn't remove any partitions, but only added them, jump
         // directly to the assign partitions. Let's verify that there's an appropriate event on the
         // background event queue, it has the correct partitions, and the future is there but not complete.
         AssignPartitionsEvent event = pollBackgroundEvent(AssignPartitionsEvent.class);
-        assertEquals(newTopicPartitions(topicName, 0, 1, 2, 3),  event.partitions());
-        CompletableFuture<Void> future = event.future();
-        assertNotNull(future);
-        assertFalse(future.isDone());
+        assertEquals(newTopicPartitions(topicName, 0, 1, 2, 3), event.partitions());
 
         // Complete the future to signal to the reconciler that the ConsumerRebalanceListener callback
         // has completed. This will trigger the "commit" of the partition assignment to the SubscriptionState.
-        assertEquals(Collections.emptySet(), subscriptions.assignedPartitions());
+        assertSubscriptionStateEmpty();
         ConsumerUtils.processRebalanceCallback(callbackInvoker, event);
-        assertEquals(newTopicPartitions(topicName, 0, 1, 2, 3), subscriptions.assignedPartitions());
+        assertSubscriptionStateEquals(newTopicPartitions(topicName, 0, 1, 2, 3));
 
         // Call the reconciler and verify that it did "commit" the partition assignment as expected.
-        result = reconciler.maybeReconcile(assignment);
-        assertEquals(result, ReconciliationResult.APPLIED_LOCALLY);
+        maybeReconcile(initialAssignment, APPLIED_LOCALLY);
+
+        // If we ask the reconciler to reconcile a previously reconciled assignment, it should tell us
+        // that nothing changed.
+        maybeReconcile(initialAssignment, UNCHANGED);
+    }
+
+    @Test
+    public void testFollowupAssignment() {
+        Uuid topicId = Uuid.randomUuid();
+        String topicName = "test-topic";
+        setup(Collections.singletonMap(topicName, topicId));
+
+        // Create our initial assignment
+        Optional<Assignment> initialAssignment = newAssignment(newTopicPartitions(topicId, 0, 1, 2, 3));
+
+        // Start the reconciliation process. At this point, since there are no partitions assigned to our
+        // subscriptions, we don't need to revoke anything. Validate that after our initial step that we haven't
+        // prematurely assigned anything to the SubscriptionState and that our result is RECONCILING.
+        maybeReconcile(initialAssignment, RECONCILING);
+        assertSubscriptionStateEmpty();
+
+        // Grab the background event. Because we didn't remove any partitions, but only added them, jump
+        // directly to the assign partitions. Let's verify that there's an appropriate event on the
+        // background event queue, it has the correct partitions, and the future is there but not complete.
+        AssignPartitionsEvent assignPartitionsEvent = pollBackgroundEvent(AssignPartitionsEvent.class);
+        assertEventEquals(assignPartitionsEvent, newTopicPartitions(topicName, 0, 1, 2, 3));
+
+        // Now process the callback.
+        ConsumerUtils.processRebalanceCallback(callbackInvoker, assignPartitionsEvent);
+        assertTrue(assignPartitionsEvent.future().isDone());
+        assertFalse(assignPartitionsEvent.future().isCompletedExceptionally());
+        assertSubscriptionStateEquals(newTopicPartitions(topicName, 0, 1, 2, 3));
+
+        // Call the reconciler and verify that it did "commit" the partition assignment as expected.
+        maybeReconcile(initialAssignment, APPLIED_LOCALLY);
+
+        // Create our follow-up assignment that removes two partitions.
+        Optional<Assignment> followupAssignment = newAssignment(newTopicPartitions(topicId, 0, 2));
+
+        // Continue the reconciliation process. Since we have partitions assigned, we will need to revoke some
+        // old partitions that are no longer part of the target assignment.
+        maybeReconcile(followupAssignment, RECONCILING);
+        assertSubscriptionStateEquals(newTopicPartitions(topicName, 0, 1, 2, 3));
+
+        // Grab the background event. We are removing some partitions, so verify that we have the correct event
+        // type on the background event queue, and it has the correct partitions to remove.
+        RevokePartitionsEvent revokePartitionsEvent = pollBackgroundEvent(RevokePartitionsEvent.class);
+        assertEventEquals(revokePartitionsEvent, newTopicPartitions(topicName, 1, 3));
+
+        // Now process the callback.
+        ConsumerUtils.processRebalanceCallback(callbackInvoker, revokePartitionsEvent);
+        assertTrue(revokePartitionsEvent.future().isDone());
+        assertFalse(revokePartitionsEvent.future().isCompletedExceptionally());
+        assertSubscriptionStateEquals(newTopicPartitions(topicName, 0, 2));
+
+        // Call the reconciler and verify that it did "commit" the partition assignment as expected.
+        maybeReconcile(followupAssignment, APPLIED_LOCALLY);
+
+        // If we ask the reconciler to reconcile a previously reconciled assignment, it should tell us
+        // that nothing changed.
+        maybeReconcile(followupAssignment, UNCHANGED);
+    }
+
+    @Test
+    public void testStuckCallbacks() {
+        Uuid topicId = Uuid.randomUuid();
+        String topicName = "test-topic";
+        setup(Collections.singletonMap(topicName, topicId));
+
+        Optional<Assignment> initialAssignment = newAssignment(newTopicPartitions(topicId, 0, 1, 2, 3));
+
+        // Start the reconciliation process. At this point, since there are no partitions assigned to our
+        // subscriptions, we don't need to revoke anything. Validate that after our initial step that we haven't
+        // prematurely assigned anything to the SubscriptionState and that our result is RECONCILING.
+        maybeReconcile(initialAssignment, RECONCILING);
+        assertSubscriptionStateEmpty();
+
+        // Grab the background event. Because we didn't remove any partitions, but only added them, jump
+        // directly to the assign partitions. Let's verify that there's an appropriate event on the
+        // background event queue, it has the correct partitions, and the future is there but not complete.
+        AssignPartitionsEvent assignPartitionsEvent = pollBackgroundEvent(AssignPartitionsEvent.class);
+        assertEventEquals(assignPartitionsEvent, newTopicPartitions(topicName, 0, 1, 2, 3));
+        assertFalse(assignPartitionsEvent.future().isDone());
+
+        // Call the reconciler and make sure it thinks that we're still reconciling.
+        maybeReconcile(initialAssignment, RECONCILING);
+    }
+
+    void maybeReconcile(Optional<Assignment> assignment, ReconciliationResult expected) {
+        ReconciliationResult result = reconciler.maybeReconcile(assignment);
+        assertEquals(expected, result);
+    }
+
+    private void assertSubscriptionStateEmpty() {
+        assertTrue(subscriptions.assignedPartitions().isEmpty());
+    }
+
+    private void assertSubscriptionStateEquals(SortedSet<TopicPartition> expected) {
+        assertEquals(expected, subscriptions.assignedPartitions());
+    }
+
+    private void assertEventEquals(RebalanceCallbackEvent event, SortedSet<TopicPartition> expected) {
+        assertEquals(expected, event.partitions());
     }
 
     private TopicPartitions newTopicPartitions(Uuid topicId, Integer... partitions) {
@@ -129,15 +230,22 @@ public class AssignmentReconcilerTest {
         return topicPartitions;
     }
 
-    private Optional<Assignment> newAssignment(TopicPartitions a) {
+    private Optional<Assignment> newAssignment(TopicPartitions... partitions) {
+        List<TopicPartitions> topicPartitions = new ArrayList<>();
+
+        if (partitions != null) {
+            Collections.addAll(topicPartitions, partitions);
+        }
+
         Assignment assignment = new Assignment();
-        assignment.setAssignedTopicPartitions(Collections.singletonList(a));
+        assignment.setAssignedTopicPartitions(topicPartitions);
         return Optional.of(assignment);
     }
 
     private void setup(Map<String, Uuid> topics) {
         setup(topics, new NoOpConsumerRebalanceListener());
     }
+
     private void setup(Map<String, Uuid> topics, ConsumerRebalanceListener listener) {
         Time time = new MockTime();
         LogContext logContext = new LogContext();
@@ -183,10 +291,14 @@ public class AssignmentReconcilerTest {
         reconciler = new AssignmentReconciler(logContext, subscriptions, metadata, backgroundEventQueue);
     }
 
-    private <T> T pollBackgroundEvent(Class<T> expectedEventType) {
+    private <T extends RebalanceCallbackEvent> T pollBackgroundEvent(Class<T> expectedEventType) {
         BackgroundEvent e = backgroundEventQueue.poll();
         assertNotNull(e);
         assertEquals(e.getClass(), expectedEventType);
-        return expectedEventType.cast(e);
+        T event = expectedEventType.cast(e);
+        CompletableFuture<Void> future = event.future();
+        assertNotNull(future);
+        assertFalse(future.isDone());
+        return event;
     }
 }
