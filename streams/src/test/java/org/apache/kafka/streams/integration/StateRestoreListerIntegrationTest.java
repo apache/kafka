@@ -152,9 +152,9 @@ public class StateRestoreListerIntegrationTest {
 
         validateReceivedMessages(sampleData, outputTopic);
 
+        // Close kafkaStreams1 (with cleanup) and start it again to force the restoration of the state.
         kafkaStreams1.close(Duration.ofMillis(IntegrationTestUtils.DEFAULT_TIMEOUT));
         kafkaStreams1.cleanUp();
-
         kafkaStreams1 = startKafkaStreamsAndAwaitUntilRunning(builder, "ks-1", kafkaStreams1StateRestoreListener);
 
         assertTrue(kafkaStreams1StateRestoreListener.awaitUntilRestorationStarts());
