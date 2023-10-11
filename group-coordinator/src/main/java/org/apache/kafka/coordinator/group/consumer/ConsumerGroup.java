@@ -45,8 +45,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
-import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH;
-
 /**
  * A Consumer Group. All the metadata in this class are backed by
  * records in the __consumer_offsets partitions.
@@ -309,57 +307,6 @@ public class ConsumerGroup implements Group {
     public ConsumerGroupMember getStaticMember(String instanceId) {
         String existingMemberId = staticMemberId(instanceId);
         return existingMemberId == null ? null : getOrMaybeCreateMember(existingMemberId, false);
-    }
-
-
-    /**
-     * Gets or creates a static member.
-     *
-     * @param memberId          The member id.
-     * @param instanceId        The group instance id.
-     * @param createIfNotExists Booleans indicating whether the member must be
-     *                          created if it does not exist.
-     *
-     * @return A ConsumerGroupMember.
-     */
-    public ConsumerGroupMember getOrMaybeCreateStaticMember(
-        String memberId,
-        String instanceId,
-        boolean createIfNotExists
-    ) {
-        ConsumerGroupMember member;
-        String existingMemberId = staticMemberId(instanceId);
-        if (!createIfNotExists) {
-            // The member joined with a non-zero epoch but we haven't registered this static member
-            // This could be an unknown member for the coordinator.
-            if (existingMemberId == null) {
-                throw Errors.UNKNOWN_MEMBER_ID.exception();
-            }
-            // We can't create a member at this point. If the 2 member-ids don't match,
-            // we will throw an error.
-            if (!existingMemberId.equals(memberId)) {
-                throw Errors.FENCED_INSTANCE_ID.exception();
-            }
-            member = getOrMaybeCreateMember(memberId, false);
-        } else {
-            // No existing member found against this instance id. Creating new.
-            if (existingMemberId == null) {
-                member = getOrMaybeCreateMember(memberId, true);
-            } else {
-                // Get the details of the existing member
-                ConsumerGroupMember existingMember = getOrMaybeCreateMember(existingMemberId, false);
-                int currentMemberEpoch = existingMember.memberEpoch();
-                // A new member with joined with an in-use instance id but the previous member using the same instance id
-                // hasn't requested leaving the group.
-                if (currentMemberEpoch != LEAVE_GROUP_STATIC_MEMBER_EPOCH /*&& !existingMemberId.equals(memberId)*/) {
-                    throw Errors.UNRELEASED_INSTANCE_ID.exception();
-                }
-                // A new static member is trying to take the place of a departed static member. We will create a new
-                // member
-                member = getOrMaybeCreateMember(memberId, true);
-            }
-        }
-        return member;
     }
 
     /**
