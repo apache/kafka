@@ -235,19 +235,19 @@ public class StateRestoreListerIntegrationTest {
         }
 
         boolean awaitUntilRestorationStarts() throws InterruptedException {
-            return onRestoreStartLatch.await(IntegrationTestUtils.DEFAULT_TIMEOUT, TimeUnit.MILLISECONDS);
+            return awaitLatchWithTimeout(onRestoreStartLatch);
         }
 
         boolean awaitUntilRestorationSuspends() throws InterruptedException {
-            return onRestoreSuspendedLatch.await(IntegrationTestUtils.DEFAULT_TIMEOUT, TimeUnit.MILLISECONDS);
+            return awaitLatchWithTimeout(onRestoreSuspendedLatch);
         }
 
         boolean awaitUntilRestorationEnds() throws InterruptedException {
-            return onRestoreEndLatch.await(IntegrationTestUtils.DEFAULT_TIMEOUT, TimeUnit.MILLISECONDS);
+            return awaitLatchWithTimeout(onRestoreEndLatch);
         }
 
         public boolean awaitUntilBatchRestoredIsCalled() throws InterruptedException {
-            return onBatchRestoredLatch.await(IntegrationTestUtils.DEFAULT_TIMEOUT, TimeUnit.MILLISECONDS);
+            return awaitLatchWithTimeout(onBatchRestoredLatch);
         }
 
         @Override
@@ -279,6 +279,10 @@ public class StateRestoreListerIntegrationTest {
                                        final String storeName,
                                        final long totalRestored) {
             onRestoreSuspendedLatch.countDown();
+        }
+
+        private static boolean awaitLatchWithTimeout(final CountDownLatch latch) throws InterruptedException {
+            return latch.await(IntegrationTestUtils.DEFAULT_TIMEOUT, TimeUnit.MILLISECONDS);
         }
     }
 
