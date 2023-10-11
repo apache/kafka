@@ -67,11 +67,18 @@ class DescribeGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinat
 
     // Join the consumer group. Note that we don't heartbeat here so we must use
     // a session long enough for the duration of the test.
-    val (memberId1, _) = joinConsumerGroupWithOldProtocol("grp-1", completeRebalance = true)
-    val (memberId2, _) = joinConsumerGroupWithOldProtocol("grp-2", completeRebalance = false)
+    val (memberId1, _) = joinConsumerGroupWithOldProtocol(
+      groupId = "grp-1",
+      metadata = Array(1, 2, 3)
+    )
+    val (memberId2, _) = joinConsumerGroupWithOldProtocol(
+      groupId = "grp-2",
+      metadata = Array(1, 2, 3),
+      completeRebalance = false
+    )
 
     // Start from version 1 because version 0 goes to ZK.
-    for (version <- 1 to ApiKeys.DESCRIBE_GROUPS.latestVersion(isUnstableApiEnabled)) {
+    for (version <- ApiKeys.DESCRIBE_GROUPS.oldestVersion() to ApiKeys.DESCRIBE_GROUPS.latestVersion(isUnstableApiEnabled)) {
       assertEquals(
         List(
           new DescribedGroup()

@@ -25,9 +25,9 @@ import org.apache.kafka.common.message.DeleteGroupsResponseData.{DeletableGroupR
 import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroup
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse
-import org.apache.kafka.common.message.{ConsumerGroupHeartbeatRequestData, ConsumerGroupHeartbeatResponseData, DeleteGroupsRequestData, DeleteGroupsResponseData, DescribeGroupsRequestData, JoinGroupRequestData, LeaveGroupResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetFetchResponseData, SyncGroupRequestData}
+import org.apache.kafka.common.message.{ConsumerGroupHeartbeatRequestData, ConsumerGroupHeartbeatResponseData, DeleteGroupsRequestData, DeleteGroupsResponseData, DescribeGroupsRequestData, JoinGroupRequestData, LeaveGroupResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetDeleteRequestData, OffsetDeleteResponseData, OffsetFetchResponseData, SyncGroupRequestData}
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, ConsumerGroupHeartbeatRequest, ConsumerGroupHeartbeatResponse, DeleteGroupsRequest, DeleteGroupsResponse, DescribeGroupsRequest, DescribeGroupsResponse, JoinGroupRequest, JoinGroupResponse, LeaveGroupRequest, LeaveGroupResponse, OffsetCommitRequest, OffsetCommitResponse, OffsetFetchRequest, OffsetFetchResponse, SyncGroupRequest, SyncGroupResponse}
+import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, ConsumerGroupHeartbeatRequest, ConsumerGroupHeartbeatResponse, DeleteGroupsRequest, DeleteGroupsResponse, DescribeGroupsRequest, DescribeGroupsResponse, JoinGroupRequest, JoinGroupResponse, LeaveGroupRequest, LeaveGroupResponse, OffsetCommitRequest, OffsetCommitResponse, OffsetDeleteRequest, OffsetDeleteResponse, OffsetFetchRequest, OffsetFetchResponse, SyncGroupRequest, SyncGroupResponse}
 import org.junit.jupiter.api.Assertions.{assertEquals, fail}
 
 import java.util.Comparator
@@ -185,6 +185,52 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     response.data.groups.asScala.toList
   }
 
+  protected def deleteOffset(
+    groupId: String,
+    topic: String,
+    partition: Int,
+    expectedResponseError: Errors = Errors.NONE,
+    expectedPartitionError: Errors = Errors.NONE,
+    version: Short
+  ): Unit = {
+    if (expectedResponseError != Errors.NONE && expectedPartitionError != Errors.NONE) {
+      fail("deleteOffset: neither expectedResponseError nor expectedTopicError is none.")
+    }
+
+    val request = new OffsetDeleteRequest.Builder(
+      new OffsetDeleteRequestData()
+        .setGroupId(groupId)
+        .setTopics(new OffsetDeleteRequestData.OffsetDeleteRequestTopicCollection(List(
+          new OffsetDeleteRequestData.OffsetDeleteRequestTopic()
+            .setName(topic)
+            .setPartitions(List(
+              new OffsetDeleteRequestData.OffsetDeleteRequestPartition()
+                .setPartitionIndex(partition)
+            ).asJava)
+        ).asJava.iterator()))
+    ).build(version)
+
+    val expectedResponse = new OffsetDeleteResponseData()
+    if (expectedResponseError == Errors.NONE) {
+      expectedResponse
+        .setTopics(new OffsetDeleteResponseData.OffsetDeleteResponseTopicCollection(List(
+          new OffsetDeleteResponseData.OffsetDeleteResponseTopic()
+            .setName(topic)
+            .setPartitions(new OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection(List(
+              new OffsetDeleteResponseData.OffsetDeleteResponsePartition()
+                .setPartitionIndex(partition)
+                .setErrorCode(expectedPartitionError.code())
+            ).asJava.iterator()))
+        ).asJava.iterator()))
+    } else {
+      expectedResponse
+        .setErrorCode(expectedResponseError.code())
+    }
+
+    val response = connectAndReceive[OffsetDeleteResponse](request)
+    assertEquals(expectedResponse, response.data)
+  }
+
   private def sortTopicPartitions(
     group: OffsetFetchResponseData.OffsetFetchResponseGroup
   ): Unit = {
@@ -194,7 +240,11 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     }
   }
 
-  protected def joinConsumerGroupWithOldProtocol(groupId: String, completeRebalance: Boolean): (String, Int) = {
+  protected def joinConsumerGroupWithOldProtocol(
+    groupId: String,
+    metadata: Array[Byte] = Array.empty,
+    completeRebalance: Boolean = true
+  ): (String, Int) = {
     val joinGroupRequestData = new JoinGroupRequestData()
       .setGroupId(groupId)
       .setRebalanceTimeoutMs(5 * 50 * 1000)
@@ -204,7 +254,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
         List(
           new JoinGroupRequestData.JoinGroupRequestProtocol()
             .setName("consumer-range")
-            .setMetadata(Array(1, 2, 3))
+            .setMetadata(metadata)
         ).asJava.iterator
       ))
 
@@ -273,7 +323,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     } else {
       // Note that we don't heartbeat and assume  that the test will
       // complete within the session timeout.
-      joinConsumerGroupWithOldProtocol(groupId, completeRebalance = true)
+      joinConsumerGroupWithOldProtocol(groupId)
     }
   }
 
@@ -295,13 +345,13 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     groupId: String,
     memberId: String,
     memberEpoch: Int,
-    instanceId: String,
-    rackId: String,
-    rebalanceTimeoutMs: Int,
-    serverAssignor: String,
-    subscribedTopicNames: List[String],
-    subscribedTopicRegex: String,
-    topicPartitions: List[ConsumerGroupHeartbeatRequestData.TopicPartitions]
+    instanceId: String = null,
+    rackId: String = null,
+    rebalanceTimeoutMs: Int = -1,
+    serverAssignor: String = null,
+    subscribedTopicNames: List[String] = null,
+    subscribedTopicRegex: String = null,
+    topicPartitions: List[ConsumerGroupHeartbeatRequestData.TopicPartitions] = null
   ): ConsumerGroupHeartbeatResponseData = {
     val consumerGroupHeartbeatRequest = new ConsumerGroupHeartbeatRequest.Builder(
       new ConsumerGroupHeartbeatRequestData()
@@ -336,15 +386,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     consumerGroupHeartbeat(
       groupId = groupId,
       memberId = memberId,
-      memberEpoch = ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH,
-      instanceId = null,
-      rackId = null,
-      rebalanceTimeoutMs = -1,
-      subscribedTopicNames = null,
-      subscribedTopicRegex = null,
-      serverAssignor = null,
-      topicPartitions = null,
-      enableUnstableLastVersion = true
+      memberEpoch = ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH
     )
   }
 

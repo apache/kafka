@@ -16,14 +16,12 @@
  */
 package kafka.server
 
+
 import kafka.test.ClusterInstance
 import kafka.test.annotation.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
 import kafka.test.junit.ClusterTestExtensions
-import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroup
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.coordinator.group.consumer.ConsumerGroup.ConsumerGroupState
-import org.apache.kafka.coordinator.group.generic.GenericGroupState
-import org.junit.jupiter.api.Assertions.{assertEquals, fail}
+import org.junit.jupiter.api.Assertions.fail
 import org.junit.jupiter.api.{Tag, Timeout}
 import org.junit.jupiter.api.extension.ExtendWith
 
@@ -31,7 +29,7 @@ import org.junit.jupiter.api.extension.ExtendWith
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 @ClusterTestDefaults(clusterType = Type.KRAFT, brokers = 1)
 @Tag("integration")
-class DeleteGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
+class OffsetDeleteRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
   @ClusterTest(serverProperties = Array(
     new ClusterConfigProperty(key = "unstable.api.versions.enable", value = "true"),
     new ClusterConfigProperty(key = "group.coordinator.new.enable", value = "true"),
@@ -40,8 +38,8 @@ class DeleteGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinator
     new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
     new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
   ))
-  def testDeleteGroupsWithNewConsumerGroupProtocolAndNewGroupCoordinator(): Unit = {
-    testDeleteGroups(true)
+  def testOffsetDeleteWithNewConsumerGroupProtocolAndNewGroupCoordinator(): Unit = {
+    testOffsetDelete(true)
   }
 
   @ClusterTest(serverProperties = Array(
@@ -50,8 +48,8 @@ class DeleteGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinator
     new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
     new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
   ))
-  def testDeleteGroupsWithOldConsumerGroupProtocolAndNewGroupCoordinator(): Unit = {
-    testDeleteGroups(false)
+  def testOffsetDeleteWithOldConsumerGroupProtocolAndNewGroupCoordinator(): Unit = {
+    testOffsetDelete(false)
   }
 
   @ClusterTest(clusterType = Type.ALL, serverProperties = Array(
@@ -60,11 +58,11 @@ class DeleteGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinator
     new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
     new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
   ))
-  def testDeleteGroupsWithOldConsumerGroupProtocolAndOldGroupCoordinator(): Unit = {
-    testDeleteGroups(false)
+  def testOffsetDeleteWithOldConsumerGroupProtocolAndOldGroupCoordinator(): Unit = {
+    testOffsetDelete(false)
   }
 
-  private def testDeleteGroups(useNewProtocol: Boolean): Unit = {
+  private def testOffsetDelete(useNewProtocol: Boolean): Unit = {
     if (useNewProtocol && !isNewGroupCoordinatorEnabled) {
       fail("Cannot use the new protocol with the old group coordinator.")
     }
@@ -79,58 +77,83 @@ class DeleteGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinator
       numPartitions = 3
     )
 
-    // Join the consumer group. Note that we don't heartbeat here so we must use
-    // a session long enough for the duration of the test.
-    val (memberIdNonEmptyGroup, memberEpochNonEmptyGroup) = joinConsumerGroup(
-      groupId = "grp-non-empty",
-      useNewProtocol = useNewProtocol
-    )
-
-    // Commit offsets.
-    for (partitionId <- 0 to 2) {
-      commitOffset(
-        groupId = "grp-non-empty",
-        memberId = memberIdNonEmptyGroup,
-        memberEpoch = memberEpochNonEmptyGroup,
-        topic = "foo",
-        partition = partitionId,
-        offset = 100L + partitionId,
-        expectedError = Errors.NONE,
-        version = ApiKeys.OFFSET_COMMIT.latestVersion(isUnstableApiEnabled)
-      )
-    }
-
-    // Start from version 1 because version 0 goes to ZK.
-    for (version <- ApiKeys.DELETE_GROUPS.oldestVersion() to ApiKeys.DELETE_GROUPS.latestVersion(isUnstableApiEnabled)) {
+    for (version <- ApiKeys.OFFSET_DELETE.oldestVersion() to ApiKeys.OFFSET_DELETE.latestVersion(isUnstableApiEnabled)) {
 
       // Join the consumer group. Note that we don't heartbeat here so we must use
       // a session long enough for the duration of the test.
-      val (memberId, _) = joinConsumerGroup(
+      val (memberId, memberEpoch) = joinConsumerGroup(
         groupId = "grp",
-        useNewProtocol = useNewProtocol
-      )
-      leaveGroup(
-        groupId = "grp",
-        memberId = memberId,
         useNewProtocol = useNewProtocol
       )
 
-      deleteGroups(
-        groupIds = List("grp-non-empty", "grp"),
-        expectedErrors = List(Errors.NON_EMPTY_GROUP, Errors.NONE),
+      // Commit offsets.
+      for (partitionId <- 0 to 2) {
+        commitOffset(
+          groupId = "grp",
+          memberId = memberId,
+          memberEpoch = memberEpoch,
+          topic = "foo",
+          partition = partitionId,
+          offset = 100L + partitionId,
+          expectedError = Errors.NONE,
+          version = ApiKeys.OFFSET_COMMIT.latestVersion(isUnstableApiEnabled)
+        )
+      }
+
+      // Delete offset with topic that the group is subscribed to.
+      deleteOffset(
+        groupId = "grp",
+        topic = "foo",
+        partition = 0,
+        expectedPartitionError = Errors.GROUP_SUBSCRIBED_TO_TOPIC,
         version = version.toShort
       )
 
-      assertEquals(
-        List(new DescribedGroup()
-          .setGroupId("grp")
-          .setGroupState(if (useNewProtocol) ConsumerGroupState.DEAD.toString else GenericGroupState.DEAD.toString)
-        ),
-        describeGroups(
-          groupIds = List("grp"),
+      // Unsubscribe the topic.
+      if (useNewProtocol) {
+        consumerGroupHeartbeat(
+          groupId = "grp",
+          memberId = memberId,
+          memberEpoch = memberEpoch,
+          subscribedTopicNames = List()
+        )
+      } else {
+        leaveGroup(
+          groupId = "grp",
+          memberId = memberId,
+          useNewProtocol = false
+        )
+      }
+
+      // Delete offsets.
+      for (partitionId <- 0 to 1) {
+        deleteOffset(
+          groupId = "grp",
+          topic = "foo",
+          partition = partitionId,
           version = version.toShort
         )
+      }
+
+      // Delete offset with unknown group id.
+      deleteOffset(
+        groupId = "grp-unknown",
+        topic = "foo",
+        partition = 2,
+        expectedResponseError = Errors.GROUP_ID_NOT_FOUND,
+        version = version.toShort
       )
+
+      // Delete offset with empty group id.
+      deleteOffset(
+        groupId = "",
+        topic = "foo",
+        partition = 2,
+        expectedResponseError = Errors.INVALID_GROUP_ID,
+        version = version.toShort
+      )
+
+      // TODO: check partition
     }
   }
 }
