@@ -145,8 +145,7 @@ public class FeatureCommandTest {
 
         );
         assertEquals("Could not downgrade metadata.version to 4. Invalid metadata.version 4. " +
-                "Refusing to perform the requested downgrade because it might delete metadata information. " +
-                "Retry using UNSAFE_DOWNGRADE if you want to force the downgrade to proceed.", commandOutput);
+                "Refusing to perform the requested downgrade because it might delete metadata information.", commandOutput);
 
         commandOutput = ToolsTestUtils.captureStandardOut(() ->
                 assertEquals(1, FeatureCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(),
