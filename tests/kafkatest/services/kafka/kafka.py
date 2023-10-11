@@ -265,6 +265,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         :param int controller_num_nodes_override: the number of nodes to use in the cluster, instead of 5, 3, or 1 based on num_nodes, if positive, not using ZooKeeper, and isolated_kafka is not None; ignored otherwise
         :param bool allow_zk_with_kraft: if True, then allow a KRaft broker or controller to also use ZooKeeper
         :param quorum_info_provider: A function that takes this KafkaService as an argument and returns a ServiceQuorumInfo. If this is None, then the ServiceQuorumInfo is generated from the test context
+        :param use_new_coordinator: When true, use the new implementation of the group coordinator as per KIP-848. If this is None, the default existing group coordinator is used.
         """
 
         self.zk = zk
@@ -279,7 +280,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.configured_for_zk_migration = False
 
         if use_new_coordinator is None :
-            self.use_new_coordinator = self.context.globals.get["use_new_coordinator", False]
+            self.use_new_coordinator = context.globals.get("use_new_coordinator", False)
 
         if num_nodes < 1:
             raise Exception("Must set a positive number of nodes: %i" % num_nodes)
