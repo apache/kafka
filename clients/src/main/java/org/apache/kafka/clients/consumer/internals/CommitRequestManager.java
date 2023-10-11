@@ -51,6 +51,7 @@ import java.util.stream.Collectors;
 public class CommitRequestManager implements RequestManager {
     // TODO: current in ConsumerConfig but inaccessible in the internal package.
     private static final String THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED = "internal.throw.on.fetch.stable.offset.unsupported";
+    
     // TODO: We will need to refactor the subscriptionState
     private final SubscriptionState subscriptions;
     private final LogContext logContext;
@@ -212,15 +213,21 @@ public class CommitRequestManager implements RequestManager {
                 requestTopicDataMap.put(topicPartition.topic(), topic);
             }
 
-            OffsetCommitRequest.Builder builder = new OffsetCommitRequest.Builder(
-                    new OffsetCommitRequestData()
-                            .setGroupId(groupId)
-                            .setGenerationIdOrMemberEpoch(memberEpoch)
-                            .setMemberId(memberId)
-                            .setGroupInstanceId(groupInstanceId)
-                            .setTopics(new ArrayList<>(requestTopicDataMap.values())));
+            OffsetCommitRequestData data = new OffsetCommitRequestData()
+                    .setGroupId(groupId)
+                    .setGenerationIdOrMemberEpoch(membershipManager.memberEpoch())
+                    .setTopics(new ArrayList<>(requestTopicDataMap.values()));
+
+            if (membershipManager.memberId() != null) {
+                data.setMemberId(membershipManager.memberId());
+            }
+
+            if (membershipManager.groupInstanceId().isPresent()) {
+                data.setGroupInstanceId(membershipManager.groupInstanceId().get());
+            }
+
             return new NetworkClientDelegate.UnsentRequest(
-                    builder,
+                    new OffsetCommitRequest.Builder(data),
                     coordinatorRequestManager.coordinator(),
                     (response, throwable) -> {
                         if (throwable == null) {
