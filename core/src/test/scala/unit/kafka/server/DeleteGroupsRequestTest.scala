@@ -21,7 +21,6 @@ import kafka.test.annotation.{ClusterConfigProperty, ClusterTest, ClusterTestDef
 import kafka.test.junit.ClusterTestExtensions
 import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroup
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.coordinator.group.consumer.ConsumerGroup.ConsumerGroupState
 import org.apache.kafka.coordinator.group.generic.GenericGroupState
 import org.junit.jupiter.api.Assertions.{assertEquals, fail}
 import org.junit.jupiter.api.{Tag, Timeout}
@@ -124,7 +123,7 @@ class DeleteGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinator
       assertEquals(
         List(new DescribedGroup()
           .setGroupId("grp")
-          .setGroupState(if (useNewProtocol) ConsumerGroupState.DEAD.toString else GenericGroupState.DEAD.toString)
+          .setGroupState(GenericGroupState.DEAD.toString) // Now we don't have ConsumerGroupDescribe, so it only returns GenericGroupState.DEAD
         ),
         describeGroups(
           groupIds = List("grp"),
