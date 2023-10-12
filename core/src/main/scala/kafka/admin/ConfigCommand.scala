@@ -297,18 +297,27 @@ object ConfigCommand extends Logging {
         "This configuration will be ignored if the version is newer than the inter.broker.protocol.version specified in the broker or " +
         "if the inter.broker.protocol.version is 3.0 or newer. This configuration is deprecated and it will be removed in Apache Kafka 4.0.")
     }
+    validatePropsKey(props)
     props
   }
 
   private[admin] def parseConfigsToBeDeleted(opts: ConfigCommandOptions): Seq[String] = {
     if (opts.options.has(opts.deleteConfig)) {
       val configsToBeDeleted = opts.options.valuesOf(opts.deleteConfig).asScala.map(_.trim())
-      val propsToBeDeleted = new Properties
-      configsToBeDeleted.foreach(propsToBeDeleted.setProperty(_, ""))
       configsToBeDeleted
     }
     else
       Seq.empty
+  }
+
+  private def validatePropsKey(props: Properties): Unit = {
+    props.keySet.forEach { propsKey =>
+      if (!propsKey.toString.matches("[a-zA-Z0-9._-]*")) {
+        throw new IllegalArgumentException(
+          s"Invalid character found for config key: ${propsKey}"
+        )
+      }
+    }
   }
 
   private def processCommand(opts: ConfigCommandOptions): Unit = {

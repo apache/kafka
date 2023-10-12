@@ -22,8 +22,6 @@ import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ConsumerGroupHeartbeatResponse;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
 
 import java.util.Arrays;
 
@@ -84,9 +82,8 @@ public class MembershipManagerImplTest {
         assertEquals(MemberState.RECONCILING, membershipManager.state());
     }
 
-    @ParameterizedTest
-    @EnumSource(Errors.class)
-    public void testMemberIdAndEpochResetOnErrors(Errors error) {
+    @Test
+    public void testMemberIdAndEpochResetOnFencedMembers() {
         MembershipManagerImpl membershipManager = new MembershipManagerImpl(GROUP_ID);
         ConsumerGroupHeartbeatResponse heartbeatResponse =
                 createConsumerGroupHeartbeatResponse(null);
@@ -95,23 +92,23 @@ public class MembershipManagerImplTest {
         assertEquals(MEMBER_ID, membershipManager.memberId());
         assertEquals(MEMBER_EPOCH, membershipManager.memberEpoch());
 
-        if (error == Errors.UNKNOWN_MEMBER_ID || error == Errors.FENCED_MEMBER_EPOCH) {
-            // Should reset member epoch and keep member id
-            ConsumerGroupHeartbeatResponse heartbeatResponseWithMemberIdError =
-                    createConsumerGroupHeartbeatResponseWithError(Errors.FENCED_MEMBER_EPOCH);
-            membershipManager.updateState(heartbeatResponseWithMemberIdError.data());
+        membershipManager.transitionToFenced();
+        assertFalse(membershipManager.memberId().isEmpty());
+        assertEquals(0, membershipManager.memberEpoch());
+    }
 
-            assertFalse(membershipManager.memberId().isEmpty());
-            assertEquals(0, membershipManager.memberEpoch());
-        } else {
-            // Should not reset member id or epoch
-            ConsumerGroupHeartbeatResponse heartbeatResponseWithError =
-                    createConsumerGroupHeartbeatResponseWithError(error);
-            membershipManager.updateState(heartbeatResponseWithError.data());
+    @Test
+    public void testTransitionToFailure() {
+        MembershipManagerImpl membershipManager = new MembershipManagerImpl(GROUP_ID);
+        ConsumerGroupHeartbeatResponse heartbeatResponse =
+                createConsumerGroupHeartbeatResponse(null);
+        membershipManager.updateState(heartbeatResponse.data());
+        assertEquals(MemberState.STABLE, membershipManager.state());
+        assertEquals(MEMBER_ID, membershipManager.memberId());
+        assertEquals(MEMBER_EPOCH, membershipManager.memberEpoch());
 
-            assertFalse(membershipManager.memberId().isEmpty());
-            assertNotEquals(0, membershipManager.memberEpoch());
-        }
+        membershipManager.transitionToFailed();
+        assertEquals(MemberState.FAILED, membershipManager.state());
     }
 
     @Test
