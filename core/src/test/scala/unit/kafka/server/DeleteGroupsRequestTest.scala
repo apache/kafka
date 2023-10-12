@@ -63,6 +63,9 @@ class DeleteGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinator
     testDeleteGroups(false)
   }
 
+  /**
+   * Testing delete group on empty and non-empty groups.
+   */
   private def testDeleteGroups(useNewProtocol: Boolean): Unit = {
     if (useNewProtocol && !isNewGroupCoordinatorEnabled) {
       fail("Cannot use the new protocol with the old group coordinator.")
@@ -80,31 +83,17 @@ class DeleteGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinator
 
     // Join the consumer group. Note that we don't heartbeat here so we must use
     // a session long enough for the duration of the test.
-    val (memberIdNonEmptyGroup, memberEpochNonEmptyGroup) = joinConsumerGroup(
+    joinConsumerGroup(
       groupId = "grp-non-empty",
       useNewProtocol = useNewProtocol
     )
-
-    // Commit offsets.
-    for (partitionId <- 0 to 2) {
-      commitOffset(
-        groupId = "grp-non-empty",
-        memberId = memberIdNonEmptyGroup,
-        memberEpoch = memberEpochNonEmptyGroup,
-        topic = "foo",
-        partition = partitionId,
-        offset = 100L + partitionId,
-        expectedError = Errors.NONE,
-        version = ApiKeys.OFFSET_COMMIT.latestVersion(isUnstableApiEnabled)
-      )
-    }
 
     // Start from version 1 because version 0 goes to ZK.
     for (version <- ApiKeys.DELETE_GROUPS.oldestVersion() to ApiKeys.DELETE_GROUPS.latestVersion(isUnstableApiEnabled)) {
 
       // Join the consumer group. Note that we don't heartbeat here so we must use
       // a session long enough for the duration of the test.
-      val (memberId, _) = joinConsumerGroup(
+      val (memberId, memberEpoch) = joinConsumerGroup(
         groupId = "grp",
         useNewProtocol = useNewProtocol
       )
@@ -120,16 +109,30 @@ class DeleteGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinator
         version = version.toShort
       )
 
-      assertEquals(
-        List(new DescribedGroup()
-          .setGroupId("grp")
-          .setGroupState(GenericGroupState.DEAD.toString) // Now we don't have ConsumerGroupDescribe, so it only returns GenericGroupState.DEAD
-        ),
-        describeGroups(
-          groupIds = List("grp"),
-          version = version.toShort
+      if (useNewProtocol) {
+        commitOffset(
+          groupId = "grp",
+          memberId = memberId,
+          memberEpoch = memberEpoch,
+          topic = "foo",
+          partition = 0,
+          offset = 100L,
+          expectedError = Errors.GROUP_ID_NOT_FOUND,
+          version = ApiKeys.OFFSET_COMMIT.latestVersion(isUnstableApiEnabled)
         )
-      )
+      } else {
+        assertEquals(
+          List(new DescribedGroup()
+            .setGroupId("grp")
+            .setGroupState(GenericGroupState.DEAD.toString)
+          ),
+          describeGroups(
+            groupIds = List("grp"),
+            version = version.toShort
+          )
+        )
+      }
     }
   }
+
 }
