@@ -677,12 +677,6 @@ class KafkaApis(val requestChannel: RequestChannel,
     else {
       val internalTopicsAllowed = request.header.clientId == AdminUtils.ADMIN_CLIENT_ID
 
-      val transactionStatePartition =
-        if (produceRequest.transactionalId() == null)
-          None
-        else
-          Some(txnCoordinator.partitionFor(produceRequest.transactionalId()))
-
       // call the replica manager to append messages to the replicas
       replicaManager.appendRecords(
         timeout = produceRequest.timeout.toLong,
@@ -693,8 +687,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         requestLocal = requestLocal,
         responseCallback = sendResponseCallback,
         recordConversionStatsCallback = processingStatsCallback,
-        transactionalId = produceRequest.transactionalId(),
-        transactionStatePartition = transactionStatePartition)
+        transactionalId = produceRequest.transactionalId()
+      )
 
       // if the request is put into the purgatory, it will have a held reference and hence cannot be garbage collected;
       // hence we clear its data here in order to let GC reclaim its memory since it is already appended to log
@@ -2932,33 +2926,9 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleDescribeConfigsRequest(request: RequestChannel.Request): Unit = {
-    val describeConfigsRequest = request.body[DescribeConfigsRequest]
-    val (authorizedResources, unauthorizedResources) = describeConfigsRequest.data.resources.asScala.partition { resource =>
-      ConfigResource.Type.forId(resource.resourceType) match {
-        case ConfigResource.Type.BROKER | ConfigResource.Type.BROKER_LOGGER =>
-          authHelper.authorize(request.context, DESCRIBE_CONFIGS, CLUSTER, CLUSTER_NAME)
-        case ConfigResource.Type.TOPIC =>
-          authHelper.authorize(request.context, DESCRIBE_CONFIGS, TOPIC, resource.resourceName)
-        case rt => throw new InvalidRequestException(s"Unexpected resource type $rt for resource ${resource.resourceName}")
-      }
-    }
-    val authorizedConfigs = configHelper.describeConfigs(authorizedResources.toList, describeConfigsRequest.data.includeSynonyms, describeConfigsRequest.data.includeDocumentation)
-    val unauthorizedConfigs = unauthorizedResources.map { resource =>
-      val error = ConfigResource.Type.forId(resource.resourceType) match {
-        case ConfigResource.Type.BROKER | ConfigResource.Type.BROKER_LOGGER => Errors.CLUSTER_AUTHORIZATION_FAILED
-        case ConfigResource.Type.TOPIC => Errors.TOPIC_AUTHORIZATION_FAILED
-        case rt => throw new InvalidRequestException(s"Unexpected resource type $rt for resource ${resource.resourceName}")
-      }
-      new DescribeConfigsResponseData.DescribeConfigsResult().setErrorCode(error.code)
-        .setErrorMessage(error.message)
-        .setConfigs(Collections.emptyList[DescribeConfigsResponseData.DescribeConfigsResourceResult])
-        .setResourceName(resource.resourceName)
-        .setResourceType(resource.resourceType)
-    }
-
+    val responseData = configHelper.handleDescribeConfigsRequest(request, authHelper)
     requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-      new DescribeConfigsResponse(new DescribeConfigsResponseData().setThrottleTimeMs(requestThrottleMs)
-        .setResults((authorizedConfigs ++ unauthorizedConfigs).asJava)))
+      new DescribeConfigsResponse(responseData.setThrottleTimeMs(requestThrottleMs)))
   }
 
   def handleAlterReplicaLogDirsRequest(request: RequestChannel.Request): Unit = {

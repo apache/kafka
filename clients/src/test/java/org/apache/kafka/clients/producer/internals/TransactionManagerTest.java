@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.producer.internals;
 
 import org.apache.kafka.clients.ApiVersions;
+import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.consumer.CommitFailedException;
@@ -99,6 +100,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
+import org.mockito.Mockito;
 
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
@@ -2474,10 +2476,11 @@ public class TransactionManagerTest {
 
         Cluster cluster = new Cluster(null, Arrays.asList(node1, node2), Arrays.asList(part1, part2),
                 Collections.emptySet(), Collections.emptySet());
+        Metadata metadataMock = setupMetadata(cluster);
         Set<Node> nodes = new HashSet<>();
         nodes.add(node1);
         nodes.add(node2);
-        Map<Integer, List<ProducerBatch>> drainedBatches = accumulator.drain(cluster, nodes, Integer.MAX_VALUE,
+        Map<Integer, List<ProducerBatch>> drainedBatches = accumulator.drain(metadataMock, nodes, Integer.MAX_VALUE,
                 time.milliseconds());
 
         // We shouldn't drain batches which haven't been added to the transaction yet.
@@ -2506,8 +2509,9 @@ public class TransactionManagerTest {
         PartitionInfo part1 = new PartitionInfo(topic, 1, node1, null, null);
         Cluster cluster = new Cluster(null, Collections.singletonList(node1), Collections.singletonList(part1),
                 Collections.emptySet(), Collections.emptySet());
+        Metadata metadataMock = setupMetadata(cluster);
         appendToAccumulator(tp1);
-        Map<Integer, List<ProducerBatch>> drainedBatches = accumulator.drain(cluster, Collections.singleton(node1),
+        Map<Integer, List<ProducerBatch>> drainedBatches = accumulator.drain(metadataMock, Collections.singleton(node1),
                 Integer.MAX_VALUE,
                 time.milliseconds());
 
@@ -2529,9 +2533,11 @@ public class TransactionManagerTest {
 
         Cluster cluster = new Cluster(null, Collections.singletonList(node1), Collections.singletonList(part1),
                 Collections.emptySet(), Collections.emptySet());
+        Metadata metadataMock = setupMetadata(cluster);
+
         Set<Node> nodes = new HashSet<>();
         nodes.add(node1);
-        Map<Integer, List<ProducerBatch>> drainedBatches = accumulator.drain(cluster, nodes, Integer.MAX_VALUE,
+        Map<Integer, List<ProducerBatch>> drainedBatches = accumulator.drain(metadataMock, nodes, Integer.MAX_VALUE,
                 time.milliseconds());
 
         // We shouldn't drain batches which haven't been added to the transaction yet.
@@ -3831,6 +3837,18 @@ public class TransactionManagerTest {
 
     private void runUntil(Supplier<Boolean> condition) {
         ProducerTestUtils.runUntil(sender, condition);
+    }
+
+    private Metadata setupMetadata(Cluster cluster) {
+        Metadata metadataMock = Mockito.mock(Metadata.class);
+        Mockito.when(metadataMock.fetch()).thenReturn(cluster);
+        for (String topic: cluster.topics()) {
+            for (PartitionInfo partInfo: cluster.partitionsForTopic(topic)) {
+                TopicPartition tp = new TopicPartition(partInfo.topic(), partInfo.partition());
+                Mockito.when(metadataMock.currentLeader(tp)).thenReturn(new Metadata.LeaderAndEpoch(Optional.of(partInfo.leader()), Optional.of(999 /* dummy value */)));
+            }
+        }
+        return metadataMock;
     }
 
 }

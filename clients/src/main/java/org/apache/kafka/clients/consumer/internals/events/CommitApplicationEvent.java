@@ -29,6 +29,7 @@ public class CommitApplicationEvent extends CompletableApplicationEvent<Void> {
     public CommitApplicationEvent(final Map<TopicPartition, OffsetAndMetadata> offsets) {
         super(Type.COMMIT);
         this.offsets = Collections.unmodifiableMap(offsets);
+
         for (OffsetAndMetadata offsetAndMetadata : offsets.values()) {
             if (offsetAndMetadata.offset() < 0) {
                 throw new IllegalArgumentException("Invalid offset: " + offsetAndMetadata.offset());

@@ -97,7 +97,7 @@ public class MetadataBatchLoader {
      *
      * @param image     Metadata image to reset this batch loader's state to.
      */
-    public void resetToImage(MetadataImage image) {
+    public final void resetToImage(MetadataImage image) {
         this.image = image;
         this.hasSeenRecord = true;
         this.delta = new MetadataDelta.Builder().setImage(image).build();
