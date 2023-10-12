@@ -566,18 +566,14 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   private def getCurrentLeader(tp: TopicPartition): LeaderNode = {
     val partitionInfoOrError = replicaManager.getPartitionOrError(tp)
-    var leaderId = -1
-    var leaderEpoch = -1
-    partitionInfoOrError match {
+    val (leaderId, leaderEpoch) = partitionInfoOrError match {
       case Right(x) =>
-          leaderId = x.leaderReplicaIdOpt.getOrElse(-1)
-          leaderEpoch = x.getLeaderEpoch
+        (x.leaderReplicaIdOpt.getOrElse(-1), x.getLeaderEpoch)
       case Left(x) =>
         debug(s"Unable to retrieve local leaderId and Epoch with error $x, falling back to metadata cache")
-        val partitionInfo = metadataCache.getPartitionInfo(tp.topic, tp.partition)
-        partitionInfo.foreach { info =>
-            leaderId = info.leader()
-            leaderEpoch = info.leaderEpoch()
+        metadataCache.getPartitionInfo(tp.topic, tp.partition) match {
+          case Some(pinfo) => (pinfo.leader(), pinfo.leaderEpoch())
+          case None => (-1, -1)
         }
     }
     val leaderNode: Node = metadataCache.getAliveBrokerNode(leaderId, config.interBrokerListenerName).getOrElse({
