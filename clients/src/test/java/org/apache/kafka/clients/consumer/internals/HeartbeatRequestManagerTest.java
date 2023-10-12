@@ -66,7 +66,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class HeartbeatRequestManagerTest {
-
     private static final int HEARTBEAT_INTERVAL_MS = 1000;
     private static final long RETRY_BACKOFF_MAX_MS = 3000;
     private static final long RETRY_BACKOFF_MS = 100;
@@ -119,6 +118,7 @@ public class HeartbeatRequestManagerTest {
             RETRY_BACKOFF_MS,
             RETRY_BACKOFF_MAX_MS,
             0);
+        membershipManager.tryJoin();
         heartbeatRequestManager = createManager();
         NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(1, result.unsentRequests.size());
@@ -242,6 +242,7 @@ public class HeartbeatRequestManagerTest {
             RETRY_BACKOFF_MS,
             RETRY_BACKOFF_MAX_MS,
             0);
+        membershipManager.tryJoin();
         heartbeatRequestManager = createManager();
         // Update membershipManager's memberId and memberEpoch
         ConsumerGroupHeartbeatResponse result =
@@ -280,6 +281,7 @@ public class HeartbeatRequestManagerTest {
             RETRY_BACKOFF_MAX_MS,
             0);
         heartbeatRequestManager = createManager();
+        membershipManager.tryJoin();
 
         // Sending first heartbeat w/o assignment to set the state to STABLE
         ConsumerGroupHeartbeatResponse rs1 = new ConsumerGroupHeartbeatResponse(new ConsumerGroupHeartbeatResponseData()
