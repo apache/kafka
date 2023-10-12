@@ -137,10 +137,13 @@ public class RemoteIndexCache implements Closeable {
     public void resizeCacheSize(long remoteLogIndexFileCacheSize) {
         lock.writeLock().lock();
         try {
-            // When resizing the cache, we always start with an empty cache.
-            // Resizing the cache is not a high-frequency operation, and there is no need to fill the data in the old
+            // When resizing the cache, we always start with an empty cache. There are two main reasons:
+            // 1. Resizing the cache is not a high-frequency operation, and there is no need to fill the data in the old
             // cache to the new cache in time when resizing inside.
-            removeAll(internalCache.asMap().keySet());
+            // 2. Since the eviction of the caffeine cache is cleared asynchronously, it is possible that after the entry
+            // in the old cache is filled in the new cache, the old cache will clear the entry, and the data in the two caches
+            // will be inconsistent.
+            internalCache.invalidateAll();
             log.info("Invalidated all entries in the cache and triggered the cleaning of all index files in the cache dir.");
             internalCache = initEmptyCache(remoteLogIndexFileCacheSize);
         } finally {
@@ -154,8 +157,7 @@ public class RemoteIndexCache implements Closeable {
                 .weigher((Uuid key, Entry entry) -> {
                     return (int) entry.entrySizeBytes;
                 })
-                // evictionListener is invoked when either the entry is invalidated (means manual removal by the caller) or
-                // evicted (means removal due to the policy)
+                // evictionListener is invoked when RemovalCause.wasEvicted() is true
                 .evictionListener((Uuid key, Entry entry, RemovalCause cause) -> {
                     // Mark the entries for cleanup and add them to the queue to be garbage collected later by the background thread.
                     if (entry != null) {

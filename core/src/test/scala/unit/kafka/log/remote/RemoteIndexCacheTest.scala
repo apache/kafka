@@ -608,6 +608,8 @@ class RemoteIndexCacheTest {
 
     assertCacheSize(1)
 
+    var entry: RemoteIndexCache.Entry = null
+
     val latchForCacheRead = new CountDownLatch(1)
     val latchForCacheRemove = new CountDownLatch(1)
     val latchForTestWait = new CountDownLatch(1)
@@ -630,7 +632,7 @@ class RemoteIndexCacheTest {
     val readCache = (() => {
       // Wait for signal to start CacheRead
       latchForCacheRead.await()
-      cache.getIndexEntry(rlsMetadata)
+      entry = cache.getIndexEntry(rlsMetadata)
       // Signal the CacheRemove to start renaming the files
       latchForCacheRemove.countDown()
     }): Runnable
@@ -642,7 +644,7 @@ class RemoteIndexCacheTest {
 
       // Wait for signal to complete the test
       latchForTestWait.await()
-      val entry = cache.getIndexEntry(rlsMetadata)
+      assertCacheSize(1)
       assertTrue(Files.exists(entry.offsetIndex().file().toPath))
     } finally {
       executor.shutdownNow()
