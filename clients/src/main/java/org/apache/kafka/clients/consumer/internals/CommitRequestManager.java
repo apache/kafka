@@ -246,21 +246,18 @@ public class CommitRequestManager implements RequestManager {
 
     private class OffsetFetchRequestState extends RequestState {
         public final Set<TopicPartition> requestedPartitions;
-        public final int memberEpoch;
         public CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future;
 
         public OffsetFetchRequestState(final Set<TopicPartition> partitions,
-                                       final int memberEpoch,
                                        final long retryBackoffMs,
                                        final long retryBackoffMaxMs) {
             super(logContext, CommitRequestManager.class.getSimpleName(), retryBackoffMs, retryBackoffMaxMs);
             this.requestedPartitions = partitions;
-            this.memberEpoch = memberEpoch;
             this.future = new CompletableFuture<>();
         }
 
         public boolean sameRequest(final OffsetFetchRequestState request) {
-            return (memberEpoch == request.memberEpoch) && requestedPartitions.equals(request.requestedPartitions);
+            return requestedPartitions.equals(request.requestedPartitions);
         }
 
         public NetworkClientDelegate.UnsentRequest toUnsentRequest() {
@@ -380,7 +377,6 @@ public class CommitRequestManager implements RequestManager {
         public String toString() {
             return "OffsetFetchRequestState{" +
                     "requestedPartitions=" + requestedPartitions +
-                    ", memberEpoch=" + memberEpoch +
                     ", future=" + future +
                     ", " + toStringBase() +
                     '}';
@@ -451,7 +447,6 @@ public class CommitRequestManager implements RequestManager {
         private CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> addOffsetFetchRequest(final Set<TopicPartition> partitions) {
             OffsetFetchRequestState request = new OffsetFetchRequestState(
                     partitions,
-                    membershipManager.memberEpoch(),
                     retryBackoffMs,
                     retryBackoffMaxMs);
             return addOffsetFetchRequest(request);
