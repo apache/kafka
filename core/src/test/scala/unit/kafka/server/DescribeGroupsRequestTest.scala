@@ -77,7 +77,6 @@ class DescribeGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinat
       completeRebalance = false
     )
 
-    // Start from version 1 because version 0 goes to ZK.
     for (version <- ApiKeys.DESCRIBE_GROUPS.oldestVersion() to ApiKeys.DESCRIBE_GROUPS.latestVersion(isUnstableApiEnabled)) {
       assertEquals(
         List(

@@ -88,7 +88,6 @@ class DeleteGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinator
       useNewProtocol = useNewProtocol
     )
 
-    // Start from version 1 because version 0 goes to ZK.
     for (version <- ApiKeys.DELETE_GROUPS.oldestVersion() to ApiKeys.DELETE_GROUPS.latestVersion(isUnstableApiEnabled)) {
 
       // Join the consumer group. Note that we don't heartbeat here so we must use
