@@ -117,7 +117,9 @@ public class GroupCoordinatorServiceTest {
             3000,
             5 * 60 * 1000,
             120,
-            10 * 5 * 1000
+            10 * 5 * 1000,
+            600000L,
+            24 * 60 * 1000L
         );
     }
 
