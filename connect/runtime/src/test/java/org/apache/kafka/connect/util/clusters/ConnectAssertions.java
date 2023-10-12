@@ -41,9 +41,9 @@ import static org.apache.kafka.test.TestUtils.waitForCondition;
 /**
  * A set of common assertions that can be applied to a Connect cluster during integration testing
  */
-public class EmbeddedConnectClusterAssertions {
+public class ConnectAssertions {
 
-    private static final Logger log = LoggerFactory.getLogger(EmbeddedConnectClusterAssertions.class);
+    private static final Logger log = LoggerFactory.getLogger(ConnectAssertions.class);
     public static final long WORKER_SETUP_DURATION_MS = TimeUnit.MINUTES.toMillis(5);
     public static final long VALIDATION_DURATION_MS = TimeUnit.SECONDS.toMillis(30);
     public static final long CONNECTOR_SETUP_DURATION_MS = TimeUnit.MINUTES.toMillis(2);
@@ -52,9 +52,9 @@ public class EmbeddedConnectClusterAssertions {
     public static final long CONNECTOR_SHUTDOWN_DURATION_MS = TimeUnit.MINUTES.toMillis(1);
     private static final long CONNECT_INTERNAL_TOPIC_UPDATES_DURATION_MS = TimeUnit.SECONDS.toMillis(60);
 
-    private final EmbeddedConnectCluster connect;
+    private final EmbeddedConnect connect;
 
-    EmbeddedConnectClusterAssertions(EmbeddedConnectCluster connect) {
+    ConnectAssertions(EmbeddedConnect connect) {
         this.connect = connect;
     }
 
@@ -274,7 +274,7 @@ public class EmbeddedConnectClusterAssertions {
     }
 
     /**
-     * Confirm that the requested number of errors are produced by {@link EmbeddedConnectCluster#validateConnectorConfig}.
+     * Confirm that the requested number of errors are produced by {@link EmbeddedConnect#validateConnectorConfig}.
      *
      * @param connectorClass the class of the connector to validate
      * @param connConfig     the intended configuration
