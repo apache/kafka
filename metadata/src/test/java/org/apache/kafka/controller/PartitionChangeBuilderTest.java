@@ -428,14 +428,13 @@ public class PartitionChangeBuilderTest {
     @ParameterizedTest
     @MethodSource("partitionChangeRecordVersions")
     public void testUncleanLeaderElection(short version) {
-        PartitionChangeRecord record = new PartitionChangeRecord()
-            .setTopicId(FOO_ID)
-            .setPartitionId(0)
-            .setIsr(Arrays.asList(2))
-            .setLeader(2)
-            .setLeaderRecoveryState(LeaderRecoveryState.RECOVERING.value());
         ApiMessageAndVersion expectedRecord = new ApiMessageAndVersion(
-            record,
+            new PartitionChangeRecord()
+                .setTopicId(FOO_ID)
+                .setPartitionId(0)
+                .setIsr(Arrays.asList(2))
+                .setLeader(2)
+                .setLeaderRecoveryState(LeaderRecoveryState.RECOVERING.value()),
             version
         );
         assertEquals(
@@ -444,15 +443,13 @@ public class PartitionChangeBuilderTest {
                 .setTargetIsrWithBrokerStates(AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(Arrays.asList(3))).build()
         );
 
-        record = new PartitionChangeRecord()
-            .setTopicId(OFFLINE_ID)
-            .setPartitionId(0)
-            .setIsr(Arrays.asList(1))
-            .setLeader(1)
-            .setLeaderRecoveryState(LeaderRecoveryState.RECOVERING.value());
-
         expectedRecord = new ApiMessageAndVersion(
-            record,
+            new PartitionChangeRecord()
+                .setTopicId(OFFLINE_ID)
+                .setPartitionId(0)
+                .setIsr(Arrays.asList(1))
+                .setLeader(1)
+                .setLeaderRecoveryState(LeaderRecoveryState.RECOVERING.value()),
             version
         );
         assertEquals(
@@ -719,6 +716,7 @@ public class PartitionChangeBuilderTest {
             .setPartitionEpoch(200)
             .build();
         Uuid topicId = Uuid.fromString("FbrrdcfiR-KC2CPSTHaJrg");
+        // Min ISR is 3.
         PartitionChangeBuilder builder = new PartitionChangeBuilder(partition, topicId, 0, r -> r != 3, metadataVersionForPartitionChangeRecordVersion(version), 3)
             .setElection(Election.PREFERRED)
             .setEligibleLeaderReplicasEnabled(isElrEnabled(version));
@@ -731,7 +729,7 @@ public class PartitionChangeBuilderTest {
             .setLeader(-2)
             .setLeaderRecoveryState(LeaderRecoveryState.NO_CHANGE);
 
-        // Both versions will set the elr and lastKnownElr as empty list instead of null.
+        // Both versions will set the elr and lastKnownElr as empty list.
         record.setEligibleLeaderReplicas(Collections.emptyList())
             .setLastKnownELR(Collections.emptyList());
         ApiMessageAndVersion expectedRecord = new ApiMessageAndVersion(
@@ -758,6 +756,7 @@ public class PartitionChangeBuilderTest {
             .setPartitionEpoch(200)
             .build();
         Uuid topicId = Uuid.fromString("FbrrdcfiR-KC2CPSTHaJrg");
+        // Min ISR is 3.
         PartitionChangeBuilder builder = new PartitionChangeBuilder(partition, topicId, 0, r -> r != 3, metadataVersionForPartitionChangeRecordVersion(version), 3)
             .setElection(Election.PREFERRED)
             .setEligibleLeaderReplicasEnabled(isElrEnabled(version));
@@ -803,6 +802,7 @@ public class PartitionChangeBuilderTest {
                 .setPartitionEpoch(200)
                 .build();
         Uuid topicId = Uuid.fromString("FbrrdcfiR-KC2CPSTHaJrg");
+        // Min ISR is 3.
         PartitionChangeBuilder builder = new PartitionChangeBuilder(partition, topicId, 0, r -> r != 3, metadataVersionForPartitionChangeRecordVersion(version), 3)
             .setElection(Election.PREFERRED)
             .setEligibleLeaderReplicasEnabled(isElrEnabled(version));
@@ -815,8 +815,8 @@ public class PartitionChangeBuilderTest {
                 .setLeader(-2)
                 .setLeaderRecoveryState(LeaderRecoveryState.NO_CHANGE);
         if (version > 0) {
-            // No change is expected to last known ELR, so it will be null.
-            record.setEligibleLeaderReplicas(Arrays.asList(2)).setLastKnownELR(Arrays.asList(3));
+            record.setEligibleLeaderReplicas(Arrays.asList(2))
+                .setLastKnownELR(Arrays.asList(3));
         } else {
             record.setEligibleLeaderReplicas(Collections.emptyList());
         }
