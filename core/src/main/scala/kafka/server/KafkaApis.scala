@@ -22,7 +22,7 @@ import kafka.controller.ReplicaAssignment
 import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinator}
 import kafka.network.RequestChannel
 import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
-import kafka.server.metadata.ConfigRepository
+import kafka.server.metadata.{ConfigRepository, KRaftMetadataCache}
 import kafka.utils.Implicits._
 import kafka.utils.{CoreUtils, Logging}
 import org.apache.kafka.admin.AdminUtils
@@ -43,6 +43,7 @@ import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
 import org.apache.kafka.common.message.CreateTopicsResponseData.{CreatableTopicResult, CreatableTopicResultCollection}
 import org.apache.kafka.common.message.DeleteRecordsResponseData.{DeleteRecordsPartitionResult, DeleteRecordsTopicResult}
 import org.apache.kafka.common.message.DeleteTopicsResponseData.{DeletableTopicResult, DeletableTopicResultCollection}
+import org.apache.kafka.common.message.DescribeTopicsResponseData.{DescribeTopicsResponsePartition, DescribeTopicsResponseTopic}
 import org.apache.kafka.common.message.ElectLeadersResponseData.{PartitionResult, ReplicaElectionResult}
 import org.apache.kafka.common.message.ListClientMetricsResourcesResponseData.ClientMetricsResource
 import org.apache.kafka.common.message.ListOffsetsRequestData.ListOffsetsPartition
@@ -120,6 +121,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   val requestHelper = new RequestHandlerHelper(requestChannel, quotas, time)
   val aclApis = new AclApis(authHelper, authorizer, requestHelper, "broker", config)
   val configManager = new ConfigAdminManager(brokerId, config, configRepository)
+  val partitionRequestLimit = 2000
 
   def close(): Unit = {
     aclApis.close()
@@ -247,6 +249,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.DESCRIBE_QUORUM => forwardToControllerOrFail(request)
         case ApiKeys.CONSUMER_GROUP_HEARTBEAT => handleConsumerGroupHeartbeat(request).exceptionally(handleError)
         case ApiKeys.CONSUMER_GROUP_DESCRIBE => handleConsumerGroupDescribe(request).exceptionally(handleError)
+        case ApiKeys.DESCRIBE_TOPICS => handleDescribeTopicsRequest(request)
         case ApiKeys.GET_TELEMETRY_SUBSCRIPTIONS => handleGetTelemetrySubscriptionsRequest(request)
         case ApiKeys.PUSH_TELEMETRY => handlePushTelemetryRequest(request)
         case ApiKeys.LIST_CLIENT_METRICS_RESOURCES => handleListClientMetricsResources(request)
@@ -1237,6 +1240,19 @@ class KafkaApis(val requestChannel: RequestChannel,
       .setPartitions(partitionData)
   }
 
+  private def describeTopicsResponseTopic(error: Errors,
+                                          topic: String,
+                                          topicId: Uuid,
+                                          isInternal: Boolean,
+                                          partitionData: util.List[DescribeTopicsResponsePartition]): DescribeTopicsResponseTopic = {
+    new DescribeTopicsResponseTopic()
+      .setErrorCode(error.code)
+      .setName(topic)
+      .setTopicId(topicId)
+      .setIsInternal(isInternal)
+      .setPartitions(partitionData)
+  }
+
   private def getTopicMetadata(
     request: RequestChannel.Request,
     fetchAllTopics: Boolean,
@@ -1277,6 +1293,37 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
 
       topicResponses ++ nonExistingTopicResponses
+    }
+  }
+
+  private def getTopicMetadataForDescribeTopicResponse(topics: Map[String, Int], listenerName: ListenerName): Seq[DescribeTopicsResponseTopic] = {
+    metadataCache match {
+      case cache: KRaftMetadataCache => {
+        val topicResponses = cache.getTopicMetadataForDescribeTopicResponse(
+          topics.map(kvp => (kvp._1, kvp._2)).toSet,
+          listenerName,
+          partitionRequestLimit)
+        val nonExistingTopics = topics.keySet.diff(topicResponses.map(_.name).toSet)
+        val nonExistingTopicResponses =
+          nonExistingTopics.map { topic =>
+            val error = try {
+              Topic.validate(topic)
+              Errors.UNKNOWN_TOPIC_OR_PARTITION
+            } catch {
+              case _: InvalidTopicException =>
+                Errors.INVALID_TOPIC_EXCEPTION
+            }
+
+            new DescribeTopicsResponseTopic()
+              .setErrorCode(error.code())
+              .setName(topic)
+              .setTopicId(cache.getTopicId(topic))
+              .setIsInternal(Topic.isInternal(topic))
+              .setPartitions(util.Collections.emptyList)
+          }
+        topicResponses ++ nonExistingTopicResponses
+      }
+      case _ => List()
     }
   }
 
@@ -1407,6 +1454,60 @@ class KafkaApis(val requestChannel: RequestChannel,
          completeTopicMetadata.asJava,
          clusterAuthorizedOperations
       ))
+  }
+
+  def handleDescribeTopicsRequest(request: RequestChannel.Request): Unit = {
+    val describeTopicsRequest = request.body[DescribeTopicsRequest]
+
+    val topics = scala.collection.mutable.Map[String, Int]()
+    describeTopicsRequest.data.topics.forEach { topic =>
+      if (topic.name == null || topic.firstPartitionId() < 0) {
+        throw new InvalidRequestException(s"Topic name and first partition id must be set.")
+      }
+      topics.put(topic.name(), topic.firstPartitionId())
+    }
+
+    val fetchAllTopics = topics.isEmpty
+    if (fetchAllTopics) {
+      metadataCache.getAllTopics().foreach(topic => topics.put(topic, 0))
+    }
+
+    val authorizedForDescribeTopics = authHelper.filterByAuthorized(request.context, DESCRIBE, TOPIC,
+      topics.keySet)(identity)
+    val (authorizedTopics, unauthorizedForDescribeTopics) = topics.keySet.partition(authorizedForDescribeTopics.contains)
+
+    // Do not disclose the existence of topics unauthorized for Describe, so we've not even checked if they exist or not
+    val unauthorizedForDescribeTopicMetadata = {
+      if (fetchAllTopics) {
+        Set.empty[DescribeTopicsResponseTopic]
+      } else {
+        // We should not return topicId when on unauthorized error, so we return zero uuid.
+        unauthorizedForDescribeTopics.map(topic =>
+          describeTopicsResponseTopic(Errors.TOPIC_AUTHORIZATION_FAILED, topic, Uuid.ZERO_UUID, false, util.Collections.emptyList()))
+      }
+    }
+
+    val targetTopics = authorizedTopics.map(topicName => (topicName, topics.get(topicName).get)).toMap
+
+    val topicMetadata = getTopicMetadataForDescribeTopicResponse(targetTopics, request.context.listenerName)
+
+    // get topic authorized operations
+    def setTopicAuthorizedOperations(topicMetadata: Seq[DescribeTopicsResponseTopic]): Unit = {
+      topicMetadata.foreach { topicData =>
+        topicData.setTopicAuthorizedOperations(authHelper.authorizedOperations(request, new Resource(ResourceType.TOPIC, topicData.name)))
+      }
+    }
+
+    setTopicAuthorizedOperations(topicMetadata)
+
+    val completeTopicMetadata = topicMetadata ++ unauthorizedForDescribeTopicMetadata
+
+    trace("Sending topic metadata %s for correlation id %d to client %s".format(completeTopicMetadata.mkString(","),
+      request.header.correlationId, request.header.clientId))
+
+    requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
+      DescribeTopicsResponse.prepareResponse(requestThrottleMs, completeTopicMetadata.asJava)
+    )
   }
 
   /**

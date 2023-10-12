@@ -251,6 +251,8 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
                 return ConsumerGroupHeartbeatResponse.parse(responseBuffer, version);
             case CONSUMER_GROUP_DESCRIBE:
                 return ConsumerGroupDescribeResponse.parse(responseBuffer, version);
+            case DESCRIBE_TOPICS:
+                return DescribeTopicsResponse.parse(responseBuffer, version);
             case CONTROLLER_REGISTRATION:
                 return ControllerRegistrationResponse.parse(responseBuffer, version);
             case GET_TELEMETRY_SUBSCRIPTIONS:

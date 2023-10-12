@@ -66,7 +66,7 @@ import org.apache.kafka.common.message.UpdateMetadataRequestData.{UpdateMetadata
 import org.apache.kafka.common.message._
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ClientInformation, ListenerName}
-import org.apache.kafka.common.protocol.{ApiKeys, Errors, MessageUtil}
+import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors, MessageUtil}
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity}
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record._
@@ -95,8 +95,12 @@ import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartiti
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult
 import org.apache.kafka.common.message.ListClientMetricsResourcesResponseData.ClientMetricsResource
 import org.apache.kafka.common.message.OffsetDeleteResponseData.{OffsetDeleteResponsePartition, OffsetDeleteResponsePartitionCollection, OffsetDeleteResponseTopic, OffsetDeleteResponseTopicCollection}
+import org.apache.kafka.common.metadata.RegisterBrokerRecord.{BrokerEndpoint, BrokerEndpointCollection}
+import org.apache.kafka.common.metadata.{PartitionRecord, RegisterBrokerRecord, TopicRecord}
 import org.apache.kafka.coordinator.group.GroupCoordinator
 import org.apache.kafka.server.ClientMetricsManager
+import org.apache.kafka.image.{ClusterImage, MetadataDelta, MetadataImage, MetadataProvenance}
+import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.server.common.{Features, MetadataVersion}
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_2_IV0, IBP_2_2_IV1}
 import org.apache.kafka.server.config.ConfigType
@@ -4095,7 +4099,160 @@ class KafkaApisTest extends Logging {
     }
   }
 
-  /**
+  @Test
+  def testDescribeTopicsRequest(): Unit = {
+    // 1. Set up broker information
+    val plaintextListener = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
+    val broker = new UpdateMetadataBroker()
+      .setId(0)
+      .setRack("rack")
+      .setEndpoints(Seq(
+        new UpdateMetadataEndpoint()
+          .setHost("broker0")
+          .setPort(9092)
+          .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
+          .setListener(plaintextListener.value)
+      ).asJava)
+
+    // 2. Set up authorizer
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+    val unauthorizedTopic = "unauthorized-topic"
+    val authorizedTopic = "authorized-topic"
+
+    val expectedActions = Seq(
+      new Action(AclOperation.DESCRIBE, new ResourcePattern(ResourceType.TOPIC, unauthorizedTopic, PatternType.LITERAL), 1, true, true),
+      new Action(AclOperation.DESCRIBE, new ResourcePattern(ResourceType.TOPIC, authorizedTopic, PatternType.LITERAL), 1, true, true)
+    )
+
+    // Here we need to use AuthHelperTest.matchSameElements instead of EasyMock.eq since the order of the request is unknown
+    when(authorizer.authorize(any[RequestContext], argThat((t: java.util.List[Action]) => t.containsAll(expectedActions.asJava))))
+      .thenAnswer { invocation =>
+        val actions = invocation.getArgument(1).asInstanceOf[util.List[Action]].asScala
+        actions.map { action =>
+          if (action.resourcePattern().name().equals(authorizedTopic))
+            AuthorizationResult.ALLOWED
+          else
+            AuthorizationResult.DENIED
+        }.asJava
+      }
+
+    // 3. Set up MetadataCache
+    val authorizedTopicId = Uuid.randomUuid()
+    val unauthorizedTopicId = Uuid.randomUuid()
+
+    val topicIds = new util.HashMap[String, Uuid]()
+    topicIds.put(authorizedTopic, authorizedTopicId)
+    topicIds.put(unauthorizedTopic, unauthorizedTopicId)
+
+    val collection = new BrokerEndpointCollection()
+    collection.add(new BrokerEndpoint()
+      .setName(broker.endpoints.get(0).listener())
+      .setHost(broker.endpoints.get(0).host())
+      .setPort(broker.endpoints.get(0).port())
+      .setSecurityProtocol(broker.endpoints.get(0).securityProtocol())
+    )
+    val records = Seq(
+      new RegisterBrokerRecord()
+        .setBrokerId(broker.id())
+        .setBrokerEpoch(0)
+        .setIncarnationId(Uuid.randomUuid())
+        .setEndPoints(collection)
+        .setRack(broker.rack())
+        .setFenced(false),
+      new TopicRecord().setName(authorizedTopic).setTopicId(topicIds.get(authorizedTopic)),
+      new TopicRecord().setName(unauthorizedTopic).setTopicId(topicIds.get(unauthorizedTopic)),
+      new PartitionRecord()
+      .setTopicId(authorizedTopicId)
+      .setPartitionId(0)
+      .setReplicas(asList(0, 1, 2))
+      .setLeader(0)
+      .setIsr(asList(0))
+      .setEligibleLeaderReplicas(asList(1))
+      .setLastKnownELR(asList(2))
+      .setLeaderEpoch(0)
+      .setPartitionEpoch(1)
+      .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value()),
+    new PartitionRecord()
+      .setTopicId(unauthorizedTopicId)
+      .setPartitionId(0)
+      .setReplicas(asList(0, 1, 3))
+      .setLeader(0)
+      .setIsr(asList(0))
+      .setEligibleLeaderReplicas(asList(1))
+      .setLastKnownELR(asList(3))
+      .setLeaderEpoch(0)
+      .setPartitionEpoch(2)
+      .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value())
+    )
+    metadataCache = new KRaftMetadataCache(0)
+    updateKraftMetadataCache(metadataCache.asInstanceOf[KRaftMetadataCache], records)
+    val api = createKafkaApis(authorizer = Some(authorizer), raftSupport = true)
+
+    // 4. Send DescribeTopicsRequest
+    var DescribeTopicsRequest = new DescribeTopicsRequest(new DescribeTopicsRequestData()
+    .setTopics(util.Arrays.asList(
+      new DescribeTopicsRequestData.TopicRequest().setName(authorizedTopic),
+      new DescribeTopicsRequestData.TopicRequest().setName(unauthorizedTopic),
+    )))
+
+    var request = buildRequest(DescribeTopicsRequest, plaintextListener)
+    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
+      any[Long])).thenReturn(0)
+
+    api.handleDescribeTopicsRequest(request)
+    var response = verifyNoThrottling[DescribeTopicsResponse](request)
+
+    var metadataByTopicId = response.data().topics().asScala.groupBy(_.topicId()).map(kv => (kv._1, kv._2.head))
+    metadataByTopicId.foreach { case (topicId, describeTopicsResponseTopic) =>
+      if (topicId == authorizedTopicId) {
+        assertEquals(Errors.NONE.code(), describeTopicsResponseTopic.errorCode())
+        assertEquals(authorizedTopic, describeTopicsResponseTopic.name())
+        assertEquals(1, describeTopicsResponseTopic.partitions().size())
+      } else {
+        assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED.code(), describeTopicsResponseTopic.errorCode())
+        assertEquals(unauthorizedTopic, describeTopicsResponseTopic.name())
+      }
+    }
+
+    // Fetch all topics
+    DescribeTopicsRequest = new DescribeTopicsRequest(new DescribeTopicsRequestData())
+    request = buildRequest(DescribeTopicsRequest, plaintextListener)
+    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
+      any[Long])).thenReturn(0)
+
+    api.handleDescribeTopicsRequest(request)
+    response = verifyNoThrottling[DescribeTopicsResponse](request)
+
+    metadataByTopicId = response.data().topics().asScala.groupBy(_.topicId()).map(kv => (kv._1, kv._2.head))
+    assertEquals(1, metadataByTopicId.size)
+    metadataByTopicId.foreach { case (topicId, describeTopicsResponseTopic) =>
+      if (topicId == authorizedTopicId) {
+        assertEquals(Errors.NONE.code(), describeTopicsResponseTopic.errorCode())
+        assertEquals(1, describeTopicsResponseTopic.partitions().size())
+        assertEquals(authorizedTopic, describeTopicsResponseTopic.name())
+      }
+    }
+  }
+
+  def updateKraftMetadataCache(kRaftMetadataCache: KRaftMetadataCache, records: Seq[ApiMessage]): Unit = {
+    val image = kRaftMetadataCache.currentImage()
+    val partialImage = new MetadataImage(
+      new MetadataProvenance(100L, 10, 1000L),
+      image.features(),
+      ClusterImage.EMPTY,
+      image.topics(),
+      image.configs(),
+      image.clientQuotas(),
+      image.producerIds(),
+      image.acls(),
+      image.scram(),
+      image.delegationTokens())
+    val delta = new MetadataDelta.Builder().setImage(partialImage).build()
+    records.foreach(delta.replay)
+    kRaftMetadataCache.setImage(delta.apply(new MetadataProvenance(100L, 10, 1000L)))
+  }
+
+    /**
    * Verifies that sending a fetch request with version 9 works correctly when
    * ReplicaManager.getLogConfig returns None.
    */

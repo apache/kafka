@@ -314,6 +314,8 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
                 return ConsumerGroupHeartbeatRequest.parse(buffer, apiVersion);
             case CONSUMER_GROUP_DESCRIBE:
                 return ConsumerGroupDescribeRequest.parse(buffer, apiVersion);
+            case DESCRIBE_TOPICS:
+                return DescribeTopicsRequest.parse(buffer, apiVersion);
             case CONTROLLER_REGISTRATION:
                 return ControllerRegistrationRequest.parse(buffer, apiVersion);
             case GET_TELEMETRY_SUBSCRIPTIONS:
