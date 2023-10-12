@@ -32,7 +32,7 @@ import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
-import org.apache.kafka.clients.consumer.internals.events.RebalanceCallbackEvent;
+import org.apache.kafka.clients.consumer.internals.events.RebalanceStartedEvent;
 import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsApplicationEvent;
@@ -285,8 +285,12 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     }
 
     private void processEvent(final BackgroundEvent backgroundEvent, final Duration timeout) {
-        if (backgroundEvent instanceof RebalanceCallbackEvent) {
-            processRebalanceCallback(consumerRebalanceListenerInvoker, (RebalanceCallbackEvent) backgroundEvent);
+        if (backgroundEvent instanceof RebalanceStartedEvent) {
+            processRebalanceCallback(
+                    consumerRebalanceListenerInvoker,
+                    (RebalanceStartedEvent) backgroundEvent,
+                    eventHandler
+            );
         }
     }
 

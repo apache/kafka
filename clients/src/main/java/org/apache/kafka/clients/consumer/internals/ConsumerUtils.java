@@ -26,7 +26,9 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerInterceptor;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
-import org.apache.kafka.clients.consumer.internals.events.RebalanceCallbackEvent;
+import org.apache.kafka.clients.consumer.internals.events.EventHandler;
+import org.apache.kafka.clients.consumer.internals.events.RebalanceListenerInvokedEvent;
+import org.apache.kafka.clients.consumer.internals.events.RebalanceStartedEvent;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.KafkaException;
@@ -225,42 +227,40 @@ public final class ConsumerUtils {
     }
 
     static void processRebalanceCallback(final ConsumerRebalanceListenerInvoker invoker,
-                                         final RebalanceCallbackEvent event) {
+                                         final RebalanceStartedEvent event,
+                                         final EventHandler eventHandler) {
+        eventHandler.add(processRebalanceCallback(invoker, event));
+    }
+
+    static RebalanceListenerInvokedEvent processRebalanceCallback(final ConsumerRebalanceListenerInvoker invoker,
+                                                                  final RebalanceStartedEvent event) {
         SortedSet<TopicPartition> partitions = event.partitions();
-        CompletableFuture<Void> future = event.future();
-        Throwable invocationException;
+        Exception invocationException;
 
         try {
-            switch (event.type()) {
-                case REVOKE_PARTITIONS:
+            switch (event.rebalanceStep()) {
+                case REVOKE:
                     invocationException = invoker.invokePartitionsRevoked(partitions);
                     break;
 
-                case ASSIGN_PARTITIONS:
+                case ASSIGN:
                     invocationException = invoker.invokePartitionsAssigned(partitions);
                     break;
 
-                case LOSE_PARTITIONS:
+                case LOSE:
                     invocationException = invoker.invokePartitionsLost(partitions);
                     break;
 
                 default:
-                    invocationException = new IllegalArgumentException("Could not invoke the rebalance callback for unexpected event type " + event.type());
+                    throw new IllegalArgumentException("Could not invoke the rebalance callback for the unexpected event type " + event.type());
             }
-        } catch (Throwable t) {
-            invocationException = t;
+        } catch (IllegalArgumentException e) {
+            throw e;
+        } catch (Exception e) {
+            invocationException = e;
         }
 
-        if (invocationException != null) {
-            future.completeExceptionally(invocationException);
-
-            if (invocationException instanceof KafkaException)
-                throw (KafkaException) invocationException;
-            else
-                throw new KafkaException(invocationException);
-        } else {
-            future.complete(null);
-        }
+        Optional<Exception> error = Optional.ofNullable(invocationException);
+        return new RebalanceListenerInvokedEvent(event.rebalanceStep(), partitions, error);
     }
-
 }

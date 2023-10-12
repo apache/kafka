@@ -14,15 +14,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.consumer.internals.events;
+package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.common.TopicPartition;
-
-import java.util.SortedSet;
-
-public class LosePartitionsEvent extends RebalanceCallbackEvent {
-
-    public LosePartitionsEvent(SortedSet<TopicPartition> partitions) {
-        super(Type.LOSE_PARTITIONS, partitions);
-    }
+public enum RebalanceStep {
+    REVOKE, ASSIGN, LOSE
 }

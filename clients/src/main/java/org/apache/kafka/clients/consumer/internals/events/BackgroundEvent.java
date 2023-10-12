@@ -24,7 +24,7 @@ import java.util.Objects;
 public abstract class BackgroundEvent {
 
     public enum Type {
-        NOOP, ERROR, REVOKE_PARTITIONS, ASSIGN_PARTITIONS, LOSE_PARTITIONS
+        NOOP, ERROR, REBALANCE_STARTED
     }
 
     private final Type type;

@@ -16,22 +16,36 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
+import org.apache.kafka.clients.consumer.internals.RebalanceStep;
 import org.apache.kafka.common.TopicPartition;
 
 import java.util.Collections;
+import java.util.Optional;
 import java.util.SortedSet;
 
-public abstract class RebalanceCallbackEvent extends CompletableBackgroundEvent<Void> {
+public class RebalanceListenerInvokedEvent extends ApplicationEvent {
 
+    private final RebalanceStep rebalanceStep;
     private final SortedSet<TopicPartition> partitions;
+    private final Optional<Exception> error;
 
-    public RebalanceCallbackEvent(Type type, SortedSet<TopicPartition> partitions) {
-        super(type);
+    public RebalanceListenerInvokedEvent(RebalanceStep rebalanceStep, SortedSet<TopicPartition> partitions, Optional<Exception> error) {
+        super(Type.REBALANCE_LISTENER_INVOKED);
+        this.rebalanceStep = rebalanceStep;
         this.partitions = Collections.unmodifiableSortedSet(partitions);
+        this.error = error;
+    }
+
+    public RebalanceStep rebalanceStep() {
+        return rebalanceStep;
     }
 
     public SortedSet<TopicPartition> partitions() {
         return partitions;
+    }
+
+    public Optional<Exception> error() {
+        return error;
     }
 
     @Override
@@ -40,21 +54,23 @@ public abstract class RebalanceCallbackEvent extends CompletableBackgroundEvent<
         if (o == null || getClass() != o.getClass()) return false;
         if (!super.equals(o)) return false;
 
-        RebalanceCallbackEvent that = (RebalanceCallbackEvent) o;
+        RebalanceListenerInvokedEvent that = (RebalanceListenerInvokedEvent) o;
 
-        return partitions.equals(that.partitions);
+        return rebalanceStep.equals(that.rebalanceStep) && partitions.equals(that.partitions) && error.equals(that.error);
     }
 
     @Override
     public int hashCode() {
         int result = super.hashCode();
+        result = 31 * result + rebalanceStep.hashCode();
         result = 31 * result + partitions.hashCode();
+        result = 31 * result + error.hashCode();
         return result;
     }
 
     @Override
     protected String toStringBase() {
-        return super.toStringBase() + ", partitions=" + partitions;
+        return super.toStringBase() + ", rebalanceStep=" + rebalanceStep + ", partitions=" + partitions + ", error=" + error;
     }
 
     @Override

@@ -65,6 +65,8 @@ public class ApplicationEventProcessor {
                 return processResetPositionsEvent();
             case VALIDATE_POSITIONS:
                 return processValidatePositionsEvent();
+            case REBALANCE_LISTENER_INVOKED:
+                return process((RebalanceListenerInvokedEvent) event);
         }
         return false;
     }
@@ -151,6 +153,11 @@ public class ApplicationEventProcessor {
 
     private boolean processValidatePositionsEvent() {
         requestManagers.offsetsRequestManager.validatePositionsIfNeeded();
+        return true;
+    }
+
+    private boolean process(final RebalanceListenerInvokedEvent event) {
+        // TODO: callback into the HeartbeatRequestManager and/or AssignmentReconciler
         return true;
     }
 }

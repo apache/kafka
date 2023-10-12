@@ -17,12 +17,11 @@
 
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
-import org.apache.kafka.clients.consumer.internals.events.AssignPartitionsEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
-import org.apache.kafka.clients.consumer.internals.events.LosePartitionsEvent;
-import org.apache.kafka.clients.consumer.internals.events.RebalanceCallbackEvent;
-import org.apache.kafka.clients.consumer.internals.events.RevokePartitionsEvent;
+import org.apache.kafka.clients.consumer.internals.events.RebalanceListenerInvokedEvent;
+import org.apache.kafka.clients.consumer.internals.events.RebalanceStartedEvent;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData.Assignment;
@@ -31,8 +30,8 @@ import org.apache.kafka.clients.consumer.internals.Utils.TopicPartitionComparato
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
+import java.time.Duration;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -42,7 +41,10 @@ import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.concurrent.BlockingQueue;
-import java.util.stream.Collectors;
+
+import static org.apache.kafka.clients.consumer.internals.RebalanceStep.ASSIGN;
+import static org.apache.kafka.clients.consumer.internals.RebalanceStep.LOSE;
+import static org.apache.kafka.clients.consumer.internals.RebalanceStep.REVOKE;
 
 /**
  * {@code AssignmentReconciler} performs the work of reconciling this consumer's partition assignment as directed
@@ -64,7 +66,7 @@ import java.util.stream.Collectors;
  *         <em>not in</em> the target assignment
  *     </li>
  *     <li>
- *         Send a {@link RevokePartitionsEvent} so that the application thread will execute the
+ *         Send a {@link RebalanceListenerInvokedEvent} so that the application thread will execute the
  *         {@link ConsumerRebalanceListener#onPartitionsRevoked(Collection)} callback method
  *     </li>
  *     <li>
@@ -79,7 +81,7 @@ import java.util.stream.Collectors;
  *         <em>not in</em> the current assignment
  *     </li>
  *     <li>
- *         Send an {@link AssignPartitionsEvent} so that the application thread will execute the
+ *         Send an {@link RebalanceListenerInvokedEvent} so that the application thread will execute the
  *         {@link ConsumerRebalanceListener#onPartitionsAssigned(Collection)} callback method
  *     </li>
  *     <li>
@@ -93,25 +95,6 @@ import java.util.stream.Collectors;
  *
  * <p/>
  *
- * Because the target assignment from the group coordinator is <em>declarative</em>, the implementation of the
- * reconciliation process is idempotent. The caller of this class is free to invoke {@link #maybeReconcile(Optional)}
- * repeatedly for as long as the group coordinator provides an {@link Assignment}.
- *
- * <ul>
- *     <li>
- *         {@link ReconciliationResult#UNCHANGED UNCHANGED}: no changes were made to the set of partitions.
- *     </li>
- *     <li>
- *         {@link ReconciliationResult#RECONCILING RECONCILING}: changes to the assignment have started. In practice
- *         this means that the appropriate {@link ConsumerRebalanceListener} callback method is being invoked.
- *     </li>
- *     <li>
- *         {@link ReconciliationResult#APPLIED_LOCALLY APPLIED_LOCALLY}: the {@link ConsumerRebalanceListener} callback
- *         method was made and the changes were applied locally. The heartbeat manager should acknowledge this to the
- *         group coordinator.
- *     </li>
- * </ul>
- *
  * The comparison against the {@link SubscriptionState#assignedPartitions() current set of assigned partitions} and
  * the {@link Assignment#assignedTopicPartitions() target set of assigned partitions} is performed by essentially
  * <em>flattening</em> the respective entries into two sets of {@link TopicPartition partitions}
@@ -119,20 +102,13 @@ import java.util.stream.Collectors;
  */
 public class AssignmentReconciler {
 
-    /**
-     * The result of the {@link #revoke(Optional)} or {@link #assign(Optional)} methods being invoked.
-     */
-    enum ReconciliationResult {
-        UNCHANGED,
-        RECONCILING,
-        APPLIED_LOCALLY
-    }
-
+    private final static String ON_PARTITIONS_LOST_METHOD_NAME = String.format("%s.onPartitionsLost()", ConsumerRebalanceListener.class.getSimpleName());
+    private final static String ON_PARTITIONS_REVOKED_METHOD_NAME = String.format("%s.onPartitionsRevoked()", ConsumerRebalanceListener.class.getSimpleName());
+    private final static String ON_PARTITIONS_ASSIGNED_METHOD_NAME = String.format("%s.onPartitionsAssigned()", ConsumerRebalanceListener.class.getSimpleName());
     private final Logger log;
     private final SubscriptionState subscriptions;
     private final ConsumerMetadata metadata;
     private final BlockingQueue<BackgroundEvent> backgroundEventQueue;
-    private Optional<RebalanceCallbackEvent> inflightCallback;
 
     AssignmentReconciler(LogContext logContext,
                          SubscriptionState subscriptions,
@@ -142,206 +118,199 @@ public class AssignmentReconciler {
         this.subscriptions = subscriptions;
         this.metadata = metadata;
         this.backgroundEventQueue = backgroundEventQueue;
-        this.inflightCallback = Optional.empty();
+    }
+
+    boolean maybeLose() {
+        SortedSet<TopicPartition> partitionsToLose = getPartitionsToLose();
+
+        if (partitionsToLose.isEmpty()) {
+            log.debug("Skipping invocation of {} as no partitions were assigned", ON_PARTITIONS_LOST_METHOD_NAME);
+            return false;
+        }
+
+        log.debug("Enqueuing event to invoke {} with the following partitions: {}",
+                ON_PARTITIONS_LOST_METHOD_NAME,
+                partitionsToLose);
+        backgroundEventQueue.add(new RebalanceStartedEvent(LOSE, partitionsToLose));
+        return true;
     }
 
     /**
-     * Perform the reconciliation process, as necessary to meet the given {@link Assignment target assignment}. Note
-     * that the reconciliation takes multiple steps, and this method should be invoked on each heartbeat if
-     * the coordinator provides a {@link Assignment target assignment}.
+     * Determine which partitions should be "lost". This is simply the
+     * {@link SubscriptionState#assignedPartitions() current set} of {@link TopicPartition partitions}.
      *
-     * @param assignment Target {@link Assignment}
-     * @return {@link ReconciliationResult}
+     * @return Set of partitions to "lose"
      */
-    ReconciliationResult maybeReconcile(Optional<Assignment> assignment) {
-        // Check for any outstanding operations first. If a conclusive result has already been reached, return that
-        // before processing any further.
-        if (inflightCallback.isPresent()) {
-            // We don't actually need the _result_ of the event, just to know that it's complete.
-            if (inflightCallback.get().future().isDone()) {
-                // This is the happy path--we completed the callback. Clear out our inflight callback first, though.
-                inflightCallback = Optional.empty();
-                return ReconciliationResult.APPLIED_LOCALLY;
-            } else {
-                // So we have a callback event out there, but it's neither complete nor expired, so wait.
-                return ReconciliationResult.RECONCILING;
-            }
+    SortedSet<TopicPartition> getPartitionsToLose() {
+        SortedSet<TopicPartition> partitions = new TreeSet<>(new TopicPartitionComparator());
+        partitions.addAll(subscriptions.assignedPartitions());
+        return partitions;
+    }
+
+    void postOnLosePartitions(Set<TopicPartition> partitions, Optional<Exception> error) {
+        if (error.isPresent()) {
+            Exception e = error.get();
+            log.warn("An error occurred when invoking {} with the following partitions: {}",
+                    ON_PARTITIONS_LOST_METHOD_NAME,
+                    partitions,
+                    e);
+        } else {
+            log.debug("{} was successfully executed with the following partitions: {}",
+                    ON_PARTITIONS_LOST_METHOD_NAME,
+                    partitions);
         }
 
-        // First, we need to determine if any partitions need to be revoked.
-        switch (revoke(assignment)) {
-            case APPLIED_LOCALLY:
-                // If we've successfully revoked the partitions locally, we need to send an acknowledgement request
-                // ASAP to let the coordinator know.
-                log.debug("The revocation step of partition reconciliation has completed locally; will inform the consumer group coordinator");
-                return ReconciliationResult.APPLIED_LOCALLY;
+        // And finally... drop all partitions, but just in case something was added in the meantime.
+        Set<TopicPartition> newAssignment = new HashSet<>(subscriptions.assignedPartitions());
+        newAssignment.removeAll(partitions);
+        subscriptions.assignFromSubscribed(newAssignment);
+    }
 
-            case RECONCILING:
-                // At this point, we've started the revocation, but it isn't complete, so there's nothing
-                // to do here but wait until it's finished or expires.
-                log.debug("The revocation step of partition reconciliation is in progress");
-                return ReconciliationResult.RECONCILING;
+    boolean maybeRevoke(Optional<Assignment> assignment) {
+        SortedSet<TopicPartition> partitionsToRevoke = getPartitionsToRevoke(assignment);
 
-            case UNCHANGED:
-                log.debug("The revocation step of partition reconciliation has no changes; it was previously completed");
-                break;
+        if (partitionsToRevoke.isEmpty()) {
+            log.debug("Skipping invocation of {} as there are no partitions to revoke in the new assignment",
+                    ON_PARTITIONS_REVOKED_METHOD_NAME);
+            return false;
         }
 
-        // Next, we need to determine the partitions to be added, if any.
-        switch (assign(assignment)) {
-            case APPLIED_LOCALLY:
-                // If we've assigned one or more partitions, we need to send an acknowledgement request ASAP to
-                // let the coordinator know that they've been added locally.
-                log.debug("The assignment step of partition reconciliation has completed locally; will inform the consumer group coordinator");
-                return ReconciliationResult.APPLIED_LOCALLY;
+        log.debug("Enqueuing event to invoke {} with the following partitions: {}",
+                ON_PARTITIONS_REVOKED_METHOD_NAME,
+                partitionsToRevoke);
+        backgroundEventQueue.add(new RebalanceStartedEvent(REVOKE, partitionsToRevoke));
+        return true;
+    }
 
-            case RECONCILING:
-                // At this point, we've started the assignment, but it isn't complete, so we wait...
-                log.debug("The assignment step of partition reconciliation is in progress");
-                return ReconciliationResult.RECONCILING;
+    /**
+     * Determine which partitions are newly revoked. This is done by comparing the
+     * {@link Assignment#assignedTopicPartitions() target set from the assignment} against the
+     * {@link SubscriptionState#assignedPartitions() current set}. The returned set of
+     * {@link TopicPartition partitions} are composed of any partitions that are in the current set but
+     * are no longer in the target set.
+     *
+     * @param assignment {@link Optional} that holds the {@link Assignment} which includes the target set of topics
+     * @return Set of partitions to revoke
+     */
 
-            case UNCHANGED:
-                log.debug("The assignment step of partition reconciliation has no changes; it was previously completed");
-                break;
+    SortedSet<TopicPartition> getPartitionsToRevoke(Optional<Assignment> assignment) {
+        SortedSet<TopicPartition> partitions = new TreeSet<>(new TopicPartitionComparator());
+        partitions.addAll(subscriptions.assignedPartitions());
+        partitions.removeAll(targetPartitions(assignment));
+        return partitions;
+    }
+
+    void postOnRevokedPartitions(Set<TopicPartition> partitions, Optional<Exception> error) {
+        if (error.isPresent()) {
+            Exception e = error.get();
+            log.warn("An error occurred when invoking {} with the following partitions: {}",
+                    ON_PARTITIONS_REVOKED_METHOD_NAME,
+                    partitions,
+                    e);
+        } else {
+            log.debug("{} was successfully executed with the following partitions: {}",
+                    ON_PARTITIONS_REVOKED_METHOD_NAME,
+                    partitions);
         }
 
-        log.debug("Both revocation and assignment steps of partition reconciliation are complete");
-        return ReconciliationResult.UNCHANGED;
+        // Modify the current assignment by removing all the partitions that no longer appear in our assignment.
+        Set<TopicPartition> newAssignment = new HashSet<>(subscriptions.assignedPartitions());
+        newAssignment.removeAll(partitions);
+        subscriptions.assignFromSubscribed(newAssignment);
     }
 
-    ReconciliationResult lose() {
-        // Clear the inflight callback reference. This is done regardless of if one existed; if there was one it is
-        // now abandoned because we're going to "lose" our partitions. This will also allow us to skip the inflight
-        // check the other steps take.
-        inflightCallback = Optional.empty();
+    /**
+     * Performs the assignment phase of the reconciliation process:
+     *
+     * <ul>
+     *     <li>
+     *         On the background thread, determine which partitions are newly assigned
+     *         via {@link #getPartitionsToAssign(Optional)}
+     *     </li>
+     *     <li>
+     *         If the set of newly assigned partitions is non-empty, enqueue an {@link RebalanceStartedEvent}
+     *         on the event queue for the application thread
+     *     </li>
+     *     <li>
+     *         As part of the next call to {@link Consumer#poll(Duration)} on the application thread,
+     *         the presence of the above event in the queue will cause the
+     *         {@link ConsumerRebalanceListener#onPartitionsAssigned(Collection)} method
+     *         to be invoked
+     *     </li>
+     *     <li>
+     *         The result of the above {@link ConsumerRebalanceListener} method—success or failure—will then
+     *         be communicated to the background thread via an {@link RebalanceListenerInvokedEvent}
+     *     </li>
+     *     <li>
+     *         On the background thread, when the {@link RebalanceListenerInvokedEvent} is processed,
+     *         call into the {@link #postOnAssignedPartitions(Set, Optional)} method to update the
+     *         {@link SubscriptionState#assignFromSubscribed(Collection) set of assigned topics}
+     *     </li>
+     * </ul>
+     *
+     * @param assignment {@link Optional} that holds the {@link Assignment} which includes the target set of topics
+     */
 
-        // For the "lose" operation, our partition diff is simply all the partitions in our current assignment.
-        SetDifferenceGenerator setDifferenceGenerator = (assigned, target) -> sortPartitions(assigned);
+    boolean maybeAssign(Optional<Assignment> assignment) {
+        SortedSet<TopicPartition> partitionsToAssign = getPartitionsToAssign(assignment);
 
-        // For lose, we modify the "current" assignment by removing all its entries, full stop. We can thus ignore
-        // the diff-ed partitions that are passed in.
-        AssignmentGenerator assignmentGenerator = __ -> Collections.emptySortedSet();
-
-        return reconcile(Optional.empty(),
-                String.format("%s.onPartitionsLost()", ConsumerRebalanceListener.class.getSimpleName()),
-                setDifferenceGenerator,
-                LosePartitionsEvent::new,
-                assignmentGenerator);
-    }
-
-    private ReconciliationResult revoke(Optional<Assignment> assignment) {
-        // For the revocation step, our partition diff is calculated by filtering out any partitions from our current
-        // assignment that aren't in the given target assignment.
-        SetDifferenceGenerator setDifferenceGenerator = (assigned, target) -> sortPartitions(assigned
-                .stream()
-                .filter(tp -> !target.contains(tp))
-                .collect(Collectors.toSet()));
-
-        // For revocation, we modify the "current" assignment by removing all entries that were not present in the
-        // "target" assignment.
-        AssignmentGenerator modifier = diffPartitions -> {
-            Set<TopicPartition> newAssignment = new HashSet<>(subscriptions.assignedPartitions());
-            newAssignment.removeAll(diffPartitions);
-            return sortPartitions(newAssignment);
-        };
-
-        return reconcile(assignment,
-                String.format("%s.onPartitionsRevoked()", ConsumerRebalanceListener.class.getSimpleName()),
-                setDifferenceGenerator,
-                RevokePartitionsEvent::new,
-                modifier);
-    }
-
-    private ReconciliationResult assign(Optional<Assignment> assignment) {
-        // For the assignment step, our partition diff is calculated by filtering out any partitions from the given
-        // target assignment that aren't presently in our current assignment.
-        SetDifferenceGenerator setDifferenceGenerator = (assigned, target) -> sortPartitions(target
-                .stream()
-                .filter(tp -> !assigned.contains(tp))
-                .collect(Collectors.toSet()));
-
-        // For assignment, we modify the "current" assignment by adding all entries that were present in the
-        // "target" assignment but not in the "current" assignment.
-        AssignmentGenerator modifier = diffPartitions -> {
-            Set<TopicPartition> newAssignment = new HashSet<>(subscriptions.assignedPartitions());
-            newAssignment.addAll(diffPartitions);
-            return sortPartitions(newAssignment);
-        };
-
-        return reconcile(assignment,
-                String.format("%s.onPartitionsAssigned()", ConsumerRebalanceListener.class.getSimpleName()),
-                setDifferenceGenerator,
-                AssignPartitionsEvent::new,
-                modifier);
-    }
-
-    private ReconciliationResult reconcile(Optional<Assignment> assignment,
-                                           String listenerMethodName,
-                                           SetDifferenceGenerator setDifferenceGenerator,
-                                           EventGenerator eventGenerator,
-                                           AssignmentGenerator assignmentGenerator) {
-        // "diff" the two sets of partitions: our "current" assignment and the "target" assignment. The result is
-        // sorted primarily so when the partitions show up in the logs, it's easier for us humans to understand.
-        SortedSet<TopicPartition> diffPartitions = setDifferenceGenerator.generate(
-                subscriptions.assignedPartitions(),
-                targetPartitions(metadata, assignment)
-        );
-
-        if (diffPartitions.isEmpty()) {
-            log.debug("Skipping invocation of {} as no partitions were changed in the new assignment",
-                    listenerMethodName);
-            return ReconciliationResult.UNCHANGED;
+        if (partitionsToAssign.isEmpty()) {
+            log.debug("Skipping invocation of {} as no partitions were assigned in the new assignment",
+                    ON_PARTITIONS_ASSIGNED_METHOD_NAME);
+            return false;
         }
 
-        // Set up our callback invocation. We don't block here waiting on it its completion, though.
-        log.debug("Preparing to invoke {} with the following partitions: {}", listenerMethodName, diffPartitions);
-        RebalanceCallbackEvent event = eventGenerator.generate(diffPartitions);
-        inflightCallback = Optional.of(event);
-
-        // Enqueue it in our background->application shared queue. This should be invoked in the Consumer.poll() method.
-        backgroundEventQueue.add(event);
-
-        // It is only after the appropriate ConsumerRebalanceListener has been executed on the application thread
-        // (via Consumer.poll()), can we "commit" the change to the assigned partitions in SubscriptionState.
-        event.future().whenComplete((result, error) -> {
-            if (error != null) {
-                log.warn("An error occurred when invoking {} with the following partitions: {}",
-                        listenerMethodName,
-                        diffPartitions,
-                        error);
-                // TODO: should we proceed or abort?
-            } else {
-                log.debug("{} was successfully executed with the following partitions: {}",
-                        listenerMethodName,
-                        diffPartitions);
-            }
-
-            SortedSet<TopicPartition> newAssignment = assignmentGenerator.generate(diffPartitions);
-
-            // And finally... assign the new set of partitions! In keeping with the existing KafkaConsumer
-            // implementation, this can only be done after the callback was successful.
-            subscriptions.assignFromSubscribed(newAssignment);
-        });
-
-        return ReconciliationResult.RECONCILING;
+        log.debug("Enqueuing event to invoke {} to assign the following partitions: {}",
+                ON_PARTITIONS_ASSIGNED_METHOD_NAME,
+                partitionsToAssign);
+        backgroundEventQueue.add(new RebalanceStartedEvent(ASSIGN, partitionsToAssign));
+        return true;
     }
 
-    private static SortedSet<TopicPartition> sortPartitions(Set<TopicPartition> topicPartitions) {
-        if (topicPartitions instanceof SortedSet)
-            return (SortedSet<TopicPartition>) topicPartitions;
+    /**
+     * Determine which partitions are newly assigned. This is done by comparing the
+     * {@link Assignment#assignedTopicPartitions() target set from the assignment} against the
+     * {@link SubscriptionState#assignedPartitions() current set}. Any {@link TopicPartition partitions} from the
+     * target set that are not already in the current set are included in the returned set.
+     *
+     * @param assignment {@link Optional} that holds the {@link Assignment} which includes the target set of topics
+     * @return Set of partitions to assign
+     */
 
-        SortedSet<TopicPartition> set = new TreeSet<>(new TopicPartitionComparator());
-        set.addAll(topicPartitions);
-        return set;
+    SortedSet<TopicPartition> getPartitionsToAssign(Optional<Assignment> assignment) {
+        SortedSet<TopicPartition> partitions = new TreeSet<>(new TopicPartitionComparator());
+        partitions.addAll(targetPartitions(assignment));
+        partitions.removeAll(subscriptions.assignedPartitions());
+        return partitions;
     }
 
-    private static SortedSet<TopicPartition> targetPartitions(ConsumerMetadata metadata, Optional<Assignment> assignment) {
+    void postOnAssignedPartitions(Set<TopicPartition> partitions, Optional<Exception> error) {
+        if (error.isPresent()) {
+            Exception e = error.get();
+            log.warn("An error occurred when invoking {} with the following partitions: {}",
+                    ON_PARTITIONS_ASSIGNED_METHOD_NAME,
+                    partitions,
+                    e);
+        } else {
+            log.debug("{} was successfully executed with the following partitions: {}",
+                    ON_PARTITIONS_ASSIGNED_METHOD_NAME,
+                    partitions);
+        }
+
+        // Modify the current assignment by adding all the partitions that are were newly assigned.
+        Set<TopicPartition> newAssignment = new HashSet<>();
+        newAssignment.addAll(subscriptions.assignedPartitions());
+        newAssignment.addAll(partitions);
+        subscriptions.assignFromSubscribed(newAssignment);
+    }
+
+    private SortedSet<TopicPartition> targetPartitions(Optional<Assignment> assignment) {
         Map<Uuid, String> topicIdToNameMap = new HashMap<>();
 
         for (Map.Entry<String, Uuid> entry : metadata.topicIds().entrySet())
             topicIdToNameMap.put(entry.getValue(), entry.getKey());
 
-        Set<TopicPartition> set = new HashSet<>();
+        SortedSet<TopicPartition> set = new TreeSet<>(new TopicPartitionComparator());
 
         assignment.ifPresent(a -> {
             for (TopicPartitions topicPartitions : a.assignedTopicPartitions()) {
@@ -354,21 +323,6 @@ public class AssignmentReconciler {
             }
         });
 
-        return sortPartitions(set);
-    }
-
-    private interface SetDifferenceGenerator {
-
-        SortedSet<TopicPartition> generate(Set<TopicPartition> assigned, Set<TopicPartition> target);
-    }
-
-    private interface AssignmentGenerator {
-
-        SortedSet<TopicPartition> generate(Set<TopicPartition> diffedPartitions);
-    }
-
-    private interface EventGenerator {
-
-        RebalanceCallbackEvent generate(SortedSet<TopicPartition> diffedPartitions);
+        return set;
     }
 }
