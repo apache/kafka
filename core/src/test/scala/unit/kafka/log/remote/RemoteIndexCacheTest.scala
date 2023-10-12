@@ -35,8 +35,8 @@ import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito._
 import org.slf4j.{Logger, LoggerFactory}
 
-import java.io.{File, FileInputStream, FileNotFoundException, IOException, PrintWriter}
-import java.nio.file.{Files, Paths}
+import java.io.{File, FileInputStream, IOException, PrintWriter}
+import java.nio.file.{Files, NoSuchFileException, Paths}
 import java.util
 import java.util.{Collections, Optional}
 import java.util.concurrent.{CountDownLatch, Executors, TimeUnit}
@@ -525,7 +525,7 @@ class RemoteIndexCacheTest {
           .filter(path => path.getFileName.toString.endsWith(suffix))
           .findAny()
       } catch {
-        case _: FileNotFoundException => Optional.empty()
+        case _: NoSuchFileException => Optional.empty()
       }
     }
 
@@ -571,7 +571,7 @@ class RemoteIndexCacheTest {
           .filter(path => path.getFileName.toString.endsWith(suffix))
           .findAny()
       } catch {
-        case _: FileNotFoundException => Optional.empty()
+        case _: NoSuchFileException => Optional.empty()
       }
     }
 
