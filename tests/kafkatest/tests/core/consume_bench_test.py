@@ -72,10 +72,17 @@ class ConsumeBenchTest(Test):
             ["consume_bench_topic[0-5]"],
             ["consume_bench_topic[0-5]:[0-4]"]
         ],
-        metadata_quorum=quorum.all_non_upgrade,
-        use_new_coordinator=[True, False]
+        metadata_quorum=quorum.zk,
+        use_new_coordinator=[False]
     ) # topic subscription
-    @skip_if_new_coordinator_and_zk
+    @matrix(
+        topics=[
+            ["consume_bench_topic[0-5]"],
+            ["consume_bench_topic[0-5]:[0-4]"]
+        ],
+        metadata_quorum=quorum.isolated_kraft,
+        use_new_coordinator=[True, False]
+    )
     def test_consume_bench(self, topics, metadata_quorum=quorum.zk, use_new_coordinator=False):
         """
         Runs a ConsumeBench workload to consume messages
@@ -100,10 +107,13 @@ class ConsumeBenchTest(Test):
 
     @cluster(num_nodes=10)
     @matrix(
-        metadata_quorum=quorum.all_non_upgrade,
+        metadata_quorum=quorum.zk,
+        use_new_coordinator=[False]
+    )
+    @matrix(
+        metadata_quorum=quorum.isolated_kraft,
         use_new_coordinator=[True, False]
     )
-    @skip_if_new_coordinator_and_zk
     def test_single_partition(self, metadata_quorum=quorum.zk, use_new_coordinator=False):
         """
         Run a ConsumeBench against a single partition
@@ -129,10 +139,13 @@ class ConsumeBenchTest(Test):
 
     @cluster(num_nodes=10)
     @matrix(
-        metadata_quorum=quorum.all_non_upgrade,
+        metadata_quorum=quorum.zk,
+        use_new_coordinator=[False]
+    )
+    @matrix(
+        metadata_quorum=quorum.isolated_kraft,
         use_new_coordinator=[True, False]
     )
-    @skip_if_new_coordinator_and_zk
     def test_multiple_consumers_random_group_topics(self, metadata_quorum=quorum.zk, use_new_coordinator=False):
         """
         Runs multiple consumers group to read messages from topics.
@@ -159,10 +172,13 @@ class ConsumeBenchTest(Test):
 
     @cluster(num_nodes=10)
     @matrix(
-        metadata_quorum=quorum.all_non_upgrade,
+        metadata_quorum=quorum.zk,
+        use_new_coordinator=[False]
+    )
+    @matrix(
+        metadata_quorum=quorum.isolated_kraft,
         use_new_coordinator=[True, False]
     )
-    @skip_if_new_coordinator_and_zk
     def test_two_consumers_specified_group_topics(self, metadata_quorum=quorum.zk, use_new_coordinator=False):
         """
         Runs two consumers in the same consumer group to read messages from topics.
@@ -190,10 +206,13 @@ class ConsumeBenchTest(Test):
 
     @cluster(num_nodes=10)
     @matrix(
-        metadata_quorum=quorum.all_non_upgrade,
+        metadata_quorum=quorum.zk,
+        use_new_coordinator=[False]
+    )
+    @matrix(
+        metadata_quorum=quorum.isolated_kraft,
         use_new_coordinator=[True, False]
     )
-    @skip_if_new_coordinator_and_zk
     def test_multiple_consumers_random_group_partitions(self, metadata_quorum=quorum.zk, use_new_coordinator=False):
         """
         Runs multiple consumers in to read messages from specific partitions.
@@ -221,10 +240,13 @@ class ConsumeBenchTest(Test):
 
     @cluster(num_nodes=10)
     @matrix(
-        metadata_quorum=quorum.all_non_upgrade,
+        metadata_quorum=quorum.zk,
+        use_new_coordinator=[False]
+    )
+    @matrix(
+        metadata_quorum=quorum.isolated_kraft,
         use_new_coordinator=[True, False]
     )
-    @skip_if_new_coordinator_and_zk
     def test_multiple_consumers_specified_group_partitions_should_raise(self, metadata_quorum=quorum.zk, use_new_coordinator=False):
         """
         Runs multiple consumers in the same group to read messages from specific partitions.

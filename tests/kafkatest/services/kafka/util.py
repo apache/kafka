@@ -40,11 +40,3 @@ def fix_opts_for_new_jvm(node):
             cmd += "export KAFKA_GC_LOG_OPTS=\"-Xlog:gc*:file=kafka-gc.log:time,tags:filecount=10,filesize=102400\"; "
             cmd += "export KAFKA_JVM_PERFORMANCE_OPTS=\"-server -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35 -XX:+ExplicitGCInvokesConcurrent -XX:MaxInlineLevel=15 -Djava.awt.headless=true\"; "
     return cmd
-
-def skip_if_new_coordinator_and_zk(func):
-    def wrapper(*args, **kwargs):
-        if kwargs.get('use_new_coordinator', False) and kwargs.get('metadata_quorum', quorum.zk) == quorum.zk:
-            TestContext.current().skip("Skipping test because use_new_coordinator is True and quorum is ZK")
-            return
-        return func(*args, **kwargs)
-    return wrapper
