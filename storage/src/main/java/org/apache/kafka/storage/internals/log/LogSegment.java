@@ -67,7 +67,8 @@ public class LogSegment {
         KafkaMetricsGroup logFlushStatsMetricsGroup = new KafkaMetricsGroup(LogSegment.class) {
             @Override
             public MetricName metricName(String name, Map<String, String> tags) {
-                // Override the group and type names for compatibility
+                // Override the group and type names for compatibility - this metrics group was previously defined within
+                // a Scala object named `kafka.log.LogFlushStats`
                 return KafkaMetricsGroup.explicitMetricName("kafka.log", "LogFlushStats", name, tags);
             }
         };
