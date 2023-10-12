@@ -161,7 +161,7 @@ versions += [
   scoverage: "1.9.3",
   slf4j: "1.7.36",
   snappy: "1.1.10.5",
-  spotbugs: "4.7.3",
+  spotbugs: "4.8.0",
   zinc: "1.9.2",
   zookeeper: "3.8.2",
   zstd: "1.5.5-6"
