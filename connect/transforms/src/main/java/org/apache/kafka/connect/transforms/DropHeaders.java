@@ -26,9 +26,10 @@ import org.apache.kafka.connect.header.Headers;
 import org.apache.kafka.connect.transforms.util.NonEmptyListValidator;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
 
-import java.util.HashSet;
 import java.util.Map;
-import java.util.Set;
+import java.util.List;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.config.ConfigDef.NO_DEFAULT_VALUE;
 
@@ -43,20 +44,26 @@ public class DropHeaders<R extends ConnectRecord<R>> implements Transformation<R
             .define(HEADERS_FIELD, ConfigDef.Type.LIST,
                     NO_DEFAULT_VALUE, new NonEmptyListValidator(),
                     ConfigDef.Importance.HIGH,
-                    "The name of the headers to be removed.");
+                    "The names or regular expressions to match of the headers to be removed.");
 
-    private Set<String> headers;
+    private List<Pattern> headersMatchers;
 
     @Override
     public R apply(R record) {
         Headers updatedHeaders = new ConnectHeaders();
         for (Header header : record.headers()) {
-            if (!headers.contains(header.key())) {
+            if (!headersMatchAnyPattern(header.key())) {
                 updatedHeaders.add(header);
             }
         }
         return record.newRecord(record.topic(), record.kafkaPartition(), record.keySchema(), record.key(),
                 record.valueSchema(), record.value(), record.timestamp(), updatedHeaders);
+    }
+
+    private boolean headersMatchAnyPattern(String key) {
+        return headersMatchers.stream().anyMatch(pattern ->
+            pattern.matcher(key).matches()
+        );
     }
 
     @Override
@@ -76,6 +83,7 @@ public class DropHeaders<R extends ConnectRecord<R>> implements Transformation<R
     @Override
     public void configure(Map<String, ?> props) {
         final SimpleConfig config = new SimpleConfig(CONFIG_DEF, props);
-        headers = new HashSet<>(config.getList(HEADERS_FIELD));
+        final List<String> headers = config.getList(HEADERS_FIELD);
+        headersMatchers = headers.stream().map(entry -> Pattern.compile(entry)).collect(Collectors.toList());
     }
 }
