@@ -438,9 +438,8 @@ public class ConfigurationControlManager {
         Map<String, String> map = configData.get(new ConfigResource(Type.TOPIC, topicName));
         if (map == null) {
             return "";
-        } else {
-            return map.getOrDefault(configKey, "");
         }
+        return map.getOrDefault(configKey, "");
     }
 
     public Map<ConfigResource, ResultOrError<Map<String, String>>> describeConfigs(

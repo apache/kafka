@@ -116,8 +116,8 @@ public class PartitionChangeBuilder {
         this.targetReplicas = Replicas.toList(partition.replicas);
         this.targetRemoving = Replicas.toList(partition.removingReplicas);
         this.targetAdding = Replicas.toList(partition.addingReplicas);
-        this.targetElr = Collections.emptyList();
-        this.targetLastKnownElr = Collections.emptyList();
+        this.targetElr = Replicas.toList(partition.elr);
+        this.targetLastKnownElr = Replicas.toList(partition.lastKnownElr);
         this.targetLeaderRecoveryState = partition.leaderRecoveryState;
     }
 
@@ -424,7 +424,7 @@ public class PartitionChangeBuilder {
         // 3. Exclude unclean shutdown replicas.
         // To do that, we first union the current ISR and current elr, then filter out the target ISR and unclean shutdown
         // Replicas.
-        Set<Integer> candidateSet = Arrays.stream(partition.elr).boxed().collect(Collectors.toSet());
+        Set<Integer> candidateSet = new HashSet<>(targetElr);
         Arrays.stream(partition.isr).boxed().forEach(ii -> candidateSet.add(ii));
         targetElr = candidateSet.stream()
             .filter(replica -> !targetIsrSet.contains(replica))
@@ -433,8 +433,8 @@ public class PartitionChangeBuilder {
 
         // Calculate the new last known ELR. Includes any ISR members since the ISR size drops below min ISR.
         // In order to reduce the metadata usage, the last known ELR excludes the members in ELR and current ISR.
-        Arrays.stream(partition.lastKnownElr).boxed().forEach(ii -> candidateSet.add(ii));
-        targetLastKnownElr =  candidateSet.stream()
+        targetLastKnownElr.forEach(ii -> candidateSet.add(ii));
+        targetLastKnownElr = candidateSet.stream()
             .filter(replica -> !targetIsrSet.contains(replica))
             .filter(replica -> !targetElr.contains(replica))
             .collect(Collectors.toList());
