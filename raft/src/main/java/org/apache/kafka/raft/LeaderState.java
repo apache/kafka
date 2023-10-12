@@ -90,7 +90,7 @@ public class LeaderState<T> implements EpochState {
         this.fetchTimer = time.timer(fetchTimeoutMs);
     }
 
-    // Check if the fetchTimer is expired because we didn't receive fetch/fetchSnapshot request from the majority of
+    // Check if the fetchTimer is expired because we didn't receive a valid fetch/fetchSnapshot request from the majority of
     // the voters within fetch timeout.
     public boolean hasMajorityFollowerFetchExpired(long currentTimeMs) {
         fetchTimer.update(currentTimeMs);
