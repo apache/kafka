@@ -202,7 +202,8 @@ public class DefaultBackgroundThread extends KafkaThread {
                         coordinatorRequestManager,
                         subscriptionState,
                         membershipManager,
-                        errorEventHandler);
+                        errorEventHandler,
+                        new AssignmentReconciler(logContext, subscriptionState, metadata, backgroundEventQueue));
             }
 
             this.requestManagers = new RequestManagers(

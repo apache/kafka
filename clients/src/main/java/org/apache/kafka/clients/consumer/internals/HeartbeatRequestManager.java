@@ -18,6 +18,8 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
@@ -31,6 +33,8 @@ import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Optional;
+import java.util.Set;
 
 /**
  * <p>Manages the request creation and response handling for the heartbeat. The module creates a
@@ -92,6 +96,11 @@ public class HeartbeatRequestManager implements RequestManager {
      */
     private final ErrorEventHandler nonRetriableErrorHandler;
 
+    /**
+     * AssignmentReconciler that handles updates to partition assignments.
+     */
+    private final AssignmentReconciler assignmentReconciler;
+
     public HeartbeatRequestManager(
         final Time time,
         final LogContext logContext,
@@ -99,13 +108,15 @@ public class HeartbeatRequestManager implements RequestManager {
         final CoordinatorRequestManager coordinatorRequestManager,
         final SubscriptionState subscriptions,
         final MembershipManager membershipManager,
-        final ErrorEventHandler nonRetriableErrorHandler) {
+        final ErrorEventHandler nonRetriableErrorHandler,
+        final AssignmentReconciler assignmentReconciler) {
         this.coordinatorRequestManager = coordinatorRequestManager;
         this.time = time;
         this.logger = logContext.logger(getClass());
         this.subscriptions = subscriptions;
         this.membershipManager = membershipManager;
         this.nonRetriableErrorHandler = nonRetriableErrorHandler;
+        this.assignmentReconciler = assignmentReconciler;
         this.rebalanceTimeoutMs = config.getInt(CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG);
         long retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
         long retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
@@ -122,7 +133,8 @@ public class HeartbeatRequestManager implements RequestManager {
         final SubscriptionState subscriptions,
         final MembershipManager membershipManager,
         final HeartbeatRequestState heartbeatRequestState,
-        final ErrorEventHandler nonRetriableErrorHandler) {
+        final ErrorEventHandler nonRetriableErrorHandler,
+        final AssignmentReconciler assignmentReconciler) {
         this.logger = logContext.logger(this.getClass());
         this.time = time;
         this.subscriptions = subscriptions;
@@ -131,6 +143,7 @@ public class HeartbeatRequestManager implements RequestManager {
         this.heartbeatRequestState = heartbeatRequestState;
         this.membershipManager = membershipManager;
         this.nonRetriableErrorHandler = nonRetriableErrorHandler;
+        this.assignmentReconciler = assignmentReconciler;
     }
 
     /**
@@ -161,6 +174,32 @@ public class HeartbeatRequestManager implements RequestManager {
         this.heartbeatRequestState.onSendAttempt(currentTimeMs);
         NetworkClientDelegate.UnsentRequest request = makeHeartbeatRequest();
         return new NetworkClientDelegate.PollResult(heartbeatRequestState.heartbeatIntervalMs, Collections.singletonList(request));
+    }
+
+    public void partitionAssignmentChangedCallbacksInvoked(Set<TopicPartition> revokedPartitions,
+                                                           Set<TopicPartition> assignedPartitions,
+                                                           Optional<KafkaException> callbackError) {
+        if (callbackError.isPresent()) {
+            // TODO: how to react to callback errors?
+            //       return?
+        }
+
+        assignmentReconciler.reconciliationCallbacksInvoked(revokedPartitions, assignedPartitions);
+
+        // Reset the timer to 0 to force a heartbeat request to be sent out at the next call to poll().
+        heartbeatRequestState.resetTimer(0);
+    }
+
+    public void partitionAssignmentLostCallbackInvoked(Set<TopicPartition> lostPartitions, Optional<KafkaException> callbackError) {
+        if (callbackError.isPresent()) {
+            // TODO: how to react to callback errors?
+            //       return?
+        }
+
+        assignmentReconciler.lostCallbackInvoked();
+
+        // Reset the timer to 0 to force a heartbeat request to be sent out at the next call to poll().
+        heartbeatRequestState.resetTimer(0);
     }
 
     private NetworkClientDelegate.UnsentRequest makeHeartbeatRequest() {
@@ -216,6 +255,9 @@ public class HeartbeatRequestManager implements RequestManager {
             this.heartbeatRequestState.onSuccessfulAttempt(currentTimeMs);
             this.heartbeatRequestState.resetTimer();
             this.membershipManager.updateState(response.data());
+
+            if (this.membershipManager.state() == MemberState.RECONCILING)
+                assignmentReconciler.reconcile(this.membershipManager.assignment());
             return;
         }
         onErrorResponse(response, currentTimeMs);
@@ -281,6 +323,7 @@ public class HeartbeatRequestManager implements RequestManager {
                         membershipManager.memberId(), membershipManager.memberEpoch());
                 logInfo(message, response, currentTimeMs);
                 membershipManager.transitionToFenced();
+                assignmentReconciler.lost();
                 break;
 
             case UNKNOWN_MEMBER_ID:
@@ -289,6 +332,7 @@ public class HeartbeatRequestManager implements RequestManager {
                         membershipManager.memberId(), membershipManager.memberEpoch());
                 logInfo(message, response, currentTimeMs);
                 membershipManager.transitionToFenced();
+                assignmentReconciler.lost();
                 break;
 
             default:
@@ -357,7 +401,11 @@ public class HeartbeatRequestManager implements RequestManager {
         }
 
         public void resetTimer() {
-            this.heartbeatTimer.reset(heartbeatIntervalMs);
+            this.resetTimer(heartbeatIntervalMs);
+        }
+
+        public void resetTimer(long timeoutMs) {
+            this.heartbeatTimer.reset(timeoutMs);
         }
 
         @Override

@@ -70,8 +70,10 @@ public class ApplicationEventProcessor {
                 return processResetPositionsEvent();
             case VALIDATE_POSITIONS:
                 return processValidatePositionsEvent();
-            case REBALANCE_LISTENER_INVOKED:
-                return process((RebalanceListenerInvocationCompletedEvent) event);
+            case PARTITION_ASSIGNMENT_CHANGED_CALLBACKS_INVOKED:
+                return process((PartitionAssignmentChangedCallbacksInvokedEvent) event);
+            case PARTITION_ASSIGNMENT_LOST_CALLBACK_INVOKED:
+                return process((PartitionAssignmentLostCallbackInvokedEvent) event);
         }
         return false;
     }
@@ -162,8 +164,19 @@ public class ApplicationEventProcessor {
         return true;
     }
 
-    private boolean process(final RebalanceListenerInvocationCompletedEvent event) {
-        // TODO: callback into the HeartbeatRequestManager and/or AssignmentReconciler
+    private boolean process(final PartitionAssignmentChangedCallbacksInvokedEvent event) {
+        requestManagers.heartbeatRequestManager.ifPresent(hrm -> {
+            hrm.partitionAssignmentChangedCallbacksInvoked(event.revokedPartitions(), event.assignedPartitions(), event.error());
+        });
+
+        return true;
+    }
+
+    private boolean process(final PartitionAssignmentLostCallbackInvokedEvent event) {
+        requestManagers.heartbeatRequestManager.ifPresent(hrm -> {
+            hrm.partitionAssignmentLostCallbackInvoked(event.lostPartitions(), event.error());
+        });
+
         return true;
     }
 }

@@ -85,6 +85,7 @@ public class HeartbeatRequestManagerTest {
     private String memberId = "member-id";
     private int memberEpoch = 1;
     private ErrorEventHandler errorEventHandler;
+    private AssignmentReconciler assignmentReconciler;
 
     @BeforeEach
     public void setUp() {
@@ -97,6 +98,7 @@ public class HeartbeatRequestManagerTest {
         membershipManager = spy(new MembershipManagerImpl(GROUP_ID));
         heartbeatRequestState = mock(HeartbeatRequestManager.HeartbeatRequestState.class);
         errorEventHandler = mock(ErrorEventHandler.class);
+        assignmentReconciler = mock(AssignmentReconciler.class);
         heartbeatRequestManager = createManager();
     }
 
@@ -404,6 +406,7 @@ public class HeartbeatRequestManagerTest {
             subscriptionState,
             membershipManager,
             heartbeatRequestState,
-            errorEventHandler);
+            errorEventHandler,
+            assignmentReconciler);
     }
 }

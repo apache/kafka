@@ -16,35 +16,30 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-import org.apache.kafka.clients.consumer.internals.RebalanceStep;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.KafkaException;
 
 import java.util.Collections;
 import java.util.Optional;
 import java.util.SortedSet;
 
-public class RebalanceListenerInvocationCompletedEvent extends ApplicationEvent {
+public class PartitionAssignmentLostCallbackInvokedEvent extends ApplicationEvent {
 
-    private final RebalanceStep rebalanceStep;
-    private final SortedSet<TopicPartition> partitions;
-    private final Optional<Exception> error;
+    private final SortedSet<TopicPartition> lostPartitions;
+    private final Optional<KafkaException> error;
 
-    public RebalanceListenerInvocationCompletedEvent(RebalanceStep rebalanceStep, SortedSet<TopicPartition> partitions, Optional<Exception> error) {
-        super(Type.REBALANCE_LISTENER_INVOKED);
-        this.rebalanceStep = rebalanceStep;
-        this.partitions = Collections.unmodifiableSortedSet(partitions);
+    public PartitionAssignmentLostCallbackInvokedEvent(SortedSet<TopicPartition> lostPartitions,
+                                                       Optional<KafkaException> error) {
+        super(Type.PARTITION_ASSIGNMENT_LOST_CALLBACK_INVOKED);
+        this.lostPartitions = Collections.unmodifiableSortedSet(lostPartitions);
         this.error = error;
     }
 
-    public RebalanceStep rebalanceStep() {
-        return rebalanceStep;
+    public SortedSet<TopicPartition> lostPartitions() {
+        return lostPartitions;
     }
 
-    public SortedSet<TopicPartition> partitions() {
-        return partitions;
-    }
-
-    public Optional<Exception> error() {
+    public Optional<KafkaException> error() {
         return error;
     }
 
@@ -54,23 +49,22 @@ public class RebalanceListenerInvocationCompletedEvent extends ApplicationEvent 
         if (o == null || getClass() != o.getClass()) return false;
         if (!super.equals(o)) return false;
 
-        RebalanceListenerInvocationCompletedEvent that = (RebalanceListenerInvocationCompletedEvent) o;
+        PartitionAssignmentLostCallbackInvokedEvent that = (PartitionAssignmentLostCallbackInvokedEvent) o;
 
-        return rebalanceStep.equals(that.rebalanceStep) && partitions.equals(that.partitions) && error.equals(that.error);
+        return lostPartitions.equals(that.lostPartitions) && error.equals(that.error);
     }
 
     @Override
     public int hashCode() {
         int result = super.hashCode();
-        result = 31 * result + rebalanceStep.hashCode();
-        result = 31 * result + partitions.hashCode();
+        result = 31 * result + lostPartitions.hashCode();
         result = 31 * result + error.hashCode();
         return result;
     }
 
     @Override
     protected String toStringBase() {
-        return super.toStringBase() + ", rebalanceStep=" + rebalanceStep + ", partitions=" + partitions + ", error=" + error;
+        return super.toStringBase() + ", lostPartitions=" + lostPartitions + ", error=" + error;
     }
 
     @Override
