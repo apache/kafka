@@ -79,7 +79,6 @@ public interface CoordinatorLoader<U> extends AutoCloseable {
             return numBytes;
         }
 
-
         @Override
         public String toString() {
             return "LoadSummary(" +
