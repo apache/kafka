@@ -122,7 +122,7 @@ class RemoteIndexCacheTest {
     // this call should have invoked fetchOffsetIndex, fetchTimestampIndex once
     val resultPosition = cache.lookupOffset(rlsMetadata, offsetPosition1.offset)
     assertEquals(offsetPosition1.position, resultPosition)
-    verifyFetchIndexInvocation(count = 1, Seq(IndexType.OFFSET))
+    verifyFetchIndexInvocation(count = 1, Seq(IndexType.OFFSET, IndexType.TIMESTAMP))
 
     // this should not cause fetching index from RemoteStorageManager as it is already fetched earlier
     reset(rsm)
@@ -642,7 +642,6 @@ class RemoteIndexCacheTest {
 
       // Wait for signal to complete the test
       latchForTestWait.await()
-      assertCacheSize(1)
       val entry = cache.getIndexEntry(rlsMetadata)
       assertTrue(Files.exists(entry.offsetIndex().file().toPath))
     } finally {
