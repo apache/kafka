@@ -658,9 +658,9 @@ class RemoteIndexCacheTest {
       .thenAnswer(ans => {
         val metadata = ans.getArgument[RemoteLogSegmentMetadata](0)
         val indexType = ans.getArgument[IndexType](1)
-        val offsetIdx = createOffsetIndexForSegmentMetadata(metadata)
-        val timeIdx = createTimeIndexForSegmentMetadata(metadata)
-        val txnIdx = createTxIndexForSegmentMetadata(metadata)
+        val offsetIdx = createOffsetIndexForSegmentMetadata(metadata, tpDir)
+        val timeIdx = createTimeIndexForSegmentMetadata(metadata, tpDir)
+        val txnIdx = createTxIndexForSegmentMetadata(metadata, tpDir)
         maybeAppendIndexEntries(offsetIdx, timeIdx)
         // Create corrupted index file
         createCorruptTimeIndexOffsetFile(tpDir)
@@ -696,9 +696,9 @@ class RemoteIndexCacheTest {
       .thenAnswer(ans => {
         val metadata = ans.getArgument[RemoteLogSegmentMetadata](0)
         val indexType = ans.getArgument[IndexType](1)
-        val offsetIdx = createOffsetIndexForSegmentMetadata(metadata)
-        val timeIdx = createTimeIndexForSegmentMetadata(metadata)
-        val txnIdx = createTxIndexForSegmentMetadata(metadata)
+        val offsetIdx = createOffsetIndexForSegmentMetadata(metadata, tpDir)
+        val timeIdx = createTimeIndexForSegmentMetadata(metadata, tpDir)
+        val txnIdx = createTxIndexForSegmentMetadata(metadata, tpDir)
         maybeAppendIndexEntries(offsetIdx, timeIdx)
         indexType match {
           case IndexType.OFFSET => new FileInputStream(offsetIdx.file)
@@ -743,7 +743,7 @@ class RemoteIndexCacheTest {
     Files.copy(entry.txnIndex().file().toPath(), Paths.get(Utils.replaceSuffix(entry.txnIndex().file().getPath(), "", tempSuffix)))
     Files.copy(entry.timeIndex().file().toPath(), Paths.get(Utils.replaceSuffix(entry.timeIndex().file().getPath(), "", tempSuffix)))
 
-    cache.internalCache().invalidate(rlsMetadata.remoteLogSegmentId().id())
+    cache.remove(rlsMetadata.remoteLogSegmentId().id())
 
     // wait until entry is marked for deletion
     TestUtils.waitUntilTrue(() => entry.isMarkedForCleanup,
@@ -771,9 +771,9 @@ class RemoteIndexCacheTest {
       .thenAnswer(ans => {
         val metadata = ans.getArgument[RemoteLogSegmentMetadata](0)
         val indexType = ans.getArgument[IndexType](1)
-        val offsetIdx = createOffsetIndexForSegmentMetadata(metadata)
-        val timeIdx = createTimeIndexForSegmentMetadata(metadata)
-        val txnIdx = createTxIndexForSegmentMetadata(metadata)
+        val offsetIdx = createOffsetIndexForSegmentMetadata(metadata, tpDir)
+        val timeIdx = createTimeIndexForSegmentMetadata(metadata, tpDir)
+        val txnIdx = createTxIndexForSegmentMetadata(metadata, tpDir)
         maybeAppendIndexEntries(offsetIdx, timeIdx)
         // Create corrupt index file return from RSM
         createCorruptedIndexFile(testIndexType, tpDir)
@@ -818,7 +818,7 @@ class RemoteIndexCacheTest {
     // verify deleted file exists on disk
     assertTrue(getRemoteCacheIndexFileFromDisk(LogFileUtils.DELETED_FILE_SUFFIX).isPresent, s"Deleted Offset index file should be present on disk at ${remoteIndexCacheDir.toPath}")
 
-    cache.internalCache().invalidate(rlsMetadata.remoteLogSegmentId().id())
+    cache.remove(rlsMetadata.remoteLogSegmentId().id())
 
     // wait until entry is marked for deletion
     TestUtils.waitUntilTrue(() => entry.isMarkedForCleanup,
