@@ -201,7 +201,7 @@ public class LogSegment {
         return maxTimestampAndOffsetSoFar.timestamp;
     }
 
-    public long offsetOfMaxTimestampSoFar() {
+    private long offsetOfMaxTimestampSoFar() {
         return maxTimestampAndOffsetSoFar.offset;
     }
 
@@ -213,7 +213,7 @@ public class LogSegment {
     /**
      * checks that the argument offset can be represented as an integer offset relative to the baseOffset.
      */
-    public boolean canConvertToRelativeOffset(long offset) throws IOException {
+    private boolean canConvertToRelativeOffset(long offset) throws IOException {
         return offsetIndex().canAppendOffset(offset);
     }
 
@@ -799,6 +799,7 @@ public class LogSegment {
         }
     }
 
+    // Visible for testing
     public boolean deleted() {
         return !log.file().exists() && !offsetIndexFile().exists() && !timeIndexFile().exists() && !txnIndex.file().exists();
     }
