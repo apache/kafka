@@ -55,6 +55,35 @@ public class DropHeadersTest {
     }
 
     @Test
+    public void dropExistingHeaderWithWildcard() {
+        xform.configure(config(".*-drop"));
+        ConnectHeaders expected = new ConnectHeaders();
+        expected.addString("existing", "existing-value");
+        ConnectHeaders headers = expected.duplicate();
+        headers.addString("to-drop", "existing-value");
+        SourceRecord original = sourceRecord(headers);
+        SourceRecord xformed = xform.apply(original);
+        assertNonHeaders(original, xformed);
+        assertEquals(expected, xformed.headers());
+    }
+
+    @Test
+    public void dropExistingHeaderBeginsWithRegexp() {
+        xform.configure(config("^drop.*"));
+        ConnectHeaders expected = new ConnectHeaders();
+        expected.addString("existing", "existing-value");
+        expected.addString("no-drop", "existing-value");
+        ConnectHeaders headers = expected.duplicate();
+        headers.addString("drop", "existing-value");
+        headers.addString("drop-me", "existing-value");
+        headers.addString("drop-me-too", "existing-value");
+        SourceRecord original = sourceRecord(headers);
+        SourceRecord xformed = xform.apply(original);
+        assertNonHeaders(original, xformed);
+        assertEquals(expected, xformed.headers());
+    }
+
+    @Test
     public void dropExistingHeaderWithMultipleValues() {
         xform.configure(config("to-drop"));
         ConnectHeaders expected = new ConnectHeaders();
@@ -62,6 +91,23 @@ public class DropHeadersTest {
         ConnectHeaders headers = expected.duplicate();
         headers.addString("to-drop", "existing-value");
         headers.addString("to-drop", "existing-other-value");
+
+        SourceRecord original = sourceRecord(headers);
+        SourceRecord xformed = xform.apply(original);
+        assertNonHeaders(original, xformed);
+        assertEquals(expected, xformed.headers());
+    }
+
+    @Test
+    public void dropExistingHeadersWithMultipleValuesWithWildcard() {
+        xform.configure(config(".*drop"));
+        ConnectHeaders expected = new ConnectHeaders();
+        expected.addString("existing", "existing-value");
+        ConnectHeaders headers = expected.duplicate();
+        headers.addString("to-drop", "existing-value");
+        headers.addString("to-drop", "existing-other-value");
+        headers.addString("also-drop", "existing-value");
+        headers.addString("also-drop", "existing-other-value");
 
         SourceRecord original = sourceRecord(headers);
         SourceRecord xformed = xform.apply(original);
