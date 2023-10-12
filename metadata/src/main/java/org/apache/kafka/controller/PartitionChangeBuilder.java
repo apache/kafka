@@ -425,7 +425,7 @@ public class PartitionChangeBuilder {
         // To do that, we first union the current ISR and current elr, then filter out the target ISR and unclean shutdown
         // Replicas.
         Set<Integer> candidateSet = new HashSet<>(targetElr);
-        Arrays.stream(partition.isr).boxed().forEach(ii -> candidateSet.add(ii));
+        Arrays.stream(partition.isr).forEach(ii -> candidateSet.add(ii));
         targetElr = candidateSet.stream()
             .filter(replica -> !targetIsrSet.contains(replica))
             .filter(replica -> uncleanShutdownReplicas == null || !uncleanShutdownReplicas.contains(replica))
