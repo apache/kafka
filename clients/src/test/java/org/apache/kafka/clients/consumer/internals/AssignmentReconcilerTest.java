@@ -20,8 +20,8 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
-import org.apache.kafka.clients.consumer.internals.events.RebalanceListenerInvokedEvent;
-import org.apache.kafka.clients.consumer.internals.events.RebalanceStartedEvent;
+import org.apache.kafka.clients.consumer.internals.events.RebalanceListenerInvocationCompletedEvent;
+import org.apache.kafka.clients.consumer.internals.events.RebalanceListenerInvocationNeededEvent;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
@@ -89,13 +89,13 @@ public class AssignmentReconcilerTest {
         // Grab the background event. Because we didn't remove any partitions, but only added them, jump
         // directly to the assign partitions. Let's verify that there's an appropriate event on the
         // background event queue, it has the correct partitions, and the future is there but not complete.
-        RebalanceStartedEvent event = pollBackgroundEvent(ASSIGN);
+        RebalanceListenerInvocationNeededEvent event = pollBackgroundEvent(ASSIGN);
         assertEventPartitionsEquals(event, newTopicPartitions(topicName, 0, 1, 2, 3));
 
         // Complete the future to signal to the reconciler that the ConsumerRebalanceListener callback
         // has completed. This will trigger the "commit" of the partition assignment to the SubscriptionState.
         assertSubscriptionStatePartitionsEquals(Collections.emptySet());
-        RebalanceListenerInvokedEvent invokedEvent = processRebalanceCallback(callbackInvoker, event);
+        RebalanceListenerInvocationCompletedEvent invokedEvent = processRebalanceCallback(callbackInvoker, event);
         assertEventPartitionsEquals(invokedEvent, newTopicPartitions(topicName, 0, 1, 2, 3));
         reconciler.postOnAssignedPartitions(invokedEvent.partitions(), invokedEvent.error());
         assertSubscriptionStatePartitionsEquals(newTopicPartitions(topicName, 0, 1, 2, 3));
@@ -120,11 +120,11 @@ public class AssignmentReconcilerTest {
             // Grab the background event. Because we didn't remove any partitions, but only added them, jump
             // directly to the assign partitions. Let's verify that there's an appropriate event on the
             // background event queue, it has the correct partitions, and the future is there but not complete.
-            RebalanceStartedEvent event = pollBackgroundEvent(ASSIGN);
+            RebalanceListenerInvocationNeededEvent event = pollBackgroundEvent(ASSIGN);
             assertEventPartitionsEquals(event, newTopicPartitions(topicName, 0, 1, 2, 3));
 
             // Now process the callback.
-            RebalanceListenerInvokedEvent invokedEvent = processRebalanceCallback(callbackInvoker, event);
+            RebalanceListenerInvocationCompletedEvent invokedEvent = processRebalanceCallback(callbackInvoker, event);
             assertEventPartitionsEquals(invokedEvent, newTopicPartitions(topicName, 0, 1, 2, 3));
             reconciler.postOnAssignedPartitions(invokedEvent.partitions(), invokedEvent.error());
             assertSubscriptionStatePartitionsEquals(newTopicPartitions(topicName, 0, 1, 2, 3));
@@ -141,11 +141,11 @@ public class AssignmentReconcilerTest {
 
             // Grab the background event. We are removing some partitions, so verify that we have the correct event
             // type on the background event queue, and it has the correct partitions to remove.
-            RebalanceStartedEvent event = pollBackgroundEvent(REVOKE);
+            RebalanceListenerInvocationNeededEvent event = pollBackgroundEvent(REVOKE);
             assertEventPartitionsEquals(event, newTopicPartitions(topicName, 1, 3));
 
             // Now process the callback.
-            RebalanceListenerInvokedEvent invokedEvent = processRebalanceCallback(callbackInvoker, event);
+            RebalanceListenerInvocationCompletedEvent invokedEvent = processRebalanceCallback(callbackInvoker, event);
             assertEventPartitionsEquals(invokedEvent, newTopicPartitions(topicName, 1, 3));
             reconciler.postOnRevokedPartitions(invokedEvent.partitions(), invokedEvent.error());
             assertSubscriptionStatePartitionsEquals(newTopicPartitions(topicName, 0, 2));
@@ -168,11 +168,11 @@ public class AssignmentReconcilerTest {
         // Grab the background event. Because we are "losing" the partitions, verify that there's an
         // appropriate event on the background event queue, it still has the partitions, and the future is
         // there but not complete.
-        RebalanceStartedEvent event = pollBackgroundEvent(LOSE);
+        RebalanceListenerInvocationNeededEvent event = pollBackgroundEvent(LOSE);
         assertEventPartitionsEquals(event, partitions);
 
         // Now process the callback. Afterward we should have an empty set of partitions
-        RebalanceListenerInvokedEvent invokedEvent = processRebalanceCallback(callbackInvoker, event);
+        RebalanceListenerInvocationCompletedEvent invokedEvent = processRebalanceCallback(callbackInvoker, event);
         assertEventPartitionsEquals(invokedEvent, partitions);
         reconciler.postOnLosePartitions(invokedEvent.partitions(), invokedEvent.error());
         assertSubscriptionStatePartitionsEquals(Collections.emptySet());
@@ -207,12 +207,12 @@ public class AssignmentReconcilerTest {
             // Start the reconciliation process.
             assertTrue(reconciler.maybeRevoke(assignment));
 
-            RebalanceStartedEvent event = pollBackgroundEvent(REVOKE);
+            RebalanceListenerInvocationNeededEvent event = pollBackgroundEvent(REVOKE);
             assertEventPartitionsEquals(event, newTopicPartitions(topicName, 1, 3));
 
             // Now process the callback. It should throw an exception, but it should still finish and allow
             // the reconciler to alter the assigned partition set.
-            RebalanceListenerInvokedEvent invokedEvent = processRebalanceCallback(callbackInvoker, event);
+            RebalanceListenerInvocationCompletedEvent invokedEvent = processRebalanceCallback(callbackInvoker, event);
             assertEventPartitionsEquals(invokedEvent, newTopicPartitions(topicName, 1, 3));
             reconciler.postOnRevokedPartitions(invokedEvent.partitions(), invokedEvent.error());
             assertSubscriptionStatePartitionsEquals(newTopicPartitions(topicName, 0, 2));
@@ -223,11 +223,11 @@ public class AssignmentReconcilerTest {
         assertEquals(expected, subscriptions.assignedPartitions());
     }
 
-    private void assertEventPartitionsEquals(RebalanceStartedEvent event, SortedSet<TopicPartition> expected) {
+    private void assertEventPartitionsEquals(RebalanceListenerInvocationNeededEvent event, SortedSet<TopicPartition> expected) {
         assertEquals(expected, event.partitions());
     }
 
-    private void assertEventPartitionsEquals(RebalanceListenerInvokedEvent event, SortedSet<TopicPartition> expected) {
+    private void assertEventPartitionsEquals(RebalanceListenerInvocationCompletedEvent event, SortedSet<TopicPartition> expected) {
         assertEquals(expected, event.partitions());
     }
 
@@ -315,11 +315,11 @@ public class AssignmentReconcilerTest {
         reconciler = new AssignmentReconciler(logContext, subscriptions, metadata, backgroundEventQueue);
     }
 
-    private RebalanceStartedEvent pollBackgroundEvent(RebalanceStep expectedRebalanceStep) {
+    private RebalanceListenerInvocationNeededEvent pollBackgroundEvent(RebalanceStep expectedRebalanceStep) {
         BackgroundEvent e = backgroundEventQueue.poll();
         assertNotNull(e);
-        assertInstanceOf(RebalanceStartedEvent.class, e);
-        RebalanceStartedEvent event = (RebalanceStartedEvent) e;
+        assertInstanceOf(RebalanceListenerInvocationNeededEvent.class, e);
+        RebalanceListenerInvocationNeededEvent event = (RebalanceListenerInvocationNeededEvent) e;
         assertEquals(expectedRebalanceStep, event.rebalanceStep());
         return event;
     }

@@ -27,8 +27,8 @@ import org.apache.kafka.clients.consumer.ConsumerInterceptor;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.events.EventHandler;
-import org.apache.kafka.clients.consumer.internals.events.RebalanceListenerInvokedEvent;
-import org.apache.kafka.clients.consumer.internals.events.RebalanceStartedEvent;
+import org.apache.kafka.clients.consumer.internals.events.RebalanceListenerInvocationCompletedEvent;
+import org.apache.kafka.clients.consumer.internals.events.RebalanceListenerInvocationNeededEvent;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.KafkaException;
@@ -227,13 +227,13 @@ public final class ConsumerUtils {
     }
 
     static void processRebalanceCallback(final ConsumerRebalanceListenerInvoker invoker,
-                                         final RebalanceStartedEvent event,
+                                         final RebalanceListenerInvocationNeededEvent event,
                                          final EventHandler eventHandler) {
         eventHandler.add(processRebalanceCallback(invoker, event));
     }
 
-    static RebalanceListenerInvokedEvent processRebalanceCallback(final ConsumerRebalanceListenerInvoker invoker,
-                                                                  final RebalanceStartedEvent event) {
+    static RebalanceListenerInvocationCompletedEvent processRebalanceCallback(final ConsumerRebalanceListenerInvoker invoker,
+                                                                              final RebalanceListenerInvocationNeededEvent event) {
         SortedSet<TopicPartition> partitions = event.partitions();
         Exception invocationException;
 
@@ -261,6 +261,6 @@ public final class ConsumerUtils {
         }
 
         Optional<Exception> error = Optional.ofNullable(invocationException);
-        return new RebalanceListenerInvokedEvent(event.rebalanceStep(), partitions, error);
+        return new RebalanceListenerInvocationCompletedEvent(event.rebalanceStep(), partitions, error);
     }
 }

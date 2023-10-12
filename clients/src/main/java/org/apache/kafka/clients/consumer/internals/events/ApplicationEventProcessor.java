@@ -66,7 +66,7 @@ public class ApplicationEventProcessor {
             case VALIDATE_POSITIONS:
                 return processValidatePositionsEvent();
             case REBALANCE_LISTENER_INVOKED:
-                return process((RebalanceListenerInvokedEvent) event);
+                return process((RebalanceListenerInvocationCompletedEvent) event);
         }
         return false;
     }
@@ -156,7 +156,7 @@ public class ApplicationEventProcessor {
         return true;
     }
 
-    private boolean process(final RebalanceListenerInvokedEvent event) {
+    private boolean process(final RebalanceListenerInvocationCompletedEvent event) {
         // TODO: callback into the HeartbeatRequestManager and/or AssignmentReconciler
         return true;
     }

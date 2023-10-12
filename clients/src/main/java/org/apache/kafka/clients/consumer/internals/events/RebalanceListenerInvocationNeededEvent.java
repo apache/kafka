@@ -20,20 +20,17 @@ import org.apache.kafka.clients.consumer.internals.RebalanceStep;
 import org.apache.kafka.common.TopicPartition;
 
 import java.util.Collections;
-import java.util.Optional;
 import java.util.SortedSet;
 
-public class RebalanceListenerInvokedEvent extends ApplicationEvent {
+public class RebalanceListenerInvocationNeededEvent extends BackgroundEvent {
 
     private final RebalanceStep rebalanceStep;
     private final SortedSet<TopicPartition> partitions;
-    private final Optional<Exception> error;
 
-    public RebalanceListenerInvokedEvent(RebalanceStep rebalanceStep, SortedSet<TopicPartition> partitions, Optional<Exception> error) {
-        super(Type.REBALANCE_LISTENER_INVOKED);
+    public RebalanceListenerInvocationNeededEvent(RebalanceStep rebalanceStep, SortedSet<TopicPartition> partitions) {
+        super(Type.REBALANCE_STARTED);
         this.rebalanceStep = rebalanceStep;
         this.partitions = Collections.unmodifiableSortedSet(partitions);
-        this.error = error;
     }
 
     public RebalanceStep rebalanceStep() {
@@ -44,19 +41,15 @@ public class RebalanceListenerInvokedEvent extends ApplicationEvent {
         return partitions;
     }
 
-    public Optional<Exception> error() {
-        return error;
-    }
-
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         if (!super.equals(o)) return false;
 
-        RebalanceListenerInvokedEvent that = (RebalanceListenerInvokedEvent) o;
+        RebalanceListenerInvocationNeededEvent that = (RebalanceListenerInvocationNeededEvent) o;
 
-        return rebalanceStep.equals(that.rebalanceStep) && partitions.equals(that.partitions) && error.equals(that.error);
+        return rebalanceStep.equals(that.rebalanceStep) && partitions.equals(that.partitions);
     }
 
     @Override
@@ -64,13 +57,12 @@ public class RebalanceListenerInvokedEvent extends ApplicationEvent {
         int result = super.hashCode();
         result = 31 * result + rebalanceStep.hashCode();
         result = 31 * result + partitions.hashCode();
-        result = 31 * result + error.hashCode();
         return result;
     }
 
     @Override
     protected String toStringBase() {
-        return super.toStringBase() + ", rebalanceStep=" + rebalanceStep + ", partitions=" + partitions + ", error=" + error;
+        return super.toStringBase() + ", rebalanceStep=" + rebalanceStep + ", partitions=" + partitions;
     }
 
     @Override
