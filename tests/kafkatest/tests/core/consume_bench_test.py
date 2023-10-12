@@ -23,14 +23,14 @@ from kafkatest.services.trogdor.consume_bench_workload import ConsumeBenchWorklo
 from kafkatest.services.trogdor.task_spec import TaskSpec
 from kafkatest.services.trogdor.trogdor import TrogdorService
 from kafkatest.services.zookeeper import ZookeeperService
-from kafkatest.services.kafka.util import skip_if_new_coordinator_and_zk
+
 
 class ConsumeBenchTest(Test):
     def __init__(self, test_context):
         """:type test_context: ducktape.tests.test.TestContext"""
         super(ConsumeBenchTest, self).__init__(test_context)
         self.zk = ZookeeperService(test_context, num_nodes=3) if quorum.for_test(test_context) == quorum.zk else None
-        self.kafka = KafkaService(test_context, num_nodes=3, zk=self.zk,)
+        self.kafka = KafkaService(test_context, num_nodes=3, zk=self.zk)
         self.producer_workload_service = ProduceBenchWorkloadService(test_context, self.kafka)
         self.consumer_workload_service = ConsumeBenchWorkloadService(test_context, self.kafka)
         self.consumer_workload_service_2 = ConsumeBenchWorkloadService(test_context, self.kafka)
@@ -69,16 +69,16 @@ class ConsumeBenchTest(Test):
     @cluster(num_nodes=10)
     @matrix(
         topics=[
-            ["consume_bench_topic[0-5]"],
-            ["consume_bench_topic[0-5]:[0-4]"]
+            ["consume_bench_topic[0-5]"], # topic subscription
+            ["consume_bench_topic[0-5]:[0-4]"] # manual topic assignment
         ],
         metadata_quorum=quorum.zk,
         use_new_coordinator=[False]
     ) # topic subscription
     @matrix(
         topics=[
-            ["consume_bench_topic[0-5]"],
-            ["consume_bench_topic[0-5]:[0-4]"]
+            ["consume_bench_topic[0-5]"], # topic subscription
+            ["consume_bench_topic[0-5]:[0-4]"] # manual topic assignment
         ],
         metadata_quorum=quorum.isolated_kraft,
         use_new_coordinator=[True, False]
@@ -275,3 +275,4 @@ class ConsumeBenchTest(Test):
             if expected_error_msg not in str(e):
                 raise RuntimeError("Unexpected Exception - " + str(e))
             self.logger.info(e)
+
