@@ -49,7 +49,7 @@
     { "name": "LastKnownELR", "type": "[]int32", "default": "null", "entityType": "brokerId",
       "versions": "1+", "nullableVersions": "1+", "taggedVersions": "1+", "tag": 7,
       "about": "null if the LastKnownELR didn't change; the last known eligible leader replicas otherwise." },
-    { "name": "LastKnownLeader", "type": "int32", "default": "-2", "entityType": "brokerId",
+    { "name": "LastKnownLeader", "type": "int32", "default": "-2", "entityType": "brokerId", "taggedVersions": "1+", "tag": 8,
       "versions": "1+",
       "about": "-1 if the LastKnownLeader should be empty; -2 means the last known leader does not change; the last known leader otherwise." }
   ]

@@ -326,7 +326,7 @@ public class ClusterControlManager {
     }
 
     boolean eligibleLeaderReplicasAllowed() {
-        return eligibleLeaderReplicasEnabled;
+        return eligibleLeaderReplicasEnabled && featureControl.metadataVersion().isElrSupported();
     }
 
     /**

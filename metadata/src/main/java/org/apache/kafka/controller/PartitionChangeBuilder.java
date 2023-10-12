@@ -19,6 +19,7 @@ package org.apache.kafka.controller;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -353,7 +354,7 @@ public class PartitionChangeBuilder {
 
         completeReassignmentIfNeeded();
 
-        if (PartitionChangeBuilder.this.eligibleLeaderReplicasEnabled) {
+        if (eligibleLeaderReplicasEnabled) {
             populateTargetElr();
         }
 
@@ -365,7 +366,7 @@ public class PartitionChangeBuilder {
         boolean isCleanLeaderElection = record.isr() == null;
 
         // Clean the ELR related fields if it is an unclean election or ELR is disabled.
-        if (!isCleanLeaderElection || !PartitionChangeBuilder.this.eligibleLeaderReplicasEnabled) {
+        if (!isCleanLeaderElection || !eligibleLeaderReplicasEnabled) {
             targetElr = Collections.emptyList();
             targetLastKnownElr = Collections.emptyList();
         }
@@ -373,17 +374,14 @@ public class PartitionChangeBuilder {
         if (!targetElr.equals(Replicas.toList(partition.elr))) {
             record.setEligibleLeaderReplicas(targetElr);
         }
+
         if (!targetLastKnownElr.equals(Replicas.toList(partition.lastKnownElr))) {
             record.setLastKnownELR(targetLastKnownElr);
         }
 
-        // The record.isr is null if it is a clean election. In this case, it will
-        // 1. Set the new ISR if it is different from the current ISR.
-        // 2. Set the new ELR/LastKnowElr if it is different from the current ones.
-        if (isCleanLeaderElection) {
-            if (!targetIsr.isEmpty() && !targetIsr.equals(Replicas.toList(partition.isr))) {
-                record.setIsr(targetIsr);
-            }
+        // Set the new ISR if it is different from the current ISR and unclean leader election didn't already set it.
+        if (isCleanLeaderElection && !targetIsr.isEmpty() && !targetIsr.equals(Replicas.toList(partition.isr))) {
+            record.setIsr(targetIsr);
         }
 
         setAssignmentChanges(record);
@@ -395,7 +393,7 @@ public class PartitionChangeBuilder {
         if (changeRecordIsNoOp(record)) {
             return Optional.empty();
         } else {
-            return Optional.of(new ApiMessageAndVersion(record, eligibleLeaderReplicasEnabled ? (short) 1 : (short) 0));
+            return Optional.of(new ApiMessageAndVersion(record, metadataVersion.partitionChangeRecordVersion()));
         }
     }
 
@@ -419,8 +417,7 @@ public class PartitionChangeBuilder {
             return;
         }
 
-
-        Set<Integer> targetIsrSet = targetIsr.stream().collect(Collectors.toSet());
+        Set<Integer> targetIsrSet = new HashSet<>(targetIsr);
         // Tracking the ELR. The new elr is expected to
         // 1. Include the current ISR
         // 2. Exclude the duplicate replicas between elr and target ISR.
@@ -430,14 +427,17 @@ public class PartitionChangeBuilder {
         Set<Integer> candidateSet = Arrays.stream(partition.elr).boxed().collect(Collectors.toSet());
         Arrays.stream(partition.isr).boxed().forEach(ii -> candidateSet.add(ii));
         targetElr = candidateSet.stream()
-            .filter(replica -> !targetIsrSet.contains(replica) && (uncleanShutdownReplicas == null || !uncleanShutdownReplicas.contains(replica)))
+            .filter(replica -> !targetIsrSet.contains(replica))
+            .filter(replica -> uncleanShutdownReplicas == null || !uncleanShutdownReplicas.contains(replica))
             .collect(Collectors.toList());
 
         // Calculate the new last known ELR. Includes any ISR members since the ISR size drops below min ISR.
         // In order to reduce the metadata usage, the last known ELR excludes the members in ELR and current ISR.
         Arrays.stream(partition.lastKnownElr).boxed().forEach(ii -> candidateSet.add(ii));
         targetLastKnownElr =  candidateSet.stream()
-            .filter(replica -> !targetIsrSet.contains(replica) && !targetElr.contains(replica)).collect(Collectors.toList());
+            .filter(replica -> !targetIsrSet.contains(replica))
+            .filter(replica -> !targetElr.contains(replica))
+            .collect(Collectors.toList());
     }
 
     @Override

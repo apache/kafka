@@ -136,8 +136,7 @@ public class ConfigurationControlManagerTest {
             setName("def").setValue("blah"));
         assertEquals(toMap(entry("abc", "x,y,z"), entry("def", "blah")),
             manager.getConfigs(MYTOPIC));
-        assertEquals(toMap(entry("abc", "x,y,z"), entry("def", "blah")),
-                manager.getTopicConfigs(MYTOPIC.name()));
+        assertEquals("x,y,z", manager.getTopicConfig(MYTOPIC.name(), "abc"));
     }
 
     @Test

@@ -434,12 +434,12 @@ public class ConfigurationControlManager {
         }
     }
 
-    Map<String, String> getTopicConfigs(String topicName) {
+    String getTopicConfig(String topicName, String configKey) {
         Map<String, String> map = configData.get(new ConfigResource(Type.TOPIC, topicName));
         if (map == null) {
-            return Collections.emptyMap();
+            return "";
         } else {
-            return Collections.unmodifiableMap(new HashMap<>(map));
+            return map.getOrDefault(configKey, "");
         }
     }
 
