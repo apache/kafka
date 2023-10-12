@@ -242,11 +242,11 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         eventHandler.add(validatePositionsEvent);
 
         // Reset positions using committed offsets retrieved from the group coordinator, for any
-        // partitions which do  not have a valid position and are not awaiting reset. We
+        // partitions which do not have a valid position and are not awaiting reset. This will
+        // trigger an OffsetFetch request and update positions with the offsets retrieved. This
         // will only do a coordinator lookup if there are partitions which have missing
         // positions, so a consumer with manually assigned partitions can avoid a coordinator
-        // dependence by always ensuring that assigned partitions have an initial position. This
-        // will trigger an OffsetFetch request and update positions with the offsets retrieved.
+        // dependence by always ensuring that assigned partitions have an initial position.
         if (isCommittedOffsetsManagementEnabled() && !refreshCommittedOffsetsIfNeeded(timer))
             return false;
 
@@ -255,7 +255,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         // are partitions with a missing position, then we will raise a NoOffsetForPartitionException exception.
         subscriptions.resetInitializingPositions();
 
-        // Reset positions using partitions offsets retrieved from the leader, for any partitions
+        // Reset positions using partition offsets retrieved from the leader, for any partitions
         // which are awaiting reset. This will trigger a ListOffset request, retrieve the
         // partition offsets according to the strategy (ex. earliest, latest), and update the
         // positions.
