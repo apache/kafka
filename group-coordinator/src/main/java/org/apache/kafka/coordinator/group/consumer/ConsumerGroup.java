@@ -42,7 +42,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-import java.util.List;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -735,20 +734,36 @@ public class ConsumerGroup implements Group {
         ConsumerGroupMember newMember
     ) {
         if (oldMember != null) {
-            oldMember.subscribedTopicNames().forEach(topicName ->
-                subscribedTopicCount.compute(topicName, ConsumerGroup::decValue)
-            );
+            String oldMemberRegex = oldMember.subscribedTopicRegex();
+            if (oldMemberRegex == null || oldMemberRegex.isEmpty()) {
+                oldMember.subscribedTopicNames().forEach(topicName ->
+                        subscribedTopicCount.compute(topicName, ConsumerGroup::decValue)
+                );
+            } else {
+                Pattern pattern = Pattern.compile(oldMemberRegex);
+                oldMember.subscribedTopicNames()
+                        .stream()
+                        .filter(topicName -> pattern.matcher(topicName).matches())
+                        .forEach(topicName -> {
+                            subscribedTopicCount.compute(topicName, ConsumerGroup::decValue);
+                        });
+            }
         }
 
         if (newMember != null) {
-            if (topics != null) {
+            String newMemberRegex = newMember.subscribedTopicRegex();
+            if (newMemberRegex == null || newMemberRegex.isEmpty()) {
+                newMember.subscribedTopicNames().forEach(topicName ->
+                        subscribedTopicCount.compute(topicName, ConsumerGroup::incValue)
+                );
+
+            } else if (topics != null) {
+                // During replay, when the topic image is empty, we should not update the RegexSubscribedTopics.
+                // Therefore, we skip updating the subscribedTopicCount in this case.
                 getRegexSubscribedTopics(topics, newMember.subscribedTopicRegex()).forEach(topicName -> {
                     subscribedTopicCount.compute(topicName, ConsumerGroup::incValue);
                 });
             }
-            newMember.subscribedTopicNames().forEach(topicName ->
-                subscribedTopicCount.compute(topicName, ConsumerGroup::incValue)
-            );
         }
     }
 
