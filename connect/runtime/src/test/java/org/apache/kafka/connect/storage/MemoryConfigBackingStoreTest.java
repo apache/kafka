@@ -31,6 +31,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -101,9 +102,10 @@ public class MemoryConfigBackingStoreTest {
         configStore.putConnectorConfig(CONNECTOR_IDS.get(1), SAMPLE_CONFIGS.get(1));
         ClusterConfigState configState = configStore.snapshot();
 
-        assertTrue(configState.contains(CONNECTOR_IDS.get(0)));
-        assertTrue(configState.contains(CONNECTOR_IDS.get(1)));
-        assertEquals(2, configState.connectors().size());
+        Set<String> expectedConnectors = new HashSet<>();
+        expectedConnectors.add(CONNECTOR_IDS.get(0));
+        expectedConnectors.add(CONNECTOR_IDS.get(1));
+        assertEquals(expectedConnectors, configState.connectors());
 
         configStore.removeConnectorConfig(CONNECTOR_IDS.get(1));
         configState = configStore.snapshot();
