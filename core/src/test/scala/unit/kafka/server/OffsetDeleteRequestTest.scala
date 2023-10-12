@@ -152,8 +152,6 @@ class OffsetDeleteRequestTest(cluster: ClusterInstance) extends GroupCoordinator
         expectedResponseError = Errors.INVALID_GROUP_ID,
         version = version.toShort
       )
-
-      // TODO: check partition
     }
   }
 }
