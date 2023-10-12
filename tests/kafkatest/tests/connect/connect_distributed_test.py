@@ -81,7 +81,13 @@ class ConnectDistributedTest(Test):
         self.value_converter = "org.apache.kafka.connect.json.JsonConverter"
         self.schemas = True
 
-    def setup_services(self, security_protocol=SecurityConfig.PLAINTEXT, timestamp_type=None, broker_version=DEV_BRANCH, auto_create_topics=False, include_filestream_connectors=False):
+    def setup_services(self,
+                       security_protocol=SecurityConfig.PLAINTEXT,
+                       timestamp_type=None,
+                       broker_version=DEV_BRANCH,
+                       auto_create_topics=False,
+                       include_filestream_connectors=False,
+                       num_workers=3):
         self.kafka = KafkaService(self.test_context, self.num_brokers, self.zk,
                                   security_protocol=security_protocol, interbroker_security_protocol=security_protocol,
                                   topics=self.topics, version=broker_version,
@@ -94,7 +100,7 @@ class ConnectDistributedTest(Test):
             for node in self.kafka.nodes:
                 node.config[config_property.MESSAGE_TIMESTAMP_TYPE] = timestamp_type
 
-        self.cc = ConnectDistributedService(self.test_context, 3, self.kafka, [self.INPUT_FILE, self.OUTPUT_FILE],
+        self.cc = ConnectDistributedService(self.test_context, num_workers, self.kafka, [self.INPUT_FILE, self.OUTPUT_FILE],
                                             include_filestream_connectors=include_filestream_connectors)
         self.cc.log_level = "DEBUG"
 
@@ -374,6 +380,159 @@ class ConnectDistributedTest(Test):
         for node in self.cc.nodes:
             wait_until(lambda: self.is_paused(self.source, node), timeout_sec=120,
                        err_msg="Failed to see connector startup in PAUSED state")
+
+    @cluster(num_nodes=5)
+    def test_dynamic_logging(self):
+        """
+        Test out the REST API for dynamically adjusting logging levels, on both a single-worker and cluster-wide basis.
+        """
+
+        self.setup_services(num_workers=3)
+        self.cc.set_configs(lambda node: self.render("connect-distributed.properties", node=node))
+        self.cc.start()
+
+        worker = self.cc.nodes[0]
+        prior_all_loggers = self.cc.get_all_loggers(worker)
+        self.logger.debug("Listed all loggers via REST API: %s", str(prior_all_loggers))
+        assert prior_all_loggers is not None
+        assert 'root' in prior_all_loggers
+        # We need root and at least one other namespace (the other namespace is checked
+        # later on to make sure that it hasn't changed)
+        assert len(prior_all_loggers) >= 2
+        for logger in prior_all_loggers.values():
+            assert logger['last_modified'] is None
+
+        namespace = None
+        for logger in prior_all_loggers.keys():
+            if logger != 'root':
+                namespace = logger
+                break
+        assert namespace is not None
+
+        initial_level = self.cc.get_logger(worker, namespace)['level'].upper()
+        # Make sure we pick a different one than what's already set for that namespace
+        new_level = 'INFO' if initial_level != 'INFO' else 'WARN'
+        self.cc.set_logger(worker, namespace, 'ERROR')
+        request_time = int(time.time() * 1000)
+        affected_loggers = self.cc.set_logger(worker, namespace, new_level)
+        assert len(affected_loggers) >= 1
+        for logger in affected_loggers:
+            assert logger.startswith(namespace)
+
+        assert self.loggers_set(new_level, request_time, namespace, workers=[worker])
+        assert self.loggers_set(initial_level, None, namespace, workers=self.cc.nodes[1:])
+
+        # Force all loggers to get updated by setting the root namespace to
+        # two different levels
+        # This guarantees that their last-modified times will be updated
+        resp = self.cc.set_logger(worker, 'root', 'DEBUG', 'cluster')
+        assert resp is None
+
+        new_root = 'INFO'
+        request_time = int(time.time() * 1000)
+        resp = self.cc.set_logger(worker, 'root', new_root, 'cluster')
+        assert resp is None
+        wait_until(
+            lambda: self.loggers_set(new_root, request_time),
+            # This should be super quick--just a write+read of the config topic, which workers are constantly polling
+            timeout_sec=10,
+            err_msg="Log level for root namespace was not adjusted in a reasonable amount of time."
+        )
+
+        new_level = 'DEBUG'
+        request_time = int(time.time() * 1000)
+        resp = self.cc.set_logger(worker, namespace, new_level, 'cluster')
+        assert resp is None
+        wait_until(
+            lambda: self.loggers_set(new_level, request_time, namespace),
+            timeout_sec=10,
+            err_msg='Log level for namespace ' + namespace + ' was not adjusted in a reasonable amount of time.'
+        )
+
+        prior_all_loggers = [self.cc.get_all_loggers(node) for node in self.cc.nodes]
+        resp = self.cc.set_logger(worker, namespace, new_level, 'cluster')
+        assert resp is None
+
+        prior_namespace = namespace
+        new_namespace = None
+        for logger, level in prior_all_loggers[0].items():
+            if logger != 'root' and not logger.startswith(namespace):
+                new_namespace = logger
+                new_level = 'DEBUG' if level['level'] != 'DEBUG' else 'INFO'
+        assert new_namespace is not None
+
+        request_time = int(time.time() * 1000)
+        resp = self.cc.set_logger(worker, new_namespace, new_level, 'cluster')
+        assert resp is None
+        wait_until(
+            lambda: self.loggers_set(new_level, request_time, new_namespace),
+            timeout_sec=10,
+            err_msg='Log level for namespace ' + new_namespace + ' was not adjusted in a reasonable amount of time.'
+        )
+
+        new_all_loggers = [self.cc.get_all_loggers(node) for node in self.cc.nodes]
+        assert len(prior_all_loggers) == len(new_all_loggers)
+        for i in range(len(prior_all_loggers)):
+            prior_loggers, new_loggers = prior_all_loggers[i], new_all_loggers[i]
+            for logger, prior_level in prior_loggers.items():
+                if logger.startswith(prior_namespace):
+                    new_level = new_loggers[logger]
+                    assert prior_level == new_level
+
+        new_root = 'INFO'
+        resp = self.cc.set_logger(worker, 'root', 'DEBUG', 'cluster')
+        assert resp is None
+        root_request_time = int(time.time() * 1000)
+        resp = self.cc.set_logger(worker, 'root', new_root, 'cluster')
+        assert resp is None
+        wait_until(
+            lambda: self.loggers_set(new_root, root_request_time),
+            timeout_sec=10,
+            err_msg="Log level for root namespace was not adjusted in a reasonable amount of time."
+        )
+        prior_all_loggers = [self.cc.get_all_loggers(node) for node in self.cc.nodes]
+
+        namespace = new_namespace
+        new_level = 'INFO' if new_root != 'INFO' else 'DEBUG'
+        request_time = int(time.time() * 1000)
+        affected_loggers = self.cc.set_logger(worker, namespace, new_level, 'worker')
+        assert len(affected_loggers) >= 1
+        for logger in affected_loggers:
+            assert logger.startswith(namespace)
+
+        assert self.loggers_set(new_level, request_time, namespace, workers=[worker])
+
+        all_loggers = self.cc.get_all_loggers(worker)
+        for logger, level in all_loggers.items():
+            if not logger.startswith(namespace):
+                assert level['level'] == new_root
+                assert root_request_time <= level['last_modified'] < request_time
+
+        new_all_loggers = [self.cc.get_all_loggers(node) for node in self.cc.nodes]
+        # Exclude the first node, which we've made worker-scope modifications to
+        # since we last adjusted the cluster-scope root level
+        assert prior_all_loggers[1:] == new_all_loggers[1:]
+
+    def loggers_set(self, expected_level, last_modified, namespace='root', workers=None):
+        if namespace == 'root':
+            namespace = ''
+        if workers is None:
+            workers = self.cc.nodes
+        for worker in workers:
+            all_loggers = self.cc.get_all_loggers(worker)
+            self.logger.debug("Read loggers on %s from Connect REST API: %s", str(worker), str(all_loggers))
+            namespaced_loggers = {k: v for k, v in all_loggers.items() if k.startswith(namespace)}
+            if len(namespaced_loggers) < 1:
+                return False
+            for logger in namespaced_loggers.values():
+                if logger['level'] != expected_level:
+                    return False
+                if last_modified is None:
+                    # Fail fast if there's a non-null timestamp; it'll never be reset to null
+                    assert logger['last_modified'] is None
+                elif logger['last_modified'] is None or logger['last_modified'] < last_modified:
+                    return False
+        return True
 
     @cluster(num_nodes=6)
     @matrix(security_protocol=[SecurityConfig.PLAINTEXT, SecurityConfig.SASL_SSL], exactly_once_source=[True, False], connect_protocol=['sessioned', 'compatible', 'eager'], metadata_quorum=quorum.all_non_upgrade)
