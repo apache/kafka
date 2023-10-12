@@ -126,6 +126,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
     assertEquals(1, log.numberOfSegments)
 
     cleaner.shutdown()
+    closeLog(log)
 
     // run the cleaner again to make sure if there are no issues post deletion
     val (log2, messages) = runCleanerAndCheckCompacted(20)
