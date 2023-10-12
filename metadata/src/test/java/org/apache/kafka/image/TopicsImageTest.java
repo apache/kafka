@@ -95,8 +95,6 @@ public class TopicsImageTest {
 
     private static final Uuid FOO_UUID2 = Uuid.fromString("9d3lha5qv8DoIl93jf8pbX");
 
-    private static final Uuid FOO_UUID3 = Uuid.fromString("H8UD7kha72bp0uzqIud7Bg");
-
     private static final Uuid BAR_UUID = Uuid.fromString("f62ptyETTjet8SL5ZeREiw");
 
     private static final Uuid BAZ_UUID = Uuid.fromString("tgHBnRglT5W_RlENnuG5vg");
