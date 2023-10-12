@@ -190,19 +190,30 @@ public class LogSegment {
             throw new NoSuchFileException("Offset index file " + offsetIndexFile().getAbsolutePath() + " does not exist");
     }
 
-    public TimestampOffset maxTimestampAndOffsetSoFar() throws IOException {
+    /**
+     * The first time this is invoked, it will result in a time index lookup (including potential materialization of
+     * the time index).
+     */
+    public TimestampOffset readMaxTimestampAndOffsetSoFar() throws IOException {
         if (maxTimestampAndOffsetSoFar == TimestampOffset.UNKNOWN)
             maxTimestampAndOffsetSoFar = timeIndex().lastEntry();
         return maxTimestampAndOffsetSoFar;
     }
 
-    /* The maximum timestamp we see so far */
-    public long maxTimestampSoFar() {
-        return maxTimestampAndOffsetSoFar.timestamp;
+    /**
+     * The maximum timestamp we see so far.
+     *
+     * Note that this may result in time index materialization.
+     */
+    public long maxTimestampSoFar() throws IOException {
+        return readMaxTimestampAndOffsetSoFar().timestamp;
     }
 
-    private long offsetOfMaxTimestampSoFar() {
-        return maxTimestampAndOffsetSoFar.offset;
+    /**
+     * Note that this may result in time index materialization.
+     */
+    private long offsetOfMaxTimestampSoFar() throws IOException {
+        return readMaxTimestampAndOffsetSoFar().offset;
     }
 
     /* Return the size in bytes of this log segment */
@@ -525,10 +536,11 @@ public class LogSegment {
 
     @Override
     public String toString() {
+        // We don't call `largestRecordTimestamp` below to avoid materializing the time index when `toString` is invoked
         return "LogSegment(baseOffset=" + baseOffset +
             ", size=" + size() +
             ", lastModifiedTime=" + lastModified() +
-            ", largestRecordTimestamp=" + largestRecordTimestamp() +
+            ", largestRecordTimestamp=" + maxTimestampAndOffsetSoFar.timestamp +
             ")";
     }
 
@@ -815,7 +827,7 @@ public class LogSegment {
     /**
      * The largest timestamp this segment contains, if maxTimestampSoFar >= 0, otherwise None.
      */
-    public OptionalLong largestRecordTimestamp() {
+    public OptionalLong largestRecordTimestamp() throws IOException {
         long maxTimestampSoFar = maxTimestampSoFar();
         if (maxTimestampSoFar >= 0)
             return OptionalLong.of(maxTimestampSoFar);
@@ -825,7 +837,7 @@ public class LogSegment {
     /**
      * The largest timestamp this segment contains.
      */
-    public long largestTimestamp() {
+    public long largestTimestamp() throws IOException {
         long maxTimestampSoFar = maxTimestampSoFar();
         if (maxTimestampSoFar >= 0)
             return maxTimestampSoFar;

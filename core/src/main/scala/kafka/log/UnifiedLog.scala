@@ -1316,7 +1316,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
         // constant time access while being safe to use with concurrent collections unlike `toArray`.
         val segmentsCopy = logSegments.asScala.toBuffer
         val latestTimestampSegment = segmentsCopy.maxBy(_.maxTimestampSoFar)
-        val latestTimestampAndOffset = latestTimestampSegment.maxTimestampAndOffsetSoFar
+        val latestTimestampAndOffset = latestTimestampSegment.readMaxTimestampAndOffsetSoFar
 
         Some(new TimestampAndOffset(latestTimestampAndOffset.timestamp,
           latestTimestampAndOffset.offset,
