@@ -136,8 +136,8 @@ class RemoteIndexCacheTest {
       .thenAnswer(ans => {
         val metadata = ans.getArgument[RemoteLogSegmentMetadata](0)
         val indexType = ans.getArgument[IndexType](1)
-        val offsetIdx = createOffsetIndexForSegmentMetadata(metadata)
-        val timeIdx = createTimeIndexForSegmentMetadata(metadata)
+        val offsetIdx = createOffsetIndexForSegmentMetadata(metadata, tpDir)
+        val timeIdx = createTimeIndexForSegmentMetadata(metadata, tpDir)
         maybeAppendIndexEntries(offsetIdx, timeIdx)
         indexType match {
           case IndexType.OFFSET => new FileInputStream(offsetIdx.file)
@@ -184,13 +184,13 @@ class RemoteIndexCacheTest {
     // Calling getIndex on the same entry should not call rsm#fetchIndex again, but it should retrieve from cache
     cache.getIndexEntry(metadataList.head)
     assertCacheSize(1)
-    verifyFetchIndexInvocation(count = 1, indexTypes = Seq(IndexType.OFFSET))
+    verifyFetchIndexInvocation(count = 1)
 
     // Here a new key metadataList(1) is invoked, that should call rsm#fetchIndex, making the count to 2
     cache.getIndexEntry(metadataList.head)
     cache.getIndexEntry(metadataList(1))
     assertCacheSize(2)
-    verifyFetchIndexInvocation(count = 2, indexTypes = Seq(IndexType.OFFSET))
+    verifyFetchIndexInvocation(count = 2)
 
     // Getting index for metadataList.last should call rsm#fetchIndex
     // to populate this entry one of the other 2 entries will be evicted. We don't know which one since it's based on
@@ -198,7 +198,7 @@ class RemoteIndexCacheTest {
     assertNotNull(cache.getIndexEntry(metadataList.last))
     assertAtLeastOnePresent(cache, metadataList(1).remoteLogSegmentId().id(), metadataList.head.remoteLogSegmentId().id())
     assertCacheSize(2)
-    verifyFetchIndexInvocation(count = 3, indexTypes = Seq(IndexType.OFFSET))
+    verifyFetchIndexInvocation(count = 3)
 
     // getting index for last expired entry should call rsm#fetchIndex as that entry was expired earlier
     val missingEntryOpt = {
@@ -210,7 +210,7 @@ class RemoteIndexCacheTest {
     assertFalse(missingEntryOpt.isEmpty)
     cache.getIndexEntry(missingEntryOpt.get)
     assertCacheSize(2)
-    verifyFetchIndexInvocation(count = 4, indexTypes = Seq(IndexType.OFFSET))
+    verifyFetchIndexInvocation(count = 4)
   }
 
   @Test
@@ -225,7 +225,7 @@ class RemoteIndexCacheTest {
     assertCacheSize(0)
     cache.getIndexEntry(metadataList.head)
     assertCacheSize(1)
-    verifyFetchIndexInvocation(count = 1, indexTypes = Seq(IndexType.OFFSET))
+    verifyFetchIndexInvocation(count = 1)
 
     cache.close()
 
@@ -366,7 +366,7 @@ class RemoteIndexCacheTest {
     // getIndex for first time will call rsm#fetchIndex
     cache.getIndexEntry(metadataList.head)
     assertCacheSize(1)
-    verifyFetchIndexInvocation(count = 1, Seq(IndexType.OFFSET))
+    verifyFetchIndexInvocation(count = 1, Seq(IndexType.OFFSET, IndexType.TIMESTAMP))
     reset(rsm)
 
     // Simulate a concurrency situation where one thread is reading the entry already present in the cache (cache hit)
@@ -432,7 +432,7 @@ class RemoteIndexCacheTest {
     // Calling getIndex on the same entry should not call rsm#fetchIndex again, but it should retrieve from cache
     cache.getIndexEntry(metadataList.head)
     assertCacheSize(1)
-    verifyFetchIndexInvocation(count = 1, indexTypes = Seq(IndexType.OFFSET))
+    verifyFetchIndexInvocation(count = 1)
 
     // Here a new key metadataList(1) is invoked, that should call rsm#fetchIndex, making the count to 2
     cache.getIndexEntry(metadataList(1))
@@ -440,7 +440,7 @@ class RemoteIndexCacheTest {
     // Calling getIndex on the same entry should not call rsm#fetchIndex again, but it should retrieve from cache
     cache.getIndexEntry(metadataList(1))
     assertCacheSize(2)
-    verifyFetchIndexInvocation(count = 2, indexTypes = Seq(IndexType.OFFSET))
+    verifyFetchIndexInvocation(count = 2)
 
     // Here a new key metadataList(2) is invoked, that should call rsm#fetchIndex
     // The cache max size is 2, it will remove one entry and keep the overall size to 2
@@ -449,7 +449,7 @@ class RemoteIndexCacheTest {
     // Calling getIndex on the same entry should not call rsm#fetchIndex again, but it should retrieve from cache
     cache.getIndexEntry(metadataList(2))
     assertCacheSize(2)
-    verifyFetchIndexInvocation(count = 3, indexTypes = Seq(IndexType.OFFSET))
+    verifyFetchIndexInvocation(count = 3)
 
     // Close the cache
     cache.close()
@@ -569,7 +569,7 @@ class RemoteIndexCacheTest {
     assertEquals(RemoteIndexCache.DIR_NAME, offsetIndexFile.getParent.getFileName.toString,
       s"offsetIndex=$offsetIndexFile is not overwrite under incorrect parent")
     // file is corrupted it should fetch from remote storage again
-    verifyFetchIndexInvocation(count = 1, indexTypes = Seq(IndexType.OFFSET))
+    verifyFetchIndexInvocation(count = 1)
   }
 
   @Test
@@ -578,9 +578,9 @@ class RemoteIndexCacheTest {
     val rlsMetadata = new RemoteLogSegmentMetadata(RemoteLogSegmentId.generateNew(idPartition), baseOffset, lastOffset,
       time.milliseconds(), brokerId, time.milliseconds(), segmentSize, Collections.singletonMap(0, 0L))
 
-    val timeIndex = spy(createTimeIndexForSegmentMetadata(rlsMetadata))
-    val txIndex = spy(createTxIndexForSegmentMetadata(rlsMetadata))
-    val offsetIndex = spy(createOffsetIndexForSegmentMetadata(rlsMetadata))
+    val timeIndex = spy(createTimeIndexForSegmentMetadata(rlsMetadata, new File(tpDir, DIR_NAME)))
+    val txIndex = spy(createTxIndexForSegmentMetadata(rlsMetadata, new File(tpDir, DIR_NAME)))
+    val offsetIndex = spy(createOffsetIndexForSegmentMetadata(rlsMetadata, new File(tpDir, DIR_NAME)))
 
     val spyEntry = spy(new RemoteIndexCache.Entry(offsetIndex, timeIndex, txIndex))
     cache.internalCache.put(rlsMetadata.remoteLogSegmentId().id(), spyEntry)
@@ -634,9 +634,9 @@ class RemoteIndexCacheTest {
                                     = RemoteLogSegmentId.generateNew(idPartition)): RemoteIndexCache.Entry = {
     val rlsMetadata = new RemoteLogSegmentMetadata(remoteLogSegmentId, baseOffset, lastOffset,
       time.milliseconds(), brokerId, time.milliseconds(), segmentSize, Collections.singletonMap(0, 0L))
-    val timeIndex = spy(createTimeIndexForSegmentMetadata(rlsMetadata))
-    val txIndex = spy(createTxIndexForSegmentMetadata(rlsMetadata))
-    val offsetIndex = spy(createOffsetIndexForSegmentMetadata(rlsMetadata))
+    val timeIndex = spy(createTimeIndexForSegmentMetadata(rlsMetadata, tpDir))
+    val txIndex = spy(createTxIndexForSegmentMetadata(rlsMetadata, tpDir))
+    val offsetIndex = spy(createOffsetIndexForSegmentMetadata(rlsMetadata, tpDir))
     spy(new RemoteIndexCache.Entry(offsetIndex, timeIndex, txIndex))
   }
 
@@ -657,26 +657,27 @@ class RemoteIndexCacheTest {
   }
 
   private def verifyFetchIndexInvocation(count: Int,
-                                         indexTypes: Seq[IndexType]): Unit = {
+                                         indexTypes: Seq[IndexType] =
+                                         Seq(IndexType.OFFSET, IndexType.TIMESTAMP, IndexType.TRANSACTION)): Unit = {
     for (indexType <- indexTypes) {
       verify(rsm, times(count)).fetchIndex(any(classOf[RemoteLogSegmentMetadata]), ArgumentMatchers.eq(indexType))
     }
   }
 
-  private def createTxIndexForSegmentMetadata(metadata: RemoteLogSegmentMetadata): TransactionIndex = {
-    val txnIdxFile = remoteTransactionIndexFile(new File(tpDir, DIR_NAME), metadata)
+  private def createTxIndexForSegmentMetadata(metadata: RemoteLogSegmentMetadata, dir: File): TransactionIndex = {
+    val txnIdxFile = remoteTransactionIndexFile(dir, metadata)
     txnIdxFile.createNewFile()
     new TransactionIndex(metadata.startOffset(), txnIdxFile)
   }
 
-  private def createTimeIndexForSegmentMetadata(metadata: RemoteLogSegmentMetadata): TimeIndex = {
+  private def createTimeIndexForSegmentMetadata(metadata: RemoteLogSegmentMetadata, dir: File): TimeIndex = {
     val maxEntries = (metadata.endOffset() - metadata.startOffset()).asInstanceOf[Int]
-    new TimeIndex(remoteTimeIndexFile(new File(tpDir, DIR_NAME), metadata), metadata.startOffset(), maxEntries * 12)
+    new TimeIndex(remoteTimeIndexFile(dir, metadata), metadata.startOffset(), maxEntries * 12)
   }
 
-  private def createOffsetIndexForSegmentMetadata(metadata: RemoteLogSegmentMetadata) = {
+  private def createOffsetIndexForSegmentMetadata(metadata: RemoteLogSegmentMetadata, dir: File) = {
     val maxEntries = (metadata.endOffset() - metadata.startOffset()).asInstanceOf[Int]
-    new OffsetIndex(remoteOffsetIndexFile(new File(tpDir, DIR_NAME), metadata), metadata.startOffset(), maxEntries * 8)
+    new OffsetIndex(remoteOffsetIndexFile(dir, metadata), metadata.startOffset(), maxEntries * 8)
   }
 
   private def generateRemoteLogSegmentMetadata(size: Int,
@@ -724,9 +725,9 @@ class RemoteIndexCacheTest {
       .thenAnswer(ans => {
         val metadata = ans.getArgument[RemoteLogSegmentMetadata](0)
         val indexType = ans.getArgument[IndexType](1)
-        val offsetIdx = createOffsetIndexForSegmentMetadata(metadata)
-        val timeIdx = createTimeIndexForSegmentMetadata(metadata)
-        val txnIdx = createTxIndexForSegmentMetadata(metadata)
+        val offsetIdx = createOffsetIndexForSegmentMetadata(metadata, tpDir)
+        val timeIdx = createTimeIndexForSegmentMetadata(metadata, tpDir)
+        val txnIdx = createTxIndexForSegmentMetadata(metadata, tpDir)
         maybeAppendIndexEntries(offsetIdx, timeIdx)
         indexType match {
           case IndexType.OFFSET => new FileInputStream(offsetIdx.file)
