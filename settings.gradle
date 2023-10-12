@@ -96,4 +96,5 @@ include 'clients',
     'tools:tools-api',
     'trogdor'
 
+project(":storage:api").name = "storage-api"
 rootProject.name = 'kafka'

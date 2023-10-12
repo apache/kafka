@@ -120,7 +120,7 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) {
 
     // This is the expected assignment.
     val expectedAssignment = new ConsumerGroupHeartbeatResponseData.Assignment()
-      .setAssignedTopicPartitions(List(new ConsumerGroupHeartbeatResponseData.TopicPartitions()
+      .setTopicPartitions(List(new ConsumerGroupHeartbeatResponseData.TopicPartitions()
         .setTopicId(topicId)
         .setPartitions(List[Integer](0, 1, 2).asJava)).asJava)
 
