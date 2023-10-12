@@ -95,6 +95,7 @@ import static java.util.Collections.emptySet;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
+import static org.apache.kafka.common.utils.Utils.intersection;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
@@ -2328,6 +2329,31 @@ public class TaskManagerTest {
         assertFalse(nonRunningNonCorruptedTask.commitPrepared);
         verify(consumer);
         Mockito.verify(stateManager).markChangelogAsCorrupted(taskId00Partitions);
+    }
+
+    @Test
+    public void shouldNotCommitNonCorruptedRestoringActiveTasksAndCommitStandbyTasks() {
+        final StreamTask activeRestoringTask = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .withInputPartitions(taskId00Partitions)
+            .inState(State.RESTORING).build();
+        final StandbyTask standbyTask = standbyTask(taskId01, taskId01ChangelogPartitions)
+            .withInputPartitions(taskId01Partitions)
+            .inState(State.RUNNING).build();
+        final StreamTask corruptedTask = statefulTask(taskId02, taskId02ChangelogPartitions)
+            .withInputPartitions(taskId02Partitions)
+            .inState(State.RUNNING).build();
+        final TasksRegistry tasks = Mockito.mock(TasksRegistry.class);
+        when(tasks.allTasksPerId()).thenReturn(mkMap(mkEntry(taskId02, corruptedTask)));
+        when(tasks.task(taskId02)).thenReturn(corruptedTask);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
+        when(stateUpdater.getTasks()).thenReturn(mkSet(activeRestoringTask, standbyTask));
+        expect(consumer.assignment()).andReturn(intersection(HashSet::new, taskId00Partitions, taskId01Partitions, taskId02Partitions));
+        replay(consumer);
+
+        taskManager.handleCorruption(mkSet(taskId02));
+
+        Mockito.verify(activeRestoringTask, never()).commitNeeded();
+        Mockito.verify(standbyTask, times(2)).commitNeeded();
     }
 
     @Test
