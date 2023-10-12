@@ -93,6 +93,9 @@ versions += [
   argparse4j: "0.7.0",
   bcpkix: "1.75",
   caffeine: "2.9.3", // 3.x supports JDK 11 and above
+  // when updating checkstyle, check whether the exclusion of
+  // CVE-2023-2976 and CVE-2020-8908 can be dropped from
+  // gradle/resources/dependencycheck-suppressions.xml
   checkstyle: "8.36.2",
   commonsCli: "1.4",
   commonsValidator: "1.7",
@@ -158,7 +161,7 @@ versions += [
   scoverage: "1.9.3",
   slf4j: "1.7.36",
   snappy: "1.1.10.5",
-  spotbugs: "4.7.3",
+  spotbugs: "4.8.0",
   zinc: "1.9.2",
   zookeeper: "3.8.2",
   zstd: "1.5.5-6"

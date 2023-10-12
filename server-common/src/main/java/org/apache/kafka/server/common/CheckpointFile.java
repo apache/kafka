@@ -89,7 +89,7 @@ public class CheckpointFile<T> {
 
     public List<T> read() throws IOException {
         synchronized (lock) {
-            try (BufferedReader reader = Files.newBufferedReader(absolutePath)) {
+            try (BufferedReader reader = Files.newBufferedReader(absolutePath, StandardCharsets.UTF_8)) {
                 CheckpointReadBuffer<T> checkpointBuffer = new CheckpointReadBuffer<>(absolutePath.toString(), reader, version, formatter);
                 return checkpointBuffer.read();
             }

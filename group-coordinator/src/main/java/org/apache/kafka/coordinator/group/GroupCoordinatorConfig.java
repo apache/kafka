@@ -91,6 +91,27 @@ public class GroupCoordinatorConfig {
      */
     public final int genericGroupMaxSessionTimeoutMs;
 
+    /**
+     * Frequency at which to check for expired offsets.
+     */
+    public final long offsetsRetentionCheckIntervalMs;
+
+    /**
+     * For subscribed consumers, committed offset of a specific partition will be expired and discarded when:
+     *     1) This retention period has elapsed after the consumer group loses all its consumers (i.e. becomes empty);
+     *     2) This retention period has elapsed since the last time an offset is committed for the partition AND
+     *        the group is no longer subscribed to the corresponding topic.
+     *
+     * For standalone consumers (using manual assignment), offsets will be expired after this retention period has
+     * elapsed since the time of last commit.
+     *
+     * Note that when a group is deleted via the DeleteGroups request, its committed offsets will also be deleted immediately;
+     *
+     * Also, when a topic is deleted via the delete-topic request, upon propagated metadata update any group's
+     *     committed offsets for that topic will also be deleted without extra retention period.
+     */
+    public final long offsetsRetentionMs;
+
     public GroupCoordinatorConfig(
         int numThreads,
         int consumerGroupSessionTimeoutMs,
@@ -103,7 +124,9 @@ public class GroupCoordinatorConfig {
         int genericGroupInitialRebalanceDelayMs,
         int genericGroupNewMemberJoinTimeoutMs,
         int genericGroupMinSessionTimeoutMs,
-        int genericGroupMaxSessionTimeoutMs
+        int genericGroupMaxSessionTimeoutMs,
+        long offsetsRetentionCheckIntervalMs,
+        long offsetsRetentionMs
     ) {
         this.numThreads = numThreads;
         this.consumerGroupSessionTimeoutMs = consumerGroupSessionTimeoutMs;
@@ -117,5 +140,7 @@ public class GroupCoordinatorConfig {
         this.genericGroupNewMemberJoinTimeoutMs = genericGroupNewMemberJoinTimeoutMs;
         this.genericGroupMinSessionTimeoutMs = genericGroupMinSessionTimeoutMs;
         this.genericGroupMaxSessionTimeoutMs = genericGroupMaxSessionTimeoutMs;
+        this.offsetsRetentionCheckIntervalMs = offsetsRetentionCheckIntervalMs;
+        this.offsetsRetentionMs = offsetsRetentionMs;
     }
 }
