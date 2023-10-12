@@ -176,39 +176,21 @@ pipeline {
         }
 
         stage('PowerPC') {
-          when {
-            not { changeRequest() }
-            beforeAgent true
+          agent { label 'ppc64le' }
+          tools {
+            jdk 'jdk_20_latest'
           }
           options {
+            timeout(time: 8, unit: 'HOURS')
             timestamps()
           }
           environment {
             SCALA_VERSION=2.13
           }
-          stages {
-            stage('Check PowerPC Agent') {
-              agent { label 'power9' }
-              options {
-                timeout(time: 5, unit: 'MINUTES')
-              }
-              steps {
-                echo 'PowerPC ok'
-              }
-            }
-            stage('Run PowerPC Build') {
-              agent { label 'power9' }
-              options {
-                timeout(time: 2, unit: 'HOURS')
-              }
-              steps {
-                doValidation()
-                catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
-                  doTest(env, 'unitTest')
-                }
-                echo 'Skipping Kafka Streams archetype test for PowerPC build'
-              }
-            }
+          steps {
+            doValidation()
+            doTest(env, 'unitTest')
+            echo 'Skipping Kafka Streams archetype test for PowerPC build'
           }
         }
       }
