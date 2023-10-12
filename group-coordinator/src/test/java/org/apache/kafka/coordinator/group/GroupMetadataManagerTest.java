@@ -9495,6 +9495,27 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testGenericGroupMaybeDelete() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+        GenericGroup group = context.createGenericGroup("group-id");
+
+        List<Record> expectedRecords = Collections.singletonList(RecordHelpers.newGroupMetadataTombstoneRecord("group-id"));
+        List<Record> records = new ArrayList<>();
+        context.groupMetadataManager.maybeDeleteGroup("group-id", records);
+        assertEquals(expectedRecords, records);
+
+        records = new ArrayList<>();
+        group.transitionTo(PREPARING_REBALANCE);
+        context.groupMetadataManager.maybeDeleteGroup("group-id", records);
+        assertEquals(Collections.emptyList(), records);
+
+        records = new ArrayList<>();
+        context.groupMetadataManager.maybeDeleteGroup("invalid-group-id", records);
+        assertEquals(Collections.emptyList(), records);
+    }
+
+    @Test
     public void testConsumerGroupDelete() {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .build();
@@ -9508,6 +9529,32 @@ public class GroupMetadataManagerTest {
         List<Record> records = new ArrayList<>();
         context.groupMetadataManager.deleteGroup("group-id", records);
         assertEquals(expectedRecords, records);
+    }
+
+    @Test
+    public void testConsumerGroupMaybeDelete() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+        ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreateConsumerGroup("group-id", true);
+
+        List<Record> expectedRecords = Arrays.asList(
+            RecordHelpers.newTargetAssignmentEpochTombstoneRecord("group-id"),
+            RecordHelpers.newGroupSubscriptionMetadataTombstoneRecord("group-id"),
+            RecordHelpers.newGroupEpochTombstoneRecord("group-id")
+        );
+        List<Record> records = new ArrayList<>();
+        context.groupMetadataManager.maybeDeleteGroup("group-id", records);
+        assertEquals(expectedRecords, records);
+
+        records = new ArrayList<>();
+        group.updateMember(new ConsumerGroupMember.Builder("member")
+            .setMemberEpoch(10)
+            .setTargetMemberEpoch(10)
+            .setPreviousMemberEpoch(10)
+            .build()
+        );
+        context.groupMetadataManager.maybeDeleteGroup("group-id", records);
+        assertEquals(Collections.emptyList(), records);
     }
 
     private static void assertNoOrEmptyResult(List<ExpiredTimeout<Void, Record>> timeouts) {

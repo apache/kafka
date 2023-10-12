@@ -144,8 +144,10 @@
                 ./bin/kafka-features.sh upgrade --metadata 3.5
             </code>
         </li>
-        <li>Note that the cluster metadata version cannot be downgraded to a pre-production 3.0.x, 3.1.x, or 3.2.x version once it has been upgraded.
-            However, it is possible to downgrade to production versions such as 3.3-IV0, 3.3-IV1, etc.</li>
+        <li>Note that cluster metadata downgrade is not supported in this version since it has metadata changes.
+            Every <a href="https://github.com/apache/kafka/blob/trunk/server-common/src/main/java/org/apache/kafka/server/common/MetadataVersion.java">MetadataVersion</a>
+            after 3.2.x has a boolean parameter that indicates if there are metadata changes (i.e. <code>IBP_3_3_IV3(7, "3.3", "IV3", true)</code> means this version has metadata changes).
+            Given your current and target versions, a downgrade is only possible if there are no metadata changes in the versions between.</li>
     </ol>
 
 <h4><a id="upgrade_3_4_0" href="#upgrade_3_4_0">Upgrading to 3.4.0 from any version 0.8.x through 3.3.x</a></h4>
@@ -205,8 +207,10 @@
                 ./bin/kafka-features.sh upgrade --metadata 3.4
             </code>
         </li>
-        <li>Note that the cluster metadata version cannot be downgraded to a pre-production 3.0.x, 3.1.x, or 3.2.x version once it has been upgraded.
-            However, it is possible to downgrade to production versions such as 3.3-IV0, 3.3-IV1, etc.</li>
+        <li>Note that cluster metadata downgrade is not supported in this version since it has metadata changes.
+            Every <a href="https://github.com/apache/kafka/blob/trunk/server-common/src/main/java/org/apache/kafka/server/common/MetadataVersion.java">MetadataVersion</a>
+            after 3.2.x has a boolean parameter that indicates if there are metadata changes (i.e. <code>IBP_3_3_IV3(7, "3.3", "IV3", true)</code> means this version has metadata changes).
+            Given your current and target versions, a downgrade is only possible if there are no metadata changes in the versions between.</li>
     </ol>
 
 <h5><a id="upgrade_340_notable" href="#upgrade_340_notable">Notable changes in 3.4.0</a></h5>
@@ -273,7 +277,10 @@
         ./bin/kafka-features.sh upgrade --metadata 3.3
         </code>
     </li>
-    <li>Note that the cluster metadata version cannot be downgraded to a pre-production 3.0.x, 3.1.x, or 3.2.x version once it has been upgraded. However, it is possible to downgrade to production versions such as 3.3-IV0, 3.3-IV1, etc.</li>
+    <li>Note that cluster metadata downgrade is not supported in this version since it has metadata changes.
+        Every <a href="https://github.com/apache/kafka/blob/trunk/server-common/src/main/java/org/apache/kafka/server/common/MetadataVersion.java">MetadataVersion</a>
+        after 3.2.x has a boolean parameter that indicates if there are metadata changes (i.e. <code>IBP_3_3_IV3(7, "3.3", "IV3", true)</code> means this version has metadata changes).
+        Given your current and target versions, a downgrade is only possible if there are no metadata changes in the versions between.</li>
 </ol>
 
 <h5><a id="upgrade_331_notable" href="#upgrade_331_notable">Notable changes in 3.3.1</a></h5>

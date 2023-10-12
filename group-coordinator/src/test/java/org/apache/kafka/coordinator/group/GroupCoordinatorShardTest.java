@@ -25,6 +25,8 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataKey;
@@ -45,6 +47,7 @@ import org.apache.kafka.coordinator.group.runtime.CoordinatorResult;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
 
 import java.util.ArrayList;
@@ -52,9 +55,14 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
+import static org.apache.kafka.common.utils.Utils.mkSet;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorShard.GROUP_EXPIRATION_KEY;
 import static org.apache.kafka.coordinator.group.TestUtil.requestContext;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -75,7 +83,9 @@ public class GroupCoordinatorShardTest {
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
-            offsetMetadataManager
+            offsetMetadataManager,
+            new MockCoordinatorTimer<>(new MockTime()),
+            mock(GroupCoordinatorConfig.class)
         );
 
         RequestContext context = requestContext(ApiKeys.CONSUMER_GROUP_HEARTBEAT);
@@ -100,7 +110,9 @@ public class GroupCoordinatorShardTest {
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
-            offsetMetadataManager
+            offsetMetadataManager,
+            new MockCoordinatorTimer<>(new MockTime()),
+            mock(GroupCoordinatorConfig.class)
         );
 
         RequestContext context = requestContext(ApiKeys.OFFSET_COMMIT);
@@ -125,7 +137,9 @@ public class GroupCoordinatorShardTest {
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
-            offsetMetadataManager
+            offsetMetadataManager,
+            new MockCoordinatorTimer<>(new MockTime()),
+            mock(GroupCoordinatorConfig.class)
         );
 
         RequestContext context = requestContext(ApiKeys.DELETE_GROUPS);
@@ -177,7 +191,9 @@ public class GroupCoordinatorShardTest {
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
-            offsetMetadataManager
+            offsetMetadataManager,
+            new MockCoordinatorTimer<>(new MockTime()),
+            mock(GroupCoordinatorConfig.class)
         );
 
         RequestContext context = requestContext(ApiKeys.DELETE_GROUPS);
@@ -240,7 +256,9 @@ public class GroupCoordinatorShardTest {
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
-            offsetMetadataManager
+            offsetMetadataManager,
+            new MockCoordinatorTimer<>(new MockTime()),
+            mock(GroupCoordinatorConfig.class)
         );
 
         OffsetCommitKey key = new OffsetCommitKey();
@@ -266,7 +284,9 @@ public class GroupCoordinatorShardTest {
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
-            offsetMetadataManager
+            offsetMetadataManager,
+            new MockCoordinatorTimer<>(new MockTime()),
+            mock(GroupCoordinatorConfig.class)
         );
 
         OffsetCommitKey key = new OffsetCommitKey();
@@ -291,7 +311,9 @@ public class GroupCoordinatorShardTest {
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
-            offsetMetadataManager
+            offsetMetadataManager,
+            new MockCoordinatorTimer<>(new MockTime()),
+            mock(GroupCoordinatorConfig.class)
         );
 
         ConsumerGroupMetadataKey key = new ConsumerGroupMetadataKey();
@@ -312,7 +334,9 @@ public class GroupCoordinatorShardTest {
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
-            offsetMetadataManager
+            offsetMetadataManager,
+            new MockCoordinatorTimer<>(new MockTime()),
+            mock(GroupCoordinatorConfig.class)
         );
 
         ConsumerGroupMetadataKey key = new ConsumerGroupMetadataKey();
@@ -332,7 +356,9 @@ public class GroupCoordinatorShardTest {
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
-            offsetMetadataManager
+            offsetMetadataManager,
+            new MockCoordinatorTimer<>(new MockTime()),
+            mock(GroupCoordinatorConfig.class)
         );
 
         ConsumerGroupPartitionMetadataKey key = new ConsumerGroupPartitionMetadataKey();
@@ -353,7 +379,9 @@ public class GroupCoordinatorShardTest {
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
-            offsetMetadataManager
+            offsetMetadataManager,
+            new MockCoordinatorTimer<>(new MockTime()),
+            mock(GroupCoordinatorConfig.class)
         );
 
         ConsumerGroupPartitionMetadataKey key = new ConsumerGroupPartitionMetadataKey();
@@ -373,7 +401,9 @@ public class GroupCoordinatorShardTest {
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
-            offsetMetadataManager
+            offsetMetadataManager,
+            new MockCoordinatorTimer<>(new MockTime()),
+            mock(GroupCoordinatorConfig.class)
         );
 
         ConsumerGroupMemberMetadataKey key = new ConsumerGroupMemberMetadataKey();
@@ -394,7 +424,9 @@ public class GroupCoordinatorShardTest {
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
-            offsetMetadataManager
+            offsetMetadataManager,
+            new MockCoordinatorTimer<>(new MockTime()),
+            mock(GroupCoordinatorConfig.class)
         );
 
         ConsumerGroupMemberMetadataKey key = new ConsumerGroupMemberMetadataKey();
@@ -414,7 +446,9 @@ public class GroupCoordinatorShardTest {
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
-            offsetMetadataManager
+            offsetMetadataManager,
+            new MockCoordinatorTimer<>(new MockTime()),
+            mock(GroupCoordinatorConfig.class)
         );
 
         ConsumerGroupTargetAssignmentMetadataKey key = new ConsumerGroupTargetAssignmentMetadataKey();
@@ -435,7 +469,9 @@ public class GroupCoordinatorShardTest {
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
-            offsetMetadataManager
+            offsetMetadataManager,
+            new MockCoordinatorTimer<>(new MockTime()),
+            mock(GroupCoordinatorConfig.class)
         );
 
         ConsumerGroupTargetAssignmentMetadataKey key = new ConsumerGroupTargetAssignmentMetadataKey();
@@ -455,7 +491,9 @@ public class GroupCoordinatorShardTest {
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
-            offsetMetadataManager
+            offsetMetadataManager,
+            new MockCoordinatorTimer<>(new MockTime()),
+            mock(GroupCoordinatorConfig.class)
         );
 
         ConsumerGroupTargetAssignmentMemberKey key = new ConsumerGroupTargetAssignmentMemberKey();
@@ -476,7 +514,9 @@ public class GroupCoordinatorShardTest {
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
-            offsetMetadataManager
+            offsetMetadataManager,
+            new MockCoordinatorTimer<>(new MockTime()),
+            mock(GroupCoordinatorConfig.class)
         );
 
         ConsumerGroupTargetAssignmentMemberKey key = new ConsumerGroupTargetAssignmentMemberKey();
@@ -496,7 +536,9 @@ public class GroupCoordinatorShardTest {
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
-            offsetMetadataManager
+            offsetMetadataManager,
+            new MockCoordinatorTimer<>(new MockTime()),
+            mock(GroupCoordinatorConfig.class)
         );
 
         ConsumerGroupCurrentMemberAssignmentKey key = new ConsumerGroupCurrentMemberAssignmentKey();
@@ -517,7 +559,9 @@ public class GroupCoordinatorShardTest {
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
-            offsetMetadataManager
+            offsetMetadataManager,
+            new MockCoordinatorTimer<>(new MockTime()),
+            mock(GroupCoordinatorConfig.class)
         );
 
         ConsumerGroupCurrentMemberAssignmentKey key = new ConsumerGroupCurrentMemberAssignmentKey();
@@ -537,7 +581,9 @@ public class GroupCoordinatorShardTest {
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
-            offsetMetadataManager
+            offsetMetadataManager,
+            new MockCoordinatorTimer<>(new MockTime()),
+            mock(GroupCoordinatorConfig.class)
         );
 
         assertThrows(NullPointerException.class, () -> coordinator.replay(new Record(null, null)));
@@ -550,7 +596,9 @@ public class GroupCoordinatorShardTest {
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
-            offsetMetadataManager
+            offsetMetadataManager,
+            new MockCoordinatorTimer<>(new MockTime()),
+            mock(GroupCoordinatorConfig.class)
         );
 
         ConsumerGroupCurrentMemberAssignmentKey key = new ConsumerGroupCurrentMemberAssignmentKey();
@@ -570,7 +618,9 @@ public class GroupCoordinatorShardTest {
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
-            offsetMetadataManager
+            offsetMetadataManager,
+            new MockCoordinatorTimer<>(new MockTime()),
+            mock(GroupCoordinatorConfig.class)
         );
 
         coordinator.onLoaded(image);
@@ -590,7 +640,9 @@ public class GroupCoordinatorShardTest {
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
-            offsetMetadataManager
+            offsetMetadataManager,
+            new MockCoordinatorTimer<>(new MockTime()),
+            mock(GroupCoordinatorConfig.class)
         );
 
         GroupMetadataKey key = new GroupMetadataKey();
@@ -611,7 +663,9 @@ public class GroupCoordinatorShardTest {
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
-            offsetMetadataManager
+            offsetMetadataManager,
+            new MockCoordinatorTimer<>(new MockTime()),
+            mock(GroupCoordinatorConfig.class)
         );
 
         GroupMetadataKey key = new GroupMetadataKey();
@@ -622,5 +676,83 @@ public class GroupCoordinatorShardTest {
         ));
 
         verify(groupMetadataManager, times(1)).replay(key, null);
+    }
+
+    @Test
+    public void testScheduleCleanupGroupMetadata() {
+        GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
+        OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
+        Time mockTime = new MockTime();
+        MockCoordinatorTimer<Void, Record> timer = new MockCoordinatorTimer<>(mockTime);
+        GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
+            new LogContext(),
+            groupMetadataManager,
+            offsetMetadataManager,
+            timer,
+            GroupCoordinatorConfigTest.createGroupCoordinatorConfig(4096, 1000L, 24 * 60)
+        );
+        MetadataImage image = MetadataImage.EMPTY;
+
+        // Confirm the cleanup is scheduled when the coordinator is initially loaded.
+        coordinator.onLoaded(image);
+        assertTrue(timer.contains(GROUP_EXPIRATION_KEY));
+
+        // Confirm that it is rescheduled after completion.
+        mockTime.sleep(1000L);
+        List<MockCoordinatorTimer.ExpiredTimeout<Void, Record>> tasks = timer.poll();
+        assertEquals(1, tasks.size());
+        assertTrue(timer.contains(GROUP_EXPIRATION_KEY));
+
+        coordinator.onUnloaded();
+        assertFalse(timer.contains(GROUP_EXPIRATION_KEY));
+    }
+
+    @Test
+    public void testCleanupGroupMetadata() {
+        GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
+        OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
+        MockCoordinatorTimer<Void, Record> timer = new MockCoordinatorTimer<>(new MockTime());
+        GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
+            new LogContext(),
+            groupMetadataManager,
+            offsetMetadataManager,
+            timer,
+            mock(GroupCoordinatorConfig.class)
+        );
+
+        Record offsetCommitTombstone = RecordHelpers.newOffsetCommitTombstoneRecord("group-id", "topic", 0);
+        Record groupMetadataTombstone = RecordHelpers.newGroupMetadataTombstoneRecord("group-id");
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<Record>> recordsCapture = ArgumentCaptor.forClass(List.class);
+
+        when(groupMetadataManager.groupIds()).thenReturn(mkSet("group-id", "other-group-id"));
+        when(offsetMetadataManager.cleanupExpiredOffsets(eq("group-id"), recordsCapture.capture()))
+            .thenAnswer(invocation -> {
+                List<Record> records = recordsCapture.getValue();
+                records.add(offsetCommitTombstone);
+                return true;
+            });
+        when(offsetMetadataManager.cleanupExpiredOffsets("other-group-id", Collections.emptyList())).thenReturn(false);
+        doAnswer(invocation -> {
+            List<Record> records = recordsCapture.getValue();
+            records.add(groupMetadataTombstone);
+            return null;
+        }).when(groupMetadataManager).maybeDeleteGroup(eq("group-id"), recordsCapture.capture());
+
+        assertFalse(timer.contains(GROUP_EXPIRATION_KEY));
+        CoordinatorResult<Void, Record> result = coordinator.cleanupGroupMetadata();
+        assertTrue(timer.contains(GROUP_EXPIRATION_KEY));
+
+        List<Record> expectedRecords = Arrays.asList(offsetCommitTombstone, groupMetadataTombstone);
+        assertEquals(expectedRecords, result.records());
+        assertNull(result.response());
+        assertNull(result.appendFuture());
+
+        verify(groupMetadataManager, times(1)).groupIds();
+        verify(offsetMetadataManager, times(1)).cleanupExpiredOffsets(eq("group-id"), any());
+        verify(offsetMetadataManager, times(1)).cleanupExpiredOffsets(eq("other-group-id"), any());
+        verify(groupMetadataManager, times(1)).maybeDeleteGroup(eq("group-id"), any());
+        verify(groupMetadataManager, times(0)).maybeDeleteGroup(eq("other-group-id"), any());
     }
 }
