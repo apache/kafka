@@ -1462,7 +1462,7 @@ public class FetchRequestManagerTest {
     public void testPartialFetchWithPausedPartitions() {
         // this test sends creates a completed fetch with 3 records and a max poll of 2 records to assert
         // that a fetch that must be returned over at least 2 polls can be cached successfully when its partition is
-        // paused, then returned successfully after its been resumed again later
+        // paused, then returned successfully after it has been resumed again later
         buildFetcher(2);
 
         Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords;
