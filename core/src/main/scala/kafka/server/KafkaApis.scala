@@ -564,7 +564,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   case class LeaderNode(leaderId: Int, leaderEpoch: Int, node: Node)
 
-  private def getCurrentLeader(tp: TopicPartition): LeaderNode = {
+  private def getCurrentLeader(tp: TopicPartition, ln: ListenerName): LeaderNode = {
     val partitionInfoOrError = replicaManager.getPartitionOrError(tp)
     val (leaderId, leaderEpoch) = partitionInfoOrError match {
       case Right(x) =>
@@ -576,7 +576,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           case None => (-1, -1)
         }
     }
-    val leaderNode: Node = metadataCache.getAliveBrokerNode(leaderId, config.interBrokerListenerName).getOrElse({
+    val leaderNode: Node = metadataCache.getAliveBrokerNode(leaderId, ln).getOrElse({
       Node.noNode()
     })
     LeaderNode(leaderId, leaderEpoch, leaderNode)
@@ -643,19 +643,19 @@ class KafkaApis(val requestChannel: RequestChannel,
             request.header.clientId,
             topicPartition,
             status.error.exceptionName))
-        }
 
-        if (request.header.apiVersion >= 10) {
-          status.currentLeader = {
-            status.error match {
-              case Errors.NOT_LEADER_OR_FOLLOWER | Errors.FENCED_LEADER_EPOCH =>
-                val leaderNode = getCurrentLeader(topicPartition)
-                nodeEndpoints.put(leaderNode.node.id(), leaderNode.node)
-                new LeaderIdAndEpoch()
-                  .setLeaderId(leaderNode.leaderId)
-                  .setLeaderEpoch(leaderNode.leaderEpoch)
-              case _ =>
-                null
+          if (request.header.apiVersion >= 10) {
+            status.currentLeader = {
+              status.error match {
+                case Errors.NOT_LEADER_OR_FOLLOWER =>
+                  val leaderNode = getCurrentLeader(topicPartition, request.context.listenerName)
+                  nodeEndpoints.put(leaderNode.node.id(), leaderNode.node)
+                  new LeaderIdAndEpoch()
+                    .setLeaderId(leaderNode.leaderId)
+                    .setLeaderEpoch(leaderNode.leaderEpoch)
+                case _ =>
+                  null
+              }
             }
           }
         }
@@ -906,7 +906,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         if (versionId >= 16) {
           data.error match {
             case Errors.NOT_LEADER_OR_FOLLOWER | Errors.FENCED_LEADER_EPOCH =>
-              val leaderNode = getCurrentLeader(tp.topicPartition())
+              val leaderNode = getCurrentLeader(tp.topicPartition(), request.context.listenerName)
               nodeEndpoints.put(leaderNode.node.id(), leaderNode.node)
               partitionData.currentLeader()
                 .setLeaderId(leaderNode.leaderId)
