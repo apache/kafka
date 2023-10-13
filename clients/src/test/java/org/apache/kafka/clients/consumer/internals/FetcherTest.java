@@ -1756,9 +1756,7 @@ public class FetcherTest {
         consumerClient.poll(time.timer(0));
 
         List<ConsumerRecord<byte[], byte[]>> fetchedRecords = new ArrayList<>();
-        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> recordsByPartition = fetchRecords();
-        for (List<ConsumerRecord<byte[], byte[]>> records : recordsByPartition.values())
-            fetchedRecords.addAll(records);
+        fetchRecordsInto(fetchedRecords);
 
         assertEquals(fetchedRecords.size(), subscriptions.position(tp1).offset - 1);
         assertEquals(4, subscriptions.position(tp1).offset);
@@ -1766,9 +1764,7 @@ public class FetcherTest {
 
         List<OffsetOutOfRangeException> oorExceptions = new ArrayList<>();
         try {
-            recordsByPartition = fetchRecords();
-            for (List<ConsumerRecord<byte[], byte[]>> records : recordsByPartition.values())
-                fetchedRecords.addAll(records);
+            fetchRecordsInto(fetchedRecords);
         } catch (OffsetOutOfRangeException oor) {
             oorExceptions.add(oor);
         }
@@ -1779,9 +1775,7 @@ public class FetcherTest {
         assertTrue(oor.offsetOutOfRangePartitions().containsKey(tp0));
         assertEquals(oor.offsetOutOfRangePartitions().size(), 1);
 
-        recordsByPartition = fetchRecords();
-        for (List<ConsumerRecord<byte[], byte[]>> records : recordsByPartition.values())
-            fetchedRecords.addAll(records);
+        fetchRecordsInto(fetchedRecords);
 
         // Should not have received an Exception for tp2.
         assertEquals(6, subscriptions.position(tp2).offset);
@@ -1791,9 +1785,7 @@ public class FetcherTest {
         List<KafkaException> kafkaExceptions = new ArrayList<>();
         for (int i = 1; i <= numExceptionsExpected; i++) {
             try {
-                recordsByPartition = fetchRecords();
-                for (List<ConsumerRecord<byte[], byte[]>> records : recordsByPartition.values())
-                    fetchedRecords.addAll(records);
+                fetchRecordsInto(fetchedRecords);
             } catch (KafkaException e) {
                 kafkaExceptions.add(e);
             }
