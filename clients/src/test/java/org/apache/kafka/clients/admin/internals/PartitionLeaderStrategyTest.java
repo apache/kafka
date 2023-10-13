@@ -93,7 +93,7 @@ public class PartitionLeaderStrategyTest {
     }
 
     @Test
-    public void testUnexpectedTopicErrror() {
+    public void testUnexpectedTopicError() {
         TopicPartition topicPartition = new TopicPartition("foo", 0);
         Throwable exception = assertFatalTopicError(topicPartition, Errors.UNKNOWN_SERVER_ERROR);
         assertTrue(exception instanceof UnknownServerException);

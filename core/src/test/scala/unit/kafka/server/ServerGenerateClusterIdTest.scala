@@ -38,7 +38,6 @@ class ServerGenerateClusterIdTest extends QuorumTestHarness {
   var config2: KafkaConfig = _
   var config3: KafkaConfig = _
   var servers: Seq[KafkaServer] = Seq()
-  val brokerMetaPropsFile = "meta.properties"
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
@@ -213,14 +212,14 @@ class ServerGenerateClusterIdTest extends QuorumTestHarness {
 
   def forgeBrokerMetadata(logDir: String, brokerId: Int, clusterId: String): Unit = {
     val checkpoint = new BrokerMetadataCheckpoint(
-      new File(logDir + File.separator + brokerMetaPropsFile))
+      new File(logDir + File.separator + KafkaServer.brokerMetaPropsFile))
     checkpoint.write(ZkMetaProperties(clusterId, brokerId).toProperties)
   }
 
   def verifyBrokerMetadata(logDirs: Seq[String], clusterId: String): Boolean = {
     for (logDir <- logDirs) {
       val brokerMetadataOpt = new BrokerMetadataCheckpoint(
-        new File(logDir + File.separator + brokerMetaPropsFile)).read()
+        new File(logDir + File.separator + KafkaServer.brokerMetaPropsFile)).read()
       brokerMetadataOpt match {
         case Some(properties) =>
           val brokerMetadata = new RawMetaProperties(properties)

@@ -20,6 +20,8 @@ import org.apache.kafka.common.cache.Cache;
 import org.apache.kafka.common.cache.LRUCache;
 import org.apache.kafka.common.cache.SynchronizedCache;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.utils.AppInfoParser;
+import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
@@ -36,7 +38,7 @@ import java.util.Map;
 import static org.apache.kafka.connect.transforms.util.Requirements.requireMap;
 import static org.apache.kafka.connect.transforms.util.Requirements.requireStruct;
 
-public class ValueToKey<R extends ConnectRecord<R>> implements Transformation<R> {
+public class ValueToKey<R extends ConnectRecord<R>> implements Transformation<R>, Versioned {
 
     public static final String OVERVIEW_DOC = "Replace the record key with a new key formed from a subset of fields in the record value.";
 
@@ -51,6 +53,11 @@ public class ValueToKey<R extends ConnectRecord<R>> implements Transformation<R>
     private List<String> fields;
 
     private Cache<Schema, Schema> valueToKeySchemaCache;
+
+    @Override
+    public String version() {
+        return AppInfoParser.getVersion();
+    }
 
     @Override
     public void configure(Map<String, ?> configs) {

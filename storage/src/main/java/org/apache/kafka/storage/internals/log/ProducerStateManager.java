@@ -113,6 +113,8 @@ public class ProducerStateManager {
 
     private final Map<Long, ProducerStateEntry> producers = new HashMap<>();
 
+    private final Map<Long, VerificationStateEntry> verificationStates = new HashMap<>();
+
     // ongoing transactions sorted by the first offset of the transaction
     private final TreeMap<Long, TxnMetadata> ongoingTxns = new TreeMap<>();
 
@@ -139,7 +141,7 @@ public class ProducerStateManager {
         this.maxTransactionTimeoutMs = maxTransactionTimeoutMs;
         this.producerStateManagerConfig = producerStateManagerConfig;
         this.time = time;
-        log = new LogContext("[ProducerStateManager partition=" + topicPartition + "]").logger(ProducerStateManager.class);
+        log = new LogContext("[ProducerStateManager partition=" + topicPartition + "] ").logger(ProducerStateManager.class);
         snapshots = loadSnapshots();
     }
 
@@ -182,6 +184,32 @@ public class ProducerStateManager {
     private void clearProducerIds() {
         producers.clear();
         producerIdCount = 0;
+    }
+
+    /**
+     * Maybe create the VerificationStateEntry for a given producer ID and return it.
+     * This method also updates the sequence and epoch accordingly.
+     */
+    public VerificationStateEntry maybeCreateVerificationStateEntry(long producerId, int sequence, short epoch) {
+        VerificationStateEntry entry = verificationStates.computeIfAbsent(producerId, pid ->
+            new VerificationStateEntry(time.milliseconds(), sequence, epoch)
+        );
+        entry.maybeUpdateLowestSequenceAndEpoch(sequence, epoch);
+        return entry;
+    }
+
+    /**
+     * Return the VerificationStateEntry for the producer ID if it exists, otherwise return null.
+     */
+    public VerificationStateEntry verificationStateEntry(long producerId) {
+        return verificationStates.get(producerId);
+    }
+
+    /**
+     * Clear the verificationStateEntry for the given producer ID.
+     */
+    public void clearVerificationStateEntry(long producerId) {
+        verificationStates.remove(producerId);
     }
 
     /**
@@ -338,6 +366,7 @@ public class ProducerStateManager {
 
     /**
      * Expire any producer ids which have been idle longer than the configured maximum expiration timeout.
+     * Also expire any verification state entries that are lingering as unverified.
      */
     public void removeExpiredProducers(long currentTimeMs) {
         List<Long> keys = producers.entrySet().stream()
@@ -345,6 +374,12 @@ public class ProducerStateManager {
                 .map(Map.Entry::getKey)
                 .collect(Collectors.toList());
         removeProducerIds(keys);
+
+        List<Long> verificationKeys = verificationStates.entrySet().stream()
+                .filter(entry -> currentTimeMs - entry.getValue().timestamp() >= producerStateManagerConfig.producerIdExpirationMs())
+                .map(Map.Entry::getKey)
+                .collect(Collectors.toList());
+        verificationKeys.forEach(verificationStates::remove);
     }
 
     /**
@@ -379,7 +414,7 @@ public class ProducerStateManager {
 
     public ProducerAppendInfo prepareUpdate(long producerId, AppendOrigin origin) {
         ProducerStateEntry currentEntry = lastEntry(producerId).orElse(ProducerStateEntry.empty(producerId));
-        return new ProducerAppendInfo(topicPartition, producerId, currentEntry, origin);
+        return new ProducerAppendInfo(topicPartition, producerId, currentEntry, origin, verificationStateEntry(producerId));
     }
 
     /**

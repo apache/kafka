@@ -17,6 +17,7 @@
 
 package org.apache.kafka.connect.converters;
 
+import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.errors.DataException;
@@ -87,5 +88,10 @@ public class ByteArrayConverterTest {
         SchemaAndValue data = converter.toConnectData(TOPIC, null);
         assertEquals(Schema.OPTIONAL_BYTES_SCHEMA, data.schema());
         assertNull(data.value());
+    }
+
+    @Test
+    public void testVersionRetrievedFromAppInfoParser() {
+        assertEquals(AppInfoParser.getVersion(), converter.version());
     }
 }

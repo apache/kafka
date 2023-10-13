@@ -80,6 +80,7 @@ public class SustainedConnectionSpec extends TaskSpec {
     private final int numThreads;
     private final int refreshRateMs;
 
+    @SuppressWarnings("this-escape")
     @JsonCreator
     public SustainedConnectionSpec(
             @JsonProperty("startMs") long startMs,

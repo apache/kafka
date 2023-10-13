@@ -99,7 +99,7 @@ public interface ReplicatedLog extends AutoCloseable {
              */
             OffsetAndEpoch latestSnapshotId = latestSnapshotId().orElseThrow(() -> new IllegalStateException(
                 String.format(
-                    "Log start offset (%s) is greater than zero but latest snapshot was not found",
+                    "Log start offset (%d) is greater than zero but latest snapshot was not found",
                     startOffset()
                 )
             ));

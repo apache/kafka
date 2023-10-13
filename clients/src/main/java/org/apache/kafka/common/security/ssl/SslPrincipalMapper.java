@@ -140,7 +140,7 @@ public class SslPrincipalMapper {
 
             if (toLowerCase && result != null) {
                 result = result.toLowerCase(Locale.ENGLISH);
-            } else if (toUpperCase & result != null) {
+            } else if (toUpperCase && result != null) {
                 result = result.toUpperCase(Locale.ENGLISH);
             }
 

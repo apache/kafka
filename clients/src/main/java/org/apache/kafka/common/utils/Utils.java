@@ -978,9 +978,9 @@ public final class Utils {
             Files.move(source, target, StandardCopyOption.ATOMIC_MOVE);
         } catch (IOException outer) {
             try {
+                log.warn("Failed atomic move of {} to {} retrying with a non-atomic move", source, target, outer);
                 Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
-                log.debug("Non-atomic move of {} to {} succeeded after atomic move failed due to {}", source, target,
-                        outer.getMessage());
+                log.debug("Non-atomic move of {} to {} succeeded after atomic move failed", source, target);
             } catch (IOException inner) {
                 inner.addSuppressed(outer);
                 throw inner;
@@ -1004,6 +1004,19 @@ public final class Utils {
             try (FileChannel dir = FileChannel.open(path, StandardOpenOption.READ)) {
                 dir.force(true);
             }
+        }
+    }
+
+    /**
+     * Flushes dirty directories to guarantee crash consistency with swallowing {@link NoSuchFileException}
+     *
+     * @throws IOException if flushing the directory fails.
+     */
+    public static void flushDirIfExists(Path path) throws IOException {
+        try {
+            flushDir(path);
+        } catch (NoSuchFileException e) {
+            log.warn("Failed to flush directory {}", path);
         }
     }
 

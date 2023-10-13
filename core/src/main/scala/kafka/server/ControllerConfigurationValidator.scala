@@ -42,7 +42,7 @@ import scala.collection.mutable
  * in the same RPC, BROKER_LOGGER is not really a dynamic configuration in the same sense
  * as the others. It is not persisted to the metadata log (or to ZK, when we're in that mode).
  */
-class ControllerConfigurationValidator extends ConfigurationValidator {
+class ControllerConfigurationValidator(kafkaConfig: KafkaConfig) extends ConfigurationValidator {
   private def validateTopicName(
     name: String
   ): Unit = {
@@ -106,7 +106,7 @@ class ControllerConfigurationValidator extends ConfigurationValidator {
           throw new InvalidConfigurationException("Null value not supported for topic configs: " +
             nullTopicConfigs.mkString(","))
         }
-        LogConfig.validate(properties)
+        LogConfig.validate(properties, kafkaConfig.extractLogConfigMap, kafkaConfig.isRemoteLogStorageSystemEnabled)
       case BROKER => validateBrokerName(resource.name())
       case _ => throwExceptionForUnknownResourceType(resource)
     }

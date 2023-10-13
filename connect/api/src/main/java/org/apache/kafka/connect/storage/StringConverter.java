@@ -20,7 +20,9 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.errors.DataException;
@@ -40,12 +42,17 @@ import java.util.Map;
  * <p>
  * This implementation currently does nothing with the topic names or header keys.
  */
-public class StringConverter implements Converter, HeaderConverter {
+public class StringConverter implements Converter, HeaderConverter, Versioned {
 
     private final StringSerializer serializer = new StringSerializer();
     private final StringDeserializer deserializer = new StringDeserializer();
 
     public StringConverter() {
+    }
+
+    @Override
+    public String version() {
+        return AppInfoParser.getVersion();
     }
 
     @Override

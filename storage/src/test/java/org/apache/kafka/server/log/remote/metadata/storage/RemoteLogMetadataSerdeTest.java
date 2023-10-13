@@ -24,6 +24,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.log.remote.metadata.storage.serialization.RemoteLogMetadataSerde;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentId;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
+import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata.CustomMetadata;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadataUpdate;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentState;
 import org.apache.kafka.server.log.remote.storage.RemotePartitionDeleteMetadata;
@@ -34,6 +35,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 
 public class RemoteLogMetadataSerdeTest {
 
@@ -69,12 +71,17 @@ public class RemoteLogMetadataSerdeTest {
         segLeaderEpochs.put(2, 80L);
         RemoteLogSegmentId remoteLogSegmentId = new RemoteLogSegmentId(TP0, Uuid.randomUuid());
         return new RemoteLogSegmentMetadata(remoteLogSegmentId, 0L, 100L, -1L, 1,
-                                            time.milliseconds(), 1024, segLeaderEpochs);
+                                            time.milliseconds(), 1024,
+                                            Optional.of(new CustomMetadata(new byte[] {0, 1, 2, 3})),
+                                            RemoteLogSegmentState.COPY_SEGMENT_STARTED,
+                                            segLeaderEpochs
+        );
     }
 
     private RemoteLogSegmentMetadataUpdate createRemoteLogSegmentMetadataUpdate() {
         RemoteLogSegmentId remoteLogSegmentId = new RemoteLogSegmentId(TP0, Uuid.randomUuid());
         return new RemoteLogSegmentMetadataUpdate(remoteLogSegmentId, time.milliseconds(),
+                                                  Optional.of(new CustomMetadata(new byte[] {0, 1, 2, 3})),
                                                   RemoteLogSegmentState.COPY_SEGMENT_FINISHED, 2);
     }
 

@@ -301,7 +301,7 @@ listeners=http://localhost:8080,https://localhost:8443</pre>
         <li><code>GET /connectors/{name}/tasks</code> - get a list of tasks currently running for a connector</li>
         <li><code>GET /connectors/{name}/tasks/{taskid}/status</code> - get current status of the task, including if it is running, failed, paused, etc., which worker it is assigned to, and error information if it has failed</li>
         <li><code>PUT /connectors/{name}/pause</code> - pause the connector and its tasks, which stops message processing until the connector is resumed. Any resources claimed by its tasks are left allocated, which allows the connector to begin processing data quickly once it is resumed.</li>
-        <li><code>PUT /connectors/{name}/stop</code> - stop the connector and shut down its tasks, deallocating any resources claimed by its tasks. This is more efficient from a resource usage standpoint than pausing the connector, but can cause it to take longer to begin processing data once resumed.</li>
+        <li id="connect_stopconnector"><code>PUT /connectors/{name}/stop</code> - stop the connector and shut down its tasks, deallocating any resources claimed by its tasks. This is more efficient from a resource usage standpoint than pausing the connector, but can cause it to take longer to begin processing data once resumed. Note that the offsets for a connector can be only modified via the offsets management endpoints if it is in the stopped state</li>
         <li><code>PUT /connectors/{name}/resume</code> - resume a paused or stopped connector (or do nothing if the connector is not paused or stopped)</li>
         <li><code>POST /connectors/{name}/restart?includeTasks=&lt;true|false&gt;&amp;onlyFailed=&lt;true|false&gt;</code> - restart a connector and its tasks instances.
             <ul>
@@ -313,7 +313,52 @@ listeners=http://localhost:8080,https://localhost:8443</pre>
         <li><code>DELETE /connectors/{name}</code> - delete a connector, halting all tasks and deleting its configuration</li>
         <li><code>GET /connectors/{name}/topics</code> - get the set of topics that a specific connector is using since the connector was created or since a request to reset its set of active topics was issued</li>
         <li><code>PUT /connectors/{name}/topics/reset</code> - send a request to empty the set of active topics of a connector</li>
-        <li><code>GET /connectors/{name}/offsets</code> - get the current offsets for a connector (see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-875%3A+First-class+offsets+support+in+Kafka+Connect">KIP-875</a> for more details)</li>
+        <li>Offsets management endpoints (see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-875%3A+First-class+offsets+support+in+Kafka+Connect">KIP-875</a> for more details):
+            <ul>
+                <li><code>GET /connectors/{name}/offsets</code> - get the current offsets for a connector</li>
+                <li><code>DELETE /connectors/{name}/offsets</code> - reset the offsets for a connector. The connector must exist and must be in the stopped state (see <a href="#connect_stopconnector"><code>PUT /connectors/{name}/stop</code></a>)</li>
+                <li><code>PATCH /connectors/{name}/offsets</code> - alter the offsets for a connector. The connector must exist and must be in the stopped state (see <a href="#connect_stopconnector"><code>PUT /connectors/{name}/stop</code></a>). The request body should be a JSON object containing a JSON array <code>offsets</code> field, similar to the response body of the <code>GET /connectors/{name}/offsets</code> endpoint</li>
+                An example request body for the <code>FileStreamSourceConnector</code>:
+                <pre class="line-numbers"><code class="json">
+{
+  "offsets": [
+    {
+      "partition": {
+        "filename": "test.txt"
+      },
+      "offset": {
+        "position": 30
+      }
+    }
+  ]
+}
+                </code></pre>
+                An example request body for the <code>FileStreamSinkConnector</code>:
+                <pre class="line-numbers"><code class="json">
+{
+  "offsets": [
+    {
+      "partition": {
+        "kafka_topic": "test",
+        "kafka_partition": 0
+      },
+      "offset": {
+        "kafka_offset": 5
+      }
+    },
+    {
+      "partition": {
+        "kafka_topic": "test",
+        "kafka_partition": 1
+      },
+      "offset": null
+    }
+  ]
+}
+                </code></pre>
+                The "offset" field may be null to reset the offset for a specific partition (applicable to both source and sink connectors). Note that the request body format depends on the connector implementation in the case of source connectors, whereas there is a common format across all sink connectors.
+            </ul>
+        </li>
     </ul>
 
     <p>Kafka Connect also provides a REST API for getting information about connector plugins:</p>
@@ -398,7 +443,7 @@ errors.tolerance=all</pre>
 
     <p>If a sink connector supports exactly-once semantics, to enable exactly-once at the Connect worker level, you must ensure its consumer group is configured to ignore records in aborted transactions. You can do this by setting the worker property <code>consumer.isolation.level</code> to <code>read_committed</code> or, if running a version of Kafka Connect that supports it, using a <a href="#connectconfigs_connector.client.config.override.policy">connector client config override policy</a> that allows the <code>consumer.override.isolation.level</code> property to be set to <code>read_committed</code> in individual connector configs. There are no additional ACL requirements.</p>
 
-    <h5><a id="connect_exactlyoncesource" href="connect_exactlyoncesource">Source connectors</a></h5>
+    <h5><a id="connect_exactlyoncesource" href="#connect_exactlyoncesource">Source connectors</a></h5>
 
     <p>If a source connector supports exactly-once semantics, you must configure your Connect cluster to enable framework-level support for exactly-once source connectors. Additional ACLs may be necessary if running against a secured Kafka cluster. Note that exactly-once support for source connectors is currently only available in distributed mode; standalone Connect workers cannot provide exactly-once semantics.</p>
 
@@ -498,6 +543,67 @@ errors.tolerance=all</pre>
         </tbody>
     </table>
 
+    <h4><a id="connect_plugindiscovery" href="#connect_plugindiscovery">Plugin Discovery</a></h4>
+
+    <p>Plugin discovery is the name for the strategy which the Connect worker uses to find plugin classes and make them accessible to configure and run in connectors. This is controlled by the <a href="#connectconfigs_plugin.discovery">plugin.discovery</a> worker configuration, and has a significant impact on worker startup time. <code>service_load</code> is the fastest strategy, but care should be taken to verify that plugins are compatible before setting this configuration to <code>service_load</code>.</p>
+
+    <p>Prior to version 3.6, this strategy was not configurable, and behaved like the <code>only_scan</code> mode which is compatible with all plugins. For version 3.6 and later, this mode defaults to <code>hybrid_warn</code> which is also compatible with all plugins, but logs a warning for plugins which are incompatible with <code>service_load</code>. The <code>hybrid_fail</code> strategy stops the worker with an error if a plugin incompatible with <code>service_load</code> is detected, asserting that all plugins are compatible. Finally, the <code>service_load</code> strategy disables the slow legacy scanning mechanism used in all other modes, and instead uses the faster <code>ServiceLoader</code> mechanism. Plugins which are incompatible with that mechanism may be unusable.</p>
+
+    <h5><a id="connect_plugindiscovery_compatibility" href="#connect_plugindiscovery_compatibility">Verifying Plugin Compatibility</a></h5>
+
+    <p>To verify if all of your plugins are compatible with <code>service_load</code>, first ensure that you are using version 3.6 or later of Kafka Connect. You can then perform one of the following checks:</p>
+
+    <ul>
+        <li>Start your worker with the default <code>hybrid_warn</code>strategy, and WARN logs enabled for the <code>org.apache.kafka.connect</code> package. At least one WARN log message mentioning the <code>plugin.discovery</code> configuration should be printed. This log message will explicitly say that all plugins are compatible, or list the incompatible plugins.</li>
+        <li>Start your worker in a test environment with <code>hybrid_fail</code>. If all plugins are compatible, startup will succeed. If at least one plugin is not compatible the worker will fail to start up, and all incompatible plugins will be listed in the exception.</li>
+    </ul>
+
+    <p>If the verification step succeeds, then your current set of installed plugins is compatible, and it should be safe to change the <code>plugin.discovery</code> configuration to <code>service_load</code>. If the verification fails, you cannot use <code>service_load</code> strategy and should take note of the list of incompatible plugins. All plugins must be addressed before using the <code>service_load</code> strategy. It is recommended to perform this verification after installing or changing plugin versions, and the verification can be done automatically in a Continuous Integration environment.</p>
+
+    <h5><a id="connect_plugindiscovery_migrateartifact" href="#connect_plugindiscovery_migrateartifact">Operators: Artifact Migration</a></h5>
+
+    <p>As an operator of Connect, if you discover incompatible plugins, there are multiple ways to resolve the incompatibility. They are listed below from most to least preferable.</p>
+
+    <ol>
+        <li>Check the latest release from your plugin provider, and if it is compatible, upgrade.</li>
+        <li>Contact your plugin provider and request that they migrate the plugin to be compatible, following the <a href="#connect_plugindiscovery_migratesource">source migration instructions</a>, and then upgrade to the compatible version.</li>
+        <li>Migrate the plugin artifacts yourself using the included migration script.</li>
+    </ol>
+
+    <p>The migration script is located in <code>bin/connect-plugin-path.sh</code> and <code>bin\windows\connect-plugin-path.bat</code> of your Kafka installation. The script can migrate incompatible plugin artifacts already installed on your Connect worker's <code>plugin.path</code> by adding or modifying JAR or resource files. This is not suitable for environments using code-signing, as this can change artifacts such that they will fail signature verification. View the built-in help with <code>--help</code>.</p>
+
+    <p>To perform a migration, first use the <code>list</code> subcommand to get an overview of the plugins available to the script. You must tell the script where to find plugins, which can be done with the repeatable <code>--worker-config</code>, <code>--plugin-path</code>, and <code>--plugin-location</code> arguments. The script will ignore plugins on the classpath, so any custom plugins on your classpath should be moved to the plugin path in order to be used with this migration script, or migrated manually. Be sure to compare the output of <code>list</code> with the worker startup warning or error message to ensure that all of your affected plugins are found by the script.</p>
+
+    <p>Once you see that all incompatible plugins are included in the listing, you can proceed to dry-run the migration with <code>sync-manifests --dry-run</code>. This will perform all parts of the migration, except for writing the results of the migration to disk. Note that the <code>sync-manifests</code> command requires all specified paths to be writable, and may alter the contents of the directories. Make a backup of your plugins in the specified paths, or copy them to a writable directory.</p>
+
+    <p>Ensure that you have a backup of your plugins and the dry-run succeeds before removing the <code>--dry-run</code> flag and actually running the migration. If the migration fails without the <code>--dry-run</code> flag, then the partially migrated artifacts should be discarded. The migration is idempotent, so running it multiple times and on already-migrated plugins is safe. After the script finishes, you should <a href="#connect_plugindiscovery_compatibility">verify the migration is complete</a>. The migration script is suitable for use in a Continuous Integration environment for automatic migration.</p>
+
+    <h5><a id="connect_plugindiscovery_migratesource" href="#connect_plugindiscovery_migratesource">Developers: Source Migration</a></h5>
+
+    <p>To make plugins compatible with <code>service_load</code>, it is necessary to add <a href="https://docs.oracle.com/javase/8/docs/api/java/util/ServiceLoader.html">ServiceLoader</a> manifests to your source code, which should then be packaged in the release artifact. Manifests are resource files in <code>META-INF/services/</code> named after their superclass type, and contain a list of fully-qualified subclass names, one on each line.</p>
+
+    <p>In order for a plugin to be compatible, it must appear as a line in a manifest corresponding to the plugin superclass it extends. If a single plugin implements multiple plugin interfaces, then it should appear in a manifest for each interface it implements. If you have no classes for a certain type of plugin, you do not need to include a manifest file for that type. If you have classes which should not be visible as plugins, they should be marked abstract. The following types are expected to have manifests:</p>
+
+    <ul>
+        <li><code>org.apache.kafka.connect.sink.SinkConnector</code></li>
+        <li><code>org.apache.kafka.connect.source.SourceConnector</code></li>
+        <li><code>org.apache.kafka.connect.storage.Converter</code></li>
+        <li><code>org.apache.kafka.connect.storage.HeaderConverter</code></li>
+        <li><code>org.apache.kafka.connect.transforms.Transformation</code></li>
+        <li><code>org.apache.kafka.connect.transforms.predicates.Predicate</code></li>
+        <li><code>org.apache.kafka.common.config.provider.ConfigProvider</code></li>
+        <li><code>org.apache.kafka.connect.rest.ConnectRestExtension</code></li>
+        <li><code>org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy</code></li>
+    </ul>
+
+    <p>For example, if you only have one connector with the fully-qualified name <code>com.example.MySinkConnector</code>, then only one manifest file must be added to resources in <code>META-INF/services/org.apache.kafka.connect.sink.SinkConnector</code>, and the contents should be similar to the following:</p>
+
+    <pre class="brush: resource;">
+# license header or comment
+com.example.MySinkConnector</pre>
+
+    <p>You should then verify that your manifests are correct by using the <a href="#connect_plugindiscovery_compatibility">verification steps</a> with a pre-release artifact. If the verification succeeds, you can then release the plugin normally, and operators can upgrade to the compatible version.</p>
+
     <h3><a id="connect_development" href="#connect_development">8.3 Connector Development Guide</a></h3>
 
     <p>This guide describes how developers can write new connectors for Kafka Connect to move data between Kafka and other systems. It briefly reviews a few key concepts and then describes how to create a simple connector.</p>
@@ -532,9 +638,15 @@ errors.tolerance=all</pre>
 
     <h5><a id="connect_connectorexample" href="#connect_connectorexample">Connector Example</a></h5>
 
-    <p>We'll cover the <code>SourceConnector</code> as a simple example. <code>SinkConnector</code> implementations are very similar. Start by creating the class that inherits from <code>SourceConnector</code> and add a field that will store the configuration information to be propagated to the task(s) (the topic to send data to, and optionally - the filename to read from and the maximum batch size):</p>
+    <p>We'll cover the <code>SourceConnector</code> as a simple example. <code>SinkConnector</code> implementations are very similar. Pick a package and class name, these examples will use the <code>FileStreamSourceConnector</code> but substitute your own class name where appropriate. In order to <a href="#connect_plugindiscovery">make the plugin discoverable at runtime</a>, add a ServiceLoader manifest to your resources in <code>META-INF/services/org.apache.kafka.connect.source.SourceConnector</code> with your fully-qualified class name on a single line:</p>
+    <pre class="brush: resource;">
+com.example.FileStreamSourceConnector</pre>
+
+    <p>Create a class that inherits from <code>SourceConnector</code> and add a field that will store the configuration information to be propagated to the task(s) (the topic to send data to, and optionally - the filename to read from and the maximum batch size):</p>
 
     <pre class="brush: java;">
+package com.example;
+
 public class FileStreamSourceConnector extends SourceConnector {
     private Map&lt;String, String&gt; props;</pre>
 
@@ -841,7 +953,7 @@ if (inputsChanged())
 
     <p><code>SinkConnectors</code> usually only have to handle the addition of streams, which may translate to new entries in their outputs (e.g., a new database table). The framework manages any changes to the Kafka input, such as when the set of input topics changes because of a regex subscription. <code>SinkTasks</code> should expect new input streams, which may require creating new resources in the downstream system, such as a new table in a database. The trickiest situation to handle in these cases may be conflicts between multiple <code>SinkTasks</code> seeing a new input stream for the first time and simultaneously trying to create the new resource. <code>SinkConnectors</code>, on the other hand, will generally require no special code for handling a dynamic set of streams.</p>
 
-    <h4><a id="connect_configs" href="#connect_configs">Connect Configuration Validation</a></h4>
+    <h4><a id="connect_configs" href="#connect_configs">Configuration Validation</a></h4>
 
     <p>Kafka Connect allows you to validate connector configurations before submitting a connector to be executed and can provide feedback about errors and recommended values. To take advantage of this, connector developers need to provide an implementation of <code>config()</code> to expose the configuration definition to the framework.</p>
 
@@ -887,7 +999,7 @@ Struct struct = new Struct(schema)
 
     <p>Sink connectors are usually simpler because they are consuming data and therefore do not need to create schemas. However, they should take just as much care to validate that the schemas they receive have the expected format. When the schema does not match -- usually indicating the upstream producer is generating invalid data that cannot be correctly translated to the destination system -- sink connectors should throw an exception to indicate this error to the system.</p>
 
-    <h4><a id="connect_administration" href="#connect_administration">Kafka Connect Administration</a></h4>
+    <h3><a id="connect_administration" href="#connect_administration">8.4 Administration</a></h3>
 
     <p>
     Kafka Connect's <a href="#connect_rest">REST layer</a> provides a set of APIs to enable administration of the cluster. This includes APIs to view the configuration of connectors and the status of their tasks, as well as to alter their current behavior (e.g. changing configuration and restarting tasks).
@@ -953,6 +1065,7 @@ Struct struct = new Struct(schema)
     <li><b>UNASSIGNED:</b> The connector/task has not yet been assigned to a worker.</li>
     <li><b>RUNNING:</b> The connector/task is running.</li>
     <li><b>PAUSED:</b> The connector/task has been administratively paused.</li>
+    <li><b>STOPPED:</b> The connector has been stopped. Note that this state is not applicable to tasks because the tasks for a stopped connector are shut down and won't be visible in the status API.</li>
     <li><b>FAILED:</b> The connector/task has failed (usually by raising an exception, which is reported in the status output).</li>
     <li><b>RESTARTING:</b> The connector/task is either actively restarting or is expected to restart soon</li>
     </ul>
@@ -967,6 +1080,10 @@ Struct struct = new Struct(schema)
 
     <p>
     It's sometimes useful to temporarily stop the message processing of a connector. For example, if the remote system is undergoing maintenance, it would be preferable for source connectors to stop polling it for new data instead of filling logs with exception spam. For this use case, Connect offers a pause/resume API. While a source connector is paused, Connect will stop polling it for additional records. While a sink connector is paused, Connect will stop pushing new messages to it. The pause state is persistent, so even if you restart the cluster, the connector will not begin message processing again until the task has been resumed. Note that there may be a delay before all of a connector's tasks have transitioned to the PAUSED state since it may take time for them to finish whatever processing they were in the middle of when being paused. Additionally, failed tasks will not transition to the PAUSED state until they have been restarted.
+    </p>
+
+    <p>
+    In 3.5.0, Connect introduced a stop API that completely shuts down the tasks for a connector and deallocates any resources claimed by them. This is different from pausing a connector where tasks are left idling and any resources claimed by them are left allocated (which allows the connector to begin processing data quickly once it is resumed). Stopping a connector is more efficient from a resource usage standpoint than pausing it, but can cause it to take longer to begin processing data once resumed. Note that the offsets for a connector can be only modified via the offsets management endpoints if it is in the stopped state.
     </p>
 </script>
 

@@ -18,6 +18,7 @@ package org.apache.kafka.coordinator.group.runtime;
 
 import org.apache.kafka.common.TopicPartition;
 
+import java.nio.ByteBuffer;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -26,7 +27,40 @@ import java.util.concurrent.CompletableFuture;
  *
  * @param <U> The type of the record.
  */
-public interface CoordinatorLoader<U> {
+public interface CoordinatorLoader<U> extends AutoCloseable {
+
+    /**
+     * UnknownRecordTypeException is thrown when the Deserializer encounters
+     * an unknown record type.
+     */
+    class UnknownRecordTypeException extends RuntimeException {
+        private final short unknownType;
+
+        public UnknownRecordTypeException(short unknownType) {
+            super(String.format("Found an unknown record type %d", unknownType));
+            this.unknownType = unknownType;
+        }
+
+        public short unknownType() {
+            return unknownType;
+        }
+    }
+
+    /**
+     * Deserializer to translates bytes to T.
+     *
+     * @param <T> The record type.
+     */
+    interface Deserializer<T> {
+        /**
+         * Deserializes the key and the value.
+         *
+         * @param key   The key or null if not present.
+         * @param value The value or null if not present.
+         * @return The record.
+         */
+        T deserialize(ByteBuffer key, ByteBuffer value) throws RuntimeException;
+    }
 
     /**
      * Loads the coordinator by reading all the records from the TopicPartition

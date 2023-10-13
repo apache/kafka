@@ -95,6 +95,7 @@ import static java.util.Collections.emptySet;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
+import static org.apache.kafka.common.utils.Utils.intersection;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
@@ -284,6 +285,42 @@ public class TaskManagerTest {
         );
 
         Mockito.verify(standbyTask).resume();
+    }
+
+    @Test
+    public void shouldResumePollingForPartitionsWithAvailableSpaceForAllActiveTasks() {
+        final StreamTask activeTask1 = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .inState(State.RUNNING)
+            .withInputPartitions(taskId00Partitions).build();
+        final StreamTask activeTask2 = statefulTask(taskId01, taskId01ChangelogPartitions)
+            .inState(State.RUNNING)
+            .withInputPartitions(taskId01Partitions).build();
+        final TasksRegistry tasks = Mockito.mock(TasksRegistry.class);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
+        when(tasks.activeTasks()).thenReturn(mkSet(activeTask1, activeTask2));
+
+        taskManager.resumePollingForPartitionsWithAvailableSpace();
+
+        Mockito.verify(activeTask1).resumePollingForPartitionsWithAvailableSpace();
+        Mockito.verify(activeTask2).resumePollingForPartitionsWithAvailableSpace();
+    }
+
+    @Test
+    public void shouldUpdateLagForAllActiveTasks() {
+        final StreamTask activeTask1 = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .inState(State.RUNNING)
+            .withInputPartitions(taskId00Partitions).build();
+        final StreamTask activeTask2 = statefulTask(taskId01, taskId01ChangelogPartitions)
+            .inState(State.RUNNING)
+            .withInputPartitions(taskId01Partitions).build();
+        final TasksRegistry tasks = Mockito.mock(TasksRegistry.class);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
+        when(tasks.activeTasks()).thenReturn(mkSet(activeTask1, activeTask2));
+
+        taskManager.updateLags();
+
+        Mockito.verify(activeTask1).updateLags();
+        Mockito.verify(activeTask2).updateLags();
     }
 
     @Test
@@ -528,7 +565,7 @@ public class TaskManagerTest {
 
         taskManager.handleAssignment(tasksToBeCreated, Collections.emptyMap());
 
-        Mockito.verify(tasks).addPendingTaskToInit(createdTasks);
+        Mockito.verify(tasks).addPendingTasksToInit(createdTasks);
         Mockito.verify(standbyTaskCreator).createTasks(Collections.emptyMap());
     }
 
@@ -550,32 +587,53 @@ public class TaskManagerTest {
         );
 
         Mockito.verify(activeTaskCreator).createTasks(consumer, Collections.emptyMap());
-        Mockito.verify(tasks).addPendingTaskToInit(createdTasks);
+        Mockito.verify(tasks).addPendingTasksToInit(createdTasks);
     }
 
     @Test
-    public void shouldAssignActiveTaskInTasksRegistryToBeRecycledWithStateUpdaterEnabled() {
-        final StreamTask activeTaskToRecycle = statefulTask(taskId03, taskId03ChangelogPartitions)
-            .inState(State.SUSPENDED)
-            .withInputPartitions(taskId03Partitions).build();
-        final StandbyTask recycledStandbyTask = standbyTask(taskId03, taskId03ChangelogPartitions)
-            .inState(State.CREATED)
-            .withInputPartitions(taskId03Partitions).build();
-        final TasksRegistry tasks = Mockito.mock(TasksRegistry.class);
+    public void shouldAddRecycledStandbyTaskfromActiveToPendingTasksToInitWithStateUpdaterEnabled() {
+        final StreamTask activeTaskToRecycle = statefulTask(taskId01, taskId01ChangelogPartitions)
+            .withInputPartitions(taskId01Partitions)
+            .inState(State.RUNNING).build();
+        final StandbyTask standbyTask = standbyTask(taskId01, taskId01ChangelogPartitions)
+            .withInputPartitions(taskId01Partitions)
+            .inState(State.CREATED).build();
+        final TasksRegistry tasks = mock(TasksRegistry.class);
         when(tasks.allTasks()).thenReturn(mkSet(activeTaskToRecycle));
+        when(standbyTaskCreator.createStandbyTaskFromActive(activeTaskToRecycle, taskId01Partitions))
+            .thenReturn(standbyTask);
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
-        when(standbyTaskCreator.createStandbyTaskFromActive(activeTaskToRecycle, activeTaskToRecycle.inputPartitions()))
-            .thenReturn(recycledStandbyTask);
 
-        taskManager.handleAssignment(
-            Collections.emptyMap(),
-            mkMap(mkEntry(activeTaskToRecycle.id(), activeTaskToRecycle.inputPartitions()))
-        );
+        taskManager.handleAssignment(emptyMap(), mkMap(mkEntry(taskId01, taskId01Partitions)));
 
-        Mockito.verify(activeTaskCreator).closeAndRemoveTaskProducerIfNeeded(activeTaskToRecycle.id());
-        Mockito.verify(activeTaskCreator).createTasks(consumer, Collections.emptyMap());
         Mockito.verify(activeTaskToRecycle).prepareCommit();
-        Mockito.verify(tasks).replaceActiveWithStandby(recycledStandbyTask);
+        Mockito.verify(activeTaskCreator).closeAndRemoveTaskProducerIfNeeded(activeTaskToRecycle.id());
+        Mockito.verify(tasks).addPendingTasksToInit(mkSet(standbyTask));
+        Mockito.verify(tasks).removeTask(activeTaskToRecycle);
+        Mockito.verify(activeTaskCreator).createTasks(consumer, Collections.emptyMap());
+        Mockito.verify(standbyTaskCreator).createTasks(Collections.emptyMap());
+    }
+
+    @Test
+    public void shouldAddRecycledStandbyTaskfromActiveToTaskRegistryWithStateUpdaterDisabled() {
+        final StreamTask activeTaskToRecycle = statefulTask(taskId01, taskId01ChangelogPartitions)
+            .withInputPartitions(taskId01Partitions)
+            .inState(State.RUNNING).build();
+        final StandbyTask standbyTask = standbyTask(taskId01, taskId01ChangelogPartitions)
+            .withInputPartitions(taskId01Partitions)
+            .inState(State.CREATED).build();
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        when(tasks.allTasks()).thenReturn(mkSet(activeTaskToRecycle));
+        when(standbyTaskCreator.createStandbyTaskFromActive(activeTaskToRecycle, taskId01Partitions))
+            .thenReturn(standbyTask);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, false);
+
+        taskManager.handleAssignment(emptyMap(), mkMap(mkEntry(taskId01, taskId01Partitions)));
+
+        Mockito.verify(activeTaskToRecycle).prepareCommit();
+        Mockito.verify(activeTaskCreator).closeAndRemoveTaskProducerIfNeeded(activeTaskToRecycle.id());
+        Mockito.verify(tasks).replaceActiveWithStandby(standbyTask);
+        Mockito.verify(activeTaskCreator).createTasks(consumer, Collections.emptyMap());
         Mockito.verify(standbyTaskCreator).createTasks(Collections.emptyMap());
     }
 
@@ -596,7 +654,8 @@ public class TaskManagerTest {
             )
         );
 
-        assertEquals(illegalStateException.getMessage(), "Standby tasks should only be managed by the state updater");
+        assertEquals(illegalStateException.getMessage(), "Standby tasks should only be managed by the state updater, " +
+            "but standby task " + taskId03 + " is managed by the stream thread");
         Mockito.verifyNoInteractions(activeTaskCreator);
     }
 
@@ -633,7 +692,8 @@ public class TaskManagerTest {
             () -> taskManager.handleAssignment(Collections.emptyMap(), Collections.emptyMap())
         );
 
-        assertEquals(illegalStateException.getMessage(), "Standby tasks should only be managed by the state updater");
+        assertEquals(illegalStateException.getMessage(), "Standby tasks should only be managed by the state updater, " +
+            "but standby task " + taskId03 + " is managed by the stream thread");
         Mockito.verifyNoInteractions(activeTaskCreator);
     }
 
@@ -715,7 +775,8 @@ public class TaskManagerTest {
             )
         );
 
-        assertEquals(illegalStateException.getMessage(), "Standby tasks should only be managed by the state updater");
+        assertEquals(illegalStateException.getMessage(), "Standby tasks should only be managed by the state updater, " +
+            "but standby task " + taskId02 + " is managed by the stream thread");
         Mockito.verifyNoInteractions(activeTaskCreator);
     }
 
@@ -753,7 +814,7 @@ public class TaskManagerTest {
             .withInputPartitions(taskId01Partitions)
             .inState(State.RUNNING).build();
         final TasksRegistry tasks = mock(TasksRegistry.class);
-        when(tasks.drainPendingTaskToInit()).thenReturn(mkSet(task00, task01));
+        when(tasks.drainPendingTasksToInit()).thenReturn(mkSet(task00, task01));
         taskManager = setUpTaskManager(StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE, tasks, true);
 
         taskManager.checkStateUpdater(time.milliseconds(), noOpResetter);
@@ -773,18 +834,57 @@ public class TaskManagerTest {
             .withInputPartitions(taskId01Partitions)
             .inState(State.RUNNING).build();
         final TasksRegistry tasks = mock(TasksRegistry.class);
-        when(tasks.drainPendingTaskToInit()).thenReturn(mkSet(task00, task01));
+        when(tasks.drainPendingTasksToInit()).thenReturn(mkSet(task00, task01));
         final LockException lockException = new LockException("Where are my keys??");
-        doThrow(lockException)
-            .when(task00).initializeIfNeeded();
+        doThrow(lockException).when(task00).initializeIfNeeded();
         taskManager = setUpTaskManager(StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE, tasks, true);
 
         taskManager.checkStateUpdater(time.milliseconds(), noOpResetter);
 
         Mockito.verify(task00).initializeIfNeeded();
         Mockito.verify(task01).initializeIfNeeded();
-        Mockito.verify(tasks).addPendingTaskToInit(Collections.singleton(task00));
+        Mockito.verify(tasks).addPendingTasksToInit(
+            Mockito.argThat(tasksToInit -> tasksToInit.contains(task00) && !tasksToInit.contains(task01))
+        );
+        Mockito.verify(stateUpdater, never()).add(task00);
         Mockito.verify(stateUpdater).add(task01);
+    }
+
+    @Test
+    public void shouldRetryInitializationWhenLockExceptionAfterRecyclingInStateUpdater() {
+        final StreamTask task00 = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .withInputPartitions(taskId00Partitions)
+            .inState(State.RESTORING).build();
+        final StandbyTask task01 = standbyTask(taskId01, taskId01ChangelogPartitions)
+            .withInputPartitions(taskId01Partitions)
+            .inState(State.RUNNING).build();
+        final StandbyTask task00Converted = standbyTask(taskId00, taskId00Partitions)
+            .withInputPartitions(taskId00Partitions).build();
+        final StreamTask task01Converted = statefulTask(taskId01, taskId01Partitions)
+            .withInputPartitions(taskId01Partitions).build();
+        when(stateUpdater.hasRemovedTasks()).thenReturn(true);
+        when(stateUpdater.drainRemovedTasks()).thenReturn(mkSet(task00, task01));
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        when(tasks.removePendingTaskToRecycle(task00.id())).thenReturn(taskId00Partitions);
+        when(tasks.removePendingTaskToRecycle(task01.id())).thenReturn(taskId01Partitions);
+        taskManager = setUpTaskManager(StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE, tasks, true);
+        when(activeTaskCreator.createActiveTaskFromStandby(task01, taskId01Partitions,
+            consumer)).thenReturn(task01Converted);
+        when(standbyTaskCreator.createStandbyTaskFromActive(task00, taskId00Partitions))
+            .thenReturn(task00Converted);
+        final LockException lockException = new LockException("Where are my keys??");
+        doThrow(lockException).when(task00Converted).initializeIfNeeded();
+        taskManager = setUpTaskManager(StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE, tasks, true);
+
+        taskManager.checkStateUpdater(time.milliseconds(), noOpResetter);
+
+        Mockito.verify(task00Converted).initializeIfNeeded();
+        Mockito.verify(task01Converted).initializeIfNeeded();
+        Mockito.verify(tasks).addPendingTasksToInit(
+            Mockito.argThat(tasksToInit -> tasksToInit.contains(task00Converted) && !tasksToInit.contains(task01Converted))
+        );
+        Mockito.verify(stateUpdater, never()).add(task00Converted);
+        Mockito.verify(stateUpdater).add(task01Converted);
     }
 
     @Test
@@ -885,7 +985,7 @@ public class TaskManagerTest {
         when(tasks.removePendingActiveTaskToSuspend(statefulTask.id())).thenReturn(true);
         when(stateUpdater.hasRemovedTasks()).thenReturn(true);
         when(stateUpdater.drainRemovedTasks()).thenReturn(mkSet(statefulTask));
-        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
+        taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
         replay(consumer);
 
         taskManager.checkStateUpdater(time.milliseconds(), noOpResetter);
@@ -894,6 +994,7 @@ public class TaskManagerTest {
         Mockito.verify(statefulTask).suspend();
         Mockito.verify(tasks).addTask(statefulTask);
     }
+
     @Test
     public void shouldHandleMultipleRemovedTasksFromStateUpdater() {
         final StreamTask taskToRecycle0 = statefulTask(taskId00, taskId00ChangelogPartitions)
@@ -945,6 +1046,41 @@ public class TaskManagerTest {
         Mockito.verify(taskToClose).closeClean();
         Mockito.verify(taskToUpdateInputPartitions).updateInputPartitions(Mockito.eq(taskId04Partitions), anyMap());
         Mockito.verify(stateUpdater).add(taskToUpdateInputPartitions);
+    }
+
+    @Test
+    public void shouldReturnFalseFromCheckStateUpdaterIfActiveTasksAreRestoring() {
+        when(stateUpdater.restoresActiveTasks()).thenReturn(true);
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
+
+        assertFalse(taskManager.checkStateUpdater(time.milliseconds(), noOpResetter));
+    }
+
+    @Test
+    public void shouldReturnFalseFromCheckStateUpdaterIfActiveTasksAreNotRestoringAndNoPendingTaskToInitButPendingTasksToRecycle() {
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        when(tasks.hasPendingTasksToRecycle()).thenReturn(true);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
+
+        assertFalse(taskManager.checkStateUpdater(time.milliseconds(), noOpResetter));
+    }
+
+    @Test
+    public void shouldReturnFalseFromCheckStateUpdaterIfActiveTasksAreNotRestoringAndNoPendingTaskToRecycleButPendingTasksToInit() {
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        when(tasks.hasPendingTasksToInit()).thenReturn(true);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
+
+        assertFalse(taskManager.checkStateUpdater(time.milliseconds(), noOpResetter));
+    }
+
+    @Test
+    public void shouldReturnTrueFromCheckStateUpdaterIfActiveTasksAreNotRestoringAndNoPendingTasksToRecycleAndInit() {
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
+
+        assertTrue(taskManager.checkStateUpdater(time.milliseconds(), noOpResetter));
     }
 
     @Test
@@ -1452,7 +1588,7 @@ public class TaskManagerTest {
             .withInputPartitions(taskId02Partitions).build();
         final TasksRegistry tasks = mock(TasksRegistry.class);
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.EXACTLY_ONCE_V2, tasks, true);
-        when(tasks.drainPendingTaskToInit()).thenReturn(mkSet(statefulTask0, statefulTask1, statefulTask2));
+        when(tasks.drainPendingTasksToInit()).thenReturn(mkSet(statefulTask0, statefulTask1, statefulTask2));
         doThrow(new TaskCorruptedException(Collections.singleton(statefulTask0.id))).when(statefulTask0).initializeIfNeeded();
         doThrow(new TaskCorruptedException(Collections.singleton(statefulTask1.id))).when(statefulTask1).initializeIfNeeded();
 
@@ -1571,6 +1707,48 @@ public class TaskManagerTest {
     }
 
     @Test
+    public void shouldReleaseLockForUnassignedTasksAfterRebalanceWithStateUpdater() throws Exception {
+        final StreamTask runningStatefulTask = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .inState(State.RUNNING)
+            .withInputPartitions(taskId00Partitions).build();
+        final StreamTask restoringStatefulTask = statefulTask(taskId01, taskId01ChangelogPartitions)
+            .inState(State.RESTORING)
+            .withInputPartitions(taskId01Partitions).build();
+        final StandbyTask standbyTask = standbyTask(taskId02, taskId02ChangelogPartitions)
+            .inState(State.RUNNING)
+            .withInputPartitions(taskId02Partitions).build();
+        final StandbyTask unassignedStandbyTask = standbyTask(taskId03, taskId03ChangelogPartitions)
+            .inState(State.CREATED)
+            .withInputPartitions(taskId03Partitions).build();
+        final TasksRegistry tasks = Mockito.mock(TasksRegistry.class);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
+        when(tasks.allTasksPerId()).thenReturn(mkMap(mkEntry(taskId00, runningStatefulTask)));
+        when(stateUpdater.getTasks()).thenReturn(mkSet(standbyTask, restoringStatefulTask));
+        when(tasks.allTasks()).thenReturn(mkSet(runningStatefulTask));
+        expectLockObtainedFor(taskId00, taskId01, taskId02, taskId03);
+        expectUnlockFor(taskId03);
+        makeTaskFolders(
+            taskId00.toString(),
+            taskId01.toString(),
+            taskId02.toString(),
+            taskId03.toString()
+        );
+        replay(stateDirectory);
+
+        final Set<TopicPartition> assigned = mkSet(t1p0, t1p1, t1p2);
+        expect(consumer.assignment()).andReturn(assigned);
+        consumer.pause(mkSet(t1p1, t1p2));
+        replay(consumer);
+
+        taskManager.handleRebalanceStart(singleton("topic"));
+        taskManager.handleRebalanceComplete();
+
+        verify(consumer);
+        verify(stateDirectory);
+        assertThat(taskManager.lockedTaskDirectories(), is(mkSet(taskId00, taskId01, taskId02)));
+    }
+
+    @Test
     public void shouldReportLatestOffsetAsOffsetSumForRunningTask() throws Exception {
         final Map<TopicPartition, Long> changelogOffsets = mkMap(
             mkEntry(new TopicPartition("changelog", 0), Task.LATEST_OFFSET),
@@ -1590,6 +1768,76 @@ public class TaskManagerTest {
         final Map<TaskId, Long> expectedOffsetSums = mkMap(mkEntry(taskId00, 15L));
 
         computeOffsetSumAndVerify(changelogOffsets, expectedOffsetSums);
+    }
+
+    @Test
+    public void shouldComputeOffsetSumForRestoringActiveTaskWithStateUpdater() throws Exception {
+        final StreamTask restoringStatefulTask = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .inState(State.RESTORING).build();
+        final long changelogOffset = 42L;
+        when(restoringStatefulTask.changelogOffsets()).thenReturn(mkMap(mkEntry(t1p0changelog, changelogOffset)));
+        expectLockObtainedFor(taskId00);
+        makeTaskFolders(taskId00.toString());
+        final Map<TopicPartition, Long> changelogOffsetInCheckpoint = mkMap(mkEntry(t1p0changelog, 24L));
+        writeCheckpointFile(taskId00, changelogOffsetInCheckpoint);
+        final TasksRegistry tasks = Mockito.mock(TasksRegistry.class);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
+        when(stateUpdater.getTasks()).thenReturn(mkSet(restoringStatefulTask));
+        replay(stateDirectory);
+        taskManager.handleRebalanceStart(singleton("topic"));
+
+        assertThat(taskManager.getTaskOffsetSums(), is(mkMap(mkEntry(taskId00, changelogOffset))));
+    }
+
+    @Test
+    public void shouldComputeOffsetSumForRestoringStandbyTaskWithStateUpdater() throws Exception {
+        final StandbyTask restoringStandbyTask = standbyTask(taskId00, taskId00ChangelogPartitions)
+            .inState(State.RUNNING).build();
+        final long changelogOffset = 42L;
+        when(restoringStandbyTask.changelogOffsets()).thenReturn(mkMap(mkEntry(t1p0changelog, changelogOffset)));
+        expectLockObtainedFor(taskId00);
+        makeTaskFolders(taskId00.toString());
+        final Map<TopicPartition, Long> changelogOffsetInCheckpoint = mkMap(mkEntry(t1p0changelog, 24L));
+        writeCheckpointFile(taskId00, changelogOffsetInCheckpoint);
+        final TasksRegistry tasks = Mockito.mock(TasksRegistry.class);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
+        when(stateUpdater.getTasks()).thenReturn(mkSet(restoringStandbyTask));
+        replay(stateDirectory);
+        taskManager.handleRebalanceStart(singleton("topic"));
+
+        assertThat(taskManager.getTaskOffsetSums(), is(mkMap(mkEntry(taskId00, changelogOffset))));
+    }
+
+    @Test
+    public void shouldComputeOffsetSumForRunningStatefulTaskAndRestoringTaskWithStateUpdater() {
+        final StreamTask runningStatefulTask = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .inState(State.RUNNING).build();
+        final StreamTask restoringStatefulTask = statefulTask(taskId01, taskId01ChangelogPartitions)
+            .inState(State.RESTORING).build();
+        final StandbyTask restoringStandbyTask = standbyTask(taskId02, taskId02ChangelogPartitions)
+            .inState(State.RUNNING).build();
+        final long changelogOffsetOfRunningTask = 42L;
+        final long changelogOffsetOfRestoringStatefulTask = 24L;
+        final long changelogOffsetOfRestoringStandbyTask = 84L;
+        when(runningStatefulTask.changelogOffsets())
+            .thenReturn(mkMap(mkEntry(t1p0changelog, changelogOffsetOfRunningTask)));
+        when(restoringStatefulTask.changelogOffsets())
+            .thenReturn(mkMap(mkEntry(t1p1changelog, changelogOffsetOfRestoringStatefulTask)));
+        when(restoringStandbyTask.changelogOffsets())
+            .thenReturn(mkMap(mkEntry(t1p2changelog, changelogOffsetOfRestoringStandbyTask)));
+        final TasksRegistry tasks = Mockito.mock(TasksRegistry.class);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
+        when(tasks.allTasksPerId()).thenReturn(mkMap(mkEntry(taskId00, runningStatefulTask)));
+        when(stateUpdater.getTasks()).thenReturn(mkSet(restoringStandbyTask, restoringStatefulTask));
+
+        assertThat(
+            taskManager.getTaskOffsetSums(),
+            is(mkMap(
+                mkEntry(taskId00, changelogOffsetOfRunningTask),
+                mkEntry(taskId01, changelogOffsetOfRestoringStatefulTask),
+                mkEntry(taskId02, changelogOffsetOfRestoringStandbyTask)
+            ))
+        );
     }
 
     @Test
@@ -1938,16 +2186,13 @@ public class TaskManagerTest {
         standbyTaskOrder.verify(corruptedStandbyTask).revive();
         Mockito.verify(tasks).removeTask(corruptedActiveTask);
         Mockito.verify(tasks).removeTask(corruptedStandbyTask);
-        Mockito.verify(tasks).addPendingTaskToInit(mkSet(corruptedActiveTask));
-        Mockito.verify(tasks).addPendingTaskToInit(mkSet(corruptedStandbyTask));
+        Mockito.verify(tasks).addPendingTasksToInit(mkSet(corruptedActiveTask));
+        Mockito.verify(tasks).addPendingTasksToInit(mkSet(corruptedStandbyTask));
     }
 
     @Test
     public void shouldReviveCorruptTasks() {
-        final ProcessorStateManager stateManager = EasyMock.createStrictMock(ProcessorStateManager.class);
-        stateManager.markChangelogAsCorrupted(taskId00Partitions);
-        EasyMock.expectLastCall().once();
-        replay(stateManager);
+        final ProcessorStateManager stateManager = Mockito.mock(ProcessorStateManager.class);
 
         final AtomicBoolean enforcedCheckpoint = new AtomicBoolean(false);
         final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager) {
@@ -1980,15 +2225,13 @@ public class TaskManagerTest {
         assertThat(taskManager.activeTaskMap(), is(singletonMap(taskId00, task00)));
         assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
 
-        verify(stateManager);
         verify(consumer);
+        Mockito.verify(stateManager).markChangelogAsCorrupted(taskId00Partitions);
     }
 
     @Test
     public void shouldReviveCorruptTasksEvenIfTheyCannotCloseClean() {
-        final ProcessorStateManager stateManager = EasyMock.createStrictMock(ProcessorStateManager.class);
-        stateManager.markChangelogAsCorrupted(taskId00Partitions);
-        replay(stateManager);
+        final ProcessorStateManager stateManager = Mockito.mock(ProcessorStateManager.class);
 
         final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager) {
             @Override
@@ -2015,15 +2258,13 @@ public class TaskManagerTest {
         assertThat(taskManager.activeTaskMap(), is(singletonMap(taskId00, task00)));
         assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
 
-        verify(stateManager);
         verify(consumer);
+        Mockito.verify(stateManager).markChangelogAsCorrupted(taskId00Partitions);
     }
 
     @Test
     public void shouldCommitNonCorruptedTasksOnTaskCorruptedException() {
-        final ProcessorStateManager stateManager = EasyMock.createStrictMock(ProcessorStateManager.class);
-        stateManager.markChangelogAsCorrupted(taskId00Partitions);
-        replay(stateManager);
+        final ProcessorStateManager stateManager = Mockito.mock(ProcessorStateManager.class);
 
         final StateMachineTask corruptedTask = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager);
         final StateMachineTask nonCorruptedTask = new StateMachineTask(taskId01, taskId01Partitions, true, stateManager);
@@ -2055,13 +2296,12 @@ public class TaskManagerTest {
         assertThat(corruptedTask.partitionsForOffsetReset, equalTo(taskId00Partitions));
 
         verify(consumer);
+        Mockito.verify(stateManager).markChangelogAsCorrupted(taskId00Partitions);
     }
 
     @Test
     public void shouldNotCommitNonRunningNonCorruptedTasks() {
-        final ProcessorStateManager stateManager = EasyMock.createStrictMock(ProcessorStateManager.class);
-        stateManager.markChangelogAsCorrupted(taskId00Partitions);
-        replay(stateManager);
+        final ProcessorStateManager stateManager = Mockito.mock(ProcessorStateManager.class);
 
         final StateMachineTask corruptedTask = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager);
         final StateMachineTask nonRunningNonCorruptedTask = new StateMachineTask(taskId01, taskId01Partitions, true, stateManager);
@@ -2088,13 +2328,37 @@ public class TaskManagerTest {
 
         assertFalse(nonRunningNonCorruptedTask.commitPrepared);
         verify(consumer);
+        Mockito.verify(stateManager).markChangelogAsCorrupted(taskId00Partitions);
+    }
+
+    @Test
+    public void shouldNotCommitNonCorruptedRestoringActiveTasksAndCommitStandbyTasks() {
+        final StreamTask activeRestoringTask = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .withInputPartitions(taskId00Partitions)
+            .inState(State.RESTORING).build();
+        final StandbyTask standbyTask = standbyTask(taskId01, taskId01ChangelogPartitions)
+            .withInputPartitions(taskId01Partitions)
+            .inState(State.RUNNING).build();
+        final StreamTask corruptedTask = statefulTask(taskId02, taskId02ChangelogPartitions)
+            .withInputPartitions(taskId02Partitions)
+            .inState(State.RUNNING).build();
+        final TasksRegistry tasks = Mockito.mock(TasksRegistry.class);
+        when(tasks.allTasksPerId()).thenReturn(mkMap(mkEntry(taskId02, corruptedTask)));
+        when(tasks.task(taskId02)).thenReturn(corruptedTask);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
+        when(stateUpdater.getTasks()).thenReturn(mkSet(activeRestoringTask, standbyTask));
+        expect(consumer.assignment()).andReturn(intersection(HashSet::new, taskId00Partitions, taskId01Partitions, taskId02Partitions));
+        replay(consumer);
+
+        taskManager.handleCorruption(mkSet(taskId02));
+
+        Mockito.verify(activeRestoringTask, never()).commitNeeded();
+        Mockito.verify(standbyTask, times(2)).commitNeeded();
     }
 
     @Test
     public void shouldCleanAndReviveCorruptedStandbyTasksBeforeCommittingNonCorruptedTasks() {
-        final ProcessorStateManager stateManager = EasyMock.createStrictMock(ProcessorStateManager.class);
-        stateManager.markChangelogAsCorrupted(taskId00Partitions);
-        replay(stateManager);
+        final ProcessorStateManager stateManager = Mockito.mock(ProcessorStateManager.class);
 
         final StateMachineTask corruptedStandby = new StateMachineTask(taskId00, taskId00Partitions, false, stateManager);
         final StateMachineTask runningNonCorruptedActive = new StateMachineTask(taskId01, taskId01Partitions, true, stateManager) {
@@ -2129,11 +2393,12 @@ public class TaskManagerTest {
         assertThat(corruptedStandby.commitPrepared, is(true));
         assertThat(corruptedStandby.state(), is(Task.State.CREATED));
         verify(consumer);
+        Mockito.verify(stateManager).markChangelogAsCorrupted(taskId00Partitions);
     }
 
     @Test
     public void shouldNotAttemptToCommitInHandleCorruptedDuringARebalance() {
-        final ProcessorStateManager stateManager = EasyMock.createNiceMock(ProcessorStateManager.class);
+        final ProcessorStateManager stateManager = Mockito.mock(ProcessorStateManager.class);
         expect(stateDirectory.listNonEmptyTaskDirectories()).andStubReturn(new ArrayList<>());
 
         final StateMachineTask corruptedActive = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager);
@@ -2154,7 +2419,7 @@ public class TaskManagerTest {
 
         expect(consumer.assignment()).andStubReturn(union(HashSet::new, taskId00Partitions, taskId01Partitions));
 
-        replay(consumer, stateDirectory, stateManager);
+        replay(consumer, stateDirectory);
 
         uncorruptedActive.setCommittableOffsetsAndMetadata(offsets);
 
@@ -2180,10 +2445,8 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldCloseAndReviveUncorruptedTasksWhenTimeoutExceptionThrownFromCommitWithALSO() {
-        final ProcessorStateManager stateManager = EasyMock.createStrictMock(ProcessorStateManager.class);
-        stateManager.markChangelogAsCorrupted(taskId00Partitions);
-        replay(stateManager);
+    public void shouldCloseAndReviveUncorruptedTasksWhenTimeoutExceptionThrownFromCommitWithALOS() {
+        final ProcessorStateManager stateManager = Mockito.mock(ProcessorStateManager.class);
 
         final StateMachineTask corruptedActive = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager);
         final StateMachineTask uncorruptedActive = new StateMachineTask(taskId01, taskId01Partitions, true, stateManager) {
@@ -2240,6 +2503,7 @@ public class TaskManagerTest {
         assertThat(corruptedActive.state(), is(Task.State.CREATED));
         assertThat(uncorruptedActive.state(), is(Task.State.CREATED));
         verify(consumer);
+        Mockito.verify(stateManager).markChangelogAsCorrupted(taskId00Partitions);
     }
 
     @Test
@@ -2247,7 +2511,7 @@ public class TaskManagerTest {
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.EXACTLY_ONCE_V2, false);
         final StreamsProducer producer = mock(StreamsProducer.class);
         when(activeTaskCreator.threadProducer()).thenReturn(producer);
-        final ProcessorStateManager stateManager = EasyMock.createMock(ProcessorStateManager.class);
+        final ProcessorStateManager stateManager = Mockito.mock(ProcessorStateManager.class);
 
         final AtomicBoolean corruptedTaskChangelogMarkedAsCorrupted = new AtomicBoolean(false);
         final StateMachineTask corruptedActiveTask = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager) {
@@ -2257,7 +2521,6 @@ public class TaskManagerTest {
                 corruptedTaskChangelogMarkedAsCorrupted.set(true);
             }
         };
-        stateManager.markChangelogAsCorrupted(taskId00ChangelogPartitions);
 
         final AtomicBoolean uncorruptedTaskChangelogMarkedAsCorrupted = new AtomicBoolean(false);
         final StateMachineTask uncorruptedActiveTask = new StateMachineTask(taskId01, taskId01Partitions, true, stateManager) {
@@ -2269,7 +2532,6 @@ public class TaskManagerTest {
         };
         final Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(t1p1, new OffsetAndMetadata(0L, null));
         uncorruptedActiveTask.setCommittableOffsetsAndMetadata(offsets);
-        stateManager.markChangelogAsCorrupted(taskId01ChangelogPartitions);
 
         // handleAssignment
         final Map<TaskId, Set<TopicPartition>> assignment = new HashMap<>();
@@ -2287,7 +2549,7 @@ public class TaskManagerTest {
 
         expect(consumer.assignment()).andStubReturn(union(HashSet::new, taskId00Partitions, taskId01Partitions));
 
-        replay(consumer, stateManager);
+        replay(consumer);
 
         taskManager.handleAssignment(assignment, emptyMap());
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -2324,6 +2586,8 @@ public class TaskManagerTest {
         assertThat(corruptedTaskChangelogMarkedAsCorrupted.get(), is(true));
         assertThat(uncorruptedTaskChangelogMarkedAsCorrupted.get(), is(true));
         verify(consumer);
+        Mockito.verify(stateManager).markChangelogAsCorrupted(taskId00ChangelogPartitions);
+        Mockito.verify(stateManager).markChangelogAsCorrupted(taskId01ChangelogPartitions);
     }
 
     @Test
@@ -2384,7 +2648,7 @@ public class TaskManagerTest {
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.EXACTLY_ONCE_V2, false);
         final StreamsProducer producer = mock(StreamsProducer.class);
         when(activeTaskCreator.threadProducer()).thenReturn(producer);
-        final ProcessorStateManager stateManager = EasyMock.createMock(ProcessorStateManager.class);
+        final ProcessorStateManager stateManager = Mockito.mock(ProcessorStateManager.class);
 
         final StateMachineTask revokedActiveTask = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager);
         final Map<TopicPartition, OffsetAndMetadata> revokedActiveTaskOffsets = singletonMap(t1p0, new OffsetAndMetadata(0L, null));
@@ -2409,9 +2673,6 @@ public class TaskManagerTest {
         expectedCommittedOffsets.putAll(revokedActiveTaskOffsets);
         expectedCommittedOffsets.putAll(unrevokedTaskOffsets);
 
-        stateManager.markChangelogAsCorrupted(taskId00ChangelogPartitions);
-        stateManager.markChangelogAsCorrupted(taskId01ChangelogPartitions);
-
         final Map<TaskId, Set<TopicPartition>> assignmentActive = mkMap(
             mkEntry(taskId00, taskId00Partitions),
             mkEntry(taskId01, taskId01Partitions),
@@ -2430,7 +2691,7 @@ public class TaskManagerTest {
 
         expect(consumer.assignment()).andStubReturn(union(HashSet::new, taskId00Partitions, taskId01Partitions, taskId02Partitions));
 
-        replay(consumer, stateManager);
+        replay(consumer);
 
         taskManager.handleAssignment(assignmentActive, emptyMap());
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -2449,6 +2710,8 @@ public class TaskManagerTest {
         assertThat(revokedActiveTask.state(), is(State.SUSPENDED));
         assertThat(unrevokedActiveTask.state(), is(State.CREATED));
         assertThat(unrevokedActiveTaskWithoutCommitNeeded.state(), is(State.RUNNING));
+        Mockito.verify(stateManager).markChangelogAsCorrupted(taskId00ChangelogPartitions);
+        Mockito.verify(stateManager).markChangelogAsCorrupted(taskId01ChangelogPartitions);
     }
 
     @Test
@@ -3524,24 +3787,23 @@ public class TaskManagerTest {
 
     @Test
     public void shouldCommitViaProducerIfEosAlphaEnabled() {
-        final StreamsProducer producer = EasyMock.mock(StreamsProducer.class);
+        final StreamsProducer producer = Mockito.mock(StreamsProducer.class);
         when(activeTaskCreator.streamsProducerForTask(any(TaskId.class)))
             .thenReturn(producer);
 
         final Map<TopicPartition, OffsetAndMetadata> offsetsT01 = singletonMap(t1p1, new OffsetAndMetadata(0L, null));
         final Map<TopicPartition, OffsetAndMetadata> offsetsT02 = singletonMap(t1p2, new OffsetAndMetadata(1L, null));
 
-        producer.commitTransaction(offsetsT01, new ConsumerGroupMetadata("appId"));
-        expectLastCall();
-        producer.commitTransaction(offsetsT02, new ConsumerGroupMetadata("appId"));
-        expectLastCall();
+        shouldCommitViaProducerIfEosEnabled(ProcessingMode.EXACTLY_ONCE_ALPHA, offsetsT01, offsetsT02);
 
-        shouldCommitViaProducerIfEosEnabled(ProcessingMode.EXACTLY_ONCE_ALPHA, producer, offsetsT01, offsetsT02);
+        Mockito.verify(producer).commitTransaction(offsetsT01, new ConsumerGroupMetadata("appId"));
+        Mockito.verify(producer).commitTransaction(offsetsT02, new ConsumerGroupMetadata("appId"));
+        Mockito.verifyNoMoreInteractions(producer);
     }
 
     @Test
     public void shouldCommitViaProducerIfEosV2Enabled() {
-        final StreamsProducer producer = EasyMock.mock(StreamsProducer.class);
+        final StreamsProducer producer = Mockito.mock(StreamsProducer.class);
         when(activeTaskCreator.threadProducer()).thenReturn(producer);
 
         final Map<TopicPartition, OffsetAndMetadata> offsetsT01 = singletonMap(t1p1, new OffsetAndMetadata(0L, null));
@@ -3550,14 +3812,13 @@ public class TaskManagerTest {
         allOffsets.putAll(offsetsT01);
         allOffsets.putAll(offsetsT02);
 
-        producer.commitTransaction(allOffsets, new ConsumerGroupMetadata("appId"));
-        expectLastCall();
+        shouldCommitViaProducerIfEosEnabled(ProcessingMode.EXACTLY_ONCE_V2, offsetsT01, offsetsT02);
 
-        shouldCommitViaProducerIfEosEnabled(ProcessingMode.EXACTLY_ONCE_V2, producer, offsetsT01, offsetsT02);
+        Mockito.verify(producer).commitTransaction(allOffsets, new ConsumerGroupMetadata("appId"));
+        Mockito.verifyNoMoreInteractions(producer);
     }
 
     private void shouldCommitViaProducerIfEosEnabled(final ProcessingMode processingMode,
-                                                     final StreamsProducer producer,
                                                      final Map<TopicPartition, OffsetAndMetadata> offsetsT01,
                                                      final Map<TopicPartition, OffsetAndMetadata> offsetsT02) {
         final TaskManager taskManager = setUpTaskManager(processingMode, false);
@@ -3573,11 +3834,11 @@ public class TaskManagerTest {
 
         reset(consumer);
         expect(consumer.groupMetadata()).andStubReturn(new ConsumerGroupMetadata("appId"));
-        replay(consumer, producer);
+        replay(consumer);
 
         taskManager.commitAll();
 
-        verify(producer, consumer);
+        verify(consumer);
     }
 
     @Test
@@ -4058,7 +4319,7 @@ public class TaskManagerTest {
         replay(consumer);
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(TaskManager.class)) {
-            LogCaptureAppender.setClassLoggerToDebug(TaskManager.class);
+            appender.setClassLoggerToDebug(TaskManager.class);
             taskManager.handleAssignment(taskId00Assignment, emptyMap());
             assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
             assertThat(task00.state(), is(Task.State.RUNNING));
@@ -4463,21 +4724,18 @@ public class TaskManagerTest {
 
     @Test
     public void shouldConvertActiveTaskToStandbyTask() {
-        final StreamTask activeTask = EasyMock.mock(StreamTask.class);
-        expect(activeTask.id()).andStubReturn(taskId00);
-        expect(activeTask.inputPartitions()).andStubReturn(taskId00Partitions);
-        expect(activeTask.isActive()).andStubReturn(true);
-        expect(activeTask.prepareCommit()).andStubReturn(Collections.emptyMap());
+        final StreamTask activeTask = Mockito.mock(StreamTask.class);
+        when(activeTask.id()).thenReturn(taskId00);
+        when(activeTask.inputPartitions()).thenReturn(taskId00Partitions);
+        when(activeTask.isActive()).thenReturn(true);
 
-        final StandbyTask standbyTask = EasyMock.mock(StandbyTask.class);
-        expect(standbyTask.id()).andStubReturn(taskId00);
+        final StandbyTask standbyTask = Mockito.mock(StandbyTask.class);
+        when(standbyTask.id()).thenReturn(taskId00);
 
         when(activeTaskCreator.createTasks(any(), Mockito.eq(taskId00Assignment))).thenReturn(singletonList(activeTask));
-        activeTask.prepareRecycle();
-        expectLastCall().once();
         when(standbyTaskCreator.createStandbyTaskFromActive(Mockito.any(), Mockito.eq(taskId00Partitions))).thenReturn(standbyTask);
 
-        replay(activeTask, standbyTask, consumer);
+        replay(consumer);
 
         taskManager.handleAssignment(taskId00Assignment, Collections.emptyMap());
         taskManager.handleAssignment(Collections.emptyMap(), taskId00Assignment);
@@ -4700,6 +4958,16 @@ public class TaskManagerTest {
         @Override
         public void prepareRecycle() {
             transitionTo(State.CLOSED);
+        }
+
+        @Override
+        public void resumePollingForPartitionsWithAvailableSpace() {
+            // noop
+        }
+
+        @Override
+        public void updateLags() {
+            // noop
         }
 
         @Override

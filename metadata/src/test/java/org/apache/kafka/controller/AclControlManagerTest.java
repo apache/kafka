@@ -203,14 +203,16 @@ public class AclControlManagerTest {
     public void testLoadSnapshot() {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         snapshotRegistry.getOrCreateSnapshot(0);
-        AclControlManager manager = new AclControlManager(snapshotRegistry, Optional.empty());
+        AclControlManager manager = new AclControlManager.Builder().
+            setSnapshotRegistry(snapshotRegistry).
+            build();
 
         // Load TEST_ACLS into the AclControlManager.
         Set<ApiMessageAndVersion> loadedAcls = new HashSet<>();
         for (StandardAclWithId acl : TEST_ACLS) {
             AccessControlEntryRecord record = acl.toRecord();
             assertTrue(loadedAcls.add(new ApiMessageAndVersion(record, (short) 0)));
-            manager.replay(acl.toRecord(), Optional.empty());
+            manager.replay(acl.toRecord());
         }
 
         // Verify that the ACLs stored in the AclControlManager match the ones we expect.
@@ -236,20 +238,18 @@ public class AclControlManagerTest {
 
     @Test
     public void testAddAndDelete() {
-        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
-        AclControlManager manager = new AclControlManager(snapshotRegistry, Optional.empty());
+        AclControlManager manager = new AclControlManager.Builder().build();
         MockClusterMetadataAuthorizer authorizer = new MockClusterMetadataAuthorizer();
         authorizer.loadSnapshot(manager.idToAcl());
-        manager.replay(StandardAclWithIdTest.TEST_ACLS.get(0).toRecord(), Optional.empty());
+        manager.replay(StandardAclWithIdTest.TEST_ACLS.get(0).toRecord());
         manager.replay(new RemoveAccessControlEntryRecord().
-            setId(TEST_ACLS.get(0).id()), Optional.empty());
+            setId(TEST_ACLS.get(0).id()));
         assertTrue(manager.idToAcl().isEmpty());
     }
 
     @Test
     public void testCreateAclDeleteAcl() {
-        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
-        AclControlManager manager = new AclControlManager(snapshotRegistry, Optional.empty());
+        AclControlManager manager = new AclControlManager.Builder().build();
         MockClusterMetadataAuthorizer authorizer = new MockClusterMetadataAuthorizer();
         authorizer.loadSnapshot(manager.idToAcl());
 
@@ -311,8 +311,7 @@ public class AclControlManagerTest {
 
     @Test
     public void testDeleteDedupe() {
-        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
-        AclControlManager manager = new AclControlManager(snapshotRegistry, Optional.empty());
+        AclControlManager manager = new AclControlManager.Builder().build();
         MockClusterMetadataAuthorizer authorizer = new MockClusterMetadataAuthorizer();
         authorizer.loadSnapshot(manager.idToAcl());
 

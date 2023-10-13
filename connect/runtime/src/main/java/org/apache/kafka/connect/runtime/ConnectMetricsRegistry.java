@@ -128,7 +128,7 @@ public class ConnectMetricsRegistry {
         connectorTags.add(CONNECTOR_TAG_NAME);
 
         connectorStatus = createTemplate("status", CONNECTOR_GROUP_NAME,
-                                         "The status of the connector. One of 'unassigned', 'running', 'paused', 'failed', or " +
+                                         "The status of the connector. One of 'unassigned', 'running', 'paused', 'stopped', 'failed', or " +
                                          "'restarting'.",
                                          connectorTags);
         connectorType = createTemplate("connector-type", CONNECTOR_GROUP_NAME, "The type of the connector. One of 'source' or 'sink'.",
