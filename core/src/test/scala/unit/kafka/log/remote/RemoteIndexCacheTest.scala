@@ -575,7 +575,7 @@ class RemoteIndexCacheTest {
       }
     }
 
-    // The test process for resizing is: put 1 entry -> evict to empty -> put 3 entrys with limited capacity of 2 entrys -> evict to 1 entry
+    // The test process for resizing is: put 1 entry -> evict to empty -> put 3 entries with limited capacity of 2 entries -> evict to 1 entry
     val estimateEntryBytesSize = estimateOneEntryBytesSize()
     val tpId = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0))
     val metadataList = generateRemoteLogSegmentMetadata(size = 3, tpId)
@@ -655,6 +655,11 @@ class RemoteIndexCacheTest {
     TestUtils.waitUntilTrue(() => !getIndexFileFromRemoteCacheDir(remoteDeletedSuffixIndexFileName(nextMissingMetadata)).isPresent,
       s"Index file marked for deletion for evicted entry should not be present on disk at ${cache.cacheDir()}")
 
+    // verify the existing entry is of `cache.getIndexEntry(metadataList(2))`
+    assertTrue(getIndexFileFromRemoteCacheDir(remoteOffsetIndexFileName(metadataList(2))).isPresent)
+    assertTrue(getIndexFileFromRemoteCacheDir(remoteTimeIndexFileName(metadataList(2))).isPresent)
+    assertTrue(getIndexFileFromRemoteCacheDir(remoteTransactionIndexFileName(metadataList(2))).isPresent)
+    assertTrue(!getIndexFileFromRemoteCacheDir(remoteDeletedSuffixIndexFileName(metadataList(2))).isPresent)
     assertTrue(cache.internalCache().estimatedSize() == 1)
   }
 
