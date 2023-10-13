@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.config.provider;
 
+import java.util.HashMap;
+import java.util.Map;
 import org.apache.kafka.common.config.ConfigData;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
@@ -34,6 +36,8 @@ import java.util.Set;
 import java.util.stream.StreamSupport;
 
 import static java.util.Arrays.asList;
+
+import static org.apache.kafka.common.config.provider.DirectoryConfigProvider.ALLOWED_PATHS_CONFIG;
 import static org.apache.kafka.test.TestUtils.toSet;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -152,6 +156,47 @@ public class DirectoryConfigProviderTest {
     public void testServiceLoaderDiscovery() {
         ServiceLoader<ConfigProvider> serviceLoader = ServiceLoader.load(ConfigProvider.class);
         assertTrue(StreamSupport.stream(serviceLoader.spliterator(), false).anyMatch(configProvider -> configProvider instanceof DirectoryConfigProvider));
+    }
+
+    @Test
+    public void testAllowedPath() {
+        Map<String, String> configs = new HashMap<>();
+        configs.put(ALLOWED_PATHS_CONFIG, parent.getAbsolutePath());
+        provider.configure(configs);
+
+        ConfigData configData = provider.get(dir.getAbsolutePath());
+        assertEquals(toSet(asList(foo.getName(), bar.getName())), configData.data().keySet());
+        assertEquals("FOO", configData.data().get(foo.getName()));
+        assertEquals("BAR", configData.data().get(bar.getName()));
+        assertNull(configData.ttl());
+    }
+
+    @Test
+    public void testMultipleAllowedPaths() {
+        Map<String, String> configs = new HashMap<>();
+        configs.put(ALLOWED_PATHS_CONFIG, dir.getAbsolutePath() + "," + siblingDir.getAbsolutePath());
+        provider.configure(configs);
+
+        ConfigData configData = provider.get(subdir.getAbsolutePath());
+        assertEquals(toSet(asList(subdirFile.getName())), configData.data().keySet());
+        assertEquals("SUBDIRFILE", configData.data().get(subdirFile.getName()));
+        assertNull(configData.ttl());
+
+        configData = provider.get(siblingDir.getAbsolutePath());
+        assertEquals(toSet(asList(siblingDirFile.getName())), configData.data().keySet());
+        assertEquals("SIBLINGDIRFILE", configData.data().get(siblingDirFile.getName()));
+        assertNull(configData.ttl());
+    }
+
+    @Test
+    public void testNotAllowedPath() {
+        Map<String, String> configs = new HashMap<>();
+        configs.put(ALLOWED_PATHS_CONFIG, dir.getAbsolutePath());
+        provider.configure(configs);
+
+        ConfigData configData = provider.get(siblingDir.getAbsolutePath());
+        assertTrue(configData.data().isEmpty());
+        assertNull(configData.ttl());
     }
 }
 

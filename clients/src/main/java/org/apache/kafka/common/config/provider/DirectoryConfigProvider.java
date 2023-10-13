@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.common.config.provider;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import org.apache.kafka.common.config.ConfigData;
 import org.apache.kafka.common.config.ConfigException;
 import org.slf4j.Logger;
@@ -44,8 +47,23 @@ public class DirectoryConfigProvider implements ConfigProvider {
 
     private static final Logger log = LoggerFactory.getLogger(DirectoryConfigProvider.class);
 
+    public static final String ALLOWED_PATHS_CONFIG = "allowed.paths";
+    public static final String ALLOWED_PATHS_DOC = "Path that this config provider is allowed to access";
+    private List<Path> allowedPaths;
+
     @Override
-    public void configure(Map<String, ?> configs) { }
+    public void configure(Map<String, ?> configs) {
+        if (configs.containsKey(ALLOWED_PATHS_CONFIG)) {
+            String configValue = (String) configs.get(ALLOWED_PATHS_CONFIG);
+
+            if (configValue != null && !configValue.isEmpty()) {
+                allowedPaths = new ArrayList<>();
+                Arrays.stream(configValue.split(",")).forEach(b -> allowedPaths.add(new File(b).toPath()));
+            }
+        } else {
+            allowedPaths = null;
+        }
+    }
 
     @Override
     public void close() throws IOException { }
@@ -75,13 +93,21 @@ public class DirectoryConfigProvider implements ConfigProvider {
                         && keys.contains(pathname.getFileName().toString()));
     }
 
-    private static ConfigData get(String path, Predicate<Path> fileFilter) {
+    private ConfigData get(String path, Predicate<Path> fileFilter) {
         Map<String, String> map = emptyMap();
         if (path != null && !path.isEmpty()) {
             Path dir = new File(path).toPath();
             if (!Files.isDirectory(dir)) {
                 log.warn("The path {} is not a directory", path);
             } else {
+                if (allowedPaths != null) {
+                    long allowed = allowedPaths.stream().filter(allowedPath -> dir.startsWith(allowedPath)).count();
+                    if (allowed == 0) {
+                        log.warn("The path {} is not allowed to be accessed", path);
+                        return new ConfigData(map);
+                    }
+                }
+
                 try (Stream<Path> stream = Files.list(dir)) {
                     map = stream
                         .filter(fileFilter)

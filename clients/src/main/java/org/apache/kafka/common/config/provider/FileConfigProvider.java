@@ -16,6 +16,11 @@
  */
 package org.apache.kafka.common.config.provider;
 
+import java.io.File;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import org.apache.kafka.common.config.ConfigData;
 import org.apache.kafka.common.config.ConfigException;
 import org.slf4j.Logger;
@@ -25,7 +30,6 @@ import java.io.IOException;
 import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.Map;
@@ -40,7 +44,21 @@ public class FileConfigProvider implements ConfigProvider {
 
     private static final Logger log = LoggerFactory.getLogger(FileConfigProvider.class);
 
+    public static final String ALLOWED_PATHS_CONFIG = "allowed.paths";
+    public static final String ALLOWED_PATHS_DOC = "Path that this config provider is allowed to access";
+    private List<Path> allowedPaths;
+
     public void configure(Map<String, ?> configs) {
+        if (configs.containsKey(ALLOWED_PATHS_CONFIG)) {
+            String configValue = (String) configs.get(ALLOWED_PATHS_CONFIG);
+
+            if (configValue != null && !configValue.isEmpty()) {
+                allowedPaths = new ArrayList<>();
+                Arrays.stream(configValue.split(",")).forEach(b -> allowedPaths.add(new File(b).toPath()));
+            }
+        } else {
+            allowedPaths = null;
+        }
     }
 
     /**
@@ -54,7 +72,17 @@ public class FileConfigProvider implements ConfigProvider {
         if (path == null || path.isEmpty()) {
             return new ConfigData(data);
         }
-        try (Reader reader = reader(path)) {
+
+        Path filePath = new File(path).toPath();
+        if (allowedPaths != null) {
+            long allowed = allowedPaths.stream().filter(allowedPath -> filePath.startsWith(allowedPath) || filePath.equals(allowedPath)).count();
+            if (allowed == 0) {
+                log.warn("The path {} is not allowed to be accessed", path);
+                return new ConfigData(data);
+            }
+        }
+
+        try (Reader reader = reader(filePath)) {
             Properties properties = new Properties();
             properties.load(reader);
             Enumeration<Object> keys = properties.keys();
@@ -84,7 +112,17 @@ public class FileConfigProvider implements ConfigProvider {
         if (path == null || path.isEmpty()) {
             return new ConfigData(data);
         }
-        try (Reader reader = reader(path)) {
+
+        Path filePath = new File(path).toPath();
+        if (allowedPaths != null) {
+            long allowed = allowedPaths.stream().filter(allowedPath -> filePath.startsWith(allowedPath) || filePath.equals(allowedPath)).count();
+            if (allowed == 0) {
+                log.warn("The path {} is not allowed to be accessed", path);
+                return new ConfigData(data);
+            }
+        }
+
+        try (Reader reader = reader(filePath)) {
             Properties properties = new Properties();
             properties.load(reader);
             for (String key : keys) {
@@ -101,8 +139,8 @@ public class FileConfigProvider implements ConfigProvider {
     }
 
     // visible for testing
-    protected Reader reader(String path) throws IOException {
-        return Files.newBufferedReader(Paths.get(path), StandardCharsets.UTF_8);
+    protected Reader reader(Path path) throws IOException {
+        return Files.newBufferedReader(path, StandardCharsets.UTF_8);
     }
 
     public void close() {
