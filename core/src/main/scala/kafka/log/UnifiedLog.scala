@@ -1648,8 +1648,9 @@ class UnifiedLog(@volatile var logStartOffset: Long,
         debug(s"Flushing log up to offset $offset ($includingOffsetStr)" +
           s"with recovery point $newRecoveryPoint, last flushed: $lastFlushTime,  current time: ${time.milliseconds()}," +
           s"unflushed: ${localLog.unflushedMessages}")
-        localLog.flush(flushOffset)
         lock synchronized {
+          // Flushing under lock, as log directory can be concurrently renamed in LocalLog.renameDir
+          localLog.flush(flushOffset)
           localLog.markFlushed(newRecoveryPoint)
         }
       }
