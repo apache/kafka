@@ -32,7 +32,6 @@ import org.apache.kafka.common.errors.RecordBatchTooLargeException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
-import org.apache.kafka.common.message.ConsumerGroupDescribeRequestData;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
@@ -940,28 +939,108 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testConsumerGroupDescribe() throws InterruptedException, ExecutionException, TimeoutException {
+    public void testConsumerGroupDescribe() throws InterruptedException, ExecutionException {
         CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
         GroupCoordinatorService service = new GroupCoordinatorService(
             new LogContext(),
             createConfig(),
             runtime
         );
-        int partitionCount = 3;
+        int partitionCount = 2;
         service.startup(() -> partitionCount);
 
-        ConsumerGroupDescribeRequestData request = new ConsumerGroupDescribeRequestData();
-
-        CompletableFuture<List<ConsumerGroupDescribeResponseData.DescribedGroup>> responseFuture = service.consumerGroupDescribe(
-            requestContext(ApiKeys.CONSUMER_GROUP_DESCRIBE),
-            Collections.singletonList("group0")
+        ConsumerGroupDescribeResponseData.DescribedGroup describedGroup1 = new ConsumerGroupDescribeResponseData.DescribedGroup()
+            .setGroupId("group-id-1");
+        ConsumerGroupDescribeResponseData.DescribedGroup describedGroup2 = new ConsumerGroupDescribeResponseData.DescribedGroup()
+            .setGroupId("group-id-2");
+        List<ConsumerGroupDescribeResponseData.DescribedGroup> expectedDescribedGroups = Arrays.asList(
+            describedGroup1,
+            describedGroup2
         );
 
-        List<ConsumerGroupDescribeResponseData.DescribedGroup> expectedResults = Arrays.asList(
+        when(runtime.scheduleReadOperation(
+            ArgumentMatchers.eq("consumer-group-describe"),
+            ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
+            ArgumentMatchers.any()
+        )).thenReturn(CompletableFuture.completedFuture(Collections.singletonList(describedGroup1)));
+
+        CompletableFuture<Object> describedGroupFuture = new CompletableFuture<>();
+        when(runtime.scheduleReadOperation(
+            ArgumentMatchers.eq("consumer-group-describe"),
+            ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 1)),
+            ArgumentMatchers.any()
+        )).thenReturn(describedGroupFuture);
+
+        CompletableFuture<List<ConsumerGroupDescribeResponseData.DescribedGroup>> future =
+            service.consumerGroupDescribe(requestContext(ApiKeys.CONSUMER_GROUP_DESCRIBE), Arrays.asList("group-id-1", "group-id-2"));
+
+        assertFalse(future.isDone());
+        describedGroupFuture.complete(Collections.singletonList(describedGroup2));
+        assertEquals(expectedDescribedGroups, future.get());
+    }
+
+    @Test
+    public void testConsumerGroupDescribeInvalidGroupId() throws ExecutionException, InterruptedException {
+        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorService(
+            new LogContext(),
+            createConfig(),
+            runtime
+        );
+        int partitionCount = 1;
+        service.startup(() -> partitionCount);
+
+        ConsumerGroupDescribeResponseData.DescribedGroup describedGroup = new ConsumerGroupDescribeResponseData.DescribedGroup()
+            .setGroupId("");
+        List<ConsumerGroupDescribeResponseData.DescribedGroup> expectedDescribedGroups = Arrays.asList(
             new ConsumerGroupDescribeResponseData.DescribedGroup()
+                .setGroupId(null)
+                .setErrorCode(Errors.INVALID_GROUP_ID.code())
+                .setErrorMessage(Errors.INVALID_GROUP_ID.message()),
+            describedGroup
         );
 
-        List<ConsumerGroupDescribeResponseData.DescribedGroup> actualResults = responseFuture.get(5, TimeUnit.SECONDS);
-        assertEquals(expectedResults, actualResults);
+        when(runtime.scheduleReadOperation(
+            ArgumentMatchers.eq("consumer-group-describe"),
+            ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
+            ArgumentMatchers.any()
+        )).thenReturn(CompletableFuture.completedFuture(Collections.singletonList(describedGroup)));
+
+        CompletableFuture<List<ConsumerGroupDescribeResponseData.DescribedGroup>> future =
+            service.consumerGroupDescribe(requestContext(ApiKeys.CONSUMER_GROUP_DESCRIBE), Arrays.asList("", null));
+
+        assertEquals(expectedDescribedGroups, future.get());
+    }
+
+    @Test
+    public void testConsumerGroupDescribeCoordinatorLoadInProgress() throws ExecutionException, InterruptedException {
+        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorService(
+            new LogContext(),
+            createConfig(),
+            runtime
+        );
+        int partitionCount = 1;
+        service.startup(() -> partitionCount);
+
+        when(runtime.scheduleReadOperation(
+            ArgumentMatchers.eq("consumer-group-describe"),
+            ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
+            ArgumentMatchers.any()
+        )).thenReturn(FutureUtils.failedFuture(
+            new CoordinatorLoadInProgressException(null)
+        ));
+
+        CompletableFuture<List<ConsumerGroupDescribeResponseData.DescribedGroup>> future =
+            service.consumerGroupDescribe(requestContext(ApiKeys.CONSUMER_GROUP_DESCRIBE), Collections.singletonList("group-id"));
+
+        assertEquals(
+            Collections.singletonList(new ConsumerGroupDescribeResponseData.DescribedGroup()
+                .setGroupId("group-id")
+                .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code())
+                .setErrorMessage(Errors.COORDINATOR_LOAD_IN_PROGRESS.message())
+            ),
+            future.get()
+        );
     }
 }

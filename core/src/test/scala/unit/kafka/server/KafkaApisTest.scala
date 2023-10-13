@@ -6213,11 +6213,39 @@ class KafkaApisTest {
   }
 
   @Test
+  def testConsumerGroupDescribe(): Unit = {
+    val groupId = "group0"
+    val consumerGroupDescribeRequestData = new ConsumerGroupDescribeRequestData()
+    consumerGroupDescribeRequestData.groupIds.add(groupId)
+    val requestChannelRequest = buildRequest(new ConsumerGroupDescribeRequest.Builder(consumerGroupDescribeRequestData, true).build())
+
+    val future = new CompletableFuture[util.List[ConsumerGroupDescribeResponseData.DescribedGroup]]()
+    when(groupCoordinator.consumerGroupDescribe(
+      requestChannelRequest.context,
+      consumerGroupDescribeRequestData.groupIds
+    )).thenReturn(future)
+
+    createKafkaApis(
+      overrideProperties = Map(KafkaConfig.NewGroupCoordinatorEnableProp -> "true")
+    ).handle(requestChannelRequest, RequestLocal.NoCaching)
+
+    val response = verifyNoThrottling[ConsumerGroupDescribeResponse](requestChannelRequest)
+
+    val describedGroups = List(new DescribedGroup()).asJava
+    val consumerGroupDescribeResponseData = new ConsumerGroupDescribeResponseData()
+      .setGroups(describedGroups)
+    future.complete(describedGroups)
+
+    assertEquals(consumerGroupDescribeResponseData, response.data)
+  }
+
+  @Test
   def testConsumerGroupDescribeReturnsUnsupportedVersion(): Unit = {
     val groupId = "group0"
     val consumerGroupDescribeRequestData = new ConsumerGroupDescribeRequestData()
     consumerGroupDescribeRequestData.groupIds.add(groupId)
     val requestChannelRequest = buildRequest(new ConsumerGroupDescribeRequest.Builder(consumerGroupDescribeRequestData, true).build())
+
     val errorCode = Errors.UNSUPPORTED_VERSION.code
     val expectedDescribedGroup = new DescribedGroup().setGroupId(groupId).setErrorCode(errorCode)
     val expectedResponse = new ConsumerGroupDescribeResponseData()

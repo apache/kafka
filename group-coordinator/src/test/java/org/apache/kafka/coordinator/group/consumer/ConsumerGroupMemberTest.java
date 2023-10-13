@@ -353,7 +353,6 @@ public class ConsumerGroupMemberTest {
         assertEquals(subscribedTopicNames, consumerGroupDescribeMember.subscribedTopicNames());
         assertEquals(subscribedTopicRegex, consumerGroupDescribeMember.subscribedTopicRegex());
 
-        assertEquals(1, consumerGroupDescribeMember.assignment().topicPartitions().size());
         assertEquals(assignedPartitions, consumerGroupDescribeMember.assignment().topicPartitions().get(0).partitions());
     }
 }

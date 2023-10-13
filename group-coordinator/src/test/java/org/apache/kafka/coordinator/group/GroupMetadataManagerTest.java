@@ -1029,7 +1029,7 @@ public class GroupMetadataManagerTest {
             return groupMetadataManager.listGroups(statesFilter, lastCommittedOffset);
         }
 
-        public List<ConsumerGroupDescribeResponseData.DescribedGroup> sendConsumerGroupDecribe(List<String> groupIds) {
+        public List<ConsumerGroupDescribeResponseData.DescribedGroup> sendConsumerGroupDescribe(List<String> groupIds) {
             return groupMetadataManager.consumerGroupDescribe(groupIds);
         }
 
@@ -8712,7 +8712,7 @@ public class GroupMetadataManagerTest {
         ));
         context.replay(RecordHelpers.newGroupEpochRecord(consumerGroupId, epoch + 1));
 
-        List<ConsumerGroupDescribeResponseData.DescribedGroup> actual = context.sendConsumerGroupDecribe(Arrays.asList(consumerGroupId));
+        List<ConsumerGroupDescribeResponseData.DescribedGroup> actual = context.sendConsumerGroupDescribe(Arrays.asList(consumerGroupId));
         ConsumerGroupDescribeResponseData.DescribedGroup describedGroup = new ConsumerGroupDescribeResponseData.DescribedGroup();
         describedGroup.setGroupEpoch(epoch + 1);
         describedGroup.setGroupId(consumerGroupId);
@@ -8741,7 +8741,7 @@ public class GroupMetadataManagerTest {
             MetadataVersion.latest()
         ));
 
-        List<ConsumerGroupDescribeResponseData.DescribedGroup> actual = context.sendConsumerGroupDecribe(Collections.singletonList(groupId));
+        List<ConsumerGroupDescribeResponseData.DescribedGroup> actual = context.sendConsumerGroupDescribe(Collections.singletonList(groupId));
         ConsumerGroupDescribeResponseData.DescribedGroup describedGroup = new ConsumerGroupDescribeResponseData.DescribedGroup();
         describedGroup.setGroupId(groupId);
         describedGroup.setErrorCode(Errors.INVALID_GROUP_ID.code());

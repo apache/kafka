@@ -54,6 +54,7 @@ import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.ConsumerGroupDescribeRequest;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.TransactionResult;
@@ -77,7 +78,9 @@ import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.OptionalInt;
 import java.util.Properties;
 import java.util.Set;
@@ -505,35 +508,43 @@ public class GroupCoordinatorService implements GroupCoordinator {
         if (!isActive.get()) {
             return FutureUtils.failedFuture(Errors.COORDINATOR_NOT_AVAILABLE.exception());
         }
-        final Set<TopicPartition> existingPartitionSet = runtime.partitions();
-        final List<ConsumerGroupDescribeResponseData.DescribedGroup> results = new ArrayList<>();
-        final CompletableFuture<List<ConsumerGroupDescribeResponseData.DescribedGroup>> future = new CompletableFuture<>();
-        final AtomicInteger cnt = new AtomicInteger(existingPartitionSet.size());
 
-        for (TopicPartition tp: existingPartitionSet) {
-            runtime.scheduleReadOperation(
-                "consumer-group-describe",
-                tp,
-                (coordinator, __) -> coordinator.consumerGroupDescribe(groupIds)
-            ).handle((describedGroups, exception) -> {
-                if (exception == null) {
-                    synchronized (results) {
-                        results.addAll(describedGroups);
-                    }
-                } else {
-                    if (!(exception instanceof NotCoordinatorException)) {
-                        // TODO: set exception error code for each group
-                        future.complete(null);
-                    }
-                }
-                if (cnt.decrementAndGet() == 0) {
-                    future.complete(results);
-                }
-                return null;
-            });
-        }
+        final List<CompletableFuture<List<ConsumerGroupDescribeResponseData.DescribedGroup>>> futures =
+            new ArrayList<>(groupIds.size());
+        final Map<TopicPartition, List<String>> groupsByTopicPartition = new HashMap<>();
+        groupIds.forEach(groupId -> {
+            groupsByTopicPartition
+                .computeIfAbsent(topicPartitionFor(groupId), __ -> new ArrayList<>())
+                .add(groupId);
+        });
 
-        return future;
+        groupsByTopicPartition.forEach((topicPartition, groupList) -> {
+            CompletableFuture<List<ConsumerGroupDescribeResponseData.DescribedGroup>> future =
+                runtime.scheduleReadOperation(
+                    "consumer-group-describe",
+                    topicPartition,
+                    (coordinator, __) -> coordinator.consumerGroupDescribe(groupIds)
+                ).exceptionally(exception -> {
+                    if (!(exception instanceof KafkaException)) {
+                        log.error("ConsumerGroupDescribe request {} hit an unexpected exception: {}.",
+                            groupList, exception.getMessage());
+                    }
+
+                    return ConsumerGroupDescribeRequest.getErrorDescribedGroupList(
+                        groupList,
+                        Errors.forException(exception)
+                    );
+                });
+
+            futures.add(future);
+        });
+
+        final CompletableFuture<Void> allFutures = CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]));
+        return allFutures.thenApply(v -> {
+            final List<ConsumerGroupDescribeResponseData.DescribedGroup> res = new ArrayList<>();
+            futures.forEach(future -> res.addAll(future.join()));
+            return res;
+        });
     }
 
     /**
