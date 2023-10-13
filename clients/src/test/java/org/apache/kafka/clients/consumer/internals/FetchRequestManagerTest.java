@@ -2922,7 +2922,7 @@ public class FetchRequestManagerTest {
         client.updateMetadata(RequestTestUtils.metadataUpdateWithIds(2, singletonMap(topicName, 4), tp -> validLeaderEpoch, topicIds, false));
         subscriptions.seek(tp0, 0);
 
-        // Node preferred replica before first fetch response
+        // Take note of the preferred replica before the first fetch response
         Node selected = fetcher.selectReadReplica(tp0, Node.noNode(), time.milliseconds());
         assertEquals(-1, selected.id());
 
