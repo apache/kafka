@@ -1482,8 +1482,6 @@ public class FetchRequestManagerTest {
         subscriptions.pause(tp0);
         networkClientDelegate.poll(time.timer(0));
 
-        fetchedRecords = fetchRecords();
-
         assertEmptyFetch("Should not return records or advance position for paused partitions");
         assertTrue(fetcher.hasCompletedFetches(), "Should have 1 entry in completed fetches");
         assertFalse(fetcher.hasAvailableFetches(), "Should not have any available (non-paused) completed fetches");
