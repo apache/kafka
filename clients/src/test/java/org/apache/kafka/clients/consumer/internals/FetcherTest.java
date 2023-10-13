@@ -1103,38 +1103,37 @@ public class FetcherTest {
     public void testFetchMaxPollRecords() {
         buildFetcher(2);
 
-        List<ConsumerRecord<byte[], byte[]>> records;
         assignFromUser(singleton(tp0));
         subscriptions.seek(tp0, 1);
 
-        client.prepareResponse(matchesOffset(tidp0, 1), fullFetchResponse(tidp0, this.records, Errors.NONE, 100L, 0));
+        client.prepareResponse(matchesOffset(tidp0, 1), fullFetchResponse(tidp0, records, Errors.NONE, 100L, 0));
         client.prepareResponse(matchesOffset(tidp0, 4), fullFetchResponse(tidp0, nextRecords, Errors.NONE, 100L, 0));
 
         assertEquals(1, sendFetches());
         consumerClient.poll(time.timer(0));
         Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> recordsByPartition = fetchRecords();
-        records = recordsByPartition.get(tp0);
-        assertEquals(2, records.size());
+        List<ConsumerRecord<byte[], byte[]>> recordsToTest = recordsByPartition.get(tp0);
+        assertEquals(2, recordsToTest.size());
         assertEquals(3L, subscriptions.position(tp0).offset);
-        assertEquals(1, records.get(0).offset());
-        assertEquals(2, records.get(1).offset());
+        assertEquals(1, recordsToTest.get(0).offset());
+        assertEquals(2, recordsToTest.get(1).offset());
 
         assertEquals(0, sendFetches());
         consumerClient.poll(time.timer(0));
         recordsByPartition = fetchRecords();
-        records = recordsByPartition.get(tp0);
-        assertEquals(1, records.size());
+        recordsToTest = recordsByPartition.get(tp0);
+        assertEquals(1, recordsToTest.size());
         assertEquals(4L, subscriptions.position(tp0).offset);
-        assertEquals(3, records.get(0).offset());
+        assertEquals(3, recordsToTest.get(0).offset());
 
         assertTrue(sendFetches() > 0);
         consumerClient.poll(time.timer(0));
         recordsByPartition = fetchRecords();
-        records = recordsByPartition.get(tp0);
-        assertEquals(2, records.size());
+        recordsToTest = recordsByPartition.get(tp0);
+        assertEquals(2, recordsToTest.size());
         assertEquals(6L, subscriptions.position(tp0).offset);
-        assertEquals(4, records.get(0).offset());
-        assertEquals(5, records.get(1).offset());
+        assertEquals(4, recordsToTest.get(0).offset());
+        assertEquals(5, recordsToTest.get(1).offset());
     }
 
     /**
@@ -1146,21 +1145,20 @@ public class FetcherTest {
     public void testFetchAfterPartitionWithFetchedRecordsIsUnassigned() {
         buildFetcher(2);
 
-        List<ConsumerRecord<byte[], byte[]>> records;
         assignFromUser(singleton(tp0));
         subscriptions.seek(tp0, 1);
 
         // Returns 3 records while `max.poll.records` is configured to 2
-        client.prepareResponse(matchesOffset(tidp0, 1), fullFetchResponse(tidp0, this.records, Errors.NONE, 100L, 0));
+        client.prepareResponse(matchesOffset(tidp0, 1), fullFetchResponse(tidp0, records, Errors.NONE, 100L, 0));
 
         assertEquals(1, sendFetches());
         consumerClient.poll(time.timer(0));
         Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> recordsByPartition = fetchRecords();
-        records = recordsByPartition.get(tp0);
-        assertEquals(2, records.size());
+        List<ConsumerRecord<byte[], byte[]>> recordsToTest = recordsByPartition.get(tp0);
+        assertEquals(2, recordsToTest.size());
         assertEquals(3L, subscriptions.position(tp0).offset);
-        assertEquals(1, records.get(0).offset());
-        assertEquals(2, records.get(1).offset());
+        assertEquals(1, recordsToTest.get(0).offset());
+        assertEquals(2, recordsToTest.get(1).offset());
 
         assignFromUser(singleton(tp1));
         client.prepareResponse(matchesOffset(tidp1, 4), fullFetchResponse(tidp1, nextRecords, Errors.NONE, 100L, 0));
@@ -1170,11 +1168,11 @@ public class FetcherTest {
         consumerClient.poll(time.timer(0));
         Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetchRecords();
         assertNull(fetchedRecords.get(tp0));
-        records = fetchedRecords.get(tp1);
-        assertEquals(2, records.size());
+        recordsToTest = fetchedRecords.get(tp1);
+        assertEquals(2, recordsToTest.size());
         assertEquals(6L, subscriptions.position(tp1).offset);
-        assertEquals(4, records.get(0).offset());
-        assertEquals(5, records.get(1).offset());
+        assertEquals(4, recordsToTest.get(0).offset());
+        assertEquals(5, recordsToTest.get(1).offset());
     }
 
     @Test
@@ -2744,7 +2742,6 @@ public class FetcherTest {
     public void testConsumingViaIncrementalFetchRequests() {
         buildFetcher(2);
 
-        List<ConsumerRecord<byte[], byte[]>> records;
         assignFromUser(new HashSet<>(Arrays.asList(tp0, tp1)));
         subscriptions.seekValidated(tp0, new SubscriptionState.FetchPosition(0, Optional.empty(), metadata.currentLeader(tp0)));
         subscriptions.seekValidated(tp1, new SubscriptionState.FetchPosition(1, Optional.empty(), metadata.currentLeader(tp1)));
@@ -2756,7 +2753,7 @@ public class FetcherTest {
                 .setHighWatermark(2)
                 .setLastStableOffset(2)
                 .setLogStartOffset(0)
-                .setRecords(this.records));
+                .setRecords(records));
         partitions1.put(tidp1, new FetchResponseData.PartitionData()
                 .setPartitionIndex(tp1.partition())
                 .setHighWatermark(100)
@@ -2770,7 +2767,7 @@ public class FetcherTest {
         assertTrue(fetcher.hasCompletedFetches());
         Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetchRecords();
         assertFalse(fetchedRecords.containsKey(tp1));
-        records = fetchedRecords.get(tp0);
+        List<ConsumerRecord<byte[], byte[]>> records = fetchedRecords.get(tp0);
         assertEquals(2, records.size());
         assertEquals(3L, subscriptions.position(tp0).offset);
         assertEquals(1L, subscriptions.position(tp1).offset);
