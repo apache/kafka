@@ -2623,7 +2623,7 @@ public class FetcherTest {
     }
 
     @Test
-    public void testReturnAbortedTransactionsinUncommittedMode() {
+    public void testReturnAbortedTransactionsInUncommittedMode() {
         buildFetcher(OffsetResetStrategy.EARLIEST, new ByteArrayDeserializer(),
                 new ByteArrayDeserializer(), Integer.MAX_VALUE, IsolationLevel.READ_UNCOMMITTED);
         ByteBuffer buffer = ByteBuffer.allocate(1024);

@@ -2638,7 +2638,7 @@ public class FetchRequestManagerTest {
     }
 
     @Test
-    public void testReturnAbortedTransactionsinUncommittedMode() {
+    public void testReturnAbortedTransactionsInUncommittedMode() {
         buildFetcher(OffsetResetStrategy.EARLIEST, new ByteArrayDeserializer(),
                 new ByteArrayDeserializer(), Integer.MAX_VALUE, IsolationLevel.READ_UNCOMMITTED);
         ByteBuffer buffer = ByteBuffer.allocate(1024);
@@ -3247,7 +3247,7 @@ public class FetchRequestManagerTest {
     }
 
     /**
-     * Assert that the {@link Fetcher#collectFetch()}  latest fetch} does not contain any
+     * Assert that the {@link Fetcher#collectFetch() latest fetch} does not contain any
      * {@link Fetch#records() user-visible records}, did not
      * {@link Fetch#positionAdvanced() advance the consumer's position},
      * and is {@link Fetch#isEmpty() empty}.
