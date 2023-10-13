@@ -2449,12 +2449,12 @@ public class FetchRequestManagerTest {
         assertTrue(fetchedRecords.containsKey(tp0));
         assertEquals(fetchedRecords.get(tp0).size(), 2);
         List<ConsumerRecord<byte[], byte[]>> fetchedConsumerRecords = fetchedRecords.get(tp0);
-        Set<String> committedKeys = new HashSet<>(Arrays.asList("commit1-1", "commit1-2"));
+        Set<String> expectedCommittedKeys = new HashSet<>(Arrays.asList("commit1-1", "commit1-2"));
         Set<String> actuallyCommittedKeys = new HashSet<>();
         for (ConsumerRecord<byte[], byte[]> consumerRecord : fetchedConsumerRecords) {
             actuallyCommittedKeys.add(new String(consumerRecord.key(), StandardCharsets.UTF_8));
         }
-        assertEquals(actuallyCommittedKeys, committedKeys);
+        assertEquals(expectedCommittedKeys, actuallyCommittedKeys);
     }
 
     @Test
