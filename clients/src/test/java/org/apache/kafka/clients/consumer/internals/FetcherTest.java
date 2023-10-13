@@ -1842,7 +1842,7 @@ public class FetcherTest {
         consumerClient.poll(time.timer(0));
         assertEmptyFetch("Should not return records or advance position on disconnect");
 
-        // disconnects should have no affect on subscription state
+        // disconnects should have no effect on subscription state
         assertFalse(subscriptions.isOffsetResetNeeded(tp0));
         assertTrue(subscriptions.isFetchable(tp0));
         assertEquals(0, subscriptions.position(tp0).offset);
