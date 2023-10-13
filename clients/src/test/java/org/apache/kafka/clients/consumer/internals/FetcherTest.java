@@ -90,6 +90,9 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.ArgumentCaptor;
 
 import java.io.DataOutputStream;
@@ -116,6 +119,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static java.util.Collections.emptyList;
 import static java.util.Collections.emptyMap;
@@ -1515,97 +1519,51 @@ public class FetcherTest {
         assertFalse(fetcher.hasCompletedFetches(), "Should have no completed fetches");
     }
 
-    @Test
-    public void testFetchNotLeaderOrFollower() {
+    @ParameterizedTest
+    @MethodSource("handleFetchResponseErrorSupplier")
+    public void testHandleFetchResponseError(Errors error,
+                                             long highWatermark,
+                                             boolean hasTopLevelError,
+                                             boolean shouldRequestMetadataUpdate) {
         buildFetcher();
         assignFromUser(singleton(tp0));
         subscriptions.seek(tp0, 0);
 
         assertEquals(1, sendFetches());
-        client.prepareResponse(fullFetchResponse(tidp0, records, Errors.NOT_LEADER_OR_FOLLOWER, 100L, 0));
+
+        final FetchResponse fetchResponse;
+
+        if (hasTopLevelError)
+            fetchResponse = fetchResponseWithTopLevelError(tidp0, error, 0);
+        else
+            fetchResponse = fullFetchResponse(tidp0, records, error, highWatermark, 0);
+
+        client.prepareResponse(fetchResponse);
         consumerClient.poll(time.timer(0));
+
         assertEmptyFetch("Should not return records or advance position on fetch error");
-        assertEquals(0L, metadata.timeToNextUpdate(time.milliseconds()));
+
+        long timeToNextUpdate = metadata.timeToNextUpdate(time.milliseconds());
+
+        if (shouldRequestMetadataUpdate)
+            assertEquals(0L, timeToNextUpdate, "Should have requested metadata update");
+        else
+            assertNotEquals(0L, timeToNextUpdate, "Should not have requested metadata update");
     }
 
-    @Test
-    public void testFetchUnknownTopicOrPartition() {
-        buildFetcher();
-        assignFromUser(singleton(tp0));
-        subscriptions.seek(tp0, 0);
-
-        assertEquals(1, sendFetches());
-        client.prepareResponse(fullFetchResponse(tidp0, records, Errors.UNKNOWN_TOPIC_OR_PARTITION, 100L, 0));
-        consumerClient.poll(time.timer(0));
-        assertEmptyFetch("Should not return records or advance position on fetch error");
-        assertEquals(0L, metadata.timeToNextUpdate(time.milliseconds()));
-    }
-
-    @Test
-    public void testFetchUnknownTopicId() {
-        buildFetcher();
-        assignFromUser(singleton(tp0));
-        subscriptions.seek(tp0, 0);
-
-        assertEquals(1, sendFetches());
-        client.prepareResponse(fullFetchResponse(tidp0, records, Errors.UNKNOWN_TOPIC_ID, -1L, 0));
-        consumerClient.poll(time.timer(0));
-        assertEmptyFetch("Should not return records or advance position on fetch error");
-        assertEquals(0L, metadata.timeToNextUpdate(time.milliseconds()));
-    }
-
-    @Test
-    public void testFetchSessionIdError() {
-        buildFetcher();
-        assignFromUser(singleton(tp0));
-        subscriptions.seek(tp0, 0);
-
-        assertEquals(1, sendFetches());
-        client.prepareResponse(fetchResponseWithTopLevelError(tidp0, Errors.FETCH_SESSION_TOPIC_ID_ERROR, 0));
-        consumerClient.poll(time.timer(0));
-        assertEmptyFetch("Should not return records or advance position on fetch error");
-        assertEquals(0L, metadata.timeToNextUpdate(time.milliseconds()));
-    }
-
-    @Test
-    public void testFetchInconsistentTopicId() {
-        buildFetcher();
-        assignFromUser(singleton(tp0));
-        subscriptions.seek(tp0, 0);
-
-        assertEquals(1, sendFetches());
-        client.prepareResponse(fullFetchResponse(tidp0, records, Errors.INCONSISTENT_TOPIC_ID, -1L, 0));
-        consumerClient.poll(time.timer(0));
-        assertEmptyFetch("Should not return records or advance position on fetch error");
-        assertEquals(0L, metadata.timeToNextUpdate(time.milliseconds()));
-    }
-
-    @Test
-    public void testFetchFencedLeaderEpoch() {
-        buildFetcher();
-        assignFromUser(singleton(tp0));
-        subscriptions.seek(tp0, 0);
-
-        assertEquals(1, sendFetches());
-        client.prepareResponse(fullFetchResponse(tidp0, records, Errors.FENCED_LEADER_EPOCH, 100L, 0));
-        consumerClient.poll(time.timer(0));
-
-        assertEmptyFetch("Should not return records or advance position on fetch error");
-        assertEquals(0L, metadata.timeToNextUpdate(time.milliseconds()), "Should have requested metadata update");
-    }
-
-    @Test
-    public void testFetchUnknownLeaderEpoch() {
-        buildFetcher();
-        assignFromUser(singleton(tp0));
-        subscriptions.seek(tp0, 0);
-
-        assertEquals(1, sendFetches());
-        client.prepareResponse(fullFetchResponse(tidp0, records, Errors.UNKNOWN_LEADER_EPOCH, 100L, 0));
-        consumerClient.poll(time.timer(0));
-
-        assertEmptyFetch("Should not return records or advance position on fetch error");
-        assertNotEquals(0L, metadata.timeToNextUpdate(time.milliseconds()), "Should not have requested metadata update");
+    /**
+     * Supplies parameters to {@link #testHandleFetchResponseError(Errors, long, boolean, boolean)}.
+     */
+    private static Stream<Arguments> handleFetchResponseErrorSupplier() {
+        return Stream.of(
+                Arguments.of(Errors.NOT_LEADER_OR_FOLLOWER, 100L, false, true),
+                Arguments.of(Errors.UNKNOWN_TOPIC_OR_PARTITION, 100L, false, true),
+                Arguments.of(Errors.UNKNOWN_TOPIC_ID, -1L, false, true),
+                Arguments.of(Errors.FETCH_SESSION_TOPIC_ID_ERROR, -1L, true, true),
+                Arguments.of(Errors.INCONSISTENT_TOPIC_ID, -1L, false, true),
+                Arguments.of(Errors.FENCED_LEADER_EPOCH, 100L, false, true),
+                Arguments.of(Errors.UNKNOWN_LEADER_EPOCH, 100L, false, false)
+        );
     }
 
     @Test
