@@ -47,8 +47,10 @@ class ZkTopicMigrationClient(zkClient: KafkaZkClient) extends TopicMigrationClie
     if (!interests.contains(TopicVisitorInterest.TOPICS)) {
       throw new IllegalArgumentException("Must specify at least TOPICS in topic visitor interests.")
     }
-    val topics = zkClient.getAllTopicsInCluster()
-    val replicaAssignmentAndTopicIds = zkClient.getReplicaAssignmentAndTopicIdForTopics(topics)
+    val allTopics = zkClient.getAllTopicsInCluster()
+    val topicDeletions = zkClient.getTopicDeletions
+    info(s"Found ${topicDeletions.size} pending topic deletions: ${topicDeletions}. These will be migrated to KRaft and then deleted.")
+    val replicaAssignmentAndTopicIds = zkClient.getReplicaAssignmentAndTopicIdForTopics(allTopics)
     replicaAssignmentAndTopicIds.foreach { case TopicIdReplicaAssignment(topic, topicIdOpt, partitionAssignments) =>
       val topicAssignment = partitionAssignments.map { case (partition, assignment) =>
         partition.partition().asInstanceOf[Integer] -> assignment.replicas.map(Integer.valueOf).asJava
@@ -195,6 +197,7 @@ class ZkTopicMigrationClient(zkClient: KafkaZkClient) extends TopicMigrationClie
 
   override def deleteTopic(
     topicName: String,
+    removePendingDeletion: Boolean,
     state: ZkMigrationLeadershipState
   ): ZkMigrationLeadershipState = wrapZkException {
     // Delete the partition state ZNodes recursively, then topic config, and finally the topic znode
@@ -204,8 +207,15 @@ class ZkTopicMigrationClient(zkClient: KafkaZkClient) extends TopicMigrationClie
       DeleteRequest(childPath, ZkVersion.MatchAnyVersion)
     } ++ Seq(
       DeleteRequest(ConfigEntityZNode.path(ConfigType.Topic, topicName), ZkVersion.MatchAnyVersion),
-      DeleteRequest(TopicZNode.path(topicName), ZkVersion.MatchAnyVersion)
-    )
+      DeleteRequest(TopicZNode.path(topicName), ZkVersion.MatchAnyVersion),
+    ) ++ {
+      if (removePendingDeletion) {
+        Seq(DeleteRequest(DeleteTopicsTopicZNode.path(topicName), ZkVersion.MatchAnyVersion))
+      } else {
+        Seq.empty
+      }
+    }
+
     val (migrationZkVersion, responses) = zkClient.retryMigrationRequestsUntilConnected(deleteRequests, state)
     val resultCodes = responses.map { response => response.path -> response.resultCode }.toMap
     if (responses.last.resultCode.equals(Code.OK)) {
@@ -315,5 +325,9 @@ class ZkTopicMigrationClient(zkClient: KafkaZkClient) extends TopicMigrationClie
   ): SetDataRequest = {
     val (path, data) = partitionStatePathAndData(topicPartition, partitionRegistration, controllerEpoch)
     SetDataRequest(path, data, ZkVersion.MatchAnyVersion, Some(topicPartition))
+  }
+
+  override def readPendingTopicDeletions(): util.Set[String] = {
+    zkClient.getTopicDeletions.toSet.asJava
   }
 }

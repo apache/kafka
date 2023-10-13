@@ -145,6 +145,7 @@ public class KRaftMigrationZkWriter {
         Map<String, Set<Integer>> extraneousPartitionsInZk = new HashMap<>();
         Map<Uuid, Map<Integer, PartitionRegistration>> changedPartitions = new HashMap<>();
         Map<Uuid, Map<Integer, PartitionRegistration>> newPartitions = new HashMap<>();
+        Set<String> pendingTopicDeletions = migrationClient.topicClient().readPendingTopicDeletions();
 
         migrationClient.topicClient().iterateTopics(
             EnumSet.of(
@@ -234,7 +235,7 @@ public class KRaftMigrationZkWriter {
             operationConsumer.accept(
                 DELETE_TOPIC,
                 "Delete Topic " + topicName + ", ID " + topicId,
-                migrationState -> migrationClient.topicClient().deleteTopic(topicName, migrationState)
+                migrationState -> migrationClient.topicClient().deleteTopic(topicName, pendingTopicDeletions.contains(topicName), migrationState)
             );
             ConfigResource resource = new ConfigResource(ConfigResource.Type.TOPIC, topicName);
             operationConsumer.accept(
@@ -280,10 +281,11 @@ public class KRaftMigrationZkWriter {
         TopicsDelta topicsDelta,
         KRaftMigrationOperationConsumer operationConsumer
     ) {
+        Set<String> pendingTopicDeletions = migrationClient.topicClient().readPendingTopicDeletions();
         topicsDelta.deletedTopicIds().forEach(topicId -> {
             String name = deletedTopicNameResolver.apply(topicId);
             operationConsumer.accept(DELETE_TOPIC, "Deleting topic " + name + ", ID " + topicId,
-                migrationState -> migrationClient.topicClient().deleteTopic(name, migrationState));
+                migrationState -> migrationClient.topicClient().deleteTopic(name, pendingTopicDeletions.contains(name), migrationState));
         });
 
         topicsDelta.changedTopics().forEach((topicId, topicDelta) -> {

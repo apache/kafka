@@ -722,6 +722,21 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                     log.info("Sending RPCs to broker before moving to dual-write mode using " +
                             "at offset and epoch {}", image.highestOffsetAndEpoch());
                     propagator.sendRPCsToBrokersFromMetadataImage(image, migrationLeadershipState.zkControllerEpoch());
+
+                    // After full metadata update, delete the pending topic deletions from KRaft. This will cause the
+                    // next round of RPCs sent to brokers to include StopReplicas
+                    zkMigrationClient.topicClient().readPendingTopicDeletions().forEach(topicToDelete -> {
+                        try {
+                            log.info("Deleting topic {} which was marked for deletion prior to the migration", topicToDelete);
+                            CompletableFuture<?> future = zkRecordConsumer.deleteTopic(topicToDelete);
+                            FutureUtils.waitWithLogging(KRaftMigrationDriver.this.log, "",
+                                "the controller to delete topic " + topicToDelete,
+                                future, Deadline.fromDelay(time, METADATA_COMMIT_MAX_WAIT_MS, TimeUnit.MILLISECONDS), time);
+                        } catch (Throwable t) {
+                            log.error("Failed to delete topic " + topicToDelete, t);
+                        }
+                    });
+
                     // Migration leadership state doesn't change since we're not doing any Zk writes.
                     transitionTo(MigrationDriverState.DUAL_WRITE);
                 } else {

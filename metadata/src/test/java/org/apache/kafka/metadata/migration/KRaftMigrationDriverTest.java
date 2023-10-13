@@ -143,6 +143,11 @@ public class KRaftMigrationDriverTest {
         public void abortMigration() {
 
         }
+
+        @Override
+        public CompletableFuture<?> deleteTopic(String topicName) {
+            return CompletableFuture.completedFuture(null);
+        }
     }
 
     static class CountingMetadataPropagator implements LegacyPropagator {

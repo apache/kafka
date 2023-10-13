@@ -1031,6 +1031,22 @@ public final class QuorumController implements Controller {
             // next controller abort the migration transaction (if in use).
             fatalFaultHandler.handleFault("Aborting the ZK migration");
         }
+
+        @Override
+        public CompletableFuture<?> deleteTopic(String topicName) {
+            Uuid topicId = QuorumController.this.replicationControl().getTopicId(topicName);
+            if (topicId == null) {
+                return CompletableFuture.completedFuture(null);
+            }
+            ControllerWriteEvent<Void> deleteEvent = new ControllerWriteEvent<>(
+                "Delete Topic " + topicName,
+                new MigrationWriteOperation(Collections.singletonList(
+                    new ApiMessageAndVersion(
+                        new RemoveTopicRecord().setTopicId(topicId), (short) 0))
+                ), EnumSet.noneOf(ControllerOperationFlag.class));
+            queue.append(deleteEvent);
+            return deleteEvent.future;
+        }
     }
 
     class QuorumMetaLogListener implements RaftClient.Listener<ApiMessageAndVersion> {

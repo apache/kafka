@@ -27,4 +27,6 @@ public interface ZkRecordConsumer {
     CompletableFuture<?> acceptBatch(List<ApiMessageAndVersion> recordBatch);
     CompletableFuture<OffsetAndEpoch> completeMigration();
     void abortMigration();
+
+    CompletableFuture<?> deleteTopic(String topicName);
 }

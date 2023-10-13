@@ -265,6 +265,72 @@ class ZkMigrationIntegrationTest {
     migrationState = migrationClient.releaseControllerLeadership(migrationState)
   }
 
+  @ClusterTemplate("zkClustersForAllMigrationVersions")
+  def testMigrateTopicDeletions(zkCluster: ClusterInstance): Unit = {
+    // Create a topic in ZK mode
+    var admin = zkCluster.createAdminClient()
+    val newTopics = new util.ArrayList[NewTopic]()
+    newTopics.add(new NewTopic("test-topic-1", 100, 3.toShort))
+    newTopics.add(new NewTopic("test-topic-2", 100, 3.toShort))
+    newTopics.add(new NewTopic("test-topic-3", 100, 3.toShort))
+    val createTopicResult = admin.createTopics(newTopics)
+    createTopicResult.all().get(300, TimeUnit.SECONDS)
+    admin.close()
+    val zkClient = zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying().zkClient
+
+    // Bootstrap the ZK cluster ID into KRaft
+    val clusterId = zkCluster.clusterId()
+    val kraftCluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setBootstrapMetadataVersion(zkCluster.config().metadataVersion()).
+        setClusterId(Uuid.fromString(clusterId)).
+        setNumBrokerNodes(0).
+        setNumControllerNodes(1).build())
+      .setConfigProp(KafkaConfig.MigrationEnabledProp, "true")
+      .setConfigProp(KafkaConfig.ZkConnectProp, zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying.zkConnect)
+      .build()
+    try {
+      kraftCluster.format()
+      kraftCluster.startup()
+      val readyFuture = kraftCluster.controllers().values().asScala.head.controller.waitForReadyBrokers(3)
+
+      // Start a delete, but don't wait for it
+      admin = zkCluster.createAdminClient()
+      admin.deleteTopics(Seq("test-topic-1", "test-topic-2", "test-topic-3").asJava)
+      admin.close()
+
+      // Enable migration configs and restart brokers
+      log.info("Restart brokers in migration mode")
+      zkCluster.config().serverProperties().put(KafkaConfig.MigrationEnabledProp, "true")
+      zkCluster.config().serverProperties().put(RaftConfig.QUORUM_VOTERS_CONFIG, kraftCluster.quorumVotersConfig())
+      zkCluster.config().serverProperties().put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
+      zkCluster.config().serverProperties().put(KafkaConfig.ListenerSecurityProtocolMapProp, "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
+      zkCluster.rollingBrokerRestart()
+
+      zkCluster.waitForReadyBrokers()
+      readyFuture.get(30, TimeUnit.SECONDS)
+
+      // Wait for migration to begin
+      log.info("Waiting for ZK migration to complete")
+      TestUtils.waitUntilTrue(
+        () => zkClient.getOrCreateMigrationState(ZkMigrationLeadershipState.EMPTY).initialZkMigrationComplete(),
+        "Timed out waiting for migration to complete",
+        30000)
+
+      Thread.sleep(30000)
+
+      admin = zkCluster.createAdminClient()
+      TestUtils.waitUntilTrue(
+        () => admin.listTopics().names().get(30, TimeUnit.SECONDS).isEmpty,
+        "Timed out waiting for topics to be deleted",
+        300000)
+      log.info("Topics after migration {}", admin.listTopics().names().get(30, TimeUnit.SECONDS))
+      admin.close()
+    } finally {
+      shutdownInSequence(zkCluster, kraftCluster)
+    }
+  }
+
   // SCRAM and Quota are intermixed. Test SCRAM Only here
   @ClusterTest(clusterType = Type.ZK, brokers = 3, metadataVersion = MetadataVersion.IBP_3_5_IV2, serverProperties = Array(
     new ClusterConfigProperty(key = "inter.broker.listener.name", value = "EXTERNAL"),
