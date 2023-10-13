@@ -445,7 +445,7 @@ public class CommitRequestManager implements RequestManager {
          * {@code inflightOffsetFetches} to bookkeep all the inflight requests.
          * Note: Sendable requests are determined by their timer as we are expecting backoff on failed attempt. See
          * {@link RequestState}.
-         **/
+         */
         List<NetworkClientDelegate.UnsentRequest> drain(final long currentTimeMs) {
             List<NetworkClientDelegate.UnsentRequest> unsentRequests = new ArrayList<>();
 
