@@ -33,6 +33,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData.Assignment;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData.TopicPartitions;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -59,6 +60,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP_PREFIX;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.processRebalanceCallback;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -302,13 +304,16 @@ public class AssignmentReconcilerTest {
         applicationEventQueue = new LinkedBlockingQueue<>();
         backgroundEventQueue = new LinkedBlockingQueue<>();
 
+        ConsumerCoordinatorMetrics sensors = new ConsumerCoordinatorMetrics(
+                subscriptions,
+                new Metrics(),
+                CONSUMER_METRIC_GROUP_PREFIX
+        );
         callbackInvoker = new ConsumerRebalanceListenerInvoker(
                 logContext,
                 subscriptions,
                 time,
-                Optional.empty(),
-                Optional.empty(),
-                Optional.empty()
+                sensors
         );
 
         reconciler = new AssignmentReconciler(logContext, subscriptions, metadata, backgroundEventQueue);

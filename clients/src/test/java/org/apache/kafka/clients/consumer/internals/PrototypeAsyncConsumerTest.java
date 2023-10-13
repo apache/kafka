@@ -388,7 +388,6 @@ public class PrototypeAsyncConsumerTest {
     public void testRefreshCommittedOffsetsNotCalledIfNoGroupId() {
         // Create consumer without group id so committed offsets are not used for updating positions
         this.groupId = null;
-        consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
 
         testUpdateFetchPositionsWithFetchCommittedOffsetsTimeout(false);
     }

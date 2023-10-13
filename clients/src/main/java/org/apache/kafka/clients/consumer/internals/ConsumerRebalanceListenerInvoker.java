@@ -26,7 +26,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
-import java.util.Optional;
 import java.util.Set;
 import java.util.SortedSet;
 
@@ -40,22 +39,16 @@ class ConsumerRebalanceListenerInvoker {
     private final Logger log;
     private final SubscriptionState subscriptions;
     private final Time time;
-    private final Optional<Sensor> assignCallbackSensor;
-    private final Optional<Sensor> revokeCallbackSensor;
-    private final Optional<Sensor> loseCallbackSensor;
+    private final ConsumerCoordinatorMetrics sensors;
 
     ConsumerRebalanceListenerInvoker(LogContext logContext,
                                      SubscriptionState subscriptions,
                                      Time time,
-                                     Optional<Sensor> assignCallbackSensor,
-                                     Optional<Sensor> revokeCallbackSensor,
-                                     Optional<Sensor> loseCallbackSensor) {
+                                     ConsumerCoordinatorMetrics sensors) {
         this.log = logContext.logger(getClass());
         this.subscriptions = subscriptions;
         this.time = time;
-        this.assignCallbackSensor = assignCallbackSensor;
-        this.revokeCallbackSensor = revokeCallbackSensor;
-        this.loseCallbackSensor = loseCallbackSensor;
+        this.sensors = sensors;
     }
 
     Exception invokePartitionsAssigned(final SortedSet<TopicPartition> assignedPartitions) {
@@ -65,7 +58,7 @@ class ConsumerRebalanceListenerInvoker {
         try {
             final long startMs = time.milliseconds();
             listener.onPartitionsAssigned(assignedPartitions);
-            assignCallbackSensor.ifPresent(s -> s.record(time.milliseconds() - startMs));
+            sensors.assignCallbackSensor.record(time.milliseconds() - startMs);
         } catch (WakeupException | InterruptException e) {
             throw e;
         } catch (Exception e) {
@@ -88,7 +81,7 @@ class ConsumerRebalanceListenerInvoker {
         try {
             final long startMs = time.milliseconds();
             listener.onPartitionsRevoked(revokedPartitions);
-            revokeCallbackSensor.ifPresent(s -> s.record(time.milliseconds() - startMs));
+            sensors.revokeCallbackSensor.record(time.milliseconds() - startMs);
         } catch (WakeupException | InterruptException e) {
             throw e;
         } catch (Exception e) {
@@ -111,7 +104,7 @@ class ConsumerRebalanceListenerInvoker {
         try {
             final long startMs = time.milliseconds();
             listener.onPartitionsLost(lostPartitions);
-            loseCallbackSensor.ifPresent(s -> s.record(time.milliseconds() - startMs));
+            sensors.loseCallbackSensor.record(time.milliseconds() - startMs);
         } catch (WakeupException | InterruptException e) {
             throw e;
         } catch (Exception e) {

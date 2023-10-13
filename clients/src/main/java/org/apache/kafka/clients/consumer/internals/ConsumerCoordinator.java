@@ -47,11 +47,7 @@ import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
-import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.metrics.stats.Avg;
-import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.RecordBatch;
@@ -189,7 +185,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         this.autoCommitIntervalMs = autoCommitIntervalMs;
         this.assignors = assignors;
         this.completedOffsetCommits = new ConcurrentLinkedQueue<>();
-        this.sensors = new ConsumerCoordinatorMetrics(metrics, metricGrpPrefix);
+        this.sensors = new ConsumerCoordinatorMetrics(subscriptions, metrics, metricGrpPrefix);
         this.interceptors = interceptors;
         this.inFlightAsyncCommits = new AtomicInteger();
         this.pendingAsyncCommits = new AtomicInteger();
@@ -227,12 +223,12 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             protocol = null;
         }
 
-        this.consumerRebalanceListenerInvoker = new ConsumerRebalanceListenerInvoker(logContext,
+        this.consumerRebalanceListenerInvoker = new ConsumerRebalanceListenerInvoker(
+                logContext,
                 subscriptions,
                 time,
-                Optional.of(sensors.assignCallbackSensor),
-                Optional.of(sensors.revokeCallbackSensor),
-                Optional.of(sensors.loseCallbackSensor));
+                sensors
+        );
         this.metadata.requestUpdate(true);
     }
 
@@ -1511,56 +1507,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             } else {
                 future.complete(offsets);
             }
-        }
-    }
-
-    private class ConsumerCoordinatorMetrics {
-        private final String metricGrpName;
-        private final Sensor commitSensor;
-        private final Sensor revokeCallbackSensor;
-        private final Sensor assignCallbackSensor;
-        private final Sensor loseCallbackSensor;
-
-        private ConsumerCoordinatorMetrics(Metrics metrics, String metricGrpPrefix) {
-            this.metricGrpName = metricGrpPrefix + "-coordinator-metrics";
-
-            this.commitSensor = metrics.sensor("commit-latency");
-            this.commitSensor.add(metrics.metricName("commit-latency-avg",
-                this.metricGrpName,
-                "The average time taken for a commit request"), new Avg());
-            this.commitSensor.add(metrics.metricName("commit-latency-max",
-                this.metricGrpName,
-                "The max time taken for a commit request"), new Max());
-            this.commitSensor.add(createMeter(metrics, metricGrpName, "commit", "commit calls"));
-
-            this.revokeCallbackSensor = metrics.sensor("partition-revoked-latency");
-            this.revokeCallbackSensor.add(metrics.metricName("partition-revoked-latency-avg",
-                this.metricGrpName,
-                "The average time taken for a partition-revoked rebalance listener callback"), new Avg());
-            this.revokeCallbackSensor.add(metrics.metricName("partition-revoked-latency-max",
-                this.metricGrpName,
-                "The max time taken for a partition-revoked rebalance listener callback"), new Max());
-
-            this.assignCallbackSensor = metrics.sensor("partition-assigned-latency");
-            this.assignCallbackSensor.add(metrics.metricName("partition-assigned-latency-avg",
-                this.metricGrpName,
-                "The average time taken for a partition-assigned rebalance listener callback"), new Avg());
-            this.assignCallbackSensor.add(metrics.metricName("partition-assigned-latency-max",
-                this.metricGrpName,
-                "The max time taken for a partition-assigned rebalance listener callback"), new Max());
-
-            this.loseCallbackSensor = metrics.sensor("partition-lost-latency");
-            this.loseCallbackSensor.add(metrics.metricName("partition-lost-latency-avg",
-                this.metricGrpName,
-                "The average time taken for a partition-lost rebalance listener callback"), new Avg());
-            this.loseCallbackSensor.add(metrics.metricName("partition-lost-latency-max",
-                this.metricGrpName,
-                "The max time taken for a partition-lost rebalance listener callback"), new Max());
-
-            Measurable numParts = (config, now) -> subscriptions.numAssignedPartitions();
-            metrics.addMetric(metrics.metricName("assigned-partitions",
-                this.metricGrpName,
-                "The number of partitions currently assigned to this consumer"), numParts);
         }
     }
 

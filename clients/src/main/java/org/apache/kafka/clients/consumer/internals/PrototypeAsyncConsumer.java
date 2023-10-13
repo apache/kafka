@@ -84,6 +84,7 @@ import java.util.stream.Collectors;
 import static java.util.Objects.requireNonNull;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP_PREFIX;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.configuredConsumerInterceptors;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createLogContext;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createMetrics;
@@ -114,7 +115,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     private final Metrics metrics;
     private final long defaultApiTimeoutMs;
 
-    private final WakeupTrigger wakeupTrigger = new WakeupTrigger();
+    private WakeupTrigger wakeupTrigger = new WakeupTrigger();
     private final ConsumerRebalanceListenerInvoker consumerRebalanceListenerInvoker;
 
     public PrototypeAsyncConsumer(Properties properties,
@@ -160,12 +161,17 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
                 clusterResourceListeners,
                 null // this is coming from the fetcher, but we don't have one
         );
-        this.consumerRebalanceListenerInvoker = new ConsumerRebalanceListenerInvoker(logContext,
+        ConsumerCoordinatorMetrics sensors = new ConsumerCoordinatorMetrics(
+                subscriptions,
+                metrics,
+                CONSUMER_METRIC_GROUP_PREFIX
+        );
+        this.consumerRebalanceListenerInvoker = new ConsumerRebalanceListenerInvoker(
+                logContext,
                 subscriptions,
                 time,
-                Optional.empty(),
-                Optional.empty(),
-                Optional.empty());
+                sensors
+        );
     }
 
     // Visible for testing
@@ -188,12 +194,17 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         this.defaultApiTimeoutMs = defaultApiTimeoutMs;
         this.deserializers = new Deserializers<>(config);
         this.eventHandler = eventHandler;
-        this.consumerRebalanceListenerInvoker = new ConsumerRebalanceListenerInvoker(logContext,
+        ConsumerCoordinatorMetrics sensors = new ConsumerCoordinatorMetrics(
+                subscriptions,
+                metrics,
+                CONSUMER_METRIC_GROUP_PREFIX
+        );
+        this.consumerRebalanceListenerInvoker = new ConsumerRebalanceListenerInvoker(
+                logContext,
                 subscriptions,
                 time,
-                Optional.empty(),
-                Optional.empty(),
-                Optional.empty());
+                sensors
+        );
     }
 
     /**
