@@ -30,6 +30,11 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.SortedSet;
 
+/**
+ * This class encapsulates the invocation of the callback methods defined in the {@link ConsumerRebalanceListener}
+ * interface. When consumer group partition assignment changes, these methods are invoked. This class wraps those
+ * callback calls with some logging, optional {@link Sensor} updates, etc.
+ */
 class ConsumerRebalanceListenerInvoker {
 
     private final Logger log;
@@ -54,7 +59,7 @@ class ConsumerRebalanceListenerInvoker {
     }
 
     Exception invokePartitionsAssigned(final SortedSet<TopicPartition> assignedPartitions) {
-        log.info("Adding newly assigned partitions: {}", org.apache.kafka.common.utils.Utils.join(assignedPartitions, ", "));
+        log.info("Adding newly assigned partitions: {}", Utils.join(assignedPartitions, ", "));
 
         ConsumerRebalanceListener listener = subscriptions.rebalanceListener();
         try {
@@ -73,7 +78,7 @@ class ConsumerRebalanceListenerInvoker {
     }
 
     Exception invokePartitionsRevoked(final SortedSet<TopicPartition> revokedPartitions) {
-        log.info("Revoke previously assigned partitions {}", org.apache.kafka.common.utils.Utils.join(revokedPartitions, ", "));
+        log.info("Revoke previously assigned partitions {}", Utils.join(revokedPartitions, ", "));
         Set<TopicPartition> revokePausedPartitions = subscriptions.pausedPartitions();
         revokePausedPartitions.retainAll(revokedPartitions);
         if (!revokePausedPartitions.isEmpty())
@@ -96,7 +101,7 @@ class ConsumerRebalanceListenerInvoker {
     }
 
     Exception invokePartitionsLost(final SortedSet<TopicPartition> lostPartitions) {
-        log.info("Lost previously assigned partitions {}", org.apache.kafka.common.utils.Utils.join(lostPartitions, ", "));
+        log.info("Lost previously assigned partitions {}", Utils.join(lostPartitions, ", "));
         Set<TopicPartition> lostPausedPartitions = subscriptions.pausedPartitions();
         lostPausedPartitions.retainAll(lostPartitions);
         if (!lostPausedPartitions.isEmpty())
