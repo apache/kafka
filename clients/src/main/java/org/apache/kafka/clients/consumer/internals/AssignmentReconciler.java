@@ -216,27 +216,27 @@ public class AssignmentReconciler {
     }
 
     private SortedSet<TopicPartition> targetPartitions(Assignment assignment) {
-        Map<Uuid, String> topicIdToNameMap = uuidStringMap();
-
-        SortedSet<TopicPartition> set = new TreeSet<>(new TopicPartitionComparator());
+        Map<Uuid, String> topicIdToNameMap = createTopicIdToNameMapping();
+        SortedSet<TopicPartition> partitions = new TreeSet<>(new TopicPartitionComparator());
 
         for (TopicPartitions topicPartitions : assignment.topicPartitions()) {
             Uuid topicId = topicPartitions.topicId();
             String topicName = Objects.requireNonNull(topicIdToNameMap.get(topicId), () -> String.format("No topic name was found in the metadata for topic ID %s", topicId));
 
             for (Integer partition : topicPartitions.partitions()) {
-                set.add(new TopicPartition(topicName, partition));
+                partitions.add(new TopicPartition(topicName, partition));
             }
         }
 
-        return set;
+        return partitions;
     }
 
-    private Map<Uuid, String> uuidStringMap() {
-        Map<Uuid, String> topicIdToNameMap = new HashMap<>();
+    private Map<Uuid, String> createTopicIdToNameMapping() {
+        Map<Uuid, String> map = new HashMap<>();
 
         for (Map.Entry<String, Uuid> entry : metadata.topicIds().entrySet())
-            topicIdToNameMap.put(entry.getValue(), entry.getKey());
-        return topicIdToNameMap;
+            map.put(entry.getValue(), entry.getKey());
+
+        return map;
     }
 }
