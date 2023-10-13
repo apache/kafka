@@ -251,11 +251,7 @@ public class NetworkClientDelegate implements AutoCloseable {
     }
 
     public static class FutureCompletionHandler extends CompletableFuture<ClientResponse> implements RequestCompletionHandler {
-
-        /**
-         * The time when the response is completed. This is used when the response is completed exceptionally because
-         * ClientResponse already contains received time which is injected by the network client.
-         */
+        
         private long responseCompletionTimeMs;
 
         FutureCompletionHandler() {
