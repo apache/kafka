@@ -1608,6 +1608,7 @@ public class FetchRequestManagerTest {
         };
         client.prepareResponse(matcher, fullFetchResponse(tidp0, records, Errors.NONE, 100L, 0));
         networkClientDelegate.pollNoWakeup();
+        assertEquals(0, networkClientDelegate.pendingRequestCount());
     }
 
     @Test

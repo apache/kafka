@@ -1593,6 +1593,7 @@ public class FetcherTest {
         };
         client.prepareResponse(matcher, fullFetchResponse(tidp0, records, Errors.NONE, 100L, 0));
         consumerClient.pollNoWakeup();
+        assertEquals(0, consumerClient.pendingRequestCount());
     }
 
     @Test
