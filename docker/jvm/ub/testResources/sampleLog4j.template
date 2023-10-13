@@ -1,0 +1,11 @@
+log4j.rootLogger={{ getEnv "KAFKA_LOG4J_ROOT_LOGLEVEL" "INFO" }}, stdout
+
+log4j.appender.stdout=org.apache.log4j.ConsoleAppender
+log4j.appender.stdout.layout=org.apache.log4j.PatternLayout
+log4j.appender.stdout.layout.ConversionPattern=[%d] %p %m (%c)%n
+
+{{ $loggerDefaults := "kafka=INFO,kafka.network.RequestChannel$=WARN,kafka.producer.async.DefaultEventHandler=DEBUG,kafka.request.logger=WARN,kafka.controller=TRACE,kafka.log.LogCleaner=INFO,state.change.logger=TRACE,kafka.authorizer.logger=WARN"}}
+{{$loggers := getEnv "KAFKA_LOG4J_LOGGERS" "" -}}
+{{ range $k, $v := splitToMapDefaults ","  $loggerDefaults $loggers}}
+log4j.logger.{{ $k }}={{ $v -}}
+{{ end }}
