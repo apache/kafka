@@ -36,6 +36,7 @@ import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.LogContext;
@@ -320,6 +321,25 @@ public class PrototypeAsyncConsumerTest {
         PrototypeAsyncConsumer<?, ?> consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
         assertThrows(NullPointerException.class, () -> consumer.offsetsForTimes(null,
                 Duration.ofMillis(1)));
+    }
+
+    @Test
+    public void testOffsetsForTimesFailsOnNegativeTargetTimes() {
+        PrototypeAsyncConsumer<?, ?> consumer = newConsumer(time, new StringDeserializer(), new StringDeserializer());
+        assertThrows(IllegalArgumentException.class,
+                () -> consumer.offsetsForTimes(Collections.singletonMap(new TopicPartition(
+                                "topic1", 1), ListOffsetsRequest.EARLIEST_TIMESTAMP),
+                        Duration.ofMillis(1)));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> consumer.offsetsForTimes(Collections.singletonMap(new TopicPartition(
+                                "topic1", 1), ListOffsetsRequest.LATEST_TIMESTAMP),
+                        Duration.ofMillis(1)));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> consumer.offsetsForTimes(Collections.singletonMap(new TopicPartition(
+                                "topic1", 1), ListOffsetsRequest.MAX_TIMESTAMP),
+                        Duration.ofMillis(1)));
     }
 
     @Test
