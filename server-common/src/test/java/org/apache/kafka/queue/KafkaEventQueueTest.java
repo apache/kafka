@@ -224,9 +224,9 @@ public class KafkaEventQueueTest {
     }
 
     @Test
-    public void testRejectedExecutionExecption() throws Exception {
+    public void testRejectedExecutionException() throws Exception {
         KafkaEventQueue queue = new KafkaEventQueue(Time.SYSTEM, new LogContext(),
-            "testRejectedExecutionExecption");
+            "testRejectedExecutionException");
         queue.close();
         CompletableFuture<Void> future = new CompletableFuture<>();
         queue.append(new EventQueue.Event() {
@@ -305,13 +305,13 @@ public class KafkaEventQueueTest {
         queue.close();
     }
 
-    private static class InterruptableEvent implements EventQueue.Event {
+    private static class InterruptibleEvent implements EventQueue.Event {
         private final CompletableFuture<Void> runFuture;
         private final CompletableFuture<Thread> queueThread;
         private final AtomicInteger numCallsToRun;
         private final AtomicInteger numInterruptedExceptionsSeen;
 
-        InterruptableEvent(
+        InterruptibleEvent(
             CompletableFuture<Thread> queueThread,
             AtomicInteger numCallsToRun,
             AtomicInteger numInterruptedExceptionsSeen
@@ -345,10 +345,10 @@ public class KafkaEventQueueTest {
         CompletableFuture<Thread> queueThread = new CompletableFuture<>();
         AtomicInteger numCallsToRun = new AtomicInteger(0);
         AtomicInteger numInterruptedExceptionsSeen = new AtomicInteger(0);
-        queue.append(new InterruptableEvent(queueThread, numCallsToRun, numInterruptedExceptionsSeen));
-        queue.append(new InterruptableEvent(queueThread, numCallsToRun, numInterruptedExceptionsSeen));
-        queue.append(new InterruptableEvent(queueThread, numCallsToRun, numInterruptedExceptionsSeen));
-        queue.append(new InterruptableEvent(queueThread, numCallsToRun, numInterruptedExceptionsSeen));
+        queue.append(new InterruptibleEvent(queueThread, numCallsToRun, numInterruptedExceptionsSeen));
+        queue.append(new InterruptibleEvent(queueThread, numCallsToRun, numInterruptedExceptionsSeen));
+        queue.append(new InterruptibleEvent(queueThread, numCallsToRun, numInterruptedExceptionsSeen));
+        queue.append(new InterruptibleEvent(queueThread, numCallsToRun, numInterruptedExceptionsSeen));
         queueThread.get().interrupt();
         TestUtils.retryOnExceptionWithTimeout(30000,
                 () -> assertEquals(1, numCallsToRun.get()));

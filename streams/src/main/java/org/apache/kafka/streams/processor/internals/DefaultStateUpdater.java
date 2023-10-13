@@ -73,6 +73,7 @@ public class DefaultStateUpdater implements StateUpdater {
         private final ChangelogReader changelogReader;
         private final StateUpdaterMetrics updaterMetrics;
         private final AtomicBoolean isRunning = new AtomicBoolean(true);
+        private final AtomicBoolean isIdle = new AtomicBoolean(false);
         private final Map<TaskId, Task> updatingTasks = new ConcurrentHashMap<>();
         private final Map<TaskId, Task> pausedTasks = new ConcurrentHashMap<>();
 
@@ -143,7 +144,7 @@ public class DefaultStateUpdater implements StateUpdater {
                 removeUpdatingAndPausedTasks();
                 updaterMetrics.clear();
                 shutdownGate.countDown();
-                log.info("State updater thread shutdown");
+                log.info("State updater thread stopped");
             }
         }
 
@@ -240,6 +241,7 @@ public class DefaultStateUpdater implements StateUpdater {
             log.info("Encountered task corrupted exception: ", taskCorruptedException);
             final Set<TaskId> corruptedTaskIds = taskCorruptedException.corruptedTasks();
             final Set<Task> corruptedTasks = new HashSet<>();
+            final Set<TopicPartition> changelogsOfCorruptedTasks = new HashSet<>();
             for (final TaskId taskId : corruptedTaskIds) {
                 final Task corruptedTask = updatingTasks.get(taskId);
                 if (corruptedTask == null) {
@@ -247,7 +249,9 @@ public class DefaultStateUpdater implements StateUpdater {
                 }
                 corruptedTasks.add(corruptedTask);
                 removeCheckpointForCorruptedTask(corruptedTask);
+                changelogsOfCorruptedTasks.addAll(corruptedTask.changelogPartitions());
             }
+            changelogReader.unregister(changelogsOfCorruptedTasks);
             addToExceptionsAndFailedTasksThenRemoveFromUpdatingTasks(new ExceptionAndTasks(corruptedTasks, taskCorruptedException));
         }
 
@@ -304,10 +308,10 @@ public class DefaultStateUpdater implements StateUpdater {
             tasksAndActionsLock.lock();
             try {
                 while (isRunning.get() &&
-                    changelogReader.allChangelogsCompleted() &&
+                    (changelogReader.allChangelogsCompleted() || updatingTasks.isEmpty()) &&
                     tasksAndActions.isEmpty() &&
                     !isTopologyResumed.get()) {
-
+                    isIdle.set(true);
                     tasksAndActionsCondition.await();
                 }
             } catch (final InterruptedException ignored) {
@@ -315,6 +319,7 @@ public class DefaultStateUpdater implements StateUpdater {
                 // and hence this exception should never be thrown
             } finally {
                 tasksAndActionsLock.unlock();
+                isIdle.set(false);
             }
         }
 
@@ -568,7 +573,7 @@ public class DefaultStateUpdater implements StateUpdater {
     @Override
     public void shutdown(final Duration timeout) {
         if (stateUpdaterThread != null) {
-            log.info("Shutting down StateUpdater thread");
+            log.info("Shutting down state updater thread");
 
             // first set the running flag and then
             // notify the condition in case the thread is waiting on it;
@@ -763,6 +768,14 @@ public class DefaultStateUpdater implements StateUpdater {
         return executeWithQueuesLocked(
             () -> getStreamOfTasks().filter(t -> !t.isActive()).map(t -> (StandbyTask) t).collect(Collectors.toSet())
         );
+    }
+
+    // used for testing
+    boolean isIdle() {
+        if (stateUpdaterThread != null) {
+            return stateUpdaterThread.isIdle.get();
+        }
+        return false;
     }
 
     private <T> Set<T> executeWithQueuesLocked(final Supplier<Set<T>> action) {

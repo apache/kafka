@@ -159,7 +159,7 @@ object CreateTopicsRequestWithPolicyTest {
       if (numPartitions != null || replicationFactor != null) {
         require(numPartitions != null, s"numPartitions should not be null, but it is $numPartitions")
         require(replicationFactor != null, s"replicationFactor should not be null, but it is $replicationFactor")
-        require(replicasAssignments == null, s"replicaAssigments should be null, but it is $replicasAssignments")
+        require(replicasAssignments == null, s"replicaAssignments should be null, but it is $replicasAssignments")
 
         if (numPartitions < 5)
           throw new PolicyViolationException(s"Topics should have at least 5 partitions, received $numPartitions")
@@ -173,7 +173,7 @@ object CreateTopicsRequestWithPolicyTest {
       } else {
         require(numPartitions == null, s"numPartitions should be null, but it is $numPartitions")
         require(replicationFactor == null, s"replicationFactor should be null, but it is $replicationFactor")
-        require(replicasAssignments != null, s"replicaAssigments should not be null, but it is $replicasAssignments")
+        require(replicasAssignments != null, s"replicaAssignments should not be null, but it is $replicasAssignments")
 
         replicasAssignments.asScala.toSeq.sortBy { case (tp, _) => tp }.foreach { case (partitionId, assignment) =>
           if (assignment.size < 2)

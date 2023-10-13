@@ -33,7 +33,6 @@ class ServerGenerateBrokerIdTest extends QuorumTestHarness {
   var config1: KafkaConfig = _
   var props2: Properties = _
   var config2: KafkaConfig = _
-  val brokerMetaPropsFile = "meta.properties"
   var servers: Seq[KafkaServer] = Seq()
 
   @BeforeEach
@@ -158,7 +157,7 @@ class ServerGenerateBrokerIdTest extends QuorumTestHarness {
 
     // verify no broker metadata was written
     serverB.config.logDirs.foreach { logDir =>
-      val brokerMetaFile = new File(logDir + File.separator + brokerMetaPropsFile)
+      val brokerMetaFile = new File(logDir + File.separator + KafkaServer.brokerMetaPropsFile)
       assertFalse(brokerMetaFile.exists())
     }
 
@@ -180,7 +179,7 @@ class ServerGenerateBrokerIdTest extends QuorumTestHarness {
   def verifyBrokerMetadata(logDirs: Seq[String], brokerId: Int): Boolean = {
     for (logDir <- logDirs) {
       val brokerMetadataOpt = new BrokerMetadataCheckpoint(
-        new File(logDir + File.separator + brokerMetaPropsFile)).read()
+        new File(logDir + File.separator + KafkaServer.brokerMetaPropsFile)).read()
       brokerMetadataOpt match {
         case Some(properties) =>
           val brokerMetadata = new RawMetaProperties(properties)

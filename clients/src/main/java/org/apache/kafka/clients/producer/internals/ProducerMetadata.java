@@ -43,12 +43,13 @@ public class ProducerMetadata extends Metadata {
     private final Time time;
 
     public ProducerMetadata(long refreshBackoffMs,
+                            long refreshBackoffMaxMs,
                             long metadataExpireMs,
                             long metadataIdleMs,
                             LogContext logContext,
                             ClusterResourceListeners clusterResourceListeners,
                             Time time) {
-        super(refreshBackoffMs, metadataExpireMs, logContext, clusterResourceListeners);
+        super(refreshBackoffMs, refreshBackoffMaxMs, metadataExpireMs, logContext, clusterResourceListeners);
         this.metadataIdleMs = metadataIdleMs;
         this.log = logContext.logger(ProducerMetadata.class);
         this.time = time;
@@ -76,7 +77,7 @@ public class ProducerMetadata extends Metadata {
         if (newTopics.contains(topic)) {
             return requestUpdateForNewTopics();
         } else {
-            return requestUpdate();
+            return requestUpdate(false);
         }
     }
 

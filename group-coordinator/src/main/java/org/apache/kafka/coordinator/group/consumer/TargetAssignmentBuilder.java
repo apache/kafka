@@ -20,7 +20,6 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.Record;
 import org.apache.kafka.coordinator.group.assignor.AssignmentMemberSpec;
 import org.apache.kafka.coordinator.group.assignor.AssignmentSpec;
-import org.apache.kafka.coordinator.group.assignor.AssignmentTopicMetadata;
 import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
@@ -244,16 +243,19 @@ public class TargetAssignmentBuilder {
         });
 
         // Prepare the topic metadata.
-        Map<Uuid, AssignmentTopicMetadata> topics = new HashMap<>();
+        Map<Uuid, TopicMetadata> topicMetadataMap = new HashMap<>();
         subscriptionMetadata.forEach((topicName, topicMetadata) ->
-            topics.put(topicMetadata.id(), new AssignmentTopicMetadata(topicMetadata.numPartitions()))
+            topicMetadataMap.put(
+                topicMetadata.id(),
+                topicMetadata
+            )
         );
 
         // Compute the assignment.
-        GroupAssignment newGroupAssignment = assignor.assign(new AssignmentSpec(
-            Collections.unmodifiableMap(memberSpecs),
-            Collections.unmodifiableMap(topics)
-        ));
+        GroupAssignment newGroupAssignment = assignor.assign(
+            new AssignmentSpec(Collections.unmodifiableMap(memberSpecs)),
+            new SubscribedTopicMetadata(topicMetadataMap)
+        );
 
         // Compute delta from previous to new target assignment and create the
         // relevant records.

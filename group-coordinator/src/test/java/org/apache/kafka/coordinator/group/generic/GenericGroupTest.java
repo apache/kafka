@@ -18,19 +18,32 @@ package org.apache.kafka.coordinator.group.generic;
 
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
+import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
+import org.apache.kafka.common.errors.FencedInstanceIdException;
+import org.apache.kafka.common.errors.GroupIdNotFoundException;
+import org.apache.kafka.common.errors.GroupNotEmptyException;
+import org.apache.kafka.common.errors.IllegalGenerationException;
+import org.apache.kafka.common.errors.RebalanceInProgressException;
+import org.apache.kafka.common.errors.UnknownMemberIdException;
+import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol;
+import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection;
 import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.coordinator.group.OffsetAndMetadata;
+import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
+import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Optional;
+import java.util.OptionalInt;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
@@ -40,6 +53,7 @@ import static org.apache.kafka.coordinator.group.generic.GenericGroupState.DEAD;
 import static org.apache.kafka.coordinator.group.generic.GenericGroupState.EMPTY;
 import static org.apache.kafka.coordinator.group.generic.GenericGroupState.PREPARING_REBALANCE;
 import static org.apache.kafka.coordinator.group.generic.GenericGroupState.STABLE;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -206,10 +220,14 @@ public class GenericGroupTest {
 
     @Test
     public void testSelectProtocol() {
-        List<Protocol> member1Protocols = Arrays.asList(
-            new Protocol("range", new byte[0]),
-            new Protocol("roundrobin", new byte[0])
-        );
+        JoinGroupRequestProtocolCollection member1Protocols = new JoinGroupRequestProtocolCollection();
+        member1Protocols.add(new JoinGroupRequestProtocol()
+            .setName("range")
+            .setMetadata(new byte[0]));
+
+        member1Protocols.add(new JoinGroupRequestProtocol()
+            .setName("roundrobin")
+            .setMetadata(new byte[0]));
 
         GenericGroupMember member1 = new GenericGroupMember(
             memberId,
@@ -223,10 +241,14 @@ public class GenericGroupTest {
         );
         group.add(member1);
 
-        List<Protocol> member2Protocols = Arrays.asList(
-            new Protocol("roundrobin", new byte[0]),
-            new Protocol("range", new byte[0])
-        );
+        JoinGroupRequestProtocolCollection member2Protocols = new JoinGroupRequestProtocolCollection();
+        member2Protocols.add(new JoinGroupRequestProtocol()
+            .setName("roundrobin")
+            .setMetadata(new byte[0]));
+
+        member2Protocols.add(new JoinGroupRequestProtocol()
+            .setName("range")
+            .setMetadata(new byte[0]));
 
         GenericGroupMember member2 = new GenericGroupMember(
             "member2",
@@ -267,10 +289,14 @@ public class GenericGroupTest {
 
     @Test
     public void testSelectProtocolChoosesCompatibleProtocol() {
-        List<Protocol> member1Protocols = Arrays.asList(
-            new Protocol("range", new byte[0]),
-            new Protocol("roundrobin", new byte[0])
-        );
+        JoinGroupRequestProtocolCollection member1Protocols = new JoinGroupRequestProtocolCollection();
+        member1Protocols.add(new JoinGroupRequestProtocol()
+            .setName("range")
+            .setMetadata(new byte[0]));
+
+        member1Protocols.add(new JoinGroupRequestProtocol()
+            .setName("roundrobin")
+            .setMetadata(new byte[0]));
 
         GenericGroupMember member1 = new GenericGroupMember(
             memberId,
@@ -284,10 +310,15 @@ public class GenericGroupTest {
         );
         group.add(member1);
 
-        List<Protocol> member2Protocols = Arrays.asList(
-            new Protocol("roundrobin", new byte[0]),
-            new Protocol("blah", new byte[0])
-        );
+        JoinGroupRequestProtocolCollection member2Protocols = new JoinGroupRequestProtocolCollection();
+        member2Protocols.add(new JoinGroupRequestProtocol()
+            .setName("roundrobin")
+            .setMetadata(new byte[0]));
+
+        member2Protocols.add(new JoinGroupRequestProtocol()
+            .setName("foo")
+            .setMetadata(new byte[0]));
+
 
         GenericGroupMember member2 = new GenericGroupMember(
             "member2",
@@ -306,10 +337,14 @@ public class GenericGroupTest {
 
     @Test
     public void testSupportsProtocols() {
-        List<Protocol> member1Protocols = Arrays.asList(
-            new Protocol("range", new byte[0]),
-            new Protocol("roundrobin", new byte[0])
-        );
+        JoinGroupRequestProtocolCollection member1Protocols = new JoinGroupRequestProtocolCollection();
+        member1Protocols.add(new JoinGroupRequestProtocol()
+            .setName("range")
+            .setMetadata(new byte[0]));
+
+        member1Protocols.add(new JoinGroupRequestProtocol()
+            .setName("roundrobin")
+            .setMetadata(new byte[0]));
 
         GenericGroupMember member1 = new GenericGroupMember(
             memberId,
@@ -338,6 +373,14 @@ public class GenericGroupTest {
         // not able to compute it for a newly created group
         assertEquals(Optional.empty(), group.subscribedTopics());
 
+        JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestProtocolCollection();
+        protocols.add(new JoinGroupRequestProtocol()
+            .setName("range")
+            .setMetadata(ConsumerProtocol.serializeSubscription(
+                new ConsumerPartitionAssignor.Subscription(
+                    Collections.singletonList("foo")
+                )).array()));
+
         GenericGroupMember member = new GenericGroupMember(
             memberId,
             Optional.empty(),
@@ -346,16 +389,7 @@ public class GenericGroupTest {
             rebalanceTimeoutMs,
             sessionTimeoutMs,
             protocolType,
-            Collections.singletonList(
-                new Protocol(
-                    "range",
-                    ConsumerProtocol.serializeSubscription(
-                        new ConsumerPartitionAssignor.Subscription(
-                            Collections.singletonList("foo")
-                        )
-                    ).array()
-                )
-            )
+            protocols
         );
 
         group.transitionTo(PREPARING_REBALANCE);
@@ -373,6 +407,11 @@ public class GenericGroupTest {
 
         assertEquals(Optional.of(Collections.emptySet()), group.subscribedTopics());
 
+        protocols = new JoinGroupRequestProtocolCollection();
+        protocols.add(new JoinGroupRequestProtocol()
+            .setName("range")
+            .setMetadata(new byte[0]));
+
         GenericGroupMember memberWithFaultyProtocol = new GenericGroupMember(
             memberId,
             Optional.empty(),
@@ -381,12 +420,7 @@ public class GenericGroupTest {
             rebalanceTimeoutMs,
             sessionTimeoutMs,
             protocolType,
-            Collections.singletonList(
-                new Protocol(
-                    "range",
-                    new byte[0]
-                )
-            )
+            protocols
         );
 
         group.transitionTo(PREPARING_REBALANCE);
@@ -402,6 +436,11 @@ public class GenericGroupTest {
         // not able to compute it for a newly created group
         assertEquals(Optional.empty(), group.subscribedTopics());
 
+        JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestProtocolCollection();
+        protocols.add(new JoinGroupRequestProtocol()
+            .setName("range")
+            .setMetadata(new byte[0]));
+
         GenericGroupMember memberWithNonConsumerProtocol = new GenericGroupMember(
             memberId,
             Optional.empty(),
@@ -410,12 +449,7 @@ public class GenericGroupTest {
             rebalanceTimeoutMs,
             sessionTimeoutMs,
             "My Protocol",
-            Collections.singletonList(
-                new Protocol(
-                    "range",
-                    new byte[0]
-                )
-            )
+            protocols
         );
 
         group.transitionTo(PREPARING_REBALANCE);
@@ -428,6 +462,11 @@ public class GenericGroupTest {
 
     @Test
     public void testInitNextGeneration() {
+        JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestProtocolCollection();
+        protocols.add(new JoinGroupRequestProtocol()
+            .setName("roundrobin")
+            .setMetadata(new byte[0]));
+
         GenericGroupMember member = new GenericGroupMember(
             memberId,
             Optional.empty(),
@@ -436,12 +475,7 @@ public class GenericGroupTest {
             rebalanceTimeoutMs,
             sessionTimeoutMs,
             protocolType,
-            Collections.singletonList(
-                new Protocol(
-                    "roundrobin",
-                    new byte[0]
-                )
-            )
+            protocols
         );
 
         group.transitionTo(PREPARING_REBALANCE);
@@ -471,6 +505,11 @@ public class GenericGroupTest {
 
     @Test
     public void testUpdateMember() {
+        JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestProtocolCollection();
+        protocols.add(new JoinGroupRequestProtocol()
+            .setName("roundrobin")
+            .setMetadata(new byte[0]));
+
         GenericGroupMember member = new GenericGroupMember(
             memberId,
             Optional.empty(),
@@ -479,26 +518,20 @@ public class GenericGroupTest {
             rebalanceTimeoutMs,
             sessionTimeoutMs,
             protocolType,
-            Collections.singletonList(
-                new Protocol(
-                    "roundrobin",
-                    new byte[0]
-                )
-            )
+            protocols
         );
 
         group.add(member);
 
-        List<Protocol> newProtocols = Arrays.asList(
-            new Protocol(
-                "range",
-                new byte[0]
-            ),
-            new Protocol(
-                "roundrobin",
-                new byte[0]
-            )
-        );
+        JoinGroupRequestProtocolCollection newProtocols = new JoinGroupRequestProtocolCollection();
+        newProtocols.add(new JoinGroupRequestProtocol()
+            .setName("range")
+            .setMetadata(new byte[0]));
+
+        newProtocols.add(new JoinGroupRequestProtocol()
+            .setName("roundrobin")
+            .setMetadata(new byte[0]));
+
         int newRebalanceTimeoutMs = 120000;
         int newSessionTimeoutMs = 20000;
         group.updateMember(member, newProtocols, newRebalanceTimeoutMs, newSessionTimeoutMs, null);
@@ -517,6 +550,11 @@ public class GenericGroupTest {
 
     @Test
     public void testReplaceGroupInstance() throws Exception {
+        JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestProtocolCollection();
+        protocols.add(new JoinGroupRequestProtocol()
+            .setName("roundrobin")
+            .setMetadata(new byte[0]));
+
         GenericGroupMember member = new GenericGroupMember(
             memberId,
             Optional.of(groupInstanceId),
@@ -525,12 +563,7 @@ public class GenericGroupTest {
             rebalanceTimeoutMs,
             sessionTimeoutMs,
             protocolType,
-            Collections.singletonList(
-                new Protocol(
-                    "roundrobin",
-                    new byte[0]
-                )
-            )
+            protocols
         );
 
         CompletableFuture<JoinGroupResponseData> joinGroupFuture = new CompletableFuture<>();
@@ -555,6 +588,11 @@ public class GenericGroupTest {
 
     @Test
     public void testCompleteJoinFuture() throws Exception {
+        JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestProtocolCollection();
+        protocols.add(new JoinGroupRequestProtocol()
+            .setName("roundrobin")
+            .setMetadata(new byte[0]));
+
         GenericGroupMember member = new GenericGroupMember(
             memberId,
             Optional.empty(),
@@ -563,12 +601,7 @@ public class GenericGroupTest {
             rebalanceTimeoutMs,
             sessionTimeoutMs,
             protocolType,
-            Collections.singletonList(
-                new Protocol(
-                    "roundrobin",
-                    new byte[0]
-                )
-            )
+            protocols
         );
 
         CompletableFuture<JoinGroupResponseData> joinGroupFuture = new CompletableFuture<>();
@@ -589,6 +622,11 @@ public class GenericGroupTest {
 
     @Test
     public void testNotCompleteJoinFuture() {
+        JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestProtocolCollection();
+        protocols.add(new JoinGroupRequestProtocol()
+            .setName("roundrobin")
+            .setMetadata(new byte[0]));
+
         GenericGroupMember member = new GenericGroupMember(
             memberId,
             Optional.empty(),
@@ -597,12 +635,7 @@ public class GenericGroupTest {
             rebalanceTimeoutMs,
             sessionTimeoutMs,
             protocolType,
-            Collections.singletonList(
-                new Protocol(
-                    "roundrobin",
-                    new byte[0]
-                )
-            )
+            protocols
         );
 
         group.add(member);
@@ -619,6 +652,11 @@ public class GenericGroupTest {
 
     @Test
     public void testCompleteSyncFuture() throws Exception {
+        JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestProtocolCollection();
+        protocols.add(new JoinGroupRequestProtocol()
+            .setName("roundrobin")
+            .setMetadata(new byte[0]));
+
         GenericGroupMember member = new GenericGroupMember(
             memberId,
             Optional.empty(),
@@ -627,12 +665,7 @@ public class GenericGroupTest {
             rebalanceTimeoutMs,
             sessionTimeoutMs,
             protocolType,
-            Collections.singletonList(
-                new Protocol(
-                    "roundrobin",
-                    new byte[0]
-                )
-            )
+            protocols
         );
 
         group.add(member);
@@ -650,6 +683,11 @@ public class GenericGroupTest {
 
     @Test
     public void testNotCompleteSyncFuture() {
+        JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestProtocolCollection();
+        protocols.add(new JoinGroupRequestProtocol()
+            .setName("roundrobin")
+            .setMetadata(new byte[0]));
+
         GenericGroupMember member = new GenericGroupMember(
             memberId,
             Optional.empty(),
@@ -658,12 +696,7 @@ public class GenericGroupTest {
             rebalanceTimeoutMs,
             sessionTimeoutMs,
             protocolType,
-            Collections.singletonList(
-                new Protocol(
-                    "roundrobin",
-                    new byte[0]
-                )
-            )
+            protocols
         );
 
         group.add(member);
@@ -677,6 +710,11 @@ public class GenericGroupTest {
 
     @Test
     public void testCannotAddPendingMemberIfStable() {
+        JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestProtocolCollection();
+        protocols.add(new JoinGroupRequestProtocol()
+            .setName("roundrobin")
+            .setMetadata(new byte[0]));
+
         GenericGroupMember member = new GenericGroupMember(
             memberId,
             Optional.empty(),
@@ -685,12 +723,7 @@ public class GenericGroupTest {
             rebalanceTimeoutMs,
             sessionTimeoutMs,
             protocolType,
-            Collections.singletonList(
-                new Protocol(
-                    "roundrobin",
-                    new byte[0]
-                )
-            )
+            protocols
         );
 
         group.add(member);
@@ -699,6 +732,11 @@ public class GenericGroupTest {
 
     @Test
     public void testRemovalFromPendingAfterMemberIsStable() {
+        JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestProtocolCollection();
+        protocols.add(new JoinGroupRequestProtocol()
+            .setName("roundrobin")
+            .setMetadata(new byte[0]));
+
         group.addPendingMember(memberId);
         assertFalse(group.hasMemberId(memberId));
         assertTrue(group.isPendingMember(memberId));
@@ -711,12 +749,7 @@ public class GenericGroupTest {
             rebalanceTimeoutMs,
             sessionTimeoutMs,
             protocolType,
-            Collections.singletonList(
-                new Protocol(
-                    "roundrobin",
-                    new byte[0]
-                )
-            )
+            protocols
         );
 
         group.add(member);
@@ -737,6 +770,11 @@ public class GenericGroupTest {
 
     @Test
     public void testCannotAddStaticMemberIfAlreadyPresent() {
+        JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestProtocolCollection();
+        protocols.add(new JoinGroupRequestProtocol()
+            .setName("roundrobin")
+            .setMetadata(new byte[0]));
+
         GenericGroupMember member = new GenericGroupMember(
             memberId,
             Optional.of(groupInstanceId),
@@ -745,19 +783,14 @@ public class GenericGroupTest {
             rebalanceTimeoutMs,
             sessionTimeoutMs,
             protocolType,
-            Collections.singletonList(
-                new Protocol(
-                    "roundrobin",
-                    new byte[0]
-                )
-            )
+            protocols
         );
-        
+
         group.add(member);
         assertTrue(group.hasMemberId(memberId));
         assertTrue(group.hasStaticMember(groupInstanceId));
 
-        // We aren ot permitted to add the member again if it is already present
+        // We are not permitted to add the member again if it is already present
         assertThrows(IllegalStateException.class, () -> group.add(member));
     }
 
@@ -775,6 +808,11 @@ public class GenericGroupTest {
 
     @Test
     public void testCanAddAndRemovePendingSyncMember() {
+        JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestProtocolCollection();
+        protocols.add(new JoinGroupRequestProtocol()
+            .setName("roundrobin")
+            .setMetadata(new byte[0]));
+
         GenericGroupMember member = new GenericGroupMember(
             memberId,
             Optional.empty(),
@@ -783,12 +821,7 @@ public class GenericGroupTest {
             rebalanceTimeoutMs,
             sessionTimeoutMs,
             protocolType,
-            Collections.singletonList(
-                new Protocol(
-                    "roundrobin",
-                    new byte[0]
-                )
-            )
+            protocols
         );
         
         group.add(member);
@@ -800,6 +833,11 @@ public class GenericGroupTest {
 
     @Test
     public void testRemovalFromPendingSyncWhenMemberIsRemoved() {
+        JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestProtocolCollection();
+        protocols.add(new JoinGroupRequestProtocol()
+            .setName("roundrobin")
+            .setMetadata(new byte[0]));
+
         GenericGroupMember member = new GenericGroupMember(
             memberId,
             Optional.of(groupInstanceId),
@@ -808,12 +846,7 @@ public class GenericGroupTest {
             rebalanceTimeoutMs,
             sessionTimeoutMs,
             protocolType,
-            Collections.singletonList(
-                new Protocol(
-                    "roundrobin",
-                    new byte[0]
-                )
-            )
+            protocols
         );
 
         group.add(member);
@@ -825,6 +858,11 @@ public class GenericGroupTest {
 
     @Test
     public void testNewGenerationClearsPendingSyncMembers() {
+        JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestProtocolCollection();
+        protocols.add(new JoinGroupRequestProtocol()
+            .setName("roundrobin")
+            .setMetadata(new byte[0]));
+
         GenericGroupMember member = new GenericGroupMember(
             memberId,
             Optional.empty(),
@@ -833,12 +871,7 @@ public class GenericGroupTest {
             rebalanceTimeoutMs,
             sessionTimeoutMs,
             protocolType,
-            Collections.singletonList(
-                new Protocol(
-                    "roundrobin",
-                    new byte[0]
-                )
-            )
+            protocols
         );
 
         group.add(member);
@@ -851,6 +884,11 @@ public class GenericGroupTest {
 
     @Test
     public void testElectNewJoinedLeader() {
+        JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestProtocolCollection();
+        protocols.add(new JoinGroupRequestProtocol()
+            .setName("roundrobin")
+            .setMetadata(new byte[0]));
+
         GenericGroupMember leader = new GenericGroupMember(
             memberId,
             Optional.empty(),
@@ -859,12 +897,7 @@ public class GenericGroupTest {
             rebalanceTimeoutMs,
             sessionTimeoutMs,
             protocolType,
-            Collections.singletonList(
-                new Protocol(
-                    "roundrobin",
-                    new byte[0]
-                )
-            )
+            protocols
         );
 
         group.add(leader);
@@ -879,12 +912,7 @@ public class GenericGroupTest {
             rebalanceTimeoutMs,
             sessionTimeoutMs,
             protocolType,
-            Collections.singletonList(
-                new Protocol(
-                    "roundrobin",
-                    new byte[0]
-                )
-            )
+            protocols
         );
         group.add(newLeader, new CompletableFuture<>());
 
@@ -896,12 +924,7 @@ public class GenericGroupTest {
             rebalanceTimeoutMs,
             sessionTimeoutMs,
             protocolType,
-            Collections.singletonList(
-                new Protocol(
-                    "roundrobin",
-                    new byte[0]
-                )
-            )
+            protocols
         );
         group.add(newMember);
 
@@ -911,6 +934,11 @@ public class GenericGroupTest {
 
     @Test
     public void testMaybeElectNewJoinedLeaderChooseExisting() {
+        JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestProtocolCollection();
+        protocols.add(new JoinGroupRequestProtocol()
+            .setName("roundrobin")
+            .setMetadata(new byte[0]));
+
         GenericGroupMember leader = new GenericGroupMember(
             memberId,
             Optional.empty(),
@@ -919,12 +947,7 @@ public class GenericGroupTest {
             rebalanceTimeoutMs,
             sessionTimeoutMs,
             protocolType,
-            Collections.singletonList(
-                new Protocol(
-                    "roundrobin",
-                    new byte[0]
-                )
-            )
+            protocols
         );
 
         group.add(leader, new CompletableFuture<>());
@@ -939,17 +962,278 @@ public class GenericGroupTest {
             rebalanceTimeoutMs,
             sessionTimeoutMs,
             protocolType,
-            Collections.singletonList(
-                new Protocol(
-                    "roundrobin",
-                    new byte[0]
-                )
-            )
+            protocols
         );
         group.add(newMember);
 
         assertTrue(group.maybeElectNewJoinedLeader());
         assertTrue(group.isLeader(memberId));
+    }
+
+    @Test
+    public void testValidateOffsetCommit() {
+        // A call from the admin client without any parameters should pass.
+        group.validateOffsetCommit("", "", -1);
+
+        // Add a member.
+        group.add(new GenericGroupMember(
+            "member-id",
+            Optional.of("instance-id"),
+            "",
+            "",
+            100,
+            100,
+            "consumer",
+            new JoinGroupRequestProtocolCollection(Collections.singletonList(
+                new JoinGroupRequestProtocol()
+                    .setName("roundrobin")
+                    .setMetadata(new byte[0])).iterator())
+        ));
+
+        group.transitionTo(PREPARING_REBALANCE);
+        group.initNextGeneration();
+
+        // No parameters and the group is not empty.
+        assertThrows(UnknownMemberIdException.class,
+            () -> group.validateOffsetCommit("", "", -1));
+
+        // The member id does not exist.
+        assertThrows(UnknownMemberIdException.class,
+            () -> group.validateOffsetCommit("unknown", "unknown", -1));
+
+        // The instance id does not exist.
+        assertThrows(UnknownMemberIdException.class,
+            () -> group.validateOffsetCommit("member-id", "unknown", -1));
+
+        // The generation id is invalid.
+        assertThrows(IllegalGenerationException.class,
+            () -> group.validateOffsetCommit("member-id", "instance-id", 0));
+
+        // Group is in prepare rebalance state.
+        assertThrows(RebalanceInProgressException.class,
+            () -> group.validateOffsetCommit("member-id", "instance-id", 1));
+
+        // Group transitions to stable.
+        group.transitionTo(STABLE);
+
+        // This should work.
+        group.validateOffsetCommit("member-id", "instance-id", 1);
+
+        // Replace static member.
+        group.replaceStaticMember("instance-id", "member-id", "new-member-id");
+
+        // The old instance id should be fenced.
+        assertThrows(FencedInstanceIdException.class,
+            () -> group.validateOffsetCommit("member-id", "instance-id", 1));
+
+        // Remove member and transitions to dead.
+        group.remove("new-instance-id");
+        group.transitionTo(DEAD);
+
+        // This should fail with CoordinatorNotAvailableException.
+        assertThrows(CoordinatorNotAvailableException.class,
+            () -> group.validateOffsetCommit("member-id", "new-instance-id", 1));
+    }
+
+    @Test
+    public void testValidateOffsetDelete() {
+        assertFalse(group.usesConsumerGroupProtocol());
+        group.transitionTo(PREPARING_REBALANCE);
+        assertThrows(GroupNotEmptyException.class, group::validateOffsetDelete);
+        group.transitionTo(COMPLETING_REBALANCE);
+        assertThrows(GroupNotEmptyException.class, group::validateOffsetDelete);
+        group.transitionTo(STABLE);
+        assertThrows(GroupNotEmptyException.class, group::validateOffsetDelete);
+
+        JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestProtocolCollection();
+        protocols.add(new JoinGroupRequestProtocol()
+            .setName("roundrobin")
+            .setMetadata(new byte[0]));
+        GenericGroupMember member = new GenericGroupMember(
+            memberId,
+            Optional.of(groupInstanceId),
+            clientId,
+            clientHost,
+            rebalanceTimeoutMs,
+            sessionTimeoutMs,
+            protocolType,
+            protocols
+        );
+        group.add(member);
+
+        assertTrue(group.usesConsumerGroupProtocol());
+        group.transitionTo(PREPARING_REBALANCE);
+        assertDoesNotThrow(group::validateOffsetDelete);
+        group.transitionTo(COMPLETING_REBALANCE);
+        assertDoesNotThrow(group::validateOffsetDelete);
+        group.transitionTo(STABLE);
+        assertDoesNotThrow(group::validateOffsetDelete);
+
+        group.transitionTo(PREPARING_REBALANCE);
+        group.transitionTo(EMPTY);
+        assertDoesNotThrow(group::validateOffsetDelete);
+        group.transitionTo(DEAD);
+        assertThrows(GroupIdNotFoundException.class, group::validateOffsetDelete);
+    }
+
+    @Test
+    public void testValidateDeleteGroup() {
+        group.transitionTo(PREPARING_REBALANCE);
+        assertThrows(GroupNotEmptyException.class, group::validateDeleteGroup);
+        group.transitionTo(COMPLETING_REBALANCE);
+        assertThrows(GroupNotEmptyException.class, group::validateDeleteGroup);
+        group.transitionTo(STABLE);
+        assertThrows(GroupNotEmptyException.class, group::validateDeleteGroup);
+        group.transitionTo(PREPARING_REBALANCE);
+        group.transitionTo(EMPTY);
+        assertDoesNotThrow(group::validateDeleteGroup);
+        group.transitionTo(DEAD);
+        assertThrows(GroupIdNotFoundException.class, group::validateDeleteGroup);
+    }
+
+    @Test
+    public void testOffsetExpirationCondition() {
+        long currentTimestamp = 30000L;
+        long commitTimestamp = 20000L;
+        long offsetsRetentionMs = 10000L;
+        OffsetAndMetadata offsetAndMetadata = new OffsetAndMetadata(15000L, OptionalInt.empty(), "", commitTimestamp, OptionalLong.empty());
+        MockTime time = new MockTime();
+        long currentStateTimestamp = time.milliseconds();
+        GenericGroup group = new GenericGroup(new LogContext(), "groupId", EMPTY, time);
+
+        // 1. Test no protocol type. Simple consumer case, Base timestamp based off of last commit timestamp.
+        Optional<OffsetExpirationCondition> offsetExpirationCondition = group.offsetExpirationCondition();
+        assertTrue(offsetExpirationCondition.isPresent());
+
+        OffsetExpirationConditionImpl condition = (OffsetExpirationConditionImpl) offsetExpirationCondition.get();
+        assertEquals(commitTimestamp, condition.baseTimestamp().apply(offsetAndMetadata));
+        assertTrue(condition.isOffsetExpired(offsetAndMetadata, currentTimestamp, offsetsRetentionMs));
+
+        // 2. Test non-consumer protocol type + Empty state. Base timestamp based off of current state timestamp.
+        JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestProtocolCollection();
+        protocols.add(new JoinGroupRequestProtocol()
+            .setName("range")
+            .setMetadata(ConsumerProtocol.serializeSubscription(
+                new ConsumerPartitionAssignor.Subscription(Collections.singletonList("topic"))).array()));
+
+        GenericGroupMember memberWithNonConsumerProtocol = new GenericGroupMember(
+            "memberWithNonConsumerProtocol",
+            Optional.empty(),
+            clientId,
+            clientHost,
+            rebalanceTimeoutMs,
+            sessionTimeoutMs,
+            "My Protocol",
+            protocols
+        );
+
+        group.add(memberWithNonConsumerProtocol);
+        assertEquals("My Protocol", group.protocolType().get());
+
+        offsetExpirationCondition = group.offsetExpirationCondition();
+        assertTrue(offsetExpirationCondition.isPresent());
+
+        condition = (OffsetExpirationConditionImpl) offsetExpirationCondition.get();
+        assertEquals(currentStateTimestamp, condition.baseTimestamp().apply(offsetAndMetadata));
+        assertTrue(condition.isOffsetExpired(offsetAndMetadata, currentStateTimestamp + offsetsRetentionMs, offsetsRetentionMs));
+
+        // 3. Test non-consumer protocol type + non-Empty state. Do not expire any offsets.
+        group.transitionTo(PREPARING_REBALANCE);
+        offsetExpirationCondition = group.offsetExpirationCondition();
+        assertFalse(offsetExpirationCondition.isPresent());
+
+        // 4. Test consumer protocol type + subscribed topics + Stable state. Base timestamp based off of last commit timestamp.
+        group.remove("memberWithNonConsumerProtocol");
+        GenericGroupMember memberWithConsumerProtocol = new GenericGroupMember(
+            "memberWithConsumerProtocol",
+            Optional.empty(),
+            clientId,
+            clientHost,
+            rebalanceTimeoutMs,
+            sessionTimeoutMs,
+            "consumer",
+            protocols
+        );
+        group.add(memberWithConsumerProtocol);
+        group.initNextGeneration();
+        group.transitionTo(STABLE);
+        assertTrue(group.subscribedTopics().get().contains("topic"));
+
+        offsetExpirationCondition = group.offsetExpirationCondition();
+        assertTrue(offsetExpirationCondition.isPresent());
+
+        condition = (OffsetExpirationConditionImpl) offsetExpirationCondition.get();
+        assertEquals(commitTimestamp, condition.baseTimestamp().apply(offsetAndMetadata));
+        assertTrue(condition.isOffsetExpired(offsetAndMetadata, currentTimestamp, offsetsRetentionMs));
+
+        // 5. Test consumer protocol type + subscribed topics + non-Stable state. Do not expire any offsets.
+        group.transitionTo(PREPARING_REBALANCE);
+        offsetExpirationCondition = group.offsetExpirationCondition();
+        assertFalse(offsetExpirationCondition.isPresent());
+    }
+
+    @Test
+    public void testIsSubscribedToTopic() {
+        GenericGroup group = new GenericGroup(new LogContext(), "groupId", EMPTY, Time.SYSTEM);
+
+        // 1. group has no protocol type => not subscribed
+        assertFalse(group.isSubscribedToTopic("topic"));
+
+        // 2. group does not use consumer group protocol type => not subscribed
+        JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestProtocolCollection();
+        protocols.add(new JoinGroupRequestProtocol()
+            .setName("range")
+            .setMetadata(ConsumerProtocol.serializeSubscription(
+                new ConsumerPartitionAssignor.Subscription(Collections.singletonList("topic"))).array()));
+
+        GenericGroupMember memberWithNonConsumerProtocol = new GenericGroupMember(
+            "memberWithNonConsumerProtocol",
+            Optional.empty(),
+            clientId,
+            clientHost,
+            rebalanceTimeoutMs,
+            sessionTimeoutMs,
+            "My Protocol",
+            protocols
+        );
+
+        group.add(memberWithNonConsumerProtocol);
+        group.transitionTo(PREPARING_REBALANCE);
+        group.initNextGeneration();
+        assertTrue(group.isInState(COMPLETING_REBALANCE));
+        assertEquals(Optional.empty(), group.computeSubscribedTopics());
+        assertFalse(group.isSubscribedToTopic("topic"));
+
+        // 3. group uses consumer group protocol type but empty members => not subscribed
+        group.remove("memberWithNonConsumerProtocol");
+        GenericGroupMember memberWithConsumerProtocol = new GenericGroupMember(
+            "memberWithConsumerProtocol",
+            Optional.empty(),
+            clientId,
+            clientHost,
+            rebalanceTimeoutMs,
+            sessionTimeoutMs,
+            "consumer",
+            protocols
+        );
+
+        group.add(memberWithConsumerProtocol);
+        group.remove("memberWithConsumerProtocol");
+        group.transitionTo(PREPARING_REBALANCE);
+        group.initNextGeneration();
+        assertTrue(group.isInState(EMPTY));
+        assertEquals(Optional.of(Collections.emptySet()), group.computeSubscribedTopics());
+        assertTrue(group.usesConsumerGroupProtocol());
+        assertFalse(group.isSubscribedToTopic("topic"));
+
+        // 4. group uses consumer group protocol type with member subscription => subscribed
+        group.add(memberWithConsumerProtocol);
+        group.transitionTo(PREPARING_REBALANCE);
+        group.initNextGeneration();
+        assertTrue(group.isInState(COMPLETING_REBALANCE));
+        assertEquals(Optional.of(Collections.singleton("topic")), group.computeSubscribedTopics());
+        assertTrue(group.usesConsumerGroupProtocol());
+        assertTrue(group.isSubscribedToTopic("topic"));
     }
 
     private void assertState(GenericGroup group, GenericGroupState targetState) {

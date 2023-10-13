@@ -126,7 +126,7 @@ public class FilteredCacheIteratorTest {
     }
 
     @Test
-    public void shouldThrowUnsupportedOperationExeceptionOnRemove() {
+    public void shouldThrowUnsupportedOperationExceptionOnRemove() {
         assertThrows(UnsupportedOperationException.class, () -> allIterator.remove());
     }
 

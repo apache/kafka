@@ -18,7 +18,14 @@ package org.apache.kafka.server.common;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ProducerIdsBlockTest {
 
@@ -41,6 +48,24 @@ class ProducerIdsBlockTest {
         assertEquals(firstId + blockSize, block.nextBlockFirstId());
         assertEquals(blockSize, block.size());
         assertEquals(brokerId, block.assignedBrokerId());
+    }
+
+    @Test
+    public void testClaimNextId() throws Exception {
+        for (int i = 0; i < 50; i++) {
+            ProducerIdsBlock block = new ProducerIdsBlock(0, 1, 1);
+            CountDownLatch latch = new CountDownLatch(1);
+            AtomicLong counter = new AtomicLong(0);
+            CompletableFuture.runAsync(() -> {
+                Optional<Long> pid = block.claimNextId();
+                counter.addAndGet(pid.orElse(0L));
+                latch.countDown();
+            });
+            Optional<Long> pid = block.claimNextId();
+            counter.addAndGet(pid.orElse(0L));
+            assertTrue(latch.await(1, TimeUnit.SECONDS));
+            assertEquals(1, counter.get());
+        }
     }
 
 }

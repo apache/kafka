@@ -18,6 +18,7 @@ package org.apache.kafka.connect.runtime.rest.entities;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import org.apache.kafka.connect.runtime.rest.resources.ConnectorsResource;
 
 import java.util.HashMap;
 import java.util.List;
@@ -45,6 +46,9 @@ import java.util.Objects;
  *       ]
  *     }
  * </pre>
+ *
+ * @see ConnectorsResource#getOffsets
+ * @see ConnectorsResource#alterConnectorOffsets
  */
 public class ConnectorOffsets {
     private final List<ConnectorOffset> offsets;

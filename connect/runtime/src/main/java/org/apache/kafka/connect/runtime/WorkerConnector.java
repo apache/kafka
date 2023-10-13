@@ -381,15 +381,15 @@ public class WorkerConnector implements Runnable {
         }
     }
 
-    public boolean isSinkConnector() {
+    public final boolean isSinkConnector() {
         return ConnectUtils.isSinkConnector(connector);
     }
 
-    public boolean isSourceConnector() {
+    public final boolean isSourceConnector() {
         return ConnectUtils.isSourceConnector(connector);
     }
 
-    protected String connectorType() {
+    protected final String connectorType() {
         if (isSinkConnector())
             return "sink";
         if (isSourceConnector())

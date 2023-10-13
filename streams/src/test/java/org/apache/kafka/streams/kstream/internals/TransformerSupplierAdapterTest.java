@@ -53,7 +53,7 @@ public class TransformerSupplierAdapterTest {
     final String value = "World";
 
     @Test
-    public void shouldCallInitOfAdapteeTransformer() {
+    public void shouldCallInitOfAdaptedTransformer() {
         when(transformerSupplier.get()).thenReturn(transformer);
 
         final TransformerSupplierAdapter<String, String, Integer, Integer> adapter =
@@ -65,7 +65,7 @@ public class TransformerSupplierAdapterTest {
     }
 
     @Test
-    public void shouldCallCloseOfAdapteeTransformer() {
+    public void shouldCallCloseOfAdaptedTransformer() {
         when(transformerSupplier.get()).thenReturn(transformer);
 
         final TransformerSupplierAdapter<String, String, Integer, Integer> adapter =
@@ -77,7 +77,7 @@ public class TransformerSupplierAdapterTest {
     }
 
     @Test
-    public void shouldCallStoresOfAdapteeTransformerSupplier() {
+    public void shouldCallStoresOfAdaptedTransformerSupplier() {
         when(transformerSupplier.stores()).thenReturn(stores);
 
         final TransformerSupplierAdapter<String, String, Integer, Integer> adapter =
@@ -86,7 +86,7 @@ public class TransformerSupplierAdapterTest {
     }
 
     @Test
-    public void shouldCallTransformOfAdapteeTransformerAndReturnSingletonIterable() {
+    public void shouldCallTransformOfAdaptedTransformerAndReturnSingletonIterable() {
         when(transformerSupplier.get()).thenReturn(transformer);
         when(transformer.transform(key, value)).thenReturn(KeyValue.pair(0, 1));
 
@@ -101,7 +101,7 @@ public class TransformerSupplierAdapterTest {
     }
 
     @Test
-    public void shouldCallTransformOfAdapteeTransformerAndReturnEmptyIterable() {
+    public void shouldCallTransformOfAdaptedTransformerAndReturnEmptyIterable() {
         when(transformerSupplier.get()).thenReturn(transformer);
         when(transformer.transform(key, value)).thenReturn(null);
 

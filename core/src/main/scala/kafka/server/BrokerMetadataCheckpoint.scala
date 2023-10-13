@@ -34,6 +34,7 @@ object RawMetaProperties {
   val ClusterIdKey = "cluster.id"
   val BrokerIdKey = "broker.id"
   val NodeIdKey = "node.id"
+  val DirectoryIdKey = "directory.id"
   val VersionKey = "version"
 }
 
@@ -63,19 +64,20 @@ class RawMetaProperties(val props: Properties = new Properties()) {
     props.setProperty(NodeIdKey, id.toString)
   }
 
+  def directoryId: Option[String] = {
+    Option(props.getProperty(DirectoryIdKey))
+  }
+
+  def directoryId_=(id: String): Unit = {
+    props.setProperty(DirectoryIdKey, id)
+  }
+
   def version: Int = {
     intValue(VersionKey).getOrElse(0)
   }
 
   def version_=(ver: Int): Unit = {
     props.setProperty(VersionKey, ver.toString)
-  }
-
-  def requireVersion(expectedVersion: Int): Unit = {
-    if (version != expectedVersion) {
-      throw new RuntimeException(s"Expected version $expectedVersion, but got "+
-        s"version $version")
-    }
   }
 
   private def intValue(key: String): Option[Int] = {
@@ -141,11 +143,21 @@ case class MetaProperties(
   clusterId: String,
   nodeId: Int,
 ) {
-  def toProperties: Properties = {
+  private def toRawMetaProperties: RawMetaProperties = {
     val properties = new RawMetaProperties()
     properties.version = 1
     properties.clusterId = clusterId
     properties.nodeId = nodeId
+    properties
+  }
+
+  def toProperties: Properties = {
+    toRawMetaProperties.props
+  }
+
+  def toPropertiesWithDirectoryId(directoryId: String): Properties = {
+    val properties = toRawMetaProperties
+    properties.directoryId = directoryId
     properties.props
   }
 
@@ -166,7 +178,7 @@ object BrokerMetadataCheckpoint extends Logging {
     val offlineDirs = mutable.ArrayBuffer.empty[String]
 
     for (logDir <- logDirs) {
-      val brokerCheckpointFile = new File(logDir, "meta.properties")
+      val brokerCheckpointFile = new File(logDir, KafkaServer.brokerMetaPropsFile)
       val brokerCheckpoint = new BrokerMetadataCheckpoint(brokerCheckpointFile)
 
       try {
