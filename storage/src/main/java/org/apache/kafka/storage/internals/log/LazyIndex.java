@@ -214,6 +214,7 @@ public class LazyIndex<T extends AbstractIndex> implements Closeable {
         }
     }
 
+    @Override
     public void close() throws IOException {
         lock.lock();
         try {

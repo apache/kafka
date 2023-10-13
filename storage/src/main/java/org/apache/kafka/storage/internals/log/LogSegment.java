@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.storage.internals.log;
 
+import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -59,7 +60,7 @@ import static java.util.Arrays.asList;
  *
  * This class is not thread-safe.
  */
-public class LogSegment {
+public class LogSegment implements Closeable {
     private static final Logger LOGGER = LoggerFactory.getLogger(LogSegment.class);
     private static final Timer LOG_FLUSH_TIMER;
 
@@ -648,7 +649,7 @@ public class LogSegment {
      * Update the directory reference for the log and indices in this segment. This would typically be called after a
      * directory is renamed.
      */
-    public void updateParentDir(File dir) {
+    void updateParentDir(File dir) {
         log.updateParentDir(dir);
         lazyOffsetIndex.updateParentDir(dir);
         lazyTimeIndex.updateParentDir(dir);
@@ -718,7 +719,7 @@ public class LogSegment {
     /**
      * @return the first batch timestamp if the timestamp is available. Otherwise return Long.MaxValue
      */
-    public long getFirstBatchTimestamp() {
+    long getFirstBatchTimestamp() {
         loadFirstBatchTimestamp();
         OptionalLong timestamp = rollingBasedTimestamp;
         if (timestamp.isPresent() && timestamp.getAsLong() >= 0)
@@ -759,6 +760,7 @@ public class LogSegment {
     /**
      * Close this log segment
      */
+    @Override
     public void close() throws IOException {
         if (maxTimestampAndOffsetSoFar != TimestampOffset.UNKNOWN)
             Utils.swallow(LOGGER, Level.WARN, "maybeAppend", () -> timeIndex().maybeAppend(maxTimestampSoFar(), offsetOfMaxTimestampSoFar(), true));
@@ -771,7 +773,7 @@ public class LogSegment {
     /**
      * Close file handlers used by the log segment but don't write to disk. This is used when the disk may have failed
      */
-    public void closeHandlers() {
+    void closeHandlers() {
         Utils.swallow(LOGGER, Level.WARN, "offsetIndex", () -> lazyOffsetIndex.closeHandler());
         Utils.swallow(LOGGER, Level.WARN, "timeIndex", () -> lazyTimeIndex.closeHandler());
         Utils.swallow(LOGGER, Level.WARN, "log", () -> log.closeHandlers());
