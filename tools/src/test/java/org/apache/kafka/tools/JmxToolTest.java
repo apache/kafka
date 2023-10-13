@@ -337,6 +337,19 @@ public class JmxToolTest {
         assertTrue(validDateFormat(dateFormat, csv.get("time")));
     }
 
+    @Test
+    public void unknownObjectName() {
+        String[] args = new String[]{
+            "--jmx-url", jmxUrl,
+            "--object-name", "kafka.server:type=DummyMetrics,name=MessagesInPerSec",
+            "--wait"
+        };
+
+        String err = executeAndGetErr(args);
+        assertCommandFailure();
+        assertTrue(err.contains("Could not find all requested object names after 10000 ms"));
+    }
+
     private static int findRandomOpenPortOnAllLocalInterfaces() throws Exception {
         try (ServerSocket socket = new ServerSocket(0)) {
             return socket.getLocalPort();

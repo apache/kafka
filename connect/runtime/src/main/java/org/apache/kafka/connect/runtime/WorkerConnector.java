@@ -20,8 +20,8 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.ConnectorContext;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
-import org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader;
 import org.apache.kafka.connect.runtime.isolation.IsolatedConnector;
+import org.apache.kafka.connect.runtime.isolation.PluginDesc;
 import org.apache.kafka.connect.runtime.isolation.PluginType;
 import org.apache.kafka.connect.sink.SinkConnectorContext;
 import org.apache.kafka.connect.source.SourceConnectorContext;
@@ -390,7 +390,7 @@ public class WorkerConnector implements Runnable {
         return connector.type() == PluginType.SOURCE;
     }
 
-    protected String connectorType() {
+    protected final String connectorType() {
         if (isSinkConnector())
             return "sink";
         if (isSourceConnector())
@@ -441,7 +441,7 @@ public class WorkerConnector implements Runnable {
             try {
                 version = connector.version();
             } catch (Exception e) {
-                version = DelegatingClassLoader.UNDEFINED_VERSION;
+                version = PluginDesc.UNDEFINED_VERSION;
             }
             metricGroup.addImmutableValueMetric(registry.connectorVersion, version);
             metricGroup.addValueMetric(registry.connectorStatus, now -> state.toString().toLowerCase(Locale.getDefault()));

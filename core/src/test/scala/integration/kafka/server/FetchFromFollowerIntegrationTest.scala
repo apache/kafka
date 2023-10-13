@@ -205,7 +205,8 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
         executor.submit(() => {
           val expectedAssignment = assignments(i)
           TestUtils.pollUntilTrue(consumer, () => consumer.assignment() == expectedAssignment.asJava,
-            s"Timed out while awaiting expected assignment $expectedAssignment. The current assignment is ${consumer.assignment()}")
+            s"Timed out while awaiting expected assignment $expectedAssignment. The current assignment is ${consumer.assignment()}",
+            waitTimeMs = 30000)
         }, 0)
       }
       assignmentFutures.foreach(future => assertEquals(0, future.get(30, TimeUnit.SECONDS)))
@@ -247,7 +248,7 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
         val newAssignment = new NewPartitionReassignment(Collections.singletonList(p))
         reassignments.put(new TopicPartition(topicWithSingleRackPartitions, p), util.Optional.of(newAssignment))
       }
-      admin.alterPartitionReassignments(reassignments).all().get(15, TimeUnit.SECONDS)
+      admin.alterPartitionReassignments(reassignments).all().get(30, TimeUnit.SECONDS)
       verifyAssignments(partitionList, topicWithAllPartitionsOnAllRacks, topicWithSingleRackPartitions)
 
     } finally {

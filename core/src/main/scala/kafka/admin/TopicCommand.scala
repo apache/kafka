@@ -20,7 +20,6 @@ package kafka.admin
 import java.util
 import java.util.{Collections, Optional, Properties}
 import joptsimple._
-import kafka.common.AdminCommandFailedException
 import kafka.utils._
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.CreatePartitionsOptions
@@ -33,8 +32,10 @@ import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
 import org.apache.kafka.common.errors.{ClusterAuthorizationException, TopicExistsException, UnsupportedVersionException}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.server.common.{AdminCommandFailedException, AdminOperationException}
 import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
 import org.apache.kafka.storage.internals.log.LogConfig
+import org.apache.kafka.server.util.TopicFilter.IncludeList
 
 import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
@@ -419,7 +420,7 @@ object TopicCommand extends Logging {
 
   private def doGetTopics(allTopics: Seq[String], topicIncludeList: Option[String], excludeInternalTopics: Boolean): Seq[String] = {
     if (topicIncludeList.isDefined) {
-      val topicsFilter = IncludeList(topicIncludeList.get)
+      val topicsFilter = new IncludeList(topicIncludeList.get)
       allTopics.filter(topicsFilter.isTopicAllowed(_, excludeInternalTopics))
     } else
     allTopics.filterNot(Topic.isInternal(_) && excludeInternalTopics)
@@ -462,7 +463,7 @@ object TopicCommand extends Logging {
 
   private def getReplicationFactor(tpi: TopicPartitionInfo, reassignment: Option[PartitionReassignment]): Int = {
     // It is possible for a reassignment to complete between the time we have fetched its state and the time
-    // we fetch partition metadata. In ths case, we ignore the reassignment when determining replication factor.
+    // we fetch partition metadata. In this case, we ignore the reassignment when determining replication factor.
     def isReassignmentInProgress(ra: PartitionReassignment): Boolean = {
       // Reassignment is still in progress as long as the removing and adding replicas are still present
       val allReplicaIds = tpi.replicas.asScala.map(_.id).toSet

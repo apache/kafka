@@ -19,7 +19,6 @@ package org.apache.kafka.connect.runtime;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigTransformer;
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.common.config.SaslConfigs;
@@ -525,7 +524,15 @@ public class AbstractHerderTest {
         config.put(SinkConnectorConfig.TOPICS_CONFIG, "topic1,topic2");
         config.put(SinkConnectorConfig.TOPICS_REGEX_CONFIG, "topic.*");
 
-        assertThrows(ConfigException.class, () -> herder.validateConnectorConfig(config, false));
+        ConfigInfos validation = herder.validateConnectorConfig(config, false);
+
+        ConfigInfo topicsListInfo = findInfo(validation, SinkConnectorConfig.TOPICS_CONFIG);
+        assertNotNull(topicsListInfo);
+        assertEquals(1, topicsListInfo.configValue().errors().size());
+
+        ConfigInfo topicsRegexInfo = findInfo(validation, SinkConnectorConfig.TOPICS_REGEX_CONFIG);
+        assertNotNull(topicsRegexInfo);
+        assertEquals(1, topicsRegexInfo.configValue().errors().size());
 
         verifyValidationIsolation();
     }
@@ -540,7 +547,11 @@ public class AbstractHerderTest {
         config.put(SinkConnectorConfig.TOPICS_CONFIG, "topic1");
         config.put(SinkConnectorConfig.DLQ_TOPIC_NAME_CONFIG, "topic1");
 
-        assertThrows(ConfigException.class, () -> herder.validateConnectorConfig(config, false));
+        ConfigInfos validation = herder.validateConnectorConfig(config, false);
+
+        ConfigInfo topicsListInfo = findInfo(validation, SinkConnectorConfig.TOPICS_CONFIG);
+        assertNotNull(topicsListInfo);
+        assertEquals(1, topicsListInfo.configValue().errors().size());
 
         verifyValidationIsolation();
     }
@@ -555,7 +566,11 @@ public class AbstractHerderTest {
         config.put(SinkConnectorConfig.TOPICS_REGEX_CONFIG, "topic.*");
         config.put(SinkConnectorConfig.DLQ_TOPIC_NAME_CONFIG, "topic1");
 
-        assertThrows(ConfigException.class, () -> herder.validateConnectorConfig(config, false));
+        ConfigInfos validation = herder.validateConnectorConfig(config, false);
+
+        ConfigInfo topicsRegexInfo = findInfo(validation, SinkConnectorConfig.TOPICS_REGEX_CONFIG);
+        assertNotNull(topicsRegexInfo);
+        assertEquals(1, topicsRegexInfo.configValue().errors().size());
 
         verifyValidationIsolation();
     }
@@ -595,7 +610,7 @@ public class AbstractHerderTest {
                 "Transforms: xformB"
         );
         assertEquals(expectedGroups, result.groups());
-        assertEquals(2, result.errorCount());
+        assertEquals(1, result.errorCount());
         Map<String, ConfigInfo> infos = result.values().stream()
                 .collect(Collectors.toMap(info -> info.configKey().name(), Function.identity()));
         assertEquals(26, infos.size());
@@ -652,7 +667,7 @@ public class AbstractHerderTest {
                 "Predicates: predY"
         );
         assertEquals(expectedGroups, result.groups());
-        assertEquals(2, result.errorCount());
+        assertEquals(1, result.errorCount());
         Map<String, ConfigInfo> infos = result.values().stream()
                 .collect(Collectors.toMap(info -> info.configKey().name(), Function.identity()));
         assertEquals(28, infos.size());
@@ -676,12 +691,12 @@ public class AbstractHerderTest {
 
     @SuppressWarnings({"rawtypes", "unchecked"})
     private PluginDesc<Predicate<?>> predicatePluginDesc() {
-        return new PluginDesc(SamplePredicate.class, "1.0", classLoader);
+        return new PluginDesc(SamplePredicate.class, "1.0", PluginType.PREDICATE, classLoader);
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
     private PluginDesc<Transformation<?>> transformationPluginDesc() {
-        return new PluginDesc(SampleTransformation.class, "1.0", classLoader);
+        return new PluginDesc(SampleTransformation.class, "1.0", PluginType.TRANSFORMATION, classLoader);
     }
 
     @Test

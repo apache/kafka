@@ -130,6 +130,7 @@ public final class TopicDelta {
         Set<TopicPartition> deletes = new HashSet<>();
         Map<TopicPartition, LocalReplicaChanges.PartitionInfo> leaders = new HashMap<>();
         Map<TopicPartition, LocalReplicaChanges.PartitionInfo> followers = new HashMap<>();
+        Map<String, Uuid> topicIds = new HashMap<>();
 
         for (Entry<Integer, PartitionRegistration> entry : partitionChanges.entrySet()) {
             if (!Replicas.contains(entry.getValue().replicas, brokerId)) {
@@ -144,6 +145,7 @@ public final class TopicDelta {
                         new TopicPartition(name(), entry.getKey()),
                         new LocalReplicaChanges.PartitionInfo(id(), entry.getValue())
                     );
+                    topicIds.putIfAbsent(name(), id());
                 }
             } else if (
                 entry.getValue().leader != brokerId &&
@@ -155,11 +157,12 @@ public final class TopicDelta {
                         new TopicPartition(name(), entry.getKey()),
                         new LocalReplicaChanges.PartitionInfo(id(), entry.getValue())
                     );
+                    topicIds.putIfAbsent(name(), id());
                 }
             }
         }
 
-        return new LocalReplicaChanges(deletes, leaders, followers);
+        return new LocalReplicaChanges(deletes, leaders, followers, topicIds);
     }
 
     @Override

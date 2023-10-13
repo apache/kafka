@@ -35,8 +35,9 @@ import org.apache.kafka.common.resource.ResourceType._
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourcePatternFilter, ResourceType}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.{Time, SecurityUtils => JSecurityUtils}
+import org.apache.kafka.controller.MockAclMutator
 import org.apache.kafka.metadata.authorizer.StandardAuthorizerTest.AuthorizerTestServerInfo
-import org.apache.kafka.metadata.authorizer.{MockAclMutator, StandardAuthorizer}
+import org.apache.kafka.metadata.authorizer.StandardAuthorizer
 import org.apache.kafka.server.authorizer._
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.{IBP_2_0_IV0, IBP_2_0_IV1}
@@ -515,7 +516,7 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
     }
 
     // Alternate authorizer, Remove all acls that end in 0
-    val concurrentFuctions = acls.map { case (acl, aclId) =>
+    val concurrentFunctions = acls.map { case (acl, aclId) =>
       () => {
         if (aclId % 2 == 0) {
           addAcls(authorizer1, Set(acl), commonResource)
@@ -532,7 +533,7 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
       aclId % 10 != 0
     }.map(_._1).toSet
 
-    TestUtils.assertConcurrent("Should support many concurrent calls", concurrentFuctions, 30 * 1000)
+    TestUtils.assertConcurrent("Should support many concurrent calls", concurrentFunctions, 30 * 1000)
 
     TestUtils.waitAndVerifyAcls(expectedAcls, authorizer1, commonResource)
     TestUtils.waitAndVerifyAcls(expectedAcls, authorizer2, commonResource)
@@ -595,14 +596,14 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
     val acl = new AccessControlEntry(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username).toString, WildcardHost, AclOperation.ALL, ALLOW)
 
     // Alternate authorizer to keep adding and removing ZooKeeper path
-    val concurrentFuctions = (0 to 50).map { _ =>
+    val concurrentFunctions = (0 to 50).map { _ =>
       () => {
         addAcls(authorizer1, Set(acl), resource)
         removeAcls(authorizer2, Set(acl), resource)
       }
     }
 
-    TestUtils.assertConcurrent("Should support many concurrent calls", concurrentFuctions, 30 * 1000)
+    TestUtils.assertConcurrent("Should support many concurrent calls", concurrentFunctions, 30 * 1000)
 
     TestUtils.waitAndVerifyAcls(Set.empty[AccessControlEntry], authorizer1, resource)
     TestUtils.waitAndVerifyAcls(Set.empty[AccessControlEntry], authorizer2, resource)

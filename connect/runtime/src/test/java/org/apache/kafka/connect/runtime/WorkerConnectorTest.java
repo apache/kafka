@@ -505,7 +505,7 @@ public class WorkerConnectorTest {
         IsolatedConnector<?> badConnector = mock(IsolatedConnector.class);
         when(badConnector.version()).thenReturn(VERSION);
         Mockito.<Class<?>>when(badConnector.pluginClass()).thenReturn(SampleSourceConnector.class);
-        when(badConnector.type()).thenReturn(PluginType.UNKNOWN);
+        when(badConnector.type()).thenReturn(PluginType.TRANSFORMATION);
         WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, badConnector, connectorConfig, ctx, metrics, listener, offsetStorageReader, offsetStore, classLoader);
 
         workerConnector.initialize();

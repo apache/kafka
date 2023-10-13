@@ -165,7 +165,7 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
                     // problem:
                     //
                     // Say we have a window size of 5 seconds
-                    //  1. A non-joined record wth time T10 is seen in the left-topic (maxLeftStreamTime: 10)
+                    //  1. A non-joined record with time T10 is seen in the left-topic (maxLeftStreamTime: 10)
                     //     The record is not processed yet, and is added to the outer-join store
                     //  2. A non-joined record with time T2 is seen in the right-topic (maxRightStreamTime: 2)
                     //     The record is not processed yet, and is added to the outer-join store

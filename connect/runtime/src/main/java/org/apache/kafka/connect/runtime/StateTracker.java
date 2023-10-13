@@ -30,16 +30,12 @@ public class StateTracker {
 
     /**
      * Change the current state.
-     * <p>
-     * This method is synchronized to ensure that all state changes are captured correctly and in the same order.
-     * Synchronization is acceptable since it is assumed that state changes will be relatively infrequent.
      *
      * @param newState the current state; may not be null
      * @param now      the current time in milliseconds
      */
-    public synchronized void changeState(State newState, long now) {
-        // JDK8: remove synchronization by using lastState.getAndUpdate(oldState->oldState.newState(newState, now));
-        lastState.set(lastState.get().newState(newState, now));
+    public void changeState(State newState, long now) {
+        lastState.getAndUpdate(oldState -> oldState.newState(newState, now));
     }
 
     /**

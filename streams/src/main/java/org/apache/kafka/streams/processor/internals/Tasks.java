@@ -115,6 +115,11 @@ class Tasks implements TasksRegistry {
     }
 
     @Override
+    public boolean hasPendingTasksToRecycle() {
+        return pendingUpdateActions.values().stream().anyMatch(action -> action.getAction() == Action.RECYCLE);
+    }
+
+    @Override
     public Set<TopicPartition> removePendingTaskToUpdateInputPartitions(final TaskId taskId) {
         if (containsTaskIdWithAction(taskId, Action.UPDATE_INPUT_PARTITIONS)) {
             return pendingUpdateActions.remove(taskId).getInputPartitions();
@@ -175,15 +180,20 @@ class Tasks implements TasksRegistry {
     }
 
     @Override
-    public Set<Task> drainPendingTaskToInit() {
+    public Set<Task> drainPendingTasksToInit() {
         final Set<Task> result = new HashSet<>(pendingTasksToInit);
         pendingTasksToInit.clear();
         return result;
     }
 
     @Override
-    public void addPendingTaskToInit(final Collection<Task> tasks) {
+    public void addPendingTasksToInit(final Collection<Task> tasks) {
         pendingTasksToInit.addAll(tasks);
+    }
+
+    @Override
+    public boolean hasPendingTasksToInit() {
+        return !pendingTasksToInit.isEmpty();
     }
 
     @Override

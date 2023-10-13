@@ -36,18 +36,17 @@ import java.util.concurrent.CompletableFuture;
  * remote.log.metadata.manager.class.name is not configured.
  * </p>
  * <p>
- * <code>remote.log.metadata.manager.class.path</code> property is about the class path of the RemoteLogStorageManager
- * implementation. If specified, the RemoteLogStorageManager implementation and its dependent libraries will be loaded
+ * <code>remote.log.metadata.manager.class.path</code> property is about the class path of the RemoteLogMetadataManager
+ * implementation. If specified, the RemoteLogMetadataManager implementation and its dependent libraries will be loaded
  * by a dedicated classloader which searches this class path before the Kafka broker class path. The syntax of this
  * parameter is same with the standard Java class path string.
  * </p>
  * <p>
  * <code>remote.log.metadata.manager.listener.name</code> property is about listener name of the local broker to which
- * it should get connected if needed by RemoteLogMetadataManager implementation. When this is configured all other
- * required properties can be passed as properties with prefix of 'remote.log.metadata.manager.listener.
+ * it should get connected if needed by RemoteLogMetadataManager implementation.
  * </p>
- * "cluster.id", "broker.id" and all other properties prefixed with "remote.log.metadata." are passed when
- * {@link #configure(Map)} is invoked on this instance.
+ * "cluster.id", "broker.id" and all other properties prefixed with the config: "remote.log.metadata.manager.impl.prefix"
+ * (default value is "rlmm.config.") are passed when {@link #configure(Map)} is invoked on this instance.
  * <p>
  */
 @InterfaceStability.Evolving
@@ -201,4 +200,13 @@ public interface RemoteLogMetadataManager extends Configurable, Closeable {
      * @param partitions topic partitions that have been stopped.
      */
     void onStopPartitions(Set<TopicIdPartition> partitions);
+
+    /**
+     * Returns total size of the log for the given leader epoch in remote storage.
+     *
+     * @param topicIdPartition topic partition for which size needs to be calculated.
+     * @param leaderEpoch Size will only include segments belonging to this epoch.
+     * @return Total size of the log stored in remote storage in bytes.
+     */
+    long remoteLogSize(TopicIdPartition topicIdPartition, int leaderEpoch) throws RemoteStorageException;
 }
