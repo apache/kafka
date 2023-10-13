@@ -103,7 +103,7 @@ versions += [
   gradle: "8.5",
   grgit: "4.1.1",
   httpclient: "4.5.14",
-  jackson: "2.15.2",
+  jackson: "2.15.3",
   jacoco: "0.8.10",
   javassist: "3.29.2-GA",
   jetty: "9.4.53.v20231009",
