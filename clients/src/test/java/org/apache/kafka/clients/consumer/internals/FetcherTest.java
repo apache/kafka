@@ -1639,6 +1639,11 @@ public class FetcherTest {
         assertTrue(sendFetches() > 0);
         client.prepareResponse(fullFetchResponse(tidp0, records, Errors.OFFSET_OUT_OF_RANGE, 100L, 0));
         consumerClient.poll(time.timer(0));
+
+        // The partition is not marked as needing its offset reset because that error handling logic is
+        // performed during the fetch collection. When we call seek() before we collect the fetch, the
+        // partition's position is updated (to offset 2) which is different from the offset from which
+        // we fetched the data (from offset 0).
         assertFalse(subscriptions.isOffsetResetNeeded(tp0));
         subscriptions.seek(tp0, 2);
         assertEmptyFetch("Should not return records or advance position after seeking to end of topic partition");
