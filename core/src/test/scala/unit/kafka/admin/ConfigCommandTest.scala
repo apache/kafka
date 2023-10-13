@@ -304,15 +304,31 @@ class ConfigCommandTest extends Logging {
     createOpts = new ConfigCommandOptions(Array(connectOpts._1, connectOpts._2,
       shortFlag, "1",
       "--alter",
-      "--add-config", "a=b,c=,d=e,f="))
+      "--add-config", "a._-c=b,c=,d=e,f="))
     createOpts.checkArgs()
 
     val addedProps2 = ConfigCommand.parseConfigsToBeAdded(createOpts)
     assertEquals(4, addedProps2.size())
-    assertEquals("b", addedProps2.getProperty("a"))
+    assertEquals("b", addedProps2.getProperty("a._-c"))
     assertEquals("e", addedProps2.getProperty("d"))
     assertTrue(addedProps2.getProperty("c").isEmpty)
     assertTrue(addedProps2.getProperty("f").isEmpty)
+
+    var inValidCreateOpts = new ConfigCommandOptions(Array(connectOpts._1, connectOpts._2,
+      shortFlag, "1",
+      "--alter",
+      "--add-config", "a;c=b"))
+
+    assertThrows(classOf[IllegalArgumentException],
+      () => ConfigCommand.parseConfigsToBeAdded(inValidCreateOpts))
+
+    inValidCreateOpts = new ConfigCommandOptions(Array(connectOpts._1, connectOpts._2,
+      shortFlag, "1",
+      "--alter",
+      "--add-config", "a,=b"))
+
+    assertThrows(classOf[IllegalArgumentException],
+      () => ConfigCommand.parseConfigsToBeAdded(inValidCreateOpts))
   }
 
   @Test

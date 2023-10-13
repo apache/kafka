@@ -3167,6 +3167,19 @@ public class GroupMetadataManager {
     }
 
     /**
+     * Delete the group if it exists and is in Empty state.
+     *
+     * @param groupId The group id.
+     * @param records The list of records to append the group metadata tombstone records.
+     */
+    public void maybeDeleteGroup(String groupId, List<Record> records) {
+        Group group = groups.get(groupId);
+        if (group != null && group.isEmpty()) {
+            deleteGroup(groupId, records);
+        }
+    }
+
+    /**
      * Checks whether the given protocol type or name in the request is inconsistent with the group's.
      *
      * @param protocolTypeOrName       The request's protocol type or name.
@@ -3181,6 +3194,13 @@ public class GroupMetadataManager {
         return protocolTypeOrName != null
             && groupProtocolTypeOrName != null
             && !groupProtocolTypeOrName.equals(protocolTypeOrName);
+    }
+
+    /**
+     * @return The set of all groups' ids.
+     */
+    public Set<String> groupIds() {
+        return Collections.unmodifiableSet(this.groups.keySet());
     }
 
     /**

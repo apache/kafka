@@ -32,6 +32,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
@@ -283,6 +284,24 @@ public class PrototypeAsyncConsumerTest {
     public void testOffsetsForTimesOnNullPartitions() {
         assertThrows(NullPointerException.class, () -> consumer.offsetsForTimes(null,
                 Duration.ofMillis(1)));
+    }
+
+    @Test
+    public void testOffsetsForTimesFailsOnNegativeTargetTimes() {
+        assertThrows(IllegalArgumentException.class,
+                () -> consumer.offsetsForTimes(Collections.singletonMap(new TopicPartition(
+                                "topic1", 1), ListOffsetsRequest.EARLIEST_TIMESTAMP),
+                        Duration.ofMillis(1)));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> consumer.offsetsForTimes(Collections.singletonMap(new TopicPartition(
+                                "topic1", 1), ListOffsetsRequest.LATEST_TIMESTAMP),
+                        Duration.ofMillis(1)));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> consumer.offsetsForTimes(Collections.singletonMap(new TopicPartition(
+                                "topic1", 1), ListOffsetsRequest.MAX_TIMESTAMP),
+                        Duration.ofMillis(1)));
     }
 
     @Test
