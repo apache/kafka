@@ -22,8 +22,11 @@ import kafka.server.KafkaBroker;
 import kafka.server.KafkaConfig;
 import kafka.utils.Logging;
 import kafka.utils.TestUtils;
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AdminClientTestUtils;
 import org.apache.kafka.clients.admin.Config;
+import org.apache.kafka.clients.admin.ListPartitionReassignmentsResult;
 import org.apache.kafka.clients.admin.NewPartitionReassignment;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.PartitionReassignment;
@@ -34,6 +37,7 @@ import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.internals.Topic;
@@ -71,17 +75,19 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.spy;
 
 @Tag("integration")
 @SuppressWarnings("deprecation") // Added for Scala 2.12 compatibility for usages of JavaConverters
 public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTestHarness implements Logging, RackAwareTest {
-    private Short defaultReplicationFactor = 1;
-    private Integer numPartitions = 1;
+    private short defaultReplicationFactor = 1;
+    private int numPartitions = 1;
     private TopicCommand.TopicService topicService;
     private Admin adminClient;
     private String bootstrapServer;
     private String testTopicName;
-    private Integer defaultTimeout = 10000;
+    private long defaultTimeout = 10000;
 
     /**
      * Implementations must override this method to return a set of KafkaConfigs. This method will be invoked for every
@@ -127,7 +133,7 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
         waitForTopicCreated(topicName, defaultTimeout);
     }
 
-    private void waitForTopicCreated(String topicName, Integer timeout) {
+    private void waitForTopicCreated(String topicName, long timeout) {
         TestUtils.waitForPartitionMetadata(brokers(), topicName, 0, timeout);
     }
 
@@ -137,13 +143,11 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
         // create adminClient
         Properties props = new Properties();
         bootstrapServer = bootstrapServers(listenerName());
-        props.put(org.apache.kafka.clients.CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, bootstrapServer);
+        props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, bootstrapServer);
         adminClient = Admin.create(props);
         topicService = new TopicCommand.TopicService(props, Optional.of(bootstrapServer));
-        testTopicName = String.format("%s-%s", info.getTestMethod().get().getName(),
-            new scala.util.Random().alphanumeric().take(10).mkString());
+        testTopicName = String.format("%s-%s", info.getTestMethod().get().getName(), TestUtils.randomString(10));
     }
-
     @AfterEach
     public void close() throws Exception {
         if (topicService != null)
@@ -158,7 +162,7 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
         createAndWaitTopic(buildTopicCommandOptionsWithBootstrap(
             "--create", "--partitions", "2", "--replication-factor", "1", "--topic", testTopicName));
 
-        adminClient.listTopics().names().get().contains(testTopicName);
+        assertTrue(adminClient.listTopics().names().get().contains(testTopicName));
     }
 
     @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
@@ -172,8 +176,8 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
             .get()
             .get(testTopicName)
             .partitions();
-        assertEquals(partitions.size(), numPartitions);
-        assertEquals((short) partitions.get(0).replicas().size(), defaultReplicationFactor);
+        assertEquals(numPartitions, partitions.size());
+        assertEquals(defaultReplicationFactor, (short) partitions.get(0).replicas().size());
     }
 
     @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
@@ -187,8 +191,8 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
             .get()
             .get(testTopicName)
             .partitions();
-        assertEquals(partitions.size(), 2);
-        assertEquals((short) partitions.get(0).replicas().size(), defaultReplicationFactor);
+        assertEquals(2, partitions.size());
+        assertEquals(defaultReplicationFactor, (short) partitions.get(0).replicas().size());
     }
 
     @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
@@ -203,8 +207,8 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
             .get(testTopicName)
             .partitions();
 
-        assertEquals(partitions.size(), numPartitions);
-        assertEquals((short) partitions.get(0).replicas().size(), 2);
+        assertEquals(numPartitions, partitions.size());
+        assertEquals(2, (short) partitions.get(0).replicas().size());
     }
 
     @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
@@ -360,7 +364,7 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
             () -> brokers().forall(b -> b.metadataCache().getTopicPartitions(testTopicName).size() == 3),
             () -> "Timeout waiting for new assignment propagating to broker", org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS, 100L);
         TopicDescription topicDescription = adminClient.describeTopics(Collections.singletonList(testTopicName)).topicNameValues().get(testTopicName).get();
-        assertTrue(topicDescription.partitions().size() == 3);
+        assertEquals(3, topicDescription.partitions().size());
     }
 
     @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
@@ -737,7 +741,7 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
     @ValueSource(strings = {"zk", "kraft"})
     public void testDescribeUnderReplicatedPartitionsWhenReassignmentIsInProgress(String quorum) throws ExecutionException, InterruptedException {
         Map<String, String> configMap = new HashMap<>();
-        Short replicationFactor = 1;
+        short replicationFactor = 1;
         int partitions = 1;
         TopicPartition tp = new TopicPartition(testTopicName, 0);
 
@@ -920,16 +924,26 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
 
     @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
     @ValueSource(strings = {"zk", "kraft"})
-    public void testDescribeDoesNotFailWhenListingReassignmentIsUnauthorized(String quorum) throws ExecutionException, InterruptedException {
+    public void testDescribeDoesNotFailWhenListingReassignmentIsUnauthorized(String quorum) throws Exception {
+        adminClient = spy(adminClient);
+        topicService.close(); // need to be closed before initializing a new one with the spy version of adminclient, otherwise will have the extra adminclient(s) not closed.
+        ListPartitionReassignmentsResult result = AdminClientTestUtils.listPartitionReassignmentsResult(
+                new ClusterAuthorizationException("Unauthorized"));
+
+        doReturn(result).when(adminClient).listPartitionReassignments(
+                Collections.singleton(new TopicPartition(testTopicName, 0))
+        );
+
+        topicService = new TopicCommand.TopicService(adminClient);
+
         adminClient.createTopics(
-            Collections.singletonList(new NewTopic(testTopicName, 1, (short) 1))
+                Collections.singletonList(new NewTopic(testTopicName, 1, (short) 1))
         ).all().get();
-        waitForTopicCreated(testTopicName);
 
         String output = captureDescribeTopicStandardOut(buildTopicCommandOptionsWithBootstrap("--describe", "--topic", testTopicName));
         String[] rows = output.split("\n");
-        assertEquals(2, rows.length);
-        assertTrue(rows[0].startsWith(String.format("Topic: %s", testTopicName)));
+        assertEquals(2, rows.length, "Unexpected output: " + output);
+        assertTrue(rows[0].startsWith(String.format("Topic: %s", testTopicName)), "Unexpected output: " + rows[0]);
     }
 
     @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)

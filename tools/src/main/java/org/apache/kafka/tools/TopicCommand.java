@@ -131,10 +131,9 @@ public abstract class TopicCommand {
         LOG.error(Utils.stackTrace(e));
     }
 
-    @SuppressWarnings("deprecation")
     static Map<Integer, List<Integer>> parseReplicaAssignment(String replicaAssignmentList) {
         String[] partitionList = replicaAssignmentList.split(",");
-        Map<Integer, List<Integer>> ret = new LinkedHashMap<Integer, List<Integer>>();
+        Map<Integer, List<Integer>> ret = new LinkedHashMap<>();
         for (int i = 0; i < partitionList.length; i++) {
             List<Integer> brokerList = Arrays.stream(partitionList[i].split(":"))
                 .map(String::trim)
@@ -512,9 +511,7 @@ public abstract class TopicCommand {
                     Map<Integer, List<Integer>> replicaMap = topic.replicaAssignment.entrySet().stream()
                         .skip(startPartitionId)
                         .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
-                    List<List<Integer>> newAssignment = replicaMap.entrySet().stream()
-                        .map(Map.Entry::getValue)
-                        .collect(Collectors.toList());
+                    List<List<Integer>> newAssignment = new ArrayList<>(replicaMap.values());
                     return new AbstractMap.SimpleEntry<>(topicName, NewPartitions.increaseTo(topic.partitions.get(), newAssignment));
                 } catch (InterruptedException | ExecutionException e) {
                     throw new RuntimeException(e);
@@ -654,7 +651,7 @@ public abstract class TopicCommand {
         public List<Uuid> getTopicIds(Uuid topicIdIncludeList, boolean excludeInternalTopics) throws ExecutionException, InterruptedException {
             ListTopicsResult allTopics = excludeInternalTopics ? adminClient.listTopics() :
                 adminClient.listTopics(new ListTopicsOptions().listInternal(true));
-            List<Uuid> allTopicIds = null;
+            List<Uuid> allTopicIds;
             allTopicIds = allTopics.listings().get().stream()
                 .map(TopicListing::topicId)
                 .sorted()
