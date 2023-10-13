@@ -31,6 +31,7 @@ import org.mockito.Mockito.{mock, times, verify, when}
 
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
+import scala.util.Success
 
 class TransactionCoordinatorTest {
 
@@ -46,7 +47,7 @@ class TransactionCoordinatorTest {
   val brokerId = 0
   val coordinatorEpoch = 0
   private val transactionalId = "known"
-  private val producerId = 10
+  private val producerId = 10L
   private val producerEpoch: Short = 1
   private val txnTimeoutMs = 1
 
@@ -68,7 +69,7 @@ class TransactionCoordinatorTest {
   private def mockPidGenerator(): Unit = {
     when(pidGenerator.generateProducerId()).thenAnswer(_ => {
       nextPid += 1
-      nextPid - 1
+      Success(nextPid - 1)
     })
   }
 
@@ -908,7 +909,7 @@ class TransactionCoordinatorTest {
       (Short.MaxValue - 2).toShort, txnTimeoutMs, Empty, partitions, time.milliseconds, time.milliseconds)
 
     when(pidGenerator.generateProducerId())
-      .thenReturn(producerId + 1)
+      .thenReturn(Success(producerId + 1))
 
     when(transactionManager.validateTransactionTimeoutMs(anyInt()))
       .thenReturn(true)
@@ -949,7 +950,7 @@ class TransactionCoordinatorTest {
       (Short.MaxValue - 2).toShort, txnTimeoutMs, Empty, partitions, time.milliseconds, time.milliseconds)
 
     when(pidGenerator.generateProducerId())
-      .thenReturn(producerId + 1)
+      .thenReturn(Success(producerId + 1))
 
     when(transactionManager.validateTransactionTimeoutMs(anyInt()))
       .thenReturn(true)
@@ -1208,7 +1209,7 @@ class TransactionCoordinatorTest {
 
   private def validateIncrementEpochAndUpdateMetadata(state: TransactionState): Unit = {
     when(pidGenerator.generateProducerId())
-      .thenReturn(producerId)
+      .thenReturn(Success(producerId))
 
     when(transactionManager.validateTransactionTimeoutMs(anyInt()))
       .thenReturn(true)

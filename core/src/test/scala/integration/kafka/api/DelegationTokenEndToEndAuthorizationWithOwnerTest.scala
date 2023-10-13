@@ -16,13 +16,17 @@
  */
 package kafka.api
 
-import kafka.admin.AclCommand
-import kafka.utils.JaasTestUtils
+import kafka.utils._
 import org.apache.kafka.clients.admin.{Admin, CreateDelegationTokenOptions, DescribeDelegationTokenOptions}
+import org.apache.kafka.common.acl._
+import org.apache.kafka.common.resource.PatternType.LITERAL
+import org.apache.kafka.common.resource.ResourceType.USER
+import org.apache.kafka.common.resource.ResourcePattern
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.security.token.delegation.DelegationToken
 import org.junit.jupiter.api.Assertions.{assertThrows, assertTrue}
-import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 import java.util.Collections
 import scala.concurrent.ExecutionException
@@ -30,28 +34,19 @@ import scala.jdk.CollectionConverters._
 
 class DelegationTokenEndToEndAuthorizationWithOwnerTest extends DelegationTokenEndToEndAuthorizationTest {
 
-  def createTokenForValidUserArgs: Array[String] = Array("--authorizer-properties",
-    s"zookeeper.connect=$zkConnect",
-    s"--add",
-    s"--user-principal=$clientPrincipal",
-    s"--operation=CreateTokens",
-    s"--allow-principal=$tokenRequesterPrincipal")
+  def AclTokenCreate = new AclBinding(new ResourcePattern(USER, clientPrincipal.toString, LITERAL),
+    new AccessControlEntry(tokenRequesterPrincipal.toString, "*", AclOperation.CREATE_TOKENS, AclPermissionType.ALLOW))
+  def TokenCreateAcl = Set(new AccessControlEntry(tokenRequesterPrincipal.toString, "*", AclOperation.CREATE_TOKENS, AclPermissionType.ALLOW))
 
   // tests the naive positive case for token requesting for others
-  def describeTokenForValidUserArgs: Array[String] = Array("--authorizer-properties",
-    s"zookeeper.connect=$zkConnect",
-    s"--add",
-    s"--user-principal=$clientPrincipal",
-    s"--operation=DescribeTokens",
-    s"--allow-principal=$tokenRequesterPrincipal")
+  def AclTokenDescribe = new AclBinding(new ResourcePattern(USER, clientPrincipal.toString, LITERAL),
+    new AccessControlEntry(tokenRequesterPrincipal.toString, "*", AclOperation.DESCRIBE_TOKENS, AclPermissionType.ALLOW))
+  def TokenDescribeAcl = Set(new AccessControlEntry(tokenRequesterPrincipal.toString, "*", AclOperation.DESCRIBE_TOKENS, AclPermissionType.ALLOW))
 
   // This permission is just there so that otherClientPrincipal shows up among the resources
-  def describeTokenForAdminArgs: Array[String] = Array("--authorizer-properties",
-    s"zookeeper.connect=$zkConnect",
-    s"--add",
-    s"--user-principal=$otherClientPrincipal",
-    s"--operation=DescribeTokens",
-    s"--allow-principal=$otherClientRequesterPrincipal")
+  def AclTokenOtherDescribe = new AclBinding(new ResourcePattern(USER, otherClientPrincipal.toString, LITERAL),
+    new AccessControlEntry(otherClientRequesterPrincipal.toString, "*", AclOperation.DESCRIBE_TOKENS, AclPermissionType.ALLOW))
+
 
   override def createDelegationTokenOptions(): CreateDelegationTokenOptions = new CreateDelegationTokenOptions().owner(clientPrincipal)
 
@@ -67,15 +62,21 @@ class DelegationTokenEndToEndAuthorizationWithOwnerTest extends DelegationTokenE
   private val describeTokenFailPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "describe-token-fail-principal")
   private val describeTokenFailPassword = "describe-token-fail-password"
 
-  override def configureTokenAclsBeforeServersStart(): Unit = {
-    super.configureTokenAclsBeforeServersStart()
-    AclCommand.main(createTokenForValidUserArgs)
-    AclCommand.main(describeTokenForValidUserArgs)
-    AclCommand.main(describeTokenForAdminArgs)
+  override def configureSecurityAfterServersStart(): Unit = {
+    // Create the Acls before calling super which will create the additiona tokens
+    val superuserAdminClient = createPrivilegedAdminClient()
+    superuserAdminClient.createAcls(List(AclTokenOtherDescribe, AclTokenCreate, AclTokenDescribe).asJava).values
+
+    brokers.foreach { s =>
+      TestUtils.waitAndVerifyAcls(TokenCreateAcl ++ TokenDescribeAcl, s.dataPlaneRequestProcessor.authorizer.get,
+        new ResourcePattern(USER, clientPrincipal.toString, LITERAL))
+    }
+    superuserAdminClient.close()
+
+    super.configureSecurityAfterServersStart()
   }
 
   override def createAdditionalCredentialsAfterServersStarted(): Unit = {
-    super.createAdditionalCredentialsAfterServersStarted()
     createScramCredentialsViaPrivilegedAdminClient(tokenRequesterPrincipal.getName, tokenRequesterPassword)
     createScramCredentialsViaPrivilegedAdminClient(otherClientPrincipal.getName, otherClientPassword)
     createScramCredentialsViaPrivilegedAdminClient(otherClientRequesterPrincipal.getName, otherClientRequesterPassword)
@@ -91,16 +92,18 @@ class DelegationTokenEndToEndAuthorizationWithOwnerTest extends DelegationTokenE
     createScramAdminClient(kafkaClientSaslMechanism, tokenRequesterPrincipal.getName, tokenRequesterPassword)
   }
 
-  @Test
-  def testCreateTokenForOtherUserFails(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("kraft", "zk"))
+  def testCreateTokenForOtherUserFails(quorum: String): Unit = {
     val thrown = assertThrows(classOf[ExecutionException], () => {
       createDelegationTokens(() => new CreateDelegationTokenOptions().owner(otherClientPrincipal), assert = false)
     })
     assertTrue(thrown.getMessage.contains("Delegation Token authorization failed"))
   }
 
-  @Test
-  def testDescribeTokenForOtherUserFails(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("kraft", "zk"))
+  def testDescribeTokenForOtherUserFails(quorum: String): Unit = {
     val describeTokenFailAdminClient = createScramAdminClient(kafkaClientSaslMechanism, describeTokenFailPrincipal.getName, describeTokenFailPassword)
     val otherClientAdminClient = createScramAdminClient(kafkaClientSaslMechanism, otherClientPrincipal.getName, otherClientPassword)
     try {
@@ -115,8 +118,9 @@ class DelegationTokenEndToEndAuthorizationWithOwnerTest extends DelegationTokenE
     }
   }
 
-  @Test
-  def testDescribeTokenForOtherUserPasses(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("kraft", "zk"))
+  def testDescribeTokenForOtherUserPasses(quorum: String): Unit = {
     val adminClient = createTokenRequesterAdminClient()
     try {
       val tokens = adminClient.describeDelegationToken(

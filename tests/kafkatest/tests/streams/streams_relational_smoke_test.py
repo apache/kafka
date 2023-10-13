@@ -60,7 +60,7 @@ class StreamsRelationalSmokeTestService(StreamsTestBaseService):
         self.logger.info("Starting process on " + str(node.account))
         node.account.ssh(self.start_cmd(node))
 
-        if len(self.pids(node)) == 0:
+        if not self.pids(node):
             raise RuntimeError("No process ids recorded")
 
     def await_command(self, command):

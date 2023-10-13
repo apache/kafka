@@ -144,6 +144,7 @@ public abstract class ConsumerCoordinatorTest {
     private final int sessionTimeoutMs = 10000;
     private final int heartbeatIntervalMs = 5000;
     private final long retryBackoffMs = 100;
+    private final long retryBackoffMaxMs = 1000;
     private final int autoCommitIntervalMs = 2000;
     private final int requestTimeoutMs = 30000;
     private final int throttleMs = 10;
@@ -195,7 +196,7 @@ public abstract class ConsumerCoordinatorTest {
     public void setup() {
         LogContext logContext = new LogContext();
         this.subscriptions = new SubscriptionState(logContext, OffsetResetStrategy.EARLIEST);
-        this.metadata = new ConsumerMetadata(0, Long.MAX_VALUE, false,
+        this.metadata = new ConsumerMetadata(0, 0, Long.MAX_VALUE, false,
                 false, subscriptions, logContext, new ClusterResourceListeners());
         this.client = new MockClient(time, metadata);
         this.client.updateMetadata(metadataResponse);
@@ -220,6 +221,7 @@ public abstract class ConsumerCoordinatorTest {
                                         groupId,
                                         groupInstanceId,
                                         retryBackoffMs,
+                                        retryBackoffMaxMs,
                                         !groupInstanceId.isPresent());
     }
 
@@ -458,7 +460,7 @@ public abstract class ConsumerCoordinatorTest {
     }
 
     @Test
-    public void testSelectRebalanceProtcol() {
+    public void testSelectRebalanceProtocol() {
         List<ConsumerPartitionAssignor> assignors = new ArrayList<>();
         assignors.add(new MockPartitionAssignor(Collections.singletonList(ConsumerPartitionAssignor.RebalanceProtocol.EAGER)));
         assignors.add(new MockPartitionAssignor(Collections.singletonList(COOPERATIVE)));
@@ -1282,7 +1284,7 @@ public abstract class ConsumerCoordinatorTest {
 
         // Refresh the metadata again. Since there have been no changes since the last refresh, it won't trigger
         // rebalance again.
-        metadata.requestUpdate();
+        metadata.requestUpdate(true);
         consumerClient.poll(time.timer(Long.MAX_VALUE));
         assertFalse(coordinator.rejoinNeededOrPending());
     }
@@ -1329,7 +1331,7 @@ public abstract class ConsumerCoordinatorTest {
 
             // Refresh the metadata again. Since there have been no changes since the last refresh, it won't trigger
             // rebalance again.
-            metadata.requestUpdate();
+            metadata.requestUpdate(true);
             consumerClient.poll(time.timer(Long.MAX_VALUE));
             assertFalse(coordinator.rejoinNeededOrPending());
         }
@@ -2226,7 +2228,7 @@ public abstract class ConsumerCoordinatorTest {
     }
 
     private void testInternalTopicInclusion(boolean includeInternalTopics) {
-        metadata = new ConsumerMetadata(0, Long.MAX_VALUE, includeInternalTopics,
+        metadata = new ConsumerMetadata(0, 0, Long.MAX_VALUE, includeInternalTopics,
                 false, subscriptions, new LogContext(), new ClusterResourceListeners());
         client = new MockClient(time, metadata);
         try (ConsumerCoordinator coordinator = buildCoordinator(rebalanceConfig, new Metrics(), assignors, false, subscriptions)) {
@@ -2511,7 +2513,7 @@ public abstract class ConsumerCoordinatorTest {
     }
 
     @Test
-    public void testCommitOffsetMetadata() {
+    public void testCommitOffsetMetadataAsync() {
         subscriptions.assignFromUser(singleton(t1p));
 
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
@@ -2521,11 +2523,27 @@ public abstract class ConsumerCoordinatorTest {
 
         AtomicBoolean success = new AtomicBoolean(false);
 
-        Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(t1p, new OffsetAndMetadata(100L, "hello"));
+        OffsetAndMetadata offsetAndMetadata = new OffsetAndMetadata(100L, "hello");
+        Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(t1p, offsetAndMetadata);
         coordinator.commitOffsetsAsync(offsets, callback(offsets, success));
         coordinator.invokeCompletedOffsetCommitCallbacks();
         assertTrue(success.get());
-        assertEquals(coordinator.inFlightAsyncCommits.get(), 0);
+        assertEquals(0, coordinator.inFlightAsyncCommits.get());
+    }
+
+    @Test
+    public void testCommitOffsetMetadataSync() {
+        subscriptions.assignFromUser(singleton(t1p));
+
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
+
+        prepareOffsetCommitRequest(singletonMap(t1p, 100L), Errors.NONE);
+
+        OffsetAndMetadata offsetAndMetadata = new OffsetAndMetadata(100L, "hello");
+        Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(t1p, offsetAndMetadata);
+        boolean success = coordinator.commitOffsetsSync(offsets, time.timer(Long.MAX_VALUE));
+        assertTrue(success);
     }
 
     @Test
@@ -2559,7 +2577,7 @@ public abstract class ConsumerCoordinatorTest {
         client.prepareResponse(body -> {
             OffsetCommitRequest commitRequest = (OffsetCommitRequest) body;
             return commitRequest.data().memberId().equals(OffsetCommitRequest.DEFAULT_MEMBER_ID) &&
-                    commitRequest.data().generationId() == OffsetCommitRequest.DEFAULT_GENERATION_ID;
+                    commitRequest.data().generationIdOrMemberEpoch() == OffsetCommitRequest.DEFAULT_GENERATION_ID;
         }, offsetCommitResponse(singletonMap(t1p, Errors.NONE)));
 
         AtomicBoolean success = new AtomicBoolean(false);

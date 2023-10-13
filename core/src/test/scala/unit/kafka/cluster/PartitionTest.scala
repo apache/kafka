@@ -24,7 +24,7 @@ import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpoints
 import kafka.utils._
 import kafka.zk.KafkaZkClient
-import org.apache.kafka.common.errors.{ApiException, FencedLeaderEpochException, InconsistentTopicIdException, NotLeaderOrFollowerException, OffsetNotAvailableException, OffsetOutOfRangeException, UnknownLeaderEpochException}
+import org.apache.kafka.common.errors.{ApiException, FencedLeaderEpochException, InconsistentTopicIdException, InvalidTxnStateException, NotLeaderOrFollowerException, OffsetNotAvailableException, OffsetOutOfRangeException, UnknownLeaderEpochException}
 import org.apache.kafka.common.message.{AlterPartitionResponseData, FetchResponseData}
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
@@ -37,7 +37,7 @@ import org.apache.kafka.metadata.LeaderRecoveryState
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.mockito.ArgumentMatchers
-import org.mockito.ArgumentMatchers.{any, anyString}
+import org.mockito.ArgumentMatchers.{any, anyBoolean, anyInt, anyLong, anyString}
 import org.mockito.Mockito._
 import org.mockito.invocation.InvocationOnMock
 
@@ -46,6 +46,7 @@ import java.util.Optional
 import java.util.concurrent.{CountDownLatch, Semaphore}
 import kafka.server.metadata.{KRaftMetadataCache, ZkMetadataCache}
 import org.apache.kafka.clients.ClientResponse
+import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.replica.ClientMetadata
 import org.apache.kafka.common.replica.ClientMetadata.DefaultClientMetadata
@@ -55,7 +56,7 @@ import org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.{KafkaScheduler, MockTime}
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
-import org.apache.kafka.storage.internals.log.{AppendOrigin, CleanerConfig, EpochEntry, FetchIsolation, FetchParams, LogAppendInfo, LogDirFailureChannel, LogReadInfo, LogStartOffsetIncrementReason, ProducerStateManager, ProducerStateManagerConfig}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, CleanerConfig, EpochEntry, FetchIsolation, FetchParams, LogAppendInfo, LogDirFailureChannel, LogOffsetMetadata, LogReadInfo, LogStartOffsetIncrementReason, ProducerStateManager, ProducerStateManagerConfig}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
@@ -996,8 +997,10 @@ class PartitionTest extends AbstractPartitionTest {
       new SimpleRecord("k1".getBytes, "v1".getBytes),
       new SimpleRecord("k2".getBytes, "v2".getBytes),
       new SimpleRecord("k3".getBytes, "v3".getBytes)),
-      baseOffset = 0L)
-    partition.appendRecordsToLeader(records, origin = AppendOrigin.CLIENT, requiredAcks = 0, RequestLocal.withThreadConfinedCaching)
+      baseOffset = 0L,
+      producerId = 2L)
+    val verificationGuard = partition.maybeStartTransactionVerification(2L, 0, 0)
+    partition.appendRecordsToLeader(records, origin = AppendOrigin.CLIENT, requiredAcks = 0, RequestLocal.withThreadConfinedCaching, verificationGuard)
 
     def fetchOffset(isolationLevel: Option[IsolationLevel], timestamp: Long): TimestampAndOffset = {
       val res = partition.fetchOffsetForTimestamp(timestamp,
@@ -1239,6 +1242,47 @@ class PartitionTest extends AbstractPartitionTest {
   }
 
   @Test
+  def testIsUnderMinIsr(): Unit = {
+    configRepository.setTopicConfig(topicPartition.topic, TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2")
+    partition = new Partition(topicPartition,
+      replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
+      interBrokerProtocolVersion = interBrokerProtocolVersion,
+      localBrokerId = brokerId,
+      () => defaultBrokerEpoch(brokerId),
+      time,
+      alterPartitionListener,
+      delayedOperations,
+      metadataCache,
+      logManager,
+      alterPartitionManager)
+    partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, topicId = None)
+    partition.makeLeader(
+      new LeaderAndIsrPartitionState()
+        .setControllerEpoch(0)
+        .setLeader(brokerId)
+        .setLeaderEpoch(0)
+        .setIsr(List(brokerId, brokerId + 1).map(Int.box).asJava)
+        .setReplicas(List(brokerId, brokerId + 1).map(Int.box).asJava)
+        .setPartitionEpoch(1)
+        .setIsNew(true),
+      offsetCheckpoints,
+      topicId = None)
+    assertFalse(partition.isUnderMinIsr)
+
+    val LeaderState = new LeaderAndIsrPartitionState()
+      .setControllerEpoch(0)
+      .setLeader(brokerId)
+      .setLeaderEpoch(1)
+      .setIsr(List(brokerId).map(Int.box).asJava)
+      .setPartitionEpoch(2)
+      .setReplicas(List(brokerId, brokerId + 1).map(Int.box).asJava)
+      .setIsNew(false)
+
+    partition.makeLeader(LeaderState, offsetCheckpoints, None)
+    assertTrue(partition.isUnderMinIsr)
+  }
+
+  @Test
   def testUpdateFollowerFetchState(): Unit = {
     val log = logManager.getOrCreateLog(topicPartition, topicId = None)
     seedLogData(log, numRecords = 6, leaderEpoch = 4)
@@ -1286,6 +1330,57 @@ class PartitionTest extends AbstractPartitionTest {
       logStartOffset = 0L,
       logEndOffset = 6L
     )
+  }
+
+  @Test
+  def testIsReplicaIsrEligibleWithEmptyReplicaMap(): Unit = {
+    val mockMetadataCache: KRaftMetadataCache = mock(classOf[KRaftMetadataCache])
+    val partition = spy(new Partition(topicPartition,
+      replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
+      interBrokerProtocolVersion = interBrokerProtocolVersion,
+      localBrokerId = brokerId,
+      () => defaultBrokerEpoch(brokerId),
+      time,
+      alterPartitionListener,
+      delayedOperations,
+      mockMetadataCache,
+      logManager,
+      alterPartitionManager))
+
+    when(offsetCheckpoints.fetch(ArgumentMatchers.anyString, ArgumentMatchers.eq(topicPartition)))
+      .thenReturn(None)
+    val log = logManager.getOrCreateLog(topicPartition, topicId = None)
+    seedLogData(log, numRecords = 6, leaderEpoch = 4)
+
+    val controllerEpoch = 0
+    val leaderEpoch = 5
+    val remoteBrokerId = brokerId + 1
+    val replicas = List(brokerId, remoteBrokerId)
+    addBrokerEpochToMockMetadataCache(mockMetadataCache, replicas)
+
+    partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
+
+    val initializeTimeMs = time.milliseconds()
+    assertTrue(partition.makeLeader(
+      new LeaderAndIsrPartitionState()
+        .setControllerEpoch(controllerEpoch)
+        .setLeader(brokerId)
+        .setLeaderEpoch(leaderEpoch)
+        .setIsr(List[Integer](brokerId).asJava)
+        .setPartitionEpoch(1)
+        .setReplicas(replicas.map(Int.box).asJava)
+        .setIsNew(true),
+      offsetCheckpoints, None), "Expected become leader transition to succeed")
+
+    doAnswer(_ => {
+      // simulate topic is deleted at the moment
+      partition.delete()
+      val replica = new Replica(remoteBrokerId, topicPartition, mockMetadataCache)
+      partition.updateFollowerFetchState(replica, mock(classOf[LogOffsetMetadata]), 0, initializeTimeMs, 0, defaultBrokerEpoch(remoteBrokerId))
+      mock(classOf[LogReadInfo])
+    }).when(partition).fetchRecords(any(), any(), anyLong(), anyInt(), anyBoolean(), anyBoolean())
+
+    assertDoesNotThrow(() => fetchFollower(partition, replicaId = remoteBrokerId, fetchOffset = 3L))
   }
 
   @Test
@@ -1689,12 +1784,11 @@ class PartitionTest extends AbstractPartitionTest {
     val replicas = List(brokerId, remoteBrokerId1, remoteBrokerId2)
     val isr = Set(brokerId, remoteBrokerId2)
 
-    val metadataCache: MetadataCache = mock(classOf[KRaftMetadataCache])
-    addBrokerEpochToMockMetadataCache(metadataCache.asInstanceOf[KRaftMetadataCache], replicas)
+    val metadataCache: KRaftMetadataCache = mock(classOf[KRaftMetadataCache])
 
     // Mark the remote broker 1 as eligible in the metadata cache.
-    when(metadataCache.asInstanceOf[KRaftMetadataCache].isBrokerFenced(remoteBrokerId1)).thenReturn(false)
-    when(metadataCache.asInstanceOf[KRaftMetadataCache].isBrokerShuttingDown(remoteBrokerId1)).thenReturn(false)
+    when(metadataCache.isBrokerFenced(remoteBrokerId1)).thenReturn(false)
+    when(metadataCache.isBrokerShuttingDown(remoteBrokerId1)).thenReturn(false)
 
     val partition = new Partition(
       topicPartition,
@@ -1725,7 +1819,10 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(isr, partition.partitionState.maximalIsr)
 
     // Fetch to let the follower catch up to the log end offset, but using a wrong broker epoch. The expansion should fail.
-    val wrongReplicaEpoch = defaultBrokerEpoch(remoteBrokerId1) + 1
+    addBrokerEpochToMockMetadataCache(metadataCache.asInstanceOf[KRaftMetadataCache], List(brokerId, remoteBrokerId2))
+    // Create a race case where the replica epoch get bumped right after the previous fetch succeeded.
+    val wrongReplicaEpoch = defaultBrokerEpoch(remoteBrokerId1) - 1
+    when(metadataCache.getAliveBrokerEpoch(remoteBrokerId1)).thenReturn(Option(wrongReplicaEpoch), Option(defaultBrokerEpoch(remoteBrokerId1)))
     fetchFollower(partition,
       replicaId = remoteBrokerId1,
       fetchOffset = log.logEndOffset,
@@ -1772,6 +1869,71 @@ class PartitionTest extends AbstractPartitionTest {
     }
   }
 
+  @Test
+  def testFenceFollowerFetchWithStaleBrokerEpoch(): Unit = {
+    val log = logManager.getOrCreateLog(topicPartition, topicId = None)
+    seedLogData(log, numRecords = 10, leaderEpoch = 4)
+    val controllerEpoch = 0
+    val leaderEpoch = 5
+    val remoteBrokerId1 = brokerId + 1
+    val replicas = List(brokerId, remoteBrokerId1)
+    val isr = Set(brokerId, remoteBrokerId1)
+
+    val metadataCache: MetadataCache = mock(classOf[KRaftMetadataCache])
+    addBrokerEpochToMockMetadataCache(metadataCache.asInstanceOf[KRaftMetadataCache], replicas)
+
+    val partition = new Partition(
+      topicPartition,
+      replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
+      interBrokerProtocolVersion = MetadataVersion.latest,
+      localBrokerId = brokerId,
+      () => defaultBrokerEpoch(brokerId),
+      time,
+      alterPartitionListener,
+      delayedOperations,
+      metadataCache,
+      logManager,
+      alterPartitionManager
+    )
+
+    partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
+    assertTrue(partition.makeLeader(
+      new LeaderAndIsrPartitionState()
+        .setControllerEpoch(controllerEpoch)
+        .setLeader(brokerId)
+        .setLeaderEpoch(leaderEpoch)
+        .setIsr(isr.toList.map(Int.box).asJava)
+        .setPartitionEpoch(1)
+        .setReplicas(replicas.map(Int.box).asJava)
+        .setIsNew(true),
+      offsetCheckpoints, None), "Expected become leader transition to succeed")
+    assertEquals(isr, partition.partitionState.isr)
+    assertEquals(isr, partition.partitionState.maximalIsr)
+
+    val expectedReplicaEpoch = defaultBrokerEpoch(remoteBrokerId1)
+    fetchFollower(partition,
+      replicaId = remoteBrokerId1,
+      fetchOffset = log.logEndOffset,
+      replicaEpoch = Some(expectedReplicaEpoch)
+    )
+
+    // Fetch to let the follower catch up to the log end offset, but using a stale broker epoch. The Fetch should not
+    // be able to update the fetch state.
+    val wrongReplicaEpoch = defaultBrokerEpoch(remoteBrokerId1) - 1
+
+    assertThrows(classOf[NotLeaderOrFollowerException], () => fetchFollower(partition,
+      replicaId = remoteBrokerId1,
+      fetchOffset = log.logEndOffset,
+      replicaEpoch = Some(wrongReplicaEpoch)
+    ))
+
+    assertReplicaState(partition, remoteBrokerId1,
+      lastCaughtUpTimeMs = time.milliseconds(),
+      logStartOffset = 0L,
+      logEndOffset = log.logEndOffset,
+      brokerEpoch = Some(expectedReplicaEpoch)
+    )
+  }
 
   @Test
   def testIsrNotExpandedIfReplicaIsInControlledShutdown(): Unit = {
@@ -1979,9 +2141,10 @@ class PartitionTest extends AbstractPartitionTest {
 
     // On initialization, the replica is considered caught up and should not be removed
     partition.maybeShrinkIsr()
+    assertEquals(alterPartitionManager.isrUpdates.size, 0)
     assertEquals(Set(brokerId, remoteBrokerId1, remoteBrokerId2), partition.partitionState.isr)
 
-    // If enough time passes without a fetch update, the ISR should shrink
+    // If enough time passes without a fetch update, the ISR should shrink after the following maybeShrinkIsr
     time.sleep(partition.replicaLagTimeMaxMs + 1)
 
     // Shrink the ISR
@@ -2333,7 +2496,7 @@ class PartitionTest extends AbstractPartitionTest {
 
   @Test
   def testPartitionShouldRetryAlterPartitionRequest(): Unit = {
-    val mockChannelManager = mock(classOf[BrokerToControllerChannelManager])
+    val mockChannelManager = mock(classOf[NodeToControllerChannelManager])
     val alterPartitionManager = new DefaultAlterPartitionManager(
       controllerChannelManager = mockChannelManager,
       scheduler = mock(classOf[KafkaScheduler]),
@@ -3348,7 +3511,7 @@ class PartitionTest extends AbstractPartitionTest {
   }
 
   @Test
-  def testHasOngoingTransaction(): Unit = {
+  def testMaybeStartTransactionVerification(): Unit = {
     val controllerEpoch = 0
     val leaderEpoch = 5
     val replicas = List[Integer](brokerId, brokerId + 1).asJava
@@ -3366,7 +3529,6 @@ class PartitionTest extends AbstractPartitionTest {
       .setReplicas(replicas)
       .setIsNew(true), offsetCheckpoints, None), "Expected become leader transition to succeed")
     assertEquals(leaderEpoch, partition.getLeaderEpoch)
-    assertFalse(partition.hasOngoingTransaction(producerId))
 
     val idempotentRecords = createIdempotentRecords(List(
       new SimpleRecord("k1".getBytes, "v1".getBytes),
@@ -3375,17 +3537,35 @@ class PartitionTest extends AbstractPartitionTest {
       baseOffset = 0L,
       producerId = producerId)
     partition.appendRecordsToLeader(idempotentRecords, origin = AppendOrigin.CLIENT, requiredAcks = 1, RequestLocal.withThreadConfinedCaching)
-    assertFalse(partition.hasOngoingTransaction(producerId))
 
-    val transactionRecords = createTransactionalRecords(List(
+    def transactionRecords() = createTransactionalRecords(List(
       new SimpleRecord("k1".getBytes, "v1".getBytes),
       new SimpleRecord("k2".getBytes, "v2".getBytes),
       new SimpleRecord("k3".getBytes, "v3".getBytes)),
       baseOffset = 0L,
       baseSequence = 3,
       producerId = producerId)
-    partition.appendRecordsToLeader(transactionRecords, origin = AppendOrigin.CLIENT, requiredAcks = 1, RequestLocal.withThreadConfinedCaching)
-    assertTrue(partition.hasOngoingTransaction(producerId))
+
+    // When verification guard is not there, we should not be able to append.
+    assertThrows(classOf[InvalidTxnStateException], () => partition.appendRecordsToLeader(transactionRecords(), origin = AppendOrigin.CLIENT, requiredAcks = 1, RequestLocal.withThreadConfinedCaching))
+
+    // Before appendRecordsToLeader is called, ReplicaManager will call maybeStartTransactionVerification. We should get a non-null verification object.
+    val verificationGuard = partition.maybeStartTransactionVerification(producerId, 3, 0)
+    assertNotNull(verificationGuard)
+
+    // With the wrong verification guard, append should fail.
+    assertThrows(classOf[InvalidTxnStateException], () => partition.appendRecordsToLeader(transactionRecords(),
+      origin = AppendOrigin.CLIENT, requiredAcks = 1, RequestLocal.withThreadConfinedCaching, Optional.of(new Object)))
+
+    // We should return the same verification object when we still need to verify. Append should proceed.
+    val verificationGuard2 = partition.maybeStartTransactionVerification(producerId, 3, 0)
+    assertEquals(verificationGuard, verificationGuard2)
+    partition.appendRecordsToLeader(transactionRecords(), origin = AppendOrigin.CLIENT, requiredAcks = 1, RequestLocal.withThreadConfinedCaching, verificationGuard)
+
+    // We should no longer need a verification object. Future appends without verification guard will also succeed.
+    val verificationGuard3 = partition.maybeStartTransactionVerification(producerId, 3, 0)
+    assertNull(verificationGuard3)
+    partition.appendRecordsToLeader(transactionRecords(), origin = AppendOrigin.CLIENT, requiredAcks = 1, RequestLocal.withThreadConfinedCaching)
   }
 
   private def makeLeader(

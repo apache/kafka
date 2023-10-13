@@ -17,6 +17,8 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroupMember;
 import org.apache.kafka.coordinator.group.consumer.TopicMetadata;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentKey;
@@ -33,11 +35,14 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmen
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMetadataValue;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
+import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
+import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
 import org.apache.kafka.coordinator.group.generic.GenericGroup;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -126,13 +131,24 @@ public class RecordHelpers {
         Map<String, TopicMetadata> newSubscriptionMetadata
     ) {
         ConsumerGroupPartitionMetadataValue value = new ConsumerGroupPartitionMetadataValue();
-        newSubscriptionMetadata.forEach((topicName, topicMetadata) ->
+        newSubscriptionMetadata.forEach((topicName, topicMetadata) -> {
+            List<ConsumerGroupPartitionMetadataValue.PartitionMetadata> partitionMetadata = new ArrayList<>();
+            // If the partition rack information map is empty, store an empty list in the record.
+            if (!topicMetadata.partitionRacks().isEmpty()) {
+                topicMetadata.partitionRacks().forEach((partition, racks) ->
+                    partitionMetadata.add(new ConsumerGroupPartitionMetadataValue.PartitionMetadata()
+                        .setPartition(partition)
+                        .setRacks(new ArrayList<>(racks))
+                    )
+                );
+            }
             value.topics().add(new ConsumerGroupPartitionMetadataValue.TopicMetadata()
                 .setTopicId(topicMetadata.id())
                 .setTopicName(topicMetadata.name())
                 .setNumPartitions(topicMetadata.numPartitions())
-            )
-        );
+                .setPartitionMetadata(partitionMetadata)
+            );
+        });
 
         return new Record(
             new ApiMessageAndVersion(
@@ -365,11 +381,13 @@ public class RecordHelpers {
      * Creates a GroupMetadata record.
      *
      * @param group              The generic group.
+     * @param assignment         The generic group assignment.
      * @param metadataVersion    The metadata version.
      * @return The record.
      */
     public static Record newGroupMetadataRecord(
         GenericGroup group,
+        Map<String, byte[]> assignment,
         MetadataVersion metadataVersion
     ) {
         List<GroupMetadataValue.MemberMetadata> members = new ArrayList<>(group.allMembers().size());
@@ -379,10 +397,10 @@ public class RecordHelpers {
                 throw new IllegalStateException("Attempted to write non-empty group metadata with no defined protocol.");
             }
 
-            byte[] assignment = member.assignment();
-            if (assignment == null) {
+            byte[] memberAssignment = assignment.get(member.memberId());
+            if (memberAssignment == null) {
                 throw new IllegalStateException("Attempted to write member " + member.memberId() +
-                    " of group + " + group.groupId() + " with no assignment.");
+                    " of group " + group.groupId() + " with no assignment.");
             }
 
             members.add(
@@ -394,7 +412,7 @@ public class RecordHelpers {
                     .setSessionTimeout(member.sessionTimeoutMs())
                     .setGroupInstanceId(member.groupInstanceId().orElse(null))
                     .setSubscription(subscription)
-                    .setAssignment(assignment)
+                    .setAssignment(memberAssignment)
             );
         });
 
@@ -433,6 +451,101 @@ public class RecordHelpers {
                 (short) 2
             ),
             null // Tombstone
+        );
+    }
+
+    /**
+     * Creates an empty GroupMetadata record.
+     *
+     * @param group              The generic group.
+     * @param metadataVersion    The metadata version.
+     * @return The record.
+     */
+    public static Record newEmptyGroupMetadataRecord(
+        GenericGroup group,
+        MetadataVersion metadataVersion
+    ) {
+        return new Record(
+            new ApiMessageAndVersion(
+                new GroupMetadataKey()
+                    .setGroup(group.groupId()),
+                (short) 2
+            ),
+            new ApiMessageAndVersion(
+                new GroupMetadataValue()
+                    .setProtocol(null)
+                    .setProtocolType("")
+                    .setGeneration(0)
+                    .setLeader(null)
+                    .setCurrentStateTimestamp(group.currentStateTimestampOrDefault())
+                    .setMembers(Collections.emptyList()),
+                metadataVersion.groupMetadataValueVersion()
+            )
+        );
+    }
+
+    /**
+     * Creates an OffsetCommit record.
+     *
+     * @param groupId           The group id.
+     * @param topic             The topic name.
+     * @param partitionId       The partition id.
+     * @param offsetAndMetadata The offset and metadata.
+     * @param metadataVersion   The metadata version.
+     * @return The record.
+     */
+    public static Record newOffsetCommitRecord(
+        String groupId,
+        String topic,
+        int partitionId,
+        OffsetAndMetadata offsetAndMetadata,
+        MetadataVersion metadataVersion
+    ) {
+        short version = metadataVersion.offsetCommitValueVersion(offsetAndMetadata.expireTimestampMs.isPresent());
+
+        return new Record(
+            new ApiMessageAndVersion(
+                new OffsetCommitKey()
+                    .setGroup(groupId)
+                    .setTopic(topic)
+                    .setPartition(partitionId),
+                (short) 1
+            ),
+            new ApiMessageAndVersion(
+                new OffsetCommitValue()
+                    .setOffset(offsetAndMetadata.offset)
+                    .setLeaderEpoch(offsetAndMetadata.leaderEpoch.orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH))
+                    .setMetadata(offsetAndMetadata.metadata)
+                    .setCommitTimestamp(offsetAndMetadata.commitTimestampMs)
+                    // Version 1 has a non-empty expireTimestamp field
+                    .setExpireTimestamp(offsetAndMetadata.expireTimestampMs.orElse(OffsetCommitRequest.DEFAULT_TIMESTAMP)),
+                version
+            )
+        );
+    }
+
+    /**
+     * Creates an OffsetCommit tombstone record.
+     *
+     * @param groupId           The group id.
+     * @param topic             The topic name.
+     * @param partitionId       The partition id.
+     * @return The record.
+     */
+    public static Record newOffsetCommitTombstoneRecord(
+        String groupId,
+        String topic,
+        int partitionId
+    ) {
+        return new Record(
+            new ApiMessageAndVersion(
+                new OffsetCommitKey()
+                    .setGroup(groupId)
+                    .setTopic(topic)
+                    .setPartition(partitionId),
+                (short) 1
+            ),
+            null
         );
     }
 

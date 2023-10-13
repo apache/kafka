@@ -17,7 +17,6 @@
 
 package org.apache.kafka.controller;
 
-import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
@@ -86,6 +85,7 @@ import org.apache.kafka.metadata.placement.StripedReplicaPlacer;
 import org.apache.kafka.metadata.placement.UsableBroker;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.server.common.TopicIdPartition;
 import org.apache.kafka.server.policy.CreateTopicPolicy;
 import org.apache.kafka.server.util.MockRandom;
 import org.apache.kafka.timeline.SnapshotRegistry;
@@ -207,7 +207,7 @@ public class ReplicationControlManagerTest {
             this.time = time;
             this.featureControl = new FeatureControlManager.Builder().
                 setSnapshotRegistry(snapshotRegistry).
-                setQuorumFeatures(new QuorumFeatures(0, new ApiVersions(),
+                setQuorumFeatures(new QuorumFeatures(0,
                     QuorumFeatures.defaultFeatureMap(),
                     Collections.singletonList(0))).
                 setMetadataVersion(metadataVersion).
@@ -2570,5 +2570,27 @@ public class ReplicationControlManagerTest {
     private static List<BrokerState> isrWithDefaultEpoch(Integer... isr) {
         return Arrays.stream(isr).map(brokerId -> brokerState(brokerId, defaultBrokerEpoch(brokerId)))
             .collect(Collectors.toList());
+    }
+
+    @Test
+    public void testDuplicateTopicIdReplay() {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().build();
+        ReplicationControlManager replicationControl = ctx.replicationControl;
+        replicationControl.replay(new TopicRecord().
+                setName("foo").
+                setTopicId(Uuid.fromString("Ktv3YkMQRe-MId4VkkrMyw")));
+        assertEquals("Found duplicate TopicRecord for foo with topic ID Ktv3YkMQRe-MId4VkkrMyw",
+            assertThrows(RuntimeException.class,
+                () -> replicationControl.replay(new TopicRecord().
+                    setName("foo").
+                    setTopicId(Uuid.fromString("Ktv3YkMQRe-MId4VkkrMyw")))).
+                        getMessage());
+        assertEquals("Found duplicate TopicRecord for foo with a different ID than before. " +
+            "Previous ID was Ktv3YkMQRe-MId4VkkrMyw and new ID is 8auUWq8zQqe_99H_m2LAmw",
+                assertThrows(RuntimeException.class,
+                        () -> replicationControl.replay(new TopicRecord().
+                                setName("foo").
+                                setTopicId(Uuid.fromString("8auUWq8zQqe_99H_m2LAmw")))).
+                        getMessage());
     }
 }

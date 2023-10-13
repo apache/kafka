@@ -32,6 +32,7 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Predicate;
 import java.util.jar.Attributes;
 import java.util.jar.JarEntry;
@@ -68,18 +69,19 @@ public class TestPlugins {
      * Unit of compilation and distribution, containing zero or more plugin classes.
      */
     public enum TestPackage {
-        ALWAYS_THROW_EXCEPTION("always-throw-exception"),
         ALIASED_STATIC_FIELD("aliased-static-field"),
-        SAMPLING_CONVERTER("sampling-converter"),
-        SAMPLING_CONFIGURABLE("sampling-configurable"),
-        SAMPLING_HEADER_CONVERTER("sampling-header-converter"),
-        SAMPLING_CONFIG_PROVIDER("sampling-config-provider"),
-        SAMPLING_CONNECTOR("sampling-connector"),
-        SERVICE_LOADER("service-loader"),
+        ALWAYS_THROW_EXCEPTION("always-throw-exception"),
+        BAD_PACKAGING("bad-packaging", s -> s.contains("NonExistentInterface")),
+        MULTIPLE_PLUGINS_IN_JAR("multiple-plugins-in-jar"),
+        NON_MIGRATED("non-migrated"),
         READ_VERSION_FROM_RESOURCE_V1("read-version-from-resource-v1"),
         READ_VERSION_FROM_RESOURCE_V2("read-version-from-resource-v2"),
-        MULTIPLE_PLUGINS_IN_JAR("multiple-plugins-in-jar"),
-        BAD_PACKAGING("bad-packaging", s -> s.contains("NonExistentInterface")),
+        SAMPLING_CONFIGURABLE("sampling-configurable"),
+        SAMPLING_CONFIG_PROVIDER("sampling-config-provider"),
+        SAMPLING_CONNECTOR("sampling-connector"),
+        SAMPLING_CONVERTER("sampling-converter"),
+        SAMPLING_HEADER_CONVERTER("sampling-header-converter"),
+        SERVICE_LOADER("service-loader"),
         SUBCLASS_OF_CLASSPATH("subclass-of-classpath");
 
         private final String resourceDir;
@@ -105,84 +107,33 @@ public class TestPlugins {
 
     public enum TestPlugin {
         /**
-         * A plugin which will always throw an exception during loading
-         */
-        ALWAYS_THROW_EXCEPTION(TestPackage.ALWAYS_THROW_EXCEPTION, "test.plugins.AlwaysThrowException"),
-        /**
          * A plugin which samples information about its initialization.
          */
         ALIASED_STATIC_FIELD(TestPackage.ALIASED_STATIC_FIELD, "test.plugins.AliasedStaticField"),
         /**
-         * A {@link org.apache.kafka.connect.storage.Converter}
-         * which samples information about its method calls.
+         * A plugin which will always throw an exception during loading
          */
-        SAMPLING_CONVERTER(TestPackage.SAMPLING_CONVERTER, "test.plugins.SamplingConverter"),
-        /**
-         * A {@link org.apache.kafka.common.Configurable}
-         * which samples information about its method calls.
-         */
-        SAMPLING_CONFIGURABLE(TestPackage.SAMPLING_CONFIGURABLE, "test.plugins.SamplingConfigurable"),
-        /**
-         * A {@link org.apache.kafka.connect.storage.HeaderConverter}
-         * which samples information about its method calls.
-         */
-        SAMPLING_HEADER_CONVERTER(TestPackage.SAMPLING_HEADER_CONVERTER, "test.plugins.SamplingHeaderConverter"),
-        /**
-         * A {@link org.apache.kafka.common.config.provider.ConfigProvider}
-         * which samples information about its method calls.
-         */
-        SAMPLING_CONFIG_PROVIDER(TestPackage.SAMPLING_CONFIG_PROVIDER, "test.plugins.SamplingConfigProvider"),
-        /**
-         * A {@link org.apache.kafka.connect.sink.SinkConnector}
-         * which samples information about its method calls.
-         */
-        SAMPLING_CONNECTOR(TestPackage.SAMPLING_CONNECTOR, "test.plugins.SamplingConnector"),
-        /**
-         * A plugin which uses a {@link java.util.ServiceLoader}
-         * to load internal classes, and samples information about their initialization.
-         */
-        SERVICE_LOADER(TestPackage.SERVICE_LOADER, "test.plugins.ServiceLoaderPlugin"),
-        /**
-         * A plugin which reads a version string from a resource and packages the version string 1.0.0.
-         */
-        READ_VERSION_FROM_RESOURCE_V1(TestPackage.READ_VERSION_FROM_RESOURCE_V1, "test.plugins.ReadVersionFromResource"),
-        /**
-         * A plugin which reads a version string from a resource and packages the version string 2.0.0.
-         * This plugin is not included in {@link TestPlugins#pluginPath()} and must be included explicitly
-         */
-        READ_VERSION_FROM_RESOURCE_V2(TestPackage.READ_VERSION_FROM_RESOURCE_V2, "test.plugins.ReadVersionFromResource", false),
-        /**
-         * A plugin which shares a jar file with {@link TestPlugin#MULTIPLE_PLUGINS_IN_JAR_THING_TWO}
-         */
-        MULTIPLE_PLUGINS_IN_JAR_THING_ONE(TestPackage.MULTIPLE_PLUGINS_IN_JAR, "test.plugins.ThingOne"),
-        /**
-         * A plugin which shares a jar file with {@link TestPlugin#MULTIPLE_PLUGINS_IN_JAR_THING_ONE}
-         */
-        MULTIPLE_PLUGINS_IN_JAR_THING_TWO(TestPackage.MULTIPLE_PLUGINS_IN_JAR, "test.plugins.ThingTwo"),
-        /**
-         * A plugin which is incorrectly packaged, and is missing a superclass definition.
-         */
-        BAD_PACKAGING_MISSING_SUPERCLASS(TestPackage.BAD_PACKAGING, "test.plugins.MissingSuperclass", false),
+        ALWAYS_THROW_EXCEPTION(TestPackage.ALWAYS_THROW_EXCEPTION, "test.plugins.AlwaysThrowException"),
         /**
          * A plugin which is packaged with other incorrectly packaged plugins, but itself has no issues loading.
          */
         BAD_PACKAGING_CO_LOCATED(TestPackage.BAD_PACKAGING, "test.plugins.CoLocatedPlugin", true),
         /**
-         * A connector which is incorrectly packaged, and throws during static initialization.
+         * A plugin which is incorrectly packaged, which has a private default constructor.
          */
-        BAD_PACKAGING_STATIC_INITIALIZER_THROWS_CONNECTOR(TestPackage.BAD_PACKAGING, "test.plugins.StaticInitializerThrowsConnector", false),
-        /**
-         * A plugin which is incorrectly packaged, which throws an exception from the {@link Versioned#version()} method.
-         */
-        BAD_PACKAGING_VERSION_METHOD_THROWS_CONNECTOR(TestPackage.BAD_PACKAGING, "test.plugins.VersionMethodThrowsConnector", true),
+        BAD_PACKAGING_DEFAULT_CONSTRUCTOR_PRIVATE_CONNECTOR(TestPackage.BAD_PACKAGING, "test.plugins.DefaultConstructorPrivateConnector", false),
         /**
          * A plugin which is incorrectly packaged, which throws an exception from default constructor.
          */
         BAD_PACKAGING_DEFAULT_CONSTRUCTOR_THROWS_CONNECTOR(TestPackage.BAD_PACKAGING, "test.plugins.DefaultConstructorThrowsConnector", false),
         /**
-         * A plugin which is incorrectly packaged, which has a private default constructor.
+         * A plugin which is incorrectly packaged, which throws an exception from the {@link Versioned#version()} method.
          */
-        BAD_PACKAGING_DEFAULT_CONSTRUCTOR_PRIVATE_CONNECTOR(TestPackage.BAD_PACKAGING, "test.plugins.DefaultConstructorPrivateConnector", false),
+        BAD_PACKAGING_INNER_CLASS_CONNECTOR(TestPackage.BAD_PACKAGING, "test.plugins.OuterClass$InnerClass", false),
+        /**
+         * A plugin which is incorrectly packaged, and is missing a superclass definition.
+         */
+        BAD_PACKAGING_MISSING_SUPERCLASS(TestPackage.BAD_PACKAGING, "test.plugins.MissingSuperclass", false),
         /**
          * A plugin which is incorrectly packaged, which has a private default constructor.
          */
@@ -196,13 +147,92 @@ public class TestPlugins {
          */
         BAD_PACKAGING_NO_DEFAULT_CONSTRUCTOR_OVERRIDE_POLICY(TestPackage.BAD_PACKAGING, "test.plugins.NoDefaultConstructorOverridePolicy", false),
         /**
-         * A plugin which is incorrectly packaged, which throws an exception from the {@link Versioned#version()} method.
+         * A connector which is incorrectly packaged, and throws during static initialization.
          */
-        BAD_PACKAGING_INNER_CLASS_CONNECTOR(TestPackage.BAD_PACKAGING, "test.plugins.OuterClass$InnerClass", false),
+        BAD_PACKAGING_STATIC_INITIALIZER_THROWS_CONNECTOR(TestPackage.BAD_PACKAGING, "test.plugins.StaticInitializerThrowsConnector", false),
         /**
          * A plugin which is incorrectly packaged, which throws an exception from the {@link Versioned#version()} method.
          */
         BAD_PACKAGING_STATIC_INITIALIZER_THROWS_REST_EXTENSION(TestPackage.BAD_PACKAGING, "test.plugins.StaticInitializerThrowsRestExtension", false),
+        /**
+         * A plugin which is incorrectly packaged, which throws an exception from the {@link Versioned#version()} method.
+         */
+        BAD_PACKAGING_VERSION_METHOD_THROWS_CONNECTOR(TestPackage.BAD_PACKAGING, "test.plugins.VersionMethodThrowsConnector", true),
+        /**
+         * A plugin which shares a jar file with {@link TestPlugin#MULTIPLE_PLUGINS_IN_JAR_THING_TWO}
+         */
+        MULTIPLE_PLUGINS_IN_JAR_THING_ONE(TestPackage.MULTIPLE_PLUGINS_IN_JAR, "test.plugins.ThingOne"),
+        /**
+         * A plugin which shares a jar file with {@link TestPlugin#MULTIPLE_PLUGINS_IN_JAR_THING_ONE}
+         */
+        MULTIPLE_PLUGINS_IN_JAR_THING_TWO(TestPackage.MULTIPLE_PLUGINS_IN_JAR, "test.plugins.ThingTwo"),
+        /**
+         * A converter which does not have a corresponding ServiceLoader manifest
+         */
+        NON_MIGRATED_CONVERTER(TestPackage.NON_MIGRATED, "test.plugins.NonMigratedConverter", false),
+        /**
+         * A header converter which does not have a corresponding ServiceLoader manifest
+         */
+        NON_MIGRATED_HEADER_CONVERTER(TestPackage.NON_MIGRATED, "test.plugins.NonMigratedHeaderConverter", false),
+        /**
+         * A plugin which implements multiple interfaces, and has ServiceLoader manifests for some interfaces and not others.
+         */
+        NON_MIGRATED_MULTI_PLUGIN(TestPackage.NON_MIGRATED, "test.plugins.NonMigratedMultiPlugin", false),
+        /**
+         * A predicate which does not have a corresponding ServiceLoader manifest
+         */
+        NON_MIGRATED_PREDICATE(TestPackage.NON_MIGRATED, "test.plugins.NonMigratedPredicate", false),
+        /**
+         * A sink connector which does not have a corresponding ServiceLoader manifest
+         */
+        NON_MIGRATED_SINK_CONNECTOR(TestPackage.NON_MIGRATED, "test.plugins.NonMigratedSinkConnector", false),
+        /**
+         * A source connector which does not have a corresponding ServiceLoader manifest
+         */
+        NON_MIGRATED_SOURCE_CONNECTOR(TestPackage.NON_MIGRATED, "test.plugins.NonMigratedSourceConnector", false),
+        /**
+         * A transformation which does not have a corresponding ServiceLoader manifest
+         */
+        NON_MIGRATED_TRANSFORMATION(TestPackage.NON_MIGRATED, "test.plugins.NonMigratedTransformation", false),
+        /**
+         * A plugin which reads a version string from a resource and packages the version string 1.0.0.
+         */
+        READ_VERSION_FROM_RESOURCE_V1(TestPackage.READ_VERSION_FROM_RESOURCE_V1, "test.plugins.ReadVersionFromResource"),
+        /**
+         * A plugin which reads a version string from a resource and packages the version string 2.0.0.
+         * This plugin is not included in {@link TestPlugins#pluginPath()} and must be included explicitly
+         */
+        READ_VERSION_FROM_RESOURCE_V2(TestPackage.READ_VERSION_FROM_RESOURCE_V2, "test.plugins.ReadVersionFromResource", false),
+        /**
+         * A {@link org.apache.kafka.common.Configurable}
+         * which samples information about its method calls.
+         */
+        SAMPLING_CONFIGURABLE(TestPackage.SAMPLING_CONFIGURABLE, "test.plugins.SamplingConfigurable"),
+        /**
+         * A {@link org.apache.kafka.common.config.provider.ConfigProvider}
+         * which samples information about its method calls.
+         */
+        SAMPLING_CONFIG_PROVIDER(TestPackage.SAMPLING_CONFIG_PROVIDER, "test.plugins.SamplingConfigProvider"),
+        /**
+         * A {@link org.apache.kafka.connect.sink.SinkConnector}
+         * which samples information about its method calls.
+         */
+        SAMPLING_CONNECTOR(TestPackage.SAMPLING_CONNECTOR, "test.plugins.SamplingConnector"),
+        /**
+         * A {@link org.apache.kafka.connect.storage.Converter}
+         * which samples information about its method calls.
+         */
+        SAMPLING_CONVERTER(TestPackage.SAMPLING_CONVERTER, "test.plugins.SamplingConverter"),
+        /**
+         * A {@link org.apache.kafka.connect.storage.HeaderConverter}
+         * which samples information about its method calls.
+         */
+        SAMPLING_HEADER_CONVERTER(TestPackage.SAMPLING_HEADER_CONVERTER, "test.plugins.SamplingHeaderConverter"),
+        /**
+         * A plugin which uses a {@link java.util.ServiceLoader}
+         * to load internal classes, and samples information about their initialization.
+         */
+        SERVICE_LOADER(TestPackage.SERVICE_LOADER, "test.plugins.ServiceLoaderPlugin"),
         /**
          * A reflectively discovered plugin which subclasses another plugin which is present on the classpath
          */
@@ -276,7 +306,7 @@ public class TestPlugins {
      * @return A list of plugin jar filenames
      * @throws AssertionError if any plugin failed to load, or no plugins were loaded.
      */
-    public static List<Path> pluginPath() {
+    public static Set<Path> pluginPath() {
         return pluginPath(defaultPlugins());
     }
 
@@ -290,14 +320,14 @@ public class TestPlugins {
      * @return A list of plugin jar filenames containing the specified test plugins
      * @throws AssertionError if any plugin failed to load, or no plugins were loaded.
      */
-    public static List<Path> pluginPath(TestPlugin... plugins) {
+    public static Set<Path> pluginPath(TestPlugin... plugins) {
         assertAvailable();
         return Arrays.stream(plugins)
                 .filter(Objects::nonNull)
                 .map(TestPlugin::testPackage)
                 .distinct()
                 .map(PLUGIN_JARS::get)
-                .collect(Collectors.toList());
+                .collect(Collectors.toSet());
     }
 
     public static String pluginPathJoined(TestPlugin... plugins) {

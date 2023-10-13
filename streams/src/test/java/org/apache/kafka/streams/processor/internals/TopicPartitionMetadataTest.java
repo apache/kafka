@@ -26,7 +26,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 public class TopicPartitionMetadataTest {
 
     @Test
-    public void shouldGetPartitonTimeAndProcessorMeta() {
+    public void shouldGetPartitionTimeAndProcessorMeta() {
         final ProcessorMetadata metadata = new ProcessorMetadata();
         final String key = "some_key";
         final long value = 100L;

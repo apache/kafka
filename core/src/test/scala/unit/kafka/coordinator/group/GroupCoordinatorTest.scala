@@ -21,7 +21,6 @@ import java.util.{Optional, OptionalInt}
 import kafka.common.OffsetAndMetadata
 import kafka.server.{DelayedOperationPurgatory, HostedPartition, KafkaConfig, ReplicaManager, RequestLocal}
 import kafka.utils._
-import kafka.utils.timer.MockTimer
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{MemoryRecords, RecordBatch}
@@ -37,6 +36,7 @@ import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
+import org.apache.kafka.server.util.timer.MockTimer
 import org.apache.kafka.server.util.{KafkaScheduler, MockTime}
 import org.apache.kafka.storage.internals.log.AppendOrigin
 import org.junit.jupiter.api.Assertions._
@@ -2263,13 +2263,13 @@ class GroupCoordinatorTest {
 
     assertEquals(Errors.NONE, await(leaderResult, 1).error)
 
-    // Leader should be able to heartbeart
+    // Leader should be able to heartbeat
     verifyHeartbeat(results.head, Errors.NONE)
 
     // Advance part the rebalance timeout to trigger the delayed operation.
     timer.advanceClock(DefaultRebalanceTimeout / 2 + 1)
 
-    // Leader should be able to heartbeart
+    // Leader should be able to heartbeat
     verifyHeartbeat(results.head, Errors.REBALANCE_IN_PROGRESS)
 
     // Followers should have been removed.
@@ -2347,7 +2347,7 @@ class GroupCoordinatorTest {
     val followerErrors = followerResults.map(await(_, 1).error)
     assertEquals(Set(Errors.NONE), followerErrors.toSet)
 
-    // Advance past the rebalance timeout to expire the Sync timout. All
+    // Advance past the rebalance timeout to expire the Sync timeout. All
     // members should remain and the group should not rebalance.
     timer.advanceClock(DefaultRebalanceTimeout / 2 + 1)
 
@@ -3865,7 +3865,6 @@ class GroupCoordinatorTest {
       any(),
       any(),
       any(),
-      any(),
       any()
     )).thenAnswer(_ => {
       capturedArgument.getValue.apply(
@@ -3901,7 +3900,6 @@ class GroupCoordinatorTest {
       any[Option[ReentrantLock]],
       any(),
       any(), 
-      any(),
       any(),
       any())).thenAnswer(_ => {
         capturedArgument.getValue.apply(
@@ -4049,9 +4047,8 @@ class GroupCoordinatorTest {
       any(),
       any(),
       any(),
-      any(),
-      any())
-    ).thenAnswer(_ => {
+      any()
+    )).thenAnswer(_ => {
       capturedArgument.getValue.apply(
         Map(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId) ->
           new PartitionResponse(Errors.NONE, 0L, RecordBatch.NO_TIMESTAMP, 0L)
@@ -4075,6 +4072,8 @@ class GroupCoordinatorTest {
 
     val capturedArgument: ArgumentCaptor[scala.collection.Map[TopicPartition, PartitionResponse] => Unit] = ArgumentCaptor.forClass(classOf[scala.collection.Map[TopicPartition, PartitionResponse] => Unit])
 
+    // Since transactional ID is only used in appendRecords, we can use a dummy value. Ensure it passes through.
+    val transactionalId = "dummy-txn-id"
     when(replicaManager.appendRecords(anyLong,
       anyShort(),
       internalTopicsAllowed = ArgumentMatchers.eq(true),
@@ -4084,10 +4083,9 @@ class GroupCoordinatorTest {
       any[Option[ReentrantLock]],
       any(),
       any(),
-      any(),
-      any(),
-      any())
-    ).thenAnswer(_ => {
+      ArgumentMatchers.eq(transactionalId),
+      any()
+    )).thenAnswer(_ => {
       capturedArgument.getValue.apply(
         Map(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupCoordinator.partitionFor(groupId)) ->
           new PartitionResponse(Errors.NONE, 0L, RecordBatch.NO_TIMESTAMP, 0L)
@@ -4096,7 +4094,7 @@ class GroupCoordinatorTest {
     })
     when(replicaManager.getMagic(any[TopicPartition])).thenReturn(Some(RecordBatch.MAGIC_VALUE_V2))
 
-    groupCoordinator.handleTxnCommitOffsets(groupId, producerId, producerEpoch,
+    groupCoordinator.handleTxnCommitOffsets(groupId, transactionalId, producerId, producerEpoch,
       memberId, groupInstanceId, generationId, offsets, responseCallback)
     val result = Await.result(responseFuture, Duration(40, TimeUnit.MILLISECONDS))
     result

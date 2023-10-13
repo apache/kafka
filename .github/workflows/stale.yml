@@ -41,7 +41,7 @@ jobs:
       - uses: actions/stale@v8
         with:
           debug-only: ${{ inputs.dryRun || false }}
-          operations-per-run: ${{ inputs.operationsPerRun || 30 }}
+          operations-per-run: ${{ inputs.operationsPerRun || 100 }}
           days-before-stale: 90
           days-before-close: -1
           stale-pr-label: 'stale'
@@ -51,5 +51,5 @@ jobs:
             merge conflicts, please update it with the latest from trunk (or appropriate release branch)
             <p>
             If this PR is no longer valid or desired, please feel free to close it. If no activity
-            occurrs in the next 30 days, it will be automatically closed.
+            occurs in the next 30 days, it will be automatically closed.
           

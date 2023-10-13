@@ -16,36 +16,47 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.ApiVersions;
+import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.GroupRebalanceConfig;
-import org.apache.kafka.clients.KafkaClient;
+import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.LinkedList;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Queue;
 import java.util.concurrent.BlockingQueue;
+
+import static java.util.Objects.requireNonNull;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_MAX_INFLIGHT_REQUESTS_PER_CONNECTION;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP_PREFIX;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.configuredIsolationLevel;
 
 /**
  * Background thread runnable that consumes {@code ApplicationEvent} and
  * produces {@code BackgroundEvent}. It uses an event loop to consume and
  * produce events, and poll the network client to handle network IO.
- * <p>
+ * <p/>
  * It holds a reference to the {@link SubscriptionState}, which is
  * initialized by the polling thread.
+ * <p/>
+ * For processing application events that have been submitted to the
+ * {@link #applicationEventQueue}, this relies on an {@link ApplicationEventProcessor}. Processing includes generating requests and
+ * handling responses with the appropriate {@link RequestManager}. The network operations for
+ * actually sending the requests is delegated to the {@link NetworkClientDelegate}
+ * </li>
  */
 public class DefaultBackgroundThread extends KafkaThread {
     private static final long MAX_POLL_TIMEOUT_MS = 5000;
@@ -63,9 +74,10 @@ public class DefaultBackgroundThread extends KafkaThread {
     private final GroupState groupState;
     private boolean running;
 
-    private final Map<RequestManager.Type, Optional<RequestManager>> requestManagerRegistry;
+    private final RequestManagers requestManagers;
 
     // Visible for testing
+    @SuppressWarnings("ParameterNumber")
     DefaultBackgroundThread(final Time time,
                             final ConsumerConfig config,
                             final LogContext logContext,
@@ -77,7 +89,10 @@ public class DefaultBackgroundThread extends KafkaThread {
                             final NetworkClientDelegate networkClient,
                             final GroupState groupState,
                             final CoordinatorRequestManager coordinatorManager,
-                            final CommitRequestManager commitRequestManager) {
+                            final CommitRequestManager commitRequestManager,
+                            final OffsetsRequestManager offsetsRequestManager,
+                            final TopicMetadataRequestManager topicMetadataRequestManager,
+                            final HeartbeatRequestManager heartbeatRequestManager) {
         super(BACKGROUND_THREAD_NAME, true);
         this.time = time;
         this.running = true;
@@ -90,11 +105,14 @@ public class DefaultBackgroundThread extends KafkaThread {
         this.networkClientDelegate = networkClient;
         this.errorEventHandler = errorEventHandler;
         this.groupState = groupState;
-
-        this.requestManagerRegistry = new HashMap<>();
-        this.requestManagerRegistry.put(RequestManager.Type.COORDINATOR, Optional.ofNullable(coordinatorManager));
-        this.requestManagerRegistry.put(RequestManager.Type.COMMIT, Optional.ofNullable(commitRequestManager));
+        this.requestManagers = new RequestManagers(
+                offsetsRequestManager,
+                topicMetadataRequestManager,
+                Optional.ofNullable(coordinatorManager),
+                Optional.ofNullable(commitRequestManager),
+                Optional.ofNullable(heartbeatRequestManager));
     }
+
     public DefaultBackgroundThread(final Time time,
                                    final ConsumerConfig config,
                                    final GroupRebalanceConfig rebalanceConfig,
@@ -102,52 +120,105 @@ public class DefaultBackgroundThread extends KafkaThread {
                                    final BlockingQueue<ApplicationEvent> applicationEventQueue,
                                    final BlockingQueue<BackgroundEvent> backgroundEventQueue,
                                    final ConsumerMetadata metadata,
-                                   final KafkaClient networkClient) {
+                                   final SubscriptionState subscriptionState,
+                                   final ApiVersions apiVersions,
+                                   final Metrics metrics,
+                                   final Sensor fetcherThrottleTimeSensor) {
         super(BACKGROUND_THREAD_NAME, true);
+        requireNonNull(config);
+        requireNonNull(rebalanceConfig);
+        requireNonNull(logContext);
+        requireNonNull(applicationEventQueue);
+        requireNonNull(backgroundEventQueue);
+        requireNonNull(metadata);
+        requireNonNull(subscriptionState);
         try {
             this.time = time;
             this.log = logContext.logger(getClass());
             this.applicationEventQueue = applicationEventQueue;
             this.backgroundEventQueue = backgroundEventQueue;
             this.config = config;
-            // subscriptionState is initialized by the polling thread
             this.metadata = metadata;
+            final NetworkClient networkClient = ClientUtils.createNetworkClient(config,
+                metrics,
+                CONSUMER_METRIC_GROUP_PREFIX,
+                logContext,
+                apiVersions,
+                time,
+                CONSUMER_MAX_INFLIGHT_REQUESTS_PER_CONNECTION,
+                metadata,
+                fetcherThrottleTimeSensor);
             this.networkClientDelegate = new NetworkClientDelegate(
-                    this.time,
-                    this.config,
-                    logContext,
-                    networkClient);
+                this.time,
+                this.config,
+                logContext,
+                networkClient);
             this.running = true;
             this.errorEventHandler = new ErrorEventHandler(this.backgroundEventQueue);
             this.groupState = new GroupState(rebalanceConfig);
-            this.requestManagerRegistry = Collections.unmodifiableMap(buildRequestManagerRegistry(logContext));
-            this.applicationEventProcessor = new ApplicationEventProcessor(backgroundEventQueue, requestManagerRegistry);
+            long retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
+            long retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
+            final int requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
+
+            OffsetsRequestManager offsetsRequestManager =
+                new OffsetsRequestManager(
+                    subscriptionState,
+                    metadata,
+                    configuredIsolationLevel(config),
+                    time,
+                    retryBackoffMs,
+                    requestTimeoutMs,
+                    apiVersions,
+                    networkClientDelegate,
+                    logContext);
+            CoordinatorRequestManager coordinatorRequestManager = null;
+            CommitRequestManager commitRequestManager = null;
+            TopicMetadataRequestManager topicMetadataRequestManger = new TopicMetadataRequestManager(
+                logContext,
+                config);
+            HeartbeatRequestManager heartbeatRequestManager = null;
+
+            // TODO: consolidate groupState and memberState
+            if (groupState.groupId != null) {
+                coordinatorRequestManager = new CoordinatorRequestManager(
+                        this.time,
+                        logContext,
+                        retryBackoffMs,
+                        retryBackoffMaxMs,
+                        this.errorEventHandler,
+                        groupState.groupId);
+                commitRequestManager = new CommitRequestManager(
+                        this.time,
+                        logContext,
+                        subscriptionState,
+                        config,
+                        coordinatorRequestManager,
+                        groupState);
+                MembershipManager membershipManager = new MembershipManagerImpl(groupState.groupId);
+                heartbeatRequestManager = new HeartbeatRequestManager(
+                        this.time,
+                        logContext,
+                        config,
+                        coordinatorRequestManager,
+                        subscriptionState,
+                        membershipManager,
+                        errorEventHandler);
+            }
+
+            this.requestManagers = new RequestManagers(
+                offsetsRequestManager,
+                topicMetadataRequestManger,
+                Optional.ofNullable(coordinatorRequestManager),
+                Optional.ofNullable(commitRequestManager),
+                Optional.ofNullable(heartbeatRequestManager));
+            this.applicationEventProcessor = new ApplicationEventProcessor(
+                backgroundEventQueue,
+                requestManagers,
+                metadata);
         } catch (final Exception e) {
             close();
             throw new KafkaException("Failed to construct background processor", e.getCause());
         }
-    }
-
-    private Map<RequestManager.Type, Optional<RequestManager>> buildRequestManagerRegistry(final LogContext logContext) {
-        Map<RequestManager.Type, Optional<RequestManager>> registry = new HashMap<>();
-        CoordinatorRequestManager coordinatorManager = groupState.groupId == null ?
-                null :
-                new CoordinatorRequestManager(
-                        time,
-                        logContext,
-                        config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG),
-                        errorEventHandler,
-                        groupState.groupId);
-        // Add subscriptionState
-        CommitRequestManager commitRequestManager = coordinatorManager == null ?
-                null :
-                new CommitRequestManager(time,
-                        logContext, null, config,
-                        coordinatorManager,
-                        groupState);
-        registry.put(RequestManager.Type.COORDINATOR, Optional.ofNullable(coordinatorManager));
-        registry.put(RequestManager.Type.COMMIT, Optional.ofNullable(commitRequestManager));
-        return registry;
     }
 
     @Override
@@ -164,7 +235,7 @@ public class DefaultBackgroundThread extends KafkaThread {
             }
         } catch (final Throwable t) {
             log.error("The background thread failed due to unexpected error", t);
-            throw new RuntimeException(t);
+            throw new KafkaException(t);
         } finally {
             close();
             log.debug("{} closed", getClass());
@@ -178,22 +249,24 @@ public class DefaultBackgroundThread extends KafkaThread {
      * 3. Poll the networkClient to send and retrieve the response.
      */
     void runOnce() {
-        drain();
+        if (!applicationEventQueue.isEmpty()) {
+            LinkedList<ApplicationEvent> res = new LinkedList<>();
+            this.applicationEventQueue.drainTo(res);
+
+            for (ApplicationEvent event : res) {
+                log.debug("Consuming application event: {}", event);
+                Objects.requireNonNull(event);
+                applicationEventProcessor.process(event);
+            }
+        }
+
         final long currentTimeMs = time.milliseconds();
-        final long pollWaitTimeMs = requestManagerRegistry.values().stream()
+        final long pollWaitTimeMs = requestManagers.entries().stream()
                 .filter(Optional::isPresent)
                 .map(m -> m.get().poll(currentTimeMs))
                 .map(this::handlePollResult)
                 .reduce(MAX_POLL_TIMEOUT_MS, Math::min);
         networkClientDelegate.poll(pollWaitTimeMs, currentTimeMs);
-    }
-
-    private void drain() {
-        Queue<ApplicationEvent> events = pollApplicationEvent();
-        for (ApplicationEvent event : events) {
-            log.debug("Consuming application event: {}", event);
-            consumeApplicationEvent(event);
-        }
     }
 
     long handlePollResult(NetworkClientDelegate.PollResult res) {
@@ -203,30 +276,15 @@ public class DefaultBackgroundThread extends KafkaThread {
         return res.timeUntilNextPollMs;
     }
 
-    private Queue<ApplicationEvent> pollApplicationEvent() {
-        if (this.applicationEventQueue.isEmpty()) {
-            return new LinkedList<>();
-        }
-
-        LinkedList<ApplicationEvent> res = new LinkedList<>();
-        this.applicationEventQueue.drainTo(res);
-        return res;
-    }
-
-    private void consumeApplicationEvent(final ApplicationEvent event) {
-        Objects.requireNonNull(event);
-        applicationEventProcessor.process(event);
-    }
-
     public boolean isRunning() {
         return this.running;
     }
 
-    public void wakeup() {
+    public final void wakeup() {
         networkClientDelegate.wakeup();
     }
 
-    public void close() {
+    public final void close() {
         this.running = false;
         this.wakeup();
         Utils.closeQuietly(networkClientDelegate, "network client utils");

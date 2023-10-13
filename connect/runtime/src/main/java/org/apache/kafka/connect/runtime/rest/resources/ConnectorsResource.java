@@ -301,7 +301,7 @@ public class ConnectorsResource implements ConnectResource {
 
     @GET
     @Path("/{connector}/tasks")
-    @Operation(summary = "List all tasks for the specified connector")
+    @Operation(summary = "List all tasks and their configurations for the specified connector")
     public List<TaskInfo> getTaskConfigs(final @PathParam("connector") String connector) throws Throwable {
         FutureCallback<List<TaskInfo>> cb = new FutureCallback<>();
         herder.taskConfigs(connector, cb);
@@ -363,6 +363,18 @@ public class ConnectorsResource implements ConnectResource {
         FutureCallback<Message> cb = new FutureCallback<>();
         herder.alterConnectorOffsets(connector, offsets.toMap(), cb);
         Message msg = requestHandler.completeOrForwardRequest(cb, "/connectors/" + connector + "/offsets", "PATCH", headers, offsets,
+                new TypeReference<Message>() { }, new IdentityTranslator<>(), forward);
+        return Response.ok().entity(msg).build();
+    }
+
+    @DELETE
+    @Path("/{connector}/offsets")
+    @Operation(summary = "Reset the offsets for the specified connector")
+    public Response resetConnectorOffsets(final @Parameter(hidden = true) @QueryParam("forward") Boolean forward,
+                                          final @Context HttpHeaders headers, final @PathParam("connector") String connector) throws Throwable {
+        FutureCallback<Message> cb = new FutureCallback<>();
+        herder.resetConnectorOffsets(connector, cb);
+        Message msg = requestHandler.completeOrForwardRequest(cb, "/connectors/" + connector + "/offsets", "DELETE", headers, null,
                 new TypeReference<Message>() { }, new IdentityTranslator<>(), forward);
         return Response.ok().entity(msg).build();
     }

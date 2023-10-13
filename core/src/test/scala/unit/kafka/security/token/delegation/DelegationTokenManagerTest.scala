@@ -23,7 +23,7 @@ import java.util.{Base64, Properties}
 import kafka.network.RequestChannel.Session
 import kafka.security.authorizer.{AclAuthorizer, AuthorizerUtils}
 import kafka.security.authorizer.AclEntry.WildcardHost
-import kafka.server.{CreateTokenResult, Defaults, DelegationTokenManager, KafkaConfig, QuorumTestHarness}
+import kafka.server.{CreateTokenResult, Defaults, DelegationTokenManager, DelegationTokenManagerZk, KafkaConfig, QuorumTestHarness}
 import kafka.utils.TestUtils
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding, AclOperation}
@@ -45,6 +45,10 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.Buffer
 
+/*
+ * These tests are only for the Zk DelegationTokenManager.
+ * They work by directly calling the DelegationTokenManager which only exists in Zk
+ */
 class DelegationTokenManagerTest extends QuorumTestHarness  {
 
   val time = new MockTime()
@@ -106,9 +110,9 @@ class DelegationTokenManagerTest extends QuorumTestHarness  {
     val password = DelegationTokenManager.createHmac(tokenId, secretKey)
     assertEquals(CreateTokenResult(owner, owner, issueTime, issueTime + renewTimeMsDefault,  issueTime + maxLifeTimeMsDefault, tokenId, password, Errors.NONE), createTokenResult)
 
-    val token = tokenManager.getToken(tokenId)
-    assertFalse(token.isEmpty )
-    assertTrue(password sameElements token.get.hmac)
+    val tokenInfo = tokenCache.token(tokenId)
+    val token = tokenManager.getDelegationToken(tokenInfo)
+    assertTrue(password sameElements token.hmac)
   }
 
   @Test
@@ -193,9 +197,9 @@ class DelegationTokenManagerTest extends QuorumTestHarness  {
 
     //try expire token immediately, even if it is an expired token
     tokenManager.expireToken(owner, ByteBuffer.wrap(password), -1, renewResponseCallback)
-    assert(tokenManager.getToken(tokenId).isEmpty)
     assertEquals(Errors.NONE, error)
     assertEquals(time.milliseconds, expiryTimeStamp)
+    assert(tokenCache.token(tokenId) == null)
   }
 
   @Test
@@ -219,7 +223,7 @@ class DelegationTokenManagerTest extends QuorumTestHarness  {
     assertNull(tokenInformation)
 
     //check that the token is removed
-    assert(tokenManager.getToken(tokenId).isEmpty)
+    assert(tokenCache.token(tokenId) == null)
   }
 
   @Test
@@ -375,7 +379,7 @@ class DelegationTokenManagerTest extends QuorumTestHarness  {
 
   private def createDelegationTokenManager(config: KafkaConfig, tokenCache: DelegationTokenCache,
                                            time: Time, zkClient: KafkaZkClient): DelegationTokenManager = {
-    val tokenManager = new DelegationTokenManager(config, tokenCache, time, zkClient)
+    val tokenManager = new DelegationTokenManagerZk(config, tokenCache, time, zkClient)
     tokenManagers += tokenManager
     tokenManager
   }

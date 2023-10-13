@@ -75,6 +75,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import static org.apache.kafka.connect.mirror.MirrorSourceConfig.SYNC_TOPIC_ACLS_ENABLED;
+import static org.apache.kafka.connect.mirror.MirrorUtils.SOURCE_CLUSTER_KEY;
+import static org.apache.kafka.connect.mirror.MirrorUtils.TOPIC_KEY;
 
 /** Replicate data, configuration, and ACLs between clusters.
  *
@@ -268,6 +270,33 @@ public class MirrorSourceConnector extends SourceConnector {
                 : ExactlyOnceSupport.UNSUPPORTED;
     }
 
+    @Override
+    public boolean alterOffsets(Map<String, String> connectorConfig, Map<Map<String, ?>, Map<String, ?>> offsets) {
+        for (Map.Entry<Map<String, ?>, Map<String, ?>> offsetEntry : offsets.entrySet()) {
+            Map<String, ?> sourceOffset = offsetEntry.getValue();
+            if (sourceOffset == null) {
+                // We allow tombstones for anything; if there's garbage in the offsets for the connector, we don't
+                // want to prevent users from being able to clean it up using the REST API
+                continue;
+            }
+
+            Map<String, ?> sourcePartition = offsetEntry.getKey();
+            if (sourcePartition == null) {
+                throw new ConnectException("Source partitions may not be null");
+            }
+
+            MirrorUtils.validateSourcePartitionString(sourcePartition, SOURCE_CLUSTER_KEY);
+            MirrorUtils.validateSourcePartitionString(sourcePartition, TOPIC_KEY);
+            MirrorUtils.validateSourcePartitionPartition(sourcePartition);
+
+            MirrorUtils.validateSourceOffset(sourcePartition, sourceOffset, false);
+        }
+
+        // We never commit offsets with our source consumer, so no additional effort is required beyond just validating
+        // the format of the user-supplied offsets
+        return true;
+    }
+
     private boolean consumerUsesReadCommitted(Map<String, String> props) {
         Object consumerIsolationLevel = MirrorSourceConfig.sourceConsumerConfig(props)
                 .get(ConsumerConfig.ISOLATION_LEVEL_CONFIG);
@@ -320,11 +349,11 @@ public class MirrorSourceConnector extends SourceConnector {
         // or if topic-partitions are missing from the target cluster
         if (!knownSourceTopicPartitionsSet.equals(sourceTopicPartitionsSet) || !missingInTarget.isEmpty()) {
 
-            Set<TopicPartition> newTopicPartitions = sourceTopicPartitionsSet;
-            newTopicPartitions.removeAll(knownSourceTopicPartitions);
+            Set<TopicPartition> newTopicPartitions = new HashSet<>(sourceTopicPartitions);
+            newTopicPartitions.removeAll(knownSourceTopicPartitionsSet);
 
             Set<TopicPartition> deletedTopicPartitions = knownSourceTopicPartitionsSet;
-            deletedTopicPartitions.removeAll(sourceTopicPartitions);
+            deletedTopicPartitions.removeAll(sourceTopicPartitionsSet);
 
             log.info("Found {} new topic-partitions on {}. " +
                      "Found {} deleted topic-partitions on {}. " +

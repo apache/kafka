@@ -174,8 +174,8 @@ public class TableSourceNode<K, V> extends SourceGraphNode<K, V> {
             return this;
         }
 
-        public TableSourceNodeBuilder<K, V> isGlobalKTable(final boolean isGlobaKTable) {
-            this.isGlobalKTable = isGlobaKTable;
+        public TableSourceNodeBuilder<K, V> isGlobalKTable(final boolean isGlobalKTable) {
+            this.isGlobalKTable = isGlobalKTable;
             return this;
         }
 
