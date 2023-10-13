@@ -309,11 +309,9 @@ public class FetchRequestManagerTest {
 
         // send request to close the fetcher
         Timer timer = time.timer(Duration.ofSeconds(10));
-        // fetcher.close(timer);
-        //
         // NOTE: by design the FetchRequestManager doesn't perform network I/O internally. That means that calling
-        // close with a Timer will NOT send out the close session requests on close. The network I/O logic is
-        // handled inside ConsumerNetworkThread.runAtClose, so we need to run that logic here.
+        // the close() method with a Timer will NOT send out the close session requests on close. The network
+        // I/O logic is handled inside ConsumerNetworkThread.runAtClose, so we need to run that logic here.
         ConsumerNetworkThread.runAtClose(singletonList(Optional.of(fetcher)), networkClientDelegate, timer);
 
         NetworkClientDelegate.PollResult pollResult = fetcher.poll(time.milliseconds());
