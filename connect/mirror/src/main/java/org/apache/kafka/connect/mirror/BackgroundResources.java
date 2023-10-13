@@ -17,7 +17,6 @@
 package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -86,7 +85,7 @@ public class BackgroundResources implements AutoCloseable {
         try {
             consumer = consumer(config.offsetSyncsTopicConsumerConfig(), "offset syncs consumer");
             admin = new TopicAdmin(
-                    config.offsetSyncsTopicAdminConfig().get(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG),
+                    config.offsetSyncsTopicAdminConfig(),
                     admin(config, config.offsetSyncsTopicAdminConfig(), "offset syncs admin"));
         } catch (Throwable t) {
             Utils.closeQuietly(consumer, "consumer for offset syncs");

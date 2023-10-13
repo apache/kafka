@@ -117,10 +117,6 @@ public class SourceConnectorConfig extends ConnectorConfig {
             super(plugins, configDef, props);
         }
 
-        @Override
-        public Object get(String key) {
-            return super.get(key);
-        }
     }
 
     private final TransactionBoundary transactionBoundary;
@@ -251,6 +247,7 @@ public class SourceConnectorConfig extends ConnectorConfig {
         return newDef;
     }
 
+    @SuppressWarnings("this-escape")
     public SourceConnectorConfig(Plugins plugins, Map<String, String> props, boolean createTopics) {
         super(plugins, configDef(), props);
         if (createTopics && props.entrySet().stream().anyMatch(e -> e.getKey().startsWith(TOPIC_CREATION_PREFIX))) {

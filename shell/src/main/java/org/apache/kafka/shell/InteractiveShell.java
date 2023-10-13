@@ -17,6 +17,9 @@
 
 package org.apache.kafka.shell;
 
+import org.apache.kafka.shell.command.CommandUtils;
+import org.apache.kafka.shell.command.Commands;
+import org.apache.kafka.shell.state.MetadataShellState;
 import org.jline.reader.Candidate;
 import org.jline.reader.Completer;
 import org.jline.reader.EndOfFileException;
@@ -41,14 +44,14 @@ import java.util.NoSuchElementException;
 import java.util.Optional;
 
 /**
- * The Kafka metadata shell.
+ * Handles running the Kafka metadata shell in interactive mode, where we accept input in real time.
  */
 public final class InteractiveShell implements AutoCloseable {
     static class MetadataShellCompleter implements Completer {
-        private final MetadataNodeManager nodeManager;
+        private final MetadataShellState state;
 
-        MetadataShellCompleter(MetadataNodeManager nodeManager) {
-            this.nodeManager = nodeManager;
+        MetadataShellCompleter(MetadataShellState state) {
+            this.state = state;
         }
 
         @Override
@@ -69,7 +72,7 @@ public final class InteractiveShell implements AutoCloseable {
                     return;
                 }
                 try {
-                    type.completeNext(nodeManager, nextWords, candidates);
+                    type.completeNext(state, nextWords, candidates);
                 } catch (Exception e) {
                     throw new RuntimeException(e);
                 }
@@ -77,22 +80,22 @@ public final class InteractiveShell implements AutoCloseable {
         }
     }
 
-    private final MetadataNodeManager nodeManager;
+    private final MetadataShellState state;
     private final Terminal terminal;
     private final Parser parser;
     private final History history;
     private final MetadataShellCompleter completer;
     private final LineReader reader;
 
-    public InteractiveShell(MetadataNodeManager nodeManager) throws IOException {
-        this.nodeManager = nodeManager;
+    public InteractiveShell(MetadataShellState state) throws IOException {
+        this.state = state;
         TerminalBuilder builder = TerminalBuilder.builder().
             system(true).
             nativeSignals(true);
         this.terminal = builder.build();
         this.parser = new DefaultParser();
         this.history = new DefaultHistory();
-        this.completer = new MetadataShellCompleter(nodeManager);
+        this.completer = new MetadataShellCompleter(state);
         this.reader = LineReaderBuilder.builder().
             terminal(terminal).
             parser(parser).
@@ -111,7 +114,7 @@ public final class InteractiveShell implements AutoCloseable {
                 reader.readLine(">> ");
                 ParsedLine parsedLine = reader.getParsedLine();
                 Commands.Handler handler = commands.parseCommand(parsedLine.words());
-                handler.run(Optional.of(this), terminal.writer(), nodeManager);
+                handler.run(Optional.of(this), terminal.writer(), state);
                 terminal.writer().flush();
             } catch (UserInterruptException eof) {
                 // Handle the user pressing control-C.

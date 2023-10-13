@@ -104,6 +104,13 @@ class KTableKTableLeftJoin<K, V1, V2, VOut> extends KTableKTableAbstractJoin<K, 
                 return;
             }
 
+            // drop out-of-order records from versioned tables (cf. KIP-914)
+            if (useVersionedSemantics && !record.value().isLatest) {
+                LOG.info("Skipping out-of-order record from versioned table while performing table-table join.");
+                droppedRecordsSensor.record();
+                return;
+            }
+
             VOut newValue = null;
             final long resultTimestamp;
             VOut oldValue = null;
@@ -131,7 +138,7 @@ class KTableKTableLeftJoin<K, V1, V2, VOut> extends KTableKTableAbstractJoin<K, 
                 oldValue = joiner.apply(record.value().oldValue, value2);
             }
 
-            context().forward(record.withValue(new Change<>(newValue, oldValue)).withTimestamp(resultTimestamp));
+            context().forward(record.withValue(new Change<>(newValue, oldValue, record.value().isLatest)).withTimestamp(resultTimestamp));
         }
 
         @Override

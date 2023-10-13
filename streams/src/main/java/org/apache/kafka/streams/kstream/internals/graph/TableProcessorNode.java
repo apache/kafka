@@ -46,6 +46,10 @@ public class TableProcessorNode<K, V> extends GraphNode {
         this.storeNames = storeNames != null ? storeNames : new String[] {};
     }
 
+    public ProcessorParameters<K, V, ?, ?> processorParameters() {
+        return processorParameters;
+    }
+
     @Override
     public String toString() {
         return "TableProcessorNode{" +

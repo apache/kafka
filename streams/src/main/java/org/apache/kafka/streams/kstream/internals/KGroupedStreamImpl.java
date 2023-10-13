@@ -37,6 +37,7 @@ import org.apache.kafka.streams.state.KeyValueStore;
 
 import java.util.Objects;
 import java.util.Set;
+import org.apache.kafka.streams.state.VersionedBytesStoreSupplier;
 
 class KGroupedStreamImpl<K, V> extends AbstractStream<K, V> implements KGroupedStream<K, V> {
 
@@ -242,7 +243,8 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K, V> implements KGroupedS
             aggregateSupplier,
             materializedInternal.queryableStoreName(),
             materializedInternal.keySerde(),
-            materializedInternal.valueSerde());
+            materializedInternal.valueSerde(),
+            materializedInternal.storeSupplier() instanceof VersionedBytesStoreSupplier);
     }
 
     @Override

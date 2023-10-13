@@ -34,7 +34,7 @@ class TimeIndexTest {
 
   @BeforeEach
   def setup(): Unit = {
-    this.idx = new TimeIndex(nonExistantTempFile(), baseOffset, maxEntries * 12)
+    this.idx = new TimeIndex(nonExistentTempFile(), baseOffset, maxEntries * 12)
   }
 
   @AfterEach
@@ -97,7 +97,7 @@ class TimeIndexTest {
       idx.maybeAppend(i * 10, i * 10 + baseOffset)
   }
 
-  def nonExistantTempFile(): File = {
+  def nonExistentTempFile(): File = {
     val file = TestUtils.tempFile()
     file.delete()
     file
@@ -117,7 +117,7 @@ class TimeIndexTest {
     idx = new TimeIndex(idx.file, baseOffset, maxEntries * 12) {
       override def lastEntry = {
         val superLastEntry = super.lastEntry
-        val offset = if (shouldCorruptOffset) baseOffset - 1 else superLastEntry.offset
+        val offset = if (shouldCorruptOffset) this.baseOffset - 1 else superLastEntry.offset
         val timestamp = if (shouldCorruptTimestamp) firstEntry.timestamp - 1 else superLastEntry.timestamp
         new TimestampOffset(timestamp, offset)
       }

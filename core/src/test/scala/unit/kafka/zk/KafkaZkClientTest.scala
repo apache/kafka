@@ -1188,7 +1188,7 @@ class KafkaZkClientTest extends QuorumTestHarness {
 
     assertEquals(CreateResponse(Code.NODEEXISTS, ControllerEpochZNode.path, None, null, ResponseMetadata(0, 0)),
       eraseMetadata(zkClient.createControllerEpochRaw(0)),
-      "Attemt to create existing nodes should return NODEEXISTS")
+      "Attempt to create existing nodes should return NODEEXISTS")
 
     assertEquals(SetDataResponse(Code.OK, ControllerEpochZNode.path, None, statWithVersion(1), ResponseMetadata(0, 0)),
       eraseMetadataAndStat(zkClient.setControllerEpochRaw(1, 0)),
@@ -1414,7 +1414,7 @@ class KafkaZkClientTest extends QuorumTestHarness {
   }
 
   @Test
-  def testJuteMaxBufffer(): Unit = {
+  def testJuteMaxBuffer(): Unit = {
 
     def assertJuteMaxBufferConfig(clientConfig: ZKClientConfig, expectedValue: String): Unit = {
       val client = KafkaZkClient(zkConnect, zkAclsEnabled.getOrElse(JaasUtils.isZkSaslEnabled), zkSessionTimeout,

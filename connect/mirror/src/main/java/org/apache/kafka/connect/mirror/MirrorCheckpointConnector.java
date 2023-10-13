@@ -23,21 +23,25 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.connector.Task;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.util.ConnectorUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+
+import static org.apache.kafka.connect.mirror.Checkpoint.CONSUMER_GROUP_ID_KEY;
+import static org.apache.kafka.connect.mirror.MirrorUtils.TOPIC_KEY;
 
 /** Replicate consumer group state between clusters. Emits checkpoint records.
  *
@@ -54,7 +58,7 @@ public class MirrorCheckpointConnector extends SourceConnector {
     private Admin sourceAdminClient;
     private Admin targetAdminClient;
     private SourceAndTarget sourceAndTarget;
-    private List<String> knownConsumerGroups = Collections.emptyList();
+    private Set<String> knownConsumerGroups = Collections.emptySet();
     private BackgroundResources backgroundResources;
 
     public MirrorCheckpointConnector() {
@@ -62,7 +66,7 @@ public class MirrorCheckpointConnector extends SourceConnector {
     }
 
     // visible for testing
-    MirrorCheckpointConnector(List<String> knownConsumerGroups, MirrorCheckpointConfig config) {
+    MirrorCheckpointConnector(Set<String> knownConsumerGroups, MirrorCheckpointConfig config) {
         this.knownConsumerGroups = knownConsumerGroups;
         this.config = config;
         this.backgroundResources = new BackgroundResources();
@@ -114,7 +118,7 @@ public class MirrorCheckpointConnector extends SourceConnector {
             return Collections.emptyList();
         }
         int numTasks = Math.min(maxTasks, knownConsumerGroups.size());
-        List<List<String>> groupsPartitioned = ConnectorUtils.groupPartitions(knownConsumerGroups, numTasks);
+        List<List<String>> groupsPartitioned = ConnectorUtils.groupPartitions(new ArrayList<>(knownConsumerGroups), numTasks);
         return IntStream.range(0, numTasks)
                 .mapToObj(i -> config.taskConfigForConsumerGroups(groupsPartitioned.get(i), i))
                 .collect(Collectors.toList());
@@ -130,14 +134,39 @@ public class MirrorCheckpointConnector extends SourceConnector {
         return AppInfoParser.getVersion();
     }
 
+    @Override
+    public boolean alterOffsets(Map<String, String> connectorConfig, Map<Map<String, ?>, Map<String, ?>> offsets) {
+        for (Map.Entry<Map<String, ?>, Map<String, ?>> offsetEntry : offsets.entrySet()) {
+            Map<String, ?> sourceOffset = offsetEntry.getValue();
+            if (sourceOffset == null) {
+                // We allow tombstones for anything; if there's garbage in the offsets for the connector, we don't
+                // want to prevent users from being able to clean it up using the REST API
+                continue;
+            }
+
+            Map<String, ?> sourcePartition = offsetEntry.getKey();
+            if (sourcePartition == null) {
+                throw new ConnectException("Source partitions may not be null");
+            }
+
+            MirrorUtils.validateSourcePartitionString(sourcePartition, CONSUMER_GROUP_ID_KEY);
+            MirrorUtils.validateSourcePartitionString(sourcePartition, TOPIC_KEY);
+            MirrorUtils.validateSourcePartitionPartition(sourcePartition);
+
+            MirrorUtils.validateSourceOffset(sourcePartition, sourceOffset, true);
+        }
+
+        // We don't actually use these offsets in the task class, so no additional effort is required beyond just validating
+        // the format of the user-supplied offsets
+        return true;
+    }
+
     private void refreshConsumerGroups()
             throws InterruptedException, ExecutionException {
-        List<String> consumerGroups = findConsumerGroups();
-        Set<String> newConsumerGroups = new HashSet<>();
-        newConsumerGroups.addAll(consumerGroups);
+        Set<String> consumerGroups = findConsumerGroups();
+        Set<String> newConsumerGroups = new HashSet<>(consumerGroups);
         newConsumerGroups.removeAll(knownConsumerGroups);
-        Set<String> deadConsumerGroups = new HashSet<>();
-        deadConsumerGroups.addAll(knownConsumerGroups);
+        Set<String> deadConsumerGroups = new HashSet<>(knownConsumerGroups);
         deadConsumerGroups.removeAll(consumerGroups);
         if (!newConsumerGroups.isEmpty() || !deadConsumerGroups.isEmpty()) {
             log.info("Found {} consumer groups for {}. {} are new. {} were removed. Previously had {}.",
@@ -154,15 +183,15 @@ public class MirrorCheckpointConnector extends SourceConnector {
         knownConsumerGroups = findConsumerGroups();
     }
 
-    List<String> findConsumerGroups()
+    Set<String> findConsumerGroups()
             throws InterruptedException, ExecutionException {
         List<String> filteredGroups = listConsumerGroups().stream()
                 .map(ConsumerGroupListing::groupId)
                 .filter(this::shouldReplicateByGroupFilter)
                 .collect(Collectors.toList());
 
-        List<String> checkpointGroups = new LinkedList<>();
-        List<String> irrelevantGroups = new LinkedList<>();
+        Set<String> checkpointGroups = new HashSet<>();
+        Set<String> irrelevantGroups = new HashSet<>();
 
         for (String group : filteredGroups) {
             Set<String> consumedTopics = listConsumerGroupOffsets(group).keySet().stream()

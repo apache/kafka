@@ -51,11 +51,6 @@ class VerifiableProperties(val props: Properties) extends Logging {
    */
   def getInt(name: String): Int = getString(name).toInt
 
-  def getIntInRange(name: String, range: (Int, Int)): Int = {
-    require(containsKey(name), "Missing required property '" + name + "'")
-    getIntInRange(name, -1, range)
-  }
-
   /**
    * Read an integer from the properties instance
    * @param name The property name
@@ -77,7 +72,7 @@ class VerifiableProperties(val props: Properties) extends Logging {
    * @throws IllegalArgumentException If the value is not in the given range
    * @return the integer value
    */
-  def getIntInRange(name: String, default: Int, range: (Int, Int)): Int = {
+  private def getIntInRange(name: String, default: Int, range: (Int, Int)): Int = {
     val v =
       if(containsKey(name))
         getProperty(name).toInt
@@ -87,7 +82,7 @@ class VerifiableProperties(val props: Properties) extends Logging {
     v
   }
 
- def getShortInRange(name: String, default: Short, range: (Short, Short)): Short = {
+ private def getShortInRange(name: String, default: Short, range: (Short, Short)): Short = {
     val v =
       if(containsKey(name))
         getProperty(name).toShort
@@ -120,7 +115,7 @@ class VerifiableProperties(val props: Properties) extends Logging {
    * @throws IllegalArgumentException If the value is not in the given range
    * @return the long value
    */
-  def getLongInRange(name: String, default: Long, range: (Long, Long)): Long = {
+  private def getLongInRange(name: String, default: Long, range: (Long, Long)): Long = {
     val v =
       if(containsKey(name))
         getProperty(name).toLong

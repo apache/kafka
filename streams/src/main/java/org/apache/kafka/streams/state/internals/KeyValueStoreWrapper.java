@@ -39,6 +39,9 @@ import org.apache.kafka.streams.state.VersionedRecord;
  */
 public class KeyValueStoreWrapper<K, V> implements StateStore {
 
+    public static final long PUT_RETURN_CODE_IS_LATEST
+        = VersionedKeyValueStore.PUT_RETURN_CODE_VALID_TO_UNDEFINED;
+
     private TimestampedKeyValueStore<K, V> timestampedStore = null;
     private VersionedKeyValueStore<K, V> versionedStore = null;
 
@@ -89,14 +92,18 @@ public class KeyValueStoreWrapper<K, V> implements StateStore {
         return versionedRecord == null ? null : ValueAndTimestamp.make(versionedRecord.value(), versionedRecord.timestamp());
     }
 
-    public void put(final K key, final V value, final long timestamp) {
+    /**
+     * @return {@code -1} if the put record is the latest for its key, and {@code Long.MIN_VALUE}
+     *         if the put was rejected (i.e., due to grace period having elapsed for a versioned
+     *         store). If neither, any other long value may be returned.
+     */
+    public long put(final K key, final V value, final long timestamp) {
         if (timestampedStore != null) {
             timestampedStore.put(key, ValueAndTimestamp.make(value, timestamp));
-            return;
+            return PUT_RETURN_CODE_IS_LATEST;
         }
         if (versionedStore != null) {
-            versionedStore.put(key, value, timestamp);
-            return;
+            return versionedStore.put(key, value, timestamp);
         }
         throw new IllegalStateException("KeyValueStoreWrapper must be initialized with either timestamped or versioned store");
     }

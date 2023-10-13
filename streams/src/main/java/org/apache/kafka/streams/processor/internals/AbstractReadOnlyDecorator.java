@@ -172,7 +172,7 @@ abstract class AbstractReadOnlyDecorator<T extends StateStore, K, V> extends Wra
         }
 
         @Override
-        public void put(final K key, final V value, final long timestamp) {
+        public long put(final K key, final V value, final long timestamp) {
             throw new UnsupportedOperationException(ERROR_MESSAGE);
         }
 

@@ -18,7 +18,6 @@ package org.apache.kafka.streams.processor.internals.metrics;
 
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.mockito.MockedStatic;
 
@@ -255,7 +254,6 @@ public class TaskMetricsTest {
     }
 
     @Test
-    @Ignore
     public void shouldGetDroppedRecordsSensor() {
         final String operation = "dropped-records";
         final String totalDescription = "The total number of dropped records";
@@ -266,12 +264,21 @@ public class TaskMetricsTest {
         try (final MockedStatic<StreamsMetricsImpl> streamsMetricsStaticMock = mockStatic(StreamsMetricsImpl.class)) {
             final Sensor sensor = TaskMetrics.droppedRecordsSensor(THREAD_ID, TASK_ID, streamsMetrics);
             streamsMetricsStaticMock.verify(
-                () -> StreamsMetricsImpl.addInvocationRateAndCountToSensor(
+                () -> StreamsMetricsImpl.addInvocationRateToSensor(
                     expectedSensor,
                     TASK_LEVEL_GROUP,
                     tagMap,
                     operation,
-                    rateDescription,
+                    rateDescription
+                )
+            );
+            streamsMetricsStaticMock.verify(
+                () -> StreamsMetricsImpl.addSumMetricToSensor(
+                    expectedSensor,
+                    TASK_LEVEL_GROUP,
+                    tagMap,
+                    operation,
+                    true,
                     totalDescription
                 )
             );

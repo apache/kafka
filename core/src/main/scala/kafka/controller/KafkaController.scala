@@ -19,11 +19,10 @@ package kafka.controller
 import com.yammer.metrics.core.Timer
 
 import java.util.concurrent.TimeUnit
-import kafka.admin.AdminOperationException
 import kafka.api._
 import kafka.common._
 import kafka.cluster.Broker
-import kafka.controller.KafkaController.{AlterReassignmentsCallback, ElectLeadersCallback, ListReassignmentsCallback, UpdateFeaturesCallback}
+import kafka.controller.KafkaController.{ActiveBrokerCountMetricName, ActiveControllerCountMetricName, AlterReassignmentsCallback, ControllerStateMetricName, ElectLeadersCallback, FencedBrokerCountMetricName, GlobalPartitionCountMetricName, GlobalTopicCountMetricName, ListReassignmentsCallback, OfflinePartitionsCountMetricName, PreferredReplicaImbalanceCountMetricName, ReplicasIneligibleToDeleteCountMetricName, ReplicasToDeleteCountMetricName, TopicsIneligibleToDeleteCountMetricName, TopicsToDeleteCountMetricName, UpdateFeaturesCallback, ZkMigrationStateMetricName}
 import kafka.coordinator.transaction.ZkProducerIdManager
 import kafka.server._
 import kafka.server.metadata.ZkFinalizedFeatureCache
@@ -45,7 +44,8 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AbstractControlRequest, ApiError, LeaderAndIsrResponse, UpdateFeaturesRequest, UpdateMetadataResponse}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.metadata.LeaderRecoveryState
-import org.apache.kafka.server.common.ProducerIdsBlock
+import org.apache.kafka.metadata.migration.ZkMigrationState
+import org.apache.kafka.server.common.{AdminOperationException, ProducerIdsBlock}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.KafkaScheduler
 import org.apache.zookeeper.KeeperException
@@ -69,6 +69,37 @@ object KafkaController extends Logging {
   type ListReassignmentsCallback = Either[Map[TopicPartition, ReplicaAssignment], ApiError] => Unit
   type AlterReassignmentsCallback = Either[Map[TopicPartition, ApiError], ApiError] => Unit
   type UpdateFeaturesCallback = Either[ApiError, Map[String, ApiError]] => Unit
+
+  private val ActiveControllerCountMetricName = "ActiveControllerCount"
+  private val OfflinePartitionsCountMetricName = "OfflinePartitionsCount"
+  private val PreferredReplicaImbalanceCountMetricName = "PreferredReplicaImbalanceCount"
+  private val ControllerStateMetricName = "ControllerState"
+  private val GlobalTopicCountMetricName = "GlobalTopicCount"
+  private val GlobalPartitionCountMetricName = "GlobalPartitionCount"
+  private val TopicsToDeleteCountMetricName = "TopicsToDeleteCount"
+  private val ReplicasToDeleteCountMetricName = "ReplicasToDeleteCount"
+  private val TopicsIneligibleToDeleteCountMetricName = "TopicsIneligibleToDeleteCount"
+  private val ReplicasIneligibleToDeleteCountMetricName = "ReplicasIneligibleToDeleteCount"
+  private val ActiveBrokerCountMetricName = "ActiveBrokerCount"
+  private val FencedBrokerCountMetricName = "FencedBrokerCount"
+  private val ZkMigrationStateMetricName = "ZkMigrationState"
+
+  // package private for testing
+  private[controller] val MetricNames = Set(
+    ZkMigrationStateMetricName,
+    ActiveControllerCountMetricName,
+    OfflinePartitionsCountMetricName,
+    PreferredReplicaImbalanceCountMetricName,
+    ControllerStateMetricName,
+    GlobalTopicCountMetricName,
+    GlobalPartitionCountMetricName,
+    TopicsToDeleteCountMetricName,
+    ReplicasToDeleteCountMetricName,
+    TopicsIneligibleToDeleteCountMetricName,
+    ReplicasIneligibleToDeleteCountMetricName,
+    ActiveBrokerCountMetricName,
+    FencedBrokerCountMetricName
+  )
 }
 
 class KafkaController(val config: KafkaConfig,
@@ -144,19 +175,20 @@ class KafkaController(val config: KafkaConfig,
   /* single-thread scheduler to clean expired tokens */
   private val tokenCleanScheduler = new KafkaScheduler(1, true, "delegation-token-cleaner")
 
-  metricsGroup.newGauge("ActiveControllerCount", () => if (isActive) 1 else 0)
-  metricsGroup.newGauge("OfflinePartitionsCount", () => offlinePartitionCount)
-  metricsGroup.newGauge("PreferredReplicaImbalanceCount", () => preferredReplicaImbalanceCount)
-  metricsGroup.newGauge("ControllerState", () => state.value)
-  metricsGroup.newGauge("GlobalTopicCount", () => globalTopicCount)
-  metricsGroup.newGauge("GlobalPartitionCount", () => globalPartitionCount)
-  metricsGroup.newGauge("TopicsToDeleteCount", () => topicsToDeleteCount)
-  metricsGroup.newGauge("ReplicasToDeleteCount", () => replicasToDeleteCount)
-  metricsGroup.newGauge("TopicsIneligibleToDeleteCount", () => ineligibleTopicsToDeleteCount)
-  metricsGroup.newGauge("ReplicasIneligibleToDeleteCount", () => ineligibleReplicasToDeleteCount)
-  metricsGroup.newGauge("ActiveBrokerCount", () => activeBrokerCount)
+  metricsGroup.newGauge(ZkMigrationStateMetricName, () => ZkMigrationState.ZK.value().intValue())
+  metricsGroup.newGauge(ActiveControllerCountMetricName, () => if (isActive) 1 else 0)
+  metricsGroup.newGauge(OfflinePartitionsCountMetricName, () => offlinePartitionCount)
+  metricsGroup.newGauge(PreferredReplicaImbalanceCountMetricName, () => preferredReplicaImbalanceCount)
+  metricsGroup.newGauge(ControllerStateMetricName, () => state.value)
+  metricsGroup.newGauge(GlobalTopicCountMetricName, () => globalTopicCount)
+  metricsGroup.newGauge(GlobalPartitionCountMetricName, () => globalPartitionCount)
+  metricsGroup.newGauge(TopicsToDeleteCountMetricName, () => topicsToDeleteCount)
+  metricsGroup.newGauge(ReplicasToDeleteCountMetricName, () => replicasToDeleteCount)
+  metricsGroup.newGauge(TopicsIneligibleToDeleteCountMetricName, () => ineligibleTopicsToDeleteCount)
+  metricsGroup.newGauge(ReplicasIneligibleToDeleteCountMetricName, () => ineligibleReplicasToDeleteCount)
+  metricsGroup.newGauge(ActiveBrokerCountMetricName, () => activeBrokerCount)
   // FencedBrokerCount metric is always 0 in the ZK controller.
-  metricsGroup.newGauge("FencedBrokerCount", () => 0)
+  metricsGroup.newGauge(FencedBrokerCountMetricName, () => 0)
 
   /**
    * Returns true if this broker is the current controller.
@@ -196,8 +228,12 @@ class KafkaController(val config: KafkaConfig,
    * shuts down the controller channel manager, if one exists (i.e. if it was the current controller)
    */
   def shutdown(): Unit = {
-    eventManager.close()
-    onControllerResignation()
+    try {
+      eventManager.close()
+      onControllerResignation()
+    } finally {
+      removeMetrics()
+    }
   }
 
   /**
@@ -500,6 +536,10 @@ class KafkaController(val config: KafkaConfig,
     controllerContext.resetContext()
 
     info("Resigned")
+  }
+
+  private def removeMetrics(): Unit = {
+    KafkaController.MetricNames.foreach(metricsGroup.removeMetric)
   }
 
   /*
@@ -1561,7 +1601,9 @@ class KafkaController(val config: KafkaConfig,
         !config.isFeatureVersioningSupported ||
         !featureCache.getFeatureOption.exists(
           latestFinalizedFeatures =>
-            BrokerFeatures.hasIncompatibleFeatures(broker.features, latestFinalizedFeatures.features))
+            BrokerFeatures.hasIncompatibleFeatures(broker.features,
+              latestFinalizedFeatures.finalizedFeatures().asScala.
+                map(kv => (kv._1, kv._2.toShort)).toMap))
     }
   }
 
@@ -2044,8 +2086,8 @@ class KafkaController(val config: KafkaConfig,
                                                         callback: UpdateFeaturesCallback): Unit = {
     val updates = request.featureUpdates
     val existingFeatures = featureCache.getFeatureOption
-      .map(featuresAndEpoch => featuresAndEpoch.features)
-      .getOrElse(Map[String, Short]())
+      .map(featuresAndEpoch => featuresAndEpoch.finalizedFeatures().asScala.map(kv => (kv._1, kv._2.toShort)).toMap)
+    .getOrElse(Map[String, Short]())
     // A map with key being feature name and value being finalized version.
     // This contains the target features to be eventually written to FeatureZNode.
     val targetFeatures = scala.collection.mutable.Map[String, Short]() ++ existingFeatures

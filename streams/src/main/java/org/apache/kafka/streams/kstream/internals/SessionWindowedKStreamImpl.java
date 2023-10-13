@@ -125,7 +125,8 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
                 countMerger),
             materializedInternal.queryableStoreName(),
             materializedInternal.keySerde() != null ? new WindowedSerdes.SessionWindowedSerde<>(materializedInternal.keySerde()) : null,
-            materializedInternal.valueSerde());
+            materializedInternal.valueSerde(),
+            false);
     }
 
     @Override
@@ -175,7 +176,8 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
             ),
             materializedInternal.queryableStoreName(),
             materializedInternal.keySerde() != null ? new WindowedSerdes.SessionWindowedSerde<>(materializedInternal.keySerde()) : null,
-            materializedInternal.valueSerde());
+            materializedInternal.valueSerde(),
+            false);
     }
 
     @Override
@@ -232,7 +234,8 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
                 sessionMerger),
             materializedInternal.queryableStoreName(),
             materializedInternal.keySerde() != null ? new WindowedSerdes.SessionWindowedSerde<>(materializedInternal.keySerde()) : null,
-            materializedInternal.valueSerde());
+            materializedInternal.valueSerde(),
+            false);
     }
 
     private <VR> StoreBuilder<SessionStore<K, VR>> materialize(final MaterializedInternal<K, VR, SessionStore<Bytes, byte[]>> materialized) {

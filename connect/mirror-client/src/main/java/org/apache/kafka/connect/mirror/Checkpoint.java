@@ -94,7 +94,7 @@ public class Checkpoint {
     @Override
     public String toString() {
         return String.format("Checkpoint{consumerGroupId=%s, topicPartition=%s, "
-            + "upstreamOffset=%d, downstreamOffset=%d, metatadata=%s}",
+            + "upstreamOffset=%d, downstreamOffset=%d, metadata=%s}",
             consumerGroupId, topicPartition, upstreamOffset, downstreamOffset, metadata);
     }
 

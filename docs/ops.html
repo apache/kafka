@@ -580,7 +580,7 @@
   </ul>
 
   <p>
-    By default, a flow replicates all topics and consumer groups. However, each replication flow can be configured independently. For instance, you can define that only specific topics or consumer groups are replicated from the source cluster to the target cluster.
+    By default, a flow replicates all topics and consumer groups (except excluded ones). However, each replication flow can be configured independently. For instance, you can define that only specific topics or consumer groups are replicated from the source cluster to the target cluster.
   </p>
 
   <p>
@@ -694,6 +694,45 @@ us-east.producer.buffer.memory = 32768
 us-east.admin.bootstrap.servers = broker8-secondary:9092
 </code></pre>
 
+  <h5 class="anchor-heading"><a id="georeplication-exactly_once" class="anchor-link"></a><a href="#georeplication-exactly_once">Exactly once</a></h5>
+
+  <p>
+    Exactly-once semantics are supported for dedicated MirrorMaker clusters as of version 3.5.0.</p>
+  
+  <p>
+    For new MirrorMaker clusters, set the <code>exactly.once.source.support</code> property to enabled for all targeted Kafka clusters that should be written to with exactly-once semantics. For example, to enable exactly-once for writes to cluster </code>us-east</code>, the following configuration can be used:
+  </p>
+
+<pre class="line-numbers"><code class="language-text">us-east.exactly.once.source.support = enabled
+</code></pre>
+  
+  <p>
+    For existing MirrorMaker clusters, a two-step upgrade is necessary. Instead of immediately setting the <code>exactly.once.source.support</code> property to enabled, first set it to <code>preparing</code> on all nodes in the cluster. Once this is complete, it can be set to </code>enabled</code> on all nodes in the cluster, in a second round of restarts.
+  </p>
+  
+  <p>
+    In either case, it is also necessary to enable intra-cluster communication between the MirrorMaker nodes, as described in  <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-710%3A+Full+support+for+distributed+mode+in+dedicated+MirrorMaker+2.0+clusters">KIP-710</a>. To do this, the <code>dedicated.mode.enable.internal.rest</code> property must be set to <code>true</code>. In addition, many of the REST-related  <a href="https://kafka.apache.org/documentation/#connectconfigs">configuration properties available for Kafka Connect</a> can be specified the MirrorMaker config. For example, to enable intra-cluster communication in MirrorMaker cluster with each node listening on port 8080 of their local machine, the following should be added to the MirrorMaker config file:
+  </p>
+
+<pre class="line-numbers"><code class="language-text">dedicated.mode.enable.internal.rest = true
+listeners = http://localhost:8080
+</code></pre>
+  
+  <p><b>
+    Note that, if intra-cluster communication is enabled in production environments, it is highly recommended to secure the REST servers brought up by each MirrorMaker node. See the <a href="https://kafka.apache.org/documentation/#connectconfigs">configuration properties for Kafka Connect</a> for information on how this can be accomplished.
+  </b></p>
+  
+  <p>
+    It is also recommended to filter records from aborted transactions out from replicated data when running MirrorMaker. To do this, ensure that the consumer used to read from source clusters is configured with <code>isolation.level</code> set to <code>read_committed</code>. If replicating data from cluster <code>us-west</code>, this can be done for all replication flows that read from that cluster by adding the following to the MirrorMaker config file:
+  </p>
+
+<pre class="line-numbers"><code class="language-text">us-west.consumer.isolation.level = read_committed
+</code></pre>
+
+  <p>
+    As a final note, under the hood, MirrorMaker uses Kafka Connect source connectors to replicate data. For more information on exactly-once support for these kinds of connectors, see the <a href="https://kafka.apache.org/documentation/#connect_exactlyoncesource">relevant docs page</a>.
+  </p>
+
   <h5 class="anchor-heading"><a id="georeplication-flow-create" class="anchor-link"></a><a href="#georeplication-flow-create">Creating and Enabling Replication Flows</a></h5>
 
   <p>
@@ -766,26 +805,8 @@ us-west->us-east.emit.heartbeats = false
 </code></pre>
 
   <p>
-    Additional configuration settings are supported, some of which are listed below. In most cases, you can leave these settings at their default values. See <a href="https://github.com/apache/kafka/blob/trunk/connect/mirror/src/main/java/org/apache/kafka/connect/mirror/MirrorMakerConfig.java">MirrorMakerConfig</a> and <a href="https://github.com/apache/kafka/blob/trunk/connect/mirror/src/main/java/org/apache/kafka/connect/mirror/MirrorConnectorConfig.java">MirrorConnectorConfig</a> for further details.
+    Additional configuration settings are supported which can be left with their default values in most cases. See <a href="/documentation/#mirrormakerconfigs">MirrorMaker Configs</a>.
   </p>
-
-  <ul>
-    <li><code>refresh.topics.enabled</code>: whether to check for new topics in the source cluster periodically (default: true)
-    <li><code>refresh.topics.interval.seconds</code>: frequency of checking for new topics in the source cluster; lower values than the default may lead to performance degradation (default: 600, every ten minutes)
-    <li><code>refresh.groups.enabled</code>: whether to check for new consumer groups in the source cluster periodically (default: true)
-    <li><code>refresh.groups.interval.seconds</code>: frequency of checking for new consumer groups in the source cluster; lower values than the default may lead to performance degradation (default: 600, every ten minutes)
-    <li><code>sync.topic.configs.enabled</code>: whether to replicate topic configurations from the source cluster (default: true)
-    <li><code>sync.topic.acls.enabled</code>: whether to sync ACLs from the source cluster (default: true)
-    <li><code>emit.heartbeats.enabled</code>: whether to emit heartbeats periodically (default: true)
-    <li><code>emit.heartbeats.interval.seconds</code>: frequency at which heartbeats are emitted (default: 1, every one seconds)
-    <li><code>heartbeats.topic.replication.factor</code>: replication factor of MirrorMaker's internal heartbeat topics (default: 3)
-    <li><code>emit.checkpoints.enabled</code>: whether to emit MirrorMaker's consumer offsets periodically (default: true)
-    <li><code>emit.checkpoints.interval.seconds</code>: frequency at which checkpoints are emitted (default: 60, every minute)
-    <li><code>checkpoints.topic.replication.factor</code>: replication factor of MirrorMaker's internal checkpoints topics (default: 3)
-    <li><code>sync.group.offsets.enabled</code>: whether to periodically write the translated offsets of replicated consumer groups (in the source cluster) to <code>__consumer_offsets</code> topic in target cluster, as long as no active consumers in that group are connected to the target cluster (default: false)
-    <li><code>sync.group.offsets.interval.seconds</code>: frequency at which consumer group offsets are synced (default: 60, every minute)
-    <li><code>offset-syncs.topic.replication.factor</code>: replication factor of MirrorMaker's internal offset-sync topics (default: 3)
-  </ul>
 
   <h5 class="anchor-heading"><a id="georeplication-flow-secure" class="anchor-link"></a><a href="#georeplication-flow-secure">Securing Replication Flows</a></h5>
 
@@ -853,7 +874,7 @@ A->B.topics = bar
   </p>
 
   <p>
-    It is therefore important to keep the MirrorMaker configration consistent across replication flows to the same target cluster. This can be achieved, for example, through automation tooling or by using a single, shared MirrorMaker configuration file for your entire organization.
+    It is therefore important to keep the MirrorMaker configuration consistent across replication flows to the same target cluster. This can be achieved, for example, through automation tooling or by using a single, shared MirrorMaker configuration file for your entire organization.
   </p>
 
   <h5 class="anchor-heading"><a id="georeplication-best-practice" class="anchor-link"></a><a href="#georeplication-best-practice">Best Practice: Consume from Remote, Produce to Local</a></h5>
@@ -1376,7 +1397,7 @@ $ bin/kafka-acls.sh \
   <h4 class="anchor-heading"><a id="replace_disk" class="anchor-link"></a><a href="#replace_disk">Replace KRaft Controller Disk</a></h4>
   <p>When Kafka is configured to use KRaft, the controllers store the cluster metadata in the directory specified in <code>metadata.log.dir</code> -- or the first log directory, if <code>metadata.log.dir</code> is not configured. See the documentation for <code>metadata.log.dir</code> for details.</p>
 
-  <p>If the data in the cluster metdata directory is lost either because of hardware failure or the hardware needs to be replaced, care should be taken when provisioning the new controller node. The new controller node should not be formatted and started until the majority of the controllers have all of the committed data. To determine if the majority of the controllers have the committed data, run the <code>kafka-metadata-quorum.sh</code> tool to describe the replication status:</p>
+  <p>If the data in the cluster metadata directory is lost either because of hardware failure or the hardware needs to be replaced, care should be taken when provisioning the new controller node. The new controller node should not be formatted and started until the majority of the controllers have all of the committed data. To determine if the majority of the controllers have the committed data, run the <code>kafka-metadata-quorum.sh</code> tool to describe the replication status:</p>
 
   <pre class="line-numbers"><code class="language-bash"> &gt; bin/kafka-metadata-quorum.sh --bootstrap-server broker_host:port describe --replication
  NodeId  LogEndOffset    Lag     LastFetchTimestamp      LastCaughtUpTimestamp   Status
@@ -1388,7 +1409,7 @@ $ bin/kafka-acls.sh \
 
   <pre class="line-numbers"><code class="language-bash"> &gt; bin/kafka-storage.sh format --cluster-id uuid --config server_properties</code></pre>
 
-  <p>It is possible for the <code>bin/kafka-storage.sh format</code> command above to fail with a message like <code>Log directory ... is already formatted</code>. This can happend when combined mode is used and only the metadata log directory was lost but not the others. In that case and only in that case, can you run the <code>kafka-storage.sh format</code> command with the <code>--ignore-formatted</code> option.</p>
+  <p>It is possible for the <code>bin/kafka-storage.sh format</code> command above to fail with a message like <code>Log directory ... is already formatted</code>. This can happen when combined mode is used and only the metadata log directory was lost but not the others. In that case and only in that case, can you run the <code>kafka-storage.sh format</code> command with the <code>--ignore-formatted</code> option.</p>
 
   <p>Start the KRaft controller after formatting the log directories.</p>
 
@@ -1740,7 +1761,7 @@ $ bin/kafka-acls.sh \
       <tr>
         <td>ZooKeeper client request latency</td>
         <td>kafka.server:type=ZooKeeperClientMetrics,name=ZooKeeperRequestLatencyMs</td>
-        <td>Latency in millseconds for ZooKeeper requests from broker.</td>
+        <td>Latency in milliseconds for ZooKeeper requests from broker.</td>
       </tr>
       <tr>
         <td>ZooKeeper connection status</td>
@@ -1767,6 +1788,16 @@ $ bin/kafka-acls.sh \
         <td>Avg time to load transaction metadata</td>
         <td>kafka.server:type=transaction-coordinator-metrics,name=partition-load-time-avg</td>
         <td>average time, in milliseconds, it took to load transaction metadata from the consumer offset partitions loaded in the last 30 seconds (including time spent waiting for the loading task to be scheduled)</td>
+      </tr>
+      <tr>
+        <td>Rate of transactional verification errors</td>
+        <td>kafka.server:type=AddPartitionsToTxnManager,name=VerificationFailureRate</td>
+        <td>Rate of verifications that returned in failure either from the AddPartitionsToTxn API response or through errors in the AddPartitionsToTxnManager. In steady state 0, but transient errors are expected during rolls and reassignments of the transactional state partition.</td>
+      </tr>
+      <tr>
+        <td>Time to verify a transactional request</td>
+        <td>kafka.server:type=AddPartitionsToTxnManager,name=VerificationTimeMs</td>
+        <td>The amount of time queueing while a possible previous request is in-flight plus the round trip to the transaction coordinator to verify (or not verify)</td>
       </tr>
       <tr>
         <td>Consumer Group Offset Count</td>
@@ -1820,6 +1851,63 @@ $ bin/kafka-acls.sh \
       </tr>
   </tbody></table>
 
+<h4 class="anchor-heading"><a id="tiered_storage_monitoring" class="anchor-link"></a><a href="#tiered_storage_monitoring">Tiered Storage Monitoring</a></h4>
+  The following set of metrics are available for monitoring of the tiered storage feature:<br/><br/>
+  <table class="data-table">
+    <tbody>
+      <tr>
+        <th>Metric/Attribute name</th>
+        <th>Description</th>
+        <th>Mbean name</th>
+      </tr>
+      <tr>
+        <td>Remote Fetch Bytes Per Sec</td>
+        <td>Rate of bytes read from remote storage per topic. Omitting 'topic=(...)' will yield the all-topic rate</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=RemoteFetchBytesPerSec,topic=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>Remote Fetch Requests Per Sec</td>
+        <td>Rate of read requests from remote storage per topic. Omitting 'topic=(...)' will yield the all-topic rate</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=RemoteFetchRequestsPerSec,topic=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>Remote Fetch Errors Per Sec</td>
+        <td>Rate of read errors from remote storage per topic. Omitting 'topic=(...)' will yield the all-topic rate</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=RemoteFetchErrorsPerSec,topic=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>Remote Copy Bytes Per Sec</td>
+        <td>Rate of bytes copied to remote storage per topic. Omitting 'topic=(...)' will yield the all-topic rate</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=RemoteCopyBytesPerSec,topic=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>Remote Copy Requests Per Sec</td>
+        <td>Rate of write requests to remote storage per topic. Omitting 'topic=(...)' will yield the all-topic rate</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=RemoteCopyRequestsPerSec,topic=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>Remote Copy Errors Per Sec</td>
+        <td>Rate of write errors from remote storage per topic. Omitting 'topic=(...)' will yield the all-topic rate</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=RemoteCopyErrorsPerSec,topic=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>RemoteLogReader Task Queue Size</td>
+        <td>Size of the queue holding remote storage read tasks</td>
+        <td>org.apache.kafka.storage.internals.log:type=RemoteStorageThreadPool,name=RemoteLogReaderTaskQueueSize</td>
+      </tr>
+      <tr>
+        <td>RemoteLogReader Avg Idle Percent</td>
+        <td>Average idle percent of thread pool for processing remote storage read tasks</td>
+        <td>org.apache.kafka.storage.internals.log:type=RemoteStorageThreadPool,name=RemoteLogReaderAvgIdlePercent</td>
+      </tr>
+      <tr>
+        <td>RemoteLogManager Tasks Avg Idle Percent</td>
+        <td>Average idle percent of thread pool for copying data to remote storage</td>
+        <td>kafka.log.remote:type=RemoteLogManager,name=RemoteLogManagerTasksAvgIdlePercent</td>
+      </tr>
+    </tbody>
+  </table>
+
 <h4 class="anchor-heading"><a id="kraft_monitoring" class="anchor-link"></a><a href="#kraft_monitoring">KRaft Monitoring Metrics</a></h4>
 The set of metrics that allow monitoring of the KRaft quorum and the metadata log.<br>
 Note that some exposed metrics depend on the role of the node as defined by <code>process.roles</code>
@@ -1834,7 +1922,7 @@ These metrics are reported on both Controllers and Brokers in a KRaft Cluster
   </tr>
   <tr>
     <td>Current State</td>
-    <td>The current state of this member; possible values are leader, candidate, voted, follower, unattached.</td>
+    <td>The current state of this member; possible values are leader, candidate, voted, follower, unattached, observer.</td>
     <td>kafka.server:type=raft-metrics,name=current-state</td>
   </tr>
   <tr>
@@ -1901,6 +1989,28 @@ These metrics are reported on both Controllers and Brokers in a KRaft Cluster
     <td>Average Poll Idle Ratio</td>
     <td>The average fraction of time the client's poll() is idle as opposed to waiting for the user code to process records.</td>
     <td>kafka.server:type=raft-metrics,name=poll-idle-ratio-avg</td>
+  </tr>
+  <tr>
+    <td>Current Metadata Version</td>
+    <td>Outputs the feature level of the current effective metadata version.</td>
+    <td>kafka.server:type=MetadataLoader,name=CurrentMetadataVersion</td>
+  </tr>
+  <tr>
+    <td>Metadata Snapshot Load Count</td>
+    <td>The total number of times we have loaded a KRaft snapshot since the process was started.</td>
+    <td>kafka.server:type=MetadataLoader,name=HandleLoadSnapshotCount</td>
+  </tr>
+  <tr>
+    <td>Latest Metadata Snapshot Size</td>
+    <td>The total size in bytes of the latest snapshot that the node has generated. If none have been generated yet, this is the size
+    of the latest snapshot that was loaded. If no snapshots have been generated or loaded, this is 0.</td>
+    <td>kafka.server:type=SnapshotEmitter,name=LatestSnapshotGeneratedBytes</td>
+  </tr>
+  <tr>
+    <td>Latest Metadata Snapshot Age</td>
+    <td>The interval in milliseconds since the latest snapshot that the node has generated. 
+    If none have been generated yet, this is approximately the time delta since the process was started.</td>
+    <td>kafka.server:type=SnapshotEmitter,name=LatestSnapshotGeneratedAgeMs</td>
   </tr>
   </tbody>
 </table>
@@ -1982,6 +2092,44 @@ These metrics are reported on both Controllers and Brokers in a KRaft Cluster
     <td>The difference between now and the timestamp of the last record from the cluster metadata partition that was applied by the controller.
     For active Controllers the value of this lag is always zero.</td>
     <td>kafka.controller:type=KafkaController,name=LastAppliedRecordLagMs</td>
+  </tr>
+  <tr>
+    <td>ZooKeeper Write Behind Lag</td>
+    <td>The amount of lag in records that ZooKeeper is behind relative to the highest committed record in the metadata log. 
+    This metric will only be reported by the active KRaft controller.</td>
+    <td>kafka.controller:type=KafkaController,name=ZkWriteBehindLag</td>
+  </tr>
+  <tr>
+    <td>ZooKeeper Metadata Snapshot Write Time</td>
+    <td>The number of milliseconds the KRaft controller took reconciling a snapshot into ZooKeeper.</td>
+    <td>kafka.controller:type=KafkaController,name=ZkWriteSnapshotTimeMs</td>
+  </tr>
+  <tr>
+    <td>ZooKeeper Metadata Delta Write Time</td>
+    <td>The number of milliseconds the KRaft controller took writing a delta into ZK.</td>
+    <td>kafka.controller:type=KafkaController,name=ZkWriteDeltaTimeMs</td>
+  </tr>
+  <tr>
+    <td>Timed-out Broker Heartbeat Count</td>
+    <td>The number of broker heartbeats that timed out on this controller since the process was started. Note that only 
+    active controllers handle heartbeats, so only they will see increases in this metric.</td>
+    <td>kafka.controller:type=KafkaController,name=TimedOutBrokerHeartbeatCount</td>
+  </tr>
+  <tr>
+    <td>Number Of Operations Started In Event Queue</td>
+    <td>The total number of controller event queue operations that were started. This includes deferred operations.</td>
+    <td>kafka.controller:type=KafkaController,name=EventQueueOperationsStartedCount</td>
+  </tr>
+  <tr>
+    <td>Number of Operations Timed Out In Event Queue</td>
+    <td>The total number of controller event queue operations that timed out before they could be performed.</td>
+    <td>kafka.controller:type=KafkaController,name=EventQueueOperationsTimedOutCount</td>
+  </tr>
+  <tr>
+    <td>Number Of New Controller Elections</td>
+    <td>Counts the number of times this node has seen a new controller elected. A transition to the "no leader" state 
+    is not counted here. If the same controller as before becomes active, that still counts.</td>
+    <td>kafka.controller:type=KafkaController,name=NewActiveControllersCount</td>
   </tr>
   </tbody>
 </table>
@@ -2408,7 +2556,7 @@ These metrics are reported on both Controllers and Brokers in a KRaft Cluster
         <td>kafka.consumer:type=consumer-metrics,client-id=([-.\w]+)</td>
       </tr>
       <tr>
-        <td>commited-time-ns-total</td>
+        <td>committed-time-ns-total</td>
         <td>The total time the Consumer spent in committed in nanoseconds.</td>
         <td>kafka.consumer:type=consumer-metrics,client-id=([-.\w]+)</td>
       </tr>
@@ -2883,12 +3031,12 @@ active-process-ratio metrics which have a recording level of <code>info</code>:
       <tr>
         <td>bytes-consumed-total</td>
         <td>The total number of bytes consumed by a source processor node.</td>
-        <td>kafka.streams:type=stream-processor-node-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+),topic=([-.\w]+)</td>
+        <td>kafka.streams:type=stream-topic-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+),topic=([-.\w]+)</td>
       </tr>
       <tr>
         <td>bytes-produced-total</td>
         <td>The total number of bytes produced by a sink processor node.</td>
-        <td>kafka.streams:type=stream-processor-node-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+),topic=([-.\w]+)</td>
+        <td>kafka.streams:type=stream-topic-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+),topic=([-.\w]+)</td>
       </tr>
       <tr>
         <td>process-rate</td>
@@ -2928,12 +3076,12 @@ active-process-ratio metrics which have a recording level of <code>info</code>:
       <tr>
         <td>records-consumed-total</td>
         <td>The total number of records consumed by a source processor node.</td>
-        <td>kafka.streams:type=stream-processor-node-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+),topic=([-.\w]+)</td>
+        <td>kafka.streams:type=stream-topic-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+),topic=([-.\w]+)</td>
       </tr>
       <tr>
         <td>records-produced-total</td>
         <td>The total number of records produced by a sink processor node.</td>
-        <td>kafka.streams:type=stream-processor-node-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+),topic=([-.\w]+)</td>
+        <td>kafka.streams:type=stream-topic-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+),topic=([-.\w]+)</td>
       </tr>
       </tbody>
  </table>
@@ -3422,7 +3570,7 @@ for built-in state stores, currently we have:
       </tr>
       <tr>
         <td>hit-ratio-min</td>
-        <td>The mininum cache hit ratio.</td>
+        <td>The minimum cache hit ratio.</td>
         <td>kafka.streams:type=stream-record-cache-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),record-cache-id=([-.\w]+)</td>
       </tr>
       <tr>
@@ -3443,8 +3591,23 @@ for built-in state stores, currently we have:
 
   <h4 class="anchor-heading"><a id="zkversion" class="anchor-link"></a><a href="#zkversion">Stable version</a></h4>
   The current stable branch is 3.5. Kafka is regularly updated to include the latest release in the 3.5 series.
+  
+  <h4 class="anchor-heading"><a id="zk_depr" class="anchor-link"></a><a href="#zk_depr">ZooKeeper Deprecation</a></h4>
+  <p>With the release of Apache Kafka 3.5, Zookeeper is now marked deprecated. Removal of ZooKeeper is planned in the next major release of Apache Kafka (version 4.0),
+     which is scheduled to happen no sooner than April 2024. During the deprecation phase, ZooKeeper is still supported for metadata management of Kafka clusters,
+     but it is not recommended for new deployments. There is a small subset of features that remain to be implemented in KRaft
+     see <a href="#kraft_missing">current missing features</a> for more information.</p>
 
-  <h4 class="anchor-heading"><a id="zkops" class="anchor-link"></a><a href="#zkops">Operationalizing ZooKeeper</a></h4>
+    <h5 class="anchor-heading"><a id="zk_depr_migration" class="anchor-link"></a><a href="#zk_drep_migration">Migration</a></h5>
+    <p>Migration of an existing ZooKeeper based Kafka cluster to KRaft is currently Preview and we expect it to be ready for production usage in version 3.6. Users are recommended to begin planning for migration to KRaft and also begin testing to provide any feedback. Refer to <a href="#kraft_zk_migration">ZooKeeper to KRaft Migration</a> for details on how to perform a live migration from ZooKeeper to KRaft and current limitations.</p>
+	
+    <h5 class="anchor-heading"><a id="zk_depr_3xsupport" class="anchor-link"></a><a href="#zk_depr_3xsupport">3.x and ZooKeeper Support</a></h5>
+    <p>The final 3.x minor release, that supports ZooKeeper mode, will receive critical bug fixes and security fixes for 12 months after its release.</p>
+	
+    <h5 class="anchor-heading"><a id="zk_depr_timeline" class="anchor-link"></a><a href="#zk_depr_timeline">ZooKeeper and KRaft timeline</a></h5>
+    <p>For details and updates on tentative timelines for ZooKeeper removal and planned KRaft feature releases, refer to <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-833%3A+Mark+KRaft+as+Production+Ready">KIP-833</a>.</p>
+
+<h4 class="anchor-heading"><a id="zkops" class="anchor-link"></a><a href="#zkops">Operationalizing ZooKeeper</a></h4>
   Operationally, we do the following for a healthy ZooKeeper installation:
   <ul>
     <li>Redundancy in the physical/hardware/network layout: try not to put them all in the same rack, decent (but don't go nuts) hardware, try to keep redundant power and network paths, etc. A typical ZooKeeper ensemble has 5 or 7 servers, which tolerates 2 and 3 servers down, respectively. If you have a small deployment, then using 3 servers is acceptable, but keep in mind that you'll only be able to tolerate 1 server down in this case. </li>
@@ -3523,7 +3686,7 @@ CurrentObservers:       [0,1,2]</code></pre>
 
   <pre class="line-numbers"><code class="language-bash">  &gt; bin/kafka-dump-log.sh --cluster-metadata-decoder --files metadata_log_dir/__cluster_metadata-0/00000000000000000000.log</code></pre>
 
-  <p>This command decodes and prints the recrods in the a cluster metadata snapshot:</p>
+  <p>This command decodes and prints the records in the a cluster metadata snapshot:</p>
 
   <pre class="line-numbers"><code class="language-bash">  &gt; bin/kafka-dump-log.sh --cluster-metadata-decoder --files metadata_log_dir/__cluster_metadata-0/00000000000000000100-0000000001.checkpoint</code></pre>
 
@@ -3555,21 +3718,308 @@ foo
   <h4 class="anchor-heading"><a id="kraft_deployment" class="anchor-link"></a><a href="#kraft_deployment">Deploying Considerations</a></h4>
 
   <ul>
-    <li>Kafka server's <code>process.role</code> should be set to either <code>broker</code> or <code>controller</code> but not both. Combined mode can be used in development enviroment but it should be avoided in critical deployment evironments.</li>
-    <li>For redundancy, a Kafka cluster should use 3 controllers. More than 3 servers is not recommended in critical environments. In the rare case of a partial network failure it is possible for the cluster metadata quorum to become unavailable. This limitation will be addresses in a future release of Kafka.</li>
-    <li>The Kafka controllers store all of the metadata for the cluster in memory and on disk. We believe that for a typical Kafka cluster 5GB of main memory and 5GB of disk space on the metadata log director is sufficient.</li>
+    <li>Kafka server's <code>process.role</code> should be set to either <code>broker</code> or <code>controller</code> but not both. Combined mode can be used in development environments, but it should be avoided in critical deployment environments.</li>
+    <li>For redundancy, a Kafka cluster should use 3 controllers. More than 3 controllers is not recommended in critical environments. In the rare case of a partial network failure it is possible for the cluster metadata quorum to become unavailable. This limitation will be addressed in a future release of Kafka.</li>
+    <li>The Kafka controllers store all the metadata for the cluster in memory and on disk. We believe that for a typical Kafka cluster 5GB of main memory and 5GB of disk space on the metadata log director is sufficient.</li>
+  </ul>
 
   <h4 class="anchor-heading"><a id="kraft_missing" class="anchor-link"></a><a href="#kraft_missing">Missing Features</a></h4>
 
-  <p>The following features are not fullying implemented in KRaft mode:</p>
+  <p>The following features are not fully implemented in KRaft mode:</p>
 
   <ul>
-    <li>Configuring SCRAM users via the administrative API</li>
     <li>Supporting JBOD configurations with multiple storage directories</li>
     <li>Modifying certain dynamic configurations on the standalone KRaft controller</li>
     <li>Delegation tokens</li>
-    <li>Upgrade from ZooKeeper mode</li>
   </ul>
+
+  <h4 class="anchor-heading"><a id="kraft_zk_migration" class="anchor-link"></a><a href="#kraft_zk_migration">ZooKeeper to KRaft Migration</a></h4>
+
+  <p>
+    <b>ZooKeeper to KRaft migration is considered an Early Access feature and is not recommended for production clusters.</b>
+  </p>
+
+  <p>The following features are not yet supported for ZK to KRaft migrations:</p>
+
+  <ul>
+    <li>Downgrading to ZooKeeper mode during or after the migration</li>
+    <li>Other features <a href="#kraft_missing">not yet supported in KRaft</a></li>
+  </ul>
+
+  <p>
+    Please report issues with ZooKeeper to KRaft migration using the
+    <a href="https://issues.apache.org/jira/projects/KAFKA" target="_blank">project JIRA</a> and the "kraft" component.
+  </p>
+
+  <h3>Terminology</h3>
+  <p>
+    We use the term "migration" here to refer to the process of changing a Kafka cluster's metadata
+    system from ZooKeeper to KRaft and migrating existing metadata. An "upgrade" refers to installing a newer version of Kafka. It is not recommended to
+    upgrade the software at the same time as performing a metadata migration.
+  </p>
+
+  <p>
+    We also use the term "ZK mode" to refer to Kafka brokers which are using ZooKeeper as their metadata
+    system. "KRaft mode" refers Kafka brokers which are using a KRaft controller quorum as their metadata system.
+  </p>
+
+  <h3>Preparing for migration</h3>
+  <p>
+    Before beginning the migration, the Kafka brokers must be upgraded to software version 3.5.0 and have the
+    "inter.broker.protocol.version" configuration set to "3.5". See <a href="#upgrade_3_5_0">Upgrading to 3.5.0</a> for
+    upgrade instructions.
+  </p>
+
+  <p>
+    It is recommended to enable TRACE level logging for the migration components while the migration is active. This can
+    be done by adding the following log4j configuration to each KRaft controller's "log4j.properties" file.
+  </p>
+
+  <pre>log4j.logger.org.apache.kafka.metadata.migration=TRACE</pre>
+
+  <p>
+    It is generally useful to enable DEBUG logging on the KRaft controllers and the ZK brokers during the migration.
+  </p>
+
+  <h3>Provisioning the KRaft controller quorum</h3>
+  <p>
+    Two things are needed before the migration can begin. First, the brokers must be configured to support the migration and second,
+    a KRaft controller quorum must be deployed. The KRaft controllers should be provisioned with the same cluster ID as
+    the existing Kafka cluster. This can be found by examining one of the "meta.properties" files in the data directories
+    of the brokers, or by running the following command.
+  </p>
+
+  <pre>./bin/zookeeper-shell.sh localhost:2181 get /cluster/id</pre>
+
+  <p>
+    The KRaft controller quorum should also be provisioned with the latest <code>metadata.version</code>.
+    This is done automatically when you format the node with the <code>kafka-storage.sh</code> tool.
+    For further instructions on KRaft deployment, please refer to <a href="#kraft_config">the above documentation</a>.
+  </p>
+
+  <p>
+    In addition to the standard KRaft configuration, the KRaft controllers will need to enable support for the migration
+    as well as provide ZooKeeper connection configuration.
+  </p>
+
+  <p>
+    Here is a sample config for a KRaft controller that is ready for migration:
+  </p>
+  <pre>
+# Sample KRaft cluster controller.properties listening on 9093
+process.roles=controller
+node.id=3000
+controller.quorum.voters=3000@localhost:9093
+controller.listener.names=CONTROLLER
+listeners=CONTROLLER://:9093
+
+# Enable the migration
+zookeeper.metadata.migration.enable=true
+
+# ZooKeeper client configuration
+zookeeper.connect=localhost:2181
+
+# Other configs ...</pre>
+
+  <p><em>Note: The KRaft cluster <code>node.id</code> values must be different from any existing ZK broker <code>broker.id</code>.
+  In KRaft-mode, the brokers and controllers share the same Node ID namespace.</em></p>
+
+  <h3>Enabling the migration on the brokers</h3>
+  <p>
+    Once the KRaft controller quorum has been started, the brokers will need to be reconfigured and restarted. Brokers
+    may be restarted in a rolling fashion to avoid impacting cluster availability. Each broker requires the
+    following configuration to communicate with the KRaft controllers and to enable the migration.
+  </p>
+
+  <ul>
+    <li><a href="#brokerconfigs_controller.quorum.voters">controller.quorum.voters</a></li>
+    <li><a href="#brokerconfigs_controller.listener.names">controller.listener.names</a></li>
+    <li>The controller.listener.name should also be added to <a href="#brokerconfigs_listener.security.protocol.map">listener.security.property.map</a></li>
+    <li><a href="#brokerconfigs_zookeeper.metadata.migration.enable">zookeeper.metadata.migration.enable</a></li>
+  </ul>
+
+  <p>Here is a sample config for a broker that is ready for migration:</p>
+
+  <pre>
+# Sample ZK broker server.properties listening on 9092
+broker.id=0
+listeners=PLAINTEXT://:9092
+advertised.listeners=PLAINTEXT://localhost:9092
+listener.security.protocol.map=PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+
+# Set the IBP
+inter.broker.protocol.version=3.5
+
+# Enable the migration
+zookeeper.metadata.migration.enable=true
+
+# ZooKeeper client configuration
+zookeeper.connect=localhost:2181
+
+# KRaft controller quorum configuration
+controller.quorum.voters=3000@localhost:9093
+controller.listener.names=CONTROLLER</pre>
+
+  <p>
+    <em>Note: Once the final ZK broker has been restarted with the necessary configuration, the migration will automatically begin.</em>
+    When the migration is complete, an INFO level log can be observed on the active controller:
+  </p>
+
+  <pre>Completed migration of metadata from Zookeeper to KRaft</pre>
+
+  <h3>Migrating brokers to KRaft</h3>
+  <p>
+    Once the KRaft controller completes the metadata migration, the brokers will still be running in ZK mode. While the
+    KRaft controller is in migration mode, it will continue sending controller RPCs to the ZK mode brokers. This includes
+    RPCs like UpdateMetadata and LeaderAndIsr.
+  </p>
+
+  <p>
+    To migrate the brokers to KRaft, they simply need to be reconfigured as KRaft brokers and restarted. Using the above
+    broker configuration as an example, we would replace the <code>broker.id</code> with <code>node.id</code> and add
+    <code>process.roles=broker</code>. It is important that the broker maintain the same Broker/Node ID when it is restarted.
+    The zookeeper configurations should be removed at this point.
+  </p>
+
+  <pre>
+# Sample KRaft broker server.properties listening on 9092
+process.roles=broker
+node.id=0
+listeners=PLAINTEXT://:9092
+advertised.listeners=PLAINTEXT://localhost:9092
+listener.security.protocol.map=PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+
+# Don't set the IBP, KRaft uses "metadata.version" feature flag
+# inter.broker.protocol.version=3.5
+
+# Remove the migration enabled flag
+# zookeeper.metadata.migration.enable=true
+
+# Remove ZooKeeper client configuration
+# zookeeper.connect=localhost:2181
+
+# Keep the KRaft controller quorum configuration
+controller.quorum.voters=3000@localhost:9093
+controller.listener.names=CONTROLLER</pre>
+
+  <p>
+    Each broker is restarted with a KRaft configuration until the entire cluster is running in KRaft mode.
+  </p>
+
+  <h3>Finalizing the migration</h3>
+  <p>
+    Once all brokers have been restarted in KRaft mode, the last step to finalize the migration is to take the
+    KRaft controllers out of migration mode. This is done by removing the "zookeeper.metadata.migration.enable"
+    property from each of their configs and restarting them one at a time.
+  </p>
+
+  <pre>
+# Sample KRaft cluster controller.properties listening on 9093
+process.roles=controller
+node.id=3000
+controller.quorum.voters=3000@localhost:9093
+controller.listener.names=CONTROLLER
+listeners=CONTROLLER://:9093
+
+# Disable the migration
+# zookeeper.metadata.migration.enable=true
+
+# Remove ZooKeeper client configuration
+# zookeeper.connect=localhost:2181
+
+# Other configs ...</pre>
+
+
+<h3 class="anchor-heading"><a id="tiered_storage" class="anchor-link"></a><a href="#kraft">6.11 Tiered Storage</a></h3>
+
+<h4 class="anchor-heading"><a id="tiered_storage_overview" class="anchor-link"></a><a href="#tiered_storage_overview">Tiered Storage Overview</a></h4>
+
+<p>Kafka data is mostly consumed in a streaming fashion using tail reads. Tail reads leverage OS's page cache to serve the data instead of disk reads.
+  Older data is typically read from the disk for backfill or failure recovery purposes and is infrequent.</p>
+
+<p>In the tiered storage approach, Kafka cluster is configured with two tiers of storage - local and remote.
+  The local tier is the same as the current Kafka that uses the local disks on the Kafka brokers to store the log segments.
+  The new remote tier uses external storage systems, such as HDFS or S3, to store the completed log segments.
+  Please check <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-405%3A+Kafka+Tiered+Storage">KIP-405</a> for more information.
+</p>
+
+<p><b>Note: Tiered storage is considered as an early access feature, and is not recommended for use in production environments</b></p>
+
+<h4 class="anchor-heading"><a id="tiered_storage_config" class="anchor-link"></a><a href="#tiered_storage_config">Configuration</a></h4>
+
+<h5 class="anchor-heading"><a id="tiered_storage_config_broker" class="anchor-link"></a><a href="#tiered_storage_config_broker">Broker Configurations</a></h5>
+
+<p>By default, Kafka server will not enable tiered storage feature. <code>remote.log.storage.system.enable</code>
+  is the property to control whether to enable tiered storage functionality in a broker or not. Setting it to "true" enables this feature.
+</p>
+
+<p><code>RemoteStorageManager</code> is an interface to provide the lifecycle of remote log segments and indexes. Kafka server
+  doesn't provide out-of-the-box implementation of RemoteStorageManager. Configuring <code>remote.log.storage.manager.class.name</code>
+  and <code>remote.log.storage.manager.class.path</code> to specify the implementation of RemoteStorageManager.
+</p>
+
+<p><code>RemoteLogMetadataManager</code> is an interface to provide the lifecycle of metadata about remote log segments with strongly consistent semantics.
+  By default, Kafka provides an implementation with storage as an internal topic. This implementation can be changed by configuring
+  <code>remote.log.metadata.manager.class.name</code> and <code>remote.log.metadata.manager.class.path</code>.
+  When adopting the default kafka internal topic based implementation, <code>remote.log.metadata.manager.listener.name</code>
+  is a mandatory property to specify which listener the clients created by the default RemoteLogMetadataManager implementation.
+</p>
+
+
+<h5 class="anchor-heading"><a id="tiered_storage_config_topic" class="anchor-link"></a><a href="#tiered_storage_config_topic">Topic Configurations</a></h5>
+
+<p>After correctly configuring broker side configurations for tiered storage feature, there are still configurations in topic level needed to be set.
+  <code>remote.storage.enable</code> is the switch to determine if a topic wants to use tiered storage or not. By default it is set to false.
+  After enabling <code>remote.storage.enable</code> property, the next thing to consider is the log retention.
+  When tiered storage is enabled for a topic, there are 2 additional log retention configurations to set:
+
+<ul>
+  <li><code>local.retention.ms</code></li>
+  <li><code>retention.ms</code></li>
+  <li><code>local.retention.bytes</code></li>
+  <li><code>retention.bytes</code></li>
+</ul>
+
+  The configuration prefixed with <code>local</code> are to specify the time/size the "local" log file can accept before moving to remote storage, and then get deleted.
+  If unset, The value in <code>retention.ms</code> and <code>retention.bytes</code> will be used.
+</p>
+
+<h4 class="anchor-heading"><a id="tiered_storage_config_ex" class="anchor-link"></a><a href="#tiered_storage_config_ex">Configurations Example</a></h4>
+
+<p>Here is a sample configuration to enable tiered storage feature in broker side:
+<pre>
+# Sample Zookeeper/Kraft broker server.properties listening on PLAINTEXT://:9092
+remote.log.storage.system.enable=true
+# Please provide the implementation for remoteStorageManager. This is the mandatory configuration for tiered storage.
+# remote.log.storage.manager.class.name=org.apache.kafka.server.log.remote.storage.NoOpRemoteStorageManager
+# Using the "PLAINTEXT" listener for the clients in RemoteLogMetadataManager to talk to the brokers.
+remote.log.metadata.manager.listener.name=PLAINTEXT
+</pre>
+</p>
+
+<p>After broker is started, creating a topic with tiered storage enabled, and a small log time retention value to try this feature:
+<pre>bin/kafka-topics.sh --create --topic tieredTopic --bootstrap-server localhost:9092 --config remote.storage.enable=true --config local.retention.ms=1000
+</pre>
+</p>
+
+<p>Then, after the active segment is rolled, the old segment should be moved to the remote storage and get deleted.
+</p>
+
+<h4 class="anchor-heading"><a id="tiered_storage_limitation" class="anchor-link"></a><a href="#tiered_storage_limitation">Limitations</a></h4>
+
+<p>While the early access release of Tiered Storage offers the opportunity to try out this new feature, it is important to be aware of the following limitations:
+<ul>
+  <li>No support for clusters with multiple log directories (i.e. JBOD feature)</li>
+  <li>No support for compacted topics</li>
+  <li>Cannot disable tiered storage at the topic level</li>
+  <li>Deleting tiered storage enabled topics is required before disabling tiered storage at the broker level</li>
+  <li>Admin actions related to tiered storage feature are only supported on clients from version 3.0 onwards</li>
+</ul>
+</p>
+
+<p>For more information, please check <a href="https://cwiki.apache.org/confluence/display/KAFKA/Kafka+Tiered+Storage+Early+Access+Release+Notes">Tiered Storage Early Access Release Note</a>.
+</p>
+
 
 </script>
 

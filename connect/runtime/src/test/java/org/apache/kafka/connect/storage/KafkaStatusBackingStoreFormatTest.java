@@ -28,7 +28,9 @@ import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.KafkaBasedLog;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.junit.MockitoJUnitRunner;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -48,10 +50,11 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
-import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 
 @SuppressWarnings("unchecked")
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class KafkaStatusBackingStoreFormatTest {
 
     private static final String STATUS_TOPIC = "status-topic";
@@ -216,7 +219,7 @@ public class KafkaStatusBackingStoreFormatTest {
         }).when(kafkaBasedLog).send(eq(key), valueCaptor.capture(), any(Callback.class));
 
         store.put(topicStatus);
-        verify(kafkaBasedLog, times(2)).send(any(), any(), any());
+        verify(kafkaBasedLog, timeout(1000).times(2)).send(any(), any(), any());
 
         // check capture state
         assertEquals(topicStatus, store.parseTopicStatus(valueCaptor.getValue()));

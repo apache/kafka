@@ -25,10 +25,12 @@ import org.apache.kafka.metadata.authorizer.StandardAclWithId;
 import org.apache.kafka.server.common.MetadataVersion;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 
@@ -38,7 +40,7 @@ import java.util.stream.Collectors;
 public final class AclsDelta {
     private final AclsImage image;
     private final Map<Uuid, Optional<StandardAcl>> changes = new LinkedHashMap<>();
-    private boolean isSnapshotDelta = false;
+    private final Set<StandardAcl> deleted = new HashSet<>();
 
     public AclsDelta(AclsImage image) {
         this.image = image;
@@ -54,16 +56,25 @@ public final class AclsDelta {
         return changes;
     }
 
+    /**
+     * Return a Set of the ACLs which were deleted in this delta. This is used by the ZK migration components.
+     *
+     * @return Set of deleted ACLs
+     */
+    public Set<StandardAcl> deleted() {
+        return deleted;
+    }
+
     void finishSnapshot() {
-        this.isSnapshotDelta = true;
+        for (Entry<Uuid, StandardAcl> entry : image.acls().entrySet()) {
+            if (!changes.containsKey(entry.getKey())) {
+                changes.put(entry.getKey(), Optional.empty());
+            }
+        }
     }
 
     public void handleMetadataVersionChange(MetadataVersion newVersion) {
         // no-op
-    }
-
-    public boolean isSnapshotDelta() {
-        return isSnapshotDelta;
     }
 
     public void replay(AccessControlEntryRecord record) {
@@ -82,8 +93,10 @@ public final class AclsDelta {
     public void replay(RemoveAccessControlEntryRecord record) {
         if (image.acls().containsKey(record.id())) {
             changes.put(record.id(), Optional.empty());
+            deleted.add(image.acls().get(record.id()));
         } else if (changes.containsKey(record.id())) {
             changes.remove(record.id());
+            // No need to track a ACL that was added and deleted within the same delta
         } else {
             throw new IllegalStateException("Failed to find existing ACL with ID " + record.id() + " in either image or changes");
         }
@@ -91,14 +104,12 @@ public final class AclsDelta {
 
     public AclsImage apply() {
         Map<Uuid, StandardAcl> newAcls = new HashMap<>();
-        if (!isSnapshotDelta) {
-            for (Entry<Uuid, StandardAcl> entry : image.acls().entrySet()) {
-                Optional<StandardAcl> change = changes.get(entry.getKey());
-                if (change == null) {
-                    newAcls.put(entry.getKey(), entry.getValue());
-                } else if (change.isPresent()) {
-                    newAcls.put(entry.getKey(), change.get());
-                }
+        for (Entry<Uuid, StandardAcl> entry : image.acls().entrySet()) {
+            Optional<StandardAcl> change = changes.get(entry.getKey());
+            if (change == null) {
+                newAcls.put(entry.getKey(), entry.getValue());
+            } else if (change.isPresent()) {
+                newAcls.put(entry.getKey(), change.get());
             }
         }
         for (Entry<Uuid, Optional<StandardAcl>> entry : changes.entrySet()) {
@@ -113,7 +124,7 @@ public final class AclsDelta {
 
     @Override
     public String toString() {
-        return "AclsDelta(isSnapshotDelta=" + isSnapshotDelta +
+        return "AclsDelta(" +
             ", changes=" + changes.entrySet().stream().
                 map(e -> "" + e.getKey() + "=" + e.getValue()).
                 collect(Collectors.joining(", ")) + ")";

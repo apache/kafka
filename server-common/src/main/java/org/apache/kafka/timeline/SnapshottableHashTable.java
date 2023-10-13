@@ -122,6 +122,9 @@ class SnapshottableHashTable<T extends SnapshottableHashTable.ElementWithStartEp
                         // When merging in a later hash tier, we want to keep only the elements
                         // that were present at our epoch.
                         if (element.startEpoch() <= epoch) {
+                            if (deltaTable == null) {
+                                deltaTable = new BaseHashTable<>(1);
+                            }
                             deltaTable.baseAddOrReplace(element);
                         }
                     }
@@ -258,8 +261,10 @@ class SnapshottableHashTable<T extends SnapshottableHashTable.ElementWithStartEp
                         int tierSlot = slot >>> shift;
                         BaseHashTable.unpackSlot(temp, deltaTable.baseElements(), tierSlot);
                         for (T object : temp) {
-                            if (BaseHashTable.findSlot(object, topTier.length) == slot) {
-                                ready.add(object);
+                            if (object.startEpoch() <= snapshot.epoch()) {
+                                if (BaseHashTable.findSlot(object, topTier.length) == slot) {
+                                    ready.add(object);
+                                }
                             }
                         }
                         temp.clear();

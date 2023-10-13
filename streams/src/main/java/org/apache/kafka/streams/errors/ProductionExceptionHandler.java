@@ -34,6 +34,18 @@ public interface ProductionExceptionHandler extends Configurable {
     ProductionExceptionHandlerResponse handle(final ProducerRecord<byte[], byte[]> record,
                                               final Exception exception);
 
+    /**
+     * Handles serialization exception and determine if the process should continue. The default implementation is to
+     * fail the process.
+     *
+     * @param record        the record that failed to serialize
+     * @param exception     the exception that occurred during serialization
+     */
+    default ProductionExceptionHandlerResponse handleSerializationException(final ProducerRecord record,
+                                                                            final Exception exception) {
+        return ProductionExceptionHandlerResponse.FAIL;
+    }
+
     enum ProductionExceptionHandlerResponse {
         /* continue processing */
         CONTINUE(0, "CONTINUE"),

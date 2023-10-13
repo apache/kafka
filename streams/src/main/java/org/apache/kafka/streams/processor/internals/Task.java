@@ -162,6 +162,17 @@ public interface Task {
      */
     void prepareRecycle();
 
+    /**
+     * Resumes polling in the main consumer for all partitions for which
+     * the corresponding record queues have capacity (again).
+     */
+    void resumePollingForPartitionsWithAvailableSpace();
+
+    /**
+     * Fetches up-to-date lag information from the consumer.
+     */
+    void updateLags();
+
     // runtime methods (using in RUNNING state)
 
     void addRecords(TopicPartition partition, Iterable<ConsumerRecord<byte[], byte[]>> records);
@@ -203,7 +214,7 @@ public interface Task {
 
     void clearTaskTimeout();
 
-    void maybeRecordRestored(final Time time, final long numRecords);
+    void recordRestoration(final Time time, final long numRecords, final boolean initRemaining);
 
     // task status inquiry
 

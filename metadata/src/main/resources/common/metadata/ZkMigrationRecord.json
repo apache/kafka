@@ -18,7 +18,12 @@
   "type": "metadata",
   "name": "ZkMigrationStateRecord",
   // Version 0 adds ZkMigrationState which is used by the KRaft controller to mark the beginning and end
-  // of the ZK to KRaft migration. Possible values are 1 (PreMigration), 2 (Migration), 3 (PostMigration).
+  // of the ZK to KRaft migration.
+  //
+  // In 3.4, the defined values are: 0 (None), 1 (PreMigration), 2 (Migration), 3 (PostMigration).
+  // In 3.5, the values for PreMigration and Migration were swapped: 0 (None), 2 (PreMigration), 1 (Migration), 3 (PostMigration).
+  //   This was done to work around the fact that we never wrote Migration or PostMigration records in 3.4
+  //
   "validVersions": "0",
   "flexibleVersions": "0+",
   "fields": [

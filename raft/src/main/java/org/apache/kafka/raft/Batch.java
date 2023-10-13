@@ -156,7 +156,7 @@ public final class Batch<T> implements Iterable<T> {
      * @param epoch epoch of the leader that created this batch
      * @param appendTimestamp timestamp in milliseconds of when the batch was appended
      * @param sizeInBytes number of bytes used by this batch
-     * @param lastOffset offset of the last record of this batch
+     * @param records the list of records in this batch
      */
     public static <T> Batch<T> control(
         long baseOffset,
@@ -168,7 +168,7 @@ public final class Batch<T> implements Iterable<T> {
         if (records.isEmpty()) {
             throw new IllegalArgumentException(
                 String.format(
-                    "Control batch must contain at least one record; baseOffset = %s; epoch = %s",
+                    "Control batch must contain at least one record; baseOffset = %d; epoch = %d",
                     baseOffset,
                     epoch
                 )
@@ -205,7 +205,7 @@ public final class Batch<T> implements Iterable<T> {
         if (records.isEmpty()) {
             throw new IllegalArgumentException(
                 String.format(
-                    "Batch must contain at least one record; baseOffset = %s; epoch = %s",
+                    "Batch must contain at least one record; baseOffset = %d; epoch = %d",
                     baseOffset,
                     epoch
                 )
