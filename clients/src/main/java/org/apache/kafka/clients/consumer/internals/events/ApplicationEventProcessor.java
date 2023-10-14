@@ -96,10 +96,6 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
                 process((ListOffsetsApplicationEvent) event);
                 return;
 
-            case FETCH:
-                process((FetchEvent) event);
-                return;
-
             case RESET_POSITIONS:
                 processResetPositionsEvent();
                 return;
@@ -182,10 +178,6 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         final CompletableFuture<Map<String, List<PartitionInfo>>> future =
                 this.requestManagers.topicMetadataRequestManager.requestTopicMetadata(Optional.of(event.topic()));
         event.chain(future);
-    }
-
-    private void process(final FetchEvent event) {
-        // This is currently unused.
     }
 
     /**

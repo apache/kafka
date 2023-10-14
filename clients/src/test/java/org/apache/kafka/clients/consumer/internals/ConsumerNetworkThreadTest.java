@@ -22,7 +22,7 @@ import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent;
-import org.apache.kafka.clients.consumer.internals.events.FetchEvent;
+import org.apache.kafka.clients.consumer.internals.events.CompletableApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
 import org.apache.kafka.clients.consumer.internals.events.ResetPositionsApplicationEvent;
@@ -46,7 +46,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Queue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 
@@ -122,7 +121,7 @@ public class ConsumerNetworkThreadTest {
 
     @Test
     public void testApplicationEvent() {
-        FetchEvent e = new FetchEvent();
+        ApplicationEvent e = new CommitApplicationEvent(new HashMap<>());
         applicationEventsQueue.add(e);
         consumerNetworkThread.runOnce();
         verify(applicationEventProcessor, times(1)).process(e);
@@ -245,12 +244,12 @@ public class ConsumerNetworkThreadTest {
 
     @Test
     void testEnsureEventsAreCompleted() {
-        FetchEvent event = spy(new FetchEvent());
-        ApplicationEvent e = new CommitApplicationEvent(Collections.emptyMap());
-        CompletableFuture<Queue<CompletedFetch>> future = new CompletableFuture<>();
-        when(event.future()).thenReturn(future);
-        applicationEventsQueue.add(event);
-        applicationEventsQueue.add(e);
+        CompletableApplicationEvent<Void> event1 = spy(new CommitApplicationEvent(Collections.emptyMap()));
+        ApplicationEvent event2 = new CommitApplicationEvent(Collections.emptyMap());
+        CompletableFuture<Void> future = new CompletableFuture<>();
+        when(event1.future()).thenReturn(future);
+        applicationEventsQueue.add(event1);
+        applicationEventsQueue.add(event2);
         assertFalse(future.isDone());
         assertFalse(applicationEventsQueue.isEmpty());
 

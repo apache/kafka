@@ -40,7 +40,6 @@ import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent;
-import org.apache.kafka.clients.consumer.internals.events.FetchEvent;
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
 import org.apache.kafka.clients.consumer.internals.events.OffsetFetchApplicationEvent;
@@ -339,7 +338,8 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
                 final Fetch<K, V> fetch = pollForFetches(timer);
 
                 if (!fetch.isEmpty()) {
-                    sendFetches();
+                    // Notify the network thread to wake up and start the next round of fetching.
+                    applicationEventHandler.wakeup();
 
                     if (fetch.records().isEmpty()) {
                         log.trace("Returning empty records from `poll()` "
@@ -908,15 +908,6 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         return wakeupTrigger;
     }
 
-    /**
-     * Send the requests for fetch data to the {@link ConsumerNetworkThread network thread} and set up to
-     * collect the results in {@link #fetchBuffer}.
-     */
-    private void sendFetches() {
-        FetchEvent event = new FetchEvent();
-        applicationEventHandler.add(event);
-    }
-
     private Fetch<K, V> pollForFetches(Timer timer) {
         long pollTimeout = timer.remainingMs();
 
@@ -926,8 +917,8 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
             return fetch;
         }
 
-        // send any new fetches (won't resend pending fetches)
-        sendFetches();
+        // Wake up the network thread to send any new fetches (won't resend pending fetches)
+        applicationEventHandler.wakeup();
 
         // We do not want to be stuck blocking in poll if we are missing some positions
         // since the offset lookup may be backing off after a failure
@@ -942,9 +933,9 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
 
         Timer pollTimer = time.timer(pollTimeout);
 
-        // Attempt to fetch any data. It's OK if we don't have any waiting data here; it's a 'best case' effort. The
-        // data may not be immediately available, but the calling method (poll) will correctly
-        // handle the overall timeout.
+        // Wait a bit for some fetched data to arrive, as there may not be anything immediately available. Note the
+        // use of a shorter, dedicated "pollTimer" here which updates "timer" so that calling method (poll) will
+        // correctly handle the overall timeout.
         try {
             fetchBuffer.awaitNotEmpty(pollTimer);
         } catch (InterruptException e) {
