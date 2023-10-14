@@ -29,9 +29,9 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.SessionWindows;
@@ -689,7 +689,7 @@ public class PositionRestartIntegrationTest {
         config.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 1000);
         config.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
         config.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1);
-        config.put(InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED, true);
+        config.put(InternalStreamsConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED, true);
         return config;
     }
 }

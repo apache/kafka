@@ -40,6 +40,7 @@ import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.test.MockClientSupplier;
 import org.junit.Before;
@@ -88,19 +89,19 @@ public class StreamsProducerTest {
         Collections.emptySet()
     );
 
-    private final StreamsConfig nonEosConfig = new StreamsConfig(mkMap(
+    private final InternalStreamsConfig nonEosConfig = new InternalStreamsConfig(mkMap(
         mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
         mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234"))
     );
 
     @SuppressWarnings("deprecation")
-    private final StreamsConfig eosAlphaConfig = new StreamsConfig(mkMap(
+    private final InternalStreamsConfig eosAlphaConfig = new InternalStreamsConfig(mkMap(
         mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
         mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234"),
         mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE))
     );
 
-    private final StreamsConfig eosBetaConfig = new StreamsConfig(mkMap(
+    private final InternalStreamsConfig eosBetaConfig = new InternalStreamsConfig(mkMap(
         mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
         mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234"),
         mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2))
@@ -384,8 +385,8 @@ public class StreamsProducerTest {
 
     @Test
     public void shouldNotSetTransactionIdIfEosDisabled() {
-        final StreamsConfig mockConfig = mock(StreamsConfig.class);
-        expect(mockConfig.getProducerConfigs("threadId-producer")).andReturn(mock(Map.class));
+        final InternalStreamsConfig mockConfig = mock(InternalStreamsConfig.class);
+        expect(mockConfig.producerConfigs("threadId-producer")).andReturn(mock(Map.class));
         expect(mockConfig.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG)).andReturn(StreamsConfig.AT_LEAST_ONCE).anyTimes();
         replay(mockConfig);
 
@@ -502,8 +503,8 @@ public class StreamsProducerTest {
         expect(mockMap.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "appId-0_0")).andReturn(null);
         expect(mockMap.get(ProducerConfig.TRANSACTIONAL_ID_CONFIG)).andReturn("appId-0_0");
 
-        final StreamsConfig mockConfig = mock(StreamsConfig.class);
-        expect(mockConfig.getProducerConfigs("threadId-0_0-producer")).andReturn(mockMap);
+        final InternalStreamsConfig mockConfig = mock(InternalStreamsConfig.class);
+        expect(mockConfig.producerConfigs("threadId-0_0-producer")).andReturn(mockMap);
         expect(mockConfig.getString(StreamsConfig.APPLICATION_ID_CONFIG)).andReturn("appId");
         expect(mockConfig.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG)).andReturn(StreamsConfig.EXACTLY_ONCE);
 
@@ -530,8 +531,8 @@ public class StreamsProducerTest {
         expect(mockMap.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "appId-" + processId + "-0")).andReturn(null);
         expect(mockMap.get(ProducerConfig.TRANSACTIONAL_ID_CONFIG)).andReturn("appId-" + processId);
 
-        final StreamsConfig mockConfig = mock(StreamsConfig.class);
-        expect(mockConfig.getProducerConfigs("threadId-StreamThread-0-producer")).andReturn(mockMap);
+        final InternalStreamsConfig mockConfig = mock(InternalStreamsConfig.class);
+        expect(mockConfig.producerConfigs("threadId-StreamThread-0-producer")).andReturn(mockMap);
         expect(mockConfig.getString(StreamsConfig.APPLICATION_ID_CONFIG)).andReturn("appId");
         expect(mockConfig.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG)).andReturn(StreamsConfig.EXACTLY_ONCE_V2).anyTimes();
 

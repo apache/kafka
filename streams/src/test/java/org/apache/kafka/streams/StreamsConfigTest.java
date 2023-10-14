@@ -31,6 +31,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.internals.UpgradeFromValues;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.TimestampExtractor;
@@ -89,7 +90,7 @@ public class StreamsConfigTest {
     @Rule
     public Timeout globalTimeout = Timeout.seconds(600);
     private final Properties props = new Properties();
-    private StreamsConfig streamsConfig;
+    private InternalStreamsConfig internalStreamsConfig;
 
     private final String groupId = "example-application";
     private final String clientId = "client";
@@ -103,56 +104,57 @@ public class StreamsConfigTest {
         props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         props.put("key.deserializer.encoding", StandardCharsets.UTF_8.name());
         props.put("value.deserializer.encoding", StandardCharsets.UTF_16.name());
-        streamsConfig = new StreamsConfig(props);
+        final InternalStreamsConfig streamsConfig = new InternalStreamsConfig(props);
+        internalStreamsConfig = new InternalStreamsConfig(streamsConfig);
     }
 
     @Test
     public void testIllegalMetricsRecordingLevel() {
         props.put(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, "illegalConfig");
-        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+        assertThrows(ConfigException.class, () -> new InternalStreamsConfig(props));
     }
 
     @Test
     public void testOsDefaultSocketBufferSizes() {
         props.put(StreamsConfig.SEND_BUFFER_CONFIG, CommonClientConfigs.SEND_BUFFER_LOWER_BOUND);
         props.put(StreamsConfig.RECEIVE_BUFFER_CONFIG, CommonClientConfigs.RECEIVE_BUFFER_LOWER_BOUND);
-        new StreamsConfig(props);
+        new InternalStreamsConfig(props);
     }
 
     @Test
     public void testInvalidSocketSendBufferSize() {
         props.put(StreamsConfig.SEND_BUFFER_CONFIG, -2);
-        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+        assertThrows(ConfigException.class, () -> new InternalStreamsConfig(props));
     }
 
     @Test
     public void testInvalidSocketReceiveBufferSize() {
         props.put(StreamsConfig.RECEIVE_BUFFER_CONFIG, -2);
-        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+        assertThrows(ConfigException.class, () -> new InternalStreamsConfig(props));
     }
 
     @Test
     public void shouldThrowExceptionIfApplicationIdIsNotSet() {
         props.remove(StreamsConfig.APPLICATION_ID_CONFIG);
-        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+        assertThrows(ConfigException.class, () -> new InternalStreamsConfig(props));
     }
 
     @Test
     public void shouldThrowExceptionIfBootstrapServersIsNotSet() {
         props.remove(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG);
-        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+        assertThrows(ConfigException.class, () -> new InternalStreamsConfig(props));
     }
 
     @Test
     public void testGetProducerConfigs() {
-        final Map<String, Object> returnedProps = streamsConfig.getProducerConfigs(clientId);
+        final Map<String, Object> returnedProps = internalStreamsConfig.producerConfigs(clientId);
         assertThat(returnedProps.get(ProducerConfig.CLIENT_ID_CONFIG), equalTo(clientId));
         assertThat(returnedProps.get(ProducerConfig.LINGER_MS_CONFIG), equalTo("100"));
     }
 
     @Test
     public void testGetConsumerConfigs() {
-        final Map<String, Object> returnedProps = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
+        final Map<String, Object> returnedProps = internalStreamsConfig.mainConsumerConfigs(groupId, clientId, threadIdx);
         assertThat(returnedProps.get(ConsumerConfig.CLIENT_ID_CONFIG), equalTo(clientId));
         assertThat(returnedProps.get(ConsumerConfig.GROUP_ID_CONFIG), equalTo(groupId));
         assertThat(returnedProps.get(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), equalTo("1000"));
@@ -165,18 +167,18 @@ public class StreamsConfigTest {
         props.put(StreamsConfig.mainConsumerPrefix(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG), "group-instance-id-1");
         props.put(StreamsConfig.restoreConsumerPrefix(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG), "group-instance-id-2");
         props.put(StreamsConfig.globalConsumerPrefix(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG), "group-instance-id-3");
-        final StreamsConfig streamsConfig = new StreamsConfig(props);
+        final InternalStreamsConfig streamsConfig = new InternalStreamsConfig(props);
 
-        Map<String, Object> returnedProps = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
+        Map<String, Object> returnedProps = streamsConfig.mainConsumerConfigs(groupId, clientId, threadIdx);
         assertThat(
             returnedProps.get(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG),
             equalTo("group-instance-id-1-" + threadIdx)
         );
 
-        returnedProps = streamsConfig.getRestoreConsumerConfigs(clientId);
+        returnedProps = streamsConfig.restoreConsumerConfigs(clientId);
         assertNull(returnedProps.get(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG));
 
-        returnedProps = streamsConfig.getGlobalConsumerConfigs(clientId);
+        returnedProps = streamsConfig.globalConsumerConfigs(clientId);
         assertNull(returnedProps.get(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG));
     }
 
@@ -190,8 +192,8 @@ public class StreamsConfigTest {
         props.put(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG, 7L);
         props.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "dummy:host");
         props.put(StreamsConfig.topicPrefix(TopicConfig.SEGMENT_BYTES_CONFIG), 100);
-        final StreamsConfig streamsConfig = new StreamsConfig(props);
-        final Map<String, Object> returnedProps = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
+        final InternalStreamsConfig streamsConfig = new InternalStreamsConfig(props);
+        final Map<String, Object> returnedProps = streamsConfig.mainConsumerConfigs(groupId, clientId, threadIdx);
 
         assertEquals(42, returnedProps.get(StreamsConfig.REPLICATION_FACTOR_CONFIG));
         assertEquals(1, returnedProps.get(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG));
@@ -212,15 +214,15 @@ public class StreamsConfigTest {
         props.put(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), "5");
         props.put(StreamsConfig.mainConsumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), "50");
         props.put(StreamsConfig.mainConsumerPrefix(ConsumerConfig.GROUP_ID_CONFIG), "another-id");
-        final StreamsConfig streamsConfig = new StreamsConfig(props);
-        final Map<String, Object> returnedProps = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
+        final InternalStreamsConfig streamsConfig = new InternalStreamsConfig(props);
+        final Map<String, Object> returnedProps = streamsConfig.mainConsumerConfigs(groupId, clientId, threadIdx);
         assertEquals(groupId, returnedProps.get(ConsumerConfig.GROUP_ID_CONFIG));
         assertEquals("50", returnedProps.get(ConsumerConfig.MAX_POLL_RECORDS_CONFIG));
     }
 
     @Test
     public void testGetRestoreConsumerConfigs() {
-        final Map<String, Object> returnedProps = streamsConfig.getRestoreConsumerConfigs(clientId);
+        final Map<String, Object> returnedProps = internalStreamsConfig.restoreConsumerConfigs(clientId);
         assertEquals(returnedProps.get(ConsumerConfig.CLIENT_ID_CONFIG), clientId);
         assertNull(returnedProps.get(ConsumerConfig.GROUP_ID_CONFIG));
     }
@@ -239,14 +241,14 @@ public class StreamsConfigTest {
         assertEquals(
             "Should get the original string after serialization and deserialization with the configured encoding",
             str,
-            streamsConfig.defaultKeySerde().deserializer().deserialize(topic, serializer.serialize(topic, str))
+            internalStreamsConfig.defaultKeySerde().deserializer().deserialize(topic, serializer.serialize(topic, str))
         );
 
         serializer.configure(serializerConfigs, false);
         assertEquals(
             "Should get the original string after serialization and deserialization with the configured encoding",
             str,
-            streamsConfig.defaultValueSerde().deserializer().deserialize(topic, serializer.serialize(topic, str))
+            internalStreamsConfig.defaultValueSerde().deserializer().deserialize(topic, serializer.serialize(topic, str))
         );
     }
 
@@ -257,7 +259,7 @@ public class StreamsConfigTest {
         final Properties props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "irrelevant");
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServersString);
-        final StreamsConfig config = new StreamsConfig(props);
+        final InternalStreamsConfig config = new InternalStreamsConfig(props);
 
         final List<String> actualBootstrapServers = config.getList(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG);
         assertEquals(expectedBootstrapServers, actualBootstrapServers);
@@ -267,8 +269,8 @@ public class StreamsConfigTest {
     public void shouldSupportPrefixedConsumerConfigs() {
         props.put(consumerPrefix(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG), "earliest");
         props.put(consumerPrefix(ConsumerConfig.METRICS_NUM_SAMPLES_CONFIG), 1);
-        final StreamsConfig streamsConfig = new StreamsConfig(props);
-        final Map<String, Object> consumerConfigs = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
+        final InternalStreamsConfig streamsConfig = new InternalStreamsConfig(props);
+        final Map<String, Object> consumerConfigs = streamsConfig.mainConsumerConfigs(groupId, clientId, threadIdx);
         assertEquals("earliest", consumerConfigs.get(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG));
         assertEquals(1, consumerConfigs.get(ConsumerConfig.METRICS_NUM_SAMPLES_CONFIG));
     }
@@ -276,32 +278,32 @@ public class StreamsConfigTest {
     @Test
     public void shouldSupportPrefixedRestoreConsumerConfigs() {
         props.put(consumerPrefix(ConsumerConfig.METRICS_NUM_SAMPLES_CONFIG), 1);
-        final StreamsConfig streamsConfig = new StreamsConfig(props);
-        final Map<String, Object> consumerConfigs = streamsConfig.getRestoreConsumerConfigs(clientId);
+        final InternalStreamsConfig streamsConfig = new InternalStreamsConfig(props);
+        final Map<String, Object> consumerConfigs = streamsConfig.restoreConsumerConfigs(clientId);
         assertEquals(1, consumerConfigs.get(ConsumerConfig.METRICS_NUM_SAMPLES_CONFIG));
     }
 
     @Test
     public void shouldSupportPrefixedPropertiesThatAreNotPartOfConsumerConfig() {
         props.put(consumerPrefix("interceptor.statsd.host"), "host");
-        final StreamsConfig streamsConfig = new StreamsConfig(props);
-        final Map<String, Object> consumerConfigs = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
+        final InternalStreamsConfig streamsConfig = new InternalStreamsConfig(props);
+        final Map<String, Object> consumerConfigs = streamsConfig.mainConsumerConfigs(groupId, clientId, threadIdx);
         assertEquals("host", consumerConfigs.get("interceptor.statsd.host"));
     }
 
     @Test
     public void shouldSupportPrefixedPropertiesThatAreNotPartOfRestoreConsumerConfig() {
         props.put(consumerPrefix("interceptor.statsd.host"), "host");
-        final StreamsConfig streamsConfig = new StreamsConfig(props);
-        final Map<String, Object> consumerConfigs = streamsConfig.getRestoreConsumerConfigs(clientId);
+        final InternalStreamsConfig streamsConfig = new InternalStreamsConfig(props);
+        final Map<String, Object> consumerConfigs = streamsConfig.restoreConsumerConfigs(clientId);
         assertEquals("host", consumerConfigs.get("interceptor.statsd.host"));
     }
 
     @Test
     public void shouldSupportPrefixedPropertiesThatAreNotPartOfProducerConfig() {
         props.put(producerPrefix("interceptor.statsd.host"), "host");
-        final StreamsConfig streamsConfig = new StreamsConfig(props);
-        final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs(clientId);
+        final InternalStreamsConfig streamsConfig = new InternalStreamsConfig(props);
+        final Map<String, Object> producerConfigs = streamsConfig.producerConfigs(clientId);
         assertEquals("host", producerConfigs.get("interceptor.statsd.host"));
     }
 
@@ -309,8 +311,8 @@ public class StreamsConfigTest {
     public void shouldSupportPrefixedProducerConfigs() {
         props.put(producerPrefix(ProducerConfig.BUFFER_MEMORY_CONFIG), 10);
         props.put(producerPrefix(ConsumerConfig.METRICS_NUM_SAMPLES_CONFIG), 1);
-        final StreamsConfig streamsConfig = new StreamsConfig(props);
-        final Map<String, Object> configs = streamsConfig.getProducerConfigs(clientId);
+        final InternalStreamsConfig streamsConfig = new InternalStreamsConfig(props);
+        final Map<String, Object> configs = streamsConfig.producerConfigs(clientId);
         assertEquals(10, configs.get(ProducerConfig.BUFFER_MEMORY_CONFIG));
         assertEquals(1, configs.get(ProducerConfig.METRICS_NUM_SAMPLES_CONFIG));
     }
@@ -319,8 +321,8 @@ public class StreamsConfigTest {
     public void shouldBeSupportNonPrefixedConsumerConfigs() {
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         props.put(ConsumerConfig.METRICS_NUM_SAMPLES_CONFIG, 1);
-        final StreamsConfig streamsConfig = new StreamsConfig(props);
-        final Map<String, Object> consumerConfigs = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
+        final InternalStreamsConfig streamsConfig = new InternalStreamsConfig(props);
+        final Map<String, Object> consumerConfigs = streamsConfig.mainConsumerConfigs(groupId, clientId, threadIdx);
         assertEquals("earliest", consumerConfigs.get(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG));
         assertEquals(1, consumerConfigs.get(ConsumerConfig.METRICS_NUM_SAMPLES_CONFIG));
     }
@@ -328,8 +330,8 @@ public class StreamsConfigTest {
     @Test
     public void shouldBeSupportNonPrefixedRestoreConsumerConfigs() {
         props.put(ConsumerConfig.METRICS_NUM_SAMPLES_CONFIG, 1);
-        final StreamsConfig streamsConfig = new StreamsConfig(props);
-        final Map<String, Object> consumerConfigs = streamsConfig.getRestoreConsumerConfigs(groupId);
+        final InternalStreamsConfig streamsConfig = new InternalStreamsConfig(props);
+        final Map<String, Object> consumerConfigs = streamsConfig.restoreConsumerConfigs(groupId);
         assertEquals(1, consumerConfigs.get(ConsumerConfig.METRICS_NUM_SAMPLES_CONFIG));
     }
 
@@ -337,8 +339,8 @@ public class StreamsConfigTest {
     public void shouldSupportNonPrefixedProducerConfigs() {
         props.put(ProducerConfig.BUFFER_MEMORY_CONFIG, 10);
         props.put(ConsumerConfig.METRICS_NUM_SAMPLES_CONFIG, 1);
-        final StreamsConfig streamsConfig = new StreamsConfig(props);
-        final Map<String, Object> configs = streamsConfig.getProducerConfigs(clientId);
+        final InternalStreamsConfig streamsConfig = new InternalStreamsConfig(props);
+        final Map<String, Object> configs = streamsConfig.producerConfigs(clientId);
         assertEquals(10, configs.get(ProducerConfig.BUFFER_MEMORY_CONFIG));
         assertEquals(1, configs.get(ProducerConfig.METRICS_NUM_SAMPLES_CONFIG));
     }
@@ -346,11 +348,11 @@ public class StreamsConfigTest {
     @Test
     public void shouldForwardCustomConfigsWithNoPrefixToAllClients() {
         props.put("custom.property.host", "host");
-        final StreamsConfig streamsConfig = new StreamsConfig(props);
-        final Map<String, Object> consumerConfigs = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
-        final Map<String, Object> restoreConsumerConfigs = streamsConfig.getRestoreConsumerConfigs(clientId);
-        final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs(clientId);
-        final Map<String, Object> adminConfigs = streamsConfig.getAdminConfigs(clientId);
+        final InternalStreamsConfig streamsConfig = new InternalStreamsConfig(props);
+        final Map<String, Object> consumerConfigs = streamsConfig.mainConsumerConfigs(groupId, clientId, threadIdx);
+        final Map<String, Object> restoreConsumerConfigs = streamsConfig.restoreConsumerConfigs(clientId);
+        final Map<String, Object> producerConfigs = streamsConfig.producerConfigs(clientId);
+        final Map<String, Object> adminConfigs = streamsConfig.adminConfigs(clientId);
         assertEquals("host", consumerConfigs.get("custom.property.host"));
         assertEquals("host", restoreConsumerConfigs.get("custom.property.host"));
         assertEquals("host", producerConfigs.get("custom.property.host"));
@@ -363,11 +365,11 @@ public class StreamsConfigTest {
         props.put(consumerPrefix("custom.property.host"), "host1");
         props.put(producerPrefix("custom.property.host"), "host2");
         props.put(adminClientPrefix("custom.property.host"), "host3");
-        final StreamsConfig streamsConfig = new StreamsConfig(props);
-        final Map<String, Object> consumerConfigs = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
-        final Map<String, Object> restoreConsumerConfigs = streamsConfig.getRestoreConsumerConfigs(clientId);
-        final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs(clientId);
-        final Map<String, Object> adminConfigs = streamsConfig.getAdminConfigs(clientId);
+        final InternalStreamsConfig streamsConfig = new InternalStreamsConfig(props);
+        final Map<String, Object> consumerConfigs = streamsConfig.mainConsumerConfigs(groupId, clientId, threadIdx);
+        final Map<String, Object> restoreConsumerConfigs = streamsConfig.restoreConsumerConfigs(clientId);
+        final Map<String, Object> producerConfigs = streamsConfig.producerConfigs(clientId);
+        final Map<String, Object> adminConfigs = streamsConfig.adminConfigs(clientId);
         assertEquals("host1", consumerConfigs.get("custom.property.host"));
         assertEquals("host1", restoreConsumerConfigs.get("custom.property.host"));
         assertEquals("host2", producerConfigs.get("custom.property.host"));
@@ -377,22 +379,22 @@ public class StreamsConfigTest {
     @Test
     public void shouldSupportNonPrefixedAdminConfigs() {
         props.put(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, 10);
-        final StreamsConfig streamsConfig = new StreamsConfig(props);
-        final Map<String, Object> configs = streamsConfig.getAdminConfigs(clientId);
+        final InternalStreamsConfig streamsConfig = new InternalStreamsConfig(props);
+        final Map<String, Object> configs = streamsConfig.adminConfigs(clientId);
         assertEquals(10, configs.get(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG));
     }
 
     @Test
     public void shouldThrowStreamsExceptionIfKeySerdeConfigFails() {
         props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, MisconfiguredSerde.class);
-        final StreamsConfig streamsConfig = new StreamsConfig(props);
+        final InternalStreamsConfig streamsConfig = new InternalStreamsConfig(props);
         assertThrows(StreamsException.class, streamsConfig::defaultKeySerde);
     }
 
     @Test
     public void shouldThrowStreamsExceptionIfValueSerdeConfigFails() {
         props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, MisconfiguredSerde.class);
-        final StreamsConfig streamsConfig = new StreamsConfig(props);
+        final InternalStreamsConfig streamsConfig = new InternalStreamsConfig(props);
         assertThrows(StreamsException.class, streamsConfig::defaultValueSerde);
     }
 
@@ -400,8 +402,8 @@ public class StreamsConfigTest {
     public void shouldOverrideStreamsDefaultConsumerConfigs() {
         props.put(StreamsConfig.consumerPrefix(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG), "latest");
         props.put(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), "10");
-        final StreamsConfig streamsConfig = new StreamsConfig(props);
-        final Map<String, Object> consumerConfigs = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
+        final InternalStreamsConfig streamsConfig = new InternalStreamsConfig(props);
+        final Map<String, Object> consumerConfigs = streamsConfig.mainConsumerConfigs(groupId, clientId, threadIdx);
         assertEquals("latest", consumerConfigs.get(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG));
         assertEquals("10", consumerConfigs.get(ConsumerConfig.MAX_POLL_RECORDS_CONFIG));
     }
@@ -410,8 +412,8 @@ public class StreamsConfigTest {
     public void shouldOverrideStreamsDefaultProducerConfigs() {
         props.put(StreamsConfig.producerPrefix(ProducerConfig.LINGER_MS_CONFIG), "10000");
         props.put(StreamsConfig.producerPrefix(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG), "30000");
-        final StreamsConfig streamsConfig = new StreamsConfig(props);
-        final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs(clientId);
+        final InternalStreamsConfig streamsConfig = new InternalStreamsConfig(props);
+        final Map<String, Object> producerConfigs = streamsConfig.producerConfigs(clientId);
         assertEquals("10000", producerConfigs.get(ProducerConfig.LINGER_MS_CONFIG));
         assertEquals("30000", producerConfigs.get(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG));
     }
@@ -439,30 +441,30 @@ public class StreamsConfigTest {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, processingGuarantee);
         props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 10000L);
         props.put(StreamsConfig.producerPrefix(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG), 3000);
-        new StreamsConfig(props);
+        new InternalStreamsConfig(props);
     }
 
     @Test
     public void shouldOverrideStreamsDefaultConsumerConifgsOnRestoreConsumer() {
         props.put(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), "10");
-        final StreamsConfig streamsConfig = new StreamsConfig(props);
-        final Map<String, Object> consumerConfigs = streamsConfig.getRestoreConsumerConfigs(clientId);
+        final InternalStreamsConfig streamsConfig = new InternalStreamsConfig(props);
+        final Map<String, Object> consumerConfigs = streamsConfig.restoreConsumerConfigs(clientId);
         assertEquals("10", consumerConfigs.get(ConsumerConfig.MAX_POLL_RECORDS_CONFIG));
     }
 
     @Test
     public void shouldResetToDefaultIfConsumerAutoCommitIsOverridden() {
         props.put(StreamsConfig.consumerPrefix(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG), "true");
-        final StreamsConfig streamsConfig = new StreamsConfig(props);
-        final Map<String, Object> consumerConfigs = streamsConfig.getMainConsumerConfigs("a", "b", threadIdx);
+        final InternalStreamsConfig streamsConfig = new InternalStreamsConfig(props);
+        final Map<String, Object> consumerConfigs = streamsConfig.mainConsumerConfigs("a", "b", threadIdx);
         assertEquals("false", consumerConfigs.get(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG));
     }
 
     @Test
     public void shouldResetToDefaultIfRestoreConsumerAutoCommitIsOverridden() {
         props.put(StreamsConfig.consumerPrefix(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG), "true");
-        final StreamsConfig streamsConfig = new StreamsConfig(props);
-        final Map<String, Object> consumerConfigs = streamsConfig.getRestoreConsumerConfigs(clientId);
+        final InternalStreamsConfig streamsConfig = new InternalStreamsConfig(props);
+        final Map<String, Object> consumerConfigs = streamsConfig.restoreConsumerConfigs(clientId);
         assertEquals("false", consumerConfigs.get(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG));
     }
 
@@ -470,14 +472,14 @@ public class StreamsConfigTest {
     public void testGetRestoreConsumerConfigsWithRestoreConsumerOverriddenPrefix() {
         props.put(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), "5");
         props.put(StreamsConfig.restoreConsumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), "50");
-        final StreamsConfig streamsConfig = new StreamsConfig(props);
-        final Map<String, Object> returnedProps = streamsConfig.getRestoreConsumerConfigs(clientId);
+        final InternalStreamsConfig streamsConfig = new InternalStreamsConfig(props);
+        final Map<String, Object> returnedProps = streamsConfig.restoreConsumerConfigs(clientId);
         assertEquals("50", returnedProps.get(ConsumerConfig.MAX_POLL_RECORDS_CONFIG));
     }
 
     @Test
     public void testGetGlobalConsumerConfigs() {
-        final Map<String, Object> returnedProps = streamsConfig.getGlobalConsumerConfigs(clientId);
+        final Map<String, Object> returnedProps = internalStreamsConfig.globalConsumerConfigs(clientId);
         assertEquals(returnedProps.get(ConsumerConfig.CLIENT_ID_CONFIG), clientId + "-global-consumer");
         assertNull(returnedProps.get(ConsumerConfig.GROUP_ID_CONFIG));
     }
@@ -485,32 +487,32 @@ public class StreamsConfigTest {
     @Test
     public void shouldSupportPrefixedGlobalConsumerConfigs() {
         props.put(consumerPrefix(ConsumerConfig.METRICS_NUM_SAMPLES_CONFIG), 1);
-        final StreamsConfig streamsConfig = new StreamsConfig(props);
-        final Map<String, Object> consumerConfigs = streamsConfig.getGlobalConsumerConfigs(clientId);
+        final InternalStreamsConfig streamsConfig = new InternalStreamsConfig(props);
+        final Map<String, Object> consumerConfigs = streamsConfig.globalConsumerConfigs(clientId);
         assertEquals(1, consumerConfigs.get(ConsumerConfig.METRICS_NUM_SAMPLES_CONFIG));
     }
 
     @Test
     public void shouldSupportPrefixedPropertiesThatAreNotPartOfGlobalConsumerConfig() {
         props.put(consumerPrefix("interceptor.statsd.host"), "host");
-        final StreamsConfig streamsConfig = new StreamsConfig(props);
-        final Map<String, Object> consumerConfigs = streamsConfig.getGlobalConsumerConfigs(clientId);
+        final InternalStreamsConfig streamsConfig = new InternalStreamsConfig(props);
+        final Map<String, Object> consumerConfigs = streamsConfig.globalConsumerConfigs(clientId);
         assertEquals("host", consumerConfigs.get("interceptor.statsd.host"));
     }
 
     @Test
     public void shouldBeSupportNonPrefixedGlobalConsumerConfigs() {
         props.put(ConsumerConfig.METRICS_NUM_SAMPLES_CONFIG, 1);
-        final StreamsConfig streamsConfig = new StreamsConfig(props);
-        final Map<String, Object> consumerConfigs = streamsConfig.getGlobalConsumerConfigs(groupId);
+        final InternalStreamsConfig streamsConfig = new InternalStreamsConfig(props);
+        final Map<String, Object> consumerConfigs = streamsConfig.globalConsumerConfigs(groupId);
         assertEquals(1, consumerConfigs.get(ConsumerConfig.METRICS_NUM_SAMPLES_CONFIG));
     }
 
     @Test
     public void shouldResetToDefaultIfGlobalConsumerAutoCommitIsOverridden() {
         props.put(StreamsConfig.consumerPrefix(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG), "true");
-        final StreamsConfig streamsConfig = new StreamsConfig(props);
-        final Map<String, Object> consumerConfigs = streamsConfig.getGlobalConsumerConfigs(clientId);
+        final InternalStreamsConfig streamsConfig = new InternalStreamsConfig(props);
+        final Map<String, Object> consumerConfigs = streamsConfig.globalConsumerConfigs(clientId);
         assertEquals("false", consumerConfigs.get(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG));
     }
 
@@ -518,21 +520,21 @@ public class StreamsConfigTest {
     public void testGetGlobalConsumerConfigsWithGlobalConsumerOverriddenPrefix() {
         props.put(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), "5");
         props.put(StreamsConfig.globalConsumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), "50");
-        final StreamsConfig streamsConfig = new StreamsConfig(props);
-        final Map<String, Object> returnedProps = streamsConfig.getGlobalConsumerConfigs(clientId);
+        final InternalStreamsConfig streamsConfig = new InternalStreamsConfig(props);
+        final Map<String, Object> returnedProps = streamsConfig.globalConsumerConfigs(clientId);
         assertEquals("50", returnedProps.get(ConsumerConfig.MAX_POLL_RECORDS_CONFIG));
     }
 
     @Test
     public void shouldSetInternalLeaveGroupOnCloseConfigToFalseInConsumer() {
-        final StreamsConfig streamsConfig = new StreamsConfig(props);
-        final Map<String, Object> consumerConfigs = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
+        final InternalStreamsConfig streamsConfig = new InternalStreamsConfig(props);
+        final Map<String, Object> consumerConfigs = streamsConfig.mainConsumerConfigs(groupId, clientId, threadIdx);
         assertThat(consumerConfigs.get("internal.leave.group.on.close"), is(false));
     }
 
     @Test
     public void shouldNotSetInternalThrowOnFetchStableOffsetUnsupportedConfigToFalseInConsumerForEosDisabled() {
-        final Map<String, Object> consumerConfigs = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
+        final Map<String, Object> consumerConfigs = internalStreamsConfig.mainConsumerConfigs(groupId, clientId, threadIdx);
         assertThat(consumerConfigs.get("internal.throw.on.fetch.stable.offset.unsupported"), is(nullValue()));
     }
 
@@ -540,8 +542,8 @@ public class StreamsConfigTest {
     @Test
     public void shouldNotSetInternalThrowOnFetchStableOffsetUnsupportedConfigToFalseInConsumerForEosAlpha() {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE);
-        final StreamsConfig streamsConfig = new StreamsConfig(props);
-        final Map<String, Object> consumerConfigs = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
+        final InternalStreamsConfig streamsConfig = new InternalStreamsConfig(props);
+        final Map<String, Object> consumerConfigs = streamsConfig.mainConsumerConfigs(groupId, clientId, threadIdx);
         assertThat(consumerConfigs.get("internal.throw.on.fetch.stable.offset.unsupported"), is(nullValue()));
     }
 
@@ -549,22 +551,22 @@ public class StreamsConfigTest {
     @Test
     public void shouldNotSetInternalThrowOnFetchStableOffsetUnsupportedConfigToFalseInConsumerForEosBeta() {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE_BETA);
-        final StreamsConfig streamsConfig = new StreamsConfig(props);
-        final Map<String, Object> consumerConfigs = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
+        final InternalStreamsConfig streamsConfig = new InternalStreamsConfig(props);
+        final Map<String, Object> consumerConfigs = streamsConfig.mainConsumerConfigs(groupId, clientId, threadIdx);
         assertThat(consumerConfigs.get("internal.throw.on.fetch.stable.offset.unsupported"), is(true));
     }
 
     @Test
     public void shouldNotSetInternalThrowOnFetchStableOffsetUnsupportedConfigToFalseInConsumerForEosV2() {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE_V2);
-        final StreamsConfig streamsConfig = new StreamsConfig(props);
-        final Map<String, Object> consumerConfigs = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
+        final InternalStreamsConfig streamsConfig = new InternalStreamsConfig(props);
+        final Map<String, Object> consumerConfigs = streamsConfig.mainConsumerConfigs(groupId, clientId, threadIdx);
         assertThat(consumerConfigs.get("internal.throw.on.fetch.stable.offset.unsupported"), is(true));
     }
 
     @Test
     public void shouldNotSetInternalAutoDowngradeTxnCommitToTrueInProducerForEosDisabled() {
-        final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs(clientId);
+        final Map<String, Object> producerConfigs = internalStreamsConfig.producerConfigs(clientId);
         assertThat(producerConfigs.get("internal.auto.downgrade.txn.commit"), is(nullValue()));
     }
 
@@ -572,8 +574,8 @@ public class StreamsConfigTest {
     @Test
     public void shouldSetInternalAutoDowngradeTxnCommitToTrueInProducerForEosAlpha() {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE);
-        final StreamsConfig streamsConfig = new StreamsConfig(props);
-        final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs(clientId);
+        final InternalStreamsConfig streamsConfig = new InternalStreamsConfig(props);
+        final Map<String, Object> producerConfigs = streamsConfig.producerConfigs(clientId);
         assertThat(producerConfigs.get("internal.auto.downgrade.txn.commit"), is(true));
     }
 
@@ -581,16 +583,16 @@ public class StreamsConfigTest {
     @Test
     public void shouldNotSetInternalAutoDowngradeTxnCommitToTrueInProducerForEosBeta() {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE_BETA);
-        final StreamsConfig streamsConfig = new StreamsConfig(props);
-        final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs(clientId);
+        final InternalStreamsConfig streamsConfig = new InternalStreamsConfig(props);
+        final Map<String, Object> producerConfigs = streamsConfig.producerConfigs(clientId);
         assertThat(producerConfigs.get("internal.auto.downgrade.txn.commit"), is(nullValue()));
     }
 
     @Test
     public void shouldNotSetInternalAutoDowngradeTxnCommitToTrueInProducerForEosV2() {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE_V2);
-        final StreamsConfig streamsConfig = new StreamsConfig(props);
-        final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs(clientId);
+        final InternalStreamsConfig streamsConfig = new InternalStreamsConfig(props);
+        final Map<String, Object> producerConfigs = streamsConfig.producerConfigs(clientId);
         assertThat(producerConfigs.get("internal.auto.downgrade.txn.commit"), is(nullValue()));
     }
 
@@ -598,39 +600,39 @@ public class StreamsConfigTest {
     public void shouldAcceptAtLeastOnce() {
         // don't use `StreamsConfig.AT_LEAST_ONCE` to actually do a useful test
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, "at_least_once");
-        new StreamsConfig(props);
+        new InternalStreamsConfig(props);
     }
 
     @Test
     public void shouldAcceptExactlyOnce() {
         // don't use `StreamsConfig.EXACTLY_ONCE` to actually do a useful test
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, "exactly_once");
-        new StreamsConfig(props);
+        new InternalStreamsConfig(props);
     }
 
     @Test
     public void shouldAcceptExactlyOnceBeta() {
         // don't use `StreamsConfig.EXACTLY_ONCE_BETA` to actually do a useful test
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, "exactly_once_beta");
-        new StreamsConfig(props);
+        new InternalStreamsConfig(props);
     }
 
     @Test
     public void shouldThrowExceptionIfNotAtLeastOnceOrExactlyOnce() {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, "bad_value");
-        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+        assertThrows(ConfigException.class, () -> new InternalStreamsConfig(props));
     }
 
     @Test
     public void shouldAcceptBuiltInMetricsLatestVersion() {
         // don't use `StreamsConfig.METRICS_LATEST` to actually do a useful test
         props.put(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, "latest");
-        new StreamsConfig(props);
+        new InternalStreamsConfig(props);
     }
 
     @Test
     public void shouldSetDefaultBuiltInMetricsVersionIfNoneIsSpecified() {
-        final StreamsConfig config = new StreamsConfig(props);
+        final InternalStreamsConfig config = new InternalStreamsConfig(props);
         assertThat(config.getString(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG), is(StreamsConfig.METRICS_LATEST));
     }
 
@@ -638,7 +640,7 @@ public class StreamsConfigTest {
     public void shouldThrowIfBuiltInMetricsVersionInvalid() {
         final String invalidVersion = "0.0.1";
         props.put(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, invalidVersion);
-        final Exception exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+        final Exception exception = assertThrows(ConfigException.class, () -> new InternalStreamsConfig(props));
         assertThat(
             exception.getMessage(),
             containsString("Invalid value " + invalidVersion + " for configuration built.in.metrics.version")
@@ -667,8 +669,8 @@ public class StreamsConfigTest {
 
     private void shouldResetToDefaultIfConsumerIsolationLevelIsOverriddenIfEosEnabled() {
         props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "anyValue");
-        final StreamsConfig streamsConfig = new StreamsConfig(props);
-        final Map<String, Object> consumerConfigs = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
+        final InternalStreamsConfig streamsConfig = new InternalStreamsConfig(props);
+        final Map<String, Object> consumerConfigs = streamsConfig.mainConsumerConfigs(groupId, clientId, threadIdx);
         assertThat(
             consumerConfigs.get(ConsumerConfig.ISOLATION_LEVEL_CONFIG),
             equalTo(READ_COMMITTED.name().toLowerCase(Locale.ROOT))
@@ -678,8 +680,8 @@ public class StreamsConfigTest {
     @Test
     public void shouldAllowSettingConsumerIsolationLevelIfEosDisabled() {
         props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, READ_UNCOMMITTED.name().toLowerCase(Locale.ROOT));
-        final StreamsConfig streamsConfig = new StreamsConfig(props);
-        final Map<String, Object> consumerConfigs = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
+        final InternalStreamsConfig streamsConfig = new InternalStreamsConfig(props);
+        final Map<String, Object> consumerConfigs = streamsConfig.mainConsumerConfigs(groupId, clientId, threadIdx);
         assertThat(
             consumerConfigs.get(ConsumerConfig.ISOLATION_LEVEL_CONFIG),
             equalTo(READ_UNCOMMITTED.name().toLowerCase(Locale.ROOT))
@@ -708,16 +710,16 @@ public class StreamsConfigTest {
 
     private void shouldResetToDefaultIfProducerEnableIdempotenceIsOverriddenIfEosEnabled() {
         props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "anyValue");
-        final StreamsConfig streamsConfig = new StreamsConfig(props);
-        final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs(clientId);
+        final InternalStreamsConfig streamsConfig = new InternalStreamsConfig(props);
+        final Map<String, Object> producerConfigs = streamsConfig.producerConfigs(clientId);
         assertTrue((Boolean) producerConfigs.get(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG));
     }
 
     @Test
     public void shouldAllowSettingProducerEnableIdempotenceIfEosDisabled() {
         props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, false);
-        final StreamsConfig streamsConfig = new StreamsConfig(props);
-        final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs(clientId);
+        final InternalStreamsConfig streamsConfig = new InternalStreamsConfig(props);
+        final Map<String, Object> producerConfigs = streamsConfig.producerConfigs(clientId);
         assertThat(producerConfigs.get(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG), equalTo(false));
     }
 
@@ -742,10 +744,10 @@ public class StreamsConfigTest {
     }
 
     private void shouldSetDifferentDefaultsIfEosEnabled() {
-        final StreamsConfig streamsConfig = new StreamsConfig(props);
+        final InternalStreamsConfig streamsConfig = new InternalStreamsConfig(props);
 
-        final Map<String, Object> consumerConfigs = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
-        final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs(clientId);
+        final Map<String, Object> consumerConfigs = streamsConfig.mainConsumerConfigs(groupId, clientId, threadIdx);
+        final Map<String, Object> producerConfigs = streamsConfig.producerConfigs(clientId);
 
         assertThat(
             consumerConfigs.get(ConsumerConfig.ISOLATION_LEVEL_CONFIG),
@@ -779,9 +781,9 @@ public class StreamsConfigTest {
 
     private void shouldOverrideUserConfigTransactionalIdIfEosEnable() {
         props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "user-TxId");
-        final StreamsConfig streamsConfig = new StreamsConfig(props);
+        final InternalStreamsConfig streamsConfig = new InternalStreamsConfig(props);
 
-        final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs(clientId);
+        final Map<String, Object> producerConfigs = streamsConfig.producerConfigs(clientId);
 
         assertThat(producerConfigs.get(ProducerConfig.TRANSACTIONAL_ID_CONFIG), is(nullValue()));
     }
@@ -809,9 +811,9 @@ public class StreamsConfigTest {
     private void shouldNotOverrideUserConfigRetriesIfExactlyOnceEnabled() {
         final int numberOfRetries = 42;
         props.put(ProducerConfig.RETRIES_CONFIG, numberOfRetries);
-        final StreamsConfig streamsConfig = new StreamsConfig(props);
+        final InternalStreamsConfig streamsConfig = new InternalStreamsConfig(props);
 
-        final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs(clientId);
+        final Map<String, Object> producerConfigs = streamsConfig.producerConfigs(clientId);
 
         assertThat(producerConfigs.get(ProducerConfig.RETRIES_CONFIG), equalTo(numberOfRetries));
     }
@@ -839,7 +841,7 @@ public class StreamsConfigTest {
     private void shouldNotOverrideUserConfigCommitIntervalMsIfExactlyOnceEnabled() {
         final long commitIntervalMs = 73L;
         props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, commitIntervalMs);
-        final StreamsConfig streamsConfig = new StreamsConfig(props);
+        final InternalStreamsConfig streamsConfig = new InternalStreamsConfig(props);
 
         assertThat(streamsConfig.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG), equalTo(commitIntervalMs));
     }
@@ -849,7 +851,7 @@ public class StreamsConfigTest {
         final long commitIntervalMs = -1;
         props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, commitIntervalMs);
         try {
-            new StreamsConfig(props);
+            new InternalStreamsConfig(props);
             fail("Should throw ConfigException when commitIntervalMs is set to a negative value");
         } catch (final ConfigException e) {
             assertEquals(
@@ -866,7 +868,7 @@ public class StreamsConfigTest {
         props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Long().getClass());
         props.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockTimestampExtractor.class);
 
-        final StreamsConfig config = new StreamsConfig(props);
+        final InternalStreamsConfig config = new InternalStreamsConfig(props);
         assertTrue(config.defaultKeySerde() instanceof Serdes.LongSerde);
         assertTrue(config.defaultValueSerde() instanceof Serdes.LongSerde);
         assertTrue(config.defaultTimestampExtractor() instanceof MockTimestampExtractor);
@@ -874,7 +876,7 @@ public class StreamsConfigTest {
 
     @Test
     public void shouldUseCorrectDefaultsWhenNoneSpecified() {
-        final StreamsConfig config = new StreamsConfig(getStreamsConfig());
+        final InternalStreamsConfig config = new InternalStreamsConfig(getStreamsConfig());
 
         assertTrue(config.defaultTimestampExtractor() instanceof FailOnInvalidTimestamp);
         assertThrows(ConfigException.class, config::defaultKeySerde);
@@ -885,7 +887,7 @@ public class StreamsConfigTest {
     public void shouldSpecifyCorrectKeySerdeClassOnError() {
         final Properties props = getStreamsConfig();
         props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, MisconfiguredSerde.class);
-        final StreamsConfig config = new StreamsConfig(props);
+        final InternalStreamsConfig config = new InternalStreamsConfig(props);
         try {
             config.defaultKeySerde();
             fail("Test should throw a StreamsException");
@@ -901,7 +903,7 @@ public class StreamsConfigTest {
     public void shouldSpecifyCorrectValueSerdeClassOnError() {
         final Properties props = getStreamsConfig();
         props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, MisconfiguredSerde.class);
-        final StreamsConfig config = new StreamsConfig(props);
+        final InternalStreamsConfig config = new InternalStreamsConfig(props);
         try {
             config.defaultValueSerde();
             fail("Test should throw a StreamsException");
@@ -935,9 +937,9 @@ public class StreamsConfigTest {
 
     private void shouldThrowExceptionIfMaxInFlightRequestsGreaterThanFiveIfEosEnabled() {
         props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, 7);
-        final StreamsConfig streamsConfig = new StreamsConfig(props);
+        final InternalStreamsConfig streamsConfig = new InternalStreamsConfig(props);
         try {
-            streamsConfig.getProducerConfigs(clientId);
+            streamsConfig.producerConfigs(clientId);
             fail("Should throw ConfigException when ESO is enabled and maxInFlight requests exceeds 5");
         } catch (final ConfigException e) {
             assertEquals(
@@ -971,7 +973,7 @@ public class StreamsConfigTest {
     private void shouldAllowToSpecifyMaxInFlightRequestsPerConnectionAsStringIfEosEnabled() {
         props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "3");
 
-        new StreamsConfig(props).getProducerConfigs(clientId);
+        new InternalStreamsConfig(props).producerConfigs(clientId);
     }
 
     @SuppressWarnings("deprecation")
@@ -998,7 +1000,7 @@ public class StreamsConfigTest {
         props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "not-a-number");
 
         try {
-            new StreamsConfig(props).getProducerConfigs(clientId);
+            new InternalStreamsConfig(props).producerConfigs(clientId);
             fail("Should throw ConfigException when EOS is enabled and maxInFlight cannot be paresed into an integer");
         } catch (final ConfigException e) {
             assertEquals(
@@ -1012,14 +1014,14 @@ public class StreamsConfigTest {
     @Test
     public void shouldStateDirStartsWithJavaIOTmpDir() {
         final String expectedPrefix = System.getProperty("java.io.tmpdir") + File.separator;
-        final String actual = streamsConfig.getString(STATE_DIR_CONFIG);
+        final String actual = internalStreamsConfig.getString(STATE_DIR_CONFIG);
         assertTrue(actual.startsWith(expectedPrefix));
     }
 
     @Test
     public void shouldSpecifyNoOptimizationWhenNotExplicitlyAddedToConfigs() {
         final String expectedOptimizeConfig = "none";
-        final String actualOptimizedConifig = streamsConfig.getString(TOPOLOGY_OPTIMIZATION_CONFIG);
+        final String actualOptimizedConifig = internalStreamsConfig.getString(TOPOLOGY_OPTIMIZATION_CONFIG);
         assertEquals("Optimization should be \"none\"", expectedOptimizeConfig, actualOptimizedConifig);
     }
 
@@ -1027,7 +1029,7 @@ public class StreamsConfigTest {
     public void shouldSpecifyOptimizationWhenExplicitlyAddedToConfigs() {
         final String expectedOptimizeConfig = "all";
         props.put(TOPOLOGY_OPTIMIZATION_CONFIG, "all");
-        final StreamsConfig config = new StreamsConfig(props);
+        final InternalStreamsConfig config = new InternalStreamsConfig(props);
         final String actualOptimizedConifig = config.getString(TOPOLOGY_OPTIMIZATION_CONFIG);
         assertEquals("Optimization should be \"all\"", expectedOptimizeConfig, actualOptimizedConifig);
     }
@@ -1035,13 +1037,13 @@ public class StreamsConfigTest {
     @Test
     public void shouldThrowConfigExceptionWhenOptimizationConfigNotValueInRange() {
         props.put(TOPOLOGY_OPTIMIZATION_CONFIG, "maybe");
-        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+        assertThrows(ConfigException.class, () -> new InternalStreamsConfig(props));
     }
 
     @Test
     public void shouldSpecifyRocksdbWhenNotExplicitlyAddedToConfigs() {
         final String expectedDefaultStoreType = StreamsConfig.ROCKS_DB;
-        final String actualDefaultStoreType = streamsConfig.getString(DEFAULT_DSL_STORE_CONFIG);
+        final String actualDefaultStoreType = internalStreamsConfig.getString(DEFAULT_DSL_STORE_CONFIG);
         assertEquals("default.dsl.store should be \"rocksDB\"", expectedDefaultStoreType, actualDefaultStoreType);
     }
 
@@ -1049,7 +1051,7 @@ public class StreamsConfigTest {
     public void shouldSpecifyInMemoryWhenExplicitlyAddedToConfigs() {
         final String expectedDefaultStoreType = StreamsConfig.IN_MEMORY;
         props.put(DEFAULT_DSL_STORE_CONFIG, expectedDefaultStoreType);
-        final StreamsConfig config = new StreamsConfig(props);
+        final InternalStreamsConfig config = new InternalStreamsConfig(props);
         final String actualDefaultStoreType = config.getString(DEFAULT_DSL_STORE_CONFIG);
         assertEquals("default.dsl.store should be \"in_memory\"", expectedDefaultStoreType, actualDefaultStoreType);
     }
@@ -1057,7 +1059,7 @@ public class StreamsConfigTest {
     @Test
     public void shouldThrowConfigExceptionWhenStoreTypeConfigNotValueInRange() {
         props.put(DEFAULT_DSL_STORE_CONFIG, "bad_config");
-        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+        assertThrows(ConfigException.class, () -> new InternalStreamsConfig(props));
     }
 
     @SuppressWarnings("deprecation")
@@ -1067,7 +1069,7 @@ public class StreamsConfigTest {
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
             appender.setClassLoggerToDebug(StreamsConfig.class);
-            new StreamsConfig(props);
+            new InternalStreamsConfig(props);
 
             assertThat(
                 appender.getMessages(),
@@ -1087,7 +1089,7 @@ public class StreamsConfigTest {
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
             appender.setClassLoggerToDebug(StreamsConfig.class);
-            new StreamsConfig(props);
+            new InternalStreamsConfig(props);
 
             assertThat(
                 appender.getMessages(),
@@ -1105,7 +1107,7 @@ public class StreamsConfigTest {
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
             appender.setClassLoggerToDebug(StreamsConfig.class);
-            new StreamsConfig(props);
+            new InternalStreamsConfig(props);
 
             assertThat(
                 appender.getMessages(),
@@ -1117,55 +1119,55 @@ public class StreamsConfigTest {
 
     @Test
     public void shouldSetDefaultAcceptableRecoveryLag() {
-        final StreamsConfig config = new StreamsConfig(props);
+        final InternalStreamsConfig config = new InternalStreamsConfig(props);
         assertThat(config.getLong(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG), is(10000L));
     }
 
     @Test
     public void shouldThrowConfigExceptionIfAcceptableRecoveryLagIsOutsideBounds() {
         props.put(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG, -1L);
-        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+        assertThrows(ConfigException.class, () -> new InternalStreamsConfig(props));
     }
 
     @Test
     public void shouldSetDefaultNumStandbyReplicas() {
-        final StreamsConfig config = new StreamsConfig(props);
+        final InternalStreamsConfig config = new InternalStreamsConfig(props);
         assertThat(config.getInt(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG), is(0));
     }
 
     @Test
     public void shouldThrowConfigExceptionIfNumStandbyReplicasIsOutsideBounds() {
         props.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, -1L);
-        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+        assertThrows(ConfigException.class, () -> new InternalStreamsConfig(props));
     }
 
     @Test
     public void shouldSetDefaultMaxWarmupReplicas() {
-        final StreamsConfig config = new StreamsConfig(props);
+        final InternalStreamsConfig config = new InternalStreamsConfig(props);
         assertThat(config.getInt(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG), is(2));
     }
 
     @Test
     public void shouldThrowConfigExceptionIfMaxWarmupReplicasIsOutsideBounds() {
         props.put(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG, 0L);
-        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+        assertThrows(ConfigException.class, () -> new InternalStreamsConfig(props));
     }
 
     @Test
     public void shouldSetDefaultProbingRebalanceInterval() {
-        final StreamsConfig config = new StreamsConfig(props);
+        final InternalStreamsConfig config = new InternalStreamsConfig(props);
         assertThat(config.getLong(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG), is(10 * 60 * 1000L));
     }
 
     @Test
     public void shouldThrowConfigExceptionIfProbingRebalanceIntervalIsOutsideBounds() {
         props.put(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG, (60 * 1000L) - 1);
-        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+        assertThrows(ConfigException.class, () -> new InternalStreamsConfig(props));
     }
 
     @Test
     public void shouldDefaultToEmptyListIfRackAwareAssignmentTagsIsNotSet() {
-        final StreamsConfig config = new StreamsConfig(props);
+        final InternalStreamsConfig config = new InternalStreamsConfig(props);
         assertTrue(config.getList(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG).isEmpty());
     }
 
@@ -1175,7 +1177,7 @@ public class StreamsConfigTest {
         for (int i = 0; i < limit; i++) {
             props.put(StreamsConfig.clientTagPrefix("k" + i), "v" + i);
         }
-        final ConfigException exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+        final ConfigException exception = assertThrows(ConfigException.class, () -> new InternalStreamsConfig(props));
         assertEquals(
             String.format("At most %s client tags can be specified using %s prefix.",
                           StreamsConfig.MAX_RACK_AWARE_ASSIGNMENT_TAG_LIST_SIZE,
@@ -1195,7 +1197,7 @@ public class StreamsConfigTest {
         }
 
         props.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, String.join(",", rackAwareAssignmentTags));
-        final ConfigException exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+        final ConfigException exception = assertThrows(ConfigException.class, () -> new InternalStreamsConfig(props));
         assertEquals(
             String.format("Invalid value %s for configuration %s: exceeds maximum list size of [%s].",
                           rackAwareAssignmentTags,
@@ -1210,23 +1212,23 @@ public class StreamsConfigTest {
         props.put(StreamsConfig.clientTagPrefix("cluster"), "cluster-1");
         props.put(StreamsConfig.clientTagPrefix("zone"), "eu-central-1a");
         props.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "cluster,zone");
-        final StreamsConfig config = new StreamsConfig(props);
+        final InternalStreamsConfig config = new InternalStreamsConfig(props);
         assertEquals(new HashSet<>(config.getList(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG)),
                      mkSet("cluster", "zone"));
     }
 
     @Test
     public void shouldGetEmptyMapIfClientTagsAreNotSet() {
-        final StreamsConfig config = new StreamsConfig(props);
-        assertTrue(config.getClientTags().isEmpty());
+        final InternalStreamsConfig config = new InternalStreamsConfig(props);
+        assertTrue(config.clientTags().isEmpty());
     }
 
     @Test
     public void shouldGetClientTagsMapWhenSet() {
         props.put(StreamsConfig.clientTagPrefix("zone"), "eu-central-1a");
         props.put(StreamsConfig.clientTagPrefix("cluster"), "cluster-1");
-        final StreamsConfig config = new StreamsConfig(props);
-        final Map<String, String> clientTags = config.getClientTags();
+        final InternalStreamsConfig config = new InternalStreamsConfig(props);
+        final Map<String, String> clientTags = config.clientTags();
         assertEquals(clientTags.size(), 2);
         assertEquals(clientTags.get("zone"), "eu-central-1a");
         assertEquals(clientTags.get("cluster"), "cluster-1");
@@ -1235,14 +1237,14 @@ public class StreamsConfigTest {
     @Test
     public void shouldThrowExceptionWhenClientTagRackAwarenessIsConfiguredWithUnknownTags() {
         props.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "cluster");
-        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+        assertThrows(ConfigException.class, () -> new InternalStreamsConfig(props));
     }
 
     @Test
     public void shouldThrowExceptionWhenClientTagKeyExceedMaxLimit() {
         final String key = String.join("", nCopies(MAX_RACK_AWARE_ASSIGNMENT_TAG_KEY_LENGTH + 1, "k"));
         props.put(StreamsConfig.clientTagPrefix(key), "eu-central-1a");
-        final ConfigException exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+        final ConfigException exception = assertThrows(ConfigException.class, () -> new InternalStreamsConfig(props));
         assertEquals(
             String.format("Invalid value %s for configuration %s: Tag key exceeds maximum length of %s.",
                           key, StreamsConfig.CLIENT_TAG_PREFIX, StreamsConfig.MAX_RACK_AWARE_ASSIGNMENT_TAG_KEY_LENGTH),
@@ -1254,7 +1256,7 @@ public class StreamsConfigTest {
     public void shouldThrowExceptionWhenClientTagValueExceedMaxLimit() {
         final String value = String.join("", nCopies(MAX_RACK_AWARE_ASSIGNMENT_TAG_VALUE_LENGTH + 1, "v"));
         props.put(StreamsConfig.clientTagPrefix("x"), value);
-        final ConfigException exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+        final ConfigException exception = assertThrows(ConfigException.class, () -> new InternalStreamsConfig(props));
         assertEquals(
             String.format("Invalid value %s for configuration %s: Tag value exceeds maximum length of %s.",
                           value, StreamsConfig.CLIENT_TAG_PREFIX, StreamsConfig.MAX_RACK_AWARE_ASSIGNMENT_TAG_VALUE_LENGTH),
@@ -1267,7 +1269,7 @@ public class StreamsConfigTest {
     public void shouldUseStateStoreCacheMaxBytesWhenBothOldAndNewConfigsAreSet() {
         props.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 100);
         props.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 10);
-        final StreamsConfig config = new StreamsConfig(props);
+        final InternalStreamsConfig config = new InternalStreamsConfig(props);
         assertEquals(getTotalCacheSize(config), 100);
     }
 
@@ -1275,20 +1277,20 @@ public class StreamsConfigTest {
     @SuppressWarnings("deprecation")
     public void shouldUseCacheMaxBytesBufferingConfigWhenOnlyDeprecatedConfigIsSet() {
         props.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 10);
-        final StreamsConfig config = new StreamsConfig(props);
+        final InternalStreamsConfig config = new InternalStreamsConfig(props);
         assertEquals(getTotalCacheSize(config), 10);
     }
 
     @Test
     public void shouldUseStateStoreCacheMaxBytesWhenNewConfigIsSet() {
         props.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 10);
-        final StreamsConfig config = new StreamsConfig(props);
+        final InternalStreamsConfig config = new InternalStreamsConfig(props);
         assertEquals(getTotalCacheSize(config), 10);
     }
 
     @Test
     public void shouldUseDefaultStateStoreCacheMaxBytesConfigWhenNoConfigIsSet() {
-        final StreamsConfig config = new StreamsConfig(props);
+        final InternalStreamsConfig config = new InternalStreamsConfig(props);
         assertEquals(getTotalCacheSize(config), 10 * 1024 * 1024);
     }
 
@@ -1296,7 +1298,7 @@ public class StreamsConfigTest {
     public void testCaseInsensitiveSecurityProtocol() {
         final String saslSslLowerCase = SecurityProtocol.SASL_SSL.name.toLowerCase(Locale.ROOT);
         props.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, saslSslLowerCase);
-        final StreamsConfig config = new StreamsConfig(props);
+        final InternalStreamsConfig config = new InternalStreamsConfig(props);
         assertEquals(saslSslLowerCase, config.originalsStrings().get(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG));
     }
 
@@ -1304,7 +1306,7 @@ public class StreamsConfigTest {
     public void testInvalidSecurityProtocol() {
         props.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "abc");
         final ConfigException ce = assertThrows(ConfigException.class,
-                () -> new StreamsConfig(props));
+                () -> new InternalStreamsConfig(props));
         assertTrue(ce.getMessage().contains(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG));
     }
 
@@ -1312,7 +1314,7 @@ public class StreamsConfigTest {
     public void shouldThrowExceptionWhenTopologyOptimizationOnAndOff() {
         final String value = String.join(",", StreamsConfig.OPTIMIZE, StreamsConfig.NO_OPTIMIZATION);
         props.put(TOPOLOGY_OPTIMIZATION_CONFIG, value);
-        final ConfigException exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+        final ConfigException exception = assertThrows(ConfigException.class, () -> new InternalStreamsConfig(props));
         assertTrue(exception.getMessage().contains("is not a valid optimization config"));
     }
 
@@ -1320,7 +1322,7 @@ public class StreamsConfigTest {
     public void shouldThrowExceptionWhenTopologyOptimizationOffAndSet() {
         final String value = String.join(",", StreamsConfig.NO_OPTIMIZATION, StreamsConfig.REUSE_KTABLE_SOURCE_TOPICS);
         props.put(TOPOLOGY_OPTIMIZATION_CONFIG, value);
-        final ConfigException exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+        final ConfigException exception = assertThrows(ConfigException.class, () -> new InternalStreamsConfig(props));
         assertTrue(exception.getMessage().contains("is not a valid optimization config"));
     }
 
@@ -1331,7 +1333,7 @@ public class StreamsConfigTest {
                                          "topology.optimization.does.not.exist",
                                          StreamsConfig.MERGE_REPARTITION_TOPICS);
         props.put(TOPOLOGY_OPTIMIZATION_CONFIG, value);
-        final ConfigException exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+        final ConfigException exception = assertThrows(ConfigException.class, () -> new InternalStreamsConfig(props));
         assertTrue(exception.getMessage().contains("Unrecognized config."));
     }
 
@@ -1339,7 +1341,7 @@ public class StreamsConfigTest {
     public void shouldThrowExceptionWhenTopologyOptimizationDoesNotExist() {
         final String value = String.join(",", "topology.optimization.does.not.exist");
         props.put(TOPOLOGY_OPTIMIZATION_CONFIG, value);
-        final ConfigException exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+        final ConfigException exception = assertThrows(ConfigException.class, () -> new InternalStreamsConfig(props));
         assertTrue(exception.getMessage().contains("Unrecognized config."));
     }
 
@@ -1347,7 +1349,7 @@ public class StreamsConfigTest {
     public void shouldEnableSelfJoin() {
         final String value = StreamsConfig.SINGLE_STORE_SELF_JOIN;
         props.put(TOPOLOGY_OPTIMIZATION_CONFIG, value);
-        final StreamsConfig config = new StreamsConfig(props);
+        final InternalStreamsConfig config = new InternalStreamsConfig(props);
         assertEquals(config.getString(TOPOLOGY_OPTIMIZATION_CONFIG), StreamsConfig.SINGLE_STORE_SELF_JOIN);
     }
 
@@ -1358,7 +1360,7 @@ public class StreamsConfigTest {
                                          StreamsConfig.REUSE_KTABLE_SOURCE_TOPICS,
                                          StreamsConfig.MERGE_REPARTITION_TOPICS);
         props.put(TOPOLOGY_OPTIMIZATION_CONFIG, value);
-        final StreamsConfig config = new StreamsConfig(props);
+        final InternalStreamsConfig config = new InternalStreamsConfig(props);
         final List<String> configs = Arrays.asList(config.getString(TOPOLOGY_OPTIMIZATION_CONFIG).split(","));
         assertEquals(3, configs.size());
         assertTrue(configs.contains(StreamsConfig.SINGLE_STORE_SELF_JOIN));
@@ -1367,6 +1369,7 @@ public class StreamsConfigTest {
     }
 
     @Test
+    @SuppressWarnings({"deprecation"})
     public void shouldEnableAllOptimizationsWithOptimizeConfig() {
         final Set<String> configs = StreamsConfig.verifyTopologyOptimizationConfigs(StreamsConfig.OPTIMIZE);
         assertEquals(3, configs.size());
@@ -1376,6 +1379,7 @@ public class StreamsConfigTest {
     }
 
     @Test
+    @SuppressWarnings({"deprecation"})
     public void shouldNotEnableAnyOptimizationsWithNoOptimizationConfig() {
         final Set<String> configs = StreamsConfig.verifyTopologyOptimizationConfigs(StreamsConfig.NO_OPTIMIZATION);
         assertEquals(0, configs.size());
@@ -1383,56 +1387,56 @@ public class StreamsConfigTest {
 
     @Test
     public void shouldReturnDefaultRackAwareAssignmentConfig() {
-        final String strategy = streamsConfig.getString(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG);
+        final String strategy = internalStreamsConfig.getString(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG);
         assertEquals("none", strategy);
     }
 
     @Test
     public void shouldtSetMinTrafficRackAwareAssignmentConfig() {
         props.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG, StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC);
-        assertEquals("min_traffic", new StreamsConfig(props).getString(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG));
+        assertEquals("min_traffic", new InternalStreamsConfig(props).getString(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG));
     }
 
     @Test
     public void shouldThrowIfNotSetCorrectRackAwareAssignmentConfig() {
         props.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG, "invalid");
-        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+        assertThrows(ConfigException.class, () -> new InternalStreamsConfig(props));
     }
 
     @Test
     public void shouldReturnDefaultRackAwareAssignmentTrafficCost() {
-        final Integer cost = streamsConfig.getInt(StreamsConfig.RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_CONFIG);
+        final Integer cost = internalStreamsConfig.getInt(StreamsConfig.RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_CONFIG);
         assertNull(cost);
     }
 
     @Test
     public void shouldReturnRackAwareAssignmentTrafficCost() {
         props.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_CONFIG, "10");
-        assertEquals(Integer.valueOf(10), new StreamsConfig(props).getInt(RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_CONFIG));
+        assertEquals(Integer.valueOf(10), new InternalStreamsConfig(props).getInt(RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_CONFIG));
     }
 
     @Test
     public void shouldReturnDefaultRackAwareAssignmentNonOverlapCost() {
-        final Integer cost = streamsConfig.getInt(StreamsConfig.RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_CONFIG);
+        final Integer cost = internalStreamsConfig.getInt(StreamsConfig.RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_CONFIG);
         assertNull(cost);
     }
 
     @Test
     public void shouldReturnRackAwareAssignmentNonOverlapCost() {
         props.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_CONFIG, "10");
-        assertEquals(Integer.valueOf(10), new StreamsConfig(props).getInt(RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_CONFIG));
+        assertEquals(Integer.valueOf(10), new InternalStreamsConfig(props).getInt(RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_CONFIG));
     }
 
     @Test
     public void shouldReturnDefaultClientSupplier() {
-        final KafkaClientSupplier supplier = streamsConfig.getKafkaClientSupplier();
+        final KafkaClientSupplier supplier = internalStreamsConfig.kafkaClientSupplier();
         assertTrue(supplier instanceof DefaultKafkaClientSupplier);
     }
 
     @Test
     public void shouldThrowOnInvalidClientSupplier() {
         props.put(StreamsConfig.DEFAULT_CLIENT_SUPPLIER_CONFIG, "invalid.class");
-        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+        assertThrows(ConfigException.class, () -> new InternalStreamsConfig(props));
     }
 
     @Test
@@ -1440,7 +1444,7 @@ public class StreamsConfigTest {
         for (final UpgradeFromValues upgradeFrom : UpgradeFromValues.values()) {
             props.put(StreamsConfig.UPGRADE_FROM_CONFIG, upgradeFrom.toString());
             try {
-                new StreamsConfig(props);
+                new InternalStreamsConfig(props);
             } catch (final Exception fatal) {
                 throw new AssertionError("StreamsConfig did not accept `upgrade.from` config value `" + upgradeFrom + "`");
             }

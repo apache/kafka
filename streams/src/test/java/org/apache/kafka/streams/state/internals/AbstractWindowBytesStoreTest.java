@@ -30,6 +30,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
@@ -990,7 +991,7 @@ public abstract class AbstractWindowBytesStoreTest {
             buildWindowStore(RETENTION_PERIOD, WINDOW_SIZE, false, Serdes.Integer(), Serdes.String());
         final InternalMockProcessorContext context = new InternalMockProcessorContext(
             TestUtils.tempDirectory(),
-            new StreamsConfig(streamsConfig),
+            new InternalStreamsConfig(streamsConfig),
             recordCollector
         );
         final Time time = new SystemTime();

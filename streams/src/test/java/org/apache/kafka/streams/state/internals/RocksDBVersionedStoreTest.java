@@ -41,6 +41,7 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.state.VersionedRecord;
 import org.apache.kafka.test.InternalMockProcessorContext;
@@ -74,7 +75,7 @@ public class RocksDBVersionedStoreTest {
             TestUtils.tempDirectory(),
             Serdes.String(),
             Serdes.String(),
-            new StreamsConfig(StreamsTestUtils.getStreamsConfig())
+            new InternalStreamsConfig(StreamsTestUtils.getStreamsConfig())
         );
         context.setTime(BASE_TIMESTAMP);
 

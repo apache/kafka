@@ -24,8 +24,8 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KafkaClientSupplier;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
@@ -52,7 +52,7 @@ import static org.apache.kafka.streams.processor.internals.ClientUtils.getThread
 
 class ActiveTaskCreator {
     private final TopologyMetadata topologyMetadata;
-    private final StreamsConfig applicationConfig;
+    private final InternalStreamsConfig applicationConfig;
     private final StreamsMetricsImpl streamsMetrics;
     private final StateDirectory stateDirectory;
     private final ChangelogReader storeChangelogReader;
@@ -68,7 +68,7 @@ class ActiveTaskCreator {
     private final boolean stateUpdaterEnabled;
 
     ActiveTaskCreator(final TopologyMetadata topologyMetadata,
-                      final StreamsConfig applicationConfig,
+                      final InternalStreamsConfig applicationConfig,
                       final StreamsMetricsImpl streamsMetrics,
                       final StateDirectory stateDirectory,
                       final ChangelogReader storeChangelogReader,

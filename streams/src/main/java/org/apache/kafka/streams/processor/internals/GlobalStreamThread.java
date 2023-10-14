@@ -28,6 +28,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
@@ -55,7 +56,7 @@ public class GlobalStreamThread extends Thread {
 
     private final Logger log;
     private final LogContext logContext;
-    private final StreamsConfig config;
+    private final InternalStreamsConfig config;
     private final Consumer<byte[], byte[]> globalConsumer;
     private final StateDirectory stateDirectory;
     private final Time time;
@@ -194,7 +195,7 @@ public class GlobalStreamThread extends Thread {
     }
 
     public GlobalStreamThread(final ProcessorTopology topology,
-                              final StreamsConfig config,
+                              final InternalStreamsConfig config,
                               final Consumer<byte[], byte[]> globalConsumer,
                               final StateDirectory stateDirectory,
                               final long cacheSizeBytes,

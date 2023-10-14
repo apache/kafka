@@ -50,6 +50,7 @@ import org.apache.kafka.common.requests.CreateTopicsRequest;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.processor.internals.InternalTopicManager.ValidationResult;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.junit.After;
@@ -130,7 +131,7 @@ public class InternalTopicManagerTest {
         internalTopicManager = new InternalTopicManager(
             time,
             mockAdminClient,
-            new StreamsConfig(config)
+            new InternalStreamsConfig(config)
         );
     }
 
@@ -167,7 +168,7 @@ public class InternalTopicManagerTest {
     @Test
     public void shouldOnlyRetryNotSuccessfulFuturesDuringSetup() {
         final AdminClient admin = mock(AdminClient.class);
-        final StreamsConfig streamsConfig = new StreamsConfig(config);
+        final InternalStreamsConfig streamsConfig = new InternalStreamsConfig(config);
         final InternalTopicManager topicManager = new InternalTopicManager(time, admin, streamsConfig);
         final KafkaFutureImpl<TopicMetadataAndConfig> createTopicFailFuture = new KafkaFutureImpl<>();
         createTopicFailFuture.completeExceptionally(new TopicExistsException("exists"));
@@ -207,7 +208,7 @@ public class InternalTopicManagerTest {
 
     private void shouldRetryCreateTopicWhenRetriableExceptionIsThrown(final Exception retriableException) {
         final AdminClient admin = mock(AdminClient.class);
-        final StreamsConfig streamsConfig = new StreamsConfig(config);
+        final InternalStreamsConfig streamsConfig = new InternalStreamsConfig(config);
         final InternalTopicManager topicManager = new InternalTopicManager(time, admin, streamsConfig);
         final KafkaFutureImpl<TopicMetadataAndConfig> createTopicFailFuture = new KafkaFutureImpl<>();
         createTopicFailFuture.completeExceptionally(retriableException);
@@ -263,7 +264,7 @@ public class InternalTopicManagerTest {
             }
         };
 
-        final StreamsConfig streamsConfig = new StreamsConfig(config);
+        final InternalStreamsConfig streamsConfig = new InternalStreamsConfig(config);
         final InternalTopicManager topicManager = new InternalTopicManager(time, admin, streamsConfig);
 
         final InternalTopicConfig topicConfig = new RepartitionTopicConfig(topic1, Collections.emptyMap());
@@ -286,7 +287,7 @@ public class InternalTopicManagerTest {
         mockAdminClient.timeoutNextRequest(Integer.MAX_VALUE);
 
         final InternalTopicManager internalTopicManager =
-            new InternalTopicManager(time, mockAdminClient, new StreamsConfig(config));
+            new InternalTopicManager(time, mockAdminClient, new InternalStreamsConfig(config));
 
         final TimeoutException exception = assertThrows(
             TimeoutException.class,
@@ -306,7 +307,7 @@ public class InternalTopicManagerTest {
             (Integer) config.get(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG)) / 15
         );
         final InternalTopicManager internalTopicManager =
-            new InternalTopicManager(time, mockAdminClient, new StreamsConfig(config));
+            new InternalTopicManager(time, mockAdminClient, new InternalStreamsConfig(config));
         final InternalTopicConfig internalTopicConfig = setupRepartitionTopicConfig(topic1, 1);
 
         final TimeoutException exception = assertThrows(
@@ -330,7 +331,7 @@ public class InternalTopicManagerTest {
         mockAdminClient.timeoutNextRequest(1);
 
         final InternalTopicManager internalTopicManager =
-                new InternalTopicManager(time, mockAdminClient, new StreamsConfig(config));
+                new InternalTopicManager(time, mockAdminClient, new InternalStreamsConfig(config));
         try {
             final Set<String> topic1set = new HashSet<>(Collections.singletonList(topic1));
             internalTopicManager.getTopicPartitionInfo(topic1set, null);
@@ -355,7 +356,7 @@ public class InternalTopicManagerTest {
         mockAdminClient.timeoutNextRequest(1);
 
         final InternalTopicManager internalTopicManager =
-                new InternalTopicManager(time, mockAdminClient, new StreamsConfig(config));
+                new InternalTopicManager(time, mockAdminClient, new InternalStreamsConfig(config));
         try {
             final Set<String> topic1set = new HashSet<String>(Arrays.asList(topic1));
             final Set<String> topic2set = new HashSet<String>(Arrays.asList(topic2));
@@ -382,7 +383,7 @@ public class InternalTopicManagerTest {
     @Test
     public void shouldThrowWhenCreateTopicsThrowsUnexpectedException() {
         final AdminClient admin = mock(AdminClient.class);
-        final StreamsConfig streamsConfig = new StreamsConfig(config);
+        final InternalStreamsConfig streamsConfig = new InternalStreamsConfig(config);
         final InternalTopicManager topicManager = new InternalTopicManager(time, admin, streamsConfig);
         final InternalTopicConfig internalTopicConfig = setupRepartitionTopicConfig(topic1, 1);
         final KafkaFutureImpl<TopicMetadataAndConfig> createTopicFailFuture = new KafkaFutureImpl<>();
@@ -401,7 +402,7 @@ public class InternalTopicManagerTest {
     @Test
     public void shouldThrowWhenCreateTopicsResultsDoNotContainTopic() {
         final AdminClient admin = mock(AdminClient.class);
-        final StreamsConfig streamsConfig = new StreamsConfig(config);
+        final InternalStreamsConfig streamsConfig = new InternalStreamsConfig(config);
         final InternalTopicManager topicManager = new InternalTopicManager(time, admin, streamsConfig);
         final InternalTopicConfig internalTopicConfig = setupRepartitionTopicConfig(topic1, 1);
         final NewTopic newTopic = newTopic(topic1, internalTopicConfig, streamsConfig);
@@ -420,7 +421,7 @@ public class InternalTopicManagerTest {
         final MockTime time = new MockTime(
             (Integer) config.get(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG)) / 3
         );
-        final StreamsConfig streamsConfig = new StreamsConfig(config);
+        final InternalStreamsConfig streamsConfig = new InternalStreamsConfig(config);
         final InternalTopicManager topicManager = new InternalTopicManager(time, admin, streamsConfig);
         final KafkaFutureImpl<TopicMetadataAndConfig> createTopicFailFuture = new KafkaFutureImpl<>();
         createTopicFailFuture.completeExceptionally(new TimeoutException());
@@ -441,7 +442,7 @@ public class InternalTopicManagerTest {
         final MockTime time = new MockTime(
             (Integer) config.get(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG)) / 3
         );
-        final StreamsConfig streamsConfig = new StreamsConfig(config);
+        final InternalStreamsConfig streamsConfig = new InternalStreamsConfig(config);
         final InternalTopicManager topicManager = new InternalTopicManager(time, admin, streamsConfig);
         final KafkaFutureImpl<TopicMetadataAndConfig> createTopicFutureThatNeverCompletes = new KafkaFutureImpl<>();
         final InternalTopicConfig internalTopicConfig = setupRepartitionTopicConfig(topic1, 1);
@@ -458,7 +459,7 @@ public class InternalTopicManagerTest {
     @Test
     public void shouldCleanUpWhenUnexpectedExceptionIsThrownDuringSetup() {
         final AdminClient admin = mock(AdminClient.class);
-        final StreamsConfig streamsConfig = new StreamsConfig(config);
+        final InternalStreamsConfig streamsConfig = new InternalStreamsConfig(config);
         final MockTime time = new MockTime(
             (Integer) config.get(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG)) / 3
         );
@@ -483,7 +484,7 @@ public class InternalTopicManagerTest {
     @Test
     public void shouldCleanUpWhenCreateTopicsResultsDoNotContainTopic() {
         final AdminClient admin = mock(AdminClient.class);
-        final StreamsConfig streamsConfig = new StreamsConfig(config);
+        final InternalStreamsConfig streamsConfig = new InternalStreamsConfig(config);
         final InternalTopicManager topicManager = new InternalTopicManager(time, admin, streamsConfig);
         final InternalTopicConfig internalTopicConfig1 = setupRepartitionTopicConfig(topic1, 1);
         final InternalTopicConfig internalTopicConfig2 = setupRepartitionTopicConfig(topic2, 1);
@@ -521,7 +522,7 @@ public class InternalTopicManagerTest {
     @Test
     public void shouldCleanUpWhenCreateTopicsTimesOut() {
         final AdminClient admin = mock(AdminClient.class);
-        final StreamsConfig streamsConfig = new StreamsConfig(config);
+        final InternalStreamsConfig streamsConfig = new InternalStreamsConfig(config);
         final MockTime time = new MockTime(
             (Integer) config.get(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG)) / 3
         );
@@ -575,7 +576,7 @@ public class InternalTopicManagerTest {
 
     private void shouldRetryDeleteTopicWhenRetriableException(final Exception retriableException) {
         final AdminClient admin = mock(AdminClient.class);
-        final StreamsConfig streamsConfig = new StreamsConfig(config);
+        final InternalStreamsConfig streamsConfig = new InternalStreamsConfig(config);
         final InternalTopicManager topicManager = new InternalTopicManager(time, admin, streamsConfig);
         final InternalTopicConfig internalTopicConfig1 = setupRepartitionTopicConfig(topic1, 1);
         final InternalTopicConfig internalTopicConfig2 = setupRepartitionTopicConfig(topic2, 1);
@@ -600,7 +601,7 @@ public class InternalTopicManagerTest {
     @Test
     public void shouldThrowTimeoutExceptionWhenFuturesNeverCompleteDuringCleanUp() {
         final AdminClient admin = mock(AdminClient.class);
-        final StreamsConfig streamsConfig = new StreamsConfig(config);
+        final InternalStreamsConfig streamsConfig = new InternalStreamsConfig(config);
         final MockTime time = new MockTime(
             (Integer) config.get(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG)) / 3
         );
@@ -624,7 +625,7 @@ public class InternalTopicManagerTest {
     @Test
     public void shouldThrowWhenDeleteTopicsThrowsUnexpectedException() {
         final AdminClient admin = mock(AdminClient.class);
-        final StreamsConfig streamsConfig = new StreamsConfig(config);
+        final InternalStreamsConfig streamsConfig = new InternalStreamsConfig(config);
         final InternalTopicManager topicManager = new InternalTopicManager(time, admin, streamsConfig);
         final InternalTopicConfig internalTopicConfig1 = setupRepartitionTopicConfig(topic1, 1);
         final InternalTopicConfig internalTopicConfig2 = setupRepartitionTopicConfig(topic2, 1);
@@ -643,7 +644,7 @@ public class InternalTopicManagerTest {
         );
     }
 
-    private void setupCleanUpScenario(final AdminClient admin, final StreamsConfig streamsConfig, final InternalTopicConfig internalTopicConfig1, final InternalTopicConfig internalTopicConfig2) {
+    private void setupCleanUpScenario(final AdminClient admin, final InternalStreamsConfig streamsConfig, final InternalTopicConfig internalTopicConfig1, final InternalTopicConfig internalTopicConfig2) {
         final KafkaFutureImpl<TopicMetadataAndConfig> createTopicFailFuture1 = new KafkaFutureImpl<>();
         createTopicFailFuture1.completeExceptionally(new TopicExistsException("exists"));
         final KafkaFutureImpl<TopicMetadataAndConfig> createTopicFailFuture2 = new KafkaFutureImpl<>();
@@ -756,7 +757,7 @@ public class InternalTopicManagerTest {
         final InternalTopicManager topicManager = new InternalTopicManager(
             time,
             admin,
-            new StreamsConfig(config)
+            new InternalStreamsConfig(config)
         );
         final TopicPartitionInfo partitionInfo = new TopicPartitionInfo(0, broker1,
             Collections.singletonList(broker1), Collections.singletonList(broker1));
@@ -828,7 +829,7 @@ public class InternalTopicManagerTest {
         final InternalTopicManager internalTopicManager2 = new InternalTopicManager(
             time,
             mockAdminClient,
-            new StreamsConfig(config)
+            new InternalStreamsConfig(config)
         );
 
         final InternalTopicConfig internalTopicConfig = new RepartitionTopicConfig(topic1, Collections.emptyMap());
@@ -848,7 +849,7 @@ public class InternalTopicManagerTest {
         final InternalTopicManager topicManager = new InternalTopicManager(
                 new AutoAdvanceMockTime(time),
                 mockAdminClient,
-                new StreamsConfig(config)
+                new InternalStreamsConfig(config)
         );
 
         final InternalTopicConfig internalTopicConfig = new RepartitionTopicConfig(topic1, Collections.emptyMap());
@@ -898,7 +899,7 @@ public class InternalTopicManagerTest {
         final InternalTopicManager topicManager = new InternalTopicManager(
             time,
             admin,
-            new StreamsConfig(config)
+            new InternalStreamsConfig(config)
         );
 
         final KafkaFutureImpl<TopicDescription> topicDescriptionLeaderNotAvailableFuture = new KafkaFutureImpl<>();
@@ -934,7 +935,7 @@ public class InternalTopicManagerTest {
         final InternalTopicManager topicManager = new InternalTopicManager(
             time,
             admin,
-            new StreamsConfig(config)
+            new InternalStreamsConfig(config)
         );
         final TopicPartitionInfo partitionInfo = new TopicPartitionInfo(0, broker1,
                 Collections.singletonList(broker1), Collections.singletonList(broker1));
@@ -967,7 +968,7 @@ public class InternalTopicManagerTest {
         final InternalTopicManager topicManager = new InternalTopicManager(
             time,
             admin,
-            new StreamsConfig(config)
+            new InternalStreamsConfig(config)
         );
 
         final KafkaFutureImpl<TopicDescription> topicDescriptionFailFuture = new KafkaFutureImpl<>();
@@ -1006,7 +1007,7 @@ public class InternalTopicManagerTest {
         );
 
         final InternalTopicManager internalTopicManager =
-            new InternalTopicManager(time, mockAdminClient, new StreamsConfig(config));
+            new InternalTopicManager(time, mockAdminClient, new InternalStreamsConfig(config));
         final InternalTopicConfig internalTopicConfig = new RepartitionTopicConfig(topic1, Collections.emptyMap());
         internalTopicConfig.setNumberOfPartitions(1);
 
@@ -1370,7 +1371,7 @@ public class InternalTopicManagerTest {
         final InternalTopicManager internalTopicManager2 = new InternalTopicManager(
             time,
             mockAdminClient,
-            new StreamsConfig(config)
+            new InternalStreamsConfig(config)
         );
 
         final InternalTopicConfig internalTopicConfig = setupRepartitionTopicConfig(topic1, 1);
@@ -1399,7 +1400,7 @@ public class InternalTopicManagerTest {
         final InternalTopicManager topicManager = new InternalTopicManager(
             time,
             admin,
-            new StreamsConfig(config)
+            new InternalStreamsConfig(config)
         );
         final KafkaFutureImpl<TopicDescription> topicDescriptionFailFuture = new KafkaFutureImpl<>();
         topicDescriptionFailFuture.completeExceptionally(new LeaderNotAvailableException("Leader Not Available!"));
@@ -1434,7 +1435,7 @@ public class InternalTopicManagerTest {
         final InternalTopicManager topicManager = new InternalTopicManager(
             time,
             admin,
-            new StreamsConfig(config)
+            new InternalStreamsConfig(config)
         );
         final KafkaFutureImpl<TopicDescription> topicDescriptionSuccessfulFuture = new KafkaFutureImpl<>();
         topicDescriptionSuccessfulFuture.complete(new TopicDescription(
@@ -1469,7 +1470,7 @@ public class InternalTopicManagerTest {
         final InternalTopicManager topicManager = new InternalTopicManager(
             time,
             admin,
-            new StreamsConfig(config)
+            new InternalStreamsConfig(config)
         );
         final KafkaFutureImpl<TopicDescription> topicDescriptionFailFuture = new KafkaFutureImpl<>();
         topicDescriptionFailFuture.completeExceptionally(new LeaderNotAvailableException("Leader Not Available!"));
@@ -1524,7 +1525,7 @@ public class InternalTopicManagerTest {
         final InternalTopicManager topicManager = new InternalTopicManager(
             time,
             admin,
-            new StreamsConfig(config)
+            new InternalStreamsConfig(config)
         );
         final KafkaFutureImpl<TopicDescription> topicDescriptionFailFuture = new KafkaFutureImpl<>();
         topicDescriptionFailFuture.completeExceptionally(new IllegalStateException("Nobody expects the Spanish inquisition"));
@@ -1541,7 +1542,7 @@ public class InternalTopicManagerTest {
         final InternalTopicManager topicManager = new InternalTopicManager(
             time,
             admin,
-            new StreamsConfig(config)
+            new InternalStreamsConfig(config)
         );
         when(admin.describeTopics(Collections.singleton(topic1)))
             .thenAnswer(answer -> new MockDescribeTopicsResult(mkMap()));
@@ -1561,7 +1562,7 @@ public class InternalTopicManagerTest {
         final InternalTopicManager topicManager = new InternalTopicManager(
             time,
             admin,
-            new StreamsConfig(config)
+            new InternalStreamsConfig(config)
         );
         final KafkaFutureImpl<TopicDescription> topicDescriptionSuccessfulFuture = new KafkaFutureImpl<>();
         topicDescriptionSuccessfulFuture.complete(new TopicDescription(
@@ -1590,7 +1591,7 @@ public class InternalTopicManagerTest {
         final InternalTopicManager topicManager = new InternalTopicManager(
             time,
             admin,
-            new StreamsConfig(config)
+            new InternalStreamsConfig(config)
         );
         final KafkaFutureImpl<TopicDescription> topicDescriptionSuccessfulFuture = new KafkaFutureImpl<>();
         topicDescriptionSuccessfulFuture.complete(new TopicDescription(
@@ -1686,7 +1687,7 @@ public class InternalTopicManagerTest {
         final InternalTopicManager topicManager = new InternalTopicManager(
             time,
             admin,
-            new StreamsConfig(config)
+            new InternalStreamsConfig(config)
         );
         final KafkaFutureImpl<TopicDescription> topicDescriptionSuccessfulFuture = new KafkaFutureImpl<>();
         topicDescriptionSuccessfulFuture.complete(new TopicDescription(
@@ -1717,7 +1718,7 @@ public class InternalTopicManagerTest {
         final InternalTopicManager topicManager = new InternalTopicManager(
             time,
             admin,
-            new StreamsConfig(config)
+            new InternalStreamsConfig(config)
         );
         final KafkaFutureImpl<TopicDescription> topicDescriptionFailFuture = new KafkaFutureImpl<>();
         topicDescriptionFailFuture.completeExceptionally(new TimeoutException());
@@ -1748,7 +1749,7 @@ public class InternalTopicManagerTest {
         final InternalTopicManager topicManager = new InternalTopicManager(
             time,
             admin,
-            new StreamsConfig(config)
+            new InternalStreamsConfig(config)
         );
         final KafkaFutureImpl<TopicDescription> topicDescriptionFutureThatNeverCompletes = new KafkaFutureImpl<>();
         when(admin.describeTopics(Collections.singleton(topic1)))
@@ -1771,7 +1772,7 @@ public class InternalTopicManagerTest {
 
     private NewTopic newTopic(final String topicName,
                               final InternalTopicConfig topicConfig,
-                              final StreamsConfig streamsConfig) {
+                              final InternalStreamsConfig streamsConfig) {
         return new NewTopic(
             topicName,
             topicConfig.numberOfPartitions(),

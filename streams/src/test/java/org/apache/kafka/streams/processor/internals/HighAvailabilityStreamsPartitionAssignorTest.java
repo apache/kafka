@@ -27,8 +27,8 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
@@ -107,7 +107,7 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
     private TaskManager taskManager;
     @Mock
     private Admin adminClient;
-    private StreamsConfig streamsConfig = new StreamsConfig(configProps());
+    private InternalStreamsConfig streamsConfig = new InternalStreamsConfig(configProps());
     private final InternalTopologyBuilder builder = new InternalTopologyBuilder();
     private TopologyMetadata topologyMetadata = new TopologyMetadata(builder, streamsConfig);
     @Mock
@@ -129,7 +129,7 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
         referenceContainer.taskManager = taskManager;
         referenceContainer.streamsMetadataState = streamsMetadataState;
         referenceContainer.time = time;
-        configurationMap.put(InternalConfig.REFERENCE_CONTAINER_PARTITION_ASSIGNOR, referenceContainer);
+        configurationMap.put(InternalStreamsConfig.REFERENCE_CONTAINER_PARTITION_ASSIGNOR, referenceContainer);
         return configurationMap;
     }
 
@@ -138,7 +138,7 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
         final Map<String, Object> configMap = configProps();
         configMap.putAll(props);
 
-        streamsConfig = new StreamsConfig(configMap);
+        streamsConfig = new InternalStreamsConfig(configMap);
         topologyMetadata = new TopologyMetadata(builder, streamsConfig);
         partitionAssignor.configure(configMap);
 

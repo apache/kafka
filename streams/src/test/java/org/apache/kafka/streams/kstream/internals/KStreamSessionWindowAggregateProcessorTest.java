@@ -25,6 +25,7 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.EmitStrategy;
 import org.apache.kafka.streams.kstream.Initializer;
@@ -118,8 +119,8 @@ public class KStreamSessionWindowAggregateProcessorTest {
     private void setup(final boolean enableCache) {
         // Always process
         final Properties prop = StreamsTestUtils.getStreamsConfig();
-        prop.put(StreamsConfig.InternalConfig.EMIT_INTERVAL_MS_KSTREAMS_WINDOWED_AGGREGATION, 0);
-        final StreamsConfig config = new StreamsConfig(prop);
+        prop.put(InternalStreamsConfig.EMIT_INTERVAL_MS_KSTREAMS_WINDOWED_AGGREGATION, 0);
+        final InternalStreamsConfig config = new InternalStreamsConfig(prop);
 
         context = new InternalMockProcessorContext<Windowed<String>, Change<Long>>(
             TestUtils.tempDirectory(),

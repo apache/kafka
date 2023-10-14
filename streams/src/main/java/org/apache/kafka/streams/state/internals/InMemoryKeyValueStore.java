@@ -20,7 +20,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
@@ -44,7 +44,7 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
-import static org.apache.kafka.streams.StreamsConfig.InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED;
+import static org.apache.kafka.streams.internals.InternalStreamsConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED;
 
 public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
 
@@ -70,7 +70,7 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     public void init(final ProcessorContext context,
                      final StateStore root) {
         if (root != null) {
-            final boolean consistencyEnabled = StreamsConfig.InternalConfig.getBoolean(
+            final boolean consistencyEnabled = InternalStreamsConfig.getBoolean(
                 context.appConfigs(),
                 IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
                 false

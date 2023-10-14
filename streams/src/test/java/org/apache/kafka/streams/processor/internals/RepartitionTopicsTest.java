@@ -23,6 +23,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskAssignmentException;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder.TopicsInfo;
 import org.apache.kafka.streams.processor.internals.assignment.CopartitionedTopicsEnforcer;
@@ -94,7 +95,7 @@ public class RepartitionTopicsTest {
         mkMap(mkEntry(REPARTITION_TOPIC_NAME1, REPARTITION_TOPIC_CONFIG1)),
         Collections.emptyMap()
     );
-    final  StreamsConfig config = new DummyStreamsConfig();
+    final InternalStreamsConfig config = new DummyStreamsConfig();
 
     @Mock
     InternalTopologyBuilder internalTopologyBuilder;

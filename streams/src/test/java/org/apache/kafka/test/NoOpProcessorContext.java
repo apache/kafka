@@ -19,6 +19,7 @@ package org.apache.kafka.test;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.CommitCallback;
 import org.apache.kafka.streams.processor.PunctuationType;
@@ -55,11 +56,11 @@ public class NoOpProcessorContext extends AbstractProcessorContext<Object, Objec
         super(new TaskId(1, 1), streamsConfig(), new MockStreamsMetrics(new Metrics()), null);
     }
 
-    private static StreamsConfig streamsConfig() {
+    private static InternalStreamsConfig streamsConfig() {
         final Properties props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "appId");
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "boot");
-        return new StreamsConfig(props);
+        return new InternalStreamsConfig(props);
     }
 
     @Override

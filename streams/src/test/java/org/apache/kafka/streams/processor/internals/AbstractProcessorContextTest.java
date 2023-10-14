@@ -26,6 +26,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
@@ -196,11 +197,11 @@ public class AbstractProcessorContextTest {
         }
 
         TestProcessorContext(final MockStreamsMetrics metrics) {
-            super(new TaskId(0, 0), new StreamsConfig(config), metrics, new ThreadCache(new LogContext("name "), 0, metrics));
+            super(new TaskId(0, 0), new InternalStreamsConfig(config), metrics, new ThreadCache(new LogContext("name "), 0, metrics));
         }
 
         TestProcessorContext(final MockStreamsMetrics metrics, final Properties config) {
-            super(new TaskId(0, 0), new StreamsConfig(config), metrics, new ThreadCache(new LogContext("name "), 0, metrics));
+            super(new TaskId(0, 0), new InternalStreamsConfig(config), metrics, new ThreadCache(new LogContext("name "), 0, metrics));
         }
 
         @Override

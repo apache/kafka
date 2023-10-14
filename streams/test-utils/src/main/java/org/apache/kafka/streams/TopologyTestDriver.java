@@ -42,6 +42,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.errors.TopologyException;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.internals.StreamsConfigUtils;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -318,7 +319,7 @@ public class TopologyTestDriver implements Closeable {
         configCopy.putIfAbsent(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy-bootstrap-host:0");
         // provide randomized dummy app-id if it's not specified
         configCopy.putIfAbsent(StreamsConfig.APPLICATION_ID_CONFIG,  "dummy-topology-test-driver-app-id-" + ThreadLocalRandom.current().nextInt());
-        final StreamsConfig streamsConfig = new ClientUtils.QuietStreamsConfig(configCopy);
+        final InternalStreamsConfig streamsConfig = new InternalStreamsConfig(configCopy);
         logIfTaskIdleEnabled(streamsConfig);
 
         logContext = new LogContext("topology-test-driver ");
@@ -373,7 +374,7 @@ public class TopologyTestDriver implements Closeable {
         setupTask(streamsConfig, streamsMetrics, cache, internalTopologyBuilder.topologyConfigs().getTaskConfig());
     }
 
-    private static void logIfTaskIdleEnabled(final StreamsConfig streamsConfig) {
+    private static void logIfTaskIdleEnabled(final InternalStreamsConfig streamsConfig) {
         final Long taskIdleTime = streamsConfig.getLong(StreamsConfig.MAX_TASK_IDLE_MS_CONFIG);
         if (taskIdleTime > 0) {
             log.info("Detected {} config in use with TopologyTestDriver (set to {}ms)." +
@@ -387,7 +388,7 @@ public class TopologyTestDriver implements Closeable {
         }
     }
 
-    private StreamsMetricsImpl setupMetrics(final StreamsConfig streamsConfig) {
+    private StreamsMetricsImpl setupMetrics(final InternalStreamsConfig streamsConfig) {
         final String threadId = Thread.currentThread().getName();
 
         final MetricConfig metricConfig = new MetricConfig()
@@ -408,7 +409,7 @@ public class TopologyTestDriver implements Closeable {
     }
 
     private void setupTopology(final InternalTopologyBuilder builder,
-                               final StreamsConfig streamsConfig) {
+                               final InternalStreamsConfig streamsConfig) {
         internalTopologyBuilder = builder;
         internalTopologyBuilder.rewriteTopology(streamsConfig);
 
@@ -425,7 +426,7 @@ public class TopologyTestDriver implements Closeable {
     }
 
     private void setupGlobalTask(final Time mockWallClockTime,
-                                 final StreamsConfig streamsConfig,
+                                 final InternalStreamsConfig streamsConfig,
                                  final StreamsMetricsImpl streamsMetrics,
                                  final ThreadCache cache) {
         if (globalTopology != null) {
@@ -470,7 +471,7 @@ public class TopologyTestDriver implements Closeable {
     }
 
     @SuppressWarnings("deprecation")
-    private void setupTask(final StreamsConfig streamsConfig,
+    private void setupTask(final InternalStreamsConfig streamsConfig,
                            final StreamsMetricsImpl streamsMetrics,
                            final ThreadCache cache,
                            final TaskConfig taskConfig) {
@@ -1391,7 +1392,7 @@ public class TopologyTestDriver implements Closeable {
 
     private static class TestDriverProducer extends StreamsProducer {
 
-        public TestDriverProducer(final StreamsConfig config,
+        public TestDriverProducer(final InternalStreamsConfig config,
                                   final KafkaClientSupplier clientSupplier,
                                   final LogContext logContext,
                                   final Time time) {

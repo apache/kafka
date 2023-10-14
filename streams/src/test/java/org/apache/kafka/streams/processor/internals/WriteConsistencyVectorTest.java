@@ -23,7 +23,7 @@ import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.StreamsConfig.InternalConfig;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
@@ -49,7 +49,7 @@ import static org.mockito.Mockito.when;
 public class WriteConsistencyVectorTest {
 
     @Mock
-    private StreamsConfig streamsConfig;
+    private InternalStreamsConfig streamsConfig;
     @Mock
     private ProcessorStateManager stateManager;
     @Mock
@@ -77,7 +77,7 @@ public class WriteConsistencyVectorTest {
 
     @Before
     public void setup() {
-        when(streamsConfig.originals()).thenReturn(Collections.singletonMap(InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED, true));
+        when(streamsConfig.originals()).thenReturn(Collections.singletonMap(InternalStreamsConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED, true));
         when(streamsConfig.values()).thenReturn(Collections.emptyMap());
         when(streamsConfig.getString(StreamsConfig.APPLICATION_ID_CONFIG)).thenReturn("add-id");
 

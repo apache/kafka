@@ -20,6 +20,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
@@ -36,7 +37,7 @@ import static org.apache.kafka.streams.internals.StreamsConfigUtils.eosEnabled;
 
 class StandbyTaskCreator {
     private final TopologyMetadata topologyMetadata;
-    private final StreamsConfig applicationConfig;
+    private final InternalStreamsConfig applicationConfig;
     private final StreamsMetricsImpl streamsMetrics;
     private final StateDirectory stateDirectory;
     private final ChangelogReader storeChangelogReader;
@@ -46,7 +47,7 @@ class StandbyTaskCreator {
     private final boolean stateUpdaterEnabled;
 
     StandbyTaskCreator(final TopologyMetadata topologyMetadata,
-                       final StreamsConfig applicationConfig,
+                       final InternalStreamsConfig applicationConfig,
                        final StreamsMetricsImpl streamsMetrics,
                        final StateDirectory stateDirectory,
                        final ChangelogReader storeChangelogReader,

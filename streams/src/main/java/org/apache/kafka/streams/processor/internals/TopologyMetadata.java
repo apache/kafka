@@ -24,6 +24,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.errors.UnknownTopologyException;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.internals.StreamsConfigUtils;
 import org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode;
 import org.apache.kafka.streams.processor.StateStore;
@@ -69,7 +70,7 @@ public class TopologyMetadata {
     public static final String UNNAMED_TOPOLOGY = "__UNNAMED_TOPOLOGY__";
     private static final Pattern EMPTY_ZERO_LENGTH_PATTERN = Pattern.compile("");
 
-    private final StreamsConfig config;
+    private final InternalStreamsConfig config;
     private final ProcessingMode processingMode;
     private final TopologyVersion version;
     private final TaskExecutionMetadata taskExecutionMetadata;
@@ -100,7 +101,7 @@ public class TopologyMetadata {
     }
 
     public TopologyMetadata(final InternalTopologyBuilder builder,
-                            final StreamsConfig config) {
+                            final InternalStreamsConfig config) {
         this.version = new TopologyVersion();
         this.processingMode = StreamsConfigUtils.processingMode(config);
         this.config = config;
@@ -117,7 +118,7 @@ public class TopologyMetadata {
     }
 
     public TopologyMetadata(final ConcurrentNavigableMap<String, InternalTopologyBuilder> builders,
-                            final StreamsConfig config) {
+                            final InternalStreamsConfig config) {
         this.version = new TopologyVersion();
         this.processingMode = StreamsConfigUtils.processingMode(config);
         this.config = config;
@@ -360,7 +361,7 @@ public class TopologyMetadata {
         allInputTopics.addAll(newInputTopics);
     }
 
-    public int getNumStreamThreads(final StreamsConfig config) {
+    public int getNumStreamThreads(final InternalStreamsConfig config) {
         final int configuredNumStreamThreads = config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG);
 
         // If there are named topologies but some are empty, this indicates a bug in user code

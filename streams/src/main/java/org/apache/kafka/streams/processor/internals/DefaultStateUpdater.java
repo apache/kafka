@@ -29,6 +29,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.Task.State;
 import org.apache.kafka.streams.processor.internals.TaskAndAction.Action;
@@ -543,7 +544,7 @@ public class DefaultStateUpdater implements StateUpdater {
 
     public DefaultStateUpdater(final String name,
                                final Metrics metrics,
-                               final StreamsConfig config,
+                               final InternalStreamsConfig config,
                                final ChangelogReader changelogReader,
                                final TopologyMetadata topologyMetadata,
                                final Time time) {

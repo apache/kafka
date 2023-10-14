@@ -26,9 +26,9 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.EmitStrategy;
 import org.apache.kafka.streams.kstream.EmitStrategy.StrategyType;
@@ -127,7 +127,7 @@ public class KStreamSlidingWindowAggregateTest {
         emitFinal = type.equals(StrategyType.ON_WINDOW_CLOSE);
         emitStrategy = StrategyType.forType(type);
         // Set interval to 0 so that it always tries to emit
-        props.setProperty(InternalConfig.EMIT_INTERVAL_MS_KSTREAMS_WINDOWED_AGGREGATION, "0");
+        props.setProperty(InternalStreamsConfig.EMIT_INTERVAL_MS_KSTREAMS_WINDOWED_AGGREGATION, "0");
     }
 
     @Test

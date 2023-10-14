@@ -39,6 +39,8 @@ import static org.junit.Assert.assertFalse;
 public class MockClientSupplier implements KafkaClientSupplier {
     private static final ByteArraySerializer BYTE_ARRAY_SERIALIZER = new ByteArraySerializer();
 
+    public static int adminCount = 0;
+
     private Cluster cluster;
     private String applicationId;
 
@@ -58,6 +60,7 @@ public class MockClientSupplier implements KafkaClientSupplier {
 
     @Override
     public Admin getAdmin(final Map<String, Object> config) {
+        ++adminCount;
         return adminClient;
     }
 

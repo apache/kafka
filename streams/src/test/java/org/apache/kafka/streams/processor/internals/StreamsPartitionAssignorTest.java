@@ -44,8 +44,8 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.TopologyWrapper;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
@@ -252,8 +252,8 @@ public class StreamsPartitionAssignorTest {
         referenceContainer.streamsMetadataState = streamsMetadataState;
         referenceContainer.time = time;
         referenceContainer.clientTags = clientTags != null ? clientTags : EMPTY_CLIENT_TAGS;
-        configurationMap.put(InternalConfig.REFERENCE_CONTAINER_PARTITION_ASSIGNOR, referenceContainer);
-        configurationMap.put(InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS, taskAssignor.getName());
+        configurationMap.put(InternalStreamsConfig.REFERENCE_CONTAINER_PARTITION_ASSIGNOR, referenceContainer);
+        configurationMap.put(InternalStreamsConfig.TASK_ASSIGNOR_CLASS, taskAssignor.getName());
         configurationMap.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG, rackAwareAssignorStrategy);
         return configurationMap;
     }
@@ -279,7 +279,7 @@ public class StreamsPartitionAssignorTest {
 
         partitionAssignor.configure(configMap);
 
-        topologyMetadata = new TopologyMetadata(builder, new StreamsConfig(configProps()));
+        topologyMetadata = new TopologyMetadata(builder, new InternalStreamsConfig(configProps()));
         return overwriteInternalTopicManagerWithMock(false, topicPartitionInfo);
     }
 
@@ -306,7 +306,7 @@ public class StreamsPartitionAssignorTest {
     private MockInternalTopicManager overwriteInternalTopicManagerWithMock(final boolean mockCreateInternalTopics, final List<Map<String, List<TopicPartitionInfo>>> topicPartitionInfo) {
         final MockInternalTopicManager mockInternalTopicManager = spy(new MockInternalTopicManager(
             time,
-            new StreamsConfig(configProps()),
+            new InternalStreamsConfig(configProps()),
             mockClientSupplier.restoreConsumer,
             mockCreateInternalTopics
         ));
@@ -345,7 +345,7 @@ public class StreamsPartitionAssignorTest {
         this.taskAssignor = taskAssignor;
         rackAwareAssignorStrategy = enableRackAwareAssignor ? StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC : StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE;
         adminClient = createMockAdminClientForAssignor(EMPTY_CHANGELOG_END_OFFSETS);
-        topologyMetadata = new TopologyMetadata(builder, new StreamsConfig(configProps()));
+        topologyMetadata = new TopologyMetadata(builder, new InternalStreamsConfig(configProps()));
     }
 
     @Test
@@ -1522,7 +1522,7 @@ public class StreamsPartitionAssignorTest {
 
         final String client = "client1";
         builder = TopologyWrapper.getInternalTopologyBuilder(streamsBuilder.build());
-        topologyMetadata = new TopologyMetadata(builder, new StreamsConfig(configProps()));
+        topologyMetadata = new TopologyMetadata(builder, new InternalStreamsConfig(configProps()));
 
         adminClient = createMockAdminClientForAssignor(getTopicPartitionOffsetsMap(
             asList(APPLICATION_ID + "-topic3-STATE-STORE-0000000002-changelog",
@@ -1602,7 +1602,7 @@ public class StreamsPartitionAssignorTest {
         partitionAssignor.configure(configProps());
         final MockInternalTopicManager mockInternalTopicManager = new MockInternalTopicManager(
             time,
-            new StreamsConfig(configProps()),
+            new InternalStreamsConfig(configProps()),
             mockClientSupplier.restoreConsumer,
             false
         ) {
@@ -1627,7 +1627,7 @@ public class StreamsPartitionAssignorTest {
 
     @Test
     public void shouldThrowTimeoutExceptionWhenCreatingChangelogTopicsTimesOut() {
-        final StreamsConfig config = new StreamsConfig(configProps());
+        final InternalStreamsConfig config = new InternalStreamsConfig(configProps());
         final StreamsBuilder streamsBuilder = new StreamsBuilder();
         streamsBuilder.table("topic1", Materialized.as("store"));
 
@@ -1890,7 +1890,7 @@ public class StreamsPartitionAssignorTest {
         final StreamsBuilder streamsBuilder = new StreamsBuilder();
         streamsBuilder.stream("topic1").groupByKey().count();
         builder = TopologyWrapper.getInternalTopologyBuilder(streamsBuilder.build());
-        topologyMetadata = new TopologyMetadata(builder, new StreamsConfig(props));
+        topologyMetadata = new TopologyMetadata(builder, new InternalStreamsConfig(props));
 
         createDefaultMockTaskManager();
         adminClient = createMockAdminClientForAssignor(getTopicPartitionOffsetsMap(
@@ -1939,7 +1939,7 @@ public class StreamsPartitionAssignorTest {
     @Test
     public void shouldThrowKafkaExceptionIfReferenceContainerNotConfigured() {
         final Map<String, Object> config = configProps();
-        config.remove(InternalConfig.REFERENCE_CONTAINER_PARTITION_ASSIGNOR);
+        config.remove(InternalStreamsConfig.REFERENCE_CONTAINER_PARTITION_ASSIGNOR);
 
         final KafkaException expected = assertThrows(
             KafkaException.class,
@@ -1951,7 +1951,7 @@ public class StreamsPartitionAssignorTest {
     @Test
     public void shouldThrowKafkaExceptionIfReferenceContainerConfigIsNotTaskManagerInstance() {
         final Map<String, Object> config = configProps();
-        config.put(InternalConfig.REFERENCE_CONTAINER_PARTITION_ASSIGNOR, "i am not a reference container");
+        config.put(InternalStreamsConfig.REFERENCE_CONTAINER_PARTITION_ASSIGNOR, "i am not a reference container");
 
         final KafkaException expected = assertThrows(
             KafkaException.class,
@@ -2423,7 +2423,7 @@ public class StreamsPartitionAssignorTest {
         props.putAll(configProps());
         props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
         builder = TopologyWrapper.getInternalTopologyBuilder(streamsBuilder.build(props));
-        topologyMetadata = new TopologyMetadata(builder, new StreamsConfig(props));
+        topologyMetadata = new TopologyMetadata(builder, new InternalStreamsConfig(props));
 
         subscriptions.put("consumer10",
             new Subscription(
@@ -2501,7 +2501,7 @@ public class StreamsPartitionAssignorTest {
     @Test
     public void shouldThrowTaskAssignmentExceptionWhenUnableToResolvePartitionCount() {
         builder = new CorruptedInternalTopologyBuilder();
-        topologyMetadata = new TopologyMetadata(builder, new StreamsConfig(configProps()));
+        topologyMetadata = new TopologyMetadata(builder, new InternalStreamsConfig(configProps()));
 
         final InternalStreamsBuilder streamsBuilder = new InternalStreamsBuilder(builder);
 

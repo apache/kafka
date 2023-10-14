@@ -37,6 +37,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils;
@@ -324,9 +325,9 @@ public class HighAvailabilityTaskAssignorIntegrationTest {
                 mkEntry(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG, "0"), // make the warmup catch up completely
                 mkEntry(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG, "2"),
                 mkEntry(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG, "60000"),
-                mkEntry(StreamsConfig.InternalConfig.ASSIGNMENT_LISTENER, configuredAssignmentListener),
+                mkEntry(InternalStreamsConfig.ASSIGNMENT_LISTENER, configuredAssignmentListener),
                 mkEntry(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L),
-                mkEntry(StreamsConfig.InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS, HighAvailabilityTaskAssignor.class.getName()),
+                mkEntry(InternalStreamsConfig.TASK_ASSIGNOR_CLASS, HighAvailabilityTaskAssignor.class.getName()),
                 // Increasing the number of threads to ensure that a rebalance happens each time a consumer sends a rejoin (KAFKA-10455)
                 mkEntry(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 40),
                 mkEntry(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class.getName()),

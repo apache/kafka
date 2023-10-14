@@ -24,7 +24,7 @@ import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -121,9 +121,9 @@ class TimeOrderedCachingWindowStore
     }
 
     private void initInternal(final InternalProcessorContext<?, ?> context) {
-        final String prefix = StreamsConfig.InternalConfig.getString(
+        final String prefix = InternalStreamsConfig.getString(
             context.appConfigs(),
-            StreamsConfig.InternalConfig.TOPIC_PREFIX_ALTERNATIVE,
+            InternalStreamsConfig.TOPIC_PREFIX_ALTERNATIVE,
             context.applicationId()
         );
         this.context = context;

@@ -32,6 +32,7 @@ import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalTopicManager;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
@@ -164,7 +165,7 @@ public class TaskAssignorConvergenceTest {
             }
 
             final MockTime time = new MockTime();
-            final StreamsConfig streamsConfig = new StreamsConfig(configProps(true));
+            final InternalStreamsConfig streamsConfig = new InternalStreamsConfig(configProps(true));
             final MockClientSupplier mockClientSupplier = new MockClientSupplier();
             final MockInternalTopicManager mockInternalTopicManager = new MockInternalTopicManager(
                 time,

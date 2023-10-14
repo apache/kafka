@@ -41,6 +41,7 @@ import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.internals.StreamsConfigUtils;
 import org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode;
 import org.apache.kafka.streams.processor.TaskId;
@@ -78,7 +79,7 @@ public class StreamsProducer {
     private boolean transactionInitialized = false;
     private double oldProducerTotalBlockedTime = 0;
 
-    public StreamsProducer(final StreamsConfig config,
+    public StreamsProducer(final InternalStreamsConfig config,
                            final String threadId,
                            final KafkaClientSupplier clientSupplier,
                            final TaskId taskId,
@@ -97,13 +98,13 @@ public class StreamsProducer {
         final Map<String, Object> producerConfigs;
         switch (processingMode) {
             case AT_LEAST_ONCE: {
-                producerConfigs = config.getProducerConfigs(getThreadProducerClientId(threadId));
+                producerConfigs = config.producerConfigs(getThreadProducerClientId(threadId));
                 eosV2ProducerConfigs = null;
 
                 break;
             }
             case EXACTLY_ONCE_ALPHA: {
-                producerConfigs = config.getProducerConfigs(
+                producerConfigs = config.producerConfigs(
                     getTaskProducerClientId(
                         threadId,
                         Objects.requireNonNull(taskId, "taskId cannot be null for exactly-once alpha")
@@ -118,7 +119,7 @@ public class StreamsProducer {
                 break;
             }
             case EXACTLY_ONCE_V2: {
-                producerConfigs = config.getProducerConfigs(getThreadProducerClientId(threadId));
+                producerConfigs = config.producerConfigs(getThreadProducerClientId(threadId));
 
                 final String applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
                 producerConfigs.put(

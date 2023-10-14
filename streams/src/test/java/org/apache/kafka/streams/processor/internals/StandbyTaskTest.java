@@ -34,6 +34,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
@@ -107,12 +108,12 @@ public class StandbyTaskTest {
     private final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, threadName, StreamsConfig.METRICS_LATEST, time);
 
     private File baseDir;
-    private StreamsConfig config;
+    private InternalStreamsConfig config;
     private StateDirectory stateDirectory;
     private StandbyTask task;
 
-    private StreamsConfig createConfig(final File baseDir) throws IOException {
-        return new StreamsConfig(mkProperties(mkMap(
+    private InternalStreamsConfig createConfig(final File baseDir) throws IOException {
+        return new InternalStreamsConfig(mkProperties(mkMap(
             mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, applicationId),
             mkEntry(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, DEBUG.name),
             mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:2171"),
@@ -523,7 +524,7 @@ public class StandbyTaskTest {
 
         final MetricName metricName = setupCloseTaskMetric();
 
-        config = new StreamsConfig(mkProperties(mkMap(
+        config = new InternalStreamsConfig(mkProperties(mkMap(
             mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, applicationId),
             mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:2171"),
             mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE)
@@ -553,7 +554,7 @@ public class StandbyTaskTest {
 
         final MetricName metricName = setupCloseTaskMetric();
 
-        config = new StreamsConfig(mkProperties(mkMap(
+        config = new InternalStreamsConfig(mkProperties(mkMap(
             mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, applicationId),
             mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:2171"),
             mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2)

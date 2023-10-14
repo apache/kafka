@@ -24,6 +24,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TopologyException;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KStream;
@@ -331,6 +332,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
      * A user can provide either the config OPTIMIZE which means all optimizations rules will be
      * applied or they can provide a list of optimization rules.
      */
+    @SuppressWarnings("deprecation")
     private void optimizeTopology(final Properties props) {
         final Set<String> optimizationConfigs;
         if (props == null || !props.containsKey(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG)) {

@@ -20,9 +20,9 @@ import java.util.stream.Stream;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.tests.SmokeTestClient;
 import org.apache.kafka.streams.tests.SmokeTestDriver;
 import org.junit.jupiter.api.AfterAll;
@@ -127,7 +127,7 @@ public class SmokeTestDriverIntegrationTest {
 
         final Properties props = new Properties();
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-        props.put(InternalConfig.STATE_UPDATER_ENABLED, stateUpdaterEnabled);
+        props.put(InternalStreamsConfig.STATE_UPDATER_ENABLED, stateUpdaterEnabled);
         // decrease the session timeout so that we can trigger the rebalance soon after old client left closed
         props.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 10000);
 

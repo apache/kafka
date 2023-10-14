@@ -51,6 +51,7 @@ import org.apache.kafka.streams.errors.DefaultProductionExceptionHandler;
 import org.apache.kafka.streams.errors.ProductionExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
@@ -101,11 +102,11 @@ public class RecordCollectorTest {
     private final TaskId taskId = new TaskId(0, 0);
     private final ProductionExceptionHandler productionExceptionHandler = new DefaultProductionExceptionHandler();
     private final StreamsMetricsImpl streamsMetrics = new MockStreamsMetrics(new Metrics());
-    private final StreamsConfig config = new StreamsConfig(mkMap(
+    private final InternalStreamsConfig config = new InternalStreamsConfig(mkMap(
         mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
         mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234")
     ));
-    private final StreamsConfig eosConfig = new StreamsConfig(mkMap(
+    private final InternalStreamsConfig eosConfig = new InternalStreamsConfig(mkMap(
         mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
         mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234"),
         mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2)

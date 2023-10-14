@@ -2151,7 +2151,7 @@ project(':streams') {
 
   task genStreamsConfigDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
-    mainClass = 'org.apache.kafka.streams.StreamsConfig'
+    mainClass = 'org.apache.kafka.streams.internals.InternalStreamsConfig'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "streams_config.html").newOutputStream()
   }

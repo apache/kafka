@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
@@ -78,7 +79,7 @@ public class MaterializedInternalTest {
     public void shouldUseStoreTypeWhenProvidedViaTopologyConfig() {
         final Properties topologyOverrides = new Properties();
         topologyOverrides.put(StreamsConfig.DEFAULT_DSL_STORE_CONFIG, StreamsConfig.IN_MEMORY);
-        final StreamsConfig config = new StreamsConfig(StreamsTestUtils.getStreamsConfig());
+        final InternalStreamsConfig config = new InternalStreamsConfig(StreamsTestUtils.getStreamsConfig());
 
         final InternalTopologyBuilder topologyBuilder = new InternalTopologyBuilder(
             new TopologyConfig("my-topology", config, topologyOverrides));

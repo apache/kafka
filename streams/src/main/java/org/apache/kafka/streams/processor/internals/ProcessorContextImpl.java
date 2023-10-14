@@ -23,6 +23,7 @@ import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
@@ -43,7 +44,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.kafka.streams.StreamsConfig.InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED;
+import static org.apache.kafka.streams.internals.InternalStreamsConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED;
 import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
 import static org.apache.kafka.streams.internals.ApiUtils.validateMillisecondDuration;
 import static org.apache.kafka.streams.processor.internals.AbstractReadOnlyDecorator.getReadOnlyStore;
@@ -61,13 +62,13 @@ public class ProcessorContextImpl extends AbstractProcessorContext<Object, Objec
 
     @SuppressWarnings("this-escape")
     public ProcessorContextImpl(final TaskId id,
-                                final StreamsConfig config,
+                                final InternalStreamsConfig config,
                                 final ProcessorStateManager stateMgr,
                                 final StreamsMetricsImpl metrics,
                                 final ThreadCache cache) {
         super(id, config, metrics, cache);
         stateManager = stateMgr;
-        consistencyEnabled = StreamsConfig.InternalConfig.getBoolean(
+        consistencyEnabled = InternalStreamsConfig.getBoolean(
                 appConfigs(),
                 IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
                 false);

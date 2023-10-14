@@ -20,6 +20,7 @@ import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.processor.internals.InternalTopicConfig;
 import org.apache.kafka.streams.processor.internals.InternalTopicManager;
 
@@ -37,7 +38,7 @@ public class MockInternalTopicManager extends InternalTopicManager {
     private final boolean mockCreateInternalTopics;
 
     public MockInternalTopicManager(final Time time,
-                                    final StreamsConfig streamsConfig,
+                                    final InternalStreamsConfig streamsConfig,
                                     final MockConsumer<byte[], byte[]> restoreConsumer,
                                     final boolean mockCreateInternalTopics) {
         super(time, new MockClientSupplier().getAdmin(streamsConfig.originals()), streamsConfig);

@@ -26,6 +26,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.TopologyException;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.JoinWindows;
@@ -139,7 +140,7 @@ public class InternalStreamsBuilderTest {
 
         builder.buildAndOptimizeTopology();
         final ProcessorTopology topology = builder.internalTopologyBuilder
-            .rewriteTopology(new StreamsConfig(StreamsTestUtils.getStreamsConfig(APP_ID)))
+            .rewriteTopology(new InternalStreamsConfig(StreamsTestUtils.getStreamsConfig(APP_ID)))
             .buildTopology();
 
         assertEquals(0, topology.stateStores().size());
@@ -176,7 +177,7 @@ public class InternalStreamsBuilderTest {
 
         builder.buildAndOptimizeTopology();
         final ProcessorTopology topology = builder.internalTopologyBuilder
-            .rewriteTopology(new StreamsConfig(StreamsTestUtils.getStreamsConfig(APP_ID)))
+            .rewriteTopology(new InternalStreamsConfig(StreamsTestUtils.getStreamsConfig(APP_ID)))
             .buildGlobalStateTopology();
         final List<StateStore> stateStores = topology.globalStateStores();
 
@@ -204,7 +205,7 @@ public class InternalStreamsBuilderTest {
 
     private void doBuildGlobalTopologyWithAllGlobalTables() {
         final ProcessorTopology topology = builder.internalTopologyBuilder
-            .rewriteTopology(new StreamsConfig(StreamsTestUtils.getStreamsConfig(APP_ID)))
+            .rewriteTopology(new InternalStreamsConfig(StreamsTestUtils.getStreamsConfig(APP_ID)))
             .buildGlobalStateTopology();
 
         final List<StateStore> stateStores = topology.globalStateStores();
@@ -281,7 +282,7 @@ public class InternalStreamsBuilderTest {
         final KStream<String, String> mapped = playEvents.map(MockMapper.selectValueKeyValueMapper());
         mapped.leftJoin(table, MockValueJoiner.TOSTRING_JOINER).groupByKey().count(Materialized.as("count"));
         builder.buildAndOptimizeTopology();
-        builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(StreamsTestUtils.getStreamsConfig(APP_ID)));
+        builder.internalTopologyBuilder.rewriteTopology(new InternalStreamsConfig(StreamsTestUtils.getStreamsConfig(APP_ID)));
         assertEquals(Collections.singletonList("table-topic"), builder.internalTopologyBuilder.sourceTopicsForStore("table-store"));
         assertEquals(Collections.singletonList(APP_ID + "-KSTREAM-MAP-0000000003-repartition"), builder.internalTopologyBuilder.sourceTopicsForStore("count"));
     }
@@ -369,7 +370,7 @@ public class InternalStreamsBuilderTest {
     public void shouldHaveNullTimestampExtractorWhenNoneSupplied() {
         builder.stream(Collections.singleton("topic"), consumed);
         builder.buildAndOptimizeTopology();
-        builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(StreamsTestUtils.getStreamsConfig(APP_ID)));
+        builder.internalTopologyBuilder.rewriteTopology(new InternalStreamsConfig(StreamsTestUtils.getStreamsConfig(APP_ID)));
         final ProcessorTopology processorTopology = builder.internalTopologyBuilder.buildTopology();
         assertNull(processorTopology.source("topic").getTimestampExtractor());
     }
@@ -380,7 +381,7 @@ public class InternalStreamsBuilderTest {
         builder.stream(Collections.singleton("topic"), consumed);
         builder.buildAndOptimizeTopology();
         final ProcessorTopology processorTopology = builder.internalTopologyBuilder
-            .rewriteTopology(new StreamsConfig(StreamsTestUtils.getStreamsConfig(APP_ID)))
+            .rewriteTopology(new InternalStreamsConfig(StreamsTestUtils.getStreamsConfig(APP_ID)))
             .buildTopology();
         assertThat(processorTopology.source("topic").getTimestampExtractor(), instanceOf(MockTimestampExtractor.class));
     }
@@ -390,7 +391,7 @@ public class InternalStreamsBuilderTest {
         builder.table("topic", consumed, materialized);
         builder.buildAndOptimizeTopology();
         final ProcessorTopology processorTopology = builder.internalTopologyBuilder
-            .rewriteTopology(new StreamsConfig(StreamsTestUtils.getStreamsConfig(APP_ID)))
+            .rewriteTopology(new InternalStreamsConfig(StreamsTestUtils.getStreamsConfig(APP_ID)))
             .buildTopology();
         assertNull(processorTopology.source("topic").getTimestampExtractor());
     }
@@ -401,7 +402,7 @@ public class InternalStreamsBuilderTest {
         builder.table("topic", consumed, materialized);
         builder.buildAndOptimizeTopology();
         final ProcessorTopology processorTopology = builder.internalTopologyBuilder
-            .rewriteTopology(new StreamsConfig(StreamsTestUtils.getStreamsConfig(APP_ID)))
+            .rewriteTopology(new InternalStreamsConfig(StreamsTestUtils.getStreamsConfig(APP_ID)))
             .buildTopology();
         assertThat(processorTopology.source("topic").getTimestampExtractor(), instanceOf(MockTimestampExtractor.class));
     }

@@ -33,7 +33,6 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.slf4j.Logger;
@@ -51,12 +50,6 @@ import java.util.stream.Collectors;
 
 public class ClientUtils {
     private static final Logger LOG = LoggerFactory.getLogger(ClientUtils.class);
-
-    public static final class QuietStreamsConfig extends StreamsConfig {
-        public QuietStreamsConfig(final Map<?, ?> props) {
-            super(props, false);
-        }
-    }
 
     public static final class QuietConsumerConfig extends ConsumerConfig {
         public QuietConsumerConfig(final Map<String, Object> props) {

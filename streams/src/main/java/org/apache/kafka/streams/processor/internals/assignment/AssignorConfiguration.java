@@ -24,7 +24,7 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.StreamsConfig.InternalConfig;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.internals.UpgradeFromValues;
 import org.apache.kafka.streams.processor.internals.ClientUtils;
 import org.apache.kafka.streams.processor.internals.InternalTopicManager;
@@ -35,7 +35,7 @@ import java.util.Map;
 
 import static org.apache.kafka.common.utils.Utils.getHost;
 import static org.apache.kafka.common.utils.Utils.getPort;
-import static org.apache.kafka.streams.StreamsConfig.InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS;
+import static org.apache.kafka.streams.internals.InternalStreamsConfig.TASK_ASSIGNOR_CLASS;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
 
 public final class AssignorConfiguration {
@@ -45,14 +45,14 @@ public final class AssignorConfiguration {
     private final Logger log;
     private final ReferenceContainer referenceContainer;
 
-    private final StreamsConfig streamsConfig;
+    private final InternalStreamsConfig streamsConfig;
     private final Map<String, ?> internalConfigs;
 
     public AssignorConfiguration(final Map<String, ?> configs) {
         // NOTE: If you add a new config to pass through to here, be sure to test it in a real
         // application. Since we filter out some configurations, we may have to explicitly copy
         // them over when we construct the Consumer.
-        streamsConfig = new ClientUtils.QuietStreamsConfig(configs);
+        streamsConfig = new InternalStreamsConfig(configs);
         internalConfigs = configs;
 
         // Setting the logger with the passed in client thread name
@@ -61,7 +61,7 @@ public final class AssignorConfiguration {
         log = logContext.logger(getClass());
 
         {
-            final Object o = configs.get(InternalConfig.REFERENCE_CONTAINER_PARTITION_ASSIGNOR);
+            final Object o = configs.get(InternalStreamsConfig.REFERENCE_CONTAINER_PARTITION_ASSIGNOR);
             if (o == null) {
                 final KafkaException fatalException = new KafkaException("ReferenceContainer is not specified");
                 log.error(fatalException.getMessage(), fatalException);
@@ -80,7 +80,7 @@ public final class AssignorConfiguration {
         }
 
         {
-            final String o = (String) configs.get(INTERNAL_TASK_ASSIGNOR_CLASS);
+            final String o = (String) configs.get(TASK_ASSIGNOR_CLASS);
             if (o == null) {
                 taskAssignorClass = HighAvailabilityTaskAssignor.class.getName();
             } else {
@@ -241,14 +241,14 @@ public final class AssignorConfiguration {
             return Utils.newInstance(taskAssignorClass, TaskAssignor.class);
         } catch (final ClassNotFoundException e) {
             throw new IllegalArgumentException(
-                "Expected an instantiable class name for " + INTERNAL_TASK_ASSIGNOR_CLASS,
+                "Expected an instantiable class name for " + TASK_ASSIGNOR_CLASS,
                 e
             );
         }
     }
 
     public AssignmentListener assignmentListener() {
-        final Object o = internalConfigs.get(InternalConfig.ASSIGNMENT_LISTENER);
+        final Object o = internalConfigs.get(InternalStreamsConfig.ASSIGNMENT_LISTENER);
         if (o == null) {
             return stable -> { };
         }
@@ -278,7 +278,7 @@ public final class AssignorConfiguration {
         public final Integer rackAwareAssignmentNonOverlapCost;
         public final String rackAwareAssignmentStrategy;
 
-        private AssignmentConfigs(final StreamsConfig configs) {
+        private AssignmentConfigs(final InternalStreamsConfig configs) {
             acceptableRecoveryLag = configs.getLong(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG);
             maxWarmupReplicas = configs.getInt(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG);
             numStandbyReplicas = configs.getInt(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG);
@@ -317,7 +317,7 @@ public final class AssignorConfiguration {
         }
 
         private static <T> T validated(final String configKey, final T value) {
-            final ConfigDef.Validator validator = StreamsConfig.configDef().configKeys().get(configKey).validator;
+            final ConfigDef.Validator validator = InternalStreamsConfig.configDef().configKeys().get(configKey).validator;
             if (validator != null) {
                 validator.ensureValid(configKey, value);
             }

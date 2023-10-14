@@ -34,11 +34,11 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils.StableAssignmentListener;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Transformer;
 import org.apache.kafka.streams.kstream.TransformerSupplier;
@@ -951,7 +951,7 @@ public class EosV2UpgradeIntegrationTest {
         properties.put(StreamsConfig.producerPrefix(ProducerConfig.PARTITIONER_CLASS_CONFIG), KeyPartitioner.class);
         properties.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
         properties.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath() + File.separator + appDir);
-        properties.put(InternalConfig.ASSIGNMENT_LISTENER, assignmentListener);
+        properties.put(InternalStreamsConfig.ASSIGNMENT_LISTENER, assignmentListener);
 
         final Properties config = StreamsTestUtils.getStreamsConfig(
             applicationId,

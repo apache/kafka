@@ -29,6 +29,7 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Transformer;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -188,7 +189,7 @@ public class StandbyTaskEOSIntegrationTest {
         final Properties props = props(stateDirPath);
 
         final StateDirectory stateDirectory = new StateDirectory(
-            new StreamsConfig(props), new MockTime(), true, false);
+            new InternalStreamsConfig(props), new MockTime(), true, false);
 
         new OffsetCheckpoint(new File(stateDirectory.getOrCreateDirectoryForTask(taskId), ".checkpoint"))
             .write(Collections.singletonMap(new TopicPartition("unknown-topic", 0), 5L));

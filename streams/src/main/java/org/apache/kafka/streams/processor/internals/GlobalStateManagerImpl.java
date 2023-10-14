@@ -30,6 +30,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.processor.CommitCallback;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateRestoreListener;
@@ -86,7 +87,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                                   final Consumer<byte[], byte[]> globalConsumer,
                                   final StateDirectory stateDirectory,
                                   final StateRestoreListener stateRestoreListener,
-                                  final StreamsConfig config) {
+                                  final InternalStreamsConfig config) {
         this.time = time;
         this.topology = topology;
         baseDir = stateDirectory.globalStateDir();
@@ -106,7 +107,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
         this.globalConsumer = globalConsumer;
         this.stateRestoreListener = stateRestoreListener;
 
-        final Map<String, Object> consumerProps = config.getGlobalConsumerConfigs("dummy");
+        final Map<String, Object> consumerProps = config.globalConsumerConfigs("dummy");
         // need to add mandatory configs; otherwise `QuietConsumerConfig` throws
         consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);

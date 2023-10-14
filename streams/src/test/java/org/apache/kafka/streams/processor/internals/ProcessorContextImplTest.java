@@ -22,7 +22,7 @@ import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.StreamsConfig.InternalConfig;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
@@ -80,7 +80,7 @@ import static org.mockito.Mockito.when;
 public class ProcessorContextImplTest {
     private ProcessorContextImpl context;
 
-    private final StreamsConfig streamsConfig = streamsConfigMock();
+    private final InternalStreamsConfig streamsConfig = streamsConfigMock();
 
     @Mock
     private RecordCollector recordCollector;
@@ -734,19 +734,19 @@ public class ProcessorContextImplTest {
         return sessionStore;
     }
 
-    private StreamsConfig streamsConfigMock() {
-        final StreamsConfig streamsConfig = mock(StreamsConfig.class);
+    private InternalStreamsConfig streamsConfigMock() {
+        final InternalStreamsConfig streamsConfig = mock(InternalStreamsConfig.class);
         when(streamsConfig.originals()).thenReturn(Collections.emptyMap());
         when(streamsConfig.values()).thenReturn(Collections.emptyMap());
         when(streamsConfig.getString(StreamsConfig.APPLICATION_ID_CONFIG)).thenReturn("add-id");
         return streamsConfig;
     }
 
-    private StreamsConfig streamsConfigWithConsistencyMock() {
-        final StreamsConfig streamsConfig = mock(StreamsConfig.class);
+    private InternalStreamsConfig streamsConfigWithConsistencyMock() {
+        final InternalStreamsConfig streamsConfig = mock(InternalStreamsConfig.class);
 
         final Map<String, Object> myValues = new HashMap<>();
-        myValues.put(InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED, true);
+        myValues.put(InternalStreamsConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED, true);
         when(streamsConfig.originals()).thenReturn(myValues);
         when(streamsConfig.values()).thenReturn(Collections.emptyMap());
         when(streamsConfig.getString(StreamsConfig.APPLICATION_ID_CONFIG)).thenReturn("add-id");

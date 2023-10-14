@@ -35,8 +35,8 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager.StateStoreMetadata;
@@ -126,7 +126,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
     private final TopicPartition tp = new TopicPartition(topicName, 0);
     private final TopicPartition tp1 = new TopicPartition("one", 0);
     private final TopicPartition tp2 = new TopicPartition("two", 0);
-    private final StreamsConfig config = new StreamsConfig(StreamsTestUtils.getStreamsConfig("test-reader"));
+    private final InternalStreamsConfig config = new InternalStreamsConfig(StreamsTestUtils.getStreamsConfig("test-reader"));
     private final MockTime time = new MockTime();
     private final MockStateRestoreListener callback = new MockStateRestoreListener();
     private final KafkaException kaboom = new KafkaException("KABOOM!");
@@ -401,7 +401,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
 
     private void shouldPollWithRightTimeout(final boolean stateUpdaterEnabled) {
         final Properties properties = new Properties();
-        properties.put(InternalConfig.STATE_UPDATER_ENABLED, stateUpdaterEnabled);
+        properties.put(InternalStreamsConfig.STATE_UPDATER_ENABLED, stateUpdaterEnabled);
         shouldPollWithRightTimeout(properties);
     }
 
@@ -422,7 +422,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         consumer.updateBeginningOffsets(Collections.singletonMap(tp, 5L));
         adminClient.updateEndOffsets(Collections.singletonMap(tp, 11L));
 
-        final StreamsConfig config = new StreamsConfig(StreamsTestUtils.getStreamsConfig("test-reader", properties));
+        final InternalStreamsConfig config = new InternalStreamsConfig(StreamsTestUtils.getStreamsConfig("test-reader", properties));
 
         final StoreChangelogReader changelogReader =
                 new StoreChangelogReader(time, config, logContext, adminClient, consumer, callback);
@@ -437,8 +437,8 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         if (type == ACTIVE) {
             assertEquals(Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG)), consumer.lastPollTimeout());
         } else {
-            if (!properties.containsKey(InternalConfig.STATE_UPDATER_ENABLED)
-                    || (boolean) properties.get(InternalConfig.STATE_UPDATER_ENABLED)) {
+            if (!properties.containsKey(InternalStreamsConfig.STATE_UPDATER_ENABLED)
+                    || (boolean) properties.get(InternalStreamsConfig.STATE_UPDATER_ENABLED)) {
                 assertEquals(Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG)), consumer.lastPollTimeout());
             } else {
                 assertEquals(Duration.ZERO, consumer.lastPollTimeout());
@@ -967,7 +967,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
 
         final Properties properties = new Properties();
         properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
-        final StreamsConfig config = new StreamsConfig(StreamsTestUtils.getStreamsConfig("test-reader", properties));
+        final InternalStreamsConfig config = new InternalStreamsConfig(StreamsTestUtils.getStreamsConfig("test-reader", properties));
         final StoreChangelogReader changelogReader = new StoreChangelogReader(time, config, logContext, adminClient, consumer, callback);
         changelogReader.transitToUpdateStandby();
 
@@ -1015,7 +1015,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         final long now = time.milliseconds();
         final Properties properties = new Properties();
         properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
-        final StreamsConfig config = new StreamsConfig(StreamsTestUtils.getStreamsConfig("test-reader", properties));
+        final InternalStreamsConfig config = new InternalStreamsConfig(StreamsTestUtils.getStreamsConfig("test-reader", properties));
         final StoreChangelogReader changelogReader = new StoreChangelogReader(time, config, logContext, adminClient, consumer, callback);
         changelogReader.transitToUpdateStandby();
 

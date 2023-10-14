@@ -37,7 +37,7 @@ import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.StreamsConfig.InternalConfig;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalTopicManager;
 import org.apache.kafka.streams.processor.internals.Task;
@@ -690,13 +690,13 @@ public final class AssignmentTestUtils {
         }
 
         final ReferenceContainer referenceContainer = new ReferenceContainer();
-        configurationMap.put(InternalConfig.REFERENCE_CONTAINER_PARTITION_ASSIGNOR, referenceContainer);
+        configurationMap.put(InternalStreamsConfig.REFERENCE_CONTAINER_PARTITION_ASSIGNOR, referenceContainer);
         return configurationMap;
     }
 
     static InternalTopicManager mockInternalTopicManagerForRandomChangelog(final int nodeSize, final int tpSize, final int partitionSize) {
         final MockTime time = new MockTime();
-        final StreamsConfig streamsConfig = new StreamsConfig(configProps(true));
+        final InternalStreamsConfig streamsConfig = new InternalStreamsConfig(configProps(true));
         final MockClientSupplier mockClientSupplier = new MockClientSupplier();
         final MockInternalTopicManager mockInternalTopicManager = new MockInternalTopicManager(
             time,
@@ -871,7 +871,7 @@ public final class AssignmentTestUtils {
 
     static InternalTopicManager mockInternalTopicManagerForChangelog() {
         final MockTime time = new MockTime();
-        final StreamsConfig streamsConfig = new StreamsConfig(configProps(true));
+        final InternalStreamsConfig streamsConfig = new InternalStreamsConfig(configProps(true));
         final MockClientSupplier mockClientSupplier = new MockClientSupplier();
         final MockInternalTopicManager mockInternalTopicManager = new MockInternalTopicManager(
             time,

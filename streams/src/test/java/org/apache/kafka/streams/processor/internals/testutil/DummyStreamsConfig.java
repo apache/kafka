@@ -17,12 +17,13 @@
 package org.apache.kafka.streams.processor.internals.testutil;
 
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.internals.StreamsConfigUtils;
 import org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode;
 
 import java.util.Properties;
 
-public class DummyStreamsConfig extends StreamsConfig {
+public class DummyStreamsConfig extends InternalStreamsConfig {
 
 
     public DummyStreamsConfig() {

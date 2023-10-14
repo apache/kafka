@@ -24,6 +24,7 @@ import org.apache.kafka.common.errors.GroupSubscribedToTopicException;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyQueryMetadata;
@@ -36,6 +37,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.errors.UnknownStateStoreException;
 import org.apache.kafka.streams.errors.UnknownTopologyException;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
@@ -77,15 +79,15 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
      * An empty Kafka Streams application that allows NamedTopologies to be added at a later point
      */
     public KafkaStreamsNamedTopologyWrapper(final Properties props) {
-        this(new StreamsConfig(props), new DefaultKafkaClientSupplier());
+        this(new InternalStreamsConfig(props), new DefaultKafkaClientSupplier());
     }
 
     public KafkaStreamsNamedTopologyWrapper(final Properties props, final KafkaClientSupplier clientSupplier) {
-        this(new StreamsConfig(props), clientSupplier);
+        this(new InternalStreamsConfig(props), clientSupplier);
     }
 
-    private KafkaStreamsNamedTopologyWrapper(final StreamsConfig config, final KafkaClientSupplier clientSupplier) {
-        super(new TopologyMetadata(new ConcurrentSkipListMap<>(), config), config, clientSupplier);
+    private KafkaStreamsNamedTopologyWrapper(final InternalStreamsConfig config, final KafkaClientSupplier clientSupplier) {
+        super(new TopologyMetadata(new ConcurrentSkipListMap<>(), config), config, clientSupplier, Time.SYSTEM);
         final LogContext logContext = new LogContext(String.format("stream-client [%s] ", clientId));
         this.log = logContext.logger(getClass());
     }

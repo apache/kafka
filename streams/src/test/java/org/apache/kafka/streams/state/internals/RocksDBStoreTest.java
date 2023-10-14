@@ -42,9 +42,9 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ChangelogRecordDeserializationHelper;
@@ -142,7 +142,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
             dir,
             Serdes.String(),
             Serdes.String(),
-            new StreamsConfig(props)
+            new InternalStreamsConfig(props)
         );
         rocksDBStore = getRocksDBStore();
     }
@@ -179,7 +179,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
     private InternalMockProcessorContext getProcessorContext(final Properties streamsProps) {
         return new InternalMockProcessorContext(
             TestUtils.tempDirectory(),
-            new StreamsConfig(streamsProps)
+            new InternalStreamsConfig(streamsProps)
         );
     }
 
@@ -390,7 +390,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
             dir,
             Serdes.String(),
             Serdes.String(),
-            new StreamsConfig(props)
+            new InternalStreamsConfig(props)
         );
 
         rocksDBStore.init((StateStoreContext) context, rocksDBStore);
@@ -402,7 +402,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
     @Test
     public void shouldThrowProcessorStateExceptionOnOpeningReadOnlyDir() {
         final File tmpDir = TestUtils.tempDirectory();
-        final InternalMockProcessorContext tmpContext = new InternalMockProcessorContext(tmpDir, new StreamsConfig(StreamsTestUtils.getStreamsConfig()));
+        final InternalMockProcessorContext tmpContext = new InternalMockProcessorContext(tmpDir, new InternalStreamsConfig(StreamsTestUtils.getStreamsConfig()));
 
         assertTrue(tmpDir.setReadOnly());
 
@@ -873,7 +873,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         context = new InternalMockProcessorContext(dir,
             Serdes.String(),
             Serdes.String(),
-            new StreamsConfig(props));
+            new InternalStreamsConfig(props));
 
         enableBloomFilters = false;
         rocksDBStore.init((StateStoreContext) context, rocksDBStore);
@@ -923,7 +923,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         when(context.metrics()).thenReturn(streamsMetrics);
         when(context.taskId()).thenReturn(taskId);
         when(context.appConfigs())
-            .thenReturn(new StreamsConfig(StreamsTestUtils.getStreamsConfig()).originals());
+            .thenReturn(new InternalStreamsConfig(StreamsTestUtils.getStreamsConfig()).originals());
         when(context.stateDir()).thenReturn(dir);
         final MonotonicProcessorRecordContext processorRecordContext = new MonotonicProcessorRecordContext("test", 0);
         when(context.recordMetadata()).thenReturn(Optional.of(processorRecordContext));
@@ -956,7 +956,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         when(context.metrics()).thenReturn(streamsMetrics);
         when(context.taskId()).thenReturn(taskId);
         when(context.appConfigs())
-                .thenReturn(new StreamsConfig(StreamsTestUtils.getStreamsConfig()).originals());
+                .thenReturn(new InternalStreamsConfig(StreamsTestUtils.getStreamsConfig()).originals());
         when(context.stateDir()).thenReturn(dir);
         final MonotonicProcessorRecordContext processorRecordContext = new MonotonicProcessorRecordContext("test", 0);
         when(context.recordMetadata()).thenReturn(Optional.of(processorRecordContext));
@@ -988,7 +988,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         context = mock(InternalMockProcessorContext.class);
         when(context.metrics()).thenReturn(streamsMetrics);
         when(context.taskId()).thenReturn(taskId);
-        when(context.appConfigs()).thenReturn(new StreamsConfig(props).originals());
+        when(context.appConfigs()).thenReturn(new InternalStreamsConfig(props).originals());
         when(context.stateDir()).thenReturn(dir);
 
         rocksDBStore.init((StateStoreContext) context, rocksDBStore);
@@ -1078,13 +1078,13 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         final List<ConsumerRecord<byte[], byte[]>> entries = getChangelogRecords();
         final Properties props = StreamsTestUtils.getStreamsConfig();
         props.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, MockRocksDbConfigSetter.class);
-        props.put(InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED, true);
+        props.put(InternalStreamsConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED, true);
         dir = TestUtils.tempDirectory();
         context = new InternalMockProcessorContext<>(
                 dir,
                 Serdes.String(),
                 Serdes.String(),
-                new StreamsConfig(props)
+                new InternalStreamsConfig(props)
         );
         rocksDBStore.init((StateStoreContext) context, rocksDBStore);
         context.restoreWithHeaders(rocksDBStore.name(), entries);
@@ -1115,13 +1115,13 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         final List<ConsumerRecord<byte[], byte[]>> entries = getChangelogRecordsMultipleTopics();
         final Properties props = StreamsTestUtils.getStreamsConfig();
         props.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, MockRocksDbConfigSetter.class);
-        props.put(InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED, true);
+        props.put(InternalStreamsConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED, true);
         dir = TestUtils.tempDirectory();
         context = new InternalMockProcessorContext<>(
                 dir,
                 Serdes.String(),
                 Serdes.String(),
-                new StreamsConfig(props)
+                new InternalStreamsConfig(props)
         );
         rocksDBStore.init((StateStoreContext) context, rocksDBStore);
         context.restoreWithHeaders(rocksDBStore.name(), entries);
@@ -1154,13 +1154,13 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         final List<ConsumerRecord<byte[], byte[]>> entries = getChangelogRecordsWithTombstones();
         final Properties props = StreamsTestUtils.getStreamsConfig();
         props.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, MockRocksDbConfigSetter.class);
-        props.put(InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED, true);
+        props.put(InternalStreamsConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED, true);
         dir = TestUtils.tempDirectory();
         context = new InternalMockProcessorContext<>(
                 dir,
                 Serdes.String(),
                 Serdes.String(),
-                new StreamsConfig(props)
+                new InternalStreamsConfig(props)
         );
         rocksDBStore.init((StateStoreContext) context, rocksDBStore);
         context.restoreWithHeaders(rocksDBStore.name(), entries);
@@ -1178,13 +1178,13 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         final List<KeyValue<byte[], byte[]>> entries = getChangelogRecordsWithoutHeaders();
         final Properties props = StreamsTestUtils.getStreamsConfig();
         props.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, MockRocksDbConfigSetter.class);
-        props.put(InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED, true);
+        props.put(InternalStreamsConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED, true);
         dir = TestUtils.tempDirectory();
         context = new InternalMockProcessorContext<>(
                 dir,
                 Serdes.String(),
                 Serdes.String(),
-                new StreamsConfig(props)
+                new InternalStreamsConfig(props)
         );
         rocksDBStore.init((StateStoreContext) context, rocksDBStore);
         context.restore(rocksDBStore.name(), entries);

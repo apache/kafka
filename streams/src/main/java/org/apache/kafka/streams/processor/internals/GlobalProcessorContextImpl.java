@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
@@ -41,7 +42,7 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext<Object,
     private final GlobalStateManager stateManager;
     private final Time time;
 
-    public GlobalProcessorContextImpl(final StreamsConfig config,
+    public GlobalProcessorContextImpl(final InternalStreamsConfig config,
                                       final GlobalStateManager stateMgr,
                                       final StreamsMetricsImpl metrics,
                                       final ThreadCache cache,

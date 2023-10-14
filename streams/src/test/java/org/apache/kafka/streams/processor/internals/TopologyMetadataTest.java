@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.processor.internals.testutil.DummyStreamsConfig;
 import org.junit.Assert;
 import org.junit.Test;
@@ -30,7 +31,7 @@ public class TopologyMetadataTest {
     @Test
     public void testPauseResume() {
         final InternalTopologyBuilder internalTopologyBuilder = mock(InternalTopologyBuilder.class);
-        final StreamsConfig config = new DummyStreamsConfig();
+        final InternalStreamsConfig config = new DummyStreamsConfig();
 
         final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder,
             config);

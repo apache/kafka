@@ -47,6 +47,7 @@ import org.apache.kafka.streams.errors.StreamsNotStartedException;
 import org.apache.kafka.streams.errors.StreamsStoppedException;
 import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
 import org.apache.kafka.streams.errors.UnknownStateStoreException;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.internals.metrics.ClientMetrics;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
@@ -86,7 +87,6 @@ import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
@@ -160,7 +160,7 @@ public class KafkaStreams implements AutoCloseable {
     private final Logger log;
     protected final String clientId;
     private final Metrics metrics;
-    protected final StreamsConfig applicationConfigs;
+    protected final InternalStreamsConfig applicationConfigs;
     protected final List<StreamThread> threads;
     protected final StateDirectory stateDirectory;
     protected final StreamsMetadataState streamsMetadataState;
@@ -755,7 +755,7 @@ public class KafkaStreams implements AutoCloseable {
      */
     public KafkaStreams(final Topology topology,
                         final Properties props) {
-        this(topology, new StreamsConfig(props));
+        this(topology, new InternalStreamsConfig(props), null, Time.SYSTEM);
     }
 
     /**
@@ -773,7 +773,7 @@ public class KafkaStreams implements AutoCloseable {
     public KafkaStreams(final Topology topology,
                         final Properties props,
                         final KafkaClientSupplier clientSupplier) {
-        this(topology, new StreamsConfig(props), clientSupplier, Time.SYSTEM);
+        this(topology, new InternalStreamsConfig(props), clientSupplier, Time.SYSTEM);
     }
 
     /**
@@ -790,7 +790,7 @@ public class KafkaStreams implements AutoCloseable {
     public KafkaStreams(final Topology topology,
                         final Properties props,
                         final Time time) {
-        this(topology, new StreamsConfig(props), time);
+        this(topology, new InternalStreamsConfig(props), null, time);
     }
 
     /**
@@ -810,7 +810,7 @@ public class KafkaStreams implements AutoCloseable {
                         final Properties props,
                         final KafkaClientSupplier clientSupplier,
                         final Time time) {
-        this(topology, new StreamsConfig(props), clientSupplier, time);
+        this(topology, new InternalStreamsConfig(props), clientSupplier, time);
     }
 
     /**
@@ -825,7 +825,7 @@ public class KafkaStreams implements AutoCloseable {
      */
     public KafkaStreams(final Topology topology,
                         final StreamsConfig applicationConfigs) {
-        this(topology, applicationConfigs, applicationConfigs.getKafkaClientSupplier());
+        this(topology, new InternalStreamsConfig(applicationConfigs), null, Time.SYSTEM);
     }
 
     /**
@@ -843,7 +843,7 @@ public class KafkaStreams implements AutoCloseable {
     public KafkaStreams(final Topology topology,
                         final StreamsConfig applicationConfigs,
                         final KafkaClientSupplier clientSupplier) {
-        this(new TopologyMetadata(topology.internalTopologyBuilder, applicationConfigs), applicationConfigs, clientSupplier);
+        this(topology, new InternalStreamsConfig(applicationConfigs), clientSupplier, Time.SYSTEM);
     }
 
     /**
@@ -860,32 +860,37 @@ public class KafkaStreams implements AutoCloseable {
     public KafkaStreams(final Topology topology,
                         final StreamsConfig applicationConfigs,
                         final Time time) {
-        this(new TopologyMetadata(topology.internalTopologyBuilder, applicationConfigs), applicationConfigs, applicationConfigs.getKafkaClientSupplier(), time);
+        this(topology, new InternalStreamsConfig(applicationConfigs), null, time);
     }
 
     private KafkaStreams(final Topology topology,
-                         final StreamsConfig applicationConfigs,
+                         final InternalStreamsConfig applicationConfigs,
                          final KafkaClientSupplier clientSupplier,
                          final Time time) throws StreamsException {
-        this(new TopologyMetadata(topology.internalTopologyBuilder, applicationConfigs), applicationConfigs, clientSupplier, time);
-    }
-
-    protected KafkaStreams(final TopologyMetadata topologyMetadata,
-                           final StreamsConfig applicationConfigs,
-                           final KafkaClientSupplier clientSupplier) throws StreamsException {
-        this(topologyMetadata, applicationConfigs, clientSupplier, Time.SYSTEM);
+        this(
+            new TopologyMetadata(
+                topology.internalTopologyBuilder,
+                applicationConfigs
+            ),
+            applicationConfigs,
+            clientSupplier,
+            time
+        );
     }
 
     @SuppressWarnings("this-escape")
-    private KafkaStreams(final TopologyMetadata topologyMetadata,
-                         final StreamsConfig applicationConfigs,
-                         final KafkaClientSupplier clientSupplier,
-                         final Time time) throws StreamsException {
-        this.applicationConfigs = applicationConfigs;
-        this.time = time;
-
+    protected KafkaStreams(final TopologyMetadata topologyMetadata,
+                           final InternalStreamsConfig applicationConfigs,
+                           final KafkaClientSupplier userClientSupplier,
+                           final Time time) throws StreamsException {
         this.topologyMetadata = topologyMetadata;
         this.topologyMetadata.buildAndRewriteTopology();
+        this.applicationConfigs = applicationConfigs;
+        clientSupplier = Objects.requireNonNull(
+            userClientSupplier != null ? userClientSupplier : applicationConfigs.kafkaClientSupplier(),
+            "Cannot instantiate KafkaStreams client; no KafkaClientSupplier provided"
+        );
+        this.time = time;
 
         final boolean hasGlobalTopology = topologyMetadata.hasGlobalTopology();
 
@@ -909,8 +914,7 @@ public class KafkaStreams implements AutoCloseable {
         topologyMetadata.setLog(logContext);
 
         // use client id instead of thread client id since this admin client may be shared among threads
-        this.clientSupplier = clientSupplier;
-        adminClient = clientSupplier.getAdmin(applicationConfigs.getAdminConfigs(ClientUtils.getSharedAdminClientId(clientId)));
+        adminClient = clientSupplier.getAdmin(applicationConfigs.adminConfigs(ClientUtils.getSharedAdminClientId(clientId)));
 
         log.info("Kafka Streams version: {}", ClientMetrics.version());
         log.info("Kafka Streams commit ID: {}", ClientMetrics.commitId());
@@ -951,7 +955,7 @@ public class KafkaStreams implements AutoCloseable {
             globalStreamThread = new GlobalStreamThread(
                 topologyMetadata.globalTaskTopology(),
                 applicationConfigs,
-                clientSupplier.getGlobalConsumer(applicationConfigs.getGlobalConsumerConfigs(clientId)),
+                clientSupplier.getGlobalConsumer(applicationConfigs.globalConsumerConfigs(clientId)),
                 stateDirectory,
                 cacheSizePerThread,
                 streamsMetrics,
@@ -1006,7 +1010,7 @@ public class KafkaStreams implements AutoCloseable {
         return streamThread;
     }
 
-    static Metrics getMetrics(final StreamsConfig config, final Time time, final String clientId) {
+    static Metrics getMetrics(final InternalStreamsConfig config, final Time time, final String clientId) {
         final MetricConfig metricConfig = new MetricConfig()
             .samples(config.getInt(StreamsConfig.METRICS_NUM_SAMPLES_CONFIG))
             .recordLevel(Sensor.RecordingLevel.forName(config.getString(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG)))
@@ -1262,7 +1266,7 @@ public class KafkaStreams implements AutoCloseable {
     }
 
     private static ScheduledExecutorService maybeCreateRocksDBMetricsRecordingService(final String clientId,
-                                                                                      final StreamsConfig config) {
+                                                                                      final InternalStreamsConfig config) {
         if (RecordingLevel.forName(config.getString(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG)) == RecordingLevel.DEBUG) {
             return Executors.newSingleThreadScheduledExecutor(r -> {
                 final Thread thread = new Thread(r, clientId + "-RocksDBMetricsRecordingTrigger");

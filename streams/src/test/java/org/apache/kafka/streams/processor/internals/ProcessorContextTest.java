@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
@@ -39,7 +40,7 @@ public class ProcessorContextTest {
 
     @Before
     public void prepare() {
-        final StreamsConfig streamsConfig = mock(StreamsConfig.class);
+        final InternalStreamsConfig streamsConfig = mock(InternalStreamsConfig.class);
         doReturn("add-id").when(streamsConfig).getString(StreamsConfig.APPLICATION_ID_CONFIG);
         doReturn(Serdes.ByteArray()).when(streamsConfig).defaultValueSerde();
         doReturn(Serdes.ByteArray()).when(streamsConfig).defaultKeySerde();

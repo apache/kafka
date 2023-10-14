@@ -27,7 +27,7 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.StreamsConfig.InternalConfig;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
@@ -73,7 +73,7 @@ public class ChangeLoggingKeyValueBytesStoreTest {
     private final InMemoryKeyValueStore inner = new InMemoryKeyValueStore("kv");
     private final ChangeLoggingKeyValueBytesStore store = new ChangeLoggingKeyValueBytesStore(inner);
     private InternalMockProcessorContext context;
-    private final StreamsConfig streamsConfig = streamsConfigMock();
+    private final InternalStreamsConfig streamsConfig = streamsConfigMock();
     private final Bytes hi = Bytes.wrap("hi".getBytes());
     private final Bytes hello = Bytes.wrap("hello".getBytes());
     private final byte[] there = "there".getBytes();
@@ -271,11 +271,11 @@ public class ChangeLoggingKeyValueBytesStoreTest {
 
     }
 
-    private StreamsConfig streamsConfigMock() {
-        final StreamsConfig streamsConfig = mock(StreamsConfig.class);
+    private InternalStreamsConfig streamsConfigMock() {
+        final InternalStreamsConfig streamsConfig = mock(InternalStreamsConfig.class);
 
         final Map<String, Object> myValues = new HashMap<>();
-        myValues.put(InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED, true);
+        myValues.put(InternalStreamsConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED, true);
         when(streamsConfig.originals()).thenReturn(myValues);
         when(streamsConfig.values()).thenReturn(Collections.emptyMap());
         when(streamsConfig.getString(StreamsConfig.APPLICATION_ID_CONFIG)).thenReturn("add-id");

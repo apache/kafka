@@ -27,6 +27,7 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.CommitCallback;
 import org.apache.kafka.streams.processor.PunctuationType;
@@ -63,7 +64,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.kafka.streams.StreamsConfig.InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED;
+import static org.apache.kafka.streams.internals.InternalStreamsConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED;
 import static org.apache.kafka.streams.processor.internals.StateRestoreCallbackAdapter.adapt;
 
 public class InternalMockProcessorContext<KOut, VOut>
@@ -90,7 +91,7 @@ public class InternalMockProcessorContext<KOut, VOut>
             null,
             null,
             new StreamsMetricsImpl(new Metrics(), "mock", StreamsConfig.METRICS_LATEST, new MockTime()),
-            new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
+            new InternalStreamsConfig(StreamsTestUtils.getStreamsConfig()),
             null,
             null,
             Time.SYSTEM
@@ -98,7 +99,7 @@ public class InternalMockProcessorContext<KOut, VOut>
     }
 
     public InternalMockProcessorContext(final File stateDir,
-                                        final StreamsConfig config) {
+                                        final InternalStreamsConfig config) {
         this(
             stateDir,
             null,
@@ -122,7 +123,7 @@ public class InternalMockProcessorContext<KOut, VOut>
             null,
             null,
             streamsMetrics,
-            new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
+            new InternalStreamsConfig(StreamsTestUtils.getStreamsConfig()),
             null,
             null,
             Time.SYSTEM
@@ -130,7 +131,7 @@ public class InternalMockProcessorContext<KOut, VOut>
     }
 
     public InternalMockProcessorContext(final File stateDir,
-                                        final StreamsConfig config,
+                                        final InternalStreamsConfig config,
                                         final RecordCollector collector) {
         this(
             stateDir,
@@ -152,7 +153,7 @@ public class InternalMockProcessorContext<KOut, VOut>
     public InternalMockProcessorContext(final File stateDir,
                                         final Serde<?> keySerde,
                                         final Serde<?> valueSerde,
-                                        final StreamsConfig config) {
+                                        final InternalStreamsConfig config) {
         this(
             stateDir,
             keySerde,
@@ -178,7 +179,7 @@ public class InternalMockProcessorContext<KOut, VOut>
             serdes.keySerde(),
             serdes.valueSerde(),
             new StreamsMetricsImpl(metrics, "mock", StreamsConfig.METRICS_LATEST, new MockTime()),
-            new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
+            new InternalStreamsConfig(StreamsTestUtils.getStreamsConfig()),
             () -> collector,
             null,
             Time.SYSTEM
@@ -195,7 +196,7 @@ public class InternalMockProcessorContext<KOut, VOut>
             keySerde,
             valueSerde,
             new StreamsMetricsImpl(new Metrics(), "mock", StreamsConfig.METRICS_LATEST, new MockTime()),
-            new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
+            new InternalStreamsConfig(StreamsTestUtils.getStreamsConfig()),
             () -> collector,
             cache,
             Time.SYSTEM
@@ -206,7 +207,7 @@ public class InternalMockProcessorContext<KOut, VOut>
                                         final Serde<?> keySerde,
                                         final Serde<?> valueSerde,
                                         final StreamsMetricsImpl metrics,
-                                        final StreamsConfig config,
+                                        final InternalStreamsConfig config,
                                         final RecordCollector.Supplier collectorSupplier,
                                         final ThreadCache cache,
                                         final Time time) {
@@ -218,7 +219,7 @@ public class InternalMockProcessorContext<KOut, VOut>
                                         final Serde<?> keySerde,
                                         final Serde<?> valueSerde,
                                         final StreamsMetricsImpl metrics,
-                                        final StreamsConfig config,
+                                        final InternalStreamsConfig config,
                                         final RecordCollector.Supplier collectorSupplier,
                                         final ThreadCache cache,
                                         final Time time,
@@ -235,7 +236,7 @@ public class InternalMockProcessorContext<KOut, VOut>
         this.valueSerde = valueSerde;
         this.recordCollectorSupplier = collectorSupplier;
         this.time = time;
-        consistencyEnabled = StreamsConfig.InternalConfig.getBoolean(
+        consistencyEnabled = InternalStreamsConfig.getBoolean(
                 appConfigs(),
                 IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
                 false);

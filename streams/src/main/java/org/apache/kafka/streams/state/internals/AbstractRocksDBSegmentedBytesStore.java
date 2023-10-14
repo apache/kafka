@@ -20,8 +20,8 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
@@ -44,7 +44,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.kafka.streams.StreamsConfig.InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED;
+import static org.apache.kafka.streams.internals.InternalStreamsConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED;
 
 public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements SegmentedBytesStore {
     private static final Logger LOG = LoggerFactory.getLogger(AbstractRocksDBSegmentedBytesStore.class);
@@ -322,7 +322,7 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
 
         open = true;
 
-        consistencyEnabled = StreamsConfig.InternalConfig.getBoolean(
+        consistencyEnabled = InternalStreamsConfig.getBoolean(
                 context.appConfigs(),
                 IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
                 false);

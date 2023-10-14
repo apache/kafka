@@ -104,6 +104,7 @@ import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
 import org.apache.kafka.test.MockClientSupplier;
@@ -120,7 +121,7 @@ import org.mockito.Mockito;
 public class RackAwareTaskAssignorTest {
 
     private final MockTime time = new MockTime();
-    private final StreamsConfig streamsConfig = new StreamsConfig(configProps(true));
+    private final InternalStreamsConfig streamsConfig = new InternalStreamsConfig(configProps(true));
     private final MockClientSupplier mockClientSupplier = new MockClientSupplier();
 
     private int trafficCost;
@@ -157,17 +158,17 @@ public class RackAwareTaskAssignorTest {
 
     private AssignmentConfigs getRackAwareEnabledConfig() {
         return new AssignorConfiguration(
-            new StreamsConfig(configProps(true)).originals()).assignmentConfigs();
+            new InternalStreamsConfig(configProps(true)).originals()).assignmentConfigs();
     }
 
     private AssignmentConfigs getRackAwareEnabledConfigWithStandby(final int replicaNum) {
         return new AssignorConfiguration(
-            new StreamsConfig(configProps(true, replicaNum)).originals()).assignmentConfigs();
+            new InternalStreamsConfig(configProps(true, replicaNum)).originals()).assignmentConfigs();
     }
 
     private AssignmentConfigs getRackAwareDisabledConfig() {
         return new AssignorConfiguration(
-            new StreamsConfig(configProps(false)).originals()).assignmentConfigs();
+            new InternalStreamsConfig(configProps(false)).originals()).assignmentConfigs();
     }
 
     @Test

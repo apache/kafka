@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import static org.apache.kafka.streams.StreamsConfig.InternalConfig.EMIT_INTERVAL_MS_KSTREAMS_WINDOWED_AGGREGATION;
+import static org.apache.kafka.streams.internals.InternalStreamsConfig.EMIT_INTERVAL_MS_KSTREAMS_WINDOWED_AGGREGATION;
 import static org.apache.kafka.streams.processor.internals.metrics.ProcessorNodeMetrics.emitFinalLatencySensor;
 import static org.apache.kafka.streams.processor.internals.metrics.ProcessorNodeMetrics.emittedRecordsSensor;
 import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensor;
@@ -25,7 +25,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.kstream.EmitStrategy;
 import org.apache.kafka.streams.kstream.EmitStrategy.StrategyType;
 import org.apache.kafka.streams.kstream.Window;
@@ -85,7 +85,7 @@ public abstract class AbstractKStreamTimeWindowAggregateProcessor<KIn, VIn, VAgg
             if (lastEmitWindowCloseTime != null) {
                 this.lastEmitWindowCloseTime = lastEmitWindowCloseTime;
             }
-            final long emitInterval = StreamsConfig.InternalConfig.getLong(
+            final long emitInterval = InternalStreamsConfig.getLong(
                 context.appConfigs(),
                 EMIT_INTERVAL_MS_KSTREAMS_WINDOWED_AGGREGATION,
                 1000L

@@ -25,6 +25,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
 import org.apache.kafka.streams.processor.internals.assignment.ReferenceContainer;
@@ -122,7 +123,7 @@ public class RackAwarenessStreamsPartitionAssignorTest {
 
     private TaskManager taskManager;
     private Admin adminClient;
-    private StreamsConfig streamsConfig = new StreamsConfig(configProps());
+    private InternalStreamsConfig streamsConfig = new InternalStreamsConfig(configProps());
     private final InternalTopologyBuilder builder = new InternalTopologyBuilder();
     private TopologyMetadata topologyMetadata = new TopologyMetadata(builder, streamsConfig);
     private final StreamsMetadataState streamsMetadataState = mock(StreamsMetadataState.class);
@@ -140,7 +141,7 @@ public class RackAwarenessStreamsPartitionAssignorTest {
         referenceContainer.taskManager = taskManager;
         referenceContainer.streamsMetadataState = streamsMetadataState;
         referenceContainer.time = time;
-        configurationMap.put(StreamsConfig.InternalConfig.REFERENCE_CONTAINER_PARTITION_ASSIGNOR, referenceContainer);
+        configurationMap.put(InternalStreamsConfig.REFERENCE_CONTAINER_PARTITION_ASSIGNOR, referenceContainer);
         configurationMap.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, String.join(",", ALL_TAG_KEYS));
         ALL_TAG_KEYS.forEach(key -> configurationMap.put(StreamsConfig.clientTagPrefix(key), "dummy"));
         return configurationMap;
@@ -151,7 +152,7 @@ public class RackAwarenessStreamsPartitionAssignorTest {
         final Map<String, Object> configMap = configProps();
         configMap.putAll(props);
 
-        streamsConfig = new StreamsConfig(configMap);
+        streamsConfig = new InternalStreamsConfig(configMap);
         topologyMetadata = new TopologyMetadata(builder, streamsConfig);
         partitionAssignor.configure(configMap);
 

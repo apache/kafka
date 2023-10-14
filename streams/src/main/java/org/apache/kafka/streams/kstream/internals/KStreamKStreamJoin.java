@@ -18,6 +18,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.kstream.ValueJoinerWithKey;
 import org.apache.kafka.streams.kstream.internals.KStreamImplJoin.TimeTracker;
 import org.apache.kafka.streams.kstream.internals.KStreamImplJoin.TimeTrackerSupplier;
@@ -34,13 +35,12 @@ import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.streams.state.internals.TimestampedKeyAndJoinSide;
 import org.apache.kafka.streams.state.internals.LeftOrRightValue;
-import org.apache.kafka.streams.StreamsConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Optional;
 
-import static org.apache.kafka.streams.StreamsConfig.InternalConfig.EMIT_INTERVAL_MS_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX;
+import static org.apache.kafka.streams.internals.InternalStreamsConfig.EMIT_INTERVAL_MS_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX;
 import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensor;
 
 class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K, VOut> {
@@ -112,7 +112,7 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
                 outerJoinStore = outerJoinWindowName.map(context::getStateStore);
 
                 sharedTimeTracker.setEmitInterval(
-                    StreamsConfig.InternalConfig.getLong(
+                    InternalStreamsConfig.getLong(
                         context.appConfigs(),
                         EMIT_INTERVAL_MS_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX,
                         1000L

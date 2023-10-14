@@ -24,6 +24,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.internals.ApiUtils;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TimestampExtractor;
@@ -396,7 +397,7 @@ public class InternalTopologyBuilder {
         return this;
     }
 
-    public synchronized final void setStreamsConfig(final StreamsConfig applicationConfig) {
+    public synchronized final void setStreamsConfig(final InternalStreamsConfig applicationConfig) {
         Objects.requireNonNull(applicationConfig, "config can't be null");
         topologyConfigs = new TopologyConfig(applicationConfig);
     }
@@ -417,7 +418,7 @@ public class InternalTopologyBuilder {
         return namedTopology;
     }
 
-    public synchronized final InternalTopologyBuilder rewriteTopology(final StreamsConfig config) {
+    public synchronized final InternalTopologyBuilder rewriteTopology(final InternalStreamsConfig config) {
         Objects.requireNonNull(config, "config can't be null");
 
         setApplicationId(config.getString(StreamsConfig.APPLICATION_ID_CONFIG));

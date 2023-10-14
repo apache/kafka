@@ -26,6 +26,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.DefaultProductionExceptionHandler;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
@@ -213,7 +214,7 @@ public class KeyValueStoreTestDriver<K, V> {
             logContext,
             new TaskId(0, 0),
             new StreamsProducer(
-                new StreamsConfig(props),
+                new InternalStreamsConfig(props),
                 "threadId",
                 new MockClientSupplier(),
                 null,
@@ -276,12 +277,12 @@ public class KeyValueStoreTestDriver<K, V> {
 
             @Override
             public Map<String, Object> appConfigs() {
-                return new StreamsConfig(props).originals();
+                return new InternalStreamsConfig(props).originals();
             }
 
             @Override
             public Map<String, Object> appConfigsWithPrefix(final String prefix) {
-                return new StreamsConfig(props).originalsWithPrefix(prefix);
+                return new InternalStreamsConfig(props).originalsWithPrefix(prefix);
             }
         };
     }

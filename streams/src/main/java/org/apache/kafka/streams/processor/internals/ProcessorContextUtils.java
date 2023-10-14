@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
@@ -74,9 +74,9 @@ public final class ProcessorContextUtils {
         if (configs == null) {
             return applicationId;
         } else {
-            return StreamsConfig.InternalConfig.getString(
+            return InternalStreamsConfig.getString(
                 configs,
-                StreamsConfig.InternalConfig.TOPIC_PREFIX_ALTERNATIVE,
+                InternalStreamsConfig.TOPIC_PREFIX_ALTERNATIVE,
                 applicationId
             );
         }

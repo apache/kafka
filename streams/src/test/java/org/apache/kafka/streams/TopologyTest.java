@@ -20,6 +20,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TopologyException;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
@@ -2307,7 +2308,7 @@ public class TopologyTest {
         final Properties topologyOverrides = new Properties();
         // change default store as in-memory
         topologyOverrides.put(StreamsConfig.DEFAULT_DSL_STORE_CONFIG, defaultStore);
-        final StreamsConfig config = new StreamsConfig(StreamsTestUtils.getStreamsConfig());
+        final InternalStreamsConfig config = new InternalStreamsConfig(StreamsTestUtils.getStreamsConfig());
 
         return new TopologyConfig(
             "my-topology",

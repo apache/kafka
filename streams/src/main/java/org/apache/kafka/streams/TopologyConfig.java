@@ -21,6 +21,7 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.internals.StreamsConfigUtils;
 import org.apache.kafka.streams.processor.TimestampExtractor;
@@ -110,7 +111,7 @@ public class TopologyConfig extends AbstractConfig {
     public final String topologyName;
     public final boolean eosEnabled;
 
-    public final StreamsConfig applicationConfigs;
+    public final InternalStreamsConfig applicationConfigs;
     public final Properties topologyOverrides;
 
     public final int maxBufferedSize;
@@ -121,12 +122,12 @@ public class TopologyConfig extends AbstractConfig {
     public final Supplier<TimestampExtractor> timestampExtractorSupplier;
     public final Supplier<DeserializationExceptionHandler> deserializationExceptionHandlerSupplier;
 
-    public TopologyConfig(final StreamsConfig globalAppConfigs) {
+    public TopologyConfig(final InternalStreamsConfig globalAppConfigs) {
         this(null, globalAppConfigs, new Properties());
     }
 
     @SuppressWarnings("this-escape")
-    public TopologyConfig(final String topologyName, final StreamsConfig globalAppConfigs, final Properties topologyOverrides) {
+    public TopologyConfig(final String topologyName, final InternalStreamsConfig globalAppConfigs, final Properties topologyOverrides) {
         super(CONFIG, topologyOverrides, false);
 
         this.topologyName = topologyName;

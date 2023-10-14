@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams;
 
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.test.StreamsTestUtils;
 
@@ -26,14 +27,14 @@ import org.apache.kafka.test.StreamsTestUtils;
 public class TopologyWrapper extends Topology {
 
     static public InternalTopologyBuilder getInternalTopologyBuilder(final Topology topology) {
-        return topology.internalTopologyBuilder.rewriteTopology(new StreamsConfig(StreamsTestUtils.getStreamsConfig()));
+        return topology.internalTopologyBuilder.rewriteTopology(new InternalStreamsConfig(StreamsTestUtils.getStreamsConfig()));
     }
 
     public InternalTopologyBuilder getInternalBuilder() {
-        return internalTopologyBuilder.rewriteTopology(new StreamsConfig(StreamsTestUtils.getStreamsConfig()));
+        return internalTopologyBuilder.rewriteTopology(new InternalStreamsConfig(StreamsTestUtils.getStreamsConfig()));
     }
 
     public InternalTopologyBuilder getInternalBuilder(final String applicationId) {
-        return internalTopologyBuilder.rewriteTopology(new StreamsConfig(StreamsTestUtils.getStreamsConfig(applicationId)));
+        return internalTopologyBuilder.rewriteTopology(new InternalStreamsConfig(StreamsTestUtils.getStreamsConfig(applicationId)));
     }
 }

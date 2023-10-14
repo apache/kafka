@@ -26,6 +26,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.processor.CommitCallback;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
@@ -136,7 +137,7 @@ public class ProcessorStateManagerTest {
     public void setup() {
         baseDir = TestUtils.tempDirectory();
 
-        stateDirectory = new StateDirectory(new StreamsConfig(new Properties() {
+        stateDirectory = new StateDirectory(new InternalStreamsConfig(new Properties() {
             {
                 put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
                 put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");

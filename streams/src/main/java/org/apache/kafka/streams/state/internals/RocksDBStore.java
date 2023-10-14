@@ -25,6 +25,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
@@ -74,7 +75,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
-import static org.apache.kafka.streams.StreamsConfig.InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED;
+import static org.apache.kafka.streams.internals.InternalStreamsConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED;
 import static org.apache.kafka.streams.StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.getMetricsImpl;
 
@@ -177,7 +178,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
             (RecordBatchingStateRestoreCallback) this::restoreBatch,
             () -> StoreQueryUtils.checkpointPosition(positionCheckpoint, position)
         );
-        consistencyEnabled = StreamsConfig.InternalConfig.getBoolean(
+        consistencyEnabled = InternalStreamsConfig.getBoolean(
             context.appConfigs(),
             IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
             false);

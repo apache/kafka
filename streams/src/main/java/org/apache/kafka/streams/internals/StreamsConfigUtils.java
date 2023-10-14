@@ -40,7 +40,7 @@ public class StreamsConfigUtils {
             this.name = name;
         }
     }
-    
+
     @SuppressWarnings("deprecation")
     public static ProcessingMode processingMode(final StreamsConfig config) {
         if (StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG))) {
@@ -75,7 +75,7 @@ public class StreamsConfigUtils {
     }
 
     @SuppressWarnings("deprecation")
-    public static long getTotalCacheSize(final StreamsConfig config) {
+    public static long getTotalCacheSize(final InternalStreamsConfig config) {
         // both deprecated and new config set. Warn and use the new one.
         if (config.originals().containsKey(CACHE_MAX_BYTES_BUFFERING_CONFIG) && config.originals().containsKey(STATESTORE_CACHE_MAX_BYTES_CONFIG)) {
             if (!config.getLong(CACHE_MAX_BYTES_BUFFERING_CONFIG).equals(config.getLong(STATESTORE_CACHE_MAX_BYTES_CONFIG))) {

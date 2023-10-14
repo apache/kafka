@@ -36,12 +36,12 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.TaskMetadata;
 import org.apache.kafka.streams.ThreadMetadata;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.internals.metrics.ClientMetrics;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.TaskId;
@@ -333,7 +333,7 @@ public class StreamThread extends Thread {
     private final boolean stateUpdaterEnabled;
 
     public static StreamThread create(final TopologyMetadata topologyMetadata,
-                                      final StreamsConfig config,
+                                      final InternalStreamsConfig config,
                                       final KafkaClientSupplier clientSupplier,
                                       final Admin adminClient,
                                       final UUID processId,
@@ -357,10 +357,10 @@ public class StreamThread extends Thread {
         referenceContainer.adminClient = adminClient;
         referenceContainer.streamsMetadataState = streamsMetadataState;
         referenceContainer.time = time;
-        referenceContainer.clientTags = config.getClientTags();
+        referenceContainer.clientTags = config.clientTags();
 
         log.info("Creating restore consumer client");
-        final Map<String, Object> restoreConsumerConfigs = config.getRestoreConsumerConfigs(getRestoreConsumerClientId(threadId));
+        final Map<String, Object> restoreConsumerConfigs = config.restoreConsumerConfigs(getRestoreConsumerClientId(threadId));
         final Consumer<byte[], byte[]> restoreConsumer = clientSupplier.getRestoreConsumer(restoreConsumerConfigs);
 
         final StoreChangelogReader changelogReader = new StoreChangelogReader(
@@ -374,7 +374,7 @@ public class StreamThread extends Thread {
 
         final ThreadCache cache = new ThreadCache(logContext, cacheSizeBytes, streamsMetrics);
 
-        final boolean stateUpdaterEnabled = InternalConfig.getStateUpdaterEnabled(config.originals());
+        final boolean stateUpdaterEnabled = InternalStreamsConfig.stateUpdaterEnabled(config.originals());
         final ActiveTaskCreator activeTaskCreator = new ActiveTaskCreator(
             topologyMetadata,
             config,
@@ -415,8 +415,8 @@ public class StreamThread extends Thread {
 
         log.info("Creating consumer client");
         final String applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
-        final Map<String, Object> consumerConfigs = config.getMainConsumerConfigs(applicationId, getConsumerClientId(threadId), threadIdx);
-        consumerConfigs.put(StreamsConfig.InternalConfig.REFERENCE_CONTAINER_PARTITION_ASSIGNOR, referenceContainer);
+        final Map<String, Object> consumerConfigs = config.mainConsumerConfigs(applicationId, getConsumerClientId(threadId), threadIdx);
+        consumerConfigs.put(InternalStreamsConfig.REFERENCE_CONTAINER_PARTITION_ASSIGNOR, referenceContainer);
 
         final String originalReset = (String) consumerConfigs.get(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG);
         // If there are any overrides, we never fall through to the consumer, but only handle offset management ourselves.
@@ -454,7 +454,7 @@ public class StreamThread extends Thread {
 
     private static StateUpdater maybeCreateAndStartStateUpdater(final boolean stateUpdaterEnabled,
                                                                 final StreamsMetricsImpl streamsMetrics,
-                                                                final StreamsConfig streamsConfig,
+                                                                final InternalStreamsConfig streamsConfig,
                                                                 final ChangelogReader changelogReader,
                                                                 final TopologyMetadata topologyMetadata,
                                                                 final Time time,
@@ -472,7 +472,7 @@ public class StreamThread extends Thread {
 
     @SuppressWarnings("this-escape")
     public StreamThread(final Time time,
-                        final StreamsConfig config,
+                        final InternalStreamsConfig config,
                         final Admin adminClient,
                         final Consumer<byte[], byte[]> mainConsumer,
                         final Consumer<byte[], byte[]> restoreConsumer,
@@ -550,14 +550,14 @@ public class StreamThread extends Thread {
 
         this.pollTime = Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG));
         final int dummyThreadIdx = 1;
-        this.maxPollTimeMs = new InternalConsumerConfig(config.getMainConsumerConfigs("dummyGroupId", "dummyClientId", dummyThreadIdx))
+        this.maxPollTimeMs = new InternalConsumerConfig(config.mainConsumerConfigs("dummyGroupId", "dummyClientId", dummyThreadIdx))
             .getInt(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG);
         this.commitTimeMs = config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG);
         this.purgeTimeMs = config.getLong(StreamsConfig.REPARTITION_PURGE_INTERVAL_MS_CONFIG);
 
         this.numIterations = 1;
         this.eosEnabled = eosEnabled(config);
-        this.stateUpdaterEnabled = InternalConfig.getStateUpdaterEnabled(config.originals());
+        this.stateUpdaterEnabled = InternalStreamsConfig.stateUpdaterEnabled(config.originals());
     }
 
     private static final class InternalConsumerConfig extends ConsumerConfig {

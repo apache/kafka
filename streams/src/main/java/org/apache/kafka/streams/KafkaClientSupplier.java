@@ -43,8 +43,7 @@ public interface KafkaClientSupplier {
     /**
      * Create a {@link Producer} which is used to write records to sink topics.
      *
-     * @param config {@link StreamsConfig#getProducerConfigs(String) producer config} which is supplied by the
-     *               {@link java.util.Properties} given to the {@link KafkaStreams} instance
+     * @param config Supplied by the {@link java.util.Properties} given to the {@link KafkaStreams}
      * @return an instance of Kafka producer
      */
     Producer<byte[], byte[]> getProducer(final Map<String, Object> config);
@@ -52,8 +51,7 @@ public interface KafkaClientSupplier {
     /**
      * Create a {@link Consumer} which is used to read records of source topics.
      *
-     * @param config {@link StreamsConfig#getMainConsumerConfigs(String, String, int) consumer config} which is
-     *               supplied by the {@link java.util.Properties} given to the {@link KafkaStreams} instance
+     * @param config Supplied by the {@link java.util.Properties} given to the {@link KafkaStreams}
      * @return an instance of Kafka consumer
      */
     Consumer<byte[], byte[]> getConsumer(final Map<String, Object> config);
@@ -61,8 +59,7 @@ public interface KafkaClientSupplier {
     /**
      * Create a {@link Consumer} which is used to read records to restore {@link StateStore}s.
      *
-     * @param config {@link StreamsConfig#getRestoreConsumerConfigs(String) restore consumer config} which is supplied
-     *               by the {@link java.util.Properties} given to the {@link KafkaStreams}
+     * @param config Supplied by the {@link java.util.Properties} given to the {@link KafkaStreams}
      * @return an instance of Kafka consumer
      */
     Consumer<byte[], byte[]> getRestoreConsumer(final Map<String, Object> config);
@@ -70,8 +67,7 @@ public interface KafkaClientSupplier {
     /**
      * Create a {@link Consumer} which is used to consume records for {@link GlobalKTable}.
      *
-     * @param config {@link StreamsConfig#getGlobalConsumerConfigs(String) global consumer config} which is supplied
-     *               by the {@link java.util.Properties} given to the {@link KafkaStreams}
+     * @param config Supplied by the {@link java.util.Properties} given to the {@link KafkaStreams}
      * @return an instance of Kafka consumer
      */
     Consumer<byte[], byte[]> getGlobalConsumer(final Map<String, Object> config);

@@ -44,6 +44,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.processor.internals.ClientUtils.QuietConsumerConfig;
 import org.slf4j.Logger;
 
@@ -84,7 +85,7 @@ public class InternalTopicManager {
 
     public InternalTopicManager(final Time time,
                                 final Admin adminClient,
-                                final StreamsConfig streamsConfig) {
+                                final InternalStreamsConfig streamsConfig) {
         this.time = time;
         this.adminClient = adminClient;
 
@@ -94,7 +95,7 @@ public class InternalTopicManager {
         replicationFactor = streamsConfig.getInt(StreamsConfig.REPLICATION_FACTOR_CONFIG).shortValue();
         windowChangeLogAdditionalRetention = streamsConfig.getLong(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG);
         retryBackOffMs = streamsConfig.getLong(StreamsConfig.RETRY_BACKOFF_MS_CONFIG);
-        final Map<String, Object> consumerConfig = streamsConfig.getMainConsumerConfigs("dummy", "dummy", -1);
+        final Map<String, Object> consumerConfig = streamsConfig.mainConsumerConfigs("dummy", "dummy", -1);
         // need to add mandatory configs; otherwise `QuietConsumerConfig` throws
         consumerConfig.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
         consumerConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);

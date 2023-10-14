@@ -39,6 +39,7 @@ import org.apache.kafka.streams.errors.StreamsNotStartedException;
 import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.errors.UnknownStateStoreException;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.internals.StreamsConfigUtils;
 import org.apache.kafka.streams.internals.metrics.ClientMetrics;
 import org.apache.kafka.streams.kstream.Materialized;
@@ -100,6 +101,7 @@ import static org.apache.kafka.streams.state.QueryableStoreTypes.keyValueStore;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
 
 import static org.hamcrest.CoreMatchers.hasItem;
+import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsString;
@@ -243,7 +245,7 @@ public class KafkaStreamsTest {
         streamThreadMockedStatic = mockStatic(StreamThread.class);
         streamThreadMockedStatic.when(() -> StreamThread.create(
                 any(TopologyMetadata.class),
-                any(StreamsConfig.class),
+                any(InternalStreamsConfig.class),
                 any(KafkaClientSupplier.class),
                 any(Admin.class),
                 any(UUID.class),
@@ -262,7 +264,7 @@ public class KafkaStreamsTest {
         streamsConfigUtils = mockStatic(StreamsConfigUtils.class);
         streamsConfigUtils.when(() -> StreamsConfigUtils.processingMode(any(StreamsConfig.class))).thenReturn(StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE);
         streamsConfigUtils.when(() -> StreamsConfigUtils.eosEnabled(any(StreamsConfig.class))).thenReturn(false);
-        streamsConfigUtils.when(() -> StreamsConfigUtils.getTotalCacheSize(any(StreamsConfig.class))).thenReturn(10 * 1024 * 1024L);
+        streamsConfigUtils.when(() -> StreamsConfigUtils.getTotalCacheSize(any(InternalStreamsConfig.class))).thenReturn(10 * 1024 * 1024L);
         when(streamThreadOne.getId()).thenReturn(1L);
         when(streamThreadTwo.getId()).thenReturn(2L);
 
@@ -1089,34 +1091,30 @@ public class KafkaStreamsTest {
 
     @Test
     public void shouldGetClientSupplierFromConfigForConstructor() {
-        final StreamsConfig config = new StreamsConfig(props);
-        final StreamsConfig mockConfig = spy(config);
-        when(mockConfig.getKafkaClientSupplier()).thenReturn(supplier);
+        props.put(StreamsConfig.DEFAULT_CLIENT_SUPPLIER_CONFIG, MockClientSupplier.class);
+        final InternalStreamsConfig config = new InternalStreamsConfig(props);
 
-        new KafkaStreams(getBuilderWithSource().build(), mockConfig);
-        // It's called once in above when mock
-        verify(mockConfig, times(2)).getKafkaClientSupplier();
+        new KafkaStreams(getBuilderWithSource().build(), config);
+        assertThat(MockClientSupplier.adminCount, equalTo(1));
     }
 
     @Test
     public void shouldGetClientSupplierFromConfigForConstructorWithTime() {
-        final StreamsConfig config = new StreamsConfig(props);
-        final StreamsConfig mockConfig = spy(config);
-        when(mockConfig.getKafkaClientSupplier()).thenReturn(supplier);
+        props.put(StreamsConfig.DEFAULT_CLIENT_SUPPLIER_CONFIG, MockClientSupplier.class);
+        final InternalStreamsConfig config = new InternalStreamsConfig(props);
 
-        new KafkaStreams(getBuilderWithSource().build(), mockConfig, time);
-        // It's called once in above when mock
-        verify(mockConfig, times(2)).getKafkaClientSupplier();
+        new KafkaStreams(getBuilderWithSource().build(), config, time);
+        assertThat(MockClientSupplier.adminCount, equalTo(1));
     }
 
     @Test
     public void shouldUseProvidedClientSupplier() {
-        final StreamsConfig config = new StreamsConfig(props);
-        final StreamsConfig mockConfig = spy(config);
+        final InternalStreamsConfig config = new InternalStreamsConfig(props);
+        final InternalStreamsConfig mockConfig = spy(config);
 
         new KafkaStreams(getBuilderWithSource().build(), mockConfig, supplier);
         // It's called once in above when mock
-        verify(mockConfig, times(0)).getKafkaClientSupplier();
+        verify(mockConfig, times(0)).kafkaClientSupplier();
     }
 
     @Test

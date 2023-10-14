@@ -27,7 +27,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.StreamsConfig.InternalConfig;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
 import org.apache.kafka.streams.processor.internals.assignment.FallbackPriorTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.HighAvailabilityTaskAssignor;
@@ -170,7 +170,7 @@ public class StreamsAssignmentScaleTest {
         builder.addSource(null, "source", null, null, null, "topic");
         builder.addProcessor("processor", new MockApiProcessorSupplier<>(), "source");
         builder.addStateStore(new MockKeyValueStoreBuilder("store", false), "processor");
-        final TopologyMetadata topologyMetadata = new TopologyMetadata(builder, new StreamsConfig(configMap));
+        final TopologyMetadata topologyMetadata = new TopologyMetadata(builder, new InternalStreamsConfig(configMap));
         topologyMetadata.buildAndRewriteTopology();
 
         @SuppressWarnings("unchecked")
@@ -186,13 +186,13 @@ public class StreamsAssignmentScaleTest {
         referenceContainer.taskManager = taskManager;
         referenceContainer.streamsMetadataState = mock(StreamsMetadataState.class);
         referenceContainer.time = new MockTime();
-        configMap.put(InternalConfig.REFERENCE_CONTAINER_PARTITION_ASSIGNOR, referenceContainer);
-        configMap.put(InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS, taskAssignor.getName());
+        configMap.put(InternalStreamsConfig.REFERENCE_CONTAINER_PARTITION_ASSIGNOR, referenceContainer);
+        configMap.put(InternalStreamsConfig.TASK_ASSIGNOR_CLASS, taskAssignor.getName());
         configMap.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, numStandbys);
 
         final MockInternalTopicManager mockInternalTopicManager = new MockInternalTopicManager(
             new MockTime(),
-            new StreamsConfig(configMap),
+            new InternalStreamsConfig(configMap),
             new MockClientSupplier().restoreConsumer,
             false
         );

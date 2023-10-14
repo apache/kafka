@@ -41,6 +41,7 @@ import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
 import org.apache.kafka.streams.errors.LogAndFailExceptionHandler;
 import org.apache.kafka.streams.errors.ProductionExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.internals.StreamsConfigUtils;
 import org.apache.kafka.streams.internals.UpgradeFromValues;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
@@ -150,11 +151,11 @@ public class StreamsConfig extends AbstractConfig {
 
     private static final Logger log = LoggerFactory.getLogger(StreamsConfig.class);
 
-    private static final ConfigDef CONFIG;
+    protected static final ConfigDef CONFIG;
 
     private final boolean eosEnabled;
     private static final long DEFAULT_COMMIT_INTERVAL_MS = 30000L;
-    private static final long EOS_DEFAULT_COMMIT_INTERVAL_MS = 100L;
+    protected static final long EOS_DEFAULT_COMMIT_INTERVAL_MS = 100L;
     private static final int DEFAULT_TRANSACTION_TIMEOUT = 10000;
 
     public static final int DUMMY_THREAD_INDEX = 1;
@@ -240,14 +241,12 @@ public class StreamsConfig extends AbstractConfig {
     public static final String CLIENT_TAG_PREFIX = "client.tag.";
 
     /** {@code topology.optimization} */
-    private static final String CONFIG_ERROR_MSG = "Acceptable values are:"
-        + " \"+NO_OPTIMIZATION+\", \"+OPTIMIZE+\", "
-        + "or a comma separated list of specific optimizations: "
-        + "(\"+REUSE_KTABLE_SOURCE_TOPICS+\", \"+MERGE_REPARTITION_TOPICS+\" + "
-        + "\"SINGLE_STORE_SELF_JOIN+\").";
-
-
     public static final String TOPOLOGY_OPTIMIZATION_CONFIG = "topology.optimization";
+    protected static final String CONFIG_ERROR_MSG = "Acceptable values are:"
+            + " \"+NO_OPTIMIZATION+\", \"+OPTIMIZE+\", "
+            + "or a comma separated list of specific optimizations: "
+            + "(\"+REUSE_KTABLE_SOURCE_TOPICS+\", \"+MERGE_REPARTITION_TOPICS+\" + "
+            + "\"SINGLE_STORE_SELF_JOIN+\").";
     private static final String TOPOLOGY_OPTIMIZATION_DOC = "A configuration telling Kafka "
         + "Streams if it should optimize the topology and what optimizations to apply. "
         + CONFIG_ERROR_MSG
@@ -283,7 +282,7 @@ public class StreamsConfig extends AbstractConfig {
      */
     public static final String SINGLE_STORE_SELF_JOIN = "single.store.self.join";
 
-    private static final List<String> TOPOLOGY_OPTIMIZATION_CONFIGS = Arrays.asList(
+    protected static final List<String> TOPOLOGY_OPTIMIZATION_CONFIGS = Arrays.asList(
         OPTIMIZE, NO_OPTIMIZATION, REUSE_KTABLE_SOURCE_TOPICS, MERGE_REPARTITION_TOPICS,
         SINGLE_STORE_SELF_JOIN);
 
@@ -1171,72 +1170,6 @@ public class StreamsConfig extends AbstractConfig {
         CONSUMER_EOS_OVERRIDES = Collections.unmodifiableMap(tempConsumerDefaultOverrides);
     }
 
-    public static class InternalConfig {
-        // This is settable in the main Streams config, but it's a private API for now
-        public static final String INTERNAL_TASK_ASSIGNOR_CLASS = "internal.task.assignor.class";
-
-        // These are not settable in the main Streams config; they are set by the StreamThread to pass internal
-        // state into the assignor.
-        public static final String REFERENCE_CONTAINER_PARTITION_ASSIGNOR = "__reference.container.instance__";
-
-        // This is settable in the main Streams config, but it's a private API for testing
-        public static final String ASSIGNMENT_LISTENER = "__assignment.listener__";
-
-        // Private API used to control the emit latency for left/outer join results (https://issues.apache.org/jira/browse/KAFKA-10847)
-        public static final String EMIT_INTERVAL_MS_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX = "__emit.interval.ms.kstreams.outer.join.spurious.results.fix__";
-
-        // Private API used to control the emit latency for windowed aggregation results for ON_WINDOW_CLOSE emit strategy
-        public static final String EMIT_INTERVAL_MS_KSTREAMS_WINDOWED_AGGREGATION = "__emit.interval.ms.kstreams.windowed.aggregation__";
-
-        // Private API used to control the usage of consistency offset vectors
-        public static final String IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED = "__iq.consistency.offset"
-            + ".vector.enabled__";
-
-        // Private API used to control the prefix of the auto created topics
-        public static final String TOPIC_PREFIX_ALTERNATIVE = "__internal.override.topic.prefix__";
-
-        // Private API to enable the state updater (i.e. state updating on a dedicated thread)
-        public static final String STATE_UPDATER_ENABLED = "__state.updater.enabled__";
-
-        public static boolean getStateUpdaterEnabled(final Map<String, Object> configs) {
-            return InternalConfig.getBoolean(configs, InternalConfig.STATE_UPDATER_ENABLED, true);
-        }
-
-        public static boolean getBoolean(final Map<String, Object> configs, final String key, final boolean defaultValue) {
-            final Object value = configs.getOrDefault(key, defaultValue);
-            if (value instanceof Boolean) {
-                return (boolean) value;
-            } else if (value instanceof String) {
-                return Boolean.parseBoolean((String) value);
-            } else {
-                log.warn("Invalid value (" + value + ") on internal configuration '" + key + "'. Please specify a true/false value.");
-                return defaultValue;
-            }
-        }
-
-        public static long getLong(final Map<String, Object> configs, final String key, final long defaultValue) {
-            final Object value = configs.getOrDefault(key, defaultValue);
-            if (value instanceof Number) {
-                return ((Number) value).longValue();
-            } else if (value instanceof String) {
-                return Long.parseLong((String) value);
-            } else {
-                log.warn("Invalid value (" + value + ") on internal configuration '" + key + "'. Please specify a numeric value.");
-                return defaultValue;
-            }
-        }
-
-        public static String getString(final Map<String, Object> configs, final String key, final String defaultValue) {
-            final Object value = configs.getOrDefault(key, defaultValue);
-            if (value instanceof String) {
-                return (String) value;
-            } else {
-                log.warn("Invalid value (" + value + ") on internal configuration '" + key + "'. Please specify a String value.");
-                return defaultValue;
-            }
-        }
-    }
-
     /**
      * Prefix a property with {@link #CONSUMER_PREFIX}. This is used to isolate {@link ConsumerConfig consumer configs}
      * from other client configs.
@@ -1271,16 +1204,6 @@ public class StreamsConfig extends AbstractConfig {
     @SuppressWarnings("WeakerAccess")
     public static String restoreConsumerPrefix(final String consumerProp) {
         return RESTORE_CONSUMER_PREFIX + consumerProp;
-    }
-
-    /**
-     * Prefix a client tag key with {@link #CLIENT_TAG_PREFIX}.
-     *
-     * @param clientTagKey client tag key
-     * @return {@link #CLIENT_TAG_PREFIX} + {@code clientTagKey}
-     */
-    public static String clientTagPrefix(final String clientTagKey) {
-        return CLIENT_TAG_PREFIX + clientTagKey;
     }
 
     /**
@@ -1332,11 +1255,23 @@ public class StreamsConfig extends AbstractConfig {
     }
 
     /**
+     * Prefix a client tag key with {@link #CLIENT_TAG_PREFIX}.
+     *
+     * @param clientTagKey client tag key
+     * @return {@link #CLIENT_TAG_PREFIX} + {@code clientTagKey}
+     */
+    public static String clientTagPrefix(final String clientTagKey) {
+        return CLIENT_TAG_PREFIX + clientTagKey;
+    }
+
+    /**
      * Return a copy of the config definition.
      *
      * @return a copy of the config definition
+     * @deprecated since 3.7.0; do not use (internal method)
      */
     @SuppressWarnings("unused")
+    @Deprecated
     public static ConfigDef configDef() {
         return new ConfigDef(CONFIG);
     }
@@ -1391,54 +1326,6 @@ public class StreamsConfig extends AbstractConfig {
                 "commit interval by tuning `producer.transaction.timeout.ms` config.",
                 transactionTimeout, commitInterval));
         }
-    }
-
-    @Override
-    protected Map<String, Object> postProcessParsedConfig(final Map<String, Object> parsedValues) {
-        final Map<String, Object> configUpdates =
-            CommonClientConfigs.postProcessReconnectBackoffConfigs(this, parsedValues);
-
-        if (StreamsConfigUtils.eosEnabled(this) && !originals().containsKey(COMMIT_INTERVAL_MS_CONFIG)) {
-            log.debug("Using {} default value of {} as exactly once is enabled.",
-                    COMMIT_INTERVAL_MS_CONFIG, EOS_DEFAULT_COMMIT_INTERVAL_MS);
-            configUpdates.put(COMMIT_INTERVAL_MS_CONFIG, EOS_DEFAULT_COMMIT_INTERVAL_MS);
-        }
-
-        validateRackAwarenessConfiguration();
-
-        return configUpdates;
-    }
-
-    private void validateRackAwarenessConfiguration() {
-        final List<String> rackAwareAssignmentTags = getList(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG);
-        final Map<String, String> clientTags = getClientTags();
-
-        if (clientTags.size() > MAX_RACK_AWARE_ASSIGNMENT_TAG_LIST_SIZE) {
-            throw new ConfigException("At most " + MAX_RACK_AWARE_ASSIGNMENT_TAG_LIST_SIZE + " client tags " +
-                                      "can be specified using " + CLIENT_TAG_PREFIX + " prefix.");
-        }
-
-        for (final String rackAwareAssignmentTag : rackAwareAssignmentTags) {
-            if (!clientTags.containsKey(rackAwareAssignmentTag)) {
-                throw new ConfigException(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG,
-                                          rackAwareAssignmentTags,
-                                          "Contains invalid value [" + rackAwareAssignmentTag + "] " +
-                                          "which doesn't have corresponding tag set via [" + CLIENT_TAG_PREFIX + "] prefix.");
-            }
-        }
-
-        clientTags.forEach((tagKey, tagValue) -> {
-            if (tagKey.length() > MAX_RACK_AWARE_ASSIGNMENT_TAG_KEY_LENGTH) {
-                throw new ConfigException(CLIENT_TAG_PREFIX,
-                                          tagKey,
-                                          "Tag key exceeds maximum length of " + MAX_RACK_AWARE_ASSIGNMENT_TAG_KEY_LENGTH + ".");
-            }
-            if (tagValue.length() > MAX_RACK_AWARE_ASSIGNMENT_TAG_VALUE_LENGTH) {
-                throw new ConfigException(CLIENT_TAG_PREFIX,
-                                          tagValue,
-                                          "Tag value exceeds maximum length of " + MAX_RACK_AWARE_ASSIGNMENT_TAG_VALUE_LENGTH + ".");
-            }
-        });
     }
 
     private Map<String, Object> getCommonConsumerConfigs() {
@@ -1541,8 +1428,10 @@ public class StreamsConfig extends AbstractConfig {
      * @param clientId     clientId
      * @param threadIdx    stream thread index
      * @return Map of the consumer configuration.
+     * @deprecated since 3.7.0; do not use (internal method)
      */
     @SuppressWarnings("WeakerAccess")
+    @Deprecated
     public Map<String, Object> getMainConsumerConfigs(final String groupId, final String clientId, final int threadIdx) {
         final Map<String, Object> consumerProps = getCommonConsumerConfigs();
 
@@ -1615,8 +1504,10 @@ public class StreamsConfig extends AbstractConfig {
      *
      * @param clientId clientId
      * @return Map of the restore consumer configuration.
+     * @deprecated since 3.7.0; do not use (internal method)
      */
     @SuppressWarnings("WeakerAccess")
+    @Deprecated
     public Map<String, Object> getRestoreConsumerConfigs(final String clientId) {
         final Map<String, Object> baseConsumerProps = getCommonConsumerConfigs();
 
@@ -1650,8 +1541,10 @@ public class StreamsConfig extends AbstractConfig {
      *
      * @param clientId clientId
      * @return Map of the global consumer configuration.
+     * @deprecated since 3.7.0; do not use (internal method)
      */
     @SuppressWarnings("WeakerAccess")
+    @Deprecated
     public Map<String, Object> getGlobalConsumerConfigs(final String clientId) {
         final Map<String, Object> baseConsumerProps = getCommonConsumerConfigs();
 
@@ -1681,8 +1574,10 @@ public class StreamsConfig extends AbstractConfig {
      *
      * @param clientId clientId
      * @return Map of the producer configuration.
+     * @deprecated since 3.7.0; do not use (internal method)
      */
     @SuppressWarnings("WeakerAccess")
+    @Deprecated
     public Map<String, Object> getProducerConfigs(final String clientId) {
         final Map<String, Object> clientProvidedProps = getClientPropsWithPrefix(PRODUCER_PREFIX, ProducerConfig.configNames());
 
@@ -1709,8 +1604,10 @@ public class StreamsConfig extends AbstractConfig {
      * Get the configs for the {@link Admin admin client}.
      * @param clientId clientId
      * @return Map of the admin client configuration.
+     * @deprecated since 3.7.0; do not use (internal method)
      */
     @SuppressWarnings("WeakerAccess")
+    @Deprecated
     public Map<String, Object> getAdminConfigs(final String clientId) {
         final Map<String, Object> clientProvidedProps = getClientPropsWithPrefix(ADMIN_CLIENT_PREFIX, AdminClientConfig.configNames());
 
@@ -1728,8 +1625,10 @@ public class StreamsConfig extends AbstractConfig {
      * Get the configured client tags set with {@link #CLIENT_TAG_PREFIX} prefix.
      *
      * @return Map of the client tags.
+     * @deprecated since 3.7.0; do not use (internal method)
      */
     @SuppressWarnings("WeakerAccess")
+    @Deprecated
     public Map<String, String> getClientTags() {
         return originalsWithPrefix(CLIENT_TAG_PREFIX).entrySet().stream().collect(
             Collectors.toMap(
@@ -1766,6 +1665,10 @@ public class StreamsConfig extends AbstractConfig {
         return props;
     }
 
+    /**
+     * @deprecated since 3.7.0; do not use (internal method)
+     */
+    @Deprecated
     public static Set<String> verifyTopologyOptimizationConfigs(final String config) {
         final List<String> configs = Arrays.asList(config.split("\\s*,\\s*"));
         final Set<String> verifiedConfigs = new HashSet<>();
@@ -1793,7 +1696,10 @@ public class StreamsConfig extends AbstractConfig {
     /**
      * Return configured KafkaClientSupplier
      * @return Configured KafkaClientSupplier
+     * @deprecated since 3.7.0; do not use (internal method)
      */
+    @SuppressWarnings("WeakerAccess")
+    @Deprecated
     public KafkaClientSupplier getKafkaClientSupplier() {
         return getConfiguredInstance(StreamsConfig.DEFAULT_CLIENT_SUPPLIER_CONFIG,
             KafkaClientSupplier.class);
@@ -1803,9 +1709,11 @@ public class StreamsConfig extends AbstractConfig {
      * Return an {@link Serde#configure(Map, boolean) configured} instance of {@link #DEFAULT_KEY_SERDE_CLASS_CONFIG key Serde
      * class}.
      *
-     * @return an configured instance of key Serde class
+     * @return a configured instance of key Serde class
+     * @deprecated since 3.7.0; do not use (internal method)
      */
     @SuppressWarnings("WeakerAccess")
+    @Deprecated
     public Serde defaultKeySerde() {
         final Object keySerdeConfigSetting = get(DEFAULT_KEY_SERDE_CLASS_CONFIG);
         if (keySerdeConfigSetting ==  null) {
@@ -1825,9 +1733,11 @@ public class StreamsConfig extends AbstractConfig {
      * Return an {@link Serde#configure(Map, boolean) configured} instance of {@link #DEFAULT_VALUE_SERDE_CLASS_CONFIG value
      * Serde class}.
      *
-     * @return an configured instance of value Serde class
+     * @return a configured instance of value Serde class
+     * @deprecated since 3.7.0; do not use (internal method)
      */
     @SuppressWarnings("WeakerAccess")
+    @Deprecated
     public Serde defaultValueSerde() {
         final Object valueSerdeConfigSetting = get(DEFAULT_VALUE_SERDE_CLASS_CONFIG);
         if (valueSerdeConfigSetting == null) {
@@ -1843,17 +1753,29 @@ public class StreamsConfig extends AbstractConfig {
         }
     }
 
+    /**
+     * @deprecated since 3.7.0; do not use (internal method)
+     */
     @SuppressWarnings("WeakerAccess")
+    @Deprecated
     public TimestampExtractor defaultTimestampExtractor() {
         return getConfiguredInstance(DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, TimestampExtractor.class);
     }
 
+    /**
+     * @deprecated since 3.7.0; do not use (internal method)
+     */
     @SuppressWarnings("WeakerAccess")
+    @Deprecated
     public DeserializationExceptionHandler defaultDeserializationExceptionHandler() {
         return getConfiguredInstance(DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, DeserializationExceptionHandler.class);
     }
 
+    /**
+     * @deprecated since 3.7.0; do not use (internal method)
+     */
     @SuppressWarnings("WeakerAccess")
+    @Deprecated
     public ProductionExceptionHandler defaultProductionExceptionHandler() {
         return getConfiguredInstance(DEFAULT_PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG, ProductionExceptionHandler.class);
     }
@@ -1879,6 +1801,10 @@ public class StreamsConfig extends AbstractConfig {
         return parsed;
     }
 
+    /**
+     * @deprecated since 3.7.0; do not use (internal method)
+     */
+    @Deprecated
     public static void main(final String[] args) {
         System.out.println(CONFIG.toHtml(4, config -> "streamsconfigs_" + config));
     }

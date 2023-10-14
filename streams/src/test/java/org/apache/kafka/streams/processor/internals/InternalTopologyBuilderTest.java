@@ -26,6 +26,7 @@ import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyDescription;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.errors.TopologyException;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
@@ -985,7 +986,7 @@ public class InternalTopologyBuilderTest {
     public void shouldSetTopologyConfigOnRewriteTopology() {
         final Properties globalProps = StreamsTestUtils.getStreamsConfig();
         globalProps.put(StreamsConfig.MAX_TASK_IDLE_MS_CONFIG, 100L);
-        final StreamsConfig globalStreamsConfig = new StreamsConfig(globalProps);
+        final InternalStreamsConfig globalStreamsConfig = new InternalStreamsConfig(globalProps);
         final InternalTopologyBuilder topologyBuilder = builder.rewriteTopology(globalStreamsConfig);
         assertThat(topologyBuilder.topologyConfigs(), equalTo(new TopologyConfig(null, globalStreamsConfig, new Properties())));
         assertThat(topologyBuilder.topologyConfigs().getTaskConfig().maxTaskIdleMs, equalTo(100L));
@@ -997,7 +998,7 @@ public class InternalTopologyBuilderTest {
         final Properties globalProps = StreamsTestUtils.getStreamsConfig();
         globalProps.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 200L);
         globalProps.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 100L);
-        final StreamsConfig globalStreamsConfig = new StreamsConfig(globalProps);
+        final InternalStreamsConfig globalStreamsConfig = new InternalStreamsConfig(globalProps);
         final InternalTopologyBuilder topologyBuilder = builder.rewriteTopology(globalStreamsConfig);
         assertThat(topologyBuilder.topologyConfigs(), equalTo(new TopologyConfig(null, globalStreamsConfig, new Properties())));
         assertThat(topologyBuilder.topologyConfigs().cacheSize, equalTo(200L));
@@ -1014,7 +1015,7 @@ public class InternalTopologyBuilderTest {
         topologyOverrides.put(StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, LogAndContinueExceptionHandler.class);
         topologyOverrides.put(StreamsConfig.DEFAULT_DSL_STORE_CONFIG, StreamsConfig.IN_MEMORY);
 
-        final StreamsConfig config = new StreamsConfig(StreamsTestUtils.getStreamsConfig());
+        final InternalStreamsConfig config = new InternalStreamsConfig(StreamsTestUtils.getStreamsConfig());
         final InternalTopologyBuilder topologyBuilder = new InternalTopologyBuilder(
             new TopologyConfig(
                 "my-topology",
@@ -1041,7 +1042,7 @@ public class InternalTopologyBuilderTest {
         streamsProps.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockTimestampExtractor.class);
         streamsProps.put(StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, LogAndContinueExceptionHandler.class);
 
-        final StreamsConfig config = new StreamsConfig(streamsProps);
+        final InternalStreamsConfig config = new InternalStreamsConfig(streamsProps);
         final InternalTopologyBuilder topologyBuilder = new InternalTopologyBuilder(
             new TopologyConfig(
                 "my-topology",
@@ -1059,7 +1060,7 @@ public class InternalTopologyBuilderTest {
     @Test
     public void shouldAddTimestampExtractorPerSource() {
         builder.addSource(null, "source", new MockTimestampExtractor(), null, null, "topic");
-        final ProcessorTopology processorTopology = builder.rewriteTopology(new StreamsConfig(StreamsTestUtils.getStreamsConfig())).buildTopology();
+        final ProcessorTopology processorTopology = builder.rewriteTopology(new InternalStreamsConfig(StreamsTestUtils.getStreamsConfig())).buildTopology();
         assertThat(processorTopology.source("topic").getTimestampExtractor(), instanceOf(MockTimestampExtractor.class));
     }
 
@@ -1067,7 +1068,7 @@ public class InternalTopologyBuilderTest {
     public void shouldAddTimestampExtractorWithPatternPerSource() {
         final Pattern pattern = Pattern.compile("t.*");
         builder.addSource(null, "source", new MockTimestampExtractor(), null, null, pattern);
-        final ProcessorTopology processorTopology = builder.rewriteTopology(new StreamsConfig(StreamsTestUtils.getStreamsConfig())).buildTopology();
+        final ProcessorTopology processorTopology = builder.rewriteTopology(new InternalStreamsConfig(StreamsTestUtils.getStreamsConfig())).buildTopology();
         assertThat(processorTopology.source(pattern.pattern()).getTimestampExtractor(), instanceOf(MockTimestampExtractor.class));
     }
 
@@ -1299,7 +1300,7 @@ public class InternalTopologyBuilderTest {
         );
         builder.initializeSubscription();
 
-        builder.rewriteTopology(new StreamsConfig(mkProperties(mkMap(
+        builder.rewriteTopology(new InternalStreamsConfig(mkProperties(mkMap(
             mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "asdf"),
             mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "asdf")
         ))));

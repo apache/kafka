@@ -28,6 +28,7 @@ import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.internals.ApiUtils;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.kstream.Transformer;
 import org.apache.kafka.streams.kstream.ValueTransformer;
 import org.apache.kafka.streams.processor.internals.ClientUtils;
@@ -61,7 +62,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
     // Immutable fields ================================================
     private final StreamsMetricsImpl metrics;
     private final TaskId taskId;
-    private final StreamsConfig config;
+    private final InternalStreamsConfig config;
     private final File stateDir;
 
     // settable record metadata ================================================
@@ -231,7 +232,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         configCopy.putAll(config);
         configCopy.putIfAbsent(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy-bootstrap-host:0");
         configCopy.putIfAbsent(StreamsConfig.APPLICATION_ID_CONFIG, "dummy-mock-app-id");
-        final StreamsConfig streamsConfig = new ClientUtils.QuietStreamsConfig(configCopy);
+        final InternalStreamsConfig streamsConfig = new InternalStreamsConfig(configCopy);
         this.taskId = taskId;
         this.config = streamsConfig;
         this.stateDir = stateDir;

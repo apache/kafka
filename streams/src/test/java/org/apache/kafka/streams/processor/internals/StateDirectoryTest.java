@@ -30,6 +30,7 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.StateDirectory.TaskDirectory;
 import org.apache.kafka.common.utils.LogCaptureAppender;
@@ -97,7 +98,7 @@ public class StateDirectoryTest {
             cleanup();
         }
         directory = new StateDirectory(
-            new StreamsConfig(new Properties() {
+            new InternalStreamsConfig(new Properties() {
                 {
                     put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
                     put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");
@@ -377,7 +378,7 @@ public class StateDirectoryTest {
     public void shouldReturnEmptyArrayIfListFilesReturnsNull() throws IOException {
         stateDir = new File(TestUtils.IO_TMP_DIR, "kafka-" + TestUtils.randomString(5));
         directory = new StateDirectory(
-            new StreamsConfig(new Properties() {
+            new InternalStreamsConfig(new Properties() {
                 {
                     put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
                     put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");
@@ -420,7 +421,7 @@ public class StateDirectoryTest {
         final File tempDir = TestUtils.tempDirectory();
         final File stateDir = new File(new File(tempDir, "foo"), "state-dir");
         final StateDirectory stateDirectory = new StateDirectory(
-            new StreamsConfig(new Properties() {
+            new InternalStreamsConfig(new Properties() {
                 {
                     put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
                     put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");
@@ -620,7 +621,7 @@ public class StateDirectoryTest {
     public void shouldLogTempDirMessage() {
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StateDirectory.class)) {
             new StateDirectory(
-                new StreamsConfig(
+                new InternalStreamsConfig(
                     mkMap(
                         mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, ""),
                         mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "")

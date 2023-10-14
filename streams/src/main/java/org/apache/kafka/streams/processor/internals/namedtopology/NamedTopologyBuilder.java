@@ -19,13 +19,14 @@ package org.apache.kafka.streams.processor.internals.namedtopology;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TopologyConfig;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
 import java.util.Properties;
 
 public class NamedTopologyBuilder extends StreamsBuilder {
 
-    NamedTopologyBuilder(final String topologyName, final StreamsConfig applicationConfigs, final Properties topologyOverrides) {
+    NamedTopologyBuilder(final String topologyName, final InternalStreamsConfig applicationConfigs, final Properties topologyOverrides) {
         super(new TopologyConfig(topologyName, applicationConfigs, topologyOverrides));
         internalTopologyBuilder.setNamedTopology((NamedTopology) topology);
     }

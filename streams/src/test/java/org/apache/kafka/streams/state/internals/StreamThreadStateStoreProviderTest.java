@@ -29,6 +29,7 @@ import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.internals.StreamsConfigUtils;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
@@ -153,7 +154,7 @@ public class StreamThreadStateStoreProviderTest {
         stateDir = TestUtils.tempDirectory();
         properties.put(StreamsConfig.STATE_DIR_CONFIG, stateDir.getPath());
 
-        final StreamsConfig streamsConfig = new StreamsConfig(properties);
+        final InternalStreamsConfig streamsConfig = new InternalStreamsConfig(properties);
         final MockClientSupplier clientSupplier = new MockClientSupplier();
         configureClients(clientSupplier, "applicationId-kv-store-changelog");
         configureClients(clientSupplier, "applicationId-window-store-changelog");
@@ -401,7 +402,7 @@ public class StreamThreadStateStoreProviderTest {
                 QueryableStoreTypes.keyValueStore())));
     }
 
-    private StreamTask createStreamsTask(final StreamsConfig streamsConfig,
+    private StreamTask createStreamsTask(final InternalStreamsConfig streamsConfig,
                                          final MockClientSupplier clientSupplier,
                                          final ProcessorTopology topology,
                                          final TaskId taskId) {

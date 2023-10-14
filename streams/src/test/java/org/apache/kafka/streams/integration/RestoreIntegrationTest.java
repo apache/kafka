@@ -36,11 +36,11 @@ import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils.TrackingStateRestoreListener;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Materialized;
@@ -140,7 +140,7 @@ public class RestoreIntegrationTest {
     }
 
     private Properties props(final boolean stateUpdaterEnabled) {
-        return props(mkObjectProperties(mkMap(mkEntry(InternalConfig.STATE_UPDATER_ENABLED, stateUpdaterEnabled))));
+        return props(mkObjectProperties(mkMap(mkEntry(InternalStreamsConfig.STATE_UPDATER_ENABLED, stateUpdaterEnabled))));
     }
 
     private Properties props(final Properties extraProperties) {
@@ -257,7 +257,7 @@ public class RestoreIntegrationTest {
         createStateForRestoration(inputStream, 0);
         setCommittedOffset(inputStream, offsetLimitDelta);
 
-        final StateDirectory stateDirectory = new StateDirectory(new StreamsConfig(props), new MockTime(), true, false);
+        final StateDirectory stateDirectory = new StateDirectory(new InternalStreamsConfig(props), new MockTime(), true, false);
         // note here the checkpointed offset is the last processed record's offset, so without control message we should write this offset - 1
         new OffsetCheckpoint(new File(stateDirectory.getOrCreateDirectoryForTask(new TaskId(0, 0)), ".checkpoint"))
                 .write(Collections.singletonMap(new TopicPartition(inputStream, 0), (long) offsetCheckpointed - 1));
@@ -324,7 +324,7 @@ public class RestoreIntegrationTest {
         createStateForRestoration(changelog, 0);
         createStateForRestoration(inputStream, 10000);
 
-        final StateDirectory stateDirectory = new StateDirectory(new StreamsConfig(props), new MockTime(), true, false);
+        final StateDirectory stateDirectory = new StateDirectory(new InternalStreamsConfig(props), new MockTime(), true, false);
         // note here the checkpointed offset is the last processed record's offset, so without control message we should write this offset - 1
         new OffsetCheckpoint(new File(stateDirectory.getOrCreateDirectoryForTask(new TaskId(0, 0)), ".checkpoint"))
                 .write(Collections.singletonMap(new TopicPartition(changelog, 0), (long) offsetCheckpointed - 1));

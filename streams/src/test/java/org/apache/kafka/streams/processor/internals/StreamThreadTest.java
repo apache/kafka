@@ -54,12 +54,12 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.ThreadMetadata;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
 import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilder;
@@ -170,8 +170,8 @@ public class StreamThreadTest {
     private final MockTime mockTime = new MockTime();
     private final String stateDir = TestUtils.tempDirectory().getPath();
     private final MockClientSupplier clientSupplier = new MockClientSupplier();
-    private final StreamsConfig config = new StreamsConfig(configProps(false));
-    private final StreamsConfig eosEnabledConfig = new StreamsConfig(configProps(true));
+    private final InternalStreamsConfig config = new InternalStreamsConfig(configProps(false));
+    private final InternalStreamsConfig eosEnabledConfig = new InternalStreamsConfig(configProps(true));
     private final ConsumedInternal<Object, Object> consumed = new ConsumedInternal<>();
     private final ChangelogReader changelogReader = new MockChangelogReader();
     private final StateDirectory stateDirectory = new StateDirectory(config, mockTime, true, false);
@@ -241,13 +241,13 @@ public class StreamThreadTest {
     }
 
     private StreamThread createStreamThread(@SuppressWarnings("SameParameterValue") final String clientId,
-                                            final StreamsConfig config,
+                                            final InternalStreamsConfig config,
                                             final boolean eosEnabled) {
         return createStreamThread(clientId, config, mockTime, eosEnabled);
     }
 
     private StreamThread createStreamThread(@SuppressWarnings("SameParameterValue") final String clientId,
-                                            final StreamsConfig config,
+                                            final InternalStreamsConfig config,
                                             final Time time,
                                             final boolean eosEnabled) {
         if (eosEnabled) {
@@ -270,7 +270,7 @@ public class StreamThreadTest {
             topologyMetadata,
             config,
             clientSupplier,
-            clientSupplier.getAdmin(config.getAdminConfigs(clientId)),
+            clientSupplier.getAdmin(config.adminConfigs(clientId)),
             PROCESS_ID,
             clientId,
             streamsMetrics,
@@ -470,7 +470,7 @@ public class StreamThreadTest {
         props.setProperty(StreamsConfig.STATE_DIR_CONFIG, stateDir);
         props.setProperty(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, Long.toString(commitInterval));
 
-        final StreamsConfig config = new StreamsConfig(props);
+        final InternalStreamsConfig config = new InternalStreamsConfig(props);
         final Consumer<byte[], byte[]> consumer = EasyMock.createNiceMock(Consumer.class);
         final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
         expect(consumer.groupMetadata()).andStubReturn(consumerGroupMetadata);
@@ -499,7 +499,7 @@ public class StreamThreadTest {
         props.setProperty(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, Long.toString(commitInterval));
         props.setProperty(StreamsConfig.REPARTITION_PURGE_INTERVAL_MS_CONFIG, Long.toString(purgeInterval));
 
-        final StreamsConfig config = new StreamsConfig(props);
+        final InternalStreamsConfig config = new InternalStreamsConfig(props);
         final Consumer<byte[], byte[]> consumer = EasyMock.createNiceMock(Consumer.class);
         final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
         expect(consumer.groupMetadata()).andStubReturn(consumerGroupMetadata);
@@ -528,7 +528,7 @@ public class StreamThreadTest {
         props.setProperty(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, Long.toString(purgeInterval));
         props.setProperty(StreamsConfig.REPARTITION_PURGE_INTERVAL_MS_CONFIG, Long.toString(purgeInterval));
 
-        final StreamsConfig config = new StreamsConfig(props);
+        final InternalStreamsConfig config = new InternalStreamsConfig(props);
         final Consumer<byte[], byte[]> consumer = EasyMock.createNiceMock(Consumer.class);
         final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
         expect(consumer.groupMetadata()).andStubReturn(consumerGroupMetadata);
@@ -556,7 +556,7 @@ public class StreamThreadTest {
     public void shouldNotProcessWhenPartitionRevoked() {
         final Properties props = configProps(false);
 
-        final StreamsConfig config = new StreamsConfig(props);
+        final InternalStreamsConfig config = new InternalStreamsConfig(props);
         when(mainConsumer.poll(Mockito.any())).thenReturn(ConsumerRecords.empty());
         final ConsumerGroupMetadata consumerGroupMetadata = Mockito.mock(ConsumerGroupMetadata.class);
         when(mainConsumer.groupMetadata()).thenReturn(consumerGroupMetadata);
@@ -577,7 +577,7 @@ public class StreamThreadTest {
     public void shouldProcessWhenRunning() {
         final Properties props = configProps(false);
 
-        final StreamsConfig config = new StreamsConfig(props);
+        final InternalStreamsConfig config = new InternalStreamsConfig(props);
         when(mainConsumer.poll(Mockito.any())).thenReturn(ConsumerRecords.empty());
         final ConsumerGroupMetadata consumerGroupMetadata = Mockito.mock(ConsumerGroupMetadata.class);
         when(mainConsumer.groupMetadata()).thenReturn(consumerGroupMetadata);
@@ -599,9 +599,9 @@ public class StreamThreadTest {
     @Test
     public void shouldProcessWhenPartitionAssigned() {
         final Properties props = configProps(false);
-        props.setProperty(InternalConfig.STATE_UPDATER_ENABLED, Boolean.toString(true));
+        props.setProperty(InternalStreamsConfig.STATE_UPDATER_ENABLED, Boolean.toString(true));
 
-        final StreamsConfig config = new StreamsConfig(props);
+        final InternalStreamsConfig config = new InternalStreamsConfig(props);
         when(mainConsumer.poll(Mockito.any())).thenReturn(ConsumerRecords.empty());
         final ConsumerGroupMetadata consumerGroupMetadata = Mockito.mock(ConsumerGroupMetadata.class);
         when(mainConsumer.groupMetadata()).thenReturn(consumerGroupMetadata);
@@ -622,9 +622,9 @@ public class StreamThreadTest {
     @Test
     public void shouldProcessWhenStarting() {
         final Properties props = configProps(false);
-        props.setProperty(InternalConfig.STATE_UPDATER_ENABLED, Boolean.toString(true));
+        props.setProperty(InternalStreamsConfig.STATE_UPDATER_ENABLED, Boolean.toString(true));
 
-        final StreamsConfig config = new StreamsConfig(props);
+        final InternalStreamsConfig config = new InternalStreamsConfig(props);
         when(mainConsumer.poll(Mockito.any())).thenReturn(ConsumerRecords.empty());
         final ConsumerGroupMetadata consumerGroupMetadata = Mockito.mock(ConsumerGroupMetadata.class);
         when(mainConsumer.groupMetadata()).thenReturn(consumerGroupMetadata);
@@ -644,7 +644,7 @@ public class StreamThreadTest {
     @Test
     public void shouldEnforceRebalanceWhenScheduledAndNotCurrentlyRebalancing() throws InterruptedException {
         final Time mockTime = new MockTime(1);
-        final StreamsConfig config = new StreamsConfig(configProps(false));
+        final InternalStreamsConfig config = new InternalStreamsConfig(configProps(false));
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(
             metrics,
             APPLICATION_ID,
@@ -667,7 +667,7 @@ public class StreamThreadTest {
             topologyMetadata,
             config,
             mockClientSupplier,
-            mockClientSupplier.getAdmin(config.getAdminConfigs(CLIENT_ID)),
+            mockClientSupplier.getAdmin(config.adminConfigs(CLIENT_ID)),
             PROCESS_ID,
             CLIENT_ID,
             streamsMetrics,
@@ -705,7 +705,7 @@ public class StreamThreadTest {
     @Test
     public void shouldNotEnforceRebalanceWhenCurrentlyRebalancing() throws InterruptedException {
         final Time mockTime = new MockTime(1);
-        final StreamsConfig config = new StreamsConfig(configProps(false));
+        final InternalStreamsConfig config = new InternalStreamsConfig(configProps(false));
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(
             metrics,
             APPLICATION_ID,
@@ -729,7 +729,7 @@ public class StreamThreadTest {
             topologyMetadata,
             config,
             mockClientSupplier,
-            mockClientSupplier.getAdmin(config.getAdminConfigs(CLIENT_ID)),
+            mockClientSupplier.getAdmin(config.adminConfigs(CLIENT_ID)),
             PROCESS_ID,
             CLIENT_ID,
             streamsMetrics,
@@ -788,7 +788,7 @@ public class StreamThreadTest {
 
         AtomicLong nextRebalanceMs() {
             return ((ReferenceContainer) consumerConfigs.get(
-                    StreamsConfig.InternalConfig.REFERENCE_CONTAINER_PARTITION_ASSIGNOR)
+                    InternalStreamsConfig.REFERENCE_CONTAINER_PARTITION_ASSIGNOR)
                 ).nextScheduledRebalanceMs;
         }
     }
@@ -814,7 +814,7 @@ public class StreamThreadTest {
 
         final Properties properties = new Properties();
         properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
-        final StreamsConfig config = new StreamsConfig(StreamsTestUtils.getStreamsConfig(APPLICATION_ID,
+        final InternalStreamsConfig config = new InternalStreamsConfig(StreamsTestUtils.getStreamsConfig(APPLICATION_ID,
                                                                                          "localhost:2171",
                                                                                          Serdes.ByteArraySerde.class.getName(),
                                                                                          Serdes.ByteArraySerde.class.getName(),
@@ -922,7 +922,7 @@ public class StreamThreadTest {
         props.setProperty(StreamsConfig.STATE_DIR_CONFIG, stateDir);
         props.setProperty(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, Long.toString(commitInterval));
 
-        final StreamsConfig config = new StreamsConfig(props);
+        final InternalStreamsConfig config = new InternalStreamsConfig(props);
         final Consumer<byte[], byte[]> consumer = EasyMock.createNiceMock(Consumer.class);
         final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
         expect(consumer.groupMetadata()).andStubReturn(consumerGroupMetadata);
@@ -952,7 +952,7 @@ public class StreamThreadTest {
         props.setProperty(StreamsConfig.STATE_DIR_CONFIG, stateDir);
         props.setProperty(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, Long.toString(commitInterval));
 
-        final StreamsConfig config = new StreamsConfig(props);
+        final InternalStreamsConfig config = new InternalStreamsConfig(props);
         final Consumer<byte[], byte[]> consumer = EasyMock.createNiceMock(Consumer.class);
         final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
         expect(consumer.groupMetadata()).andStubReturn(consumerGroupMetadata);
@@ -1014,7 +1014,7 @@ public class StreamThreadTest {
         props.setProperty(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, Long.toString(commitInterval));
         props.setProperty(StreamsConfig.REPARTITION_PURGE_INTERVAL_MS_CONFIG, Long.toString(purgeInterval));
 
-        final StreamsConfig config = new StreamsConfig(props);
+        final InternalStreamsConfig config = new InternalStreamsConfig(props);
         final Consumer<byte[], byte[]> consumer = EasyMock.createNiceMock(Consumer.class);
         final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
         expect(consumer.groupMetadata()).andStubReturn(consumerGroupMetadata);
@@ -1190,7 +1190,7 @@ public class StreamThreadTest {
 
         final Properties props = configProps(true);
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
-        final StreamThread thread = createStreamThread(CLIENT_ID, new StreamsConfig(props), true);
+        final StreamThread thread = createStreamThread(CLIENT_ID, new InternalStreamsConfig(props), true);
 
         thread.setState(StreamThread.State.STARTING);
         thread.rebalanceListener().onPartitionsRevoked(Collections.emptyList());
@@ -1226,7 +1226,7 @@ public class StreamThreadTest {
         internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
 
         final Properties props = configProps(true);
-        final StreamThread thread = createStreamThread(CLIENT_ID, new StreamsConfig(props), true);
+        final StreamThread thread = createStreamThread(CLIENT_ID, new InternalStreamsConfig(props), true);
 
         thread.setState(StreamThread.State.STARTING);
         thread.rebalanceListener().onPartitionsRevoked(Collections.emptyList());
@@ -1269,9 +1269,9 @@ public class StreamThreadTest {
         // Since this tests verifies an aspect that is independent from the state updater, it is OK to disable
         // the state updater and leave the rewriting of the test to later, when the code path for disabled state updater
         // is removed.
-        props.put(InternalConfig.STATE_UPDATER_ENABLED, false);
+        props.put(InternalStreamsConfig.STATE_UPDATER_ENABLED, false);
         final StreamThread thread =
-            createStreamThread(CLIENT_ID, new StreamsConfig(props), new MockTime(1), true);
+            createStreamThread(CLIENT_ID, new InternalStreamsConfig(props), new MockTime(1), true);
 
         thread.taskManager().handleRebalanceStart(Collections.singleton(topic1));
 
@@ -1317,7 +1317,7 @@ public class StreamThreadTest {
 
         final StreamThread thread = createStreamThread(
             CLIENT_ID,
-            new StreamsConfig(configProps(true)),
+            new InternalStreamsConfig(configProps(true)),
             new MockTime(1),
             true
         );
@@ -1437,8 +1437,8 @@ public class StreamThreadTest {
             new StreamsMetricsImpl(metrics, CLIENT_ID, StreamsConfig.METRICS_LATEST, mockTime);
 
         final Properties props = configProps(false);
-        props.put(InternalConfig.STATE_UPDATER_ENABLED, stateUpdaterEnabled);
-        final StreamsConfig config = new StreamsConfig(props);
+        props.put(InternalStreamsConfig.STATE_UPDATER_ENABLED, stateUpdaterEnabled);
+        final InternalStreamsConfig config = new InternalStreamsConfig(props);
         final StreamThread thread = new StreamThread(
             new MockTime(1),
             config,
@@ -1543,7 +1543,7 @@ public class StreamThreadTest {
         internalTopologyBuilder.addSource(null, "source", null, null, null, topic1);
         internalTopologyBuilder.addSink("sink", "dummyTopic", null, null, null, "source");
 
-        final StreamThread thread = createStreamThread(CLIENT_ID, new StreamsConfig(configProps(true)), true);
+        final StreamThread thread = createStreamThread(CLIENT_ID, new InternalStreamsConfig(configProps(true)), true);
 
         final MockConsumer<byte[], byte[]> consumer = clientSupplier.consumer;
 
@@ -1602,7 +1602,7 @@ public class StreamThreadTest {
 
     @Test
     public void shouldNotCloseTaskAndRemoveFromTaskManagerIfProducerGotFencedInCommitTransactionWhenSuspendingTasks() {
-        final StreamThread thread = createStreamThread(CLIENT_ID, new StreamsConfig(configProps(true)), true);
+        final StreamThread thread = createStreamThread(CLIENT_ID, new InternalStreamsConfig(configProps(true)), true);
 
         internalTopologyBuilder.addSource(null, "name", null, null, null, topic1);
         internalTopologyBuilder.addSink("out", "output", null, null, null, "name");
@@ -1651,8 +1651,8 @@ public class StreamThreadTest {
 
     private void shouldReinitializeRevivedTasksInAnyState(final boolean stateUpdaterEnabled) throws Exception {
         final Properties streamsConfigProps = configProps(false);
-        streamsConfigProps.put(InternalConfig.STATE_UPDATER_ENABLED, stateUpdaterEnabled);
-        final StreamsConfig config = new StreamsConfig(streamsConfigProps);
+        streamsConfigProps.put(InternalStreamsConfig.STATE_UPDATER_ENABLED, stateUpdaterEnabled);
+        final InternalStreamsConfig config = new InternalStreamsConfig(streamsConfigProps);
         final StreamThread thread = createStreamThread(CLIENT_ID, config, new MockTime(1), false);
 
         final String storeName = "store";
@@ -1763,7 +1763,7 @@ public class StreamThreadTest {
         // only have source but no sink so that we would not get fenced in producer.send
         internalTopologyBuilder.addSource(null, "source", null, null, null, topic1);
 
-        final StreamThread thread = createStreamThread(CLIENT_ID, new StreamsConfig(configProps(true)), true);
+        final StreamThread thread = createStreamThread(CLIENT_ID, new InternalStreamsConfig(configProps(true)), true);
 
         final MockConsumer<byte[], byte[]> consumer = clientSupplier.consumer;
 
@@ -1812,7 +1812,7 @@ public class StreamThreadTest {
 
     @Test
     public void shouldNotCloseTaskProducerWhenSuspending() {
-        final StreamThread thread = createStreamThread(CLIENT_ID, new StreamsConfig(configProps(true)), true);
+        final StreamThread thread = createStreamThread(CLIENT_ID, new InternalStreamsConfig(configProps(true)), true);
 
         internalTopologyBuilder.addSource(null, "name", null, null, null, topic1);
         internalTopologyBuilder.addSink("out", "output", null, null, null, "name");
@@ -1868,7 +1868,7 @@ public class StreamThreadTest {
             topologyMetadata,
             config,
             clientSupplier,
-            clientSupplier.getAdmin(config.getAdminConfigs(CLIENT_ID)),
+            clientSupplier.getAdmin(config.adminConfigs(CLIENT_ID)),
             PROCESS_ID,
             CLIENT_ID,
             streamsMetrics,
@@ -1971,8 +1971,8 @@ public class StreamThreadTest {
         final String changelogName2 = APPLICATION_ID + "-" + storeName2 + "-changelog";
         final Properties props = configProps(false);
         // Updating standby tasks on the stream thread only happens when the state updater is disabled
-        props.put(InternalConfig.STATE_UPDATER_ENABLED, false);
-        final StreamsConfig config = new StreamsConfig(props);
+        props.put(InternalStreamsConfig.STATE_UPDATER_ENABLED, false);
+        final InternalStreamsConfig config = new InternalStreamsConfig(props);
         final StreamThread thread = createStreamThread(CLIENT_ID, config, false);
         final MockConsumer<byte[], byte[]> restoreConsumer = clientSupplier.restoreConsumer;
 
@@ -2096,8 +2096,8 @@ public class StreamThreadTest {
         final String changelogName2 = APPLICATION_ID + "-" + storeName2 + "-changelog";
         final Properties props = configProps(false);
         // Updating standby tasks on the stream thread only happens when the state updater is disabled
-        props.put(InternalConfig.STATE_UPDATER_ENABLED, false);
-        final StreamsConfig config = new StreamsConfig(props);
+        props.put(InternalStreamsConfig.STATE_UPDATER_ENABLED, false);
+        final InternalStreamsConfig config = new InternalStreamsConfig(props);
         final StreamThread thread = createStreamThread(CLIENT_ID, config, false);
         final MockConsumer<byte[], byte[]> restoreConsumer = clientSupplier.restoreConsumer;
 
@@ -2353,8 +2353,8 @@ public class StreamThreadTest {
         internalStreamsBuilder.buildAndOptimizeTopology();
 
         final Properties props = configProps(false);
-        props.put(InternalConfig.STATE_UPDATER_ENABLED, stateUpdaterEnabled);
-        final StreamsConfig config = new StreamsConfig(props);
+        props.put(InternalStreamsConfig.STATE_UPDATER_ENABLED, stateUpdaterEnabled);
+        final InternalStreamsConfig config = new InternalStreamsConfig(props);
         final StreamThread thread = createStreamThread("clientId", config, new MockTime(1), false);
         final MockConsumer<byte[], byte[]> mockConsumer = (MockConsumer<byte[], byte[]>) thread.mainConsumer();
         final MockConsumer<byte[], byte[]> mockRestoreConsumer = (MockConsumer<byte[], byte[]>) thread.restoreConsumer();
@@ -2486,7 +2486,7 @@ public class StreamThreadTest {
             LogAndContinueExceptionHandler.class.getName()
         );
         config.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass().getName());
-        final StreamThread thread = createStreamThread(CLIENT_ID, new StreamsConfig(config), false);
+        final StreamThread thread = createStreamThread(CLIENT_ID, new InternalStreamsConfig(config), false);
 
         thread.setState(StreamThread.State.STARTING);
         thread.setState(StreamThread.State.PARTITIONS_REVOKED);
@@ -3009,7 +3009,7 @@ public class StreamThreadTest {
             StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
             LogAndSkipOnInvalidTimestamp.class.getName()
         );
-        final StreamThread thread = createStreamThread(CLIENT_ID, new StreamsConfig(config), false);
+        final StreamThread thread = createStreamThread(CLIENT_ID, new InternalStreamsConfig(config), false);
 
         thread.setState(StreamThread.State.STARTING);
         thread.setState(StreamThread.State.PARTITIONS_REVOKED);
@@ -3238,7 +3238,7 @@ public class StreamThreadTest {
     @Test
     public void shouldCheckStateUpdater() {
         final Properties streamsConfigProps = StreamsTestUtils.getStreamsConfig();
-        streamsConfigProps.put(InternalConfig.STATE_UPDATER_ENABLED, true);
+        streamsConfigProps.put(InternalStreamsConfig.STATE_UPDATER_ENABLED, true);
         final StreamThread streamThread = setUpThread(streamsConfigProps);
         final TaskManager taskManager = streamThread.taskManager();
         streamThread.setState(State.STARTING);
@@ -3252,7 +3252,7 @@ public class StreamThreadTest {
     @Test
     public void shouldCheckStateUpdaterInBetweenProcessCalls() {
         final Properties streamsConfigProps = StreamsTestUtils.getStreamsConfig();
-        streamsConfigProps.put(InternalConfig.STATE_UPDATER_ENABLED, true);
+        streamsConfigProps.put(InternalStreamsConfig.STATE_UPDATER_ENABLED, true);
         final StreamThread streamThread = setUpThread(streamsConfigProps);
         final TaskManager taskManager = streamThread.taskManager();
         streamThread.setState(State.STARTING);
@@ -3296,7 +3296,7 @@ public class StreamThreadTest {
     @Test
     public void shouldRespectPollTimeInPartitionsAssignedStateWithStateUpdater() {
         final Properties streamsConfigProps = StreamsTestUtils.getStreamsConfig();
-        streamsConfigProps.put(InternalConfig.STATE_UPDATER_ENABLED, true);
+        streamsConfigProps.put(InternalStreamsConfig.STATE_UPDATER_ENABLED, true);
         final Duration pollTime = Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG));
         final StreamThread streamThread = setUpThread(streamsConfigProps);
         streamThread.setState(State.STARTING);
@@ -3310,7 +3310,7 @@ public class StreamThreadTest {
     @Test
     public void shouldNotBlockWhenPollingInPartitionsAssignedStateWithoutStateUpdater() {
         final Properties streamsConfigProps = StreamsTestUtils.getStreamsConfig();
-        streamsConfigProps.put(InternalConfig.STATE_UPDATER_ENABLED, false);
+        streamsConfigProps.put(InternalStreamsConfig.STATE_UPDATER_ENABLED, false);
         final StreamThread streamThread = setUpThread(streamsConfigProps);
         streamThread.setState(State.STARTING);
         streamThread.setState(State.PARTITIONS_ASSIGNED);
@@ -3330,7 +3330,7 @@ public class StreamThreadTest {
         topologyMetadata.buildAndRewriteTopology();
         return new StreamThread(
             mockTime,
-            new StreamsConfig(streamsConfigProps.entrySet().stream()
+            new InternalStreamsConfig(streamsConfigProps.entrySet().stream()
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue))),
             null,
             mainConsumer,
@@ -3452,7 +3452,7 @@ public class StreamThreadTest {
 
     private StreamThread buildStreamThread(final Consumer<byte[], byte[]> consumer,
                                            final TaskManager taskManager,
-                                           final StreamsConfig config,
+                                           final InternalStreamsConfig config,
                                            final TopologyMetadata topologyMetadata) {
         final StreamsMetricsImpl streamsMetrics =
             new StreamsMetricsImpl(metrics, CLIENT_ID, StreamsConfig.METRICS_LATEST, mockTime);

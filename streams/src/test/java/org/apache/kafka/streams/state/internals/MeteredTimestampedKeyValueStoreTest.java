@@ -33,6 +33,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
@@ -94,7 +95,7 @@ public class MeteredTimestampedKeyValueStoreTest {
     @Mock
     private InternalProcessorContext context;
 
-    private final static Map<String, Object> CONFIGS =  mkMap(mkEntry(StreamsConfig.InternalConfig.TOPIC_PREFIX_ALTERNATIVE, APPLICATION_ID));
+    private final static Map<String, Object> CONFIGS =  mkMap(mkEntry(InternalStreamsConfig.TOPIC_PREFIX_ALTERNATIVE, APPLICATION_ID));
 
     private MeteredTimestampedKeyValueStore<String, String> metered;
     private final KeyValue<Bytes, byte[]> byteKeyValueTimestampPair = KeyValue.pair(KEY_BYTES,

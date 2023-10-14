@@ -33,9 +33,9 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager.StateStoreMetadata;
@@ -218,7 +218,7 @@ public class StoreChangelogReader implements ChangelogReader {
     private long lastUpdateOffsetTime;
 
     public StoreChangelogReader(final Time time,
-                                final StreamsConfig config,
+                                final InternalStreamsConfig config,
                                 final LogContext logContext,
                                 final Admin adminClient,
                                 final Consumer<byte[], byte[]> restoreConsumer,
@@ -230,7 +230,7 @@ public class StoreChangelogReader implements ChangelogReader {
         this.restoreConsumer = restoreConsumer;
         this.stateRestoreListener = stateRestoreListener;
 
-        this.stateUpdaterEnabled = InternalConfig.getStateUpdaterEnabled(config.originals());
+        this.stateUpdaterEnabled = InternalStreamsConfig.stateUpdaterEnabled(config.originals());
 
         this.groupId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
         this.pollTime = Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG));

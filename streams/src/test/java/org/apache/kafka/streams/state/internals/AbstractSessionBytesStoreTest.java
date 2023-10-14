@@ -30,6 +30,7 @@ import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.processor.StateStoreContext;
@@ -798,7 +799,7 @@ public abstract class AbstractSessionBytesStoreTest {
         final SessionStore<String, Long> sessionStore = buildSessionStore(RETENTION_PERIOD, Serdes.String(), Serdes.Long());
         final InternalMockProcessorContext context = new InternalMockProcessorContext(
             TestUtils.tempDirectory(),
-            new StreamsConfig(streamsConfig),
+            new InternalStreamsConfig(streamsConfig),
             recordCollector
         );
         final Time time = new SystemTime();

@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.To;
@@ -63,7 +64,7 @@ public class GlobalProcessorContextImplTest {
 
     @Before
     public void setup() {
-        final StreamsConfig streamsConfig = mock(StreamsConfig.class);
+        final InternalStreamsConfig streamsConfig = mock(InternalStreamsConfig.class);
         when(streamsConfig.getString(StreamsConfig.APPLICATION_ID_CONFIG)).thenReturn("dummy-id");
 
         globalContext = new GlobalProcessorContextImpl(

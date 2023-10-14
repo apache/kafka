@@ -32,6 +32,7 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.StateRestoreListener;
@@ -160,7 +161,7 @@ public class LagFetchIntegrationTest {
             final Properties props = (Properties) streamsConfiguration.clone();
             // this test relies on the second instance getting the standby, so we specify
             // an assignor with this contract.
-            props.put(StreamsConfig.InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS, FallbackPriorTaskAssignor.class.getName());
+            props.put(InternalStreamsConfig.TASK_ASSIGNOR_CLASS, FallbackPriorTaskAssignor.class.getName());
             props.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:" + i);
             props.put(StreamsConfig.CLIENT_ID_CONFIG, "instance-" + i);
             props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, optimization);

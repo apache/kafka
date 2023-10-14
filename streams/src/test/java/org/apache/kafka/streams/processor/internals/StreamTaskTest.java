@@ -53,6 +53,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.errors.TopologyException;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
@@ -225,19 +226,19 @@ public class StreamTaskTest {
                                      Collections.emptySet());
     }
 
-    private static StreamsConfig createConfig() {
+    private static InternalStreamsConfig createConfig() {
         return createConfig("0");
     }
 
-    private static StreamsConfig createConfig(final String enforcedProcessingValue) {
+    private static InternalStreamsConfig createConfig(final String enforcedProcessingValue) {
         return createConfig(AT_LEAST_ONCE, enforcedProcessingValue);
     }
 
-    private static StreamsConfig createConfig(final String eosConfig, final String enforcedProcessingValue) {
+    private static InternalStreamsConfig createConfig(final String eosConfig, final String enforcedProcessingValue) {
         return createConfig(eosConfig, enforcedProcessingValue, LogAndFailExceptionHandler.class.getName());
     }
 
-    private static StreamsConfig createConfig(
+    private static InternalStreamsConfig createConfig(
         final String eosConfig,
         final String enforcedProcessingValue,
         final String deserializationExceptionHandler) {
@@ -247,7 +248,7 @@ public class StreamTaskTest {
         } catch (final IOException e) {
             throw new RuntimeException(e);
         }
-        return new StreamsConfig(mkProperties(mkMap(
+        return new InternalStreamsConfig(mkProperties(mkMap(
             mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, APPLICATION_ID),
             mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:2171"),
             mkEntry(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, "3"),
@@ -1819,7 +1820,7 @@ public class StreamTaskTest {
         EasyMock.expect(recordCollector.offsets()).andReturn(emptyMap()).anyTimes();
         EasyMock.replay(stateManager, recordCollector);
 
-        final StreamsConfig config = createConfig();
+        final InternalStreamsConfig config = createConfig();
         final InternalProcessorContext context = new ProcessorContextImpl(
             taskId,
             config,
@@ -2670,7 +2671,7 @@ public class StreamTaskTest {
         return metrics.metrics().keySet().stream().filter(m -> m.tags().containsKey("task-id")).collect(Collectors.toList());
     }
 
-    private StreamTask createOptimizedStatefulTask(final StreamsConfig config, final Consumer<byte[], byte[]> consumer) {
+    private StreamTask createOptimizedStatefulTask(final InternalStreamsConfig config, final Consumer<byte[], byte[]> consumer) {
         final StateStore stateStore = new MockKeyValueStore(storeName, true);
 
         final ProcessorTopology topology = ProcessorTopologyFactories.with(
@@ -2704,7 +2705,7 @@ public class StreamTaskTest {
         );
     }
 
-    private StreamTask createDisconnectedTask(final StreamsConfig config) {
+    private StreamTask createDisconnectedTask(final InternalStreamsConfig config) {
         final MockKeyValueStore stateStore = new MockKeyValueStore(storeName, false);
 
         final ProcessorTopology topology = ProcessorTopologyFactories.with(
@@ -2745,7 +2746,7 @@ public class StreamTaskTest {
         );
     }
 
-    private StreamTask createFaultyStatefulTask(final StreamsConfig config) {
+    private StreamTask createFaultyStatefulTask(final InternalStreamsConfig config) {
         final ProcessorTopology topology = ProcessorTopologyFactories.with(
             asList(source1, source3),
             mkMap(mkEntry(topic1, source1), mkEntry(topic2, source3)),
@@ -2778,11 +2779,11 @@ public class StreamTaskTest {
         );
     }
 
-    private StreamTask createStatefulTask(final StreamsConfig config, final boolean logged) {
+    private StreamTask createStatefulTask(final InternalStreamsConfig config, final boolean logged) {
         return createStatefulTask(config, logged, stateManager);
     }
 
-    private StreamTask createStatefulTask(final StreamsConfig config, final boolean logged, final ProcessorStateManager stateManager) {
+    private StreamTask createStatefulTask(final InternalStreamsConfig config, final boolean logged, final ProcessorStateManager stateManager) {
         final MockKeyValueStore stateStore = new MockKeyValueStore(storeName, logged);
 
         final ProcessorTopology topology = ProcessorTopologyFactories.with(
@@ -2816,7 +2817,7 @@ public class StreamTaskTest {
         );
     }
 
-    private StreamTask createSingleSourceStateless(final StreamsConfig config,
+    private StreamTask createSingleSourceStateless(final InternalStreamsConfig config,
                                                    final String builtInMetricsVersion) {
         final ProcessorTopology topology = withSources(
             asList(source1, processorStreamTime, processorSystemTime),
@@ -2856,7 +2857,7 @@ public class StreamTaskTest {
         );
     }
 
-    private StreamTask createStatelessTask(final StreamsConfig config) {
+    private StreamTask createStatelessTask(final InternalStreamsConfig config) {
         final ProcessorTopology topology = withSources(
             asList(source1, source2, processorStreamTime, processorSystemTime),
             mkMap(mkEntry(topic1, source1), mkEntry(topic2, source2))
@@ -2909,7 +2910,7 @@ public class StreamTaskTest {
         EasyMock.expect(recordCollector.offsets()).andReturn(Collections.emptyMap()).anyTimes();
         EasyMock.replay(stateManager, recordCollector);
 
-        final StreamsConfig config = createConfig();
+        final InternalStreamsConfig config = createConfig();
 
         final InternalProcessorContext context = new ProcessorContextImpl(
             taskId,
@@ -2944,7 +2945,7 @@ public class StreamTaskTest {
             mkMap(mkEntry(topic1, timeoutSource))
         );
 
-        final StreamsConfig config = createConfig(eosConfig, "0");
+        final InternalStreamsConfig config = createConfig(eosConfig, "0");
         final InternalProcessorContext context = new ProcessorContextImpl(
             taskId,
             config,

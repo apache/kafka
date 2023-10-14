@@ -25,6 +25,7 @@ import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.EmitStrategy;
 import org.apache.kafka.streams.kstream.Grouped;
@@ -94,7 +95,7 @@ public class SessionWindowedKStreamImplTest {
         emitFinal = type.equals(EmitStrategy.StrategyType.ON_WINDOW_CLOSE);
 
         // Set interval to 0 so that it always tries to emit
-        props.setProperty(StreamsConfig.InternalConfig.EMIT_INTERVAL_MS_KSTREAMS_WINDOWED_AGGREGATION, "0");
+        props.setProperty(InternalStreamsConfig.EMIT_INTERVAL_MS_KSTREAMS_WINDOWED_AGGREGATION, "0");
 
         final KStream<String, String> stream = builder.stream(TOPIC, Consumed.with(Serdes.String(), Serdes.String()));
         this.stream = stream.groupByKey(Grouped.with(Serdes.String(), Serdes.String()))

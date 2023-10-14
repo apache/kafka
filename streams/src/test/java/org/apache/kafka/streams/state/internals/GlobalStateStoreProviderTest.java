@@ -22,6 +22,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
@@ -60,7 +61,7 @@ import static org.junit.Assert.assertTrue;
 
 public class GlobalStateStoreProviderTest {
     private final Map<String, StateStore> stores = new HashMap<>();
-    private final static Map<String, Object> CONFIGS =  mkMap(mkEntry(StreamsConfig.InternalConfig.TOPIC_PREFIX_ALTERNATIVE, "appId"));
+    private final static Map<String, Object> CONFIGS =  mkMap(mkEntry(InternalStreamsConfig.TOPIC_PREFIX_ALTERNATIVE, "appId"));
 
     @Before
     public void before() {

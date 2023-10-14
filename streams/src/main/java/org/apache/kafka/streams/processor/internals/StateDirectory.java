@@ -21,6 +21,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.processor.TaskId;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
@@ -112,7 +113,7 @@ public class StateDirectory {
      * @throws ProcessorStateException if the base state directory or application state directory does not exist
      *                                 and could not be created when hasPersistentStores is enabled.
      */
-    public StateDirectory(final StreamsConfig config, final Time time, final boolean hasPersistentStores, final boolean hasNamedTopologies) {
+    public StateDirectory(final InternalStreamsConfig config, final Time time, final boolean hasPersistentStores, final boolean hasNamedTopologies) {
         this.time = time;
         this.hasPersistentStores = hasPersistentStores;
         this.hasNamedTopologies = hasNamedTopologies;

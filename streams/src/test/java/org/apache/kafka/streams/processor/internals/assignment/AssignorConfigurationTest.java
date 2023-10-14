@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals.assignment;
 
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.internals.UpgradeFromValues;
 import org.junit.Before;
 import org.junit.Test;
@@ -38,7 +39,7 @@ public class AssignorConfigurationTest {
     public void setup() {
         config.put(StreamsConfig.APPLICATION_ID_CONFIG, "app.id");
         config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy");
-        config.put(StreamsConfig.InternalConfig.REFERENCE_CONTAINER_PARTITION_ASSIGNOR, mock(ReferenceContainer.class));
+        config.put(InternalStreamsConfig.REFERENCE_CONTAINER_PARTITION_ASSIGNOR, mock(ReferenceContainer.class));
     }
 
     @Test

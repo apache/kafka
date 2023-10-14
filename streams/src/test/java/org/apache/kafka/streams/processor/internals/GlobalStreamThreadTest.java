@@ -28,6 +28,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.internals.InternalNameProvider;
 import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
@@ -67,7 +68,7 @@ public class GlobalStreamThreadTest {
     private final MockTime time = new MockTime();
     private final MockStateRestoreListener stateRestoreListener = new MockStateRestoreListener();
     private GlobalStreamThread globalStreamThread;
-    private StreamsConfig config;
+    private InternalStreamsConfig config;
     private String baseDirectoryName;
 
     private final static String GLOBAL_STORE_TOPIC_NAME = "foo";
@@ -116,7 +117,7 @@ public class GlobalStreamThreadTest {
         properties.put(StreamsConfig.STATE_DIR_CONFIG, baseDirectoryName);
         properties.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.ByteArraySerde.class.getName());
         properties.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.ByteArraySerde.class.getName());
-        config = new StreamsConfig(properties);
+        config = new InternalStreamsConfig(properties);
         globalStreamThread = new GlobalStreamThread(
             builder.rewriteTopology(config).buildGlobalStateTopology(),
             config,

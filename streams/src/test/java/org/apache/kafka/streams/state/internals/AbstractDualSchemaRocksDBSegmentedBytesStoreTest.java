@@ -34,7 +34,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.StreamsConfig.InternalConfig;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
@@ -1342,14 +1342,14 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest<S extends
     @Test
     public void shouldRestoreRecordsAndConsistencyVectorSingleTopic() {
         final Properties props = StreamsTestUtils.getStreamsConfig();
-        props.put(InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED, true);
+        props.put(InternalStreamsConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED, true);
         final File dir = TestUtils.tempDirectory();
         context = new InternalMockProcessorContext<>(
                 dir,
                 Serdes.String(),
                 Serdes.String(),
                 new StreamsMetricsImpl(new Metrics(), "mock", StreamsConfig.METRICS_LATEST, new MockTime()),
-                new StreamsConfig(props),
+                new InternalStreamsConfig(props),
                 MockRecordCollector::new,
                 new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())),
                 Time.SYSTEM
@@ -1378,14 +1378,14 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest<S extends
     @Test
     public void shouldRestoreRecordsAndConsistencyVectorMultipleTopics() {
         final Properties props = StreamsTestUtils.getStreamsConfig();
-        props.put(InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED, true);
+        props.put(InternalStreamsConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED, true);
         final File dir = TestUtils.tempDirectory();
         context = new InternalMockProcessorContext<>(
                 dir,
                 Serdes.String(),
                 Serdes.String(),
                 new StreamsMetricsImpl(new Metrics(), "mock", StreamsConfig.METRICS_LATEST, new MockTime()),
-                new StreamsConfig(props),
+                new InternalStreamsConfig(props),
                 MockRecordCollector::new,
                 new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())),
                 Time.SYSTEM
@@ -1417,14 +1417,14 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest<S extends
     @Test
     public void shouldHandleTombstoneRecords() {
         final Properties props = StreamsTestUtils.getStreamsConfig();
-        props.put(InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED, true);
+        props.put(InternalStreamsConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED, true);
         final File dir = TestUtils.tempDirectory();
         context = new InternalMockProcessorContext<>(
                 dir,
                 Serdes.String(),
                 Serdes.String(),
                 new StreamsMetricsImpl(new Metrics(), "mock", StreamsConfig.METRICS_LATEST, new MockTime()),
-                new StreamsConfig(props),
+                new InternalStreamsConfig(props),
                 MockRecordCollector::new,
                 new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())),
                 Time.SYSTEM
@@ -1458,14 +1458,14 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest<S extends
     @Test
     public void shouldNotThrowWhenRestoringOnMissingHeaders() {
         final Properties props = StreamsTestUtils.getStreamsConfig();
-        props.put(InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED, true);
+        props.put(InternalStreamsConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED, true);
         final File dir = TestUtils.tempDirectory();
         context = new InternalMockProcessorContext<>(
                 dir,
                 Serdes.String(),
                 Serdes.String(),
                 new StreamsMetricsImpl(new Metrics(), "mock", StreamsConfig.METRICS_LATEST, new MockTime()),
-                new StreamsConfig(props),
+                new InternalStreamsConfig(props),
                 MockRecordCollector::new,
                 new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())),
                 Time.SYSTEM
@@ -1584,7 +1584,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest<S extends
         final AbstractDualSchemaRocksDBSegmentedBytesStore<S> bytesStore = getBytesStore();
         final InternalMockProcessorContext context = new InternalMockProcessorContext(
             TestUtils.tempDirectory(),
-            new StreamsConfig(streamsConfig)
+            new InternalStreamsConfig(streamsConfig)
         );
         final Time time = new SystemTime();
         context.setSystemTimeMs(time.milliseconds());

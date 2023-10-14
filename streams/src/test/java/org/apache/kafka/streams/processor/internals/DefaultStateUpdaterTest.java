@@ -25,6 +25,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.StateUpdater.ExceptionAndTasks;
 import org.apache.kafka.streams.processor.internals.Task.State;
@@ -100,7 +101,7 @@ class DefaultStateUpdaterTest {
     // need an auto-tick timer to work for draining with timeout
     private final Time time = new MockTime(1L);
     private final Metrics metrics = new Metrics(time);
-    private final StreamsConfig config = new StreamsConfig(configProps(COMMIT_INTERVAL));
+    private final InternalStreamsConfig config = new InternalStreamsConfig(configProps(COMMIT_INTERVAL));
     private final ChangelogReader changelogReader = mock(ChangelogReader.class);
     private final TopologyMetadata topologyMetadata = unnamedTopology().build();
     private DefaultStateUpdater stateUpdater =
@@ -162,7 +163,7 @@ class DefaultStateUpdaterTest {
     @Test
     public void shouldRemoveUpdatingTasksOnShutdown() throws Exception {
         stateUpdater.shutdown(Duration.ofMillis(Long.MAX_VALUE));
-        stateUpdater = new DefaultStateUpdater("test-state-updater", metrics, new StreamsConfig(configProps(Integer.MAX_VALUE)), changelogReader, topologyMetadata, time);
+        stateUpdater = new DefaultStateUpdater("test-state-updater", metrics, new InternalStreamsConfig(configProps(Integer.MAX_VALUE)), changelogReader, topologyMetadata, time);
         final StreamTask activeTask = statefulTask(TASK_0_0, mkSet(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
         final StandbyTask standbyTask = standbyTask(TASK_0_2, mkSet(TOPIC_PARTITION_C_0)).inState(State.RUNNING).build();
         when(changelogReader.completedChangelogs()).thenReturn(Collections.emptySet());

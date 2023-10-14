@@ -35,6 +35,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
@@ -67,7 +68,7 @@ public class LogicalKeyValueSegmentTest {
             TestUtils.tempDirectory(),
             Serdes.String(),
             Serdes.String(),
-            new StreamsConfig(StreamsTestUtils.getStreamsConfig())
+            new InternalStreamsConfig(StreamsTestUtils.getStreamsConfig())
         ), physicalStore);
 
         segment0 = new LogicalKeyValueSegment(0, "segment-0", physicalStore);

@@ -20,7 +20,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.internals.InternalStreamsConfig;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
@@ -35,7 +35,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-import static org.apache.kafka.streams.StreamsConfig.InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED;
+import static org.apache.kafka.streams.internals.InternalStreamsConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED;
 
 /**
  * An in-memory LRU cache store based on HashSet and HashMap.
@@ -99,7 +99,7 @@ public class MemoryLRUCache implements KeyValueStore<Bytes, byte[]> {
 
     @Override
     public void init(final StateStoreContext context, final StateStore root) {
-        final boolean consistencyEnabled = StreamsConfig.InternalConfig.getBoolean(
+        final boolean consistencyEnabled = InternalStreamsConfig.getBoolean(
             context.appConfigs(),
             IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
             false
