@@ -109,7 +109,7 @@ class DescribeGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinat
             .setGroupState(GenericGroupState.DEAD.toString)
         ),
         describeGroups(
-          groupIds = List("grp-1", "grp-2","grp-unknown"),
+          groupIds = List("grp-1", "grp-2", "grp-unknown"),
           version = version.toShort
         )
       )

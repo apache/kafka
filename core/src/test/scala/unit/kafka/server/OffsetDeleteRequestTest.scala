@@ -114,7 +114,7 @@ class OffsetDeleteRequestTest(cluster: ClusterInstance) extends GroupCoordinator
           groupId = "grp",
           memberId = memberId,
           memberEpoch = memberEpoch,
-          subscribedTopicNames = List()
+          subscribedTopicNames = List.empty
         )
       } else {
         leaveGroup(
@@ -153,4 +153,6 @@ class OffsetDeleteRequestTest(cluster: ClusterInstance) extends GroupCoordinator
       )
     }
   }
+  // TODO: test wrong topic
+  // TODO: test wrong partition
 }
