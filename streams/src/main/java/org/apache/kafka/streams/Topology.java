@@ -716,7 +716,7 @@ public class Topology {
         internalTopologyBuilder.addProcessor(name, supplier, parentNames);
         final Set<StoreBuilder<?>> stores = supplier.stores();
         if (stores != null) {
-            for (final StoreBuilder storeBuilder : stores) {
+            for (final StoreBuilder<?> storeBuilder : stores) {
                 internalTopologyBuilder.addStateStore(storeBuilder, name);
             }
         }
