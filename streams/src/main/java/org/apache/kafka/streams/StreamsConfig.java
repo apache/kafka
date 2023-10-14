@@ -158,6 +158,10 @@ public class StreamsConfig extends AbstractConfig {
     protected static final long EOS_DEFAULT_COMMIT_INTERVAL_MS = 100L;
     private static final int DEFAULT_TRANSACTION_TIMEOUT = 10000;
 
+    /**
+     * @deprecated since 3.7.0; do not use (internal)
+     */
+    @Deprecated
     public static final int DUMMY_THREAD_INDEX = 1;
     public static final long MAX_TASK_IDLE_MS_DISABLED = -1;
 
