@@ -63,9 +63,6 @@ class DeleteGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinator
     testDeleteGroups(false)
   }
 
-  /**
-   * Testing delete group on empty and non-empty groups.
-   */
   private def testDeleteGroups(useNewProtocol: Boolean): Unit = {
     if (useNewProtocol && !isNewGroupCoordinatorEnabled) {
       fail("Cannot use the new protocol with the old group coordinator.")
@@ -83,6 +80,7 @@ class DeleteGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinator
 
     // Join the consumer group. Note that we don't heartbeat here so we must use
     // a session long enough for the duration of the test.
+    // We test DeleteGroups on empty and non-empty groups. Here we create the non-empty group.
     joinConsumerGroup(
       groupId = "grp-non-empty",
       useNewProtocol = useNewProtocol
