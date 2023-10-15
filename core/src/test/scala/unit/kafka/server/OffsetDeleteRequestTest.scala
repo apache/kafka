@@ -134,6 +134,15 @@ class OffsetDeleteRequestTest(cluster: ClusterInstance) extends GroupCoordinator
         )
       }
 
+      // Delete offsets with partition that doesn't exist.
+      deleteOffset(
+        groupId = "grp",
+        topic = "foo",
+        partition = 5,
+        expectedPartitionError = Errors.UNKNOWN_TOPIC_OR_PARTITION,
+        version = version.toShort
+      )
+
       // Delete offset with unknown group id.
       deleteOffset(
         groupId = "grp-unknown",
@@ -153,6 +162,4 @@ class OffsetDeleteRequestTest(cluster: ClusterInstance) extends GroupCoordinator
       )
     }
   }
-  // TODO: test wrong topic
-  // TODO: test wrong partition
 }
