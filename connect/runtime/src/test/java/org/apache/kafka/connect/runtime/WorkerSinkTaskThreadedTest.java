@@ -592,7 +592,6 @@ public class WorkerSinkTaskThreadedTest {
         when(transformationChain.apply(any(SinkRecord.class))).thenAnswer(AdditionalAnswers.returnsFirstArg());
     }
 
-    //    @SuppressWarnings("unchecked")
     @SuppressWarnings("SameParameterValue")
     private void expectRebalanceDuringPoll(long startOffset) {
         final List<TopicPartition> partitions = Arrays.asList(TOPIC_PARTITION, TOPIC_PARTITION2, TOPIC_PARTITION3);
@@ -624,9 +623,8 @@ public class WorkerSinkTaskThreadedTest {
         when(valueConverter.toConnectData(TOPIC, emptyHeaders(), RAW_VALUE)).thenReturn(new SchemaAndValue(VALUE_SCHEMA, VALUE));
     }
 
-    @SuppressWarnings("rawtypes")
     private void expectOffsetCommit(ExpectOffsetCommitCommand... commands) {
-        doAnswer(new Answer() {
+        doAnswer(new Answer<Object>() {
             int index = 0;
 
             @Override
@@ -643,7 +641,7 @@ public class WorkerSinkTaskThreadedTest {
             }
         }).when(sinkTask).preCommit(anyMap());
 
-        doAnswer(new Answer() {
+        doAnswer(new Answer<Object>() {
             int index = 0;
 
             @Override
