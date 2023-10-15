@@ -134,4 +134,3 @@ class DeleteGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinator
     }
   }
 }
-
