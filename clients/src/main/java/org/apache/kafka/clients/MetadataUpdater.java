@@ -85,9 +85,13 @@ public interface MetadataUpdater extends Closeable {
      */
     void handleSuccessfulResponse(RequestHeader requestHeader, long now, MetadataResponse metadataResponse);
 
+    boolean isBootstrapped();
+    boolean tryBootstrap(long nowMs, NetworkClient.BootstrapState bootstrapState);
+
     /**
      * Close this updater.
      */
     @Override
     void close();
+
 }

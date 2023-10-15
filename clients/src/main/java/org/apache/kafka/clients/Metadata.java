@@ -659,6 +659,10 @@ public class Metadata implements Closeable {
         }
     }
 
+    public boolean isBootstrapped() {
+        return cache.cluster().isBootstrapConfigured();
+    }
+
     /**
      * Represents current leader state known in metadata. It is possible that we know the leader, but not the
      * epoch if the metadata is received from a broker which does not support a sufficient Metadata API version.

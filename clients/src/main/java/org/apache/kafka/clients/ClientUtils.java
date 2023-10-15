@@ -103,6 +103,41 @@ public final class ClientUtils {
         return addresses;
     }
 
+    public static List<InetSocketAddress> validateAddresses(List<String> urls, ClientDnsLookup clientDnsLookup) {
+        List<InetSocketAddress> addresses = new ArrayList<>();
+        urls.forEach(url -> {
+            final String host = getHost(url);
+            final Integer port = getPort(url);
+
+            if (clientDnsLookup == ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY) {
+                InetAddress[] inetAddresses;
+                try {
+                    inetAddresses = InetAddress.getAllByName(host);
+                } catch (UnknownHostException e) {
+                    inetAddresses = new InetAddress[0];
+                }
+
+                for (InetAddress inetAddress : inetAddresses) {
+                    String resolvedCanonicalName = inetAddress.getCanonicalHostName();
+                    InetSocketAddress address = new InetSocketAddress(resolvedCanonicalName, port);
+                    if (address.isUnresolved()) {
+                        log.warn("Couldn't resolve server {} from {} as DNS resolution of the canonical hostname {} failed for {}", url, CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, resolvedCanonicalName, host);
+                    } else {
+                        addresses.add(address);
+                    }
+                }
+            } else {
+                InetSocketAddress address = new InetSocketAddress(host, port);
+                if (address.isUnresolved()) {
+                    log.warn("Couldn't resolve server {} from {} as DNS resolution failed for {}", url, CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, host);
+                } else {
+                    addresses.add(address);
+                }
+            }
+        });
+        return addresses;
+    }
+
     /**
      * Create a new channel builder from the provided configuration.
      *
@@ -213,7 +248,6 @@ public final class ClientUtils {
                                                     Sensor throttleTimeSensor) {
         ChannelBuilder channelBuilder = null;
         Selector selector = null;
-
         try {
             channelBuilder = ClientUtils.createChannelBuilder(config, time, logContext);
             selector = new Selector(config.getLong(CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG),
@@ -222,6 +256,10 @@ public final class ClientUtils {
                     metricsGroupPrefix,
                     channelBuilder,
                     logContext);
+            NetworkClient.BootstrapConfiguration bootstrapConfig = new NetworkClient.BootstrapConfiguration(
+                    config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG),
+                    ClientDnsLookup.forConfig(config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG)),
+                    config.getLong(CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG));
             return new NetworkClient(metadataUpdater,
                     metadata,
                     selector,
@@ -234,6 +272,7 @@ public final class ClientUtils {
                     requestTimeoutMs,
                     config.getLong(CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG),
                     config.getLong(CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG),
+                    bootstrapConfig,
                     time,
                     true,
                     apiVersions,
