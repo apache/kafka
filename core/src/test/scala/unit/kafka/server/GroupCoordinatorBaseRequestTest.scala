@@ -193,7 +193,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     version: Short
   ): Unit = {
     if (expectedResponseError != Errors.NONE && expectedPartitionError != Errors.NONE) {
-      fail("deleteOffset: neither expectedResponseError nor expectedTopicError is none.")
+      fail("deleteOffset: neither expectedResponseError nor expectedTopicError is Errors.NONE.")
     }
 
     val request = new OffsetDeleteRequest.Builder(
