@@ -23,7 +23,9 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import org.eclipse.jgit.api.Git;
+import org.eclipse.jgit.api.InitCommand;
 import org.eclipse.jgit.api.errors.GitAPIException;
+import org.eclipse.jgit.internal.storage.file.FileRepository;
 import org.eclipse.jgit.lib.Constants;
 import org.eclipse.jgit.lib.ObjectId;
 import org.eclipse.jgit.lib.ObjectLoader;
@@ -31,6 +33,7 @@ import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.revwalk.RevCommit;
 import org.eclipse.jgit.revwalk.RevTree;
 import org.eclipse.jgit.revwalk.RevWalk;
+import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
 import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider;
 import org.eclipse.jgit.treewalk.TreeWalk;
 import org.eclipse.jgit.treewalk.filter.PathFilter;
@@ -109,13 +112,19 @@ public class MetadataSchemaChecker {
         if (tempFile.createNewFile()) {
             System.out.println("temp file created: " + tempFile);
         }
-        Git git = Git.cloneRepository()
+        /*Git git = Git.cloneRepository()
                 .setURI("https://github.com/apache/kafka.git")
                 .setCredentialsProvider(new UsernamePasswordCredentialsProvider("x", "x"))
                 .setDirectory(tempFile)
                 .setBranchesToClone(Collections.singleton("refs/heads/trunk"))
                 .call();
+        //Repository repository = git.getRepository();
+        Repository repository = new FileRepositoryBuilder().readEnvironment().findGitDir(System.getProperty("user.dir")).build();*/
+        Git git = Git.init().setDirectory(new File(System.getProperty("user.dir")))
+                .setInitialBranch("refs/heads/trunk")
+                .call();
         Repository repository = git.getRepository();
+
         ObjectId lastCommitId = repository.resolve(Constants.HEAD);
         try (RevWalk revWalk = new RevWalk(repository)) {
             RevCommit commit = revWalk.parseCommit(lastCommitId);
@@ -146,6 +155,7 @@ public class MetadataSchemaChecker {
                         }
                     }
                 }
+                System.out.println(stringBuilder);
                 gitSchemas.add(stringBuilder.toString());
             }
             revWalk.dispose();
