@@ -1761,7 +1761,6 @@ public class TaskManager {
 
     private void maybeLockTasks(final Set<TaskId> ids) {
         if (schedulingTaskManager != null && !ids.isEmpty()) {
-            // Some tasks may be owned by the state updater and do not have to be locked in order to be committed.
             if (log.isDebugEnabled()) {
                 log.debug("Locking tasks {}", ids.stream().map(TaskId::toString).collect(Collectors.joining(", ")));
             }
@@ -1783,7 +1782,6 @@ public class TaskManager {
 
     private void maybeUnlockTasks(final Set<TaskId> ids) {
         if (schedulingTaskManager != null && !ids.isEmpty()) {
-            // Some tasks may be owned by the state updater and do not have to be locked in order to be committed.
             if (log.isDebugEnabled()) {
                 log.debug("Unlocking tasks {}", ids.stream().map(TaskId::toString).collect(Collectors.joining(", ")));
             }

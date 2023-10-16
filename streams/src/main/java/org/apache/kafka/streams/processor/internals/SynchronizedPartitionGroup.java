@@ -23,7 +23,7 @@ import org.apache.kafka.common.TopicPartition;
 
 class SynchronizedPartitionGroup extends AbstractPartitionGroup {
 
-    private AbstractPartitionGroup wrapped;
+    private final AbstractPartitionGroup wrapped;
 
     public SynchronizedPartitionGroup(final AbstractPartitionGroup wrapped) {
         this.wrapped = wrapped;
