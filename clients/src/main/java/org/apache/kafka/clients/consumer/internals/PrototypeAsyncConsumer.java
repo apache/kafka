@@ -44,6 +44,7 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
@@ -588,6 +589,11 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         } finally {
             wakeupTrigger.clearActiveTask();
         }
+    }
+
+    @Override
+    public Uuid clientInstanceId(Duration timeout) {
+        throw new KafkaException("method not implemented");
     }
 
     @Override
