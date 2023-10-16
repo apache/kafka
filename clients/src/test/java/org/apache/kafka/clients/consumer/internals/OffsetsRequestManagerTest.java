@@ -514,8 +514,8 @@ public class OffsetsRequestManagerTest {
                 unsentRequest, Collections.singletonMap(TEST_PARTITION_1, Errors.TOPIC_AUTHORIZATION_FAILED));
         clientResponse.onComplete();
 
-        assertTrue(unsentRequest.handler().isDone());
-        assertFalse(unsentRequest.handler().isCompletedExceptionally());
+        assertTrue(unsentRequest.future().isDone());
+        assertFalse(unsentRequest.future().isCompletedExceptionally());
 
         verify(subscriptionState).requestFailed(any(), anyLong());
         verify(metadata).requestUpdate(false);
@@ -551,8 +551,8 @@ public class OffsetsRequestManagerTest {
         ClientResponse clientResponse = buildOffsetsForLeaderEpochResponse(unsentRequest,
                 Collections.singletonList(tp), expectedEndOffset);
         clientResponse.onComplete();
-        assertTrue(unsentRequest.handler().isDone());
-        assertFalse(unsentRequest.handler().isCompletedExceptionally());
+        assertTrue(unsentRequest.future().isDone());
+        assertFalse(unsentRequest.future().isCompletedExceptionally());
         verify(subscriptionState).maybeCompleteValidation(any(), any(), any());
     }
 
@@ -588,8 +588,8 @@ public class OffsetsRequestManagerTest {
                 buildOffsetsForLeaderEpochResponseWithErrors(unsentRequest, Collections.singletonMap(TEST_PARTITION_1, Errors.TOPIC_AUTHORIZATION_FAILED));
         clientResponse.onComplete();
 
-        assertTrue(unsentRequest.handler().isDone());
-        assertFalse(unsentRequest.handler().isCompletedExceptionally());
+        assertTrue(unsentRequest.future().isDone());
+        assertFalse(unsentRequest.future().isCompletedExceptionally());
 
         // Following validatePositions should raise the previous exception without performing any
         // request
@@ -650,8 +650,8 @@ public class OffsetsRequestManagerTest {
         NetworkClientDelegate.UnsentRequest unsentRequest = pollResult.unsentRequests.get(0);
         ClientResponse clientResponse = buildClientResponse(unsentRequest, expectedOffsets);
         clientResponse.onComplete();
-        assertTrue(unsentRequest.handler().isDone());
-        assertFalse(unsentRequest.handler().isCompletedExceptionally());
+        assertTrue(unsentRequest.future().isDone());
+        assertFalse(unsentRequest.future().isCompletedExceptionally());
     }
 
     private ListOffsetsResponseData.ListOffsetsTopicResponse mockUnknownOffsetResponse(

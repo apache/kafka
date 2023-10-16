@@ -224,11 +224,15 @@ public class NetworkClientDelegate implements AutoCloseable {
                              final Optional<Node> node,
                              final BiConsumer<ClientResponse, Throwable> callback) {
             this(requestBuilder, node);
-            this.handler.whenComplete(callback);
+            this.handler.future().whenComplete(callback);
         }
 
         public void setTimer(final Time time, final long requestTimeoutMs) {
             this.timer = time.timer(requestTimeoutMs);
+        }
+
+        CompletableFuture<ClientResponse> future() {
+            return handler.future;
         }
 
         FutureCompletionHandler handler() {
@@ -250,16 +254,18 @@ public class NetworkClientDelegate implements AutoCloseable {
         }
     }
 
-    public static class FutureCompletionHandler extends CompletableFuture<ClientResponse> implements RequestCompletionHandler {
-        
+    public static class FutureCompletionHandler implements RequestCompletionHandler {
+
         private long responseCompletionTimeMs;
+        private final CompletableFuture<ClientResponse> future;
 
         FutureCompletionHandler() {
+            future = new CompletableFuture<>();
         }
 
         public void onFailure(final long currentTimeMs, final RuntimeException e) {
             this.responseCompletionTimeMs = currentTimeMs;
-            this.completeExceptionally(e);
+            this.future.completeExceptionally(e);
         }
 
         public long completionTimeMs() {
@@ -277,8 +283,12 @@ public class NetworkClientDelegate implements AutoCloseable {
                 onFailure(completionTimeMs, response.versionMismatch());
             } else {
                 responseCompletionTimeMs = completionTimeMs;
-                this.complete(response);
+                this.future.complete(response);
             }
+        }
+
+        public CompletableFuture<ClientResponse> future() {
+            return future;
         }
     }
 }

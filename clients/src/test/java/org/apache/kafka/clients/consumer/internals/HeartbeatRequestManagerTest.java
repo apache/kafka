@@ -211,7 +211,7 @@ public class HeartbeatRequestManagerTest {
         when(membershipManager.shouldSendHeartbeat()).thenReturn(true);
         NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(1, result.unsentRequests.size());
-        result.unsentRequests.get(0).handler().completeExceptionally(new KafkaException("fatal"));
+        result.unsentRequests.get(0).future().completeExceptionally(new KafkaException("fatal"));
         verify(membershipManager).transitionToFailed();
         verify(errorEventHandler).handle(any());
     }
@@ -299,7 +299,7 @@ public class HeartbeatRequestManagerTest {
         ClientResponse response = createHeartbeatResponse(
             result.unsentRequests.get(0),
             error);
-        result.unsentRequests.get(0).handler().complete(response);
+        result.unsentRequests.get(0).future().complete(response);
         ConsumerGroupHeartbeatResponse mockResponse = (ConsumerGroupHeartbeatResponse) response.responseBody();
 
         switch (error) {
