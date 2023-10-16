@@ -115,7 +115,8 @@ public class Loggers {
      * Set the level for the specified logger and all of its children
      * @param namespace the name of the logger to adjust along with its children; may not be nul
      * @param level the level to set for the logger and its children; may not be null
-     * @return all loggers that were affected by this action; may be empty, but never null
+     * @return all loggers that were affected by this action, sorted by their natural ordering;
+     * may be empty, but never null
      */
     public synchronized List<String> setLevel(String namespace, Level level) {
         Objects.requireNonNull(namespace, "Logging namespace may not be null");
