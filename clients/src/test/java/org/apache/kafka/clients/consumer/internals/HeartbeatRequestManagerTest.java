@@ -95,10 +95,10 @@ public class HeartbeatRequestManagerTest {
         coordinatorRequestManager = mock(CoordinatorRequestManager.class);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(new Node(1, "localhost", 9999)));
         subscriptionState = mock(SubscriptionState.class);
-        membershipManager = spy(new MembershipManagerImpl(GROUP_ID));
+        assignmentReconciler = mock(AssignmentReconciler.class);
+        membershipManager = spy(new MembershipManagerImpl(GROUP_ID, assignmentReconciler));
         heartbeatRequestState = mock(HeartbeatRequestManager.HeartbeatRequestState.class);
         errorEventHandler = mock(ErrorEventHandler.class);
-        assignmentReconciler = mock(AssignmentReconciler.class);
         heartbeatRequestManager = createManager();
     }
 
@@ -236,7 +236,12 @@ public class HeartbeatRequestManagerTest {
         Properties prop = createConsumerConfig();
         prop.setProperty(MAX_POLL_INTERVAL_MS_CONFIG, "10000");
         config = new ConsumerConfig(prop);
-        membershipManager = new MembershipManagerImpl(GROUP_ID, GROUP_INSTANCE_ID, null);
+        membershipManager = new MembershipManagerImpl(
+                GROUP_ID,
+                GROUP_INSTANCE_ID,
+                null,
+                assignmentReconciler
+        );
         heartbeatRequestState = new HeartbeatRequestManager.HeartbeatRequestState(
             logContext,
             time,
@@ -406,7 +411,6 @@ public class HeartbeatRequestManagerTest {
             subscriptionState,
             membershipManager,
             heartbeatRequestState,
-            errorEventHandler,
-            assignmentReconciler);
+            errorEventHandler);
     }
 }

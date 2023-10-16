@@ -16,27 +16,34 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.TopicPartition;
 
 import java.util.Collections;
 import java.util.Optional;
 import java.util.SortedSet;
 
-public class PartitionAssignmentLostCallbackInvokedEvent extends ApplicationEvent {
+public class PartitionReconciliationCompleteEvent extends ApplicationEvent {
 
-    private final SortedSet<TopicPartition> lostPartitions;
+    private final SortedSet<TopicPartition> revokedPartitions;
+    private final SortedSet<TopicPartition> assignedPartitions;
     private final Optional<KafkaException> error;
 
-    public PartitionAssignmentLostCallbackInvokedEvent(SortedSet<TopicPartition> lostPartitions,
-                                                       Optional<KafkaException> error) {
-        super(Type.PARTITION_ASSIGNMENT_LOST_CALLBACK_INVOKED);
-        this.lostPartitions = Collections.unmodifiableSortedSet(lostPartitions);
+    public PartitionReconciliationCompleteEvent(SortedSet<TopicPartition> revokedPartitions,
+                                                SortedSet<TopicPartition> assignedPartitions,
+                                                Optional<KafkaException> error) {
+        super(Type.PARTITION_RECONCILIATION_COMPLETE);
+        this.revokedPartitions = Collections.unmodifiableSortedSet(revokedPartitions);
+        this.assignedPartitions = Collections.unmodifiableSortedSet(assignedPartitions);
         this.error = error;
     }
 
-    public SortedSet<TopicPartition> lostPartitions() {
-        return lostPartitions;
+    public SortedSet<TopicPartition> revokedPartitions() {
+        return revokedPartitions;
+    }
+
+    public SortedSet<TopicPartition> assignedPartitions() {
+        return assignedPartitions;
     }
 
     public Optional<KafkaException> error() {
@@ -49,22 +56,28 @@ public class PartitionAssignmentLostCallbackInvokedEvent extends ApplicationEven
         if (o == null || getClass() != o.getClass()) return false;
         if (!super.equals(o)) return false;
 
-        PartitionAssignmentLostCallbackInvokedEvent that = (PartitionAssignmentLostCallbackInvokedEvent) o;
+        PartitionReconciliationCompleteEvent that = (PartitionReconciliationCompleteEvent) o;
 
-        return lostPartitions.equals(that.lostPartitions) && error.equals(that.error);
+        return revokedPartitions.equals(that.revokedPartitions) &&
+                assignedPartitions.equals(that.assignedPartitions) &&
+                error.equals(that.error);
     }
 
     @Override
     public int hashCode() {
         int result = super.hashCode();
-        result = 31 * result + lostPartitions.hashCode();
+        result = 31 * result + revokedPartitions.hashCode();
+        result = 31 * result + assignedPartitions.hashCode();
         result = 31 * result + error.hashCode();
         return result;
     }
 
     @Override
     protected String toStringBase() {
-        return super.toStringBase() + ", lostPartitions=" + lostPartitions + ", error=" + error;
+        return super.toStringBase() +
+                ", revokedPartitions=" + revokedPartitions +
+                ", assignedPartitions=" + assignedPartitions +
+                ", error=" + error;
     }
 
     @Override

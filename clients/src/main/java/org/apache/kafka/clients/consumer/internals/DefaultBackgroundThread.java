@@ -177,6 +177,7 @@ public class DefaultBackgroundThread extends KafkaThread {
                 logContext,
                 config);
             HeartbeatRequestManager heartbeatRequestManager = null;
+            MembershipManager membershipManager = null;
 
             // TODO: consolidate groupState and memberState
             if (groupState.groupId != null) {
@@ -194,7 +195,13 @@ public class DefaultBackgroundThread extends KafkaThread {
                         config,
                         coordinatorRequestManager,
                         groupState);
-                MembershipManager membershipManager = new MembershipManagerImpl(groupState.groupId);
+                AssignmentReconciler assignmentReconciler = new AssignmentReconciler(
+                        logContext,
+                        subscriptionState,
+                        metadata,
+                        backgroundEventQueue
+                );
+                membershipManager = new MembershipManagerImpl(groupState.groupId, assignmentReconciler);
                 heartbeatRequestManager = new HeartbeatRequestManager(
                         this.time,
                         logContext,
@@ -202,8 +209,7 @@ public class DefaultBackgroundThread extends KafkaThread {
                         coordinatorRequestManager,
                         subscriptionState,
                         membershipManager,
-                        errorEventHandler,
-                        new AssignmentReconciler(logContext, subscriptionState, metadata, backgroundEventQueue));
+                        errorEventHandler);
             }
 
             this.requestManagers = new RequestManagers(
@@ -215,7 +221,8 @@ public class DefaultBackgroundThread extends KafkaThread {
             this.applicationEventProcessor = new ApplicationEventProcessor(
                 backgroundEventQueue,
                 requestManagers,
-                metadata);
+                metadata,
+                Optional.ofNullable(membershipManager));
         } catch (final Exception e) {
             close();
             throw new KafkaException("Failed to construct background processor", e.getCause());

@@ -21,17 +21,24 @@ import org.apache.kafka.common.TopicPartition;
 import java.util.Collections;
 import java.util.SortedSet;
 
-public class PartitionAssignmentLostStartedEvent extends BackgroundEvent {
+public class PartitionReconciliationStartedEvent extends BackgroundEvent {
 
-    private final SortedSet<TopicPartition> lostPartitions;
+    private final SortedSet<TopicPartition> revokedPartitions;
+    private final SortedSet<TopicPartition> assignedPartitions;
 
-    public PartitionAssignmentLostStartedEvent(SortedSet<TopicPartition> lostPartitions) {
-        super(Type.PARTITION_ASSIGNMENT_LOST_STARTED);
-        this.lostPartitions = Collections.unmodifiableSortedSet(lostPartitions);
+    public PartitionReconciliationStartedEvent(SortedSet<TopicPartition> revokedPartitions,
+                                               SortedSet<TopicPartition> assignedPartitions) {
+        super(Type.PARTITION_RECONCILIATION_STARTED);
+        this.revokedPartitions = Collections.unmodifiableSortedSet(revokedPartitions);
+        this.assignedPartitions = Collections.unmodifiableSortedSet(assignedPartitions);
     }
 
-    public SortedSet<TopicPartition> lostPartitions() {
-        return lostPartitions;
+    public SortedSet<TopicPartition> revokedPartitions() {
+        return revokedPartitions;
+    }
+
+    public SortedSet<TopicPartition> assignedPartitions() {
+        return assignedPartitions;
     }
 
     @Override
@@ -40,21 +47,25 @@ public class PartitionAssignmentLostStartedEvent extends BackgroundEvent {
         if (o == null || getClass() != o.getClass()) return false;
         if (!super.equals(o)) return false;
 
-        PartitionAssignmentLostStartedEvent that = (PartitionAssignmentLostStartedEvent) o;
+        PartitionReconciliationStartedEvent that = (PartitionReconciliationStartedEvent) o;
 
-        return lostPartitions.equals(that.lostPartitions);
+        return revokedPartitions.equals(that.revokedPartitions) &&
+                assignedPartitions.equals(that.assignedPartitions);
     }
 
     @Override
     public int hashCode() {
         int result = super.hashCode();
-        result = 31 * result + lostPartitions.hashCode();
+        result = 31 * result + revokedPartitions.hashCode();
+        result = 31 * result + assignedPartitions.hashCode();
         return result;
     }
 
     @Override
     protected String toStringBase() {
-        return super.toStringBase() + ", lostPartitions=" + lostPartitions;
+        return super.toStringBase() +
+                ", revokedPartitions=" + revokedPartitions +
+                ", assignedPartitions=" + assignedPartitions;
     }
 
     @Override

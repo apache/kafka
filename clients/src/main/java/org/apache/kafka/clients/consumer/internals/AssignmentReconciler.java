@@ -19,9 +19,9 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
-import org.apache.kafka.clients.consumer.internals.events.PartitionAssignmentLostStartedEvent;
-import org.apache.kafka.clients.consumer.internals.events.PartitionAssignmentChangedCallbacksInvokedEvent;
-import org.apache.kafka.clients.consumer.internals.events.PartitionAssignmentChangedStartedEvent;
+import org.apache.kafka.clients.consumer.internals.events.PartitionLostStartedEvent;
+import org.apache.kafka.clients.consumer.internals.events.PartitionReconciliationCompleteEvent;
+import org.apache.kafka.clients.consumer.internals.events.PartitionReconciliationStartedEvent;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData.Assignment;
@@ -59,8 +59,8 @@ import java.util.concurrent.BlockingQueue;
  *
  * <ol>
  *     <li>
- *         On the background thread, upon receipt of a new assignment from the group coordinator, the heartbeat
- *         request manager should first call {@link #reconcile(Assignment)} to start revocation
+ *         On the background thread, upon receipt of a new assignment from the group coordinator, the
+ *         {@link MembershipManager} should call {@link #startReconcile(Assignment)} to start reconciliation.
  *     </li>
  *     <li>
  *         Internally, the partitions to revoke are determined via {@link #getPartitionsToRevoke(Assignment)};
@@ -69,23 +69,22 @@ import java.util.concurrent.BlockingQueue;
  *         these are the partitions in the target assignment that are <em>not in</em> the current assignment.
  *     </li>
  *     <li>
- *         Send a {@link PartitionAssignmentChangedStartedEvent} so that the application thread will execute the
- *         {@link ConsumerRebalanceListener} callback methods
+ *         Send a {@link PartitionReconciliationStartedEvent} so that the application thread will execute the
+ *         {@link ConsumerRebalanceListener} callback methods.
  *     </li>
  *     <li>
- *         On the application thread, when the {@link PartitionAssignmentChangedStartedEvent} is received, execute the
+ *         On the application thread, when the {@link PartitionReconciliationStartedEvent} is received, execute the
  *         {@link ConsumerRebalanceListener#onPartitionsRevoked(Collection)} and
  *         {@link ConsumerRebalanceListener#onPartitionsAssigned(Collection)} callback methods
  *     </li>
  *     <li>
- *         Enqueue a corresponding {@link PartitionAssignmentChangedCallbacksInvokedEvent} so that the background thread
+ *         Enqueue a corresponding {@link PartitionReconciliationCompleteEvent} so that the background thread
  *         will know the listener was invoked and the result of the invocation
  *     </li>
  *     <li>
- *         On the background thread, process the {@link PartitionAssignmentChangedCallbacksInvokedEvent}, which should
- *         call the {@link HeartbeatRequestManager#partitionAssignmentChangedCallbacksInvoked(Set, Set, Optional)}
- *         method. This method will call the {@link #reconciliationCallbacksInvoked(Set, Set)} method to remove the
- *         revoked partitions and add the assigned partitions in the
+ *         On the background thread, process the {@link PartitionReconciliationCompleteEvent}, which should call the
+ *         {@link MembershipManager#completeReconcile(Set, Set, Optional)} method. This method will call
+ *         {@link #completeReconcile(Set, Set)} to remove the revoked partitions and add the assigned partitions in the
  *         {@link SubscriptionState#assignFromSubscribed(Collection) current assignment} and then make a note to
  *         send a {@link ConsumerGroupHeartbeatRequest} to the group coordinator on its next pass of
  *         {@link HeartbeatRequestManager#poll(long)}
@@ -116,7 +115,7 @@ public class AssignmentReconciler {
         this.backgroundEventQueue = backgroundEventQueue;
     }
 
-    void lost() {
+    void startLost() {
         SortedSet<TopicPartition> partitionsToLose = getPartitionsToLose();
 
         if (partitionsToLose.isEmpty()) {
@@ -126,10 +125,20 @@ public class AssignmentReconciler {
         }
 
         log.debug("Enqueuing event to invoke {} callbacks", ConsumerRebalanceListener.class.getSimpleName());
-        backgroundEventQueue.add(new PartitionAssignmentLostStartedEvent(partitionsToLose));
+        backgroundEventQueue.add(new PartitionLostStartedEvent(partitionsToLose));
     }
 
-    void lostCallbackInvoked() {
+    /**
+     * This method should be invoked to signal the completion of the "{@link TopicPartition lost partition}"
+     * process. Specifically, it is to be executed on background thread <em>after</em> the
+     * {@link ConsumerRebalanceListener#onPartitionsLost(Collection)} callback was executed on the application
+     * thread. It should clear the set of {@link SubscriptionState#assignedPartitions() assigned partitions},
+     * regardless of the set of "lost partitions."
+     *
+     * @param lostPartitions Set of {@link TopicPartition partitions} that were lost
+     * @see AssignmentReconciler
+     */
+    void completeLost(Set<TopicPartition> lostPartitions) {
         log.debug("{} callbacks were successfully invoked", ConsumerRebalanceListener.class.getSimpleName());
         subscriptions.assignFromSubscribed(Collections.emptySet());
     }
@@ -140,7 +149,7 @@ public class AssignmentReconciler {
      * @param assignment Holds the {@link Assignment} which includes the target set of topics
      */
 
-    void reconcile(Assignment assignment) {
+    void startReconcile(Assignment assignment) {
         SortedSet<TopicPartition> partitionsToRevoke = getPartitionsToRevoke(assignment);
         SortedSet<TopicPartition> partitionsToAssign = getPartitionsToAssign(assignment);
 
@@ -151,15 +160,27 @@ public class AssignmentReconciler {
         }
 
         log.debug("Enqueuing event to invoke {} callbacks", ConsumerRebalanceListener.class.getSimpleName());
-        PartitionAssignmentChangedStartedEvent event = new PartitionAssignmentChangedStartedEvent(
+        PartitionReconciliationStartedEvent event = new PartitionReconciliationStartedEvent(
                 partitionsToRevoke,
                 partitionsToAssign
         );
         backgroundEventQueue.add(event);
     }
 
-    void reconciliationCallbacksInvoked(Set<TopicPartition> revokedPartitions,
-                                        Set<TopicPartition> assignedPartitions) {
+    /**
+     * This method should be invoked to signal the completion of a successful {@link TopicPartition partition}
+     * assignment reconciliation. Specifically, it is to be executed on background thread <em>after</em> the
+     * {@link ConsumerRebalanceListener#onPartitionsRevoked(Collection)} and
+     * {@link ConsumerRebalanceListener#onPartitionsAssigned(Collection)} callbacks have completed execution on
+     * the application thread. It should update the set of
+     * {@link SubscriptionState#assignedPartitions() assigned partitions} based on the
+     * given partitions.
+     *
+     * @param revokedPartitions Set of {@link TopicPartition partitions} that were revoked
+     * @param assignedPartitions Set of {@link TopicPartition partitions} that were assigned
+     * @see MembershipManager#completeReconcile(Set, Set, Optional)
+     */
+    void completeReconcile(Set<TopicPartition> revokedPartitions, Set<TopicPartition> assignedPartitions) {
         log.debug("{} callbacks were successfully invoked", ConsumerRebalanceListener.class.getSimpleName());
 
         Set<TopicPartition> newAssignment = new HashSet<>(subscriptions.assignedPartitions());

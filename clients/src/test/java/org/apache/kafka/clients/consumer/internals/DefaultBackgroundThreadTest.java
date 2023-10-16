@@ -153,7 +153,8 @@ public class DefaultBackgroundThreadTest {
         this.applicationEventProcessor = new ApplicationEventProcessor(
                 this.backgroundEventsQueue,
                 mockRequestManagers(),
-                metadata);
+                metadata,
+                Optional.empty());
         when(coordinatorManager.poll(anyLong())).thenReturn(mockPollCoordinatorResult());
         when(commitManager.poll(anyLong())).thenReturn(mockPollCommitResult());
         when(offsetsRequestManager.poll(anyLong())).thenReturn(emptyPollResults());
@@ -232,7 +233,8 @@ public class DefaultBackgroundThreadTest {
         applicationEventProcessor = spy(new ApplicationEventProcessor(
                 this.backgroundEventsQueue,
                 mockRequestManagers(),
-                metadata));
+                metadata,
+                Optional.empty()));
         DefaultBackgroundThread backgroundThread = mockBackgroundThread();
 
         TopicAuthorizationException authException = new TopicAuthorizationException("Topic authorization failed");
@@ -274,7 +276,8 @@ public class DefaultBackgroundThreadTest {
         applicationEventProcessor = spy(new ApplicationEventProcessor(
                 this.backgroundEventsQueue,
                 mockRequestManagers(),
-                metadata));
+                metadata,
+                Optional.empty()));
         DefaultBackgroundThread backgroundThread = mockBackgroundThread();
 
         LogTruncationException logTruncationException = new LogTruncationException(Collections.emptyMap(), Collections.emptyMap());
@@ -295,7 +298,8 @@ public class DefaultBackgroundThreadTest {
         this.applicationEventProcessor = spy(new ApplicationEventProcessor(
                 this.backgroundEventsQueue,
                 mockRequestManagers(),
-                metadata));
+                metadata,
+                Optional.empty()));
 
         DefaultBackgroundThread backgroundThread = mockBackgroundThread();
         HashMap<TopicPartition, OffsetAndMetadata> offset = mockTopicPartitionOffset();

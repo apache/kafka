@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer.internals.events;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.internals.CommitRequestManager;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
+import org.apache.kafka.clients.consumer.internals.MembershipManager;
 import org.apache.kafka.clients.consumer.internals.RequestManagers;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
@@ -39,12 +40,16 @@ public class ApplicationEventProcessor {
 
     private final RequestManagers requestManagers;
 
+    private final Optional<MembershipManager> membershipManager;
+
     public ApplicationEventProcessor(final BlockingQueue<BackgroundEvent> backgroundEventQueue,
                                      final RequestManagers requestManagers,
-                                     final ConsumerMetadata metadata) {
+                                     final ConsumerMetadata metadata,
+                                     final Optional<MembershipManager> membershipManager) {
         this.backgroundEventQueue = backgroundEventQueue;
         this.requestManagers = requestManagers;
         this.metadata = metadata;
+        this.membershipManager = membershipManager;
     }
 
     public boolean process(final ApplicationEvent event) {
@@ -70,10 +75,10 @@ public class ApplicationEventProcessor {
                 return processResetPositionsEvent();
             case VALIDATE_POSITIONS:
                 return processValidatePositionsEvent();
-            case PARTITION_ASSIGNMENT_CHANGED_CALLBACKS_INVOKED:
-                return process((PartitionAssignmentChangedCallbacksInvokedEvent) event);
-            case PARTITION_ASSIGNMENT_LOST_CALLBACK_INVOKED:
-                return process((PartitionAssignmentLostCallbackInvokedEvent) event);
+            case PARTITION_RECONCILIATION_COMPLETE:
+                return process((PartitionReconciliationCompleteEvent) event);
+            case PARTITION_LOST_COMPLETE:
+                return process((PartitionLostCompleteEvent) event);
         }
         return false;
     }
@@ -164,19 +169,13 @@ public class ApplicationEventProcessor {
         return true;
     }
 
-    private boolean process(final PartitionAssignmentChangedCallbacksInvokedEvent event) {
-        requestManagers.heartbeatRequestManager.ifPresent(hrm -> {
-            hrm.partitionAssignmentChangedCallbacksInvoked(event.revokedPartitions(), event.assignedPartitions(), event.error());
-        });
-
+    private boolean process(final PartitionReconciliationCompleteEvent event) {
+        membershipManager.ifPresent(mm -> mm.completeReconcile(event.revokedPartitions(), event.assignedPartitions(), event.error()));
         return true;
     }
 
-    private boolean process(final PartitionAssignmentLostCallbackInvokedEvent event) {
-        requestManagers.heartbeatRequestManager.ifPresent(hrm -> {
-            hrm.partitionAssignmentLostCallbackInvoked(event.lostPartitions(), event.error());
-        });
-
+    private boolean process(final PartitionLostCompleteEvent event) {
+        membershipManager.ifPresent(mm -> mm.completeLost(event.lostPartitions(), event.error()));
         return true;
     }
 }

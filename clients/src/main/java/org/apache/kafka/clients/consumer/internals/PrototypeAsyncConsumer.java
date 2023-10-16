@@ -32,13 +32,13 @@ import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
-import org.apache.kafka.clients.consumer.internals.events.PartitionAssignmentChangedStartedEvent;
+import org.apache.kafka.clients.consumer.internals.events.PartitionReconciliationStartedEvent;
 import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
 import org.apache.kafka.clients.consumer.internals.events.OffsetFetchApplicationEvent;
-import org.apache.kafka.clients.consumer.internals.events.PartitionAssignmentLostStartedEvent;
+import org.apache.kafka.clients.consumer.internals.events.PartitionLostStartedEvent;
 import org.apache.kafka.clients.consumer.internals.events.ResetPositionsApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ValidatePositionsApplicationEvent;
 import org.apache.kafka.common.KafkaException;
@@ -297,17 +297,17 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     }
 
     private void processEvent(final BackgroundEvent backgroundEvent, final Duration timeout) {
-        if (backgroundEvent instanceof PartitionAssignmentChangedStartedEvent) {
+        if (backgroundEvent instanceof PartitionReconciliationStartedEvent) {
             processRebalanceCallback(
                     eventHandler,
                     consumerRebalanceListenerInvoker,
-                    (PartitionAssignmentChangedStartedEvent) backgroundEvent
+                    (PartitionReconciliationStartedEvent) backgroundEvent
             );
-        } else if (backgroundEvent instanceof PartitionAssignmentLostStartedEvent) {
+        } else if (backgroundEvent instanceof PartitionLostStartedEvent) {
             processRebalanceCallback(
                     eventHandler,
                     consumerRebalanceListenerInvoker,
-                    (PartitionAssignmentLostStartedEvent) backgroundEvent
+                    (PartitionLostStartedEvent) backgroundEvent
             );
         }
     }

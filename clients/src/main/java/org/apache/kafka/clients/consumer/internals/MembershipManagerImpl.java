@@ -17,10 +17,13 @@
 
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.protocol.Errors;
 
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Membership manager that maintains group membership for a single member following the new
@@ -53,12 +56,19 @@ public class MembershipManagerImpl implements MembershipManager {
      * was in process.
      */
     private Optional<ConsumerGroupHeartbeatResponseData.Assignment> nextTargetAssignment;
+    /**
+     * AssignmentReconciler that handles updates to partition assignments.
+     */
+    private final AssignmentReconciler assignmentReconciler;
 
-    public MembershipManagerImpl(String groupId) {
-        this(groupId, null, null);
+    public MembershipManagerImpl(String groupId, AssignmentReconciler assignmentReconciler) {
+        this(groupId, null, null, assignmentReconciler);
     }
 
-    public MembershipManagerImpl(String groupId, String groupInstanceId, AssignorSelection assignorSelection) {
+    public MembershipManagerImpl(String groupId,
+                                 String groupInstanceId,
+                                 AssignorSelection assignorSelection,
+                                 AssignmentReconciler assignmentReconciler) {
         this.groupId = groupId;
         this.state = MemberState.UNJOINED;
         if (assignorSelection == null) {
@@ -69,6 +79,7 @@ public class MembershipManagerImpl implements MembershipManager {
         this.groupInstanceId = Optional.ofNullable(groupInstanceId);
         this.targetAssignment = Optional.empty();
         this.nextTargetAssignment = Optional.empty();
+        this.assignmentReconciler = assignmentReconciler;
     }
 
     /**
@@ -135,6 +146,7 @@ public class MembershipManagerImpl implements MembershipManager {
     public void transitionToFenced() {
         resetEpoch();
         transitionTo(MemberState.FENCED);
+        assignmentReconciler.startLost();
     }
 
     @Override
@@ -156,6 +168,7 @@ public class MembershipManagerImpl implements MembershipManager {
             transitionTo(MemberState.STABLE);
         } else {
             transitionTo(MemberState.RECONCILING);
+            targetAssignment.ifPresent(assignmentReconciler::startReconcile);
         }
         return state.equals(MemberState.STABLE);
     }
@@ -247,5 +260,29 @@ public class MembershipManagerImpl implements MembershipManager {
             nextTargetAssignment = Optional.empty();
         }
         maybeTransitionToStable();
+    }
+
+    @Override
+    public void completeReconcile(Set<TopicPartition> revokedPartitions,
+                                  Set<TopicPartition> assignedPartitions,
+                                  Optional<KafkaException> callbackError) {
+        if (callbackError.isPresent()) {
+            // TODO: how to react to callback errors?
+        }
+
+        assignmentReconciler.completeReconcile(revokedPartitions, assignedPartitions);
+        transitionTo(MemberState.STABLE);
+        // TODO: update state to signal the HeartbeatRequestManager to send an ACK heartbeat
+    }
+
+    @Override
+    public void completeLost(Set<TopicPartition> lostPartitions, Optional<KafkaException> callbackError) {
+        if (callbackError.isPresent()) {
+            // TODO: how to react to callback errors?
+        }
+
+        assignmentReconciler.completeLost(lostPartitions);
+        transitionTo(MemberState.UNJOINED);
+        // TODO: update state to signal the HeartbeatRequestManager to send an ACK heartbeat
     }
 }

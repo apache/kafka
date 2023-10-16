@@ -28,10 +28,10 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventHandler;
-import org.apache.kafka.clients.consumer.internals.events.PartitionAssignmentLostCallbackInvokedEvent;
-import org.apache.kafka.clients.consumer.internals.events.PartitionAssignmentLostStartedEvent;
-import org.apache.kafka.clients.consumer.internals.events.PartitionAssignmentChangedCallbacksInvokedEvent;
-import org.apache.kafka.clients.consumer.internals.events.PartitionAssignmentChangedStartedEvent;
+import org.apache.kafka.clients.consumer.internals.events.PartitionLostCompleteEvent;
+import org.apache.kafka.clients.consumer.internals.events.PartitionLostStartedEvent;
+import org.apache.kafka.clients.consumer.internals.events.PartitionReconciliationCompleteEvent;
+import org.apache.kafka.clients.consumer.internals.events.PartitionReconciliationStartedEvent;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.KafkaException;
@@ -232,7 +232,7 @@ public final class ConsumerUtils {
 
     static void processRebalanceCallback(final EventHandler eventHandler,
                                          final ConsumerRebalanceListenerInvoker invoker,
-                                         final PartitionAssignmentChangedStartedEvent startedEvent) {
+                                         final PartitionReconciliationStartedEvent startedEvent) {
         final AtomicReference<Exception> firstException = new AtomicReference<>(null);
         SortedSet<TopicPartition> revokedPartitions = startedEvent.revokedPartitions();
 
@@ -260,7 +260,7 @@ public final class ConsumerUtils {
             }
         }
 
-        ApplicationEvent invokedEvent = new PartitionAssignmentChangedCallbacksInvokedEvent(
+        ApplicationEvent invokedEvent = new PartitionReconciliationCompleteEvent(
                 revokedPartitions,
                 assignedPartitions,
                 error
@@ -273,7 +273,7 @@ public final class ConsumerUtils {
 
     static void processRebalanceCallback(final EventHandler eventHandler,
                                          final ConsumerRebalanceListenerInvoker invoker,
-                                         final PartitionAssignmentLostStartedEvent startedEvent) {
+                                         final PartitionLostStartedEvent startedEvent) {
         Optional<KafkaException> error = Optional.empty();
         SortedSet<TopicPartition> lostPartitions = startedEvent.lostPartitions();
 
@@ -291,7 +291,7 @@ public final class ConsumerUtils {
             }
         }
 
-        ApplicationEvent invokedEvent = new PartitionAssignmentLostCallbackInvokedEvent(lostPartitions, error);
+        ApplicationEvent invokedEvent = new PartitionLostCompleteEvent(lostPartitions, error);
         eventHandler.add(invokedEvent);
 
         if (error.isPresent())
