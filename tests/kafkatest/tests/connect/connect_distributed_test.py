@@ -610,7 +610,7 @@ class ConnectDistributedTest(Test):
         for task in range(num_tasks):
             # Validate source messages
             src_seqnos = [msg['payload']['seqno'] for msg in src_messages if msg['payload']['task'] == task]
-            if len(src_seqnos) == 0:
+            if not src_seqnos:
                 self.logger.error("No records produced by task " + str(task))
                 errors.append("No records produced by task %d" % (task))
                 success = False

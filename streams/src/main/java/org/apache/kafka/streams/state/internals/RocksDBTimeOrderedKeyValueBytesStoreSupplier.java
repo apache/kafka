@@ -18,12 +18,9 @@ package org.apache.kafka.streams.state.internals;
 
 public class RocksDBTimeOrderedKeyValueBytesStoreSupplier {
     private final String name;
-    private final long retentionPeriod;
-
-    public RocksDBTimeOrderedKeyValueBytesStoreSupplier(final String name,
-                                                        final long retentionPeriod) {
+  
+    public RocksDBTimeOrderedKeyValueBytesStoreSupplier(final String name) {
         this.name = name;
-        this.retentionPeriod = retentionPeriod;
     }
 
     public String name() {

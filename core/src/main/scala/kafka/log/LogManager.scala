@@ -17,8 +17,6 @@
 
 package kafka.log
 
-import kafka.log.remote.RemoteIndexCache
-
 import java.io._
 import java.nio.file.Files
 import java.util.concurrent._
@@ -43,7 +41,7 @@ import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.storage.internals.log.LogConfig.MessageFormatVersion
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.Scheduler
-import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig}
+import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig, RemoteIndexCache}
 
 import scala.annotation.nowarn
 
@@ -119,6 +117,9 @@ class LogManager(logDirs: Seq[File],
   }
 
   private val dirLocks = lockLogDirs(liveLogDirs)
+  private val dirIds = directoryIds(liveLogDirs)
+  // visible for testing
+  private[log] val directoryIds: Set[Uuid] = dirIds.values.toSet
   @volatile private var recoveryPointCheckpoints = liveLogDirs.map(dir =>
     (dir, new OffsetCheckpointFile(new File(dir, RecoveryPointCheckpointFile), logDirFailureChannel))).toMap
   @volatile private var logStartOffsetCheckpoints = liveLogDirs.map(dir =>
@@ -131,6 +132,12 @@ class LogManager(logDirs: Seq[File],
     _liveLogDirs.forEach(dir => logDirsSet -= dir)
     logDirsSet
   }
+
+  // A map that stores hadCleanShutdown flag for each log dir.
+  private val hadCleanShutdownFlags = new ConcurrentHashMap[String, Boolean]()
+
+  // A map that tells whether all logs in a log dir had been loaded or not at startup time.
+  private val loadLogsCompletedFlags = new ConcurrentHashMap[String, Boolean]()
 
   @volatile private var _cleaner: LogCleaner = _
   private[kafka] def cleaner: LogCleaner = _cleaner
@@ -257,6 +264,40 @@ class LogManager(logDirs: Seq[File],
     }
   }
 
+  /**
+   * Retrieves the Uuid for the directory, given its absolute path.
+   */
+  def directoryId(dir: String): Option[Uuid] = dirIds.get(dir)
+
+  /**
+   * Determine directory ID for each directory with a meta.properties.
+   * If meta.properties does not include a directory ID, one is generated and persisted back to meta.properties.
+   * Directories without a meta.properties don't get a directory ID assigned.
+   */
+  private def directoryIds(dirs: Seq[File]): Map[String, Uuid] = {
+    dirs.flatMap { dir =>
+      try {
+        val metadataCheckpoint = new BrokerMetadataCheckpoint(new File(dir, KafkaServer.brokerMetaPropsFile))
+        metadataCheckpoint.read().map { props =>
+          val rawMetaProperties = new RawMetaProperties(props)
+          val uuid = rawMetaProperties.directoryId match {
+            case Some(uuidStr) => Uuid.fromString(uuidStr)
+            case None =>
+              val uuid = Uuid.randomUuid()
+              rawMetaProperties.directoryId = uuid.toString
+              metadataCheckpoint.write(rawMetaProperties.props)
+              uuid
+          }
+          dir.getAbsolutePath -> uuid
+        }.toMap
+      } catch {
+        case e: IOException =>
+          logDirFailureChannel.maybeAddOfflineLogDir(dir.getAbsolutePath, s"Disk error while loading ID $dir", e)
+          None
+      }
+    }.toMap
+  }
+
   private def addLogToBeDeleted(log: UnifiedLog): Unit = {
     this.logsToBeDeleted.add((log, time.milliseconds()))
   }
@@ -374,6 +415,7 @@ class LogManager(logDirs: Seq[File],
           Files.deleteIfExists(cleanShutdownFile.toPath)
           hadCleanShutdown = true
         }
+        hadCleanShutdownFlags.put(logDirAbsolutePath, hadCleanShutdown)
 
         var recoveryPoints = Map[TopicPartition, Long]()
         try {
@@ -397,10 +439,11 @@ class LogManager(logDirs: Seq[File],
           logDir.isDirectory &&
             // Ignore remote-log-index-cache directory as that is index cache maintained by tiered storage subsystem
             // but not any topic-partition dir.
-            !logDir.getName.equals(RemoteIndexCache.DirName) &&
+            !logDir.getName.equals(RemoteIndexCache.DIR_NAME) &&
             UnifiedLog.parseTopicPartitionName(logDir).topic != KafkaRaftServer.MetadataTopic)
         numTotalLogs += logsToLoad.length
-        numRemainingLogs.put(dir.getAbsolutePath, logsToLoad.length)
+        numRemainingLogs.put(logDirAbsolutePath, logsToLoad.length)
+        loadLogsCompletedFlags.put(logDirAbsolutePath, logsToLoad.isEmpty)
 
         if (logsToLoad.isEmpty) {
           info(s"No logs found to be loaded in $logDirAbsolutePath")
@@ -429,12 +472,18 @@ class LogManager(logDirs: Seq[File],
                 // And while converting IOException to KafkaStorageException, we've already handled the exception. So we can ignore it here.
             } finally {
               val logLoadDurationMs = time.hiResClockMs() - logLoadStartMs
-              val remainingLogs = decNumRemainingLogs(numRemainingLogs, dir.getAbsolutePath)
+              val remainingLogs = decNumRemainingLogs(numRemainingLogs, logDirAbsolutePath)
               val currentNumLoaded = logsToLoad.length - remainingLogs
               log match {
-                case Some(loadedLog) => info(s"Completed load of $loadedLog with ${loadedLog.numberOfSegments} segments in ${logLoadDurationMs}ms " +
+                case Some(loadedLog) => info(s"Completed load of $loadedLog with ${loadedLog.numberOfSegments} segments, " +
+                  s"local-log-start-offset ${loadedLog.localLogStartOffset()} and log-end-offset ${loadedLog.logEndOffset} in ${logLoadDurationMs}ms " +
                   s"($currentNumLoaded/${logsToLoad.length} completed in $logDirAbsolutePath)")
                 case None => info(s"Error while loading logs in $logDir in ${logLoadDurationMs}ms ($currentNumLoaded/${logsToLoad.length} completed in $logDirAbsolutePath)")
+              }
+
+              if (remainingLogs == 0) {
+                // loadLog is completed for all logs under the logDdir, mark it.
+                loadLogsCompletedFlags.put(logDirAbsolutePath, true)
               }
             }
           }
@@ -629,9 +678,15 @@ class LogManager(logDirs: Seq[File],
           debug(s"Updating log start offsets at $dir")
           checkpointLogStartOffsetsInDir(dir, logs)
 
-          // mark that the shutdown was clean by creating marker file
-          debug(s"Writing clean shutdown marker at $dir")
-          CoreUtils.swallow(Files.createFile(new File(dir, LogLoader.CleanShutdownFile).toPath), this)
+          // mark that the shutdown was clean by creating marker file for log dirs that:
+          //  1. had clean shutdown marker file; or
+          //  2. had no clean shutdown marker file, but all logs under it have been recovered at startup time
+          val logDirAbsolutePath = dir.getAbsolutePath
+          if (hadCleanShutdownFlags.getOrDefault(logDirAbsolutePath, false) ||
+              loadLogsCompletedFlags.getOrDefault(logDirAbsolutePath, false)) {
+            debug(s"Writing clean shutdown marker at $dir")
+            CoreUtils.swallow(Files.createFile(new File(dir, LogLoader.CleanShutdownFile).toPath), this)
+          }
         }
       }
     } finally {
@@ -687,8 +742,12 @@ class LogManager(logDirs: Seq[File],
    * @param topicPartition The partition whose log needs to be truncated
    * @param newOffset The new offset to start the log with
    * @param isFuture True iff the truncation should be performed on the future log of the specified partition
+   * @param logStartOffsetOpt The log start offset to set for the log. If None, the new offset will be used.
    */
-  def truncateFullyAndStartAt(topicPartition: TopicPartition, newOffset: Long, isFuture: Boolean): Unit = {
+  def truncateFullyAndStartAt(topicPartition: TopicPartition,
+                              newOffset: Long,
+                              isFuture: Boolean,
+                              logStartOffsetOpt: Option[Long] = None): Unit = {
     val log = {
       if (isFuture)
         futureLogs.get(topicPartition)
@@ -701,7 +760,7 @@ class LogManager(logDirs: Seq[File],
       if (!isFuture)
         abortAndPauseCleaning(topicPartition)
       try {
-        log.truncateFullyAndStartAt(newOffset)
+        log.truncateFullyAndStartAt(newOffset, logStartOffsetOpt)
         if (!isFuture)
           maybeTruncateCleanerCheckpointToActiveSegmentBaseOffset(log, topicPartition)
       } finally {
@@ -778,7 +837,7 @@ class LogManager(logDirs: Seq[File],
     try {
       logStartOffsetCheckpoints.get(logDir).foreach { checkpoint =>
         val logStartOffsets = logsToCheckpoint.collect {
-          case (tp, log) if log.logStartOffset > log.logSegments.head.baseOffset => tp -> log.logStartOffset
+          case (tp, log) if log.logStartOffset > log.logSegments.asScala.head.baseOffset => tp -> log.logStartOffset
         }
         checkpoint.write(logStartOffsets)
       }
@@ -872,12 +931,17 @@ class LogManager(logDirs: Seq[File],
    * Update the configuration of the provided topic.
    */
   def updateTopicConfig(topic: String,
-                        newTopicConfig: Properties): Unit = {
+                        newTopicConfig: Properties,
+                        isRemoteLogStorageSystemEnabled: Boolean): Unit = {
     topicConfigUpdated(topic)
     val logs = logsByTopic(topic)
+    // Combine the default properties with the overrides in zk to create the new LogConfig
+    val newLogConfig = LogConfig.fromProps(currentDefaultConfig.originals, newTopicConfig)
+    // We would like to validate the configuration no matter whether the logs have materialised on disk or not.
+    // Otherwise we risk someone creating a tiered-topic, disabling Tiered Storage cluster-wide and the check
+    // failing since the logs for the topic are non-existent.
+    LogConfig.validateRemoteStorageOnlyIfSystemEnabled(newLogConfig.values(), isRemoteLogStorageSystemEnabled, true)
     if (logs.nonEmpty) {
-      // Combine the default properties with the overrides in zk to create the new LogConfig
-      val newLogConfig = LogConfig.fromProps(currentDefaultConfig.originals, newTopicConfig)
       logs.foreach { log =>
         val oldLogConfig = log.updateConfig(newLogConfig)
         if (oldLogConfig.compact && !newLogConfig.compact) {
@@ -1378,7 +1442,7 @@ object LogManager {
             keepPartitionMetadataFile: Boolean): LogManager = {
     val defaultProps = config.extractLogConfigMap
 
-    LogConfig.validateValues(defaultProps)
+    LogConfig.validateBrokerLogConfigValues(defaultProps, config.isRemoteLogStorageSystemEnabled)
     val defaultLogConfig = new LogConfig(defaultProps)
 
     val cleanerConfig = LogCleaner.cleanerConfig(config)

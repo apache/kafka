@@ -44,7 +44,7 @@ public class SerializedJwt {
         String[] splits = token.split("\\.");
 
         if (splits.length != 3)
-            throw new ValidateException(String.format("Malformed JWT provided (%s); expected three sections (header, payload, and signature), but %s sections provided",
+            throw new ValidateException(String.format("Malformed JWT provided (%s); expected three sections (header, payload, and signature), but %d sections provided",
                 token, splits.length));
 
         this.token = token.trim();

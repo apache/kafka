@@ -23,7 +23,7 @@ import kafka.server.{KafkaConfig, KafkaServer, QuorumTestHarness}
 import kafka.tools.DumpLogSegments
 import kafka.utils.TestUtils._
 import kafka.utils.{CoreUtils, Logging, TestUtils}
-import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
+import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.RecordBatch
@@ -56,7 +56,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
   val msgBigger = new Array[Byte](10000)
   var brokers: Seq[KafkaServer] = _
   var producer: KafkaProducer[Array[Byte], Array[Byte]] = _
-  var consumer: KafkaConsumer[Array[Byte], Array[Byte]] = _
+  var consumer: Consumer[Array[Byte], Array[Byte]] = _
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
@@ -391,7 +391,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
     DumpLogSegments.main(Seq("--files", getLogFile(brokers(1), 0).getCanonicalPath).toArray)
   }
 
-  private def startConsumer(): KafkaConsumer[Array[Byte], Array[Byte]] = {
+  private def startConsumer(): Consumer[Array[Byte], Array[Byte]] = {
     val consumerConfig = new Properties()
     consumerConfig.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, plaintextBootstrapServers(brokers))
     consumerConfig.put(ConsumerConfig.FETCH_MAX_BYTES_CONFIG, String.valueOf(getLogFile(brokers(1), 0).length() * 2))

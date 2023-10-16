@@ -31,7 +31,6 @@ import org.apache.kafka.common.utils.Utils
 import org.slf4j.event.Level
 
 import scala.jdk.CollectionConverters._
-import scala.collection.mutable
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, ExecutionContext, ExecutionContextExecutorService, Future}
 
@@ -42,56 +41,6 @@ class CoreUtilsTest extends Logging {
   @Test
   def testSwallow(): Unit = {
     CoreUtils.swallow(throw new KafkaException("test"), this, Level.INFO)
-  }
-
-  @Test
-  def testTryAll(): Unit = {
-    case class TestException(key: String) extends Exception
-
-    val recorded = mutable.Map.empty[String, Either[TestException, String]]
-    def recordingFunction(v: Either[TestException, String]): Unit = {
-      val key = v match {
-        case Right(key) => key
-        case Left(e) => e.key
-      }
-      recorded(key) = v
-    }
-
-    CoreUtils.tryAll(Seq(
-      () => recordingFunction(Right("valid-0")),
-      () => recordingFunction(Left(TestException("exception-1"))),
-      () => recordingFunction(Right("valid-2")),
-      () => recordingFunction(Left(TestException("exception-3")))
-    ))
-    var expected = Map(
-      "valid-0" -> Right("valid-0"),
-      "exception-1" -> Left(TestException("exception-1")),
-      "valid-2" -> Right("valid-2"),
-      "exception-3" -> Left(TestException("exception-3"))
-    )
-    assertEquals(expected, recorded)
-
-    recorded.clear()
-    CoreUtils.tryAll(Seq(
-      () => recordingFunction(Right("valid-0")),
-      () => recordingFunction(Right("valid-1"))
-    ))
-    expected = Map(
-      "valid-0" -> Right("valid-0"),
-      "valid-1" -> Right("valid-1")
-    )
-    assertEquals(expected, recorded)
-
-    recorded.clear()
-    CoreUtils.tryAll(Seq(
-      () => recordingFunction(Left(TestException("exception-0"))),
-      () => recordingFunction(Left(TestException("exception-1")))
-    ))
-    expected = Map(
-      "exception-0" -> Left(TestException("exception-0")),
-      "exception-1" -> Left(TestException("exception-1"))
-    )
-    assertEquals(expected, recorded)
   }
 
   @Test

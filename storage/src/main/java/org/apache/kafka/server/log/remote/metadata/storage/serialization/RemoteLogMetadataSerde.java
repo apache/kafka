@@ -65,7 +65,7 @@ public class RemoteLogMetadataSerde {
         return MetadataRecordType.fromId(apiKey).newMetadataRecord();
     }
 
-    protected Map<Short, RemoteLogMetadataTransform> createRemoteLogMetadataTransforms() {
+    protected final Map<Short, RemoteLogMetadataTransform> createRemoteLogMetadataTransforms() {
         Map<Short, RemoteLogMetadataTransform> map = new HashMap<>();
         map.put(REMOTE_LOG_SEGMENT_METADATA_API_KEY, new RemoteLogSegmentMetadataTransform());
         map.put(REMOTE_LOG_SEGMENT_METADATA_UPDATE_API_KEY, new RemoteLogSegmentMetadataUpdateTransform());
@@ -74,7 +74,7 @@ public class RemoteLogMetadataSerde {
         return map;
     }
 
-    protected Map<String, Short> createRemoteLogStorageClassToApiKeyMap() {
+    protected final Map<String, Short> createRemoteLogStorageClassToApiKeyMap() {
         Map<String, Short> map = new HashMap<>();
         map.put(RemoteLogSegmentMetadata.class.getName(), REMOTE_LOG_SEGMENT_METADATA_API_KEY);
         map.put(RemoteLogSegmentMetadataUpdate.class.getName(), REMOTE_LOG_SEGMENT_METADATA_UPDATE_API_KEY);

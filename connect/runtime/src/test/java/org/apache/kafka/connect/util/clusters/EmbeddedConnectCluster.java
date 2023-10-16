@@ -18,6 +18,8 @@ package org.apache.kafka.connect.util.clusters;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -25,10 +27,13 @@ import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.entities.ActiveTopicsInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffset;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ServerInfo;
+import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
+import org.apache.kafka.connect.util.SinkUtils;
 import org.eclipse.jetty.client.HttpClient;
 import org.eclipse.jetty.client.api.ContentResponse;
 import org.eclipse.jetty.client.api.Request;
@@ -57,6 +62,7 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.BOOTSTRAP_SERVERS_CONFIG;
+import static org.apache.kafka.connect.runtime.WorkerConfig.PLUGIN_DISCOVERY_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.CONFIG_TOPIC_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.OFFSET_STORAGE_REPLICATION_FACTOR_CONFIG;
@@ -276,6 +282,7 @@ public class EmbeddedConnectCluster {
         putIfAbsent(workerProps, STATUS_STORAGE_REPLICATION_FACTOR_CONFIG, internalTopicsReplFactor);
         putIfAbsent(workerProps, KEY_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.storage.StringConverter");
         putIfAbsent(workerProps, VALUE_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.storage.StringConverter");
+        putIfAbsent(workerProps, PLUGIN_DISCOVERY_CONFIG, "hybrid_fail");
 
         for (int i = 0; i < numInitialWorkers; i++) {
             addWorker();
@@ -605,19 +612,19 @@ public class EmbeddedConnectCluster {
 
     /**
      * Get the task configs of a connector running in this cluster.
-
+     *
      * @param connectorName name of the connector
-     * @return a map from task ID (connector name + "-" + task number) to task config
+     * @return a list of task configurations for the connector
      */
-    public Map<String, Map<String, String>> taskConfigs(String connectorName) {
+    public List<TaskInfo> taskConfigs(String connectorName) {
         ObjectMapper mapper = new ObjectMapper();
-        String url = endpointForResource(String.format("connectors/%s/tasks-config", connectorName));
+        String url = endpointForResource(String.format("connectors/%s/tasks", connectorName));
         Response response = requestGet(url);
         try {
             if (response.getStatus() < Response.Status.BAD_REQUEST.getStatusCode()) {
                 // We use String instead of ConnectorTaskId as the key here since the latter can't be automatically
                 // deserialized by Jackson when used as a JSON object key (i.e., when it's serialized as a JSON string)
-                return mapper.readValue(responseToString(response), new TypeReference<Map<String, Map<String, String>>>() { });
+                return mapper.readValue(responseToString(response), new TypeReference<List<TaskInfo>>() { });
             }
         } catch (IOException e) {
             log.error("Could not read task configs from response: {}",
@@ -647,7 +654,8 @@ public class EmbeddedConnectCluster {
 
     /**
      * Get the offsets for a connector via the <strong><em>GET /connectors/{connector}/offsets</em></strong> endpoint
-     * @param connectorName name of the connector
+     *
+     * @param connectorName name of the connector whose offsets are to be retrieved
      * @return the connector's offsets
      */
     public ConnectorOffsets connectorOffsets(String connectorName) {
@@ -667,9 +675,46 @@ public class EmbeddedConnectCluster {
     }
 
     /**
+     * Alter the offset for a source connector's partition via the <strong><em>PATCH /connectors/{connector}/offsets</em></strong>
+     * endpoint
+     *
+     * @param connectorName name of the source connector whose offset is to be altered
+     * @param partition the source partition for which the offset is to be altered
+     * @param offset the source offset to be written
+     *
+     * @return the API response as a {@link java.lang.String}
+     */
+    public String alterSourceConnectorOffset(String connectorName, Map<String, ?> partition, Map<String, ?> offset) {
+        return alterConnectorOffsets(
+            connectorName,
+            new ConnectorOffsets(Collections.singletonList(new ConnectorOffset(partition, offset)))
+        );
+    }
+
+    /**
+     * Alter the offset for a sink connector's topic partition via the <strong><em>PATCH /connectors/{connector}/offsets</em></strong>
+     * endpoint
+     *
+     * @param connectorName name of the sink connector whose offset is to be altered
+     * @param topicPartition the topic partition for which the offset is to be altered
+     * @param offset the offset to be written
+     *
+     * @return the API response as a {@link java.lang.String}
+     */
+    public String alterSinkConnectorOffset(String connectorName, TopicPartition topicPartition, Long offset) {
+        return alterConnectorOffsets(
+            connectorName,
+            SinkUtils.consumerGroupOffsetsToConnectorOffsets(Collections.singletonMap(topicPartition, new OffsetAndMetadata(offset)))
+        );
+    }
+
+    /**
      * Alter a connector's offsets via the <strong><em>PATCH /connectors/{connector}/offsets</em></strong> endpoint
-     * @param connectorName name of the connector
+     *
+     * @param connectorName name of the connector whose offsets are to be altered
      * @param offsets offsets to alter
+     *
+     * @return the API response as a {@link java.lang.String}
      */
     public String alterConnectorOffsets(String connectorName, ConnectorOffsets offsets) {
         String url = endpointForResource(String.format("connectors/%s/offsets", connectorName));
@@ -686,7 +731,23 @@ public class EmbeddedConnectCluster {
             return responseToString(response);
         } else {
             throw new ConnectRestException(response.getStatus(),
-                    "Could not execute PATCH request. Error response: " + responseToString(response));
+                    "Could not alter connector offsets. Error response: " + responseToString(response));
+        }
+    }
+
+    /**
+     * Reset a connector's offsets via the <strong><em>DELETE /connectors/{connector}/offsets</em></strong> endpoint
+     *
+     * @param connectorName name of the connector whose offsets are to be reset
+     */
+    public String resetConnectorOffsets(String connectorName) {
+        String url = endpointForResource(String.format("connectors/%s/offsets", connectorName));
+        Response response = requestDelete(url);
+        if (response.getStatus() < Response.Status.BAD_REQUEST.getStatusCode()) {
+            return responseToString(response);
+        } else {
+            throw new ConnectRestException(response.getStatus(),
+                    "Could not reset connector offsets. Error response: " + responseToString(response));
         }
     }
 

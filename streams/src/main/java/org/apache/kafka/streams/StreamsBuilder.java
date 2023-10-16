@@ -49,7 +49,7 @@ import java.util.Properties;
 import java.util.regex.Pattern;
 
 /**
- * {@code StreamsBuilder} provide the high-level Kafka Streams DSL to specify a Kafka Streams topology.
+ * {@code StreamsBuilder} provides the high-level Kafka Streams DSL to specify a Kafka Streams topology.
  *
  * <p>
  * It is a requirement that the processing logic ({@link Topology}) be defined in a deterministic way,
@@ -85,13 +85,14 @@ public class StreamsBuilder {
      *
      * @param topologyConfigs    the streams configs that apply at the topology level. Please refer to {@link TopologyConfig} for more detail
      */
+    @SuppressWarnings("this-escape")
     public StreamsBuilder(final TopologyConfig topologyConfigs) {
-        topology = getNewTopology(topologyConfigs);
+        topology = newTopology(topologyConfigs);
         internalTopologyBuilder = topology.internalTopologyBuilder;
         internalStreamsBuilder = new InternalStreamsBuilder(internalTopologyBuilder);
     }
 
-    protected Topology getNewTopology(final TopologyConfig topologyConfigs) {
+    protected Topology newTopology(final TopologyConfig topologyConfigs) {
         return new Topology(topologyConfigs);
     }
 
@@ -415,7 +416,7 @@ public class StreamsBuilder {
 
     /**
      * Create a {@link GlobalKTable} for the specified topic.
-     *
+     * <p>
      * Input {@link KeyValue} pairs with {@code null} key will be dropped.
      * <p>
      * The resulting {@link GlobalKTable} will be materialized in a local {@link KeyValueStore} configured with
@@ -466,7 +467,7 @@ public class StreamsBuilder {
 
     /**
      * Create a {@link GlobalKTable} for the specified topic.
-     *
+     * <p>
      * Input {@link KeyValue} pairs with {@code null} key will be dropped.
      * <p>
      * The resulting {@link GlobalKTable} will be materialized in a local {@link KeyValueStore} configured with

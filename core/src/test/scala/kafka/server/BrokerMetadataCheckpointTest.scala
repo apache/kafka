@@ -168,7 +168,7 @@ class BrokerMetadataCheckpointTest extends Logging {
       for (mp <- metaProperties) {
         val logDir = TestUtils.tempDirectory()
         logDirs += logDir
-        val propFile = new File(logDir.getAbsolutePath, "meta.properties")
+        val propFile = new File(logDir.getAbsolutePath, KafkaServer.brokerMetaPropsFile)
         val fs = new FileOutputStream(propFile)
         try {
           mp.props.store(fs, "")
