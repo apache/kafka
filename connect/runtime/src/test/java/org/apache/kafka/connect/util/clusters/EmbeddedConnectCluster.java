@@ -31,6 +31,7 @@ import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffset;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ServerInfo;
+import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
 import org.apache.kafka.connect.util.SinkUtils;
 import org.eclipse.jetty.client.HttpClient;
@@ -611,19 +612,19 @@ public class EmbeddedConnectCluster {
 
     /**
      * Get the task configs of a connector running in this cluster.
-
+     *
      * @param connectorName name of the connector
-     * @return a map from task ID (connector name + "-" + task number) to task config
+     * @return a list of task configurations for the connector
      */
-    public Map<String, Map<String, String>> taskConfigs(String connectorName) {
+    public List<TaskInfo> taskConfigs(String connectorName) {
         ObjectMapper mapper = new ObjectMapper();
-        String url = endpointForResource(String.format("connectors/%s/tasks-config", connectorName));
+        String url = endpointForResource(String.format("connectors/%s/tasks", connectorName));
         Response response = requestGet(url);
         try {
             if (response.getStatus() < Response.Status.BAD_REQUEST.getStatusCode()) {
                 // We use String instead of ConnectorTaskId as the key here since the latter can't be automatically
                 // deserialized by Jackson when used as a JSON object key (i.e., when it's serialized as a JSON string)
-                return mapper.readValue(responseToString(response), new TypeReference<Map<String, Map<String, String>>>() { });
+                return mapper.readValue(responseToString(response), new TypeReference<List<TaskInfo>>() { });
             }
         } catch (IOException e) {
             log.error("Could not read task configs from response: {}",

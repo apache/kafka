@@ -14,33 +14,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.kstream;
-
+package org.apache.kafka.coordinator.group;
 
 /**
- * The {@code ForeachAction} interface for performing an action on a {@link org.apache.kafka.streams.KeyValue key-value
- * pair}.
- * This is a stateless record-by-record operation, i.e, {@link #apply(Object, Object)} is invoked individually for each
- * record of a stream.
- * If stateful processing is required, consider using
- * {@link KStream#process(org.apache.kafka.streams.processor.api.ProcessorSupplier, String...) KStream#process(...)}.
- *
- * @param <K> key type
- * @param <V> value type
- *
- * @see KStream#foreach(ForeachAction)
+ * An offset is considered expired based on different factors, such as the state of the group
+ * and/or the GroupMetadata record version (for generic groups). This class is used to check
+ * how offsets for the group should be expired.
  */
-public interface ForeachAction<K, V> {
+public interface OffsetExpirationCondition {
 
     /**
-     * Perform an action for each record of a stream.
+     * Given an offset metadata and offsets retention, return whether the offset is expired or not.
      *
-     * @param key
-     *        the key of the record
-     * @param value
-     *        the value of the record
+     * @param offset               The offset metadata.
+     * @param currentTimestampMs   The current timestamp.
+     * @param offsetsRetentionMs   The offset retention.
+     *
+     * @return Whether the offset is considered expired or not.
      */
-    void apply(final K key, final V value);
+    boolean isOffsetExpired(OffsetAndMetadata offset, long currentTimestampMs, long offsetsRetentionMs);
 }
-
-

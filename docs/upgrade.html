@@ -21,6 +21,67 @@
 
 <h4><a id="upgrade_3_6_0" href="#upgrade_3_6_0">Upgrading to 3.6.0 from any version 0.8.x through 3.5.x</a></h4>
 
+    <h5><a id="upgrade_360_zk" href="#upgrade_360_zk">Upgrading ZooKeeper-based clusters</a></h5>
+    <p><b>If you are upgrading from a version prior to 2.1.x, please see the note in step 5 below about the change to the schema used to store consumer offsets.
+        Once you have changed the inter.broker.protocol.version to the latest version, it will not be possible to downgrade to a version prior to 2.1.</b></p>
+
+    <p><b>For a rolling upgrade:</b></p>
+
+    <ol>
+        <li>Update server.properties on all brokers and add the following properties. CURRENT_KAFKA_VERSION refers to the version you
+            are upgrading from. CURRENT_MESSAGE_FORMAT_VERSION refers to the message format version currently in use. If you have previously
+            overridden the message format version, you should keep its current value. Alternatively, if you are upgrading from a version prior
+            to 0.11.0.x, then CURRENT_MESSAGE_FORMAT_VERSION should be set to match CURRENT_KAFKA_VERSION.
+            <ul>
+                <li>inter.broker.protocol.version=CURRENT_KAFKA_VERSION (e.g. <code>3.5</code>, <code>3.4</code>, etc.)</li>
+                <li>log.message.format.version=CURRENT_MESSAGE_FORMAT_VERSION  (See <a href="#upgrade_10_performance_impact">potential performance impact
+                    following the upgrade</a> for the details on what this configuration does.)</li>
+            </ul>
+            If you are upgrading from version 0.11.0.x or above, and you have not overridden the message format, then you only need to override
+            the inter-broker protocol version.
+            <ul>
+                <li>inter.broker.protocol.version=CURRENT_KAFKA_VERSION (e.g. <code>3.5</code>, <code>3.4</code>, etc.)</li>
+            </ul>
+        </li>
+        <li>Upgrade the brokers one at a time: shut down the broker, update the code, and restart it. Once you have done so, the
+            brokers will be running the latest version and you can verify that the cluster's behavior and performance meets expectations.
+            It is still possible to downgrade at this point if there are any problems.
+        </li>
+        <li>Once the cluster's behavior and performance has been verified, bump the protocol version by editing
+            <code>inter.broker.protocol.version</code> and setting it to <code>3.6</code>.
+        </li>
+        <li>Restart the brokers one by one for the new protocol version to take effect. Once the brokers begin using the latest
+            protocol version, it will no longer be possible to downgrade the cluster to an older version.
+        </li>
+        <li>If you have overridden the message format version as instructed above, then you need to do one more rolling restart to
+            upgrade it to its latest version. Once all (or most) consumers have been upgraded to 0.11.0 or later,
+            change log.message.format.version to 3.6 on each broker and restart them one by one. Note that the older Scala clients,
+            which are no longer maintained, do not support the message format introduced in 0.11, so to avoid conversion costs
+            (or to take advantage of <a href="#upgrade_11_exactly_once_semantics">exactly once semantics</a>),
+            the newer Java clients must be used.
+        </li>
+    </ol>
+
+    <h5><a id="upgrade_360_kraft" href="#upgrade_360_kraft">Upgrading KRaft-based clusters</a></h5>
+    <p><b>If you are upgrading from a version prior to 3.3.0, please see the note in step 3 below. Once you have changed the metadata.version to the latest version, it will not be possible to downgrade to a version prior to 3.3-IV0.</b></p>
+
+    <p><b>For a rolling upgrade:</b></p>
+
+    <ol>
+        <li>Upgrade the brokers one at a time: shut down the broker, update the code, and restart it. Once you have done so, the
+            brokers will be running the latest version and you can verify that the cluster's behavior and performance meets expectations.
+        </li>
+        <li>Once the cluster's behavior and performance has been verified, bump the metadata.version by running
+            <code>
+                ./bin/kafka-features.sh upgrade --metadata 3.6
+            </code>
+        </li>
+        <li>Note that cluster metadata downgrade is not supported in this version since it has metadata changes.
+            Every <a href="https://github.com/apache/kafka/blob/trunk/server-common/src/main/java/org/apache/kafka/server/common/MetadataVersion.java">MetadataVersion</a>
+            after 3.2.x has a boolean parameter that indicates if there are metadata changes (i.e. <code>IBP_3_3_IV3(7, "3.3", "IV3", true)</code> means this version has metadata changes).
+            Given your current and target versions, a downgrade is only possible if there are no metadata changes in the versions between.</li>
+    </ol>
+
     <h5><a id="upgrade_360_notable" href="#upgrade_360_notable">Notable changes in 3.6.0</a></h5>
     <ul>
         <li>Apache Kafka now supports having both an IPv4 and an IPv6 listener on the same port. This change only applies to
@@ -58,36 +119,6 @@
     </ul>
 
 <h4><a id="upgrade_3_5_0" href="#upgrade_3_5_0">Upgrading to 3.5.0 from any version 0.8.x through 3.4.x</a></h4>
-
-    <h5><a id="upgrade_350_notable" href="#upgrade_350_notable">Notable changes in 3.5.0</a></h5>
-    <ul>
-        <li>Kafka Streams has introduced a new state store type, versioned key-value stores,
-            for storing multiple record versions per key, thereby enabling timestamped retrieval
-            operations to return the latest record (per key) as of a specified timestamp.
-            See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-889%3A+Versioned+State+Stores">KIP-889</a>
-            and <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-914%3A+DSL+Processor+Semantics+for+Versioned+Stores">KIP-914</a>
-            for more details.
-            If the new store typed is used in the DSL, improved processing semantics are applied as described in 
-            <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-914%3A+DSL+Processor+Semantics+for+Versioned+Stores">KIP-914</a>.
-        </li>
-        <li>KTable aggregation semantics got further improved via 
-            <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-904%3A+Kafka+Streams+-+Guarantee+subtractor+is+called+before+adder+if+key+has+not+changed">KIP-904</a>,
-	    now avoiding spurious intermediate results.
-        </li>
-        <li>Kafka Streams' <code>ProductionExceptionHandler</code> is improved via 
-            <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-399%3A+Extend+ProductionExceptionHandler+to+cover+serialization+exceptions">KIP-399</a>,
-            now also covering serialization errors.
-        </li>
-        <li>MirrorMaker now uses incrementalAlterConfigs API by default to synchronize topic configurations instead of the deprecated alterConfigs API.
-            A new settings called <code>use.incremental.alter.configs</code> is introduced to allow users to control which API to use.
-            This new setting is marked deprecated and will be removed in the next major release when incrementalAlterConfigs API is always used.
-            See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-894%3A+Use+incrementalAlterConfigs+API+for+syncing+topic+configurations">KIP-894</a> for more details.
-        </li>
-        <li>The JmxTool, EndToEndLatency, StreamsResetter, ConsumerPerformance and ClusterTool have been migrated to the tools module.
-            The 'kafka.tools' package is deprecated and will change to 'org.apache.kafka.tools' in the next major release.
-            See <a href="https://issues.apache.org/jira/browse/KAFKA-14525">KAFKA-14525</a> for more details.
-        </li>
-    </ul>
 
     <h5><a id="upgrade_350_zk" href="#upgrade_350_zk">Upgrading ZooKeeper-based clusters</a></h5>
     <p><b>If you are upgrading from a version prior to 2.1.x, please see the note in step 5 below about the change to the schema used to store consumer offsets.
@@ -144,9 +175,41 @@
                 ./bin/kafka-features.sh upgrade --metadata 3.5
             </code>
         </li>
-        <li>Note that the cluster metadata version cannot be downgraded to a pre-production 3.0.x, 3.1.x, or 3.2.x version once it has been upgraded.
-            However, it is possible to downgrade to production versions such as 3.3-IV0, 3.3-IV1, etc.</li>
+        <li>Note that cluster metadata downgrade is not supported in this version since it has metadata changes.
+            Every <a href="https://github.com/apache/kafka/blob/trunk/server-common/src/main/java/org/apache/kafka/server/common/MetadataVersion.java">MetadataVersion</a>
+            after 3.2.x has a boolean parameter that indicates if there are metadata changes (i.e. <code>IBP_3_3_IV3(7, "3.3", "IV3", true)</code> means this version has metadata changes).
+            Given your current and target versions, a downgrade is only possible if there are no metadata changes in the versions between.</li>
     </ol>
+
+    <h5><a id="upgrade_350_notable" href="#upgrade_350_notable">Notable changes in 3.5.0</a></h5>
+    <ul>
+        <li>Kafka Streams has introduced a new state store type, versioned key-value stores,
+            for storing multiple record versions per key, thereby enabling timestamped retrieval
+            operations to return the latest record (per key) as of a specified timestamp.
+            See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-889%3A+Versioned+State+Stores">KIP-889</a>
+            and <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-914%3A+DSL+Processor+Semantics+for+Versioned+Stores">KIP-914</a>
+            for more details.
+            If the new store typed is used in the DSL, improved processing semantics are applied as described in
+            <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-914%3A+DSL+Processor+Semantics+for+Versioned+Stores">KIP-914</a>.
+        </li>
+        <li>KTable aggregation semantics got further improved via
+            <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-904%3A+Kafka+Streams+-+Guarantee+subtractor+is+called+before+adder+if+key+has+not+changed">KIP-904</a>,
+            now avoiding spurious intermediate results.
+        </li>
+        <li>Kafka Streams' <code>ProductionExceptionHandler</code> is improved via
+            <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-399%3A+Extend+ProductionExceptionHandler+to+cover+serialization+exceptions">KIP-399</a>,
+            now also covering serialization errors.
+        </li>
+        <li>MirrorMaker now uses incrementalAlterConfigs API by default to synchronize topic configurations instead of the deprecated alterConfigs API.
+            A new settings called <code>use.incremental.alter.configs</code> is introduced to allow users to control which API to use.
+            This new setting is marked deprecated and will be removed in the next major release when incrementalAlterConfigs API is always used.
+            See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-894%3A+Use+incrementalAlterConfigs+API+for+syncing+topic+configurations">KIP-894</a> for more details.
+        </li>
+        <li>The JmxTool, EndToEndLatency, StreamsResetter, ConsumerPerformance and ClusterTool have been migrated to the tools module.
+            The 'kafka.tools' package is deprecated and will change to 'org.apache.kafka.tools' in the next major release.
+            See <a href="https://issues.apache.org/jira/browse/KAFKA-14525">KAFKA-14525</a> for more details.
+        </li>
+    </ul>
 
 <h4><a id="upgrade_3_4_0" href="#upgrade_3_4_0">Upgrading to 3.4.0 from any version 0.8.x through 3.3.x</a></h4>
 
@@ -205,8 +268,10 @@
                 ./bin/kafka-features.sh upgrade --metadata 3.4
             </code>
         </li>
-        <li>Note that the cluster metadata version cannot be downgraded to a pre-production 3.0.x, 3.1.x, or 3.2.x version once it has been upgraded.
-            However, it is possible to downgrade to production versions such as 3.3-IV0, 3.3-IV1, etc.</li>
+        <li>Note that cluster metadata downgrade is not supported in this version since it has metadata changes.
+            Every <a href="https://github.com/apache/kafka/blob/trunk/server-common/src/main/java/org/apache/kafka/server/common/MetadataVersion.java">MetadataVersion</a>
+            after 3.2.x has a boolean parameter that indicates if there are metadata changes (i.e. <code>IBP_3_3_IV3(7, "3.3", "IV3", true)</code> means this version has metadata changes).
+            Given your current and target versions, a downgrade is only possible if there are no metadata changes in the versions between.</li>
     </ol>
 
 <h5><a id="upgrade_340_notable" href="#upgrade_340_notable">Notable changes in 3.4.0</a></h5>
@@ -273,7 +338,10 @@
         ./bin/kafka-features.sh upgrade --metadata 3.3
         </code>
     </li>
-    <li>Note that the cluster metadata version cannot be downgraded to a pre-production 3.0.x, 3.1.x, or 3.2.x version once it has been upgraded. However, it is possible to downgrade to production versions such as 3.3-IV0, 3.3-IV1, etc.</li>
+    <li>Note that cluster metadata downgrade is not supported in this version since it has metadata changes.
+        Every <a href="https://github.com/apache/kafka/blob/trunk/server-common/src/main/java/org/apache/kafka/server/common/MetadataVersion.java">MetadataVersion</a>
+        after 3.2.x has a boolean parameter that indicates if there are metadata changes (i.e. <code>IBP_3_3_IV3(7, "3.3", "IV3", true)</code> means this version has metadata changes).
+        Given your current and target versions, a downgrade is only possible if there are no metadata changes in the versions between.</li>
 </ol>
 
 <h5><a id="upgrade_331_notable" href="#upgrade_331_notable">Notable changes in 3.3.1</a></h5>
