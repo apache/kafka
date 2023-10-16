@@ -69,7 +69,9 @@ import org.apache.kafka.storage.internals.log.OffsetIndex;
 import org.apache.kafka.storage.internals.log.ProducerStateManager;
 import org.apache.kafka.storage.internals.log.RemoteStorageFetchInfo;
 import org.apache.kafka.storage.internals.log.TimeIndex;
+import org.apache.kafka.storage.internals.log.TimestampOffset;
 import org.apache.kafka.storage.internals.log.TransactionIndex;
+import org.apache.kafka.storage.internals.log.CorruptIndexException;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -174,6 +176,8 @@ public class RemoteLogManagerTest {
     private final TopicIdPartition followerTopicIdPartition = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("Follower", 0));
     private final Map<String, Uuid> topicIds = new HashMap<>();
     private final TopicPartition tp = new TopicPartition("TestTopic", 5);
+
+    private final Integer maxEntries = 10;
     private final EpochEntry epochEntry0 = new EpochEntry(0, 0);
     private final EpochEntry epochEntry1 = new EpochEntry(1, 100);
     private final EpochEntry epochEntry2 = new EpochEntry(2, 200);
@@ -418,6 +422,22 @@ public class RemoteLogManagerTest {
         when(fileRecords.sizeInBytes()).thenReturn(10);
         when(oldSegment.readNextOffset()).thenReturn(nextSegmentStartOffset);
 
+        File txnFile1 = UnifiedLog.transactionIndexFile(tempDir, oldSegmentStartOffset, "");
+        txnFile1.createNewFile();
+
+        when(oldSegment.timeIndex()).thenReturn(new TimeIndex(TestUtils.tempFile(), oldSegmentStartOffset, maxEntries * 12));
+        when(oldSegment.txnIndex()).thenReturn(new TransactionIndex(oldSegmentStartOffset, txnFile1));
+        when(oldSegment.offsetIndex()).thenReturn(new OffsetIndex(TestUtils.tempFile(),
+                oldSegmentStartOffset, maxEntries * 8));
+
+        File txnFile2 = UnifiedLog.transactionIndexFile(tempDir, nextSegmentStartOffset, "");
+        txnFile2.createNewFile();
+
+        when(activeSegment.timeIndex()).thenReturn(new TimeIndex(TestUtils.tempFile(), nextSegmentStartOffset, maxEntries * 12));
+        when(activeSegment.txnIndex()).thenReturn(new TransactionIndex(nextSegmentStartOffset, txnFile2));
+        when(activeSegment.offsetIndex()).thenReturn(new OffsetIndex(TestUtils.tempFile(),
+                nextSegmentStartOffset, maxEntries * 8));
+
         when(mockLog.activeSegment()).thenReturn(activeSegment);
         when(mockLog.logStartOffset()).thenReturn(oldSegmentStartOffset);
         when(mockLog.logSegments(anyLong(), anyLong())).thenReturn(JavaConverters.collectionAsScalaIterable(Arrays.asList(oldSegment, activeSegment)));
@@ -520,6 +540,22 @@ public class RemoteLogManagerTest {
         // create 2 log segments, with 0 and 150 as log start offset
         LogSegment oldSegment = mock(LogSegment.class);
         LogSegment activeSegment = mock(LogSegment.class);
+
+        File txnFile1 = UnifiedLog.transactionIndexFile(tempDir, oldSegmentStartOffset, "");
+        txnFile1.createNewFile();
+
+        when(oldSegment.timeIndex()).thenReturn(new TimeIndex(TestUtils.tempFile(), oldSegmentStartOffset, maxEntries * 12));
+        when(oldSegment.txnIndex()).thenReturn(new TransactionIndex(oldSegmentStartOffset, txnFile1));
+        when(oldSegment.offsetIndex()).thenReturn(new OffsetIndex(TestUtils.tempFile(),
+                oldSegmentStartOffset, maxEntries * 8));
+
+        File txnFile2 = UnifiedLog.transactionIndexFile(tempDir, nextSegmentStartOffset, "");
+        txnFile2.createNewFile();
+
+        when(activeSegment.timeIndex()).thenReturn(new TimeIndex(TestUtils.tempFile(), nextSegmentStartOffset, maxEntries * 12));
+        when(activeSegment.txnIndex()).thenReturn(new TransactionIndex(nextSegmentStartOffset, txnFile2));
+        when(activeSegment.offsetIndex()).thenReturn(new OffsetIndex(TestUtils.tempFile(),
+                nextSegmentStartOffset, maxEntries * 8));
 
         when(oldSegment.baseOffset()).thenReturn(oldSegmentStartOffset);
         when(activeSegment.baseOffset()).thenReturn(nextSegmentStartOffset);
@@ -705,6 +741,22 @@ public class RemoteLogManagerTest {
         when(mockLog.producerStateManager()).thenReturn(mockStateManager);
         when(mockStateManager.fetchSnapshot(anyLong())).thenReturn(Optional.of(mockProducerSnapshotIndex));
         when(mockLog.lastStableOffset()).thenReturn(250L);
+
+        File txnFile1 = UnifiedLog.transactionIndexFile(tempDir, oldSegmentStartOffset, "");
+        txnFile1.createNewFile();
+
+        when(oldSegment.timeIndex()).thenReturn(new TimeIndex(TestUtils.tempFile(), oldSegmentStartOffset, maxEntries * 12));
+        when(oldSegment.txnIndex()).thenReturn(new TransactionIndex(oldSegmentStartOffset, txnFile1));
+        when(oldSegment.offsetIndex()).thenReturn(new OffsetIndex(TestUtils.tempFile(),
+                oldSegmentStartOffset, maxEntries * 8));
+
+        File txnFile2 = UnifiedLog.transactionIndexFile(tempDir, nextSegmentStartOffset, "");
+        txnFile2.createNewFile();
+
+        when(activeSegment.timeIndex()).thenReturn(new TimeIndex(TestUtils.tempFile(), nextSegmentStartOffset, maxEntries * 12));
+        when(activeSegment.txnIndex()).thenReturn(new TransactionIndex(nextSegmentStartOffset, txnFile2));
+        when(activeSegment.offsetIndex()).thenReturn(new OffsetIndex(TestUtils.tempFile(),
+                nextSegmentStartOffset, maxEntries * 8));
 
         LazyIndex idx = LazyIndex.forOffset(UnifiedLog.offsetIndexFile(tempDir, oldSegmentStartOffset, ""), oldSegmentStartOffset, 1000);
         LazyIndex timeIdx = LazyIndex.forTime(UnifiedLog.timeIndexFile(tempDir, oldSegmentStartOffset, ""), oldSegmentStartOffset, 1500);
@@ -1732,6 +1784,279 @@ public class RemoteLogManagerTest {
             assertEquals(expectedEndMetadata, deletedMetadataList.get(deletedMetadataList.size() - 1));
             assertEquals(currentLogStartOffset.get(), expectedEndMetadata.endOffset() + 1);
         }
+    }
+
+    @Test
+    void testCorruptedTimeIndex() throws Exception {
+        // copyLogSegment is executed in case we have more than 1 segment, what is why we create 2 of them
+        long oldSegmentStartOffset = 0L;
+        long nextSegmentStartOffset = 150L;
+
+        when(mockLog.topicPartition()).thenReturn(leaderTopicIdPartition.topicPartition());
+
+        // leader epoch preparation
+        checkpoint.write(totalEpochEntries);
+        LeaderEpochFileCache cache = new LeaderEpochFileCache(leaderTopicIdPartition.topicPartition(), checkpoint);
+        when(mockLog.leaderEpochCache()).thenReturn(Option.apply(cache));
+        when(remoteLogMetadataManager.highestOffsetForEpoch(any(TopicIdPartition.class), anyInt())).thenReturn(Optional.of(0L));
+
+        File tempFile = TestUtils.tempFile();
+        File mockProducerSnapshotIndex = TestUtils.tempFile();
+        File tempDir = TestUtils.tempDirectory();
+        // create 2 log segments, with 0 and 150 as log start offset
+        LogSegment oldSegment = mock(LogSegment.class);
+        LogSegment activeSegment = mock(LogSegment.class);
+
+        when(oldSegment.baseOffset()).thenReturn(oldSegmentStartOffset);
+        when(activeSegment.baseOffset()).thenReturn(nextSegmentStartOffset);
+
+        // Mock all required segment data to be managed by RLMTask
+        FileRecords fileRecords = mock(FileRecords.class);
+        when(oldSegment.log()).thenReturn(fileRecords);
+        when(fileRecords.file()).thenReturn(tempFile);
+        when(fileRecords.sizeInBytes()).thenReturn(10);
+        when(oldSegment.readNextOffset()).thenReturn(nextSegmentStartOffset);
+
+        File txnFile1 = UnifiedLog.transactionIndexFile(tempDir, oldSegmentStartOffset, "");
+        txnFile1.createNewFile();
+
+        File timeindexFile = TestUtils.tempFile();
+
+        TimeIndex ti = spy(new TimeIndex(timeindexFile, 45L, 12));
+        when(ti.entries()).thenReturn(1);
+        // One of the checks to detect index being corrupted is checking that:
+        // offset < baseOffset, BaseOffset is 45, offset => 0
+        when(ti.lastEntry()).thenReturn(new TimestampOffset(0L, 0L));
+
+        // Initialise timeIndex for oldSegment
+        when(oldSegment.timeIndex()).thenReturn(ti);
+        when(oldSegment.txnIndex()).thenReturn(new TransactionIndex(oldSegmentStartOffset, txnFile1));
+        when(oldSegment.offsetIndex()).thenReturn(new OffsetIndex(TestUtils.tempFile(),
+                oldSegmentStartOffset, maxEntries * 8));
+
+        File txnFile2 = UnifiedLog.transactionIndexFile(tempDir, nextSegmentStartOffset, "");
+        txnFile2.createNewFile();
+
+        when(activeSegment.timeIndex()).thenReturn(new TimeIndex(TestUtils.tempFile(), 45L, 1));
+        when(activeSegment.log()).thenReturn(fileRecords);
+        when(activeSegment.txnIndex()).thenReturn(new TransactionIndex(nextSegmentStartOffset, txnFile2));
+        when(activeSegment.offsetIndex()).thenReturn(new OffsetIndex(TestUtils.tempFile(),
+                nextSegmentStartOffset, maxEntries * 8));
+
+        when(mockLog.activeSegment()).thenReturn(activeSegment);
+        when(mockLog.logStartOffset()).thenReturn(oldSegmentStartOffset);
+        when(mockLog.logSegments(anyLong(), anyLong())).thenReturn(JavaConverters.collectionAsScalaIterable(Arrays.asList(oldSegment, activeSegment)));
+
+        ProducerStateManager mockStateManager = mock(ProducerStateManager.class);
+        when(mockLog.producerStateManager()).thenReturn(mockStateManager);
+        when(mockStateManager.fetchSnapshot(anyLong())).thenReturn(Optional.of(mockProducerSnapshotIndex));
+        when(mockLog.lastStableOffset()).thenReturn(250L);
+
+
+        LazyIndex idx = LazyIndex.forOffset(UnifiedLog.offsetIndexFile(tempDir, oldSegmentStartOffset, ""), oldSegmentStartOffset, 1000);
+        LazyIndex timeIdx = LazyIndex.forTime(UnifiedLog.timeIndexFile(tempDir, oldSegmentStartOffset, ""), oldSegmentStartOffset, 1500);
+
+        when(oldSegment.lazyTimeIndex()).thenReturn(timeIdx);
+        when(oldSegment.lazyOffsetIndex()).thenReturn(idx);
+
+        CompletableFuture<Void> dummyFuture = new CompletableFuture<>();
+        dummyFuture.complete(null);
+        when(remoteLogMetadataManager.addRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadata.class))).thenReturn(dummyFuture);
+        when(remoteLogMetadataManager.updateRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadataUpdate.class))).thenReturn(dummyFuture);
+
+        RemoteLogManager.RLMTask task = remoteLogManager.new RLMTask(leaderTopicIdPartition, 256);
+        // Just simulate situation when we upload next segment from another leader
+        task.convertToLeader(2);
+        // Here CorruptIndex will be thrown and caught by copyLogSegmentsToRemote
+        task.copyLogSegmentsToRemote(mockLog);
+
+        // verify the remoteLogMetadataManager never add any metadata and remoteStorageManager never copy log segments
+        // Since segment with index corruption should not be uploaded
+        verify(remoteLogMetadataManager, never()).addRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadata.class));
+        verify(remoteStorageManager, never()).copyLogSegmentData(any(RemoteLogSegmentMetadata.class), any(LogSegmentData.class));
+        verify(remoteLogMetadataManager, never()).updateRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadataUpdate.class));
+        assertEquals(1, remoteLogManager.getSegmentCopyFailures());
+    }
+
+    @Test
+    void testCorruptedTxnIndex() throws Exception {
+        // copyLogSegment is executed in case we have more than 1 segment, what is why we create 2 of them
+        long oldSegmentStartOffset = 0L;
+        long nextSegmentStartOffset = 150L;
+
+        when(mockLog.topicPartition()).thenReturn(leaderTopicIdPartition.topicPartition());
+
+        // leader epoch preparation
+        checkpoint.write(totalEpochEntries);
+        LeaderEpochFileCache cache = new LeaderEpochFileCache(leaderTopicIdPartition.topicPartition(), checkpoint);
+        when(mockLog.leaderEpochCache()).thenReturn(Option.apply(cache));
+        when(remoteLogMetadataManager.highestOffsetForEpoch(any(TopicIdPartition.class), anyInt())).thenReturn(Optional.of(0L));
+
+        File tempFile = TestUtils.tempFile();
+        File mockProducerSnapshotIndex = TestUtils.tempFile();
+        File tempDir = TestUtils.tempDirectory();
+        // create 2 log segments, with 0 and 150 as log start offset
+        LogSegment oldSegment = mock(LogSegment.class);
+        LogSegment activeSegment = mock(LogSegment.class);
+
+        when(oldSegment.baseOffset()).thenReturn(oldSegmentStartOffset);
+        when(activeSegment.baseOffset()).thenReturn(nextSegmentStartOffset);
+
+        // Mock all required segment data to be managed by RLMTask
+        FileRecords fileRecords = mock(FileRecords.class);
+        when(oldSegment.log()).thenReturn(fileRecords);
+        when(fileRecords.file()).thenReturn(tempFile);
+        when(fileRecords.sizeInBytes()).thenReturn(10);
+        when(oldSegment.readNextOffset()).thenReturn(nextSegmentStartOffset);
+
+        File txnFile1 = UnifiedLog.transactionIndexFile(tempDir, oldSegmentStartOffset, "");
+        txnFile1.createNewFile();
+
+        TransactionIndex txnIndex = spy(new TransactionIndex(nextSegmentStartOffset, txnFile1));
+
+        doThrow(new CorruptIndexException("")).when(txnIndex).sanityCheck();
+
+        // Initialise timeIndex for oldSegment
+        when(oldSegment.timeIndex()).thenReturn(new TimeIndex(TestUtils.tempFile(), oldSegmentStartOffset, maxEntries * 12));
+        when(oldSegment.txnIndex()).thenReturn(txnIndex);
+        when(oldSegment.offsetIndex()).thenReturn(new OffsetIndex(TestUtils.tempFile(),
+                oldSegmentStartOffset, maxEntries * 8));
+
+        File txnFile2 = UnifiedLog.transactionIndexFile(tempDir, nextSegmentStartOffset, "");
+        txnFile2.createNewFile();
+
+        when(activeSegment.timeIndex()).thenReturn(new TimeIndex(TestUtils.tempFile(), 45L, 1));
+        when(activeSegment.log()).thenReturn(fileRecords);
+
+
+
+        when(activeSegment.txnIndex()).thenReturn(new TransactionIndex(oldSegmentStartOffset, txnFile1));
+        when(activeSegment.offsetIndex()).thenReturn(new OffsetIndex(TestUtils.tempFile(),
+                nextSegmentStartOffset, maxEntries * 8));
+
+
+        when(mockLog.activeSegment()).thenReturn(activeSegment);
+        when(mockLog.logStartOffset()).thenReturn(oldSegmentStartOffset);
+        when(mockLog.logSegments(anyLong(), anyLong())).thenReturn(JavaConverters.collectionAsScalaIterable(Arrays.asList(oldSegment, activeSegment)));
+
+        ProducerStateManager mockStateManager = mock(ProducerStateManager.class);
+        when(mockLog.producerStateManager()).thenReturn(mockStateManager);
+        when(mockStateManager.fetchSnapshot(anyLong())).thenReturn(Optional.of(mockProducerSnapshotIndex));
+        when(mockLog.lastStableOffset()).thenReturn(250L);
+
+
+        LazyIndex idx = LazyIndex.forOffset(UnifiedLog.offsetIndexFile(tempDir, oldSegmentStartOffset, ""), oldSegmentStartOffset, 1000);
+        LazyIndex timeIdx = LazyIndex.forTime(UnifiedLog.timeIndexFile(tempDir, oldSegmentStartOffset, ""), oldSegmentStartOffset, 1500);
+
+        when(oldSegment.lazyTimeIndex()).thenReturn(timeIdx);
+        when(oldSegment.lazyOffsetIndex()).thenReturn(idx);
+
+        CompletableFuture<Void> dummyFuture = new CompletableFuture<>();
+        dummyFuture.complete(null);
+        when(remoteLogMetadataManager.addRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadata.class))).thenReturn(dummyFuture);
+        when(remoteLogMetadataManager.updateRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadataUpdate.class))).thenReturn(dummyFuture);
+
+        RemoteLogManager.RLMTask task = remoteLogManager.new RLMTask(leaderTopicIdPartition, 256);
+        // Just simulate situation when we upload next segment from another leader
+        task.convertToLeader(2);
+        // Here CorruptIndex will be thrown and caught by copyLogSegmentsToRemote
+        task.copyLogSegmentsToRemote(mockLog);
+
+        // verify the remoteLogMetadataManager never add any metadata and remoteStorageManager never copy log segments
+        // Since segment with index corruption should not be uploaded
+        verify(remoteLogMetadataManager, never()).addRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadata.class));
+        verify(remoteStorageManager, never()).copyLogSegmentData(any(RemoteLogSegmentMetadata.class), any(LogSegmentData.class));
+        verify(remoteLogMetadataManager, never()).updateRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadataUpdate.class));
+        assertEquals(1, remoteLogManager.getSegmentCopyFailures());
+    }
+
+    @Test
+    void testCorruptedOffsetIndex() throws Exception {
+        // copyLogSegment is executed in case we have more than 1 segment, what is why we create 2 of them
+        long oldSegmentStartOffset = 0L;
+        long nextSegmentStartOffset = 150L;
+
+        when(mockLog.topicPartition()).thenReturn(leaderTopicIdPartition.topicPartition());
+
+        // leader epoch preparation
+        checkpoint.write(totalEpochEntries);
+        LeaderEpochFileCache cache = new LeaderEpochFileCache(leaderTopicIdPartition.topicPartition(), checkpoint);
+        when(mockLog.leaderEpochCache()).thenReturn(Option.apply(cache));
+        when(remoteLogMetadataManager.highestOffsetForEpoch(any(TopicIdPartition.class), anyInt())).thenReturn(Optional.of(0L));
+
+        File tempFile = TestUtils.tempFile();
+        File mockProducerSnapshotIndex = TestUtils.tempFile();
+        File tempDir = TestUtils.tempDirectory();
+        // create 2 log segments, with 0 and 150 as log start offset
+        LogSegment oldSegment = mock(LogSegment.class);
+        LogSegment activeSegment = mock(LogSegment.class);
+
+        when(oldSegment.baseOffset()).thenReturn(oldSegmentStartOffset);
+        when(activeSegment.baseOffset()).thenReturn(nextSegmentStartOffset);
+
+        // Mock all required segment data to be managed by RLMTask
+        FileRecords fileRecords = mock(FileRecords.class);
+        when(oldSegment.log()).thenReturn(fileRecords);
+        when(fileRecords.file()).thenReturn(tempFile);
+        when(fileRecords.sizeInBytes()).thenReturn(10);
+        when(oldSegment.readNextOffset()).thenReturn(nextSegmentStartOffset);
+
+        File txnFile1 = UnifiedLog.transactionIndexFile(tempDir, oldSegmentStartOffset, "");
+        txnFile1.createNewFile();
+
+        // Initialise timeIndex for oldSegment
+        when(oldSegment.timeIndex()).thenReturn(new TimeIndex(TestUtils.tempFile(), oldSegmentStartOffset, maxEntries * 12));
+        when(oldSegment.txnIndex()).thenReturn(new TransactionIndex(oldSegmentStartOffset, txnFile1));
+
+        OffsetIndex offsetIndex = spy(new OffsetIndex(TestUtils.tempFile(),
+                nextSegmentStartOffset, maxEntries * 8));
+
+        when(offsetIndex.entries()).thenReturn(1);
+        offsetIndex.setLastOffset(0L);
+
+        when(oldSegment.offsetIndex()).thenReturn(offsetIndex);
+
+        File txnFile2 = UnifiedLog.transactionIndexFile(tempDir, nextSegmentStartOffset, "");
+        txnFile2.createNewFile();
+
+        when(activeSegment.timeIndex()).thenReturn(new TimeIndex(TestUtils.tempFile(), 45L, 1));
+        when(activeSegment.log()).thenReturn(fileRecords);
+        when(activeSegment.txnIndex()).thenReturn(new TransactionIndex(nextSegmentStartOffset, txnFile2));
+        when(activeSegment.offsetIndex()).thenReturn(new OffsetIndex(TestUtils.tempFile(),
+                nextSegmentStartOffset, maxEntries * 8));
+
+        when(mockLog.activeSegment()).thenReturn(activeSegment);
+        when(mockLog.logStartOffset()).thenReturn(oldSegmentStartOffset);
+        when(mockLog.logSegments(anyLong(), anyLong())).thenReturn(JavaConverters.collectionAsScalaIterable(Arrays.asList(oldSegment, activeSegment)));
+
+        ProducerStateManager mockStateManager = mock(ProducerStateManager.class);
+        when(mockLog.producerStateManager()).thenReturn(mockStateManager);
+        when(mockStateManager.fetchSnapshot(anyLong())).thenReturn(Optional.of(mockProducerSnapshotIndex));
+        when(mockLog.lastStableOffset()).thenReturn(250L);
+
+        LazyIndex idx = LazyIndex.forOffset(UnifiedLog.offsetIndexFile(tempDir, oldSegmentStartOffset, ""), oldSegmentStartOffset, 1000);
+        LazyIndex timeIdx = LazyIndex.forTime(UnifiedLog.timeIndexFile(tempDir, oldSegmentStartOffset, ""), oldSegmentStartOffset, 1500);
+
+        when(oldSegment.lazyTimeIndex()).thenReturn(timeIdx);
+        when(oldSegment.lazyOffsetIndex()).thenReturn(idx);
+
+        CompletableFuture<Void> dummyFuture = new CompletableFuture<>();
+        dummyFuture.complete(null);
+        when(remoteLogMetadataManager.addRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadata.class))).thenReturn(dummyFuture);
+        when(remoteLogMetadataManager.updateRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadataUpdate.class))).thenReturn(dummyFuture);
+
+        RemoteLogManager.RLMTask task = remoteLogManager.new RLMTask(leaderTopicIdPartition, 256);
+        // Just simulate situation when we upload next segment from another leader
+        task.convertToLeader(2);
+        // Here CorruptIndex will be thrown and caught by copyLogSegmentsToRemote
+        task.copyLogSegmentsToRemote(mockLog);
+
+        // verify the remoteLogMetadataManager never add any metadata and remoteStorageManager never copy log segments
+        // Since segment with index corruption should not be uploaded
+        verify(remoteLogMetadataManager, never()).addRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadata.class));
+        verify(remoteStorageManager, never()).copyLogSegmentData(any(RemoteLogSegmentMetadata.class), any(LogSegmentData.class));
+        verify(remoteLogMetadataManager, never()).updateRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadataUpdate.class));
+        assertEquals(1, remoteLogManager.getSegmentCopyFailures());
     }
 
     private List<RemoteLogSegmentMetadata> listRemoteLogSegmentMetadata(TopicIdPartition topicIdPartition,

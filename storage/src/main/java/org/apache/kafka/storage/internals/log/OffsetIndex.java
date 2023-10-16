@@ -191,6 +191,14 @@ public class OffsetIndex extends AbstractIndex {
         return lastOffset;
     }
 
+    /**
+     * This method is created for unit tests only
+     * @param lastOffset
+     */
+    public void setLastOffset(long lastOffset) {
+        this.lastOffset = lastOffset;
+    }
+
     @Override
     public void truncate() {
         truncateToEntries(0);
