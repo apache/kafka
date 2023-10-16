@@ -1156,6 +1156,9 @@ class LogManager(logDirs: Seq[File],
       // we will add metrics back after sourceLog remove the metrics
       destLog.removeLogMetrics()
       destLog.updateHighWatermark(sourceLog.highWatermark)
+      sourceLog.leaderEpochCache.foreach(cache =>
+        cache.latestEntry.map(entry =>
+          destLog.maybeAssignEpochStartOffset(entry.epoch, entry.startOffset)))
 
       // Now that future replica has been successfully renamed to be the current replica
       // Update the cached map and log cleaner as appropriate.

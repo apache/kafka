@@ -1036,4 +1036,35 @@ class LogManagerTest {
     assertTrue(logManager.directoryId(dirs(4).getAbsolutePath).isDefined)
     assertEquals(4, logManager.directoryIds.size)
   }
+
+  def testLeaderEpochAndOffsetCacheIsUpdatedWhenMovingCurrentToFutureLog(): Unit = {
+    val dir1 = TestUtils.tempDir()
+    val dir2 = TestUtils.tempDir()
+    logManager = createLogManager(Seq(dir1, dir2))
+    logManager.startup(Set.empty)
+
+    val tp = new TopicPartition("future-log", 0)
+    val leaderEpoch = 100
+    val startOffset = 11000
+    
+    def verifyLatestLeaderEpoch(log: UnifiedLog, leaderEpoch: Int, startOffset: Long): Boolean = {
+      if (log.leaderEpochCache.isEmpty) {
+        true
+      } else {
+        var isEqual = false
+        log.leaderEpochCache.get.latestEntry.map(latestEntry =>
+          isEqual = latestEntry.epoch == leaderEpoch && latestEntry.startOffset == startOffset)
+        isEqual
+      }
+    }
+
+    logManager.maybeUpdatePreferredLogDir(tp, dir1.getAbsolutePath)
+    val currentLog = logManager.getOrCreateLog(tp, topicId = None)
+    currentLog.maybeAssignEpochStartOffset(leaderEpoch, startOffset)
+    logManager.maybeUpdatePreferredLogDir(tp, dir2.getAbsolutePath)
+    val futureLog = logManager.getOrCreateLog(tp, isFuture = true, topicId = None)
+
+    logManager.replaceCurrentWithFutureLog(tp)
+    assertTrue(verifyLatestLeaderEpoch(futureLog, leaderEpoch, startOffset))
+  }
 }
