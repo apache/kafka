@@ -86,7 +86,8 @@ public class ListOffsetsApplicationEvent extends CompletableApplicationEvent<Map
     @Override
     public String toString() {
         return getClass().getSimpleName() + " {" +
-                "timestampsToSearch=" + timestampsToSearch + ", " +
+                toStringBase() +
+                ", timestampsToSearch=" + timestampsToSearch + ", " +
                 "requireTimestamps=" + requireTimestamps + '}';
     }
 

@@ -20,13 +20,13 @@ package kafka.log
 import com.yammer.metrics.core.{Gauge, MetricName}
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.server.metadata.{ConfigRepository, MockConfigRepository}
-import kafka.server.BrokerTopicStats
+import kafka.server.{BrokerMetadataCheckpoint, BrokerTopicStats, KafkaServer, RawMetaProperties}
 import kafka.utils._
 import org.apache.directory.api.util.FileUtils
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.OffsetOutOfRangeException
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.common.{KafkaException, TopicPartition}
+import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.ArgumentMatchers.any
@@ -275,15 +275,15 @@ class LogManagerTest {
     assertTrue(log.numberOfSegments > 1, "There should be more than one segment now.")
     log.updateHighWatermark(log.logEndOffset)
 
-    log.logSegments.foreach(_.log.file.setLastModified(time.milliseconds))
+    log.logSegments.forEach(_.log.file.setLastModified(time.milliseconds))
 
     time.sleep(maxLogAgeMs + 1)
     assertEquals(1, log.numberOfSegments, "Now there should only be only one segment in the index.")
     time.sleep(log.config.fileDeleteDelayMs + 1)
 
-    log.logSegments.foreach(s => {
-      s.lazyOffsetIndex.get
-      s.lazyTimeIndex.get
+    log.logSegments.forEach(s => {
+      s.offsetIndex()
+      s.timeIndex()
     })
 
     // there should be a log file, two indexes, one producer snapshot, and the leader epoch checkpoint
@@ -320,7 +320,7 @@ class LogManagerTest {
     for (_ <- 0 until numMessages) {
       val set = TestUtils.singletonRecords("test".getBytes())
       val info = log.appendAsLeader(set, leaderEpoch = 0)
-      offset = info.firstOffset.get.messageOffset
+      offset = info.firstOffset
     }
 
     log.updateHighWatermark(log.logEndOffset)
@@ -374,7 +374,7 @@ class LogManagerTest {
     val numSegments = log.numberOfSegments
     assertTrue(log.numberOfSegments > 1, "There should be more than one segment now.")
 
-    log.logSegments.foreach(_.log.file.setLastModified(time.milliseconds))
+    log.logSegments.forEach(_.log.file.setLastModified(time.milliseconds))
 
     time.sleep(maxLogAgeMs + 1)
     assertEquals(numSegments, log.numberOfSegments, "number of segments shouldn't have changed")
@@ -511,12 +511,12 @@ class LogManagerTest {
 
     val removedLog = logManager.asyncDelete(new TopicPartition(name, 0)).get
     val removedSegment = removedLog.activeSegment
-    val indexFilesAfterDelete = Seq(removedSegment.lazyOffsetIndex.file, removedSegment.lazyTimeIndex.file,
+    val indexFilesAfterDelete = Seq(removedSegment.offsetIndexFile, removedSegment.timeIndexFile,
       removedSegment.txnIndex.file)
 
     assertEquals(new File(removedLog.dir, logName), removedSegment.log.file)
-    assertEquals(new File(removedLog.dir, indexName), removedSegment.lazyOffsetIndex.file)
-    assertEquals(new File(removedLog.dir, timeIndexName), removedSegment.lazyTimeIndex.file)
+    assertEquals(new File(removedLog.dir, indexName), removedSegment.offsetIndexFile)
+    assertEquals(new File(removedLog.dir, timeIndexName), removedSegment.timeIndexFile)
     assertEquals(new File(removedLog.dir, txnIndexName), removedSegment.txnIndex.file)
 
     // Try to detect the case where a new index type was added and we forgot to update the pointer
@@ -1009,5 +1009,31 @@ class LogManagerTest {
     assertFalse(LogManager.waitForAllToComplete(Seq(failure, failure), _ => failureCount += 1))
     assertEquals(8, invokedCount)
     assertEquals(4, failureCount)
+  }
+
+  @Test
+  def testLoadDirectoryIds(): Unit = {
+    def writeMetaProperties(dir: File, id: Option[String] = None): Unit = {
+      val rawProps = new RawMetaProperties()
+      rawProps.nodeId = 1
+      rawProps.clusterId = "IVT1Seu3QjacxS7oBTKhDQ"
+      id.foreach(v => rawProps.directoryId = v)
+      new BrokerMetadataCheckpoint(new File(dir, KafkaServer.brokerMetaPropsFile)).write(rawProps.props)
+    }
+    val dirs: Seq[File] = Seq.fill(5)(TestUtils.tempDir())
+    writeMetaProperties(dirs(0))
+    writeMetaProperties(dirs(1), Some("ZwkGXjB0TvSF6mjVh6gO7Q"))
+    // no meta.properties on dirs(2)
+    writeMetaProperties(dirs(3), Some("kQfNPJ2FTHq_6Qlyyv6Jqg"))
+    writeMetaProperties(dirs(4))
+
+    logManager = createLogManager(dirs)
+
+    assertTrue(logManager.directoryId(dirs(0).getAbsolutePath).isDefined)
+    assertEquals(Some(Uuid.fromString("ZwkGXjB0TvSF6mjVh6gO7Q")), logManager.directoryId(dirs(1).getAbsolutePath))
+    assertEquals(None, logManager.directoryId(dirs(2).getAbsolutePath))
+    assertEquals(Some(Uuid.fromString("kQfNPJ2FTHq_6Qlyyv6Jqg")), logManager.directoryId(dirs(3).getAbsolutePath))
+    assertTrue(logManager.directoryId(dirs(4).getAbsolutePath).isDefined)
+    assertEquals(4, logManager.directoryIds.size)
   }
 }

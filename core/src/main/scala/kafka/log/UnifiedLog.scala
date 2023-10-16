@@ -40,12 +40,13 @@ import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.util.Scheduler
 import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
-import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, BatchMetadata, CompletedTxn, EpochEntry, FetchDataInfo, FetchIsolation, LastRecord, LeaderHwChange, LogAppendInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogStartOffsetIncrementReason, LogValidator, ProducerAppendInfo, ProducerStateManager, ProducerStateManagerConfig, RollParams}
+import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, BatchMetadata, CompletedTxn, EpochEntry, FetchDataInfo, FetchIsolation, LastRecord, LeaderHwChange, LogAppendInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogSegment, LogSegments, LogStartOffsetIncrementReason, LogValidator, ProducerAppendInfo, ProducerStateManager, ProducerStateManagerConfig, RollParams}
 
 import java.io.{File, IOException}
 import java.nio.file.Files
 import java.util
 import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap}
+import java.util.stream.Collectors
 import java.util.{Collections, Optional, OptionalInt, OptionalLong}
 import scala.annotation.nowarn
 import scala.collection.mutable.ListBuffer
@@ -104,7 +105,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
                  @volatile private var _topicId: Option[Uuid],
                  val keepPartitionMetadataFile: Boolean,
                  val remoteStorageSystemEnable: Boolean = false,
-                 @volatile private var logOffsetsListener: LogOffsetsListener = LogOffsetsListener.NO_OP_OFFSETS_LISTENER) extends Logging {
+                 @volatile private var logOffsetsListener: LogOffsetsListener = LogOffsetsListener.NO_OP_OFFSETS_LISTENER) extends Logging with AutoCloseable {
 
   import kafka.log.UnifiedLog._
 
@@ -165,7 +166,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
     initializePartitionMetadata()
     updateLogStartOffset(logStartOffset)
-    updateLocalLogStartOffset(math.max(logStartOffset, localLog.segments.firstSegmentBaseOffset.getOrElse(0L)))
+    updateLocalLogStartOffset(math.max(logStartOffset, localLog.segments.firstSegmentBaseOffset.orElse(0L)))
     if (!remoteLogEnabled())
       logStartOffset = localLogStartOffset()
     maybeIncrementFirstUnstableOffset()
@@ -643,7 +644,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    * Close this log.
    * The memory mapped buffer for index files of this log will be left open until the log is deleted.
    */
-  def close(): Unit = {
+  override def close(): Unit = {
     debug("Closing log")
     lock synchronized {
       logOffsetsListener = LogOffsetsListener.NO_OP_OFFSETS_LISTENER
@@ -768,10 +769,10 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     // This will ensure that any log data can be recovered with the correct topic ID in the case of failure.
     maybeFlushMetadataFile()
 
-    val appendInfo = analyzeAndValidateRecords(records, origin, ignoreRecordSize, leaderEpoch)
+    val appendInfo = analyzeAndValidateRecords(records, origin, ignoreRecordSize, !validateAndAssignOffsets, leaderEpoch)
 
     // return if we have no valid messages or if this is a duplicate of the last appended entry
-    if (appendInfo.shallowCount == 0) appendInfo
+    if (appendInfo.validBytes <= 0) appendInfo
     else {
 
       // trim any invalid bytes or partial messages before appending it to the on-disk log
@@ -784,13 +785,14 @@ class UnifiedLog(@volatile var logStartOffset: Long,
           if (validateAndAssignOffsets) {
             // assign offsets to the message set
             val offset = PrimitiveRef.ofLong(localLog.logEndOffset)
-            appendInfo.setFirstOffset(Optional.of(new LogOffsetMetadata(offset.value)))
+            appendInfo.setFirstOffset(offset.value)
             val validateAndOffsetAssignResult = try {
+              val targetCompression = BrokerCompressionType.forName(config.compressionType).targetCompressionType(appendInfo.sourceCompression)
               val validator = new LogValidator(validRecords,
                 topicPartition,
                 time,
                 appendInfo.sourceCompression,
-                appendInfo.targetCompression,
+                targetCompression,
                 config.compact,
                 config.recordVersion.value,
                 config.messageTimestampType,
@@ -835,18 +837,14 @@ class UnifiedLog(@volatile var logStartOffset: Long,
             }
           } else {
             // we are taking the offsets we are given
-            if (!appendInfo.offsetsMonotonic)
-              throw new OffsetsOutOfOrderException(s"Out of order offsets found in append to $topicPartition: " +
-                records.records.asScala.map(_.offset))
-
             if (appendInfo.firstOrLastOffsetOfFirstBatch < localLog.logEndOffset) {
               // we may still be able to recover if the log is empty
               // one example: fetching from log start offset on the leader which is not batch aligned,
               // which may happen as a result of AdminClient#deleteRecords()
-              val firstOffset = appendInfo.firstOffset.map[Long](x => x.messageOffset)
-                .orElse(records.batches.iterator().next().baseOffset())
+              val hasFirstOffset = appendInfo.firstOffset != UnifiedLog.UnknownOffset
+              val firstOffset = if (hasFirstOffset) appendInfo.firstOffset else records.batches.iterator().next().baseOffset()
 
-              val firstOrLast = if (appendInfo.firstOffset.isPresent) "First offset" else "Last offset of the first batch"
+              val firstOrLast = if (hasFirstOffset) "First offset" else "Last offset of the first batch"
               throw new UnexpectedAppendOffsetException(
                 s"Unexpected offset in append to $topicPartition. $firstOrLast " +
                   s"${appendInfo.firstOrLastOffsetOfFirstBatch} is less than the next offset ${localLog.logEndOffset}. " +
@@ -892,16 +890,11 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
           maybeDuplicate match {
             case Some(duplicate) =>
-              appendInfo.setFirstOffset(Optional.of(new LogOffsetMetadata(duplicate.firstOffset)))
+              appendInfo.setFirstOffset(duplicate.firstOffset)
               appendInfo.setLastOffset(duplicate.lastOffset)
               appendInfo.setLogAppendTime(duplicate.timestamp)
               appendInfo.setLogStartOffset(logStartOffset)
             case None =>
-              // Before appending update the first offset metadata to include segment information
-              appendInfo.setFirstOffset(appendInfo.firstOffset.map { offsetMetadata =>
-                new LogOffsetMetadata(offsetMetadata.messageOffset, segment.baseOffset, segment.size)
-              })
-
               // Append the records, and increment the local log end offset immediately after the append because a
               // write to the transaction index below may fail and we want to ensure that the offsets
               // of future appends still grow monotonically. The resulting transaction index inconsistency
@@ -1048,8 +1041,10 @@ class UnifiedLog(@volatile var logStartOffset: Long,
           if (duplicateBatch.isPresent) {
             return (updatedProducers, completedTxns.toList, Some(duplicateBatch.get()))
           }
+        }
 
-          // Verify that if the record is transactional & the append origin is client, that we either have an ongoing transaction or verified transaction state.
+        if (origin == AppendOrigin.CLIENT || origin == AppendOrigin.COORDINATOR) {
+          // Verify that if the record is transactional & the append origin is client/coordinator, that we either have an ongoing transaction or verified transaction state.
           // This guarantees that transactional records are never written to the log outside of the transaction coordinator's knowledge of an open transaction on
           // the partition. If we do not have an ongoing transaction or correct guard, return an error and do not append.
           // There are two phases -- the first append to the log and subsequent appends.
@@ -1086,7 +1081,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   }
 
   private def batchMissingRequiredVerification(batch: MutableRecordBatch, requestVerificationGuard: Object): Boolean = {
-    producerStateManager.producerStateManagerConfig().transactionVerificationEnabled() &&
+    producerStateManager.producerStateManagerConfig().transactionVerificationEnabled() && !batch.isControlBatch &&
       (requestVerificationGuard != verificationGuard(batch.producerId) || requestVerificationGuard == null)
   }
 
@@ -1095,7 +1090,8 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    * <ol>
    * <li> each message matches its CRC
    * <li> each message size is valid (if ignoreRecordSize is false)
-   * <li> that the sequence numbers of the incoming record batches are consistent with the existing state and with each other.
+   * <li> that the sequence numbers of the incoming record batches are consistent with the existing state and with each other
+   * <li> that the offsets are monotonically increasing (if requireOffsetsMonotonic is true)
    * </ol>
    *
    * Also compute the following quantities:
@@ -1111,10 +1107,10 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   private def analyzeAndValidateRecords(records: MemoryRecords,
                                         origin: AppendOrigin,
                                         ignoreRecordSize: Boolean,
+                                        requireOffsetsMonotonic: Boolean,
                                         leaderEpoch: Int): LogAppendInfo = {
-    var shallowMessageCount = 0
     var validBytesCount = 0
-    var firstOffset: Optional[LogOffsetMetadata] = Optional.empty()
+    var firstOffset = UnifiedLog.UnknownOffset
     var lastOffset = -1L
     var lastLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH
     var sourceCompression = CompressionType.NONE
@@ -1141,7 +1137,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
       // Also indicate whether we have the accurate first offset or not
       if (!readFirstMessage) {
         if (batch.magic >= RecordBatch.MAGIC_VALUE_V2)
-          firstOffset = Optional.of(new LogOffsetMetadata(batch.baseOffset))
+          firstOffset = batch.baseOffset
         lastOffsetOfFirstBatch = batch.lastOffset
         readFirstMessage = true
       }
@@ -1174,7 +1170,6 @@ class UnifiedLog(@volatile var logStartOffset: Long,
         offsetOfMaxTimestamp = lastOffset
       }
 
-      shallowMessageCount += 1
       validBytesCount += batchSize
 
       val batchCompression = CompressionType.forId(batch.compressionType.id)
@@ -1182,17 +1177,18 @@ class UnifiedLog(@volatile var logStartOffset: Long,
         sourceCompression = batchCompression
     }
 
-    // Apply broker-side compression if any
-    val targetCompression = BrokerCompressionType.forName(config.compressionType).targetCompressionType(sourceCompression)
+    if (requireOffsetsMonotonic && !monotonic)
+        throw new OffsetsOutOfOrderException(s"Out of order offsets found in append to $topicPartition: " +
+          records.records.asScala.map(_.offset))
+
     val lastLeaderEpochOpt: OptionalInt = if (lastLeaderEpoch != RecordBatch.NO_PARTITION_LEADER_EPOCH)
       OptionalInt.of(lastLeaderEpoch)
     else
       OptionalInt.empty()
 
     new LogAppendInfo(firstOffset, lastOffset, lastLeaderEpochOpt, maxTimestamp, offsetOfMaxTimestamp,
-      RecordBatch.NO_TIMESTAMP, logStartOffset, RecordConversionStats.EMPTY, sourceCompression, targetCompression,
-      shallowMessageCount, validBytesCount, monotonic, lastOffsetOfFirstBatch, Collections.emptyList[RecordError], null,
-      LeaderHwChange.NONE)
+      RecordBatch.NO_TIMESTAMP, logStartOffset, RecordConversionStats.EMPTY, sourceCompression,
+      validBytesCount, lastOffsetOfFirstBatch, Collections.emptyList[RecordError], LeaderHwChange.NONE)
   }
 
   /**
@@ -1318,9 +1314,9 @@ class UnifiedLog(@volatile var logStartOffset: Long,
       } else if (targetTimestamp == ListOffsetsRequest.MAX_TIMESTAMP) {
         // Cache to avoid race conditions. `toBuffer` is faster than most alternatives and provides
         // constant time access while being safe to use with concurrent collections unlike `toArray`.
-        val segmentsCopy = logSegments.toBuffer
+        val segmentsCopy = logSegments.asScala.toBuffer
         val latestTimestampSegment = segmentsCopy.maxBy(_.maxTimestampSoFar)
-        val latestTimestampAndOffset = latestTimestampSegment.maxTimestampAndOffsetSoFar
+        val latestTimestampAndOffset = latestTimestampSegment.readMaxTimestampAndOffsetSoFar
 
         Some(new TimestampAndOffset(latestTimestampAndOffset.timestamp,
           latestTimestampAndOffset.offset,
@@ -1352,15 +1348,15 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   private def searchOffsetInLocalLog(targetTimestamp: Long, startOffset: Long): Option[TimestampAndOffset] = {
     // Cache to avoid race conditions. `toBuffer` is faster than most alternatives and provides
     // constant time access while being safe to use with concurrent collections unlike `toArray`.
-    val segmentsCopy = logSegments.toBuffer
+    val segmentsCopy = logSegments.asScala.toBuffer
     val targetSeg = segmentsCopy.find(_.largestTimestamp >= targetTimestamp)
-    targetSeg.flatMap(_.findOffsetByTimestamp(targetTimestamp, startOffset))
+    targetSeg.flatMap(_.findOffsetByTimestamp(targetTimestamp, startOffset).asScala)
   }
 
   def legacyFetchOffsetsBefore(timestamp: Long, maxNumOffsets: Int): Seq[Long] = {
     // Cache to avoid race conditions. `toBuffer` is faster than most alternatives and provides
     // constant time access while being safe to use with concurrent collections unlike `toArray`.
-    val allSegments = logSegments.toBuffer
+    val allSegments = logSegments.asScala.toBuffer
     val lastSegmentHasSize = allSegments.last.size > 0
 
     val offsetTimeArray =
@@ -1468,7 +1464,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
         // remove the segments for lookups
         localLog.removeAndDeleteSegments(segmentsToDelete, asyncDelete = true, reason)
         deleteProducerSnapshots(deletable, asyncDelete = true)
-        incrementStartOffset(localLog.segments.firstSegmentBaseOffset.get, LogStartOffsetIncrementReason.SegmentDeletion)
+        incrementStartOffset(localLog.segments.firstSegmentBaseOffset.getAsLong, LogStartOffsetIncrementReason.SegmentDeletion)
       }
       numToDelete
     }
@@ -1536,7 +1532,8 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   /**
    * The log size in bytes for all segments that are only in local log but not yet in remote log.
    */
-  def onlyLocalLogSegmentsSize: Long = UnifiedLog.sizeInBytes(logSegments.filter(_.baseOffset >= highestOffsetInRemoteStorage))
+  def onlyLocalLogSegmentsSize: Long =
+    UnifiedLog.sizeInBytes(logSegments.stream.filter(_.baseOffset >= highestOffsetInRemoteStorage).collect(Collectors.toList[LogSegment]))
 
   /**
    * The offset of the next message that will be appended to the log
@@ -1586,10 +1583,10 @@ class UnifiedLog(@volatile var logStartOffset: Long,
         Note that this is only required for pre-V2 message formats because these do not store the first message offset
         in the header.
       */
-      val rollOffset = appendInfo
-        .firstOffset
-        .map[Long](_.messageOffset)
-        .orElse(maxOffsetInMessages - Integer.MAX_VALUE)
+      val rollOffset = if (appendInfo.firstOffset == UnifiedLog.UnknownOffset)
+        maxOffsetInMessages - Integer.MAX_VALUE
+      else
+        appendInfo.firstOffset
 
       roll(Some(rollOffset))
     } else {
@@ -1724,7 +1721,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
         info(s"Truncating to offset $targetOffset")
         lock synchronized {
           localLog.checkIfMemoryMappedBufferClosed()
-          if (localLog.segments.firstSegmentBaseOffset.get > targetOffset) {
+          if (localLog.segments.firstSegmentBaseOffset.getAsLong > targetOffset) {
             truncateFullyAndStartAt(targetOffset)
           } else {
             val deletedSegments = localLog.truncateTo(targetOffset)
@@ -1775,17 +1772,17 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   /**
    * All the log segments in this log ordered from oldest to newest
    */
-  def logSegments: Iterable[LogSegment] = localLog.segments.values
+  def logSegments: util.Collection[LogSegment] = localLog.segments.values
 
   /**
    * Get all segments beginning with the segment that includes "from" and ending with the segment
    * that includes up to "to-1" or the end of the log (if to > logEndOffset).
    */
   def logSegments(from: Long, to: Long): Iterable[LogSegment] = lock synchronized {
-    localLog.segments.values(from, to)
+    localLog.segments.values(from, to).asScala
   }
 
-  def nonActiveLogSegmentsFrom(from: Long): Iterable[LogSegment] = lock synchronized {
+  def nonActiveLogSegmentsFrom(from: Long): util.Collection[LogSegment] = lock synchronized {
     localLog.segments.nonActiveLogSegmentsFrom(from)
   }
 
@@ -1819,7 +1816,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    * Currently, it is used by LogCleaner threads on log compact non-active segments only with LogCleanerManager's lock
    * to ensure no other logcleaner threads and retention thread can work on the same segment.
    */
-  private[log] def getFirstBatchTimestampForSegments(segments: Iterable[LogSegment]): Iterable[Long] = {
+  private[log] def getFirstBatchTimestampForSegments(segments: util.Collection[LogSegment]): util.Collection[java.lang.Long] = {
     LogSegments.getFirstBatchTimestampForSegments(segments)
   }
 
@@ -1931,7 +1928,7 @@ object UnifiedLog extends Logging {
       segments,
       logStartOffset,
       recoveryPoint,
-      leaderEpochCache,
+      leaderEpochCache.asJava,
       producerStateManager,
       numRemainingSegments,
       isRemoteLogEnabled,
@@ -1950,26 +1947,17 @@ object UnifiedLog extends Logging {
       logOffsetsListener)
   }
 
-  def logFile(dir: File, offset: Long, suffix: String = ""): File = LogFileUtils.logFile(dir, offset, suffix)
-
   def logDeleteDirName(topicPartition: TopicPartition): String = LocalLog.logDeleteDirName(topicPartition)
 
   def logFutureDirName(topicPartition: TopicPartition): String = LocalLog.logFutureDirName(topicPartition)
 
   def logDirName(topicPartition: TopicPartition): String = LocalLog.logDirName(topicPartition)
 
-  def offsetIndexFile(dir: File, offset: Long, suffix: String = ""): File = LogFileUtils.offsetIndexFile(dir, offset, suffix)
-
-  def timeIndexFile(dir: File, offset: Long, suffix: String = ""): File = LogFileUtils.timeIndexFile(dir, offset, suffix)
-
-  def deleteFileIfExists(file: File, suffix: String = ""): Unit =
-    Files.deleteIfExists(new File(file.getPath + suffix).toPath)
-
   def transactionIndexFile(dir: File, offset: Long, suffix: String = ""): File = LogFileUtils.transactionIndexFile(dir, offset, suffix)
 
   def offsetFromFile(file: File): Long = LogFileUtils.offsetFromFile(file)
 
-  def sizeInBytes(segments: Iterable[LogSegment]): Long = LogSegments.sizeInBytes(segments)
+  def sizeInBytes(segments: util.Collection[LogSegment]): Long = LogSegments.sizeInBytes(segments)
 
   def parseTopicPartitionName(dir: File): TopicPartition = LocalLog.parseTopicPartitionName(dir)
 
@@ -2108,7 +2096,7 @@ object UnifiedLog extends Logging {
     val offsetsToSnapshot =
       if (segments.nonEmpty) {
         val lastSegmentBaseOffset = segments.lastSegment.get.baseOffset
-        val nextLatestSegmentBaseOffset = segments.lowerSegment(lastSegmentBaseOffset).map(_.baseOffset)
+        val nextLatestSegmentBaseOffset = segments.lowerSegment(lastSegmentBaseOffset).asScala.map(_.baseOffset)
         Seq(nextLatestSegmentBaseOffset, Some(lastSegmentBaseOffset), Some(lastOffset))
       } else {
         Seq(Some(lastOffset))
@@ -2152,14 +2140,14 @@ object UnifiedLog extends Logging {
       if (lastOffset > producerStateManager.mapEndOffset && !isEmptyBeforeTruncation) {
         val segmentOfLastOffset = segments.floorSegment(lastOffset)
 
-        segments.values(producerStateManager.mapEndOffset, lastOffset).foreach { segment =>
+        segments.values(producerStateManager.mapEndOffset, lastOffset).forEach { segment =>
           val startOffset = Utils.max(segment.baseOffset, producerStateManager.mapEndOffset, logStartOffset)
           producerStateManager.updateMapEndOffset(startOffset)
 
           if (offsetsToSnapshot.contains(Some(segment.baseOffset)))
             producerStateManager.takeSnapshot()
 
-          val maxPosition = if (segmentOfLastOffset.contains(segment)) {
+          val maxPosition = if (segmentOfLastOffset.isPresent && segmentOfLastOffset.get == segment) {
             Option(segment.translateOffset(lastOffset))
               .map(_.position)
               .getOrElse(segment.size)
@@ -2167,9 +2155,7 @@ object UnifiedLog extends Logging {
             segment.size
           }
 
-          val fetchDataInfo = segment.read(startOffset,
-            maxSize = Int.MaxValue,
-            maxPosition = maxPosition)
+          val fetchDataInfo = segment.read(startOffset, Int.MaxValue, maxPosition)
           if (fetchDataInfo != null)
             loadProducersFromRecords(producerStateManager, fetchDataInfo.records)
         }
@@ -2269,21 +2255,20 @@ case class RetentionMsBreach(log: UnifiedLog, remoteLogEnabled: Boolean) extends
   override def logReason(toDelete: List[LogSegment]): Unit = {
     val retentionMs = UnifiedLog.localRetentionMs(log.config, remoteLogEnabled)
     toDelete.foreach { segment =>
-      segment.largestRecordTimestamp match {
-        case Some(_) =>
-          if (remoteLogEnabled)
-            log.info(s"Deleting segment $segment due to local log retention time ${retentionMs}ms breach based on the largest " +
-              s"record timestamp in the segment")
-          else
-            log.info(s"Deleting segment $segment due to log retention time ${retentionMs}ms breach based on the largest " +
-              s"record timestamp in the segment")
-        case None =>
-          if (remoteLogEnabled)
-            log.info(s"Deleting segment $segment due to local log retention time ${retentionMs}ms breach based on the " +
-              s"last modified time of the segment")
-          else
-            log.info(s"Deleting segment $segment due to log retention time ${retentionMs}ms breach based on the " +
-              s"last modified time of the segment")
+      if (segment.largestRecordTimestamp.isPresent)
+        if (remoteLogEnabled)
+          log.info(s"Deleting segment $segment due to local log retention time ${retentionMs}ms breach based on the largest " +
+            s"record timestamp in the segment")
+        else
+          log.info(s"Deleting segment $segment due to log retention time ${retentionMs}ms breach based on the largest " +
+            s"record timestamp in the segment")
+      else {
+        if (remoteLogEnabled)
+          log.info(s"Deleting segment $segment due to local log retention time ${retentionMs}ms breach based on the " +
+            s"last modified time of the segment")
+        else
+          log.info(s"Deleting segment $segment due to log retention time ${retentionMs}ms breach based on the " +
+            s"last modified time of the segment")
       }
     }
   }

@@ -230,8 +230,7 @@ public class StoreChangelogReader implements ChangelogReader {
         this.restoreConsumer = restoreConsumer;
         this.stateRestoreListener = stateRestoreListener;
 
-        this.stateUpdaterEnabled =
-            InternalConfig.getBoolean(config.originals(), InternalConfig.STATE_UPDATER_ENABLED, false);
+        this.stateUpdaterEnabled = InternalConfig.getStateUpdaterEnabled(config.originals());
 
         this.groupId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
         this.pollTime = Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG));
@@ -808,14 +807,14 @@ public class StoreChangelogReader implements ChangelogReader {
 
     private void initializeChangelogs(final Map<TaskId, Task> tasks,
                                       final Set<ChangelogMetadata> newPartitionsToRestore) {
-        if (newPartitionsToRestore.isEmpty()) {
-            return;
-        }
-
         // for those changelog partitions whose tasks are not included, in means those tasks
         // are paused at the moment, and hence we should not try to initialize those
         // changelogs yet
         filterNewPartitionsToRestore(tasks, newPartitionsToRestore);
+
+        if (newPartitionsToRestore.isEmpty()) {
+            return;
+        }
 
         // for active changelogs, we need to find their end offset before transit to restoring
         // if the changelog is on source topic, then its end offset should be the minimum of

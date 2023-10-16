@@ -59,4 +59,20 @@ public interface MembershipManager {
      * current assignment.
      */
     void updateAssignment(ConsumerGroupHeartbeatResponseData.Assignment assignment);
+
+    /**
+     * Transition the member to the FENCED state.  This is only invoked when the heartbeat returns a
+     * FENCED_MEMBER_EPOCH or UNKNOWN_MEMBER_ID error code.
+     */
+    void transitionToFenced();
+
+    /**
+     * Transition the member to the FAILED state.  This is invoked when the heartbeat returns a non-retriable error.
+     */
+    void transitionToFailed();
+
+    /**
+     * Return true if the member should send heartbeat to the coordinator
+     */
+    boolean shouldSendHeartbeat();
 }
