@@ -113,7 +113,7 @@ public class Loggers {
 
     /**
      * Set the level for the specified logger and all of its children
-     * @param namespace the name of the logger to adjust along with its children; may not be nul
+     * @param namespace the name of the logger to adjust along with its children; may not be null
      * @param level the level to set for the logger and its children; may not be null
      * @return all loggers that were affected by this action, sorted by their natural ordering;
      * may be empty, but never null
