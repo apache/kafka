@@ -3,7 +3,7 @@ version: '2'
 services:
 
   broker:
-    image: apache/kafka:3.6.0
+    image: {$IMAGE}
     hostname: broker
     container_name: broker
     ports:
@@ -25,7 +25,7 @@ services:
       CLUSTER_ID: '4L6g3nShT-eMCtK--X86sw'
 
   broker-ssl:
-    image: apache/kafka:3.6.0
+    image: {$IMAGE}
     hostname: broker-ssl
     container_name: broker-ssl
     ports:
