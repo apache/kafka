@@ -151,7 +151,7 @@ Or on Windows:
 Next, we create the input topic named <b>streams-plaintext-input</b> and the output topic named <b>streams-wordcount-output</b>:
 
 <pre class="language-bash"><code class="language-bash">$ bin/kafka-topics.sh --create \
---bootstrap-server localhost:9092 \
+    --bootstrap-server localhost:9092 \
     --replication-factor 1 \
     --partitions 1 \
     --topic streams-plaintext-input
