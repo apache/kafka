@@ -94,7 +94,7 @@ public class TopicMetadataRequestManagerTest {
         this.topicMetadataRequestManager.requestTopicMetadata(Optional.of("hello"));
         this.time.sleep(100);
         NetworkClientDelegate.PollResult res = this.topicMetadataRequestManager.poll(this.time.milliseconds());
-        res.unsentRequests.get(0).handler().complete(buildTopicMetadataClientResponse(
+        res.unsentRequests.get(0).future().complete(buildTopicMetadataClientResponse(
             res.unsentRequests.get(0),
             Optional.of(topic),
             error));
@@ -118,7 +118,7 @@ public class TopicMetadataRequestManagerTest {
         NetworkClientDelegate.PollResult res = this.topicMetadataRequestManager.poll(this.time.milliseconds());
         assertEquals(1, res.unsentRequests.size());
 
-        res.unsentRequests.get(0).handler().complete(buildTopicMetadataClientResponse(
+        res.unsentRequests.get(0).future().complete(buildTopicMetadataClientResponse(
             res.unsentRequests.get(0),
             topic,
             Errors.NONE));
@@ -143,7 +143,7 @@ public class TopicMetadataRequestManagerTest {
         NetworkClientDelegate.PollResult res = this.topicMetadataRequestManager.poll(this.time.milliseconds());
         assertEquals(1, res.unsentRequests.size());
 
-        res.unsentRequests.get(0).handler().completeExceptionally(exception);
+        res.unsentRequests.get(0).future().completeExceptionally(exception);
 
         if (exception instanceof RetriableException) {
             assertFalse(topicMetadataRequestManager.inflightRequests().isEmpty());
@@ -175,7 +175,7 @@ public class TopicMetadataRequestManagerTest {
         res2 = topicMetadataRequestManager.poll(this.time.milliseconds());
         assertEquals(1, res2.unsentRequests.size());
 
-        res2.unsentRequests.get(0).handler().complete(buildTopicMetadataClientResponse(
+        res2.unsentRequests.get(0).future().complete(buildTopicMetadataClientResponse(
             res2.unsentRequests.get(0),
             topic,
             Errors.NONE));

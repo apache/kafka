@@ -152,7 +152,7 @@ public class TopicMetadataRequestManager implements RequestManager {
                 request,
                 Optional.empty());
 
-            unsent.handler().whenComplete((response, exception) -> {
+            unsent.future().whenComplete((response, exception) -> {
                 if (response == null) {
                     // Backoff if the error is retriable
                     handleError(exception, unsent.handler().completionTimeMs());
