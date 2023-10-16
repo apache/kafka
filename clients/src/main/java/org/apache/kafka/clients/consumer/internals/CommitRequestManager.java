@@ -43,6 +43,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -181,20 +182,20 @@ public class CommitRequestManager implements RequestManager {
         private final String groupId;
         private final Optional<String> memberId;
         private final Optional<String> groupInstanceId;
+        private OptionalInt memberEpoch;
         private final CompletableFuture<Void> future;
-        private int memberEpoch;
 
         public OffsetCommitRequestState(final Map<TopicPartition, OffsetAndMetadata> offsets,
                                         final String groupId,
                                         final Optional<String> groupInstanceId,
-                                        final int memberEpoch,
-                                        final String memberId) {
+                                        final OptionalInt memberEpoch,
+                                        final Optional<String> memberId) {
             this.offsets = offsets;
             this.future = new CompletableFuture<>();
             this.groupId = groupId;
             this.groupInstanceId = groupInstanceId;
             this.memberEpoch = memberEpoch;
-            this.memberId = Optional.ofNullable(memberId);
+            this.memberId = memberId;
         }
 
         public NetworkClientDelegate.UnsentRequest toUnsentRequest() {
@@ -220,16 +221,11 @@ public class CommitRequestManager implements RequestManager {
 
             OffsetCommitRequestData data = new OffsetCommitRequestData()
                     .setGroupId(groupId)
-                    .setGenerationIdOrMemberEpoch(memberEpoch)
                     .setTopics(new ArrayList<>(requestTopicDataMap.values()));
 
-            if (memberId.isPresent()) {
-                data.setMemberId(memberId.get());
-            }
-
-            if (groupInstanceId.isPresent()) {
-                data.setGroupInstanceId(groupInstanceId.get());
-            }
+            memberEpoch.ifPresent(data::setGenerationIdOrMemberEpoch);
+            memberId.ifPresent(data::setMemberId);
+            groupInstanceId.ifPresent(data::setGroupInstanceId);
 
             return new NetworkClientDelegate.UnsentRequest(
                     new OffsetCommitRequest.Builder(data),

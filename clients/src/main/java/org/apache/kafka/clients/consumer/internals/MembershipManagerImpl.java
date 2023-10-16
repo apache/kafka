@@ -21,6 +21,7 @@ import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.protocol.Errors;
 
 import java.util.Optional;
+import java.util.OptionalInt;
 
 /**
  * Membership manager that maintains group membership for a single member following the new
@@ -34,8 +35,8 @@ public class MembershipManagerImpl implements MembershipManager {
 
     private final String groupId;
     private final Optional<String> groupInstanceId;
-    private String memberId;
-    private int memberEpoch;
+    private Optional<String> memberId;
+    private OptionalInt memberEpoch;
     private MemberState state;
     private AssignorSelection assignorSelection;
 
@@ -69,6 +70,8 @@ public class MembershipManagerImpl implements MembershipManager {
         this.groupInstanceId = Optional.ofNullable(groupInstanceId);
         this.targetAssignment = Optional.empty();
         this.nextTargetAssignment = Optional.empty();
+        this.memberEpoch = OptionalInt.empty();
+        this.memberId = Optional.empty();
     }
 
     /**
@@ -104,12 +107,12 @@ public class MembershipManagerImpl implements MembershipManager {
     }
 
     @Override
-    public String memberId() {
+    public Optional<String> memberId() {
         return memberId;
     }
 
     @Override
-    public int memberEpoch() {
+    public OptionalInt memberEpoch() {
         return memberEpoch;
     }
 
@@ -122,8 +125,9 @@ public class MembershipManagerImpl implements MembershipManager {
             );
             throw new IllegalStateException(errorMessage);
         }
-        this.memberId = response.memberId();
-        this.memberEpoch = response.memberEpoch();
+
+        this.memberId = Optional.of(response.memberId());
+        this.memberEpoch = OptionalInt.of(response.memberEpoch());
         ConsumerGroupHeartbeatResponseData.Assignment assignment = response.assignment();
         if (assignment != null) {
             setTargetAssignment(assignment);
@@ -144,13 +148,14 @@ public class MembershipManagerImpl implements MembershipManager {
 
     @Override
     public void tryJoin() {
-        resetEpoch();
+        // Member sends memberEpoch = 0 when joining
+        memberEpoch = OptionalInt.of(0);
         transitionTo(MemberState.UNJOINED);
     }
 
     @Override
     public void leaveGroup() {
-        resetEpoch();
+        memberEpoch = OptionalInt.empty();
         transitionTo(MemberState.NOT_IN_GROUP);
     }
 
@@ -217,7 +222,7 @@ public class MembershipManagerImpl implements MembershipManager {
     }
 
     private void resetEpoch() {
-        this.memberEpoch = 0;
+        this.memberEpoch = OptionalInt.of(0);
     }
 
     @Override

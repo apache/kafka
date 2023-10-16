@@ -167,9 +167,11 @@ public class HeartbeatRequestManager implements RequestManager {
         // TODO: We only need to send the rebalanceTimeoutMs field once unless the first request failed.
         ConsumerGroupHeartbeatRequestData data = new ConsumerGroupHeartbeatRequestData()
             .setGroupId(membershipManager.groupId())
-            .setMemberEpoch(membershipManager.memberEpoch())
-            .setMemberId(membershipManager.memberId())
             .setRebalanceTimeoutMs(rebalanceTimeoutMs);
+
+        // The member joins the group by sending an heartbeat with no Member ID and a member epoch equals to 0
+        membershipManager.memberEpoch().ifPresent(data::setMemberEpoch);
+        membershipManager.memberId().ifPresent(data::setMemberId);
 
         membershipManager.groupInstanceId().ifPresent(data::setInstanceId);
 

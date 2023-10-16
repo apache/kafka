@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 
 import java.util.Optional;
+import java.util.OptionalInt;
 
 /**
  * Manages group membership for a single member.
@@ -33,9 +34,9 @@ public interface MembershipManager {
 
     Optional<String> groupInstanceId();
 
-    String memberId();
+    Optional<String> memberId();
 
-    int memberEpoch();
+    OptionalInt memberEpoch();
 
     boolean canCommitOffset();
 

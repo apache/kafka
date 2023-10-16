@@ -29,8 +29,8 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class MembershipManagerImplTest {
 
@@ -42,8 +42,8 @@ public class MembershipManagerImplTest {
     public void testInitialState() {
         MembershipManagerImpl membershipManager = new MembershipManagerImpl(GROUP_ID);
         assertEquals(GROUP_ID, membershipManager.groupId());
-        assertEquals(0, membershipManager.memberEpoch());
-        assertNull(membershipManager.memberId());
+        assertFalse(membershipManager.memberEpoch().isPresent());
+        assertFalse(membershipManager.memberId().isPresent());
         assertEquals(Optional.empty(), membershipManager.groupInstanceId());
         assertEquals(MemberState.NOT_IN_GROUP, membershipManager.state());
     }
@@ -53,8 +53,8 @@ public class MembershipManagerImplTest {
         MembershipManagerImpl membershipManager = instantiateMembershipManagerAndJoin();
         membershipManager.leaveGroup();
         assertEquals(GROUP_ID, membershipManager.groupId());
-        assertEquals(0, membershipManager.memberEpoch());
-        assertNull(membershipManager.memberId());
+        assertFalse(membershipManager.memberEpoch().isPresent());
+        assertFalse(membershipManager.memberId().isPresent());
         assertEquals(Optional.empty(), membershipManager.groupInstanceId());
         assertEquals(MemberState.NOT_IN_GROUP, membershipManager.state());
     }
@@ -112,12 +112,12 @@ public class MembershipManagerImplTest {
                 createConsumerGroupHeartbeatResponse(null);
         membershipManager.updateState(heartbeatResponse.data());
         assertEquals(MemberState.STABLE, membershipManager.state());
-        assertEquals(MEMBER_ID, membershipManager.memberId());
-        assertEquals(MEMBER_EPOCH, membershipManager.memberEpoch());
+        assertEquals(MEMBER_ID, membershipManager.memberId().get());
+        assertEquals(MEMBER_EPOCH, membershipManager.memberEpoch().getAsInt());
 
         membershipManager.transitionToFenced();
-        assertFalse(membershipManager.memberId().isEmpty());
-        assertEquals(0, membershipManager.memberEpoch());
+        assertTrue(membershipManager.memberId().isPresent());
+        assertEquals(0, membershipManager.memberEpoch().getAsInt());
     }
 
     @Test
@@ -127,8 +127,8 @@ public class MembershipManagerImplTest {
                 createConsumerGroupHeartbeatResponse(null);
         membershipManager.updateState(heartbeatResponse.data());
         assertEquals(MemberState.STABLE, membershipManager.state());
-        assertEquals(MEMBER_ID, membershipManager.memberId());
-        assertEquals(MEMBER_EPOCH, membershipManager.memberEpoch());
+        assertEquals(MEMBER_ID, membershipManager.memberId().get());
+        assertEquals(MEMBER_EPOCH, membershipManager.memberEpoch().getAsInt());
 
         membershipManager.transitionToFailed();
         assertEquals(MemberState.FAILED, membershipManager.state());
@@ -180,6 +180,23 @@ public class MembershipManagerImplTest {
         ConsumerGroupHeartbeatResponseData.Assignment newAssignment3 = createAssignment();
         membershipManager.updateState(createConsumerGroupHeartbeatResponse(newAssignment3).data());
         checkAssignments(membershipManager, null, newAssignment1, newAssignment3);
+    }
+
+    @Test
+    public void testEnsureOptionalFieldsAreEmptyWhenNotInGroup() {
+        MembershipManagerImpl membershipManager = new MembershipManagerImpl(GROUP_ID);
+        assertFalse(membershipManager.memberId().isPresent());
+        assertFalse(membershipManager.memberEpoch().isPresent());
+        assertFalse(membershipManager.groupId().isEmpty());
+
+        // Transition to STABLE
+        membershipManager.tryJoin();
+        ConsumerGroupHeartbeatResponse responseWithoutAssignment =
+            createConsumerGroupHeartbeatResponse(null);
+        membershipManager.updateState(responseWithoutAssignment.data());
+        assertTrue(membershipManager.memberId().isPresent());
+        assertTrue(membershipManager.memberEpoch().isPresent());
+        assertFalse(membershipManager.groupId().isEmpty());
     }
 
     private MembershipManagerImpl instantiateMembershipManagerAndJoin() {
