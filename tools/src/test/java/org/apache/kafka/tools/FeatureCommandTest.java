@@ -78,7 +78,7 @@ public class FeatureCommandTest {
         );
         // Change expected message to reflect latest MetadataVersion (SupportedMaxVersion increases when adding a new version)
         assertEquals("Feature: metadata.version\tSupportedMinVersion: 3.0-IV1\t" +
-                "SupportedMaxVersion: 3.7-IV0\tFinalizedVersionLevel: 3.7-IV0\t", outputWithoutEpoch(commandOutput));
+                "SupportedMaxVersion: 3.7-IV1\tFinalizedVersionLevel: 3.7-IV1\t", outputWithoutEpoch(commandOutput));
     }
 
     @ClusterTest(clusterType = Type.ZK, metadataVersion = MetadataVersion.IBP_3_3_IV1)
