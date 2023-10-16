@@ -515,9 +515,19 @@ public class GroupCoordinatorService implements GroupCoordinator {
             new ArrayList<>(groupIds.size());
         final Map<TopicPartition, List<String>> groupsByTopicPartition = new HashMap<>();
         groupIds.forEach(groupId -> {
-            groupsByTopicPartition
-                .computeIfAbsent(topicPartitionFor(groupId), __ -> new ArrayList<>())
-                .add(groupId);
+            // For backwards compatibility, we support DescribeGroups for the empty group id.
+            if (groupId == null) {
+                futures.add(CompletableFuture.completedFuture(Collections.singletonList(
+                    new ConsumerGroupDescribeResponseData.DescribedGroup()
+                        .setGroupId(null)
+                        .setErrorCode(Errors.INVALID_GROUP_ID.code())
+                        .setErrorMessage(Errors.INVALID_GROUP_ID.message())
+                )));
+            } else {
+                groupsByTopicPartition
+                    .computeIfAbsent(topicPartitionFor(groupId), __ -> new ArrayList<>())
+                    .add(groupId);
+            }
         });
 
         groupsByTopicPartition.forEach((topicPartition, groupList) -> {
