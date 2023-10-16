@@ -522,7 +522,9 @@ class BrokerServer(
         config.groupInitialRebalanceDelay,
         GroupCoordinatorConfig.GENERIC_GROUP_NEW_MEMBER_JOIN_TIMEOUT_MS,
         config.groupMinSessionTimeoutMs,
-        config.groupMaxSessionTimeoutMs
+        config.groupMaxSessionTimeoutMs,
+        config.offsetsRetentionCheckIntervalMs,
+        config.offsetsRetentionMinutes * 60 * 1000L
       )
       val timer = new SystemTimerReaper(
         "group-coordinator-reaper",

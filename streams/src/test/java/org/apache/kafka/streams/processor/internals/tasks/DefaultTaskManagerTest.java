@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals.tasks;
 
+import java.time.Duration;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -23,9 +24,9 @@ import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.ReadOnlyTask;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.TaskExecutionMetadata;
 import org.apache.kafka.streams.processor.internals.TasksRegistry;
@@ -34,11 +35,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
-import java.util.Properties;
-
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.common.utils.Utils.mkObjectProperties;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -65,23 +61,30 @@ public class DefaultTaskManagerTest {
     private final StreamsException exception = mock(StreamsException.class);
     private final TaskExecutionMetadata taskExecutionMetadata = mock(TaskExecutionMetadata.class);
 
-    private final StreamsConfig config = new StreamsConfig(configProps());
-    private final TaskManager taskManager = new DefaultTaskManager(time, "TaskManager", tasks, config,
-        (taskManager, name, time, taskExecutionMetadata) -> taskExecutor, taskExecutionMetadata);
-
-    private Properties configProps() {
-        return mkObjectProperties(mkMap(
-            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
-            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:2171"),
-            mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2)
-        ));
-    }
+    private final TaskManager taskManager = new DefaultTaskManager(time, "TaskManager", tasks,
+        (taskManager, name, time, taskExecutionMetadata) -> taskExecutor, taskExecutionMetadata, 1);
 
     @BeforeEach
     public void setUp() {
         when(task.isProcessable(anyLong())).thenReturn(true);
         when(tasks.activeTasks()).thenReturn(Collections.singleton(task));
         when(tasks.task(taskId)).thenReturn(task);
+    }
+
+    @Test
+    public void shouldShutdownTaskExecutors() {
+        final Duration duration = mock(Duration.class);
+        taskManager.shutdown(duration);
+
+        verify(taskExecutor).requestShutdown();
+        verify(taskExecutor).awaitShutdown(duration);
+    }
+
+    @Test
+    public void shouldStartTaskExecutors() {
+        taskManager.startTaskExecutors();
+
+        verify(taskExecutor).start();
     }
 
     @Test
@@ -119,7 +122,7 @@ public class DefaultTaskManagerTest {
 
         public void shutdown() {
             shutdownRequested.set(true);
-            taskManager.signalProcessableTasks();
+            taskManager.signalTaskExecutors();
         }
     }
 
@@ -155,7 +158,7 @@ public class DefaultTaskManagerTest {
         awaitingThread.start();
         verify(tasks, timeout(VERIFICATION_TIMEOUT).atLeastOnce()).activeTasks();
 
-        taskManager.signalProcessableTasks();
+        taskManager.signalTaskExecutors();
 
         assertTrue(awaitingRunnable.awaitDone.await(VERIFICATION_TIMEOUT, TimeUnit.MILLISECONDS));
 
@@ -230,6 +233,18 @@ public class DefaultTaskManagerTest {
         when(task.canPunctuateStreamTime()).thenReturn(true);
 
         assertEquals(task, taskManager.assignNextTask(taskExecutor));
+        assertNull(taskManager.assignNextTask(taskExecutor));
+    }
+
+    @Test
+    public void shouldNotAssignTasksIfUncaughtExceptionPresent() {
+        taskManager.add(Collections.singleton(task));
+        when(tasks.activeTasks()).thenReturn(Collections.singleton(task));
+        ensureTaskMakesProgress();
+        taskManager.assignNextTask(taskExecutor);
+        taskManager.setUncaughtException(new StreamsException("Exception"), taskId);
+        taskManager.unassignTask(task, taskExecutor);
+
         assertNull(taskManager.assignNextTask(taskExecutor));
     }
 
@@ -314,6 +329,7 @@ public class DefaultTaskManagerTest {
     public void shouldNotAssignLockedTask() {
         taskManager.add(Collections.singleton(task));
         when(tasks.activeTasks()).thenReturn(Collections.singleton(task));
+        when(taskExecutionMetadata.canProcessTask(eq(task), anyLong())).thenReturn(true);
         when(tasks.task(task.id())).thenReturn(task);
         when(tasks.contains(task.id())).thenReturn(true);
 
@@ -323,9 +339,47 @@ public class DefaultTaskManagerTest {
     }
 
     @Test
+    public void shouldLockAnEmptySetOfTasks() {
+        taskManager.add(Collections.singleton(task));
+        when(tasks.activeTasks()).thenReturn(Collections.singleton(task));
+        when(taskExecutionMetadata.canProcessTask(eq(task), anyLong())).thenReturn(true);
+        when(tasks.task(task.id())).thenReturn(task);
+        when(tasks.contains(task.id())).thenReturn(true);
+
+        assertTrue(taskManager.lockTasks(Collections.emptySet()).isDone());
+
+        assertEquals(task, taskManager.assignNextTask(taskExecutor));
+    }
+
+
+    @Test
+    public void shouldLockATaskThatWasVoluntarilyReleased() {
+        final KafkaFutureImpl<StreamTask> future = new KafkaFutureImpl<>();
+
+        taskManager.add(Collections.singleton(task));
+        when(tasks.activeTasks()).thenReturn(Collections.singleton(task));
+        when(taskExecutionMetadata.canProcessTask(eq(task), anyLong())).thenReturn(true);
+        when(tasks.task(task.id())).thenReturn(task);
+        when(tasks.contains(task.id())).thenReturn(true);
+        when(taskExecutor.unassign()).thenReturn(future);
+
+        assertEquals(task, taskManager.assignNextTask(taskExecutor));
+
+        final KafkaFuture<Void> lockingFuture = taskManager.lockTasks(Collections.singleton(task.id()));
+        assertFalse(lockingFuture.isDone());
+
+        taskManager.unassignTask(task, taskExecutor);
+        future.complete(null);
+
+        assertTrue(lockingFuture.isDone());
+        assertNull(taskManager.assignNextTask(taskExecutor));
+    }
+
+    @Test
     public void shouldNotAssignAnyLockedTask() {
         taskManager.add(Collections.singleton(task));
         when(tasks.activeTasks()).thenReturn(Collections.singleton(task));
+        when(taskExecutionMetadata.canProcessTask(eq(task), anyLong())).thenReturn(true);
         when(tasks.task(task.id())).thenReturn(task);
         when(tasks.contains(task.id())).thenReturn(true);
 
@@ -379,12 +433,21 @@ public class DefaultTaskManagerTest {
 
         assertEquals(task, taskManager.assignNextTask(taskExecutor));
 
+        when(taskExecutor.currentTask()).thenReturn(new ReadOnlyTask(task));
         final KafkaFuture<Void> lockFuture = taskManager.lockAllTasks();
         assertFalse(lockFuture.isDone());
 
         verify(taskExecutor).unassign();
 
+        taskManager.unassignTask(task, taskExecutor);
         future.complete(task);
+
         assertTrue(lockFuture.isDone());
     }
+
+    private void ensureTaskMakesProgress() {
+        when(taskExecutionMetadata.canPunctuateTask(eq(task))).thenReturn(true);
+        when(task.canPunctuateStreamTime()).thenReturn(true);
+    }
+
 }

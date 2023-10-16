@@ -17,11 +17,15 @@
 package org.apache.kafka.coordinator.group.consumer;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.GroupNotEmptyException;
 import org.apache.kafka.common.errors.StaleMemberEpochException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.coordinator.group.GroupMetadataManagerTest;
+import org.apache.kafka.coordinator.group.OffsetAndMetadata;
+import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
+import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.junit.jupiter.api.Test;
@@ -29,12 +33,15 @@ import org.junit.jupiter.api.Test;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Optional;
+import java.util.OptionalInt;
+import java.util.OptionalLong;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
 import static org.apache.kafka.coordinator.group.RecordHelpersTest.mkMapOfPartitionRacks;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -672,5 +679,95 @@ public class ConsumerGroupTest {
 
         // This should succeed.
         group.validateOffsetFetch("member-id", 0, Long.MAX_VALUE);
+    }
+
+    @Test
+    public void testValidateDeleteGroup() {
+        ConsumerGroup consumerGroup = createConsumerGroup("foo");
+
+        assertEquals(ConsumerGroup.ConsumerGroupState.EMPTY, consumerGroup.state());
+        assertDoesNotThrow(consumerGroup::validateDeleteGroup);
+
+        ConsumerGroupMember member1 = new ConsumerGroupMember.Builder("member1")
+            .setMemberEpoch(1)
+            .setPreviousMemberEpoch(0)
+            .setTargetMemberEpoch(1)
+            .build();
+        consumerGroup.updateMember(member1);
+
+        assertEquals(ConsumerGroup.ConsumerGroupState.RECONCILING, consumerGroup.state());
+        assertThrows(GroupNotEmptyException.class, consumerGroup::validateDeleteGroup);
+
+        consumerGroup.setGroupEpoch(1);
+
+        assertEquals(ConsumerGroup.ConsumerGroupState.ASSIGNING, consumerGroup.state());
+        assertThrows(GroupNotEmptyException.class, consumerGroup::validateDeleteGroup);
+
+        consumerGroup.setTargetAssignmentEpoch(1);
+
+        assertEquals(ConsumerGroup.ConsumerGroupState.STABLE, consumerGroup.state());
+        assertThrows(GroupNotEmptyException.class, consumerGroup::validateDeleteGroup);
+    }
+
+    @Test
+    public void testOffsetExpirationCondition() {
+        long currentTimestamp = 30000L;
+        long commitTimestamp = 20000L;
+        long offsetsRetentionMs = 10000L;
+        OffsetAndMetadata offsetAndMetadata = new OffsetAndMetadata(15000L, OptionalInt.empty(), "", commitTimestamp, OptionalLong.empty());
+        ConsumerGroup group = new ConsumerGroup(new SnapshotRegistry(new LogContext()), "group-id");
+
+        Optional<OffsetExpirationCondition> offsetExpirationCondition = group.offsetExpirationCondition();
+        assertTrue(offsetExpirationCondition.isPresent());
+
+        OffsetExpirationConditionImpl condition = (OffsetExpirationConditionImpl) offsetExpirationCondition.get();
+        assertEquals(commitTimestamp, condition.baseTimestamp().apply(offsetAndMetadata));
+        assertTrue(condition.isOffsetExpired(offsetAndMetadata, currentTimestamp, offsetsRetentionMs));
+    }
+
+    @Test
+    public void testIsSubscribedToTopic() {
+        Uuid fooTopicId = Uuid.randomUuid();
+        Uuid barTopicId = Uuid.randomUuid();
+
+        MetadataImage image = new GroupMetadataManagerTest.MetadataImageBuilder()
+            .addTopic(fooTopicId, "foo", 1)
+            .addTopic(barTopicId, "bar", 2)
+            .addRacks()
+            .build();
+
+        ConsumerGroupMember member1 = new ConsumerGroupMember.Builder("member1")
+            .setSubscribedTopicNames(Collections.singletonList("foo"))
+            .build();
+        ConsumerGroupMember member2 = new ConsumerGroupMember.Builder("member2")
+            .setSubscribedTopicNames(Collections.singletonList("bar"))
+            .build();
+
+        ConsumerGroup consumerGroup = createConsumerGroup("group-foo");
+
+        consumerGroup.updateMember(member1);
+        consumerGroup.updateMember(member2);
+
+        assertEquals(
+            mkMap(
+                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1, mkMapOfPartitionRacks(1))),
+                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2, mkMapOfPartitionRacks(2)))
+            ),
+            consumerGroup.computeSubscriptionMetadata(
+                null,
+                null,
+                image.topics(),
+                image.cluster()
+            )
+        );
+
+        assertTrue(consumerGroup.isSubscribedToTopic("foo"));
+        assertTrue(consumerGroup.isSubscribedToTopic("bar"));
+
+        consumerGroup.removeMember("member1");
+        assertFalse(consumerGroup.isSubscribedToTopic("foo"));
+
+        consumerGroup.removeMember("member2");
+        assertFalse(consumerGroup.isSubscribedToTopic("bar"));
     }
 }

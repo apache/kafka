@@ -2324,6 +2324,19 @@ public class StreamTaskTest {
     }
 
     @Test
+    public void shouldFlushStateManagerAndRecordCollector() {
+        stateManager.flush();
+        EasyMock.expectLastCall().once();
+        recordCollector.flush();
+        EasyMock.expectLastCall().once();
+        EasyMock.replay(stateManager, recordCollector);
+
+        task = createStatefulTask(createConfig("100"), false);
+
+        task.flush();
+    }
+
+    @Test
     public void shouldClearCommitStatusesInCloseDirty() {
         task = createSingleSourceStateless(createConfig(AT_LEAST_ONCE, "0"), StreamsConfig.METRICS_LATEST);
         task.initializeIfNeeded();

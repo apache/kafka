@@ -2186,8 +2186,9 @@ class ReplicaManagerTest {
     }
   }
 
-  @Test
-  def testTransactionVerificationFlow(): Unit = {
+  @ParameterizedTest
+  @EnumSource(value = classOf[AppendOrigin], names = Array("CLIENT", "COORDINATOR"))
+  def testTransactionVerificationFlow(appendOrigin: AppendOrigin): Unit = {
     val tp0 = new TopicPartition(topic, 0)
     val producerId = 24L
     val producerEpoch = 0.toShort
@@ -2205,7 +2206,7 @@ class ReplicaManagerTest {
         new SimpleRecord("message".getBytes))
 
       // We should add these partitions to the manager to verify.
-      val result = appendRecords(replicaManager, tp0, transactionalRecords, transactionalId = transactionalId)
+      val result = appendRecords(replicaManager, tp0, transactionalRecords, origin = appendOrigin, transactionalId = transactionalId)
       val appendCallback = ArgumentCaptor.forClass(classOf[AddPartitionsToTxnManager.AppendCallback])
       verify(addPartitionsToTxnManager, times(1)).verifyTransaction(
         ArgumentMatchers.eq(transactionalId),
@@ -2224,7 +2225,7 @@ class ReplicaManagerTest {
       assertEquals(verificationGuard, getVerificationGuard(replicaManager, tp0, producerId))
 
       // This time verification is successful.
-      appendRecords(replicaManager, tp0, transactionalRecords, transactionalId = transactionalId)
+      appendRecords(replicaManager, tp0, transactionalRecords, origin = appendOrigin, transactionalId = transactionalId)
       val appendCallback2 = ArgumentCaptor.forClass(classOf[AddPartitionsToTxnManager.AppendCallback])
       verify(addPartitionsToTxnManager, times(2)).verifyTransaction(
         ArgumentMatchers.eq(transactionalId),

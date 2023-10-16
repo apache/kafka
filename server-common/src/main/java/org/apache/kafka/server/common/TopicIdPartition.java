@@ -14,25 +14,34 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.server.common;
 
-package org.apache.kafka.controller;
-
-import java.util.Objects;
 import org.apache.kafka.common.Uuid;
 
-final class TopicIdPartition {
+import java.util.Objects;
+
+/**
+ * Represents a partition using its unique topic Id and partition number.
+ */
+public final class TopicIdPartition {
     private final Uuid topicId;
     private final int partitionId;
 
-    TopicIdPartition(Uuid topicId, int partitionId) {
+    public TopicIdPartition(Uuid topicId, int partitionId) {
         this.topicId = topicId;
         this.partitionId = partitionId;
     }
 
+    /**
+     * @return Universally unique Id representing this topic partition.
+     */
     public Uuid topicId() {
         return topicId;
     }
 
+    /**
+     * @return The partition Id.
+     */
     public int partitionId() {
         return partitionId;
     }
