@@ -129,8 +129,8 @@ class LogManagerTest {
 
       logManagerForTest.get.shutdown(3)
 
-      assertFalse(Files.exists(new File(logDir1, CleanShutdownFileHandler.CleanShutdownFileName).toPath))
-      assertTrue(Files.exists(new File(logDir2, CleanShutdownFileHandler.CleanShutdownFileName).toPath))
+      assertFalse(Files.exists(new File(logDir1, CleanShutdownFileHandler.CLEAN_SHUTDOWN_FILE_NAME).toPath))
+      assertTrue(Files.exists(new File(logDir2, CleanShutdownFileHandler.CLEAN_SHUTDOWN_FILE_NAME).toPath))
       assertEquals(-1L, logManagerForTest.get.readBrokerEpochFromCleanShutdownFiles())
     } finally {
       logManagerForTest.foreach(manager => manager.liveLogDirs.foreach(Utils.delete))
@@ -139,8 +139,6 @@ class LogManagerTest {
 
   @Test
   def testCleanShutdownFileWithBrokerEpoch(): Unit = {
-    // We create two directories logDir1 and logDir2 to help effectively test error handling
-    // during LogManager.shutdown().
     val logDir1 = TestUtils.tempDir()
     val logDir2 = TestUtils.tempDir()
     var logManagerForTest: Option[LogManager] = Option.empty
@@ -159,8 +157,8 @@ class LogManagerTest {
 
       logManagerForTest.get.shutdown(3)
 
-      assertTrue(Files.exists(new File(logDir1, CleanShutdownFileHandler.CleanShutdownFileName).toPath))
-      assertTrue(Files.exists(new File(logDir2, CleanShutdownFileHandler.CleanShutdownFileName).toPath))
+      assertTrue(Files.exists(new File(logDir1, CleanShutdownFileHandler.CLEAN_SHUTDOWN_FILE_NAME).toPath))
+      assertTrue(Files.exists(new File(logDir2, CleanShutdownFileHandler.CLEAN_SHUTDOWN_FILE_NAME).toPath))
       assertEquals(3L, logManagerForTest.get.readBrokerEpochFromCleanShutdownFiles())
     } finally {
       logManagerForTest.foreach(manager => manager.liveLogDirs.foreach(Utils.delete))
@@ -191,7 +189,7 @@ class LogManagerTest {
 
     // 2. simulate unclean shutdown by deleting clean shutdown marker file
     logManager.shutdown()
-    assertTrue(Files.deleteIfExists(new File(logDir, CleanShutdownFileHandler.CleanShutdownFileName).toPath))
+    assertTrue(Files.deleteIfExists(new File(logDir, CleanShutdownFileHandler.CLEAN_SHUTDOWN_FILE_NAME).toPath))
 
     // 3. create a new LogManager and start it in a different thread
     @volatile var loadLogCalled = 0
@@ -217,7 +215,7 @@ class LogManagerTest {
     logManager = null
 
     // 5. verify that CleanShutdownFile is not created under logDir
-    assertFalse(Files.exists(new File(logDir, CleanShutdownFileHandler.CleanShutdownFileName).toPath))
+    assertFalse(Files.exists(new File(logDir, CleanShutdownFileHandler.CLEAN_SHUTDOWN_FILE_NAME).toPath))
   }
 
   /**

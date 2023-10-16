@@ -206,14 +206,18 @@ class BrokerLifecycleManager(
    * @param highestMetadataOffsetProvider Provides the current highest metadata offset.
    * @param channelManager                The NodeToControllerChannelManager to use.
    * @param clusterId                     The cluster ID.
+   * @param advertisedListeners           The advertised listeners for this broker.
+   * @param supportedFeatures             The features for this broker.
+   * @param previousBrokerEpoch           The broker epoch before the reboot.
+   *
    */
   def start(highestMetadataOffsetProvider: () => Long,
             channelManager: NodeToControllerChannelManager,
             clusterId: String,
             advertisedListeners: ListenerCollection,
             supportedFeatures: util.Map[String, VersionRange],
-            brokerEpoch: Long): Unit = {
-    previousBrokerEpoch = brokerEpoch
+            previousBrokerEpoch: Long): Unit = {
+    this.previousBrokerEpoch = previousBrokerEpoch
     eventQueue.append(new StartupEvent(highestMetadataOffsetProvider,
       channelManager, clusterId, advertisedListeners, supportedFeatures))
   }

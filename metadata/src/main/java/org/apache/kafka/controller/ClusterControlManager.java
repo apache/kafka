@@ -328,8 +328,7 @@ public class ClusterControlManager {
         }
         int brokerId = request.brokerId();
         BrokerRegistration existing = brokerRegistrations.get(brokerId);
-        if (version == 0 || request.previousBrokerEpoch() != existing.epoch()) {
-            // TODO(KIP-966): Remove the unclean shutdown replicas from the
+        if (version < 2 || request.previousBrokerEpoch() != existing.epoch()) {
             log.debug("Received an unclean shutdown request");
         }
         if (existing != null) {
