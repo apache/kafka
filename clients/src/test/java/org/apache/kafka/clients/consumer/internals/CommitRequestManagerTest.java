@@ -22,9 +22,12 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.OffsetFetchRequestData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractRequest;
+import org.apache.kafka.common.requests.ConsumerGroupHeartbeatResponse;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.OffsetFetchRequest;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
@@ -57,14 +60,17 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 public class CommitRequestManagerTest {
+    private final String groupId = "group-id";
     private SubscriptionState subscriptionState;
     private GroupState groupState;
     private LogContext logContext;
+    private MembershipManager membershipManager;
     private MockTime time;
     private CoordinatorRequestManager coordinatorRequestManager;
     private Properties props;
@@ -76,6 +82,7 @@ public class CommitRequestManagerTest {
         this.time = new MockTime(0);
         this.subscriptionState = mock(SubscriptionState.class);
         this.coordinatorRequestManager = mock(CoordinatorRequestManager.class);
+        this.membershipManager = new MembershipManagerImpl(groupId);
         this.groupState = new GroupState("group-1", Optional.empty());
 
         this.props = new Properties();
@@ -246,6 +253,101 @@ public class CommitRequestManagerTest {
         }
     }
 
+    @ParameterizedTest
+    @MethodSource("retriableGroupErrors")
+    public void testOffsetFetchFailsWithGroupErrorsAndRetriesAfterReceivingUpdatedInfoInHeartbeat(final Errors error) {
+        CommitRequestManager commitRequestManger = create(true, 100);
+        mockFailedOffsetFetchWaitingForNewMemberIdOrEpoch(error, commitRequestManger);
+
+        // Mock Heartbeat received with new member ID and epoch
+        String newMemberId = "new-member1";
+        int newEpoch = 2;
+        membershipManager.updateState(createConsumerGroupHeartbeatResponse(newMemberId, newEpoch).data());
+
+        // A new request should be generated on the next poll, with the new member ID and epoch.
+        NetworkClientDelegate.PollResult res = commitRequestManger.poll(time.milliseconds());
+        assertEquals(1, res.unsentRequests.size());
+        OffsetFetchRequestData reqData = (OffsetFetchRequestData) res.unsentRequests.get(0).requestBuilder().build().data();
+        assertEquals(1, reqData.groups().size());
+
+        if (error == Errors.UNKNOWN_MEMBER_ID) {
+            assertEquals(newMemberId, reqData.groups().get(0).memberId());
+        } else if (error == Errors.STALE_MEMBER_EPOCH) {
+            assertEquals(newEpoch, reqData.groups().get(0).memberEpoch());
+        }
+    }
+
+    @ParameterizedTest
+    @MethodSource("retriableGroupErrors")
+    public void testOffsetFetchWaitingForMemberIdAndEpochIsRetriedEvenIfMembersLeavesGroup(final Errors error) {
+        CommitRequestManager commitRequestManger = create(true, 100);
+        mockFailedOffsetFetchWaitingForNewMemberIdOrEpoch(error, commitRequestManger);
+
+        // Mock member leaves group
+        membershipManager.leaveGroup();
+
+        // A new request should be generated on the next poll, without any member ID or epoch.
+        NetworkClientDelegate.PollResult res = commitRequestManger.poll(time.milliseconds());
+        assertEquals(1, res.unsentRequests.size());
+        assertNoMemberIdOrEpochInRequest(res.unsentRequests.get(0));
+    }
+
+    @ParameterizedTest
+    @MethodSource("retriableGroupErrors")
+    public void testOffsetFetchWaitingForMemberIdAndEpochFailsIfMemberFails(final Errors error) {
+        CommitRequestManager commitRequestManger = create(true, 100);
+        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> result =
+                mockFailedOffsetFetchWaitingForNewMemberIdOrEpoch(error, commitRequestManger);
+
+        // Mock member fails
+        membershipManager.transitionToFailed();
+
+        // OffsetFetch request should fail.
+        assertTrue(result.isCompletedExceptionally());
+
+        // No other request should be generated on the next poll to the commit request manager
+        NetworkClientDelegate.PollResult res = commitRequestManger.poll(time.milliseconds());
+        assertEquals(0, res.unsentRequests.size());
+    }
+
+    private CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> mockFailedOffsetFetchWaitingForNewMemberIdOrEpoch(
+            Errors error, CommitRequestManager commitRequestManger) {
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
+        Set<TopicPartition> partitions = new HashSet<>();
+        partitions.add(new TopicPartition("t1", 0));
+
+        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> result = commitRequestManger.addOffsetFetchRequest(partitions);
+
+        // Complete request with retriable error for invalid member ID/epoch
+        NetworkClientDelegate.PollResult res = commitRequestManger.poll(time.milliseconds());
+        assertEquals(1, res.unsentRequests.size());
+        res.unsentRequests.get(0).future().complete(buildOffsetFetchClientResponse(res.unsentRequests.get(0), partitions, error));
+
+        // Request result future should still be pending (waiting to receive a new member ID/epoch).
+        assertFalse(result.isDone());
+
+        // All outbound buffers should be empty given that it is a new request that will be retried.
+        assertEquals(0, commitRequestManger.pendingRequests.inflightOffsetFetches.size());
+        assertEquals(0, commitRequestManger.pendingRequests.unsentOffsetFetches.size());
+
+        return result;
+    }
+
+    private void assertNoMemberIdOrEpochInRequest(NetworkClientDelegate.UnsentRequest req) {
+        OffsetFetchRequestData reqData = (OffsetFetchRequestData) req.requestBuilder().build().data();
+        assertEquals(1, reqData.groups().size());
+        assertNull(reqData.groups().get(0).memberId());
+        // This -1 is the default introduced by the OffsetFetchRequest.Builder when no epoch is  provided.
+        assertEquals(-1, reqData.groups().get(0).memberEpoch());
+    }
+
+    private ConsumerGroupHeartbeatResponse createConsumerGroupHeartbeatResponse(String memberId, int memberEpoch) {
+        return new ConsumerGroupHeartbeatResponse(new ConsumerGroupHeartbeatResponseData()
+                .setErrorCode(Errors.NONE.code())
+                .setMemberId(memberId)
+                .setMemberEpoch(memberEpoch));
+    }
+
     private void testRetriable(final CommitRequestManager commitRequestManger,
                                final List<CompletableFuture<Map<TopicPartition, OffsetAndMetadata>>> futures) {
         futures.forEach(f -> assertFalse(f.isDone()));
@@ -266,7 +368,15 @@ public class CommitRequestManagerTest {
                 Arguments.of(Errors.COORDINATOR_LOAD_IN_PROGRESS, true),
                 Arguments.of(Errors.UNKNOWN_SERVER_ERROR, false),
                 Arguments.of(Errors.GROUP_AUTHORIZATION_FAILED, false),
-                Arguments.of(Errors.TOPIC_AUTHORIZATION_FAILED, false));
+                Arguments.of(Errors.TOPIC_AUTHORIZATION_FAILED, false),
+                Arguments.of(Errors.STALE_MEMBER_EPOCH, true),
+                Arguments.of(Errors.UNKNOWN_MEMBER_ID, true));
+    }
+
+    private static Stream<Arguments> retriableGroupErrors() {
+        return Stream.of(
+                Arguments.of(Errors.STALE_MEMBER_EPOCH, true),
+                Arguments.of(Errors.UNKNOWN_MEMBER_ID, true));
     }
 
     @ParameterizedTest
@@ -364,7 +474,8 @@ public class CommitRequestManagerTest {
                 this.subscriptionState,
                 new ConsumerConfig(props),
                 this.coordinatorRequestManager,
-                this.groupState);
+                this.groupState,
+                this.membershipManager);
     }
 
     private ClientResponse buildOffsetFetchClientResponse(

@@ -76,6 +76,8 @@ public class DefaultBackgroundThread extends KafkaThread {
 
     private final RequestManagers requestManagers;
 
+    private final Optional<MembershipManager> membershipManager;
+
     // Visible for testing
     @SuppressWarnings("ParameterNumber")
     DefaultBackgroundThread(final Time time,
@@ -87,6 +89,7 @@ public class DefaultBackgroundThread extends KafkaThread {
                             final ApplicationEventProcessor processor,
                             final ConsumerMetadata metadata,
                             final NetworkClientDelegate networkClient,
+                            final MembershipManager membershipManager,
                             final GroupState groupState,
                             final CoordinatorRequestManager coordinatorManager,
                             final CommitRequestManager commitRequestManager,
@@ -105,6 +108,7 @@ public class DefaultBackgroundThread extends KafkaThread {
         this.networkClientDelegate = networkClient;
         this.errorEventHandler = errorEventHandler;
         this.groupState = groupState;
+        this.membershipManager = Optional.ofNullable(membershipManager);
         this.requestManagers = new RequestManagers(
                 offsetsRequestManager,
                 topicMetadataRequestManager,
@@ -180,6 +184,7 @@ public class DefaultBackgroundThread extends KafkaThread {
 
             // TODO: consolidate groupState and memberState
             if (groupState.groupId != null) {
+                membershipManager = Optional.of(new MembershipManagerImpl(groupState.groupId));
                 coordinatorRequestManager = new CoordinatorRequestManager(
                         this.time,
                         logContext,
@@ -193,7 +198,8 @@ public class DefaultBackgroundThread extends KafkaThread {
                         subscriptionState,
                         config,
                         coordinatorRequestManager,
-                        groupState);
+                        groupState,
+                        membershipManager.get());
                 MembershipManager membershipManager = new MembershipManagerImpl(groupState.groupId);
                 heartbeatRequestManager = new HeartbeatRequestManager(
                         this.time,
@@ -203,6 +209,8 @@ public class DefaultBackgroundThread extends KafkaThread {
                         subscriptionState,
                         membershipManager,
                         errorEventHandler);
+            } else {
+                membershipManager = Optional.empty();
             }
 
             this.requestManagers = new RequestManagers(

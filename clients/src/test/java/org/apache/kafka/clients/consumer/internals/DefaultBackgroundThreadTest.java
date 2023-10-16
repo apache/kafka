@@ -87,6 +87,7 @@ public class DefaultBackgroundThreadTest {
     private CommitRequestManager commitManager;
     private TopicMetadataRequestManager topicMetadataRequestManager;
     private HeartbeatRequestManager heartbeatRequestManager;
+    private MembershipManager membershipManager;
 
     @BeforeEach
     @SuppressWarnings("unchecked")
@@ -111,6 +112,7 @@ public class DefaultBackgroundThreadTest {
                 1000,
                 true);
         this.groupState = new GroupState(rebalanceConfig);
+        this.membershipManager = mock(MembershipManager.class);
         this.commitManager = mock(CommitRequestManager.class);
         this.topicMetadataRequestManager = mock(TopicMetadataRequestManager.class);
     }
@@ -410,6 +412,7 @@ public class DefaultBackgroundThreadTest {
             applicationEventProcessor,
             this.metadata,
             this.networkClient,
+            this.membershipManager,
             this.groupState,
             this.coordinatorManager,
             this.commitManager,
