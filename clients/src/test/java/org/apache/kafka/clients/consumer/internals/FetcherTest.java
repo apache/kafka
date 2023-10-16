@@ -1253,7 +1253,6 @@ public class FetcherTest {
         assignFromUser(singleton(tp0));
         subscriptions.seek(tp0, 0);
 
-        // resize the limit of the buffer to pretend it is only fetch-size large
         assertEquals(1, sendFetches());
         client.prepareResponse(fullFetchResponse(tidp0, records, Errors.TOPIC_AUTHORIZATION_FAILED, 100L, 0));
         consumerClient.poll(time.timer(0));
