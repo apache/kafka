@@ -507,7 +507,7 @@ public class KStreamKStreamLeftJoinTest {
         joined = stream1.leftJoin(
             stream2,
             MockValueJoiner.TOSTRING_JOINER,
-            JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100)).after(ofMillis(0)),
+            JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100)).after(Duration.ZERO),
             StreamJoined.with(Serdes.Integer(),
                 Serdes.String(),
                 Serdes.String())
