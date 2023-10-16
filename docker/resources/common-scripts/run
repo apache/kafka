@@ -31,7 +31,7 @@ fi
 echo "===> User"
 id
 
-if [[ -z "${KAFKA_ZOOKEEPER_CONNECT}" ]]
+if [[ -z "${KAFKA_ZOOKEEPER_CONNECT-}" ]]
 then
 echo "===> Setting default values of environment variables if not already set."
 . /etc/kafka/docker/configureDefaults

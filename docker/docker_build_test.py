@@ -30,7 +30,7 @@ def build_native(image, tag):
 
 
 def run_jvm_tests(image, tag):
-    subprocess.Popen(["python", "docker_sanity_test.py", f"{image}:{tag}", "jvm"], cwd="test")
+    subprocess.run(["python3", "docker_sanity_test.py", f"{image}:{tag}", "jvm"], cwd="test")
 
 
 if __name__ == '__main__':
