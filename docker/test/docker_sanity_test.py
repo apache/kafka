@@ -10,6 +10,7 @@ from confluent_kafka.serialization import SerializationContext, MessageField
 from confluent_kafka.schema_registry import SchemaRegistryClient
 from HTMLTestRunner import HTMLTestRunner
 import constants
+import argparse
 
 class DockerSanityTestCommon(unittest.TestCase):
     CONTAINER_NAME="broker"
@@ -285,25 +286,25 @@ class DockerSanityTestZookeeper(DockerSanityTestCommon):
     def test_bed(self):
         self.execute()
 
-class DockerSanityTestNative(DockerSanityTestCommon):
-    def setUp(self) -> None:
-        self.startCompose("fixtures/native/docker-compose.yml")
-    def tearDown(self) -> None:
-        self.destroyCompose("fixtures/native/docker-compose.yml")
-    def test_bed(self):
-        self.execute()
-
 if __name__ == "__main__":
-    if len(sys.argv) > 0:
-        DockerSanityTestCommon.IMAGE = sys.argv.pop()
-    test_classes_to_run = [DockerSanityTestKraftMode, DockerSanityTestZookeeper, DockerSanityTestNative]
+    parser = argparse.ArgumentParser()
+    parser.add_argument("image")
+    parser.add_argument("mode", default="all")
+    args = parser.parse_args()
+
+    DockerSanityTestCommon.IMAGE = args.image
+
+    test_classes_to_run = []
+    if args.mode in ("all", "jvm"):
+        test_classes_to_run.extend([DockerSanityTestKraftMode, DockerSanityTestZookeeper])
+    
     loader = unittest.TestLoader()
     suites_list = []
     for test_class in test_classes_to_run:
         suite = loader.loadTestsFromTestCase(test_class)
         suites_list.append(suite)
     big_suite = unittest.TestSuite(suites_list)
-    outfile = open("report.html", "w")
+    outfile = open(f"report.html", "w")
     runner = HTMLTestRunner.HTMLTestRunner(
                 stream=outfile,
                 title='Test Report',

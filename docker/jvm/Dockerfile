@@ -21,7 +21,7 @@ ARG GOLANG_VERSION=1.21.1
 FROM golang:${GOLANG_VERSION} AS build-ub
 WORKDIR /build
 RUN useradd --no-log-init --create-home --shell /bin/bash appuser
-COPY --chown=appuser:appuser ub/ ./
+COPY --chown=appuser:appuser resources/ub/ ./
 RUN go build -ldflags="-w -s" ./ub.go
 USER appuser
 RUN go test ./...
@@ -29,24 +29,22 @@ RUN go test ./...
 
 FROM eclipse-temurin:17-jre
 
-COPY bash-config /etc/kafka/docker/bash-config
+COPY resources/docker_scripts/bash-config /etc/kafka/docker/bash-config
 
 # exposed ports
 EXPOSE 9092
 
 USER root
 
-ARG kafka_url=https://archive.apache.org/dist/kafka/3.5.1/kafka_2.13-3.5.1.tgz
-ARG kafka_version=2.13-3.5.1
-ARG vcs_ref=unspecified
+# Get kafka from https://archive.apache.org/dist/kafka and pass the url through build arguments
+ARG kafka_url=unspecified
 ARG build_date=unspecified
+
 
 LABEL org.label-schema.name="kafka" \
       org.label-schema.description="Apache Kafka" \
       org.label-schema.build-date="${build_date}" \
       org.label-schema.vcs-url="https://github.com/apache/kafka" \
-      org.label-schema.vcs-ref="${vcs_ref}" \
-      org.label-schema.version="${kafka_version}" \
       org.label-schema.schema-version="1.0" \
       maintainer="apache"
 
@@ -80,7 +78,7 @@ RUN set -eux ; \
     rm kafka.tgz;
 
 COPY --from=build-ub /build/ub /usr/bin
-COPY --chown=appuser:appuser include/etc/kafka/docker /etc/kafka/docker
+COPY --chown=appuser:appuser resources/docker_scripts/include/etc/kafka/docker /etc/kafka/docker
 
 USER appuser
 
