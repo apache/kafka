@@ -29,16 +29,14 @@ RUN go test ./...
 
 FROM eclipse-temurin:17-jre
 
-COPY resources/bash-config /etc/kafka/docker/bash-config
-
 # exposed ports
 EXPOSE 9092
 
 USER root
 
 # Get kafka from https://archive.apache.org/dist/kafka and pass the url through build arguments
-ARG kafka_url=unspecified
-ARG build_date=unspecified
+ARG kafka_url
+ARG build_date
 
 
 LABEL org.label-schema.name="kafka" \
@@ -49,14 +47,6 @@ LABEL org.label-schema.name="kafka" \
       maintainer="apache"
 
 ENV KAFKA_URL=$kafka_url
-
-# allow arg override of required env params
-ARG KAFKA_ZOOKEEPER_CONNECT
-ENV KAFKA_ZOOKEEPER_CONNECT=${KAFKA_ZOOKEEPER_CONNECT}
-ARG KAFKA_ADVERTISED_LISTENERS
-ENV KAFKA_ADVERTISED_LISTENERS=${KAFKA_ADVERTISED_LISTENERS}
-ARG CLUSTER_ID
-ENV CLUSTER_ID=${CLUSTER_ID}
 
 RUN set -eux ; \
     apt-get update ; \
@@ -78,7 +68,7 @@ RUN set -eux ; \
     rm kafka.tgz;
 
 COPY --from=build-ub /build/ub /usr/bin
-COPY --chown=appuser:appuser resources/common_scripts /etc/kafka/docker
+COPY --chown=appuser:appuser resources/common-scripts /etc/kafka/docker
 COPY --chown=appuser:appuser launch /etc/kafka/docker/launch
 
 USER appuser

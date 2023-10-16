@@ -15,7 +15,7 @@ def build_jvm(image, tag, kafka_url):
     shutil.rmtree("jvm/resources")
 
 def run_jvm_tests(image, tag):
-    subprocess.Popen(["python", "docker_sanity_test.py", f"{image}:{tag}", "jvm"], cwd="test")
+    subprocess.run(["python3", "docker_sanity_test.py", f"{image}:{tag}", "jvm"], cwd="test")
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
