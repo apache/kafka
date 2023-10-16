@@ -24,14 +24,17 @@ RUN go test ./...
 
 FROM ghcr.io/graalvm/graalvm-community:17 AS build-native-image
 
+ARG kafka_url
+
 WORKDIR /app
 
-COPY kafka_2.13-3.7.0-SNAPSHOT.tgz kafka_2.13-3.7.0-SNAPSHOT.tgz
+ENV KAFKA_URL=$kafka_url
 COPY native-image-configs native-image-configs
 
-RUN tar -xzf kafka_2.13-3.7.0-SNAPSHOT.tgz ; \
-    rm kafka_2.13-3.7.0-SNAPSHOT.tgz ; \
-    cd kafka_2.13-3.7.0-SNAPSHOT ;  \
+RUN wget -nv -O kafka.tgz "$KAFKA_URL"; \
+    tar xfz kafka.tgz -C /kafka --strip-components 1; \
+    rm kafka.tgz ; \
+    cd kafka ;  \
     native-image --no-fallback \
         --allow-incomplete-classpath \
         --report-unsupported-elements-at-runtime \
@@ -55,7 +58,7 @@ WORKDIR /app
 
 COPY --from=build-ub /build/ub /usr/bin
 COPY --from=build-native-image /app/kafka_2.13-3.7.0-SNAPSHOT/kafka.kafkanativewrapper .
-COPY resources/common_scripts /etc/kafka/resources
-COPY launch /etc/kafka/resources/
+COPY resources/common-scripts /etc/kafka/docker
+COPY launch /etc/kafka/docker/
 
-CMD ["/etc/kafka/resources/launch"]
+CMD ["/etc/kafka/docker/launch"]
