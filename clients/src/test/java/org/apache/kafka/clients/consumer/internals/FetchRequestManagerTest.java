@@ -2078,7 +2078,7 @@ public class FetchRequestManagerTest {
     }
 
     @Test
-    public void testFetchResponseMetricsPartialResponse() {
+    public void testFetchResponseMetricsWithSkippedOffset() {
         buildFetcher();
 
         assignFromUser(singleton(tp0));
