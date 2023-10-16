@@ -652,12 +652,12 @@ public class IQv2StoreIntegrationTest {
                 public void process(final Record<Integer, Integer> record) {
                     final TimestampedWindowStore<Integer, Integer> stateStore =
                         context().getStateStore(windowStoreStoreBuilder.name());
+                    // We don't re-implement the DSL logic (which implements sum) but instead just keep the lasted value per window
                     stateStore.put(
                         record.key(),
                         ValueAndTimestamp.make(
                             record.value(), record.timestamp()
                         ),
-                        // We don't re-implement the DSL logic (which implements sum) but instead just keep the lasted value per window
                         (record.timestamp() / WINDOW_SIZE.toMillis()) * WINDOW_SIZE.toMillis()
                     );
                 }
