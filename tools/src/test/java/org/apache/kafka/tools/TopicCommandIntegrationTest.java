@@ -939,6 +939,7 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
         adminClient.createTopics(
                 Collections.singletonList(new NewTopic(testTopicName, 1, (short) 1))
         ).all().get();
+        waitForTopicCreated(testTopicName);
 
         String output = captureDescribeTopicStandardOut(buildTopicCommandOptionsWithBootstrap("--describe", "--topic", testTopicName));
         String[] rows = output.split("\n");
