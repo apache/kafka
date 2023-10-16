@@ -1453,8 +1453,8 @@ $ bin/kafka-acls.sh \
       </tr>
       <tr>
         <td>Byte in rate from other brokers</td>
-        <td>kafka.server:type=BrokerTopicMetrics,name=ReplicationBytesInPerSec,topic=([-.\w]+)</td>
-        <td>Byte in (from the other brokers) rate per topic. Omitting 'topic=(...)' will yield the all-topic rate.</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=ReplicationBytesInPerSec</td>
+        <td>Byte in (from the other brokers) rate across all topics.</td>
       </tr>
       <tr>
         <td>Controller Request rate from Broker</td>
@@ -1537,8 +1537,8 @@ $ bin/kafka-acls.sh \
       </tr>
       <tr>
         <td>Byte out rate to other brokers</td>
-        <td>kafka.server:type=BrokerTopicMetrics,name=ReplicationBytesOutPerSec,topic=([-.\w]+)</td>
-        <td>Byte out (to the other brokers) rate per topic. Omitting 'topic=(...)' will yield the all-topic rate.</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=ReplicationBytesOutPerSec</td>
+        <td>Byte out (to the other brokers) rate across all topics</td>
       </tr>
       <tr>
         <td>Rejected byte rate</td>
