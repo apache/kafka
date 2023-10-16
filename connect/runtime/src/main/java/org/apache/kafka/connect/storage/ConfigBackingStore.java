@@ -123,7 +123,8 @@ public interface ConfigBackingStore {
     }
 
     /**
-     * Store a new level for the specified logging namespace (and all of its children)
+     * Emit a new level for the specified logging namespace (and all of its children). This level should
+     * be applied by all workers currently in the cluster, but not to workers that join after it is stored.
      * @param namespace the namespace to adjust; may not be null
      * @param level the new level for the namespace; may not be null
      */
