@@ -22,10 +22,10 @@ import org.apache.kafka.common.utils.Utils;
 
 import java.io.PrintStream;
 import java.util.Arrays;
-import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 
@@ -126,20 +126,18 @@ public class ToolsUtils {
         }
     }
 
-    public static <T> List<T> duplicates(List<T> s) {
-        Map<T, Integer> countMap = new HashMap<>();
-        List<T> duplicates = new ArrayList<>();
+    /**
+     * Return all duplicates in a list. A duplicated element will appear only once.
+     */
+    public static <T> Set<T> duplicates(List<T> s) {
+        Set<T> set = new HashSet<>();
+        Set<T> duplicates = new HashSet<>();
 
         s.forEach(element -> {
-            countMap.put(element, countMap.getOrDefault(element, 0) + 1);
-        });
-
-        countMap.entrySet().forEach(entry -> {
-            if (entry.getValue() > 1) {
-                duplicates.add(entry.getKey());
+            if (!set.add(element)) {
+                duplicates.add(element);
             }
         });
-
         return duplicates;
     }
 }

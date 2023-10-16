@@ -2395,8 +2395,6 @@ object TestUtils extends Logging {
     )
 
     def unexpectedThreads: Set[String] = {
-      val x = Thread.getAllStackTraces.asScala.filter(entry => unexpectedThreadNames.exists(s => entry._1.getName.contains(s)))
-      print(x)
       val allThreads = Thread.getAllStackTraces.keySet.asScala.map(thread => thread.getName)
       allThreads.filter(t => unexpectedThreadNames.exists(s => t.contains(s))).toSet
     }

@@ -651,8 +651,7 @@ public abstract class TopicCommand {
         public List<Uuid> getTopicIds(Uuid topicIdIncludeList, boolean excludeInternalTopics) throws ExecutionException, InterruptedException {
             ListTopicsResult allTopics = excludeInternalTopics ? adminClient.listTopics() :
                 adminClient.listTopics(new ListTopicsOptions().listInternal(true));
-            List<Uuid> allTopicIds;
-            allTopicIds = allTopics.listings().get().stream()
+            List<Uuid> allTopicIds = allTopics.listings().get().stream()
                 .map(TopicListing::topicId)
                 .sorted()
                 .collect(Collectors.toList());
