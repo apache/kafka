@@ -114,8 +114,8 @@ public enum ApiKeys {
     CONSUMER_GROUP_HEARTBEAT(ApiMessageType.CONSUMER_GROUP_HEARTBEAT),
     CONSUMER_GROUP_DESCRIBE(ApiMessageType.CONSUMER_GROUP_DESCRIBE),
     CONTROLLER_REGISTRATION(ApiMessageType.CONTROLLER_REGISTRATION),
-    GET_TELEMETRY_SUBSCRIPTIONS(ApiMessageType.GET_TELEMETRY_SUBSCRIPTIONS, false, true),
-    PUSH_TELEMETRY(ApiMessageType.PUSH_TELEMETRY, false, true);
+    GET_TELEMETRY_SUBSCRIPTIONS(ApiMessageType.GET_TELEMETRY_SUBSCRIPTIONS),
+    PUSH_TELEMETRY(ApiMessageType.PUSH_TELEMETRY);
 
     private static final Map<ApiMessageType.ListenerType, EnumSet<ApiKeys>> APIS_BY_LISTENER =
         new EnumMap<>(ApiMessageType.ListenerType.class);

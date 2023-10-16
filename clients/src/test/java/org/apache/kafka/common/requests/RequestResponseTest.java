@@ -3524,13 +3524,19 @@ public class RequestResponseTest {
         response.setSubscriptionId(1);
         response.setAcceptedCompressionTypes(Collections.singletonList(CompressionType.GZIP.id));
         response.setPushIntervalMs(60 * 1000);
+        response.setDeltaTemporality(false);
+        response.setErrorCode(Errors.NONE.code());
+        response.setThrottleTimeMs(10);
         return new GetTelemetrySubscriptionsResponse(response);
     }
 
     private PushTelemetryRequest createPushTelemetryRequest(short version) {
         return new PushTelemetryRequest.Builder(new PushTelemetryRequestData()
             .setClientInstanceId(Uuid.randomUuid())
+            .setSubscriptionId(1)
             .setTerminating(false)
+            .setCompressionType(CompressionType.ZSTD.id)
+            .setMetrics("test-metrics".getBytes(StandardCharsets.UTF_8))
         ).build(version);
     }
 
