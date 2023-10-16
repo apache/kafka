@@ -1,0 +1,9 @@
+#!/bin/sh
+
+ub render-properties /etc/kafka/resources/kafka-propertiesSpec.json > /etc/kafka/config/kafka.properties
+ub render-template /etc/kafka/resources/kafka-log4j.properties.template > /etc/kafka/config/log4j.properties
+ub render-template /etc/kafka/resources/kafka-tools-log4j.properties.template > /etc/kafka/config/tools-log4j.properties
+
+
+result=$(/app/kafka.kafkanativewrapper storage-tool format --cluster-id=$CLUSTER_ID -c /etc/kafka/config/kafka.properties 2>&1) || echo $result | grep -i "already formatted" || echo $result && (exit 1)
+exec /app/kafka.kafkanativewrapper kafka /etc/kafka/config/kafka.properties -Dkafka.logs.dir=logs/ -Dlog4j.configuration=file:/etc/kafka/config/log4j.properties

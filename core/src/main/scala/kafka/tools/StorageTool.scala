@@ -42,6 +42,10 @@ import scala.collection.mutable.ArrayBuffer
 
 object StorageTool extends Logging {
   def main(args: Array[String]): Unit = {
+    process(args)
+  }
+
+  def process(args: Array[String]): Unit = {
     try {
       val namespace = parseArguments(args)
       val command = namespace.getString("command")
