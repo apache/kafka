@@ -200,6 +200,14 @@ public class EmbeddedConnectCluster extends EmbeddedConnect {
             return this;
         }
 
+        /**
+         * Deprecated; please use {@link #clientProps(Map)} instead
+         */
+        @Deprecated
+        public Builder clientConfigs(Map<String, String> clientProps) {
+            return clientProps(clientProps);
+        }
+
         @Override
         protected EmbeddedConnectCluster build(
                 int numBrokers,
