@@ -22,14 +22,12 @@ package org.apache.kafka.tools.SchemaChecker;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
+import org.eclipse.jgit.api.CheckoutCommand;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.InitCommand;
 import org.eclipse.jgit.api.errors.GitAPIException;
 import org.eclipse.jgit.internal.storage.file.FileRepository;
-import org.eclipse.jgit.lib.Constants;
-import org.eclipse.jgit.lib.ObjectId;
-import org.eclipse.jgit.lib.ObjectLoader;
-import org.eclipse.jgit.lib.Repository;
+import org.eclipse.jgit.lib.*;
 import org.eclipse.jgit.revwalk.RevCommit;
 import org.eclipse.jgit.revwalk.RevTree;
 import org.eclipse.jgit.revwalk.RevWalk;
@@ -107,29 +105,14 @@ public class MetadataSchemaChecker {
 
     private static List<String> GetDataFromGit() throws IOException, GitAPIException {
         List<String> gitSchemas = new ArrayList<>();
-        Path tempDir = Files.createTempDirectory("tempDir");
-        File tempFile = new File(tempDir.toString(), "");
-        if (tempFile.createNewFile()) {
-            System.out.println("temp file created: " + tempFile);
-        }
-        /*Git git = Git.cloneRepository()
-                .setURI("https://github.com/apache/kafka.git")
-                .setCredentialsProvider(new UsernamePasswordCredentialsProvider("x", "x"))
-                .setDirectory(tempFile)
-                .setBranchesToClone(Collections.singleton("refs/heads/trunk"))
-                .call();
-        //Repository repository = git.getRepository();
-        Repository repository = new FileRepositoryBuilder().readEnvironment().findGitDir(System.getProperty("user.dir")).build();*/
-        Git git = Git.init().setDirectory(new File(System.getProperty("user.dir")))
-                .setInitialBranch("refs/heads/trunk")
-                .call();
-        Repository repository = git.getRepository();
 
-        ObjectId lastCommitId = repository.resolve(Constants.HEAD);
+        Git git = Git.open(new File(System.getProperty("user.dir") + "/.git"));
+        Repository repository = git.getRepository();
+        Ref head = git.getRepository().getRefDatabase().firstExactRef("refs/heads/trunk");
+
         try (RevWalk revWalk = new RevWalk(repository)) {
-            RevCommit commit = revWalk.parseCommit(lastCommitId);
+            RevCommit commit = revWalk.parseCommit(head.getObjectId());
             RevTree tree = commit.getTree();
-            System.out.println("Having tree: " + tree);
             for (String jsonSchema : filesCheckMetadata) {
                 StringBuilder stringBuilder = new StringBuilder();
                 try (TreeWalk treeWalk = new TreeWalk(repository)) {
@@ -155,12 +138,10 @@ public class MetadataSchemaChecker {
                         }
                     }
                 }
-                System.out.println(stringBuilder);
                 gitSchemas.add(stringBuilder.toString());
             }
             revWalk.dispose();
         }
-        tempDir.toFile().deleteOnExit();
         return gitSchemas;
     }
 
