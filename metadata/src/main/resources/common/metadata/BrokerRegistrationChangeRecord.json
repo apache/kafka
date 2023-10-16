@@ -16,7 +16,7 @@
 {
   "apiKey": 17,
   "type": "metadata",
-  "name": "BrokerRegistrationChangeRecord!!!!",
+  "name": "BrokerRegistrationChangeRecord",
   "validVersions": "0-1",
   "flexibleVersions": "0+",
   "fields": [
