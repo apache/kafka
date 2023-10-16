@@ -657,6 +657,7 @@ public class IQv2StoreIntegrationTest {
                         ValueAndTimestamp.make(
                             record.value(), record.timestamp()
                         ),
+                        // We don't re-implement the DSL logic (which implements sum) but instead just keep the lasted value per window
                         (record.timestamp() / WINDOW_SIZE.toMillis()) * WINDOW_SIZE.toMillis()
                     );
                 }
@@ -673,6 +674,7 @@ public class IQv2StoreIntegrationTest {
                     public void process(final Record<Integer, Integer> record) {
                         final WindowStore<Integer, Integer> stateStore =
                             context().getStateStore(windowStoreStoreBuilder.name());
+                        // We don't re-implement the DSL logic (which implements sum) but instead just keep the lasted value per window
                         stateStore.put(record.key(), record.value(), (record.timestamp() / WINDOW_SIZE.toMillis()) * WINDOW_SIZE.toMillis());
                     }
                 };
@@ -718,6 +720,8 @@ public class IQv2StoreIntegrationTest {
                 final SessionStore<Integer, Integer> stateStore =
                     context().getStateStore(sessionStoreStoreBuilder.name());
                 stateStore.put(
+                    // we do not re-implement the actual session-window logic from the DSL here to keep the test simple,
+                    // but instead just put each record into it's own session
                     new Windowed<>(record.key(), new SessionWindow(record.timestamp(), record.timestamp())),
                     record.value()
                 );
@@ -780,19 +784,19 @@ public class IQv2StoreIntegrationTest {
                         final Function<ValueAndTimestamp<Integer>, Integer> valueExtractor =
                             ValueAndTimestamp::value;
                         if (kind.equals("DSL")) {
-                            shouldHandleKeyDSLQuery(2, valueExtractor, 5);
+                            shouldHandleKeyQuery(2, valueExtractor, 5);
                             shouldHandleRangeDSLQueries(valueExtractor);
                         } else {
-                            shouldHandleKeyPAPIQuery(2, valueExtractor, 5);
+                            shouldHandleKeyQuery(2, valueExtractor, 5);
                             shouldHandleRangePAPIQueries(valueExtractor);
                         }
                     } else {
                         final Function<Integer, Integer> valueExtractor = Function.identity();
                         if (kind.equals("DSL")) {
-                            shouldHandleKeyDSLQuery(2, valueExtractor, 5);
+                            shouldHandleKeyQuery(2, valueExtractor, 5);
                             shouldHandleRangeDSLQueries(valueExtractor);
                         } else {
-                            shouldHandleKeyPAPIQuery(2, valueExtractor, 5);
+                            shouldHandleKeyQuery(2, valueExtractor, 5);
                             shouldHandleRangePAPIQueries(valueExtractor);
                         }
                     }
@@ -1544,42 +1548,7 @@ public class IQv2StoreIntegrationTest {
         );
     }
 
-    public <V> void shouldHandleKeyDSLQuery(
-        final Integer key,
-        final Function<V, Integer> valueExtactor,
-        final Integer expectedValue) {
-
-        final KeyQuery<Integer, V> query = KeyQuery.withKey(key);
-        final StateQueryRequest<V> request =
-            inStore(STORE_NAME)
-                .withQuery(query)
-                .withPartitions(mkSet(0, 1))
-                .withPositionBound(PositionBound.at(INPUT_POSITION));
-
-        final StateQueryResult<V> result =
-            IntegrationTestUtils.iqv2WaitForResult(kafkaStreams, request);
-
-        final QueryResult<V> queryResult = result.getOnlyPartitionResult();
-        final boolean failure = queryResult.isFailure();
-        if (failure) {
-            throw new AssertionError(queryResult.toString());
-        }
-        assertThat(queryResult.isSuccess(), is(true));
-
-        assertThrows(IllegalArgumentException.class, queryResult::getFailureReason);
-        assertThrows(
-            IllegalArgumentException.class,
-            queryResult::getFailureMessage
-        );
-
-        final V result1 = queryResult.getResult();
-        final Integer integer = valueExtactor.apply(result1);
-        assertThat(integer, is(expectedValue));
-        assertThat(queryResult.getExecutionInfo(), is(empty()));
-        assertThat(queryResult.getPosition(), is(POSITION_0));
-    }
-
-    public <V> void shouldHandleKeyPAPIQuery(
+    public <V> void shouldHandleKeyQuery(
         final Integer key,
         final Function<V, Integer> valueExtactor,
         final Integer expectedValue) {
