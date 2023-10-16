@@ -190,7 +190,7 @@ class BrokerLifecycleManager(
   /**
    * The broker epoch from the previous run, or -1 if the epoch is not able to be found.
    */
-  private var previousBrokerEpoch: Long = -1L
+  @volatile private var previousBrokerEpoch: Long = -1L
 
   /**
    * The event queue.

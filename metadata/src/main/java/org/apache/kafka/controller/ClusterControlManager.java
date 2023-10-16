@@ -329,6 +329,7 @@ public class ClusterControlManager {
         int brokerId = request.brokerId();
         BrokerRegistration existing = brokerRegistrations.get(brokerId);
         if (version < 2 || request.previousBrokerEpoch() != existing.epoch()) {
+            // TODO(KIP-966): Update the ELR if the broker has an unclean shutdown.
             log.debug("Received an unclean shutdown request");
         }
         if (existing != null) {

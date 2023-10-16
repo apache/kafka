@@ -19,9 +19,9 @@ package kafka.log;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
-import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.BufferedWriter;
@@ -32,7 +32,6 @@ import java.nio.file.Files;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 /**
  * Clean shutdown file that indicates the broker was cleanly shutdown in 0.8 and higher.
@@ -47,8 +46,8 @@ import java.util.stream.Collectors;
 
 public class CleanShutdownFileHandler {
     public static final String CLEAN_SHUTDOWN_FILE_NAME = ".kafka_cleanshutdown";
-    File cleanShutdownFile;
-    int currentVersion = 0;
+    private final File cleanShutdownFile;
+    private final int currentVersion = 0;
     private final Logger logger;
 
     private enum Fields {
@@ -63,15 +62,10 @@ public class CleanShutdownFileHandler {
 
     public CleanShutdownFileHandler(String dirPath) {
         logger = new LogContext().logger(CleanShutdownFileHandler.class);
-        try {
-            this.cleanShutdownFile = new File(dirPath, CleanShutdownFileHandler.CLEAN_SHUTDOWN_FILE_NAME);
-        } catch (Exception e) {
-            logger.warn("Fail to initiate the clean shutdown file handler: " + e);
-        }
+        this.cleanShutdownFile = new File(dirPath, CleanShutdownFileHandler.CLEAN_SHUTDOWN_FILE_NAME);
     }
 
     public void write(long brokerEpoch) throws Exception {
-        if (cleanShutdownFile == null) return;
         write(brokerEpoch, currentVersion);
     }
 
@@ -92,37 +86,26 @@ public class CleanShutdownFileHandler {
         }
     }
 
-    long read() throws Exception {
-        if (cleanShutdownFile == null) return -1L;
-        BufferedReader br = Files.newBufferedReader(cleanShutdownFile.toPath(), StandardCharsets.UTF_8);
+    public long read() {
         long brokerEpoch = -1L;
         try {
-            String text = br.lines().collect(Collectors.joining());
+            String text = Utils.readFileAsString(cleanShutdownFile.toPath().toString());
             Map<String, String> content = new ObjectMapper().readValue(text, HashMap.class);
-            int version = Integer.parseInt(content.getOrDefault(Fields.VERSION.toString(), "-1"));
-            if (version > currentVersion || version == -1) {
-                throwIOException("Unsupported version \"" + version + "\"");
-            }
 
             brokerEpoch = Long.parseLong(content.getOrDefault(Fields.BROKER_EPOCH.toString(), "-1L"));
         } catch (Exception e) {
-            throw e;
+            logger.warn("Fail to read the clean shutdown file:" + e);
         } finally {
-            br.close();
+            return brokerEpoch;
         }
-        return brokerEpoch;
     }
 
-    private void throwIOException(String msg) throws IOException {
-        throw new IOException("Fail to parse clean shutdown file: " + msg);
-    }
-
-    void delete() throws Exception {
+    public void delete() throws Exception {
         Files.deleteIfExists(cleanShutdownFile.toPath());
     }
 
-    boolean exists() {
-        return  cleanShutdownFile == null ? false : cleanShutdownFile.exists();
+    public boolean exists() {
+        return  cleanShutdownFile.exists();
     }
 
     @Override

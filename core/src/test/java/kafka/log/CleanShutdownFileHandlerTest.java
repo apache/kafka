@@ -26,7 +26,6 @@ import java.nio.file.Files;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
@@ -39,20 +38,20 @@ class CleanShutdownFileHandlerTest {
         CleanShutdownFileHandler cleanShutdownFileHandler = new CleanShutdownFileHandler(logDir.getPath());
         assertDoesNotThrow(() -> cleanShutdownFileHandler.write(10L));
         assertTrue(cleanShutdownFileHandler.exists());
-        assertEquals(10L, assertDoesNotThrow(() -> cleanShutdownFileHandler.read()));
+        assertEquals(10L, cleanShutdownFileHandler.read());
         assertDoesNotThrow(() -> cleanShutdownFileHandler.delete());
         assertFalse(cleanShutdownFileHandler.exists());
     }
 
     @Test
-    public void testCleanShutdownFileWrongVersion() {
+    public void testCleanShutdownFileNonExist() {
         File logDir;
         logDir = assertDoesNotThrow(() -> Files.createTempDirectory("kafka-cleanShutdownFile").toFile());
         CleanShutdownFileHandler cleanShutdownFileHandler = new CleanShutdownFileHandler(logDir.getPath());
-        assertDoesNotThrow(() -> cleanShutdownFileHandler.write(10L, -1));
+        assertDoesNotThrow(() -> cleanShutdownFileHandler.write(10L, 0));
         assertTrue(cleanShutdownFileHandler.exists());
-        assertThrows(Exception.class, () -> cleanShutdownFileHandler.read());
         assertDoesNotThrow(() -> cleanShutdownFileHandler.delete());
         assertFalse(cleanShutdownFileHandler.exists());
+        assertEquals(-1L, cleanShutdownFileHandler.read());
     }
 }
