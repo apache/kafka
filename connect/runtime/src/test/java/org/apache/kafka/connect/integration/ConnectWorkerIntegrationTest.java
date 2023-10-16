@@ -303,8 +303,8 @@ public class ConnectWorkerIntegrationTest {
         // When automatic topic creation is disabled on the broker
         brokerProps.put("auto.create.topics.enable", "false");
         connect = connectBuilder
-            .numWorkers(1)
             .brokerProps(brokerProps)
+            .numWorkers(1)
             .numBrokers(1)
             .build();
         connect.start();
