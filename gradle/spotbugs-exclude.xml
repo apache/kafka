@@ -161,7 +161,10 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         <!-- Scala doesn't have checked exceptions so one cannot catch RuntimeException and rely
              on the compiler to fail if the code is changed to call a method that throws Exception.
              Given that, this bug pattern doesn't make sense for Scala code. -->
-        <Class name="kafka.log.Log"/>
+        <Or>
+            <Class name="kafka.log.Log"/>
+            <Class name="kafka.log.LocalLog$"/>
+        </Or>
         <Bug pattern="REC_CATCH_EXCEPTION"/>
     </Match>
 

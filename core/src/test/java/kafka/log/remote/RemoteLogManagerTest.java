@@ -19,7 +19,6 @@ package kafka.log.remote;
 import com.yammer.metrics.core.Gauge;
 import kafka.cluster.EndPoint;
 import kafka.cluster.Partition;
-import kafka.log.LogSegment;
 import kafka.log.UnifiedLog;
 import kafka.server.BrokerTopicStats;
 import kafka.server.KafkaConfig;
@@ -65,6 +64,8 @@ import org.apache.kafka.storage.internals.log.FetchDataInfo;
 import org.apache.kafka.storage.internals.log.FetchIsolation;
 import org.apache.kafka.storage.internals.log.LazyIndex;
 import org.apache.kafka.storage.internals.log.LogConfig;
+import org.apache.kafka.storage.internals.log.LogFileUtils;
+import org.apache.kafka.storage.internals.log.LogSegment;
 import org.apache.kafka.storage.internals.log.OffsetIndex;
 import org.apache.kafka.storage.internals.log.ProducerStateManager;
 import org.apache.kafka.storage.internals.log.RemoteStorageFetchInfo;
@@ -428,13 +429,13 @@ public class RemoteLogManagerTest {
         when(mockLog.lastStableOffset()).thenReturn(lastStableOffset);
         when(mockLog.logEndOffset()).thenReturn(logEndOffset);
 
-        LazyIndex idx = LazyIndex.forOffset(UnifiedLog.offsetIndexFile(tempDir, oldSegmentStartOffset, ""), oldSegmentStartOffset, 1000);
-        LazyIndex timeIdx = LazyIndex.forTime(UnifiedLog.timeIndexFile(tempDir, oldSegmentStartOffset, ""), oldSegmentStartOffset, 1500);
+        OffsetIndex idx = LazyIndex.forOffset(LogFileUtils.offsetIndexFile(tempDir, oldSegmentStartOffset, ""), oldSegmentStartOffset, 1000).get();
+        TimeIndex timeIdx = LazyIndex.forTime(LogFileUtils.timeIndexFile(tempDir, oldSegmentStartOffset, ""), oldSegmentStartOffset, 1500).get();
         File txnFile = UnifiedLog.transactionIndexFile(tempDir, oldSegmentStartOffset, "");
         txnFile.createNewFile();
         TransactionIndex txnIndex = new TransactionIndex(oldSegmentStartOffset, txnFile);
-        when(oldSegment.lazyTimeIndex()).thenReturn(timeIdx);
-        when(oldSegment.lazyOffsetIndex()).thenReturn(idx);
+        when(oldSegment.timeIndex()).thenReturn(timeIdx);
+        when(oldSegment.offsetIndex()).thenReturn(idx);
         when(oldSegment.txnIndex()).thenReturn(txnIndex);
 
         CompletableFuture<Void> dummyFuture = new CompletableFuture<>();
@@ -542,13 +543,13 @@ public class RemoteLogManagerTest {
         when(mockLog.lastStableOffset()).thenReturn(lastStableOffset);
         when(mockLog.logEndOffset()).thenReturn(logEndOffset);
 
-        LazyIndex idx = LazyIndex.forOffset(UnifiedLog.offsetIndexFile(tempDir, oldSegmentStartOffset, ""), oldSegmentStartOffset, 1000);
-        LazyIndex timeIdx = LazyIndex.forTime(UnifiedLog.timeIndexFile(tempDir, oldSegmentStartOffset, ""), oldSegmentStartOffset, 1500);
+        OffsetIndex idx = LazyIndex.forOffset(LogFileUtils.offsetIndexFile(tempDir, oldSegmentStartOffset, ""), oldSegmentStartOffset, 1000).get();
+        TimeIndex timeIdx = LazyIndex.forTime(LogFileUtils.timeIndexFile(tempDir, oldSegmentStartOffset, ""), oldSegmentStartOffset, 1500).get();
         File txnFile = UnifiedLog.transactionIndexFile(tempDir, oldSegmentStartOffset, "");
         txnFile.createNewFile();
         TransactionIndex txnIndex = new TransactionIndex(oldSegmentStartOffset, txnFile);
-        when(oldSegment.lazyTimeIndex()).thenReturn(timeIdx);
-        when(oldSegment.lazyOffsetIndex()).thenReturn(idx);
+        when(oldSegment.timeIndex()).thenReturn(timeIdx);
+        when(oldSegment.offsetIndex()).thenReturn(idx);
         when(oldSegment.txnIndex()).thenReturn(txnIndex);
 
         int customMetadataSizeLimit = 128;
@@ -628,13 +629,13 @@ public class RemoteLogManagerTest {
         when(mockStateManager.fetchSnapshot(anyLong())).thenReturn(Optional.of(mockProducerSnapshotIndex));
         when(mockLog.lastStableOffset()).thenReturn(250L);
 
-        LazyIndex idx = LazyIndex.forOffset(UnifiedLog.offsetIndexFile(tempDir, oldSegmentStartOffset, ""), oldSegmentStartOffset, 1000);
-        LazyIndex timeIdx = LazyIndex.forTime(UnifiedLog.timeIndexFile(tempDir, oldSegmentStartOffset, ""), oldSegmentStartOffset, 1500);
+        OffsetIndex idx = LazyIndex.forOffset(LogFileUtils.offsetIndexFile(tempDir, oldSegmentStartOffset, ""), oldSegmentStartOffset, 1000).get();
+        TimeIndex timeIdx = LazyIndex.forTime(LogFileUtils.timeIndexFile(tempDir, oldSegmentStartOffset, ""), oldSegmentStartOffset, 1500).get();
         File txnFile = UnifiedLog.transactionIndexFile(tempDir, oldSegmentStartOffset, "");
         txnFile.createNewFile();
         TransactionIndex txnIndex = new TransactionIndex(oldSegmentStartOffset, txnFile);
-        when(oldSegment.lazyTimeIndex()).thenReturn(timeIdx);
-        when(oldSegment.lazyOffsetIndex()).thenReturn(idx);
+        when(oldSegment.timeIndex()).thenReturn(timeIdx);
+        when(oldSegment.offsetIndex()).thenReturn(idx);
         when(oldSegment.txnIndex()).thenReturn(txnIndex);
 
         CompletableFuture<Void> dummyFuture = new CompletableFuture<>();
@@ -706,13 +707,13 @@ public class RemoteLogManagerTest {
         when(mockStateManager.fetchSnapshot(anyLong())).thenReturn(Optional.of(mockProducerSnapshotIndex));
         when(mockLog.lastStableOffset()).thenReturn(250L);
 
-        LazyIndex idx = LazyIndex.forOffset(UnifiedLog.offsetIndexFile(tempDir, oldSegmentStartOffset, ""), oldSegmentStartOffset, 1000);
-        LazyIndex timeIdx = LazyIndex.forTime(UnifiedLog.timeIndexFile(tempDir, oldSegmentStartOffset, ""), oldSegmentStartOffset, 1500);
+        OffsetIndex idx = LazyIndex.forOffset(LogFileUtils.offsetIndexFile(tempDir, oldSegmentStartOffset, ""), oldSegmentStartOffset, 1000).get();
+        TimeIndex timeIdx = LazyIndex.forTime(LogFileUtils.timeIndexFile(tempDir, oldSegmentStartOffset, ""), oldSegmentStartOffset, 1500).get();
         File txnFile = UnifiedLog.transactionIndexFile(tempDir, oldSegmentStartOffset, "");
         txnFile.createNewFile();
         TransactionIndex txnIndex = new TransactionIndex(oldSegmentStartOffset, txnFile);
-        when(oldSegment.lazyTimeIndex()).thenReturn(timeIdx);
-        when(oldSegment.lazyOffsetIndex()).thenReturn(idx);
+        when(oldSegment.timeIndex()).thenReturn(timeIdx);
+        when(oldSegment.offsetIndex()).thenReturn(idx);
         when(oldSegment.txnIndex()).thenReturn(txnIndex);
 
         CompletableFuture<Void> dummyFuture = new CompletableFuture<>();
@@ -856,8 +857,8 @@ public class RemoteLogManagerTest {
     }
 
     private void verifyLogSegmentData(LogSegmentData logSegmentData,
-                                      LazyIndex idx,
-                                      LazyIndex timeIdx,
+                                      OffsetIndex idx,
+                                      TimeIndex timeIdx,
                                       TransactionIndex txnIndex,
                                       File tempFile,
                                       File mockProducerSnapshotIndex,

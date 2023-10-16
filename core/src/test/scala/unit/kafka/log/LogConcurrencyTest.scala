@@ -161,7 +161,7 @@ class LogConcurrencyTest {
 
   private def validateConsumedData(log: UnifiedLog, consumedBatches: Iterable[FetchedBatch]): Unit = {
     val iter = consumedBatches.iterator
-    log.logSegments.foreach { segment =>
+    log.logSegments.forEach { segment =>
       segment.log.batches.forEach { batch =>
         if (iter.hasNext) {
           val consumedBatch = iter.next()
