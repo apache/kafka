@@ -29,7 +29,7 @@ RUN go test ./...
 
 FROM eclipse-temurin:17-jre
 
-COPY resources/docker_scripts/bash-config /etc/kafka/docker/bash-config
+COPY resources/bash-config /etc/kafka/docker/bash-config
 
 # exposed ports
 EXPOSE 9092
@@ -78,7 +78,8 @@ RUN set -eux ; \
     rm kafka.tgz;
 
 COPY --from=build-ub /build/ub /usr/bin
-COPY --chown=appuser:appuser resources/docker_scripts/include/etc/kafka/docker /etc/kafka/docker
+COPY --chown=appuser:appuser resources/common_scripts /etc/kafka/docker
+COPY --chown=appuser:appuser launch /etc/kafka/docker/launch
 
 USER appuser
 

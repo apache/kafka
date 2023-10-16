@@ -17,14 +17,28 @@
 # limitations under the License.
 ###############################################################################
 
+. /etc/kafka/docker/bash-config
 
-# Start kafka broker
-# TODO: REMOVE THIS
-echo "$(date +"%H:%M:%S.%3N") ===> Launching kafka ... "
-/opt/kafka/bin/kafka-server-start.sh /etc/kafka/kafka.properties & # your first application
-P1=$! # capture PID of the process
+# Set environment values if they exist as arguments
+if [ $# -ne 0 ]; then
+  echo "===> Overriding env params with args ..."
+  for var in "$@"
+  do
+    export "$var"
+  done
+fi
 
-# Wait for process to exit
-wait -n $P1
-# Exit with status of process that exited first
-exit $?
+echo "===> User"
+id
+
+if [[ -z "${KAFKA_ZOOKEEPER_CONNECT}" ]]
+then
+echo "===> Setting default values of environment variables if not already set."
+. /etc/kafka/docker/configureDefaults
+fi
+
+echo "===> Configuring ..."
+/etc/kafka/docker/configure
+
+echo "===> Launching ... "
+exec /etc/kafka/docker/launch

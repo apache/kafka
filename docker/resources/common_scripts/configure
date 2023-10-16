@@ -17,8 +17,6 @@
 # limitations under the License.
 ###############################################################################
 
-. /etc/kafka/docker/bash-config
-
 # --- for broker
 
 # If KAFKA_PROCESS_ROLES is defined it means we are running in KRaft mode
