@@ -24,11 +24,14 @@ import org.apache.kafka.common.requests.ConsumerGroupHeartbeatResponse;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class MembershipManagerImplTest {
 
@@ -98,10 +101,9 @@ public class MembershipManagerImplTest {
     }
 
     @Test
-    public void testTransitionToFailure() {
+    public void testTransitionToFailedFromStable() {
         MembershipManagerImpl membershipManager = new MembershipManagerImpl(GROUP_ID);
-        ConsumerGroupHeartbeatResponse heartbeatResponse =
-                createConsumerGroupHeartbeatResponse(null);
+        ConsumerGroupHeartbeatResponse heartbeatResponse = createConsumerGroupHeartbeatResponse(null);
         membershipManager.updateState(heartbeatResponse.data());
         assertEquals(MemberState.STABLE, membershipManager.state());
         assertEquals(MEMBER_ID, membershipManager.memberId());
@@ -109,6 +111,59 @@ public class MembershipManagerImplTest {
 
         membershipManager.transitionToFailed();
         assertEquals(MemberState.FAILED, membershipManager.state());
+    }
+
+    @Test
+    public void testTransitionToFailedWhenTryingToJoin() {
+        MembershipManagerImpl membershipManager = new MembershipManagerImpl(GROUP_ID);
+        assertEquals(MemberState.UNJOINED, membershipManager.state());
+
+        membershipManager.transitionToFailed();
+        assertEquals(MemberState.FAILED, membershipManager.state());
+    }
+
+    @Test
+    public void testTransitionToFailedCancelsAllFuturesWaitingForNewIdAndEpoch() {
+        MembershipManagerImpl membershipManager = new MembershipManagerImpl(GROUP_ID);
+        mockStableMember(membershipManager);
+
+        // Register to get member ID/epoch updates
+        List<CompletableFuture<Void>> watchers =
+                Arrays.asList(
+                        membershipManager.registerForMemberIdUpdate(),
+                        membershipManager.registerForMemberIdUpdate(),
+                        membershipManager.registerForMemberEpochUpdate());
+
+        // Transition to FAILED before getting member ID/epoch
+        membershipManager.transitionToFailed();
+        assertEquals(MemberState.FAILED, membershipManager.state());
+
+        // Watchers should be cancelled and cleared
+        watchers.forEach(future -> assertTrue(future.isCompletedExceptionally()));
+        assertEquals(0, membershipManager.memberIdUpdateWatcherCount());
+        assertEquals(0, membershipManager.memberEpochUpdateWatcherCount());
+    }
+
+    private void mockStableMember(MembershipManagerImpl membershipManager) {
+        ConsumerGroupHeartbeatResponse heartbeatResponse = createConsumerGroupHeartbeatResponse(null);
+        membershipManager.updateState(heartbeatResponse.data());
+        assertEquals(MemberState.STABLE, membershipManager.state());
+        assertEquals(MEMBER_ID, membershipManager.memberId());
+        assertEquals(MEMBER_EPOCH, membershipManager.memberEpoch());
+    }
+
+    @Test
+    public void testLeaveGroupCancelsAllFuturesWaitingForNewIdAndEpoch() {
+        MembershipManagerImpl membershipManager = new MembershipManagerImpl(GROUP_ID);
+        CompletableFuture<Void> memberIdUpdateWatcher = membershipManager.registerForMemberIdUpdate();
+        CompletableFuture<Void> memberEpochUpdateWatcher = membershipManager.registerForMemberEpochUpdate();
+
+        membershipManager.leaveGroup();
+
+        assertTrue(memberIdUpdateWatcher.isDone());
+        assertTrue(memberIdUpdateWatcher.isCompletedExceptionally());
+        assertTrue(memberEpochUpdateWatcher.isDone());
+        assertTrue(memberEpochUpdateWatcher.isCompletedExceptionally());
     }
 
     @Test
@@ -121,6 +176,19 @@ public class MembershipManagerImplTest {
 
         // Target assignment should be in the process of being reconciled
         checkAssignments(membershipManager, null, newAssignment, null);
+    }
+
+    @Test
+    public void testUpdateAssignmentNotifiesWatchersWhenMemberIdChanges() {
+        MembershipManagerImpl membershipManager = new MembershipManagerImpl(GROUP_ID);
+        CompletableFuture<Void> memberIdUpdateWatcher = membershipManager.registerForMemberIdUpdate();
+        CompletableFuture<Void> memberEpochUpdateWatcher = membershipManager.registerForMemberEpochUpdate();
+
+        ConsumerGroupHeartbeatResponse heartbeatResponse =
+                createConsumerGroupHeartbeatResponse("id1", 1);
+        membershipManager.updateState(heartbeatResponse.data());
+        assertTrue(memberIdUpdateWatcher.isDone());
+        assertTrue(memberEpochUpdateWatcher.isDone());
     }
 
     @Test
@@ -176,6 +244,13 @@ public class MembershipManagerImplTest {
                 .setMemberId(MEMBER_ID)
                 .setMemberEpoch(MEMBER_EPOCH)
                 .setAssignment(assignment));
+    }
+
+    private ConsumerGroupHeartbeatResponse createConsumerGroupHeartbeatResponse(String memberId, int memberEpoch) {
+        return new ConsumerGroupHeartbeatResponse(new ConsumerGroupHeartbeatResponseData()
+                .setErrorCode(Errors.NONE.code())
+                .setMemberId(memberId)
+                .setMemberEpoch(memberEpoch));
     }
 
     private ConsumerGroupHeartbeatResponse createConsumerGroupHeartbeatResponseWithError(Errors error) {

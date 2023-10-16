@@ -17,10 +17,15 @@
 
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.protocol.Errors;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Membership manager that maintains group membership for a single member following the new
@@ -32,12 +37,50 @@ import java.util.Optional;
  */
 public class MembershipManagerImpl implements MembershipManager {
 
+    /**
+     * ID of the consumer group.
+     */
     private final String groupId;
+
+    /**
+     * Instance ID to use by this member. If not empty, this indicates that it is a static member.
+     */
     private final Optional<String> groupInstanceId;
+
+    /**
+     * Member ID received from the broker.
+     */
     private String memberId;
+
+    /**
+     * Current member epoch. This will be updated with the latest member epoch received from the
+     * broker, or reset to be sent to the broker when the member wants to re-join or leave the
+     * group.
+     */
     private int memberEpoch;
+
+    /**
+     * Current state of the member.
+     */
     private MemberState state;
+
+    /**
+     * Assignor selection that will indicate if server or client side assignors are in use, and
+     * the specific assignor implementation. This will default to server-side assignor, with null
+     * default implementation, and in that case the broker will choose the default implementation
+     * to use.
+     */
     private AssignorSelection assignorSelection;
+
+    /**
+     * Futures that will be completed when a new member ID is received in the Heartbeat response.
+     */
+    private final List<CompletableFuture<Void>> memberIdUpdateWatchers;
+
+    /**
+     * Futures that will be completed when a new member epoch is received in the Heartbeat response.
+     */
+    private final List<CompletableFuture<Void>> memberEpochUpdateWatchers;
 
     /**
      * Assignment that the member received from the server and successfully processed.
@@ -69,6 +112,8 @@ public class MembershipManagerImpl implements MembershipManager {
         this.groupInstanceId = Optional.ofNullable(groupInstanceId);
         this.targetAssignment = Optional.empty();
         this.nextTargetAssignment = Optional.empty();
+        this.memberIdUpdateWatchers = new ArrayList<>();
+        this.memberEpochUpdateWatchers = new ArrayList<>();
     }
 
     /**
@@ -86,7 +131,6 @@ public class MembershipManagerImpl implements MembershipManager {
 
     private void transitionTo(MemberState nextState) {
         if (!this.state.equals(nextState) && !nextState.getPreviousValidStates().contains(state)) {
-            // TODO: handle invalid state transition
             throw new RuntimeException(String.format("Invalid state transition from %s to %s",
                     state, nextState));
         }
@@ -114,6 +158,21 @@ public class MembershipManagerImpl implements MembershipManager {
     }
 
     @Override
+    public void leaveGroup() {
+        memberEpoch = leaveGroupEpoch();
+        transitionTo(MemberState.NOT_IN_GROUP);
+        failAllUpdateWatchers();
+    }
+
+    /**
+     * Return the epoch to use in the Heartbeat request to indicate that the member wants to
+     * leave the group. Should be -2 if this is a static member, or -1 in any other case.
+     */
+    private int leaveGroupEpoch() {
+        return groupInstanceId.isPresent() ? -2 : -1;
+    }
+
+    @Override
     public void updateState(ConsumerGroupHeartbeatResponseData response) {
         if (response.errorCode() != Errors.NONE.code()) {
             String errorMessage = String.format(
@@ -122,8 +181,18 @@ public class MembershipManagerImpl implements MembershipManager {
             );
             throw new IllegalStateException(errorMessage);
         }
-        this.memberId = response.memberId();
-        this.memberEpoch = response.memberEpoch();
+        if (!Objects.equals(memberId, response.memberId())) {
+            // New member ID received
+            this.memberId = response.memberId();
+            notifyMemberIdChange();
+        }
+
+        if (this.memberEpoch != response.memberEpoch()) {
+            // New member epoch received
+            this.memberEpoch = response.memberEpoch();
+            notifyMemberEpochChange();
+        }
+
         ConsumerGroupHeartbeatResponseData.Assignment assignment = response.assignment();
         if (assignment != null) {
             setTargetAssignment(assignment);
@@ -140,11 +209,64 @@ public class MembershipManagerImpl implements MembershipManager {
     @Override
     public void transitionToFailed() {
         transitionTo(MemberState.FAILED);
+        // This is an unrecoverable state so all futures that were waiting for member ID and
+        // epoch updates should be completed exceptionally.
+        failAllUpdateWatchers();
+    }
+
+    private void notifyMemberIdChange() {
+        memberIdUpdateWatchers.forEach(f -> f.complete(null));
+        memberIdUpdateWatchers.clear();
+    }
+
+    private void notifyMemberEpochChange() {
+        memberEpochUpdateWatchers.forEach(f -> f.complete(null));
+        memberEpochUpdateWatchers.clear();
+    }
+
+    private void failAllUpdateWatchers() {
+        memberIdUpdateWatchers.forEach(f -> f.completeExceptionally(new KafkaException("Member " +
+                "failed with unrecoverable error")));
+        memberIdUpdateWatchers.clear();
+
+        memberEpochUpdateWatchers.forEach(f -> f.completeExceptionally(new KafkaException("Member" +
+                " failed with unrecoverable error")));
+        memberEpochUpdateWatchers.clear();
     }
 
     @Override
     public boolean shouldSendHeartbeat() {
         return state() != MemberState.FAILED;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public CompletableFuture<Void> registerForMemberIdUpdate() {
+        CompletableFuture<Void> future = new CompletableFuture<>();
+        memberIdUpdateWatchers.add(future);
+        return future;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public CompletableFuture<Void> registerForMemberEpochUpdate() {
+        CompletableFuture<Void> future = new CompletableFuture<>();
+        memberEpochUpdateWatchers.add(future);
+        return future;
+    }
+
+    // VisibleForTesting
+    int memberIdUpdateWatcherCount() {
+        return memberIdUpdateWatchers.size();
+    }
+
+    // VisibleForTesting
+    int memberEpochUpdateWatcherCount() {
+        return memberEpochUpdateWatchers.size();
     }
 
     /**

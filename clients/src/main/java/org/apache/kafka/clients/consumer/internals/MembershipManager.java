@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Manages group membership for a single member.
@@ -36,6 +37,8 @@ public interface MembershipManager {
     String memberId();
 
     int memberEpoch();
+
+    void leaveGroup();
 
     MemberState state();
 
@@ -75,4 +78,18 @@ public interface MembershipManager {
      * Return true if the member should send heartbeat to the coordinator
      */
     boolean shouldSendHeartbeat();
+
+    /**
+     * Register to be notified when the member ID is updated.
+     * This will return a future that will complete successfully when a new member ID is received
+     * from the broker, or complete exceptionally if the member leaves the group of fails.
+     */
+    CompletableFuture<Void> registerForMemberIdUpdate();
+
+    /**
+     * Register to be notified when the member epoch is updated.
+     * This will return a future that will complete successfully when a new member epoch is received
+     * from the broker, or complete exceptionally if the member leaves the group of fails.
+     */
+    CompletableFuture<Void> registerForMemberEpochUpdate();
 }
