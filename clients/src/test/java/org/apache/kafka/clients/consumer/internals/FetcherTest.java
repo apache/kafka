@@ -880,15 +880,12 @@ public class FetcherTest {
 
         assertEquals(1, sendFetches());
         consumerClient.poll(time.timer(0));
-        // The fetcher should block on Deserialization error
+
         for (int i = 0; i < 2; i++) {
-            try {
-                collectFetch();
-                fail("fetchedRecords should have raised");
-            } catch (SerializationException e) {
-                // the position should not advance since no data has been returned
-                assertEquals(1, subscriptions.position(tp0).offset);
-            }
+            // The fetcher should block on Deserialization error
+            assertThrows(SerializationException.class, this::collectFetch);
+            // the position should not advance since no data has been returned
+            assertEquals(1, subscriptions.position(tp0).offset);
         }
     }
 
@@ -943,7 +940,7 @@ public class FetcherTest {
         client.prepareResponse(fullFetchResponse(tidp0, MemoryRecords.readableRecords(buffer), Errors.NONE, 100L, 0));
         consumerClient.poll(time.timer(0));
 
-        // the first fetchedRecords() should return the first valid message
+        // the first fetchRecords() should return the first valid message
         assertEquals(1, fetchRecords().get(tp0).size());
         assertEquals(1, subscriptions.position(tp0).offset);
 
@@ -961,15 +958,10 @@ public class FetcherTest {
     }
 
     private void ensureBlockOnRecord(long blockedOffset) {
-        //
-        // the fetchedRecords() should always throw exception due to the invalid message at the starting offset.
         for (int i = 0; i < 2; i++) {
-            try {
-                fetchRecords();
-                fail("fetchedRecords should have raised KafkaException");
-            } catch (KafkaException e) {
-                assertEquals(blockedOffset, subscriptions.position(tp0).offset);
-            }
+            // the fetchRecords() should always throw exception due to the invalid message at the starting offset.
+            assertThrows(KafkaException.class, this::fetchRecords);
+            assertEquals(blockedOffset, subscriptions.position(tp0).offset);
         }
     }
 
@@ -1018,14 +1010,10 @@ public class FetcherTest {
         client.prepareResponse(fullFetchResponse(tidp0, MemoryRecords.readableRecords(buffer), Errors.NONE, 100L, 0));
         consumerClient.poll(time.timer(0));
 
-        // the fetchedRecords() should always throw exception due to the bad batch.
         for (int i = 0; i < 2; i++) {
-            try {
-                collectFetch();
-                fail("fetchedRecords should have raised KafkaException");
-            } catch (KafkaException e) {
-                assertEquals(0, subscriptions.position(tp0).offset);
-            }
+            // collectFetch() should always throw exception due to the bad batch.
+            assertThrows(KafkaException.class, this::collectFetch);
+            assertEquals(0, subscriptions.position(tp0).offset);
         }
     }
 
@@ -1049,13 +1037,10 @@ public class FetcherTest {
         assertEquals(1, sendFetches());
         client.prepareResponse(fullFetchResponse(tidp0, MemoryRecords.readableRecords(buffer), Errors.NONE, 100L, 0));
         consumerClient.poll(time.timer(0));
-        try {
-            collectFetch();
-            fail("fetchedRecords should have raised");
-        } catch (KafkaException e) {
-            // the position should not advance since no data has been returned
-            assertEquals(0, subscriptions.position(tp0).offset);
-        }
+
+        assertThrows(KafkaException.class, this::collectFetch);
+        // the position should not advance since no data has been returned
+        assertEquals(0, subscriptions.position(tp0).offset);
     }
 
     @Test
@@ -1221,14 +1206,9 @@ public class FetcherTest {
 
             client.setNodeApiVersions(NodeApiVersions.create(ApiKeys.FETCH.id, (short) 2, (short) 2));
             makeFetchRequestWithIncompleteRecord();
-            try {
-                collectFetch();
-                fail("RecordTooLargeException should have been raised");
-            } catch (RecordTooLargeException e) {
-                assertTrue(e.getMessage().startsWith("There are some messages at [Partition=Offset]: "));
-                // the position should not advance since no data has been returned
-                assertEquals(0, subscriptions.position(tp0).offset);
-            }
+            assertThrows(RecordTooLargeException.class, this::collectFetch);
+            // the position should not advance since no data has been returned
+            assertEquals(0, subscriptions.position(tp0).offset);
         } finally {
             client.setNodeApiVersions(NodeApiVersions.create());
         }
@@ -1246,7 +1226,7 @@ public class FetcherTest {
         makeFetchRequestWithIncompleteRecord();
         try {
             collectFetch();
-            fail("RecordTooLargeException should have been raised");
+            fail("collectFetch should have thrown a KafkaException");
         } catch (KafkaException e) {
             assertTrue(e.getMessage().startsWith("Failed to make progress reading messages"));
             // the position should not advance since no data has been returned
@@ -1279,7 +1259,7 @@ public class FetcherTest {
         consumerClient.poll(time.timer(0));
         try {
             collectFetch();
-            fail("fetchedRecords should have thrown");
+            fail("collectFetch should have thrown a TopicAuthorizationException");
         } catch (TopicAuthorizationException e) {
             assertEquals(singleton(topicName), e.unauthorizedTopics());
         }
