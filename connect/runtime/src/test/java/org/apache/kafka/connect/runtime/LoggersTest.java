@@ -40,6 +40,7 @@ import java.util.stream.Stream;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 
 @RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class LoggersTest {
@@ -197,6 +198,14 @@ public class LoggersTest {
 
         Map<String, LoggerLevel> actualLevels = loggers.allLevels();
         assertEquals(expectedLevels, actualLevels);
+    }
+
+    @Test
+    public void testSetLevelNullArguments() {
+        Logger root = logger("root");
+        Loggers loggers = new TestLoggers(root);
+        assertThrows(NullPointerException.class, () -> loggers.setLevel(null, Level.INFO));
+        assertThrows(NullPointerException.class, () -> loggers.setLevel("root", null));
     }
 
     private class TestLoggers extends Loggers {

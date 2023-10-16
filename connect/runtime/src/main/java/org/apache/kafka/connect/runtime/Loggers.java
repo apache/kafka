@@ -114,11 +114,12 @@ public class Loggers {
     /**
      * Set the level for the specified logger and all of its children
      * @param namespace the name of the logger to adjust along with its children; may not be nul
-     * @param level the level to set for the logger and its children; may be null
+     * @param level the level to set for the logger and its children; may not be null
      * @return all loggers that were affected by this action; may be empty, but never null
      */
     public synchronized List<String> setLevel(String namespace, Level level) {
         Objects.requireNonNull(namespace, "Logging namespace may not be null");
+        Objects.requireNonNull(level, "Level may not be null");
 
         log.info("Setting level of namespace {} and children to {}", namespace, level);
         List<org.apache.log4j.Logger> childLoggers = loggers(namespace);
