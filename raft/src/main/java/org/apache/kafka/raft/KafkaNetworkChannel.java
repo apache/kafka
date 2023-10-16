@@ -107,7 +107,7 @@ public class KafkaNetworkChannel implements NetworkChannel {
                 request.createdTimeMs,
                 node,
                 buildRequest(request.data),
-                response -> sendDnComplete(request, response)
+                response -> sendOnComplete(request, response)
             ));
         } else
             sendCompleteFuture(request, errorResponse(request.data, Errors.BROKER_NOT_AVAILABLE));
@@ -122,7 +122,7 @@ public class KafkaNetworkChannel implements NetworkChannel {
         request.completion.complete(response);
     }
 
-    private void sendDnComplete(RaftRequest.Outbound request, ClientResponse clientResponse) {
+    private void sendOnComplete(RaftRequest.Outbound request, ClientResponse clientResponse) {
         ApiMessage response;
         if (clientResponse.versionMismatch() != null) {
             log.error("Request {} failed due to unsupported version error", request, clientResponse.versionMismatch());
