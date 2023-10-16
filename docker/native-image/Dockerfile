@@ -55,7 +55,7 @@ WORKDIR /app
 
 COPY --from=build-ub /build/ub /usr/bin
 COPY --from=build-native-image /app/kafka_2.13-3.7.0-SNAPSHOT/kafka.kafkanativewrapper .
-COPY resources/docker_scripts/include/etc/kafka/docker /etc/kafka/resources
+COPY resources/common_scripts /etc/kafka/resources
 COPY launch /etc/kafka/resources/
 
 CMD ["/etc/kafka/resources/launch"]
