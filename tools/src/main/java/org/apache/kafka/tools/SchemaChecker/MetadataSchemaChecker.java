@@ -43,62 +43,56 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 
 public class MetadataSchemaChecker {
 
     static int latestTag = -1;
+    static int  latestTagVersion = -1;
     static int oldLatestVersion = -1;
     static int oldFirstVersion = -1;
     static int newLatestVersion = -1;
     static int newFirstVersion = -1;
+
+    static String[] filesCheckMetadata = {"AccessControlEntryRecord.json", "BrokerRegistrationChangeRecord.json", "ClientQuotaRecord.json",
+            "ConfigRecord.json", "DelegationTokenRecord.json", "FeatureLevelRecord.json", "FenceBrokerRecord.json", "NoOpRecord.json",
+            "PartitionChangeRecord.json", "PartitionRecord.json", "ProducerIdsRecord.json", "RegisterBrokerRecord.json",
+            "RemoveAccessControlEntryRecord.json", "RemoveTopicRecord.json", "RemoveUserScramCredentialRecord.json", "TopicRecord.json",
+            "UnfenceBrokerRecord.json", "UnregisterBrokerRecord.json", "UserScramCredentialRecord.json", "ZkMigrationRecord.json"};
     public static void main(String[] args) throws Exception {
-        /*ArgumentParser par = ArgumentParsers.newArgumentParser("metadata-schema-checker").
-                defaultHelp(true).
-                description("Metadata Schema Checker");
-        par.addArgument("--schema", "-s").
-                required(true).
-                help("Changed schema");
-        // need to split all of this up into separate  helper functions
-        Namespace input = par.parseArgsOrFail(args);*/
 
         try {
-            final String dir = System.getProperty("user.dir");
-            //String path = dir + "/metadata/src/main/resources/common/metadata/" + input.get("schema").toString() + ".json";
-            String path = dir + "/metadata/src/main/resources/common/metadata/BrokerRegistrationChangeRecord.json";
-            BufferedReader reader = new BufferedReader(new FileReader(path));
-            for (int i = 0; i < 15; i++) {
-                reader.readLine();
-            }
-            StringBuilder content = new StringBuilder();
-            for (String line = reader.readLine(); line != null; line = reader.readLine()) {
-                content.append(line);
-            }
-
-
-            //String path1 = dir + "/metadata/src/main/resources/common/metadata/AccessControlEntryRecord.json";
-            String path1 = dir + "/tools/src/main/java/org/apache/kafka/tools/SchemaChecker/TestingSchema.json";
-            BufferedReader reader1 = new BufferedReader(new FileReader(path1));
-            for (int i = 0; i < 15; i++) {
-                reader1.readLine();
-            }
-            StringBuilder content1 = new StringBuilder();
-            for (String line1 = reader1.readLine(); line1 != null; line1 = reader1.readLine()) {
-                content1.append(line1);
+            List<String> localContent = new ArrayList<>();
+            for(String jsonSchema: filesCheckMetadata) {
+                final String dir = System.getProperty("user.dir");
+                String path = dir + "/metadata/src/main/resources/common/metadata/" + jsonSchema;
+                BufferedReader reader = new BufferedReader(new FileReader(path));
+                for (int i = 0; i < 15; i++) {
+                    reader.readLine();
+                }
+                StringBuilder content = new StringBuilder();
+                for (String line = reader.readLine(); line != null; line = reader.readLine()) {
+                    content.append(line);
+                }
+                localContent.add(content.toString());
             }
 
-            String gitContent = GetDataFromGit();
+            List<String> gitContent = GetDataFromGit();
+            if (localContent.size() != gitContent.size()) {
+                throw new RuntimeException("missing schemas");
+            }
+            for(int i = 0; i < localContent.size(); i++) {
+                if (Objects.equals(localContent.get(i), gitContent.get(i))) {
+                    continue;
+                }
 
+                ObjectMapper objectMapper = new ObjectMapper();
+                JsonNode jsonNode1 = objectMapper.readTree(gitContent.get(i));
+                JsonNode jsonNode2 = objectMapper.readTree(localContent.get(i));
 
-            ObjectMapper objectMapper = new ObjectMapper();
-            JsonNode jsonNode1 = objectMapper.readTree(content.toString());
-            JsonNode jsonNode2 = objectMapper.readTree(content1.toString());
-
-            checkApiTypeVersions(jsonNode1, jsonNode2);
-            parser((ArrayNode) jsonNode1.get("fields"), (ArrayNode) jsonNode2.get("fields"));
+                checkApiTypeVersions(jsonNode1, jsonNode2);
+                parser((ArrayNode) jsonNode1.get("fields"), (ArrayNode) jsonNode2.get("fields"));
+            }
 
         } catch (FileNotFoundException e) {
             System.out.println("An error occurred.");
@@ -108,8 +102,8 @@ public class MetadataSchemaChecker {
         }
     }
 
-    private static String GetDataFromGit() throws IOException, GitAPIException {
-        StringBuilder stringBuilder = new StringBuilder();
+    private static List<String> GetDataFromGit() throws IOException, GitAPIException {
+        List<String> gitSchemas = new ArrayList<>();
         Path tempDir = Files.createTempDirectory("tempDir");
         File tempFile = new File(tempDir.toString(), "");
         if (tempFile.createNewFile()) {
@@ -117,7 +111,7 @@ public class MetadataSchemaChecker {
         }
         Git git = Git.cloneRepository()
                 .setURI("https://github.com/apache/kafka.git")
-                .setCredentialsProvider(new UsernamePasswordCredentialsProvider("mannoopj", "Olivewinner1!"))
+                .setCredentialsProvider(new UsernamePasswordCredentialsProvider("x", "x"))
                 .setDirectory(tempFile)
                 .setBranchesToClone(Collections.singleton("refs/heads/trunk"))
                 .call();
@@ -127,28 +121,37 @@ public class MetadataSchemaChecker {
             RevCommit commit = revWalk.parseCommit(lastCommitId);
             RevTree tree = commit.getTree();
             System.out.println("Having tree: " + tree);
-            try (TreeWalk treeWalk = new TreeWalk(repository)) {
-                treeWalk.addTree(tree);
-                treeWalk.setRecursive(true);
-                treeWalk.setFilter(PathFilter.create("metadata/src/main/resources/common/metadata/BrokerRegistrationChangeRecord.json"));
-                if (!treeWalk.next()) {
-                    throw new IllegalStateException("Did not find expected file /metadata/src/main/resources/common/metadata/BrokerRegistrationChangeRecord.json");
-                }
-                ObjectId objectId = treeWalk.getObjectId(0);
-                ObjectLoader loader = repository.open(objectId);
+            for (String jsonSchema : filesCheckMetadata) {
+                StringBuilder stringBuilder = new StringBuilder();
+                try (TreeWalk treeWalk = new TreeWalk(repository)) {
+                    treeWalk.addTree(tree);
+                    treeWalk.setRecursive(true);
+                    treeWalk.setFilter(PathFilter.create("metadata/src/main/resources/common/metadata/" + jsonSchema));
+                    if (!treeWalk.next()) {
+                        throw new IllegalStateException("Did not find expected file /metadata/src/main/resources/common/metadata/" + jsonSchema);
+                    }
+                    ObjectId objectId = treeWalk.getObjectId(0);
+                    ObjectLoader loader = repository.open(objectId);
 
-                // and then one can the loader to read the file
-                String content = new String(loader.getBytes());
-                String[] lines = content.split("\n");
-                for(int i = 15; i < lines.length; i++) {
-                    System.out.println(lines[i]);
-                    stringBuilder.append(lines[i]);
+                    // and then one can the loader to read the file
+                    String content = new String(loader.getBytes());
+                    String[] lines = content.split("\n");
+                    boolean print = false;
+                    for (int i = 15; i < lines.length; i++) {
+                        if (lines[i].charAt(0) == '{') {
+                            print = true;
+                        }
+                        if (print && !lines[i].contains("//")) {
+                            stringBuilder.append(lines[i]);
+                        }
+                    }
                 }
+                gitSchemas.add(stringBuilder.toString());
             }
             revWalk.dispose();
         }
         tempDir.toFile().deleteOnExit();
-        return stringBuilder.toString();
+        return gitSchemas;
     }
 
     private static void checkApiTypeVersions(JsonNode original, JsonNode edited) {
@@ -202,8 +205,15 @@ public class MetadataSchemaChecker {
                 throw new RuntimeException("Fields must have same type. Expected: " + nodeOrig.get("type") + " Received: " + nodeNew.get("type"));
             }
 
-            if (nodeOrig.isArray() && nodeNew.isArray()) {
-                parser((ArrayNode) nodeOrig, (ArrayNode) nodeNew);
+            parseNullableVersion(nodeOrig, nodeNew);
+
+
+            if (nodeOrig.has("fields")) {
+                while(!nodeNew.has("fields")) {
+                    parseNewField(nodeNew);
+                    nodeNew = iterNewNode.next();
+                }
+                parser((ArrayNode) nodeOrig.get("fields"), (ArrayNode) nodeNew.get("fields"));
             }
         }
 
@@ -213,33 +223,31 @@ public class MetadataSchemaChecker {
     }
 
     private static boolean parseVersion(JsonNode nodeOrig, JsonNode nodeNew) {
-        String oldVersion = String.valueOf(nodeOrig.get("versions"));
-        oldVersion = oldVersion.substring(1, oldVersion.length() - 1);
-        String newVersion = String.valueOf(nodeNew.get("versions"));
-        newVersion = newVersion.substring(1, newVersion.length() - 1);
+        String[] oldVersion = cleanUpVersionStrings(String.valueOf(nodeOrig.get("versions")));
+        String[] newVersion = cleanUpVersionStrings(String.valueOf(nodeNew.get("versions")));
 
-        if (!Objects.equals(oldVersion, newVersion)) {
-            if (oldVersion.contains("-") && !newVersion.contains("-")) {
-                int cutoff = Character.getNumericValue(oldVersion.charAt(oldVersion.length() - 1));
-                if (cutoff > Character.getNumericValue(newVersion.charAt(0))) {
+        if (!Arrays.equals(oldVersion, newVersion)) {
+            if (oldVersion.length == 2 && newVersion.length == 1) {
+                int cutoff = Integer.parseInt(oldVersion[1]);
+                if (cutoff > Integer.parseInt(newVersion[0])) {
                     parseNewField(nodeNew);
                     return true;
                 } else {
                     throw new RuntimeException("new schema cannot reopen already closed field");
                 }
-            } else if (oldVersion.contains("-") && newVersion.contains("-")) {
+            } else if (oldVersion.length == 2 && newVersion.length == 2) {
                 throw new RuntimeException("cannot changed already closed field");
-            } else if (!oldVersion.contains("-") && newVersion.contains("-")) {
-                if (!Objects.equals(oldVersion.charAt(0), newVersion.charAt(0))) {
+            } else if (oldVersion.length == 1 && newVersion.length == 2) {
+                if (!Objects.equals(oldVersion[0], newVersion[0])) {
                     throw new RuntimeException("cannot change lower end of ");
                 }
-                int cutoffVersion = Character.getNumericValue(newVersion.charAt(newVersion.length() - 1));
+                int cutoffVersion = Integer.parseInt(newVersion[1]);
                 if (cutoffVersion != newLatestVersion && cutoffVersion + 1 != newLatestVersion) {
                     throw new RuntimeException("Invalid closing version for field");
                 }
-            } else if (!oldVersion.contains("-") && !newVersion.contains("-")) {
-                int oldInt = Character.getNumericValue(oldVersion.charAt(0));
-                int newInt = Character.getNumericValue(newVersion.charAt(0));
+            } else if (oldVersion.length == 1 && newVersion.length == 1) {
+                int oldInt = Integer.parseInt(oldVersion[0]);
+                int newInt = Integer.parseInt(newVersion[0]);
                 if (oldInt < newInt) {
                     parseNewField(nodeNew);
                     return true;
@@ -251,59 +259,31 @@ public class MetadataSchemaChecker {
         return false;
     }
 
-    private static void oldParser(JsonNode nodeOrig, JsonNode nodeNew) {
-        Iterator<Map.Entry<String, JsonNode>> fieldsOrig = nodeOrig.fields();
-        Iterator<Map.Entry<String, JsonNode>> fieldsNew = nodeNew.fields();
-        while (fieldsOrig.hasNext()) {
-            Map.Entry<String, JsonNode> fieldOrig = fieldsOrig.next();
-
-            //there should be at least the same amount of new fields as there are old
-            if (!fieldsNew.hasNext()) {
-                throw new RuntimeException("New schema is missing field ");
+    private static void parseNullableVersion(JsonNode nodeOrig, JsonNode nodeNew) {
+        String[] oldVersion = cleanUpVersionStrings(String.valueOf(nodeOrig.get("nullableVersions")));
+        String[] newVersion = cleanUpVersionStrings(String.valueOf(nodeNew.get("nullableVersions")));
+        if (nodeOrig.has("nullableVersions")) {
+            if (!nodeNew.has("nullableVersions")) {
+                throw new RuntimeException("field is missing nullable information");
+            }
+            if (oldVersion.length == 2 && newVersion.length == 1) {
+                throw new RuntimeException("cannot make field nullable after closing nullable versions");
+            }
+            if (oldVersion.length == 1 && newVersion.length == 2) {
+                if (!Objects.equals(oldVersion[0], newVersion[0])) {
+                    throw new RuntimeException("invalid closing version for nullable versions");
+                }
+                if (Integer.parseInt(newVersion[1]) != newLatestVersion) {
+                    throw new RuntimeException("incorrect closing version for nullable versions");
+                }
             }
 
-            //checks if items in json fields are same order, not invariant I think, could be removed
-            Map.Entry<String, JsonNode> fieldNew = fieldsNew.next();
-            if (!Objects.equals(fieldOrig.getKey(), fieldNew.getKey())) {
-                throw new RuntimeException("New schema has wrongly ordered field, " + fieldNew.getKey() + " should be " + fieldOrig.getKey());
-            }
-
-            if (fieldOrig.getValue().isArray() && fieldNew.getValue().isArray()) {
-                Iterator<JsonNode> iterOrig = fieldOrig.getValue().iterator();
-                Iterator<JsonNode> iterNew = fieldNew.getValue().iterator();
-                JsonNode nOrig = null, nNew;
-                boolean isNewField = false;
-                while (iterOrig.hasNext() || isNewField) {
-                    if (!isNewField) {
-                        nOrig = iterOrig.next();
-                    }
-                    if (!iterNew.hasNext()) {
-                        throw new RuntimeException("New schema is missing field ");
-                    }
-                    nNew = iterNew.next();
-
-                    isNewField = false;
-                //checkIfNewFields(nOrig, nNew);
-
-                    if (isNewField) {
-                        continue;
-                    }
-
-                    checkTaggedFieldIfTag(nOrig, nNew);
-                    //parser(nOrig, nNew);
-                }
-
-                // use this loop if there are new fields
-                while (iterNew.hasNext()) {
-                    parseNewField(iterNew.next());
-                }
-
-            } else if (fieldOrig.getValue().isArray() || fieldNew.getValue().isArray()) {
-                throw new RuntimeException("array missing");
+        } else if (nodeNew.has("nullableVersions")) {
+            if (Integer.parseInt(newVersion[0]) != newLatestVersion) {
+                throw new RuntimeException("invalid version for new nullable version");
             }
         }
     }
-
 
     private static boolean checkTaggedFieldIfTag(JsonNode origNode, JsonNode newNode) {
         if (origNode.has("tag")) {
@@ -317,39 +297,62 @@ public class MetadataSchemaChecker {
             }
 
 
-            if (latestTag + 1 != Character.getNumericValue(newNode.get("tag").asText().charAt(0))) {
-                throw new RuntimeException(" tag from new schema not in numeric order, " + Character.getNumericValue(newNode.get("tag").asText().charAt(0))
+            if (latestTag + 1 != Integer.parseInt(newNode.get("tag").asText())) {
+                throw new RuntimeException(" tag from new schema not in numeric order, " + newNode.get("tag").asText()
                                            + " should be "  + (latestTag + 1));
             }
-            latestTag = Character.getNumericValue(origNode.get("tag").asText().charAt(0));
+            latestTag = Integer.parseInt(newNode.get("tag").asText());
+            String[] x = cleanUpVersionStrings(origNode.get("taggedVersions").asText());
+            latestTagVersion = Integer.parseInt(cleanUpVersionStrings(origNode.get("taggedVersions").asText())[0]);
+        } else {
+            if (newNode.has("tag")) {
+                parseNewField(newNode);
+            }
         }
         return false;
     }
 
     private static void parseNewField(JsonNode node) {
-        if (oldLatestVersion + 1 != newLatestVersion) {
+        String[] versions = cleanUpVersionStrings(String.valueOf(node.get("versions")));
+        if (oldLatestVersion + 1 != newLatestVersion && !node.has("tag")) {
             throw new RuntimeException("New schemas with new fields need to be on the next version iteration");
         }
-        if (newLatestVersion != Character.getNumericValue(String.valueOf(node.get("versions")).charAt(1))) {
+        if (newLatestVersion != Integer.parseInt(versions[0]) && !node.has("tag")) {
             throw new RuntimeException("new field version not correct");
         }
         if (!node.has("type") && !node.has("fields")) {
             throw new RuntimeException("new field requires a type if it doesn't have fields node ");
         }
-        if (Character.getNumericValue(node.get("versions").asText().charAt(0)) != (oldLatestVersion + 1)) {
-            System.out.println(node);
+
+        if (Integer.parseInt(versions[0]) != (oldLatestVersion + 1) && !node.has("tag")) {
             throw new RuntimeException("New field must be on next version");
         }
         if (node.has("tag")) {
             if (!node.has("taggedVersions")) {
                 throw new RuntimeException("new tagged field is missing tagged versions");
             }
-            if (Character.getNumericValue(node.get("tag").asText().charAt(0)) != latestTag + 1) {
-                throw new RuntimeException("new tagged field is not on next sequential tag");
+            String[] taggedVersions = cleanUpVersionStrings(String.valueOf(node.get("taggedVersions")));
+
+            if (Integer.parseInt(taggedVersions[0]) != latestTagVersion + 1) {
+                throw new RuntimeException("taggedVersion incorrect for new tagged field");
+            }
+            if (Integer.parseInt(versions[0]) < oldLatestVersion ||
+                Integer.parseInt(versions[0]) > newLatestVersion) {
+                throw new RuntimeException("Invalid version for new tagged field");
             }
         }
-
-
     }
 
+    private static String[] cleanUpVersionStrings(String string) {
+        String[] cleanedInts;
+        if (string.charAt(0) == '"') {
+            string = string.substring(1, string.length() - 1);
+        }
+        if (string.contains("-")) {
+            cleanedInts = string.split("-");
+        } else {
+            cleanedInts = string.split("\\+");
+        }
+        return cleanedInts;
+    }
 }

@@ -22,9 +22,7 @@
   "fields": [
     { "name": "BrokerId", "type": "int32", "versions": "0+", "entityType": "brokerId",
       "about": "The broker id." },
-    { "name": "BrokerEpoch", "type": "int64", "versions": "0+",
-      "about": "The broker epoch assigned by the controller." },
-    { "name": "NEWFIELD", "type": "int64", "versions": "2+",
+    { "name": "BrokerEpoch", "type": "int64", "versions": "0+", "nullableVersions": "2+",
       "about": "The broker epoch assigned by the controller." },
     { "name": "Fenced", "type": "int8", "versions": "0+", "taggedVersions": "0+", "tag": 0,
       "about": "-1 if the broker has been unfenced, 0 if no change, 1 if the broker has been fenced." },
