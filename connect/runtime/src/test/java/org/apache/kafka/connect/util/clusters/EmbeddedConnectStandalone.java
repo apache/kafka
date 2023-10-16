@@ -129,7 +129,7 @@ public class EmbeddedConnectStandalone extends EmbeddedConnect {
         private String tempOffsetsFile() {
             try {
                 return TestUtils
-                        .tempFile("connect-standalone-offsets", "")
+                        .tempFile("connect-standalone-offsets", null)
                         .getAbsolutePath();
             } catch (IOException e) {
                 throw new UncheckedIOException("Failed to create temporary offsets file", e);
