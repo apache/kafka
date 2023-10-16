@@ -38,7 +38,7 @@ import java.util.Optional;
 public class MembershipManagerImpl implements MembershipManager {
 
     /**
-     * ID of the consumer group the member will be part of, provided when creating the current
+     * Group ID of the consumer group the member will be part of, provided when creating the current
      * membership manager.
      */
     private final String groupId;
@@ -57,7 +57,8 @@ public class MembershipManagerImpl implements MembershipManager {
     /**
      * Current epoch of the member. It will be set to 0 by the member, and provided to the server
      * on the heartbeat request, to join the group. It will be then maintained by the server,
-     * incremented as the member reconciles and acknowledges the assignments it receives.
+     * incremented as the member reconciles and acknowledges the assignments it receives. It will
+     * be reset to 0 if the member gets fenced.
      */
     private int memberEpoch;
 
@@ -238,12 +239,12 @@ public class MembershipManagerImpl implements MembershipManager {
      */
     private void setTargetAssignment(ConsumerGroupHeartbeatResponseData.Assignment newTargetAssignment) {
         if (!targetAssignment.isPresent()) {
-            log.debug("Member {} accepted new target assignment {} to reconcile", memberId, newTargetAssignment);
+            log.info("Member {} accepted new target assignment {} to reconcile", memberId, newTargetAssignment);
             targetAssignment = Optional.of(newTargetAssignment);
         } else {
             transitionToFailed();
-            throw new IllegalStateException("A target assignment pending to be reconciled already" +
-                    " exists.");
+            throw new IllegalStateException("Cannot set new target assignment because a " +
+                    "previous one pending to be reconciled already exists.");
         }
     }
 
@@ -285,8 +286,8 @@ public class MembershipManagerImpl implements MembershipManager {
 
     /**
      * Assignment that the member received from the server but hasn't completely processed yet.
+     * This is visible for testing.
      */
-    // VisibleForTesting
     Optional<ConsumerGroupHeartbeatResponseData.Assignment> targetAssignment() {
         return targetAssignment;
     }
@@ -309,10 +310,11 @@ public class MembershipManagerImpl implements MembershipManager {
             // here to uncover any issues in the interaction of the assignment processing logic
             // and this.
             throw new IllegalStateException(String.format("Reconciled assignment %s does not " +
-                            "match the initial target assignment %s", assignment, targetAssignment.orElse(null)));
+                            "match the expected target assignment %s", assignment,
+                    targetAssignment.orElse(null)));
         }
         this.currentAssignment = assignment;
         targetAssignment = Optional.empty();
-        maybeTransitionToStable();
+        transitionTo(MemberState.STABLE);
     }
 }

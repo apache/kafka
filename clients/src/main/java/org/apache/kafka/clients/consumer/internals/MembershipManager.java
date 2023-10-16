@@ -31,28 +31,28 @@ import java.util.Optional;
 public interface MembershipManager {
 
     /**
-     * ID of the consumer group the member is part of (or wants to be part of).
+     * @return Group ID of the consumer group the member is part of (or wants to be part of).
      */
     String groupId();
 
     /**
-     * Instance ID used by the member when joining the group. If non-empty, it will indicate that
+     * @return Instance ID used by the member when joining the group. If non-empty, it will indicate that
      * this is a static member.
      */
     Optional<String> groupInstanceId();
 
     /**
-     * Member ID assigned by the server to this member when it joins the consumer group.
+     * @return Member ID assigned by the server to this member when it joins the consumer group.
      */
     String memberId();
 
     /**
-     * Current epoch of the member, maintained by the server.
+     * @return Current epoch of the member, maintained by the server.
      */
     int memberEpoch();
 
     /**
-     * Current state of this member a part of the consumer group, as defined in {@link MemberState}.
+     * @return Current state of this member a part of the consumer group, as defined in {@link MemberState}.
      */
     MemberState state();
 
@@ -64,13 +64,13 @@ public interface MembershipManager {
     void updateState(ConsumerGroupHeartbeatResponseData response);
 
     /**
-     * Returns the {@link AssignorSelection} configured for the member, that will be sent out to
+     * @return  {@link AssignorSelection} configured for the member, that will be sent out to
      * the server to be used. If empty, then the server will select the assignor.
      */
     AssignorSelection assignorSelection();
 
     /**
-     * Returns the current assignment for the member.
+     * @return Current assignment for the member.
      */
     ConsumerGroupHeartbeatResponseData.Assignment currentAssignment();
 
@@ -95,7 +95,7 @@ public interface MembershipManager {
     void transitionToFailed();
 
     /**
-     * Return true if the member should send heartbeat to the coordinator
+     * @return True if the member should send heartbeat to the coordinator.
      */
     boolean shouldSendHeartbeat();
 }
