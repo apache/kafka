@@ -357,11 +357,7 @@ public class HeartbeatRequestManager implements RequestManager {
         }
 
         public void resetTimer() {
-            this.resetTimer(heartbeatIntervalMs);
-        }
-
-        public void resetTimer(long timeoutMs) {
-            this.heartbeatTimer.reset(timeoutMs);
+            this.heartbeatTimer.reset(heartbeatIntervalMs);
         }
 
         @Override
