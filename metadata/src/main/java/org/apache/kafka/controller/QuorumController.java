@@ -1873,6 +1873,7 @@ public final class QuorumController implements Controller {
             setDefaultReplicationFactor(defaultReplicationFactor).
             setDefaultNumPartitions(defaultNumPartitions).
             setDefaultMinIsr(defaultMinIsr).
+            setEligibleLeaderReplicasEnabled(eligibleLeaderReplicasEnabled).
             setMaxElectionsPerImbalance(ReplicationControlManager.MAX_ELECTIONS_PER_IMBALANCE).
             setConfigurationControl(configurationControl).
             setClusterControl(clusterControl).

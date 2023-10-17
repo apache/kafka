@@ -40,6 +40,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
@@ -57,6 +58,7 @@ import static org.apache.kafka.common.config.ConfigResource.Type.TOPIC;
 import static org.apache.kafka.common.metadata.MetadataRecordType.CONFIG_RECORD;
 import static org.apache.kafka.server.config.ConfigSynonym.HOURS_TO_MILLISECONDS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 
 @Timeout(value = 40)
@@ -137,6 +139,7 @@ public class ConfigurationControlManagerTest {
         assertEquals(toMap(entry("abc", "x,y,z"), entry("def", "blah")),
             manager.getConfigs(MYTOPIC));
         assertEquals("x,y,z", manager.getTopicConfig(MYTOPIC.name(), "abc"));
+        assertThrows(NoSuchElementException.class, () -> manager.getTopicConfig(MYTOPIC.name(), "none-exists"));
     }
 
     @Test

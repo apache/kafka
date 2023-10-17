@@ -235,7 +235,6 @@ public class ReplicationControlManagerTest {
                 setSessionTimeoutNs(TimeUnit.MILLISECONDS.convert(BROKER_SESSION_TIMEOUT_MS, TimeUnit.NANOSECONDS)).
                 setReplicaPlacer(new StripedReplicaPlacer(random)).
                 setFeatureControlManager(featureControl).
-                setEligibleLeaderReplicasEnabled(isElrEnabled).
                 build();
 
             this.replicationControl = new ReplicationControlManager.Builder().
@@ -246,6 +245,7 @@ public class ReplicationControlManagerTest {
                 setClusterControl(clusterControl).
                 setCreateTopicPolicy(createTopicPolicy).
                 setFeatureControl(featureControl).
+                setEligibleLeaderReplicasEnabled(isElrEnabled).
                 build();
             clusterControl.activate();
         }
