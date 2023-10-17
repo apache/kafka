@@ -17,7 +17,6 @@
 package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.clients.Metadata;
-import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
@@ -108,10 +107,10 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
 
         // rebalance callbacks
         if (!added.isEmpty()) {
-            this.subscriptions.rebalanceListener().onPartitionsAssigned(added);
+            this.subscriptions.rebalanceListener().ifPresent(crl -> crl.onPartitionsAssigned(added));
         }
         if (!removed.isEmpty()) {
-            this.subscriptions.rebalanceListener().onPartitionsRevoked(removed);
+            this.subscriptions.rebalanceListener().ifPresent(crl -> crl.onPartitionsRevoked(removed));
         }
     }
 
@@ -122,14 +121,14 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public synchronized void subscribe(Collection<String> topics) {
-        subscribe(topics, new NoOpConsumerRebalanceListener());
+        subscribe(topics, null);
     }
 
     @Override
     public synchronized void subscribe(Pattern pattern, final ConsumerRebalanceListener listener) {
         ensureNotClosed();
         committed.clear();
-        this.subscriptions.subscribe(pattern, listener);
+        this.subscriptions.subscribe(pattern, Optional.ofNullable(listener));
         Set<String> topicsToSubscribe = new HashSet<>();
         for (String topic: partitions.keySet()) {
             if (pattern.matcher(topic).matches() &&
@@ -150,14 +149,14 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public synchronized void subscribe(Pattern pattern) {
-        subscribe(pattern, new NoOpConsumerRebalanceListener());
+        subscribe(pattern, null);
     }
 
     @Override
     public synchronized void subscribe(Collection<String> topics, final ConsumerRebalanceListener listener) {
         ensureNotClosed();
         committed.clear();
-        this.subscriptions.subscribe(new HashSet<>(topics), listener);
+        this.subscriptions.subscribe(new HashSet<>(topics), Optional.ofNullable(listener));
     }
 
     @Override

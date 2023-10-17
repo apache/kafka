@@ -229,7 +229,7 @@ public class HeartbeatRequestManagerTest {
     public void testValidateConsumerGroupHeartbeatRequest(final short version) {
         List<String> subscribedTopics = Collections.singletonList("topic");
         subscriptionState = new SubscriptionState(logContext, OffsetResetStrategy.NONE);
-        subscriptionState.subscribe(new HashSet<>(subscribedTopics), new NoOpConsumerRebalanceListener());
+        subscriptionState.subscribe(new HashSet<>(subscribedTopics), Optional.empty());
 
         Properties prop = createConsumerConfig();
         prop.setProperty(MAX_POLL_INTERVAL_MS_CONFIG, "10000");

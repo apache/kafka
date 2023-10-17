@@ -143,7 +143,7 @@ import static org.mockito.Mockito.verify;
 public class FetcherTest {
     private static final double EPSILON = 0.0001;
 
-    private ConsumerRebalanceListener listener = new NoOpConsumerRebalanceListener();
+    private Optional<ConsumerRebalanceListener> listener = Optional.empty();
     private String topicName = "test";
     private String groupId = "test-group";
     private Uuid topicId = Uuid.randomUuid();

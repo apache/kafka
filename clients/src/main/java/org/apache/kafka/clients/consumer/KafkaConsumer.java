@@ -31,7 +31,6 @@ import org.apache.kafka.clients.consumer.internals.FetchConfig;
 import org.apache.kafka.clients.consumer.internals.FetchMetricsManager;
 import org.apache.kafka.clients.consumer.internals.Fetcher;
 import org.apache.kafka.clients.consumer.internals.KafkaConsumerMetrics;
-import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.OffsetFetcher;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.clients.consumer.internals.TopicMetadataFetcher;
@@ -930,7 +929,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 fetcher.clearBufferedDataForUnassignedPartitions(currentTopicPartitions);
 
                 log.info("Subscribed to topic(s): {}", join(topics, ", "));
-                if (this.subscriptions.subscribe(new HashSet<>(topics), listener))
+                if (this.subscriptions.subscribe(new HashSet<>(topics), Optional.ofNullable(listener)))
                     metadata.requestUpdateForNewTopics();
             }
         } finally {
@@ -961,7 +960,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void subscribe(Collection<String> topics) {
-        subscribe(topics, new NoOpConsumerRebalanceListener());
+        subscribe(topics, null);
     }
 
     /**
@@ -994,7 +993,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         try {
             throwIfNoAssignorsConfigured();
             log.info("Subscribed to pattern: '{}'", pattern);
-            this.subscriptions.subscribe(pattern, listener);
+            this.subscriptions.subscribe(pattern, Optional.ofNullable(listener));
             this.coordinator.updatePatternSubscription(metadata.fetch());
             this.metadata.requestUpdateForNewTopics();
         } finally {
@@ -1020,7 +1019,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void subscribe(Pattern pattern) {
-        subscribe(pattern, new NoOpConsumerRebalanceListener());
+        subscribe(pattern, null);
     }
 
     /**
