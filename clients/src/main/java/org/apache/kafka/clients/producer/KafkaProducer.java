@@ -1274,7 +1274,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      *                        instance ID, though this error does not necessarily imply the
      *                        producer client is otherwise unusable.
      * @throws IllegalArgumentException If the {@code timeout} is negative.
-     * @throws IllegalStateException If telemetry is not enabled.
+     * @throws IllegalStateException If telemetry is not enabled ie, config `{@code enable.metrics.push}`
+     *                               is set to `{@code false}`.
      * @return The client's assigned instance id used for metrics collection.
      */
     @Override
