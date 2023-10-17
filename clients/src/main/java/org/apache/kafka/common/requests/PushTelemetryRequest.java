@@ -61,8 +61,8 @@ public class PushTelemetryRequest extends AbstractRequest {
     @Override
     public PushTelemetryResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         PushTelemetryResponseData responseData = new PushTelemetryResponseData()
-                .setErrorCode(Errors.forException(e).code());
-        responseData.setThrottleTimeMs(throttleTimeMs);
+                .setErrorCode(Errors.forException(e).code())
+                .setThrottleTimeMs(throttleTimeMs);
         return new PushTelemetryResponse(responseData);
     }
 

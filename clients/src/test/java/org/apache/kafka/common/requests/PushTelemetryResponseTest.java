@@ -17,7 +17,6 @@
 
 package org.apache.kafka.common.requests;
 
-import java.util.Map;
 import org.apache.kafka.common.message.PushTelemetryResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.junit.jupiter.api.Test;
@@ -31,7 +30,6 @@ public class PushTelemetryResponseTest {
     @Test
     public void testErrorCountsReturnsNoneWhenNoErrors() {
         PushTelemetryResponseData data = new PushTelemetryResponseData()
-                .setThrottleTimeMs(60)
                 .setErrorCode(Errors.NONE.code());
         PushTelemetryResponse response = new PushTelemetryResponse(data);
         assertEquals(Collections.singletonMap(Errors.NONE, 1), response.errorCounts());
@@ -40,14 +38,11 @@ public class PushTelemetryResponseTest {
     @Test
     public void testErrorCountsReturnsOneError() {
         PushTelemetryResponseData data = new PushTelemetryResponseData()
-            .setThrottleTimeMs(10)
-            .setErrorCode(Errors.CLUSTER_AUTHORIZATION_FAILED.code());
+               .setErrorCode(Errors.CLUSTER_AUTHORIZATION_FAILED.code());
         data.setErrorCode(Errors.INVALID_CONFIG.code());
 
         PushTelemetryResponse response = new PushTelemetryResponse(data);
-        Map<Errors, Integer> errorCounts = response.errorCounts();
-        assertEquals(1, errorCounts.size());
-        assertEquals(1, errorCounts.get(Errors.INVALID_CONFIG));
+        assertEquals(Collections.singletonMap(Errors.INVALID_CONFIG, 1), response.errorCounts());
     }
 
 }

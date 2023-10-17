@@ -22,7 +22,6 @@ import org.apache.kafka.common.protocol.Errors;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
-import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -31,7 +30,6 @@ public class GetTelemetrySubscriptionsResponseTest {
     @Test
     public void testErrorCountsReturnsNoneWhenNoErrors() {
         GetTelemetrySubscriptionsResponseData data = new GetTelemetrySubscriptionsResponseData()
-                .setThrottleTimeMs(10)
                 .setErrorCode(Errors.NONE.code());
         GetTelemetrySubscriptionsResponse response = new GetTelemetrySubscriptionsResponse(data);
         assertEquals(Collections.singletonMap(Errors.NONE, 1), response.errorCounts());
@@ -40,13 +38,10 @@ public class GetTelemetrySubscriptionsResponseTest {
     @Test
     public void testErrorCountsReturnsOneError() {
         GetTelemetrySubscriptionsResponseData data = new GetTelemetrySubscriptionsResponseData()
-                .setThrottleTimeMs(10)
                 .setErrorCode(Errors.CLUSTER_AUTHORIZATION_FAILED.code());
         data.setErrorCode(Errors.INVALID_CONFIG.code());
 
         GetTelemetrySubscriptionsResponse response = new GetTelemetrySubscriptionsResponse(data);
-        Map<Errors, Integer> errorCounts = response.errorCounts();
-        assertEquals(1, errorCounts.size());
-        assertEquals(1, errorCounts.get(Errors.INVALID_CONFIG));
+        assertEquals(Collections.singletonMap(Errors.INVALID_CONFIG, 1), response.errorCounts());
     }
 }

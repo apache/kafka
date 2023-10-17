@@ -6226,7 +6226,6 @@ class KafkaApisTest {
   @Test
   def testGetTelemetrySubscriptionsNotAllowedForZkClusters(): Unit = {
     val data = new GetTelemetrySubscriptionsRequestData()
-    data.setClientInstanceId(Uuid.randomUuid())
 
     val request = buildRequest(new GetTelemetrySubscriptionsRequest.Builder(data, true).build())
     createKafkaApis(enableForwarding = true).handle(request, RequestLocal.NoCaching)
@@ -6238,7 +6237,6 @@ class KafkaApisTest {
   @Test
   def testGetTelemetrySubscriptionsUnsupportedVersionForKRaftClusters(): Unit = {
     val data = new GetTelemetrySubscriptionsRequestData()
-    data.setClientInstanceId(Uuid.ZERO_UUID)
 
     val request = buildRequest(new GetTelemetrySubscriptionsRequest.Builder(data, true).build())
     val errorCode = Errors.UNSUPPORTED_VERSION.code
@@ -6255,7 +6253,6 @@ class KafkaApisTest {
   @Test
   def testPushTelemetryNotAllowedForZkClusters(): Unit = {
     val data = new PushTelemetryRequestData()
-    data.setClientInstanceId(Uuid.randomUuid())
 
     val request = buildRequest(new PushTelemetryRequest.Builder(data, true).build())
     createKafkaApis(enableForwarding = true).handle(request, RequestLocal.NoCaching)
@@ -6267,7 +6264,6 @@ class KafkaApisTest {
   @Test
   def testPushTelemetryUnsupportedVersionForKRaftClusters(): Unit = {
     val data = new PushTelemetryRequestData()
-    data.setClientInstanceId(Uuid.ZERO_UUID)
 
     val request = buildRequest(new PushTelemetryRequest.Builder(data, true).build())
     val errorCode = Errors.UNSUPPORTED_VERSION.code
