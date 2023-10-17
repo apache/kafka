@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.coordinator.group.metrics;
 
-import com.yammer.metrics.core.Histogram;
-import com.yammer.metrics.core.MetricsRegistry;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Gauge;
 import org.apache.kafka.common.metrics.Metrics;
@@ -26,12 +24,10 @@ import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Min;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorRuntime.CoordinatorState;
-import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 
 import java.util.Arrays;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 public class GroupCoordinatorRuntimeMetrics implements CoordinatorRuntimeMetrics {
@@ -69,23 +65,6 @@ public class GroupCoordinatorRuntimeMetrics implements CoordinatorRuntimeMetrics
     private final MetricName eventQueueSize;
 
     /**
-     * Metric to measure the event queue time.
-     */
-    private final com.yammer.metrics.core.MetricName eventQueueTimeMs =
-        KafkaYammerMetrics.getMetricName("kafka.coordinator.group", METRICS_GROUP, "EventQueueTimeMs");
-
-    /**
-     * Metric to measure the event processing time.
-     */
-    private final com.yammer.metrics.core.MetricName eventQueueProcessingTimeMs =
-        KafkaYammerMetrics.getMetricName("kafka.coordinator.group", METRICS_GROUP, "EventQueueProcessingTimeMs");
-
-    /**
-     * The yammer metrics registry.
-     */
-    private final MetricsRegistry registry;
-
-    /**
      * The Kafka metrics registry.
      */
     private final Metrics metrics;
@@ -100,18 +79,7 @@ public class GroupCoordinatorRuntimeMetrics implements CoordinatorRuntimeMetrics
      */
     private Sensor threadIdleRatioSensor;
 
-    /**
-     * The event queue time updater.
-     */
-    private final Consumer<Long> eventQueueTimeUpdater;
-
-    /**
-     * The event queue processing time updater.
-     */
-    private final Consumer<Long> eventQueueProcessingTimeUpdater;
-
-    public GroupCoordinatorRuntimeMetrics(MetricsRegistry registry, Metrics metrics) {
-        this.registry = Objects.requireNonNull(registry);
+    public GroupCoordinatorRuntimeMetrics(Metrics metrics) {
         this.metrics = Objects.requireNonNull(metrics);
 
         this.numPartitionsLoading = kafkaMetricName(
@@ -165,9 +133,6 @@ public class GroupCoordinatorRuntimeMetrics implements CoordinatorRuntimeMetrics
                 METRICS_GROUP,
                 "The average thread idle ratio over the last 30 seconds."
             ), new Avg());
-
-        eventQueueTimeUpdater = newHistogram(eventQueueTimeMs);
-        eventQueueProcessingTimeUpdater = newHistogram(eventQueueProcessingTimeMs);
     }
 
     /**
@@ -181,11 +146,6 @@ public class GroupCoordinatorRuntimeMetrics implements CoordinatorRuntimeMetrics
         return metrics.metricName(name, METRICS_GROUP, description, keyValue);
     }
 
-    private Consumer<Long> newHistogram(com.yammer.metrics.core.MetricName name) {
-        Histogram histogram = registry.newHistogram(name, true);
-        return histogram::update;
-    }
-
     @Override
     public void close() {
         Arrays.asList(
@@ -194,11 +154,6 @@ public class GroupCoordinatorRuntimeMetrics implements CoordinatorRuntimeMetrics
             numPartitionsFailed,
             eventQueueSize
         ).forEach(metrics::removeMetric);
-
-        Arrays.asList(
-            eventQueueTimeMs,
-            eventQueueProcessingTimeMs
-        ).forEach(registry::removeMetric);
 
         metrics.removeSensor(partitionLoadSensor.name());
         metrics.removeSensor(threadIdleRatioSensor.name());
@@ -247,14 +202,10 @@ public class GroupCoordinatorRuntimeMetrics implements CoordinatorRuntimeMetrics
     }
 
     @Override
-    public void recordEventQueueTime(long durationMs) {
-        eventQueueTimeUpdater.accept(durationMs);
-    }
+    public void recordEventQueueTime(long durationMs) { }
 
     @Override
-    public void recordEventQueueProcessingTime(long durationMs) {
-        eventQueueProcessingTimeUpdater.accept(durationMs);
-    }
+    public void recordEventQueueProcessingTime(long durationMs) { }
 
     @Override
     public void recordThreadIdleRatio(double ratio) {
