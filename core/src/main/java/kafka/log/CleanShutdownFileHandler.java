@@ -46,7 +46,7 @@ import java.util.Map;
 public class CleanShutdownFileHandler {
     public static final String CLEAN_SHUTDOWN_FILE_NAME = ".kafka_cleanshutdown";
     private final File cleanShutdownFile;
-    private final int currentVersion = 0;
+    private static final int CURRENT_VERSION = 0;
     private final Logger logger;
 
     private enum Fields {
@@ -65,7 +65,7 @@ public class CleanShutdownFileHandler {
     }
 
     public void write(long brokerEpoch) throws Exception {
-        write(brokerEpoch, currentVersion);
+        write(brokerEpoch, CURRENT_VERSION);
     }
 
     // visible to test.
