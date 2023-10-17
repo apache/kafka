@@ -20,8 +20,6 @@ import org.apache.kafka.common.KafkaException;
 
 public class IllegalClientTelemetryStateException extends KafkaException {
 
-    private static final long serialVersionUID = 1L;
-
     public IllegalClientTelemetryStateException(final String message) {
         super(message);
     }
