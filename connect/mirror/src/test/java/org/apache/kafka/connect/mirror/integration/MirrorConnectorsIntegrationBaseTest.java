@@ -81,6 +81,7 @@ import org.junit.jupiter.api.Tag;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import static org.apache.kafka.clients.consumer.ConsumerConfig.AUTO_OFFSET_RESET_CONFIG;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -872,6 +873,34 @@ public class MirrorConnectorsIntegrationBaseTest {
                     "`retention.bytes` should be synced with target's default value!");
             return true;
         }, 30000, "Topic configurations were not synced");
+    }
+
+    @Test
+    public void testReplicateFromLatest() throws Exception {
+        // populate topic with records that should not be replicated
+        String topic = "test-topic-1";
+        produceMessages(primaryProducer, topic, NUM_PARTITIONS);
+
+        // consume from the ends of topics when no committed offsets are found
+        mm2Props.put(PRIMARY_CLUSTER_ALIAS + ".consumer." + AUTO_OFFSET_RESET_CONFIG, "latest");
+        // one way replication from primary to backup
+        mm2Props.put(BACKUP_CLUSTER_ALIAS + "->" + PRIMARY_CLUSTER_ALIAS + ".enabled", "false");
+        mm2Config = new MirrorMakerConfig(mm2Props);
+        waitUntilMirrorMakerIsRunning(backup, CONNECTOR_LIST, mm2Config, PRIMARY_CLUSTER_ALIAS, BACKUP_CLUSTER_ALIAS);
+
+        // produce some more messages to the topic, now that MM2 is running and replication should be taking place
+        produceMessages(primaryProducer, topic, NUM_PARTITIONS);
+
+        String backupTopic = remoteTopicName(topic, PRIMARY_CLUSTER_ALIAS);
+        // wait for at least the expected number of records to be replicated to the backup cluster
+        backup.kafka().consume(NUM_PARTITIONS * NUM_RECORDS_PER_PARTITION, RECORD_TRANSFER_DURATION_MS, backupTopic);
+        // consume all records from backup cluster
+        ConsumerRecords<byte[], byte[]> replicatedRecords = backup.kafka().consumeAll(RECORD_TRANSFER_DURATION_MS, backupTopic);
+        // ensure that we only replicated the records produced after startup
+        replicatedRecords.partitions().forEach(topicPartition -> {
+            int replicatedCount = replicatedRecords.records(topicPartition).size();
+            assertEquals(NUM_RECORDS_PER_PARTITION, replicatedCount);
+        });
     }
 
     private TopicPartition remoteTopicPartition(TopicPartition tp, String alias) {

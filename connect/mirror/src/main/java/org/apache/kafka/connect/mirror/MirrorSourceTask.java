@@ -53,7 +53,6 @@ public class MirrorSourceTask extends SourceTask {
     private static final Logger log = LoggerFactory.getLogger(MirrorSourceTask.class);
 
     private static final int MAX_OUTSTANDING_OFFSET_SYNCS = 10;
-    public static final long NON_EXISTING_OFFSET_VALUE = -1L;
 
     private KafkaConsumer<byte[], byte[]> consumer;
     private KafkaProducer<byte[], byte[]> offsetProducer;
@@ -104,29 +103,10 @@ public class MirrorSourceTask extends SourceTask {
         consumer = MirrorUtils.newConsumer(config.sourceConsumerConfig("replication-consumer"));
         offsetProducer = MirrorUtils.newProducer(config.offsetSyncsTopicProducerConfig());
         Set<TopicPartition> taskTopicPartitions = config.taskTopicPartitions();
-        Map<TopicPartition, Long> topicPartitionOffsets = loadOffsets(taskTopicPartitions);
-        consumer.assign(topicPartitionOffsets.keySet());
-        log.info("Starting with {} previously uncommitted partitions.", topicPartitionOffsets.entrySet().stream()
-            .filter(x -> x.getValue() == NON_EXISTING_OFFSET_VALUE).count());
+        initializeConsumer(taskTopicPartitions);
 
-        log.trace("Seeking offsets: {}", topicPartitionOffsets.entrySet().stream()
-                .filter(topicPartitionOffset ->
-                        topicPartitionOffset.getValue() != NON_EXISTING_OFFSET_VALUE));
-
-        topicPartitionOffsets.forEach(this::maybeSeek);
         log.info("{} replicating {} topic-partitions {}->{}: {}.", Thread.currentThread().getName(),
             taskTopicPartitions.size(), sourceClusterAlias, config.targetClusterAlias(), taskTopicPartitions);
-    }
-
-    private void maybeSeek(TopicPartition topicPartition, Long offset) {
-        // Do not call seek on partitions that don't have an existing offset committed.
-        if (offset == NON_EXISTING_OFFSET_VALUE) {
-            log.trace("Skipping seeking offset for topicPartition: {}", topicPartition);
-            return;
-        }
-        long nextOffsetToCommittedOffset = offset + 1L;
-        log.trace("Seeking to offset {} for topicPartition: {}", nextOffsetToCommittedOffset, topicPartition);
-        consumer.seek(topicPartition, nextOffsetToCommittedOffset);
     }
 
     @Override
@@ -285,6 +265,28 @@ public class MirrorSourceTask extends SourceTask {
         return MirrorUtils.unwrapOffset(wrappedOffset);
     }
 
+    // visible for testing
+    void initializeConsumer(Set<TopicPartition> taskTopicPartitions) {
+        Map<TopicPartition, Long> topicPartitionOffsets = loadOffsets(taskTopicPartitions);
+        consumer.assign(topicPartitionOffsets.keySet());
+        log.info("Starting with {} previously uncommitted partitions.", topicPartitionOffsets.values().stream()
+                .filter(this::isUncommitted).count());
+
+        log.trace("Seeking offsets: {}", topicPartitionOffsets.entrySet().stream()
+                .filter(tpo -> !isUncommitted(tpo.getValue())));
+
+        topicPartitionOffsets.forEach((topicPartition, offset) -> {
+            // Do not call seek on partitions that don't have an existing offset committed.
+            if (isUncommitted(offset)) {
+                log.trace("Skipping seeking offset for topicPartition: {}", topicPartition);
+                return;
+            }
+            long nextOffsetToCommittedOffset = offset + 1L;
+            log.trace("Seeking to offset {} for topicPartition: {}", nextOffsetToCommittedOffset, topicPartition);
+            consumer.seek(topicPartition, nextOffsetToCommittedOffset);
+        });
+    }
+
     // visible for testing 
     SourceRecord convertRecord(ConsumerRecord<byte[], byte[]> record) {
         String targetTopic = formatRemoteTopic(record.topic());
@@ -316,6 +318,10 @@ public class MirrorSourceTask extends SourceTask {
         } else {
             return bytes.length;
         }
+    }
+
+    private boolean isUncommitted(Long offset) {
+        return offset == null || offset < 0;
     }
 
     static class PartitionState {

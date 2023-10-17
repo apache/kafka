@@ -3010,7 +3010,6 @@ project(':connect:mirror') {
     testImplementation libs.junitJupiter
     testImplementation libs.log4j
     testImplementation libs.mockitoCore
-    testImplementation libs.mockitoInline // supports mocking static methods, final classes, etc.
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':connect:runtime').sourceSets.test.output
     testImplementation project(':core')
