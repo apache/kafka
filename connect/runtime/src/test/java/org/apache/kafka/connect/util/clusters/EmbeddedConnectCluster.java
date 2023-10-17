@@ -41,8 +41,8 @@ import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.STA
 import static org.apache.kafka.connect.runtime.rest.RestServerConfig.LISTENERS_CONFIG;
 
 /**
- * Start an embedded connect cluster. Internally, this class will spin up a Kafka and Zk cluster, setup any tmp
- * directories and clean up them on them. Methods on the same {@code EmbeddedConnectCluster} are
+ * Start an embedded connect cluster. Internally, this class will spin up a Kafka and Zk cluster, set up any tmp
+ * directories, and clean them up on exit. Methods on the same {@code EmbeddedConnectCluster} are
  * not guaranteed to be thread-safe.
  */
 public class EmbeddedConnectCluster extends EmbeddedConnect {

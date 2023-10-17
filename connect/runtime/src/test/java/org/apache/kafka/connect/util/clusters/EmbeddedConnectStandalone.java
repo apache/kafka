@@ -38,7 +38,7 @@ import static org.apache.kafka.connect.runtime.standalone.StandaloneConfig.OFFSE
 
 /**
  * Start a standalone embedded connect worker. Internally, this class will spin up a Kafka and Zk cluster,
- * setup any tmp directories and clean up them on them. Methods on the same
+ * set up any tmp directories. and clean them up on exit. Methods on the same
  * {@code EmbeddedConnectStandalone} are not guaranteed to be thread-safe.
  */
 public class EmbeddedConnectStandalone extends EmbeddedConnect {
