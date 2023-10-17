@@ -39,7 +39,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 @Category(IntegrationTest.class)
-public class StandaloneWorkerTest {
+public class StandaloneWorkerIntegrationTest {
 
     private EmbeddedConnectStandalone connect;
 
@@ -61,7 +61,7 @@ public class StandaloneWorkerTest {
         assertFalse("Connect REST API did not list any known loggers", initialLevels.isEmpty());
         Map<String, LoggerLevel> invalidModifiedLoggers = Utils.filterMap(
                 initialLevels,
-                StandaloneWorkerTest::isModified
+                StandaloneWorkerIntegrationTest::isModified
         );
         assertEquals(
                 "No loggers should have a non-null last-modified timestamp",
