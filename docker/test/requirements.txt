@@ -1,4 +1,4 @@
-confluent_kafka
+confluent-kafka
 urllib3
 requests
 fastavro
