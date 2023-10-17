@@ -18,8 +18,6 @@
   "type": "metadata",
   "name": "PartitionChangeRecord",
   "validVersions": "0",
-  // Version 1 implements Eligiable Leader Replicas and LastKnownELR as described in KIP-966.
-  //
   "flexibleVersions": "0+",
   "fields": [
     { "name": "PartitionId", "type": "int32", "versions": "0+", "default": "-1",

@@ -2288,13 +2288,13 @@ public class ReplicationControlManagerTest {
                         setPartitionId(0).
                         setTopicId(fooId).
                         setLeader(1),
-                        (short) 0),
+                    (short) 0),
                 new ApiMessageAndVersion(
                     new PartitionChangeRecord().
                         setPartitionId(2).
                         setTopicId(fooId).
                         setLeader(0),
-                        (short) 0)),
+                    (short) 0)),
             election2Result.records());
     }
 
