@@ -127,13 +127,18 @@ public class ToolsUtils {
         }
     }
 
+    /**
+     * Return all duplicates in a list. A duplicated element will appear only once.
+     */
     public static <T> Set<T> duplicates(Collection<T> s) {
+        Set<T> set = new HashSet<>();
         Set<T> duplicates = new HashSet<>();
-        Set<T> elements = new HashSet<>();
-        for (T t : s) {
-            if (!elements.add(t))
-                duplicates.add(t);
-        }
+
+        s.forEach(element -> {
+            if (!set.add(element)) {
+                duplicates.add(element);
+            }
+        });
         return duplicates;
     }
 }
