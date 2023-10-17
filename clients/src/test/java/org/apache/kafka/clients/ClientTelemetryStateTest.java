@@ -33,7 +33,6 @@ public class ClientTelemetryStateTest {
     public void testValidateTransitionForSubscriptionNeeded() {
         List<ClientTelemetryState> validStates = new ArrayList<>();
         validStates.add(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS);
-        validStates.add(ClientTelemetryState.TERMINATING_PUSH_NEEDED);
         validStates.add(ClientTelemetryState.TERMINATED);
 
         testValidateTransition(ClientTelemetryState.SUBSCRIPTION_NEEDED, validStates);

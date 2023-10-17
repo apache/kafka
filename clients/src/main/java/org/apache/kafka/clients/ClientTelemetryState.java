@@ -75,8 +75,7 @@ public enum ClientTelemetryState {
          However, it's still possible that client doesn't get very far before terminating.
         */
         VALID_NEXT_STATES.put(
-            SUBSCRIPTION_NEEDED, Arrays.asList(SUBSCRIPTION_IN_PROGRESS, TERMINATING_PUSH_NEEDED,
-                TERMINATED));
+            SUBSCRIPTION_NEEDED, Arrays.asList(SUBSCRIPTION_IN_PROGRESS, TERMINATED));
 
         /*
          If client is finished waiting for subscription, then client is ready to push the telemetry.
