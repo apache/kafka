@@ -40,7 +40,7 @@ import java.io.{File, FileInputStream, IOException, PrintWriter}
 import java.nio.file.{Files, NoSuchFileException, Paths}
 import java.util
 import java.util.{Collections, Optional}
-import java.util.concurrent.{CountDownLatch, Executors, TimeUnit}
+import java.util.concurrent.{CountDownLatch, Executors, Future, TimeUnit}
 import scala.collection.mutable
 
 class RemoteIndexCacheTest {
@@ -725,11 +725,16 @@ class RemoteIndexCacheTest {
 
     val executor = Executors.newFixedThreadPool(2)
     try {
-      executor.submit(removeCache: Runnable)
-      executor.submit(readCache: Runnable)
+      val removeCacheFuture: Future[_] = executor.submit(removeCache: Runnable)
+      val readCacheFuture: Future[_] = executor.submit(readCache: Runnable)
+
+      // Verify both tasks are completed without any exception
+      removeCacheFuture.get()
+      readCacheFuture.get()
 
       // Wait for signal to complete the test
       latchForTestWait.await()
+
       // We can't determine read thread or remove thread will go first so if,
       // 1. Read thread go first, cache file should not exist and cache size should be zero.
       // 2. Remove thread go first, cache file should present and cache size should be one.
