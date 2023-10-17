@@ -1897,18 +1897,16 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * this specific client instance and will not change after it is initially generated.
      * The ID is useful for correlating client operations with telemetry sent to the broker and
      * to its eventual monitoring destinations.
-     *
+     * <p>
      * If telemetry is enabled, this will first require a connection to the cluster to generate
      * the unique client instance ID. This method waits up to {@code timeout} for the consumer
      * client to complete the request.
-     *
-     * If telemetry is disabled, the method will throw {@link IllegalStateException}.
-     *
+     * <p>
      * Client telemetry is controlled by the {@link ConsumerConfig#ENABLE_METRICS_PUSH_CONFIG}
      * configuration option.
      *
      * @param timeout The maximum time to wait for consumer client to determine its client instance ID.
-     *                The value should be non-negative. Specifying a timeout of zero means do not
+     *                The value must be non-negative. Specifying a timeout of zero means do not
      *                wait for the initial request to complete if it hasn't already.
      * @throws InterruptException If the thread is interrupted while blocked.
      * @throws KafkaException If an unexpected error occurs while trying to determine the client
