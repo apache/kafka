@@ -53,6 +53,7 @@ import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadataUpdate
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentState;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageException;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager;
+import org.apache.kafka.server.log.remote.storage.RemoteStorageInterruptedException;
 import org.apache.kafka.server.metrics.KafkaMetricsGroup;
 import org.apache.kafka.storage.internals.checkpoint.InMemoryLeaderEpochCheckpoint;
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache;
@@ -699,6 +700,10 @@ public class RemoteLogManager implements Closeable {
                 brokerTopicStats.topicStats(log.topicPartition().topic()).failedRemoteCopyRequestRate().mark();
                 brokerTopicStats.allTopicsStats().failedRemoteCopyRequestRate().mark();
                 this.cancel();
+            } catch (RemoteStorageInterruptedException e) {
+                logger.info("Copy log segment interrupted for partition {}. This can happen during leadership migration or " +
+                        "if the topic is being deleted.", topicIdPartition);
+                throw new InterruptedException();
             } catch (InterruptedException | RetriableException ex) {
                 throw ex;
             } catch (Exception ex) {
