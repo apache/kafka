@@ -189,8 +189,10 @@ public class RemoteIndexCache implements Closeable {
             internalCache.asMap().computeIfPresent(key, (k, v) -> {
                 try {
                     v.markForCleanup();
-                    expiredIndexes.put(v);
-                } catch (IOException | InterruptedException e) {
+                    if (!expiredIndexes.offer(v)) {
+                        log.error("Error while inserting entry {} for key {} into the cleaner queue because queue is full.", v, k);
+                    }
+                } catch (IOException e) {
                     throw new KafkaException(e);
                 }
                 // Returning null to remove the key from the cache
@@ -207,8 +209,10 @@ public class RemoteIndexCache implements Closeable {
             keys.forEach(key -> internalCache.asMap().computeIfPresent(key, (k, v) -> {
                 try {
                     v.markForCleanup();
-                    expiredIndexes.put(v);
-                } catch (IOException | InterruptedException e) {
+                    if (!expiredIndexes.offer(v)) {
+                        log.error("Error while inserting entry {} for key {} into the cleaner queue because queue is full.", v, k);
+                    }
+                } catch (IOException e) {
                     throw new KafkaException(e);
                 }
                 // Returning null to remove the key from the cache

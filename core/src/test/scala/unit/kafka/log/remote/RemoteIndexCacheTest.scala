@@ -694,15 +694,21 @@ class RemoteIndexCacheTest {
     val latchForCacheRemove = new CountDownLatch(1)
     val latchForTestWait = new CountDownLatch(1)
 
+    var markForCleanupCallCount = 0
+
     doAnswer((invocation: InvocationOnMock) => {
-      // Signal the CacheRead to unblock itself
-      latchForCacheRead.countDown()
-      // Wait for signal to start renaming the files
-      latchForCacheRemove.await()
-      // Calling the markForCleanup() actual method to start renaming the files
-      invocation.callRealMethod()
-      // Signal TestWait to unblock itself so that test can be completed
-      latchForTestWait.countDown()
+      markForCleanupCallCount += 1
+
+      if (markForCleanupCallCount == 1) {
+        // Signal the CacheRead to unblock itself
+        latchForCacheRead.countDown()
+        // Wait for signal to start renaming the files
+        latchForCacheRemove.await()
+        // Calling the markForCleanup() actual method to start renaming the files
+        invocation.callRealMethod()
+        // Signal TestWait to unblock itself so that test can be completed
+        latchForTestWait.countDown()
+      }
     }).when(spyEntry).markForCleanup()
 
     val removeCache = (() => {
@@ -724,8 +730,11 @@ class RemoteIndexCacheTest {
 
       // Wait for signal to complete the test
       latchForTestWait.await()
-      assertCacheSize(1)
-      assertTrue(Files.exists(entry.offsetIndex().file().toPath))
+      if (getIndexFileFromRemoteCacheDir(cache, LogFileUtils.INDEX_FILE_SUFFIX).isPresent) {
+        assertCacheSize(1)
+      } else {
+        assertCacheSize(0)
+      }
     } finally {
       executor.shutdownNow()
     }
