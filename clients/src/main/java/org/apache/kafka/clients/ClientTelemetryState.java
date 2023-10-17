@@ -141,7 +141,6 @@ public enum ClientTelemetryState {
      */
 
     public ClientTelemetryState validateTransition(ClientTelemetryState newState) {
-        System.out.println(String.format("[APM] - State transitioning from %s to %s", this, newState));
         List<ClientTelemetryState> allowableStates = VALID_NEXT_STATES.get(this);
 
         if (allowableStates != null && allowableStates.contains(newState)) {
