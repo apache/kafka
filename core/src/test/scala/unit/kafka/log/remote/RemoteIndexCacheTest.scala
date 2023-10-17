@@ -730,6 +730,11 @@ class RemoteIndexCacheTest {
 
       // Wait for signal to complete the test
       latchForTestWait.await()
+      // We can't determine read thread or remove thread will go first so if,
+      // 1. Read thread go first, cache file should not exist and cache size should be zero.
+      // 2. Remove thread go first, cache file should present and cache size should be one.
+      // so basically here we are making sure that if cache existed, the cache file should exist,
+      // and if cache is non-existed, the cache file should not exist.
       if (getIndexFileFromRemoteCacheDir(cache, LogFileUtils.INDEX_FILE_SUFFIX).isPresent) {
         assertCacheSize(1)
       } else {
