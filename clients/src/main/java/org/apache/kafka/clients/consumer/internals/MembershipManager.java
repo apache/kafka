@@ -21,7 +21,7 @@ import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import java.util.Optional;
 
 /**
- * Manages membership of a single member to a consumer group.
+ * A stateful object tracking the state of a single member in relationship to a consumer group:
  * <p/>
  * Responsible for:
  * <li>Keeping member state</li>
