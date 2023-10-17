@@ -164,7 +164,7 @@ public class ApplicationEventProcessor {
 
     private boolean process(final TopicMetadataApplicationEvent event) {
         final CompletableFuture<Map<String, List<PartitionInfo>>> future =
-                this.requestManagers.topicMetadataRequestManager.requestTopicMetadata(Optional.of(event.topic()));
+            this.requestManagers.topicMetadataRequestManager.requestTopicMetadata(Optional.of(event.topic()));
         event.chain(future);
         return true;
     }

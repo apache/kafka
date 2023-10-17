@@ -32,7 +32,7 @@ public class RequestManagers {
 
     public final Optional<CoordinatorRequestManager> coordinatorRequestManager;
     public final Optional<CommitRequestManager> commitRequestManager;
-    public final Optional<HeartbeatRequestManager> heartbeatRequestManager;
+    private final Optional<HeartbeatRequestManager> heartbeatRequestManager;
     public final OffsetsRequestManager offsetsRequestManager;
     public final TopicMetadataRequestManager topicMetadataRequestManager;
     private final List<Optional<? extends RequestManager>> entries;

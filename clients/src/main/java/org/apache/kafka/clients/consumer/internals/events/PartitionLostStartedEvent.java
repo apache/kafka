@@ -16,11 +16,21 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
+import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.common.TopicPartition;
 
+import java.time.Duration;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.SortedSet;
 
+/**
+ * Event that signifies that the background thread has determined that the member should abandon its partition
+ * assignment. This event will be processed by the application thread when the next {@link Consumer#poll(Duration)}
+ * call is performed by the user. When processed, the application thread should invoke the
+ * {@link ConsumerRebalanceListener#onPartitionsLost(Collection)} callback with the given partitions.
+ */
 public class PartitionLostStartedEvent extends BackgroundEvent {
 
     private final SortedSet<TopicPartition> lostPartitions;

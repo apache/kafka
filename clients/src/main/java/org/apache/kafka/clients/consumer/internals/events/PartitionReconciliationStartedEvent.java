@@ -16,11 +16,22 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
+import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.common.TopicPartition;
 
+import java.time.Duration;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.SortedSet;
 
+/**
+ * Event that signifies that the background thread has started the partition assignment process. This event will
+ * be processed by the application thread when the next {@link Consumer#poll(Duration)} call is performed by the
+ * user. When processed, the application thread should invoke both the
+ * {@link ConsumerRebalanceListener#onPartitionsRevoked(Collection)} and
+ * {@link ConsumerRebalanceListener#onPartitionsAssigned(Collection)} callbacks with the given partitions.
+ */
 public class PartitionReconciliationStartedEvent extends BackgroundEvent {
 
     private final SortedSet<TopicPartition> revokedPartitions;

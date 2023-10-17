@@ -16,13 +16,21 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
+import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Optional;
 import java.util.SortedSet;
 
+/**
+ * Event that signifies that the application thread has executed the
+ * {@link ConsumerRebalanceListener#onPartitionsRevoked(Collection)} and
+ * {@link ConsumerRebalanceListener#onPartitionsAssigned(Collection)} callbacks. If either callback execution threw
+ * an error, the <em>first</em> error encountered is included in the event should any event listener want to know.
+ */
 public class PartitionReconciliationCompleteEvent extends ApplicationEvent {
 
     private final SortedSet<TopicPartition> revokedPartitions;

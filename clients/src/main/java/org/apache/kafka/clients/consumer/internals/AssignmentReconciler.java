@@ -47,7 +47,7 @@ import java.util.concurrent.BlockingQueue;
  * {@code AssignmentReconciler} performs the work of reconciling this consumer's partition assignment as directed
  * by the consumer group coordinator. When the coordinator determines that a change to the partition ownership of
  * the group is required, it will communicate with each consumer to relay its respective <em>target</em>
- * assignment, that is, the set of partitions for which that consumer should now assume ownership. It is the then the
+ * assignment, that is, the set of partitions for which that consumer should now assume ownership. It is then the
  * responsibility of the consumer to work toward that target by performing the necessary internal modifications to
  * satisfy the assignment from the coordinator. In practical terms, this means that it must first determine the set
  * difference between the <em>{@link SubscriptionState#assignedPartitions() current assignment}</em> and the
@@ -199,7 +199,6 @@ public class AssignmentReconciler {
      * @param assignment Holds the {@link Assignment} which includes the target set of topics
      * @return Set of partitions to revoke
      */
-
     SortedSet<TopicPartition> getPartitionsToRevoke(Assignment assignment) {
         SortedSet<TopicPartition> partitions = new TreeSet<>(new TopicPartitionComparator());
         partitions.addAll(subscriptions.assignedPartitions());
@@ -216,7 +215,6 @@ public class AssignmentReconciler {
      * @param assignment {@link Optional} that holds the {@link Assignment} which includes the target set of topics
      * @return Set of partitions to assign
      */
-
     SortedSet<TopicPartition> getPartitionsToAssign(Assignment assignment) {
         SortedSet<TopicPartition> partitions = new TreeSet<>(new TopicPartitionComparator());
         partitions.addAll(targetPartitions(assignment));
