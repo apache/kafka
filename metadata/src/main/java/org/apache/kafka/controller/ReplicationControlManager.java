@@ -2016,14 +2016,15 @@ public class ReplicationControlManager {
     }
 
     // Visible to test.
-    Integer getTopicEffectiveMinIsr(String topicName) {
+    int getTopicEffectiveMinIsr(String topicName) {
         String minIsrConfig = configurationControl.getTopicConfig(topicName, MIN_IN_SYNC_REPLICAS_CONFIG);
-        Integer currentMinIsr = minIsrConfig.isEmpty() ? defaultMinIsr : Integer.parseInt(minIsrConfig);
-        Uuid topicId = topicsByName.get(topicName);
-        Integer replicationFactor = topics.get(topicId).parts.get(0).replicas.length;
-        if (replicationFactor == 0) {
-            replicationFactor = (int) defaultReplicationFactor;
-            log.debug("Can't find the replication factor for topic: " + topicName + " using default value " + replicationFactor);
+        int currentMinIsr = minIsrConfig.isEmpty() ? defaultMinIsr : Integer.parseInt(minIsrConfig);
+        int replicationFactor = defaultReplicationFactor;
+        try {
+            Uuid topicId = topicsByName.get(topicName);
+            replicationFactor = topics.get(topicId).parts.get(0).replicas.length;
+        } catch (Exception e) {
+            log.warn("Can't find the replication factor for topic: " + topicName + " using default value " + replicationFactor);
         }
         return Math.min(currentMinIsr, replicationFactor);
     }

@@ -1606,7 +1606,7 @@ public class ReplicationControlManagerTest {
                 setReplicas(asList(2, 1, 3)).
                 setLeader(3).
                 setRemovingReplicas(Collections.emptyList()).
-                setAddingReplicas(Collections.emptyList()), MetadataVersion.latest().partitionChangeRecordVersion())),
+                setAddingReplicas(Collections.emptyList()), (short) 0)),
             new AlterPartitionReassignmentsResponseData().setErrorMessage(null).setResponses(asList(
                 new ReassignableTopicResponse().setName("foo").setPartitions(asList(
                     new ReassignablePartitionResponse().setPartitionIndex(0).
@@ -1957,7 +1957,7 @@ public class ReplicationControlManagerTest {
                     setLeader(4).
                     setReplicas(asList(2, 3, 4)).
                     setRemovingReplicas(null).
-                    setAddingReplicas(Collections.emptyList()), MetadataVersion.latest().partitionChangeRecordVersion())),
+                    setAddingReplicas(Collections.emptyList()), (short) 0)),
             new AlterPartitionReassignmentsResponseData().setErrorMessage(null).setResponses(asList(
                 new ReassignableTopicResponse().setName("foo").setPartitions(asList(
                     new ReassignablePartitionResponse().setPartitionIndex(0).
@@ -2288,13 +2288,13 @@ public class ReplicationControlManagerTest {
                         setPartitionId(0).
                         setTopicId(fooId).
                         setLeader(1),
-                    MetadataVersion.latest().partitionChangeRecordVersion()),
+                        (short) 0),
                 new ApiMessageAndVersion(
                     new PartitionChangeRecord().
                         setPartitionId(2).
                         setTopicId(fooId).
                         setLeader(0),
-                    MetadataVersion.latest().partitionChangeRecordVersion())),
+                        (short) 0)),
             election2Result.records());
     }
 
@@ -2337,7 +2337,7 @@ public class ReplicationControlManagerTest {
             .setPartitionId(0)
             .setTopicId(fooId)
             .setLeader(1);
-        assertEquals(asList(new ApiMessageAndVersion(expectedChangeRecord, MetadataVersion.latest().partitionChangeRecordVersion())), balanceResult.records());
+        assertEquals(asList(new ApiMessageAndVersion(expectedChangeRecord, (short) 0)), balanceResult.records());
         assertTrue(replication.arePartitionLeadersImbalanced());
         assertFalse(balanceResult.response());
 
@@ -2369,7 +2369,7 @@ public class ReplicationControlManagerTest {
             .setPartitionId(2)
             .setTopicId(fooId)
             .setLeader(0);
-        assertEquals(asList(new ApiMessageAndVersion(expectedChangeRecord, MetadataVersion.latest().partitionChangeRecordVersion())), balanceResult.records());
+        assertEquals(asList(new ApiMessageAndVersion(expectedChangeRecord, (short) 0)), balanceResult.records());
         assertFalse(replication.arePartitionLeadersImbalanced());
         assertFalse(balanceResult.response());
     }
@@ -2483,7 +2483,7 @@ public class ReplicationControlManagerTest {
                 .setTopicId(topicId)
                 .setIsr(asList(1, 2))
                 .setLeader(1),
-            metadataVersion.partitionChangeRecordVersion()));
+            (short) 0));
 
         assertEquals(expectedRecords, result.records());
     }

@@ -333,8 +333,6 @@ class MetadataVersionTest {
                 metadataVersion.isElrSupported());
         short expectPartitionRecordVersion = metadataVersion.equals(IBP_3_7_IV1) ? (short) 1 : (short) 0;
         assertEquals(expectPartitionRecordVersion, metadataVersion.partitionRecordVersion());
-        short expectPartitionChangeRecordVersion = metadataVersion.equals(IBP_3_7_IV1) ? (short) 1 : (short) 0;
-        assertEquals(expectPartitionChangeRecordVersion, metadataVersion.partitionChangeRecordVersion());
     }
 
     @ParameterizedTest

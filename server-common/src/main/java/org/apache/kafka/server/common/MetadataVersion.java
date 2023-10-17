@@ -342,14 +342,6 @@ public enum MetadataVersion {
     public boolean isControllerRegistrationSupported() {
         return this.isAtLeast(MetadataVersion.IBP_3_7_IV0);
     }
-
-    public short partitionChangeRecordVersion() {
-        if (isElrSupported()) {
-            return (short) 1;
-        } else {
-            return (short) 0;
-        }
-    }
     public short partitionRecordVersion() {
         if (isElrSupported()) {
             return (short) 1;

@@ -354,14 +354,46 @@ public class PartitionChangeBuilder {
 
         completeReassignmentIfNeeded();
 
-        if (eligibleLeaderReplicasEnabled) {
-            populateTargetElr();
-        }
+        maybePopulateTargetElr();
 
         tryElection(record);
 
         triggerLeaderEpochBumpIfNeeded(record);
 
+        maybeUpdateRecordElr(record);
+
+        if (record.isr() == null && !targetIsr.isEmpty() && !targetIsr.equals(Replicas.toList(partition.isr))) {
+            // Set the new ISR if it is different from the current ISR and unclean leader election didn't already set it.
+            record.setIsr(targetIsr);
+        }
+
+
+        setAssignmentChanges(record);
+
+        if (targetLeaderRecoveryState != partition.leaderRecoveryState) {
+            record.setLeaderRecoveryState(targetLeaderRecoveryState.value());
+        }
+
+        if (changeRecordIsNoOp(record)) {
+            return Optional.empty();
+        } else {
+            return Optional.of(new ApiMessageAndVersion(record, (short) 0));
+        }
+    }
+
+    private void setAssignmentChanges(PartitionChangeRecord record) {
+        if (!targetReplicas.isEmpty() && !targetReplicas.equals(Replicas.toList(partition.replicas))) {
+            record.setReplicas(targetReplicas);
+        }
+        if (!targetRemoving.equals(Replicas.toList(partition.removingReplicas))) {
+            record.setRemovingReplicas(targetRemoving);
+        }
+        if (!targetAdding.equals(Replicas.toList(partition.addingReplicas))) {
+            record.setAddingReplicas(targetAdding);
+        }
+    }
+
+    private void maybeUpdateRecordElr(PartitionChangeRecord record) {
         // During the leader election, it can set the record isr if an unclean leader election happens.
         boolean isCleanLeaderElection = record.isr() == null;
 
@@ -378,38 +410,11 @@ public class PartitionChangeBuilder {
         if (!targetLastKnownElr.equals(Replicas.toList(partition.lastKnownElr))) {
             record.setLastKnownELR(targetLastKnownElr);
         }
-
-        // Set the new ISR if it is different from the current ISR and unclean leader election didn't already set it.
-        if (isCleanLeaderElection && !targetIsr.isEmpty() && !targetIsr.equals(Replicas.toList(partition.isr))) {
-            record.setIsr(targetIsr);
-        }
-
-        setAssignmentChanges(record);
-
-        if (targetLeaderRecoveryState != partition.leaderRecoveryState) {
-            record.setLeaderRecoveryState(targetLeaderRecoveryState.value());
-        }
-
-        if (changeRecordIsNoOp(record)) {
-            return Optional.empty();
-        } else {
-            return Optional.of(new ApiMessageAndVersion(record, metadataVersion.partitionChangeRecordVersion()));
-        }
     }
 
-    private void setAssignmentChanges(PartitionChangeRecord record) {
-        if (!targetReplicas.isEmpty() && !targetReplicas.equals(Replicas.toList(partition.replicas))) {
-            record.setReplicas(targetReplicas);
-        }
-        if (!targetRemoving.equals(Replicas.toList(partition.removingReplicas))) {
-            record.setRemovingReplicas(targetRemoving);
-        }
-        if (!targetAdding.equals(Replicas.toList(partition.addingReplicas))) {
-            record.setAddingReplicas(targetAdding);
-        }
-    }
+    private void maybePopulateTargetElr() {
+        if (!eligibleLeaderReplicasEnabled) return;
 
-    private void populateTargetElr() {
         // If the ISR is larger or equal to the min ISR, clear the ELR and lastKnownELR.
         if (targetIsr.size() >= minISR) {
             targetElr = Collections.emptyList();
