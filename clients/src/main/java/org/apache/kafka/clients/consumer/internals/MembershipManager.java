@@ -52,7 +52,8 @@ public interface MembershipManager {
     int memberEpoch();
 
     /**
-     * @return Current state of this member a part of the consumer group, as defined in {@link MemberState}.
+     * @return Current state of this member in relationship to a consumer group, as defined in
+     * {@link MemberState}.
      */
     MemberState state();
 
