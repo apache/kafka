@@ -2297,7 +2297,7 @@ class ReplicaManagerTest {
       )
       assertEquals(verificationGuard, getVerificationGuard(replicaManager, tp0, producerId))
 
-      // Verification should succeed, but we expect to fail with OutOfOrderSequence and for the verification guard to remain.
+      // Verification should succeed, but we expect to fail with OutOfOrderSequence and for the VerificationGuard to remain.
       val callback2: AddPartitionsToTxnManager.AppendCallback = appendCallback2.getValue()
       callback2(Map.empty[TopicPartition, Errors].toMap)
       assertEquals(verificationGuard, getVerificationGuard(replicaManager, tp0, producerId))

@@ -3546,23 +3546,23 @@ class PartitionTest extends AbstractPartitionTest {
       baseSequence = 3,
       producerId = producerId)
 
-    // When verification guard is not there, we should not be able to append.
+    // When VerificationGuard is not there, we should not be able to append.
     assertThrows(classOf[InvalidTxnStateException], () => partition.appendRecordsToLeader(transactionRecords(), origin = AppendOrigin.CLIENT, requiredAcks = 1, RequestLocal.withThreadConfinedCaching))
 
-    // Before appendRecordsToLeader is called, ReplicaManager will call maybeStartTransactionVerification. We should get a non-null verification object.
+    // Before appendRecordsToLeader is called, ReplicaManager will call maybeStartTransactionVerification. We should get a non-null VerificationGuard.
     val verificationGuard = partition.maybeStartTransactionVerification(producerId, 3, 0)
     assertNotNull(verificationGuard)
 
-    // With the wrong verification guard, append should fail.
+    // With the wrong VerificationGuard, append should fail.
     assertThrows(classOf[InvalidTxnStateException], () => partition.appendRecordsToLeader(transactionRecords(),
       origin = AppendOrigin.CLIENT, requiredAcks = 1, RequestLocal.withThreadConfinedCaching, new VerificationGuard()))
 
-    // We should return the same verification object when we still need to verify. Append should proceed.
+    // We should return the same VerificationGuard when we still need to verify. Append should proceed.
     val verificationGuard2 = partition.maybeStartTransactionVerification(producerId, 3, 0)
     assertEquals(verificationGuard, verificationGuard2)
     partition.appendRecordsToLeader(transactionRecords(), origin = AppendOrigin.CLIENT, requiredAcks = 1, RequestLocal.withThreadConfinedCaching, verificationGuard)
 
-    // We should no longer need a verification object. Future appends without verification guard will also succeed.
+    // We should no longer need a VerificationGuard. Future appends without VerificationGuard will also succeed.
     val verificationGuard3 = partition.maybeStartTransactionVerification(producerId, 3, 0)
     assertNull(verificationGuard3)
     partition.appendRecordsToLeader(transactionRecords(), origin = AppendOrigin.CLIENT, requiredAcks = 1, RequestLocal.withThreadConfinedCaching)

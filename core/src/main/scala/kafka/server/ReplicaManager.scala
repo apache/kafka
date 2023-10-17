@@ -877,7 +877,7 @@ class ReplicaManager(val config: KafkaConfig,
         transactionalBatches.foreach(batch => transactionalProducerIds.add(batch.producerId))
 
         if (transactionalBatches.nonEmpty) {
-          // We return verification guard if the partition needs to be verified. If no state is present, no need to verify.
+          // We return VerificationGuard if the partition needs to be verified. If no state is present, no need to verify.
           val firstBatch = records.firstBatch
           val verificationGuard = getPartitionOrException(topicPartition).maybeStartTransactionVerification(firstBatch.producerId, firstBatch.baseSequence, firstBatch.producerEpoch)
           if (verificationGuard != null) {

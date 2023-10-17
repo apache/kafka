@@ -3768,13 +3768,13 @@ class UnifiedLogTest {
     log.appendAsLeader(idempotentRecords, origin = appendOrigin, leaderEpoch = 0)
     assertFalse(log.hasOngoingTransaction(producerId))
 
-    // Since we wrote idempotent records, we keep verification guard.
+    // Since we wrote idempotent records, we keep VerificationGuard.
     assertEquals(verificationGuard, log.verificationGuard(producerId))
 
     // Now write the transactional records
     log.appendAsLeader(transactionalRecords, origin = appendOrigin, leaderEpoch = 0, verificationGuard = verificationGuard)
     assertTrue(log.hasOngoingTransaction(producerId))
-    // Verification guard should be cleared now.
+    // VerificationGuard should be cleared now.
     assertNull(log.verificationGuard(producerId))
 
     // A subsequent maybeStartTransactionVerification will be empty since we are already verified.
