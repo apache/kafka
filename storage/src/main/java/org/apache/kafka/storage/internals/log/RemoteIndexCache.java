@@ -151,7 +151,12 @@ public class RemoteIndexCache implements Closeable {
                 .weigher((Uuid key, Entry entry) -> {
                     return (int) entry.entrySizeBytes;
                 })
-                // evictionListener is invoked when RemovalCause.wasEvicted() is true
+                // This listener is invoked each time an entry is being automatically removed due to eviction. The cache will invoke this listener
+                // during the atomic operation to remove the entry (refer: https://github.com/ben-manes/caffeine/wiki/Removal),
+                // hence, care must be taken to ensure that this operation is not expensive. Note that this listener is not invoked when
+                // RemovalCause from cache is EXPLICIT or REPLACED (e.g. on Cache.invalidate(), Cache.put() etc.) For a complete list see:
+                // https://www.javadoc.io/static/com.github.ben-manes.caffeine/caffeine/2.9.2/index.html?com/github/benmanes/caffeine/cache/Caffeine.html.
+                // Hence, any operation required after removal from cache must be performed manually for these scenarios.
                 .evictionListener((Uuid key, Entry entry, RemovalCause cause) -> {
                     // Mark the entries for cleanup and add them to the queue to be garbage collected later by the background thread.
                     if (entry != null) {
@@ -160,9 +165,7 @@ public class RemoteIndexCache implements Closeable {
                         } catch (IOException e) {
                             throw new KafkaException(e);
                         }
-                        if (!expiredIndexes.offer(entry)) {
-                            log.error("Error while inserting entry {} for key {} into the cleaner queue because queue is full.", entry, key);
-                        }
+                        enqueueEntryForCleaning(entry, key);
                     } else {
                         log.error("Received entry as null for key {} when the it is removed from the cache.", key);
                     }
@@ -189,9 +192,7 @@ public class RemoteIndexCache implements Closeable {
             internalCache.asMap().computeIfPresent(key, (k, v) -> {
                 try {
                     v.markForCleanup();
-                    if (!expiredIndexes.offer(v)) {
-                        log.error("Error while inserting entry {} for key {} into the cleaner queue because queue is full.", v, k);
-                    }
+                    enqueueEntryForCleaning(v, k);
                 } catch (IOException e) {
                     throw new KafkaException(e);
                 }
@@ -209,9 +210,7 @@ public class RemoteIndexCache implements Closeable {
             keys.forEach(key -> internalCache.asMap().computeIfPresent(key, (k, v) -> {
                 try {
                     v.markForCleanup();
-                    if (!expiredIndexes.offer(v)) {
-                        log.error("Error while inserting entry {} for key {} into the cleaner queue because queue is full.", v, k);
-                    }
+                    enqueueEntryForCleaning(v, k);
                 } catch (IOException e) {
                     throw new KafkaException(e);
                 }
@@ -220,6 +219,12 @@ public class RemoteIndexCache implements Closeable {
             }));
         } finally {
             lock.readLock().unlock();
+        }
+    }
+
+    private void enqueueEntryForCleaning(Entry entry, Uuid key) {
+        if (!expiredIndexes.offer(entry)) {
+            log.error("Error while inserting entry {} for key {} into the cleaner queue because queue is full.", entry, key);
         }
     }
 
