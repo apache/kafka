@@ -35,28 +35,24 @@ abstract class EmbeddedConnectBuilder<C extends EmbeddedConnect, B extends Embed
             Map<String, String> workerProps
     );
 
-    @SuppressWarnings("unchecked")
     public B workerProps(Map<String, String> workerProps) {
         this.workerProps = workerProps;
-        return (B) this;
+        return self();
     }
 
-    @SuppressWarnings("unchecked")
     public B numBrokers(int numBrokers) {
         this.numBrokers = numBrokers;
-        return (B) this;
+        return self();
     }
 
-    @SuppressWarnings("unchecked")
     public B brokerProps(Properties brokerProps) {
         this.brokerProps = brokerProps;
-        return (B) this;
+        return self();
     }
 
-    @SuppressWarnings("unchecked")
     public B clientProps(Map<String, String> clientProps) {
         this.clientProps.putAll(clientProps);
-        return (B) this;
+        return self();
     }
 
     /**
@@ -71,13 +67,18 @@ abstract class EmbeddedConnectBuilder<C extends EmbeddedConnect, B extends Embed
      * @param mask if false, exit and halt procedures remain unchanged; true is the default.
      * @return the builder for this cluster
      */
-    @SuppressWarnings("unchecked")
     public B maskExitProcedures(boolean mask) {
         this.maskExitProcedures = mask;
-        return (B) this;
+        return self();
     }
 
     public C build() {
         return build(numBrokers, brokerProps, maskExitProcedures, clientProps, workerProps);
     }
+
+    @SuppressWarnings("unchecked")
+    protected B self() {
+        return (B) this;
+    }
+
 }
