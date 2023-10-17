@@ -115,6 +115,10 @@ public class AssignmentReconciler {
         this.backgroundEventQueue = backgroundEventQueue;
     }
 
+    /**
+     * Performs the step of dropping any assigned {@link TopicPartition partitions} as this consumer is no longer
+     * to be considered a valid member of the group.
+     */
     void startLost() {
         SortedSet<TopicPartition> partitionsToLose = getPartitionsToLose();
 
@@ -123,6 +127,11 @@ public class AssignmentReconciler {
                     ConsumerRebalanceListener.class.getSimpleName());
             return;
         }
+
+        markPartitionsPendingRevocation();
+
+        // TODO: determine if there's a "valid" ConsumerRebalanceListener in use. If not, we can return false
+        //       immediately as there's no need to perform the rebalance callback invocation.
 
         log.debug("Enqueuing event to invoke {} callbacks", ConsumerRebalanceListener.class.getSimpleName());
         backgroundEventQueue.add(new PartitionLostStartedEvent(partitionsToLose));
@@ -148,7 +157,6 @@ public class AssignmentReconciler {
      *
      * @param assignment Holds the {@link Assignment} which includes the target set of topics
      */
-
     void startReconcile(Assignment assignment) {
         SortedSet<TopicPartition> partitionsToRevoke = getPartitionsToRevoke(assignment);
         SortedSet<TopicPartition> partitionsToAssign = getPartitionsToAssign(assignment);
@@ -158,6 +166,11 @@ public class AssignmentReconciler {
                     ConsumerRebalanceListener.class.getSimpleName());
             return;
         }
+
+        markPartitionsPendingRevocation();
+
+        // TODO: determine if there's a "valid" ConsumerRebalanceListener in use. If not, we can return false
+        //       immediately as there's no need to perform the rebalance callback invocation.
 
         log.debug("Enqueuing event to invoke {} callbacks", ConsumerRebalanceListener.class.getSimpleName());
         PartitionReconciliationStartedEvent event = new PartitionReconciliationStartedEvent(
@@ -248,6 +261,20 @@ public class AssignmentReconciler {
         }
 
         return partitions;
+    }
+
+    /**
+     * When asynchronously committing offsets prior to the revocation of a set of partitions, there will be a
+     * window of time between when the offset commit is sent and when it returns and revocation completes. It is
+     * possible for pending fetches for these partitions to return during this time, which means the application's
+     * position may get ahead of the committed position prior to revocation. This can cause duplicate consumption.
+     * To prevent this, we mark the partitions as "pending revocation," which stops the Fetcher from sending new
+     * fetches or returning data from previous fetches to the user.
+     */
+    private void markPartitionsPendingRevocation() {
+        Set<TopicPartition> partitions = subscriptions.assignedPartitions();
+        log.debug("Marking assigned partitions pending for revocation: {}", partitions);
+        subscriptions.markPendingRevocation(partitions);
     }
 
     private Map<Uuid, String> createTopicIdToNameMapping() {
