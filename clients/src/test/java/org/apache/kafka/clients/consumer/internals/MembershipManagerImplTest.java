@@ -26,6 +26,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -40,33 +41,18 @@ public class MembershipManagerImplTest {
     private final LogContext logContext = new LogContext();
 
     @Test
-    public void testMembershipManagerDefaultAssignor() {
+    public void testMembershipManagerServerAssignor() {
         MembershipManagerImpl membershipManager = new MembershipManagerImpl(GROUP_ID, logContext);
-        assertEquals(AssignorSelection.defaultAssignor(), membershipManager.assignorSelection());
+        assertEquals(Optional.empty(), membershipManager.serverAssignor());
 
-        membershipManager = new MembershipManagerImpl(GROUP_ID, "instance1", null, logContext);
-        assertEquals(AssignorSelection.defaultAssignor(), membershipManager.assignorSelection());
-    }
-
-    @Test
-    public void testMembershipManagerAssignorSelectionUpdate() {
-        AssignorSelection firstAssignorSelection = AssignorSelection.newServerAssignor("uniform");
-        MembershipManagerImpl membershipManager = new MembershipManagerImpl(GROUP_ID, "instance1",
-                firstAssignorSelection, logContext);
-        assertEquals(firstAssignorSelection, membershipManager.assignorSelection());
-
-        AssignorSelection secondAssignorSelection = AssignorSelection.newServerAssignor("range");
-        membershipManager.setAssignorSelection(secondAssignorSelection);
-        assertEquals(secondAssignorSelection, membershipManager.assignorSelection());
-
-        assertThrows(IllegalArgumentException.class,
-                () -> membershipManager.setAssignorSelection(null));
+        membershipManager = new MembershipManagerImpl(GROUP_ID, "instance1", "Uniform", logContext);
+        assertEquals(Optional.of("Uniform"), membershipManager.serverAssignor());
     }
 
     @Test
     public void testMembershipManagerInitSupportsEmptyGroupInstanceId() {
         new MembershipManagerImpl(GROUP_ID, logContext);
-        new MembershipManagerImpl(GROUP_ID, null, AssignorSelection.defaultAssignor(), logContext);
+        new MembershipManagerImpl(GROUP_ID, null, null, logContext);
     }
 
     @Test

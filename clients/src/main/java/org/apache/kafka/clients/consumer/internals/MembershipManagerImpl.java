@@ -68,11 +68,11 @@ public class MembershipManagerImpl implements MembershipManager {
     private MemberState state;
 
     /**
-     * Assignor selection configured for the member, that will be sent out to the server on the
-     * {@link ConsumerGroupHeartbeatRequest}. This will default to using server-side assignor,
-     * letting the server choose the specific assignor implementation to use.
+     * Name of the server-side assignor this member has configured to use. It will be sent
+     * out to the server on the {@link ConsumerGroupHeartbeatRequest}. If not defined, the server
+     * will select the assignor implementation to use.
      */
-    private AssignorSelection assignorSelection;
+    private final Optional<String> serverAssignor;
 
     /**
      * Assignment that the member received from the server and successfully processed.
@@ -96,33 +96,14 @@ public class MembershipManagerImpl implements MembershipManager {
 
     public MembershipManagerImpl(String groupId,
                                  String groupInstanceId,
-                                 AssignorSelection assignorSelection,
+                                 String serverAssignor,
                                  LogContext logContext) {
         this.groupId = groupId;
         this.state = MemberState.UNJOINED;
-        if (assignorSelection == null) {
-            setAssignorSelection(AssignorSelection.defaultAssignor());
-        } else {
-            setAssignorSelection(assignorSelection);
-        }
+        this.serverAssignor = Optional.ofNullable(serverAssignor);
         this.groupInstanceId = Optional.ofNullable(groupInstanceId);
         this.targetAssignment = Optional.empty();
         this.log = logContext.logger(MembershipManagerImpl.class);
-    }
-
-    /**
-     * Update assignor selection for the member.
-     *
-     * @param assignorSelection New assignor selection. If empty is provided, this will
-     *                          effectively clear the previous assignor selection defined for the
-     *                          member.
-     * @throws IllegalArgumentException If the provided optional assignor selection is null.
-     */
-    public final void setAssignorSelection(AssignorSelection assignorSelection) {
-        if (assignorSelection == null) {
-            throw new IllegalArgumentException("Assignor selection cannot be null");
-        }
-        this.assignorSelection = assignorSelection;
     }
 
     /**
@@ -271,8 +252,8 @@ public class MembershipManagerImpl implements MembershipManager {
      * {@inheritDoc}
      */
     @Override
-    public AssignorSelection assignorSelection() {
-        return this.assignorSelection;
+    public Optional<String> serverAssignor() {
+        return this.serverAssignor;
     }
 
     /**
@@ -285,8 +266,8 @@ public class MembershipManagerImpl implements MembershipManager {
 
 
     /**
-     * Assignment that the member received from the server but hasn't completely processed yet.
-     * This is visible for testing.
+     * @return Assignment that the member received from the server but hasn't completely processed
+     * yet. Visible for testing.
      */
     Optional<ConsumerGroupHeartbeatResponseData.Assignment> targetAssignment() {
         return targetAssignment;
