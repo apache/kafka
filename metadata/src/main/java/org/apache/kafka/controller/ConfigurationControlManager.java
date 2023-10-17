@@ -434,6 +434,12 @@ public class ConfigurationControlManager {
         }
     }
 
+    /**
+     * Get the config value for the give topic and give config key.
+     *
+     * @param topicName            The topic name for the config.
+     * @param configKey            The key for the config.
+     */
     String getTopicConfig(String topicName, String configKey) {
         Map<String, String> map = configData.get(new ConfigResource(Type.TOPIC, topicName));
         if (map == null) {
