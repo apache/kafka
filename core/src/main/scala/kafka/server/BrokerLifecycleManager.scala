@@ -252,7 +252,7 @@ class BrokerLifecycleManager(
    * Start shutting down the BrokerLifecycleManager, but do not block.
    */
   def beginShutdown(): Unit = {
-    eventQueue.beginShutdown("beginShutdown");
+    eventQueue.beginShutdown("beginShutdown")
   }
 
   /**
@@ -483,7 +483,7 @@ class BrokerLifecycleManager(
     override def run(): Unit = {
       if (!initialRegistrationSucceeded) {
         error("Shutting down because we were unable to register with the controller quorum.")
-        eventQueue.beginShutdown("registrationTimeout");
+        eventQueue.beginShutdown("registrationTimeout")
       }
     }
   }
