@@ -273,6 +273,9 @@
   <subpackage name="tools">
     <allow pkg="org.apache.kafka.common"/>
     <allow pkg="org.apache.kafka.server.util" />
+    <allow pkg="kafka.admin" />
+    <allow pkg="kafka.server" />
+    <allow pkg="org.apache.kafka.storage.internals" />
     <allow pkg="org.apache.kafka.server.common" />
     <allow pkg="org.apache.kafka.clients" />
     <allow pkg="org.apache.kafka.clients.admin" />
