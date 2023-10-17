@@ -22,7 +22,6 @@ import org.apache.kafka.common.utils.Utils;
 
 import java.io.PrintStream;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -130,7 +129,7 @@ public class ToolsUtils {
     /**
      * Return all duplicates in a list. A duplicated element will appear only once.
      */
-    public static <T> Set<T> duplicates(Collection<T> s) {
+    public static <T> Set<T> duplicates(List<T> s) {
         Set<T> set = new HashSet<>();
         Set<T> duplicates = new HashSet<>();
 
