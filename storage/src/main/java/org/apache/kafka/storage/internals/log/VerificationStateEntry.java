@@ -30,13 +30,13 @@ package org.apache.kafka.storage.internals.log;
 public class VerificationStateEntry {
 
     final private long timestamp;
-    final private Object verificationGuard;
+    final private VerificationGuard verificationGuard;
     private int lowestSequence;
     private short epoch;
 
     public VerificationStateEntry(long timestamp, int sequence, short epoch) {
         this.timestamp = timestamp;
-        this.verificationGuard = new Object();
+        this.verificationGuard = new VerificationGuard();
         this.lowestSequence = sequence;
         this.epoch = epoch;
     }
@@ -45,7 +45,7 @@ public class VerificationStateEntry {
         return timestamp;
     }
 
-    public Object verificationGuard() {
+    public VerificationGuard verificationGuard() {
         return verificationGuard;
     }
 

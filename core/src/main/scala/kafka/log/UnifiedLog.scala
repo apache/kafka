@@ -40,7 +40,7 @@ import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.util.Scheduler
 import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
-import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, BatchMetadata, CompletedTxn, EpochEntry, FetchDataInfo, FetchIsolation, LastRecord, LeaderHwChange, LogAppendInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogSegment, LogSegments, LogStartOffsetIncrementReason, LogValidator, ProducerAppendInfo, ProducerStateManager, ProducerStateManagerConfig, RollParams}
+import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, BatchMetadata, CompletedTxn, EpochEntry, FetchDataInfo, FetchIsolation, LastRecord, LeaderHwChange, LogAppendInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogSegment, LogSegments, LogStartOffsetIncrementReason, LogValidator, ProducerAppendInfo, ProducerStateManager, ProducerStateManagerConfig, RollParams, VerificationGuard}
 
 import java.io.{File, IOException}
 import java.nio.file.Files
@@ -599,10 +599,10 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   }
 
   /**
-   * Maybe create and return the verification guard object for the given producer ID if the transaction is not yet ongoing.
+   * Maybe create and return the VerificationGuard for the given producer ID if the transaction is not yet ongoing.
    * Creation starts the verification process. Otherwise return null.
    */
-  def maybeStartTransactionVerification(producerId: Long, sequence: Int, epoch: Short): Object = lock synchronized {
+  def maybeStartTransactionVerification(producerId: Long, sequence: Int, epoch: Short): VerificationGuard = lock synchronized {
     if (hasOngoingTransaction(producerId))
       null
     else
@@ -610,18 +610,18 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   }
 
   /**
-   * Maybe create the VerificationStateEntry for the given producer ID -- always return the verification guard
+   * Maybe create the VerificationStateEntry for the given producer ID -- always return the VerificationGuard
    */
   def maybeCreateVerificationGuard(producerId: Long,
                                    sequence: Int,
-                                   epoch: Short): Object = lock synchronized {
+                                   epoch: Short): VerificationGuard = lock synchronized {
     producerStateManager.maybeCreateVerificationStateEntry(producerId, sequence, epoch).verificationGuard
   }
 
   /**
-   * If an VerificationStateEntry is present for the given producer ID, return its verification guard, otherwise, return null.
+   * If an VerificationStateEntry is present for the given producer ID, return its VerificationGuard, otherwise, return null.
    */
-  def verificationGuard(producerId: Long): Object = lock synchronized {
+  def verificationGuard(producerId: Long): VerificationGuard = lock synchronized {
     val entry = producerStateManager.verificationStateEntry(producerId)
     if (entry != null) entry.verificationGuard else null
   }
@@ -715,7 +715,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
                      origin: AppendOrigin = AppendOrigin.CLIENT,
                      interBrokerProtocolVersion: MetadataVersion = MetadataVersion.latest,
                      requestLocal: RequestLocal = RequestLocal.NoCaching,
-                     verificationGuard: Object = null): LogAppendInfo = {
+                     verificationGuard: VerificationGuard = null): LogAppendInfo = {
     val validateAndAssignOffsets = origin != AppendOrigin.RAFT_LEADER
     append(records, origin, interBrokerProtocolVersion, validateAndAssignOffsets, leaderEpoch, Some(requestLocal), verificationGuard, ignoreRecordSize = false)
   }
@@ -763,7 +763,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
                      validateAndAssignOffsets: Boolean,
                      leaderEpoch: Int,
                      requestLocal: Option[RequestLocal],
-                     verificationGuard: Object,
+                     verificationGuard: VerificationGuard,
                      ignoreRecordSize: Boolean): LogAppendInfo = {
     // We want to ensure the partition metadata file is written to the log dir before any log data is written to disk.
     // This will ensure that any log data can be recovered with the correct topic ID in the case of failure.
@@ -1024,7 +1024,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   private def analyzeAndValidateProducerState(appendOffsetMetadata: LogOffsetMetadata,
                                               records: MemoryRecords,
                                               origin: AppendOrigin,
-                                              requestVerificationGuard: Object):
+                                              requestVerificationGuard: VerificationGuard):
   (mutable.Map[Long, ProducerAppendInfo], List[CompletedTxn], Option[BatchMetadata]) = {
     val updatedProducers = mutable.Map.empty[Long, ProducerAppendInfo]
     val completedTxns = ListBuffer.empty[CompletedTxn]
@@ -1080,9 +1080,9 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     (updatedProducers, completedTxns.toList, None)
   }
 
-  private def batchMissingRequiredVerification(batch: MutableRecordBatch, requestVerificationGuard: Object): Boolean = {
+  private def batchMissingRequiredVerification(batch: MutableRecordBatch, requestVerificationGuard: VerificationGuard): Boolean = {
     producerStateManager.producerStateManagerConfig().transactionVerificationEnabled() && !batch.isControlBatch &&
-      (requestVerificationGuard != verificationGuard(batch.producerId) || requestVerificationGuard == null)
+      (requestVerificationGuard == null || !requestVerificationGuard.equals(verificationGuard(batch.producerId)))
   }
 
   /**
