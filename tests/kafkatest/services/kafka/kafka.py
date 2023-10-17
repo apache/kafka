@@ -279,14 +279,12 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.isolated_controller_quorum = None # will define below if necessary
         self.configured_for_zk_migration = False
 
-        if use_new_coordinator is None:
-            # First prioritize using any paramiterization in the test context.
-            arg_name = 'use_new_coordinator'
-            use_new_coordinator = context.injected_args.get(arg_name)
-            # If not in the test paramiterization, pull from globals.
-            if use_new_coordinator is None:
-                use_new_coordinator = context.globals.get("use_new_coordinator", False)
-
+        DEFAULT_USE_NEW_COORDINATOR = False
+        # Use the parameterized value if it exists or use the global default otherwise.
+        use_new_coordinator = (
+            context.injected_args.get('use_new_coordinator') or
+            context.globals.get('use_new_coordinator', DEFAULT_USE_NEW_COORDINATOR)
+        )
         self.use_new_coordinator = use_new_coordinator
 
         if num_nodes < 1:
