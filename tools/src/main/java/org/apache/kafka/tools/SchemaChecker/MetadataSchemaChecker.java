@@ -80,7 +80,7 @@ public class MetadataSchemaChecker {
 
             List<String> gitContent = GetDataFromGit();
             if (localContent.size() != gitContent.size()) {
-                throw new RuntimeException("missing schemas");
+                throw new IllegalStateException("missing schemas");
             }
             for(int i = 0; i < localContent.size(); i++) {
                 if (Objects.equals(localContent.get(i), gitContent.get(i))) {
@@ -125,7 +125,6 @@ public class MetadataSchemaChecker {
                     ObjectId objectId = treeWalk.getObjectId(0);
                     ObjectLoader loader = repository.open(objectId);
 
-                    // and then one can the loader to read the file
                     String content = new String(loader.getBytes());
                     String[] lines = content.split("\n");
                     boolean print = false;
@@ -147,22 +146,22 @@ public class MetadataSchemaChecker {
 
     private static void checkApiTypeVersions(JsonNode original, JsonNode edited) {
         if (!Objects.equals(original.get("apiKey"), edited.get("apiKey"))) {
-            throw new RuntimeException("New schema has wrong api key, " + edited.get("apiKey") + " should be " + original.get("apiKey"));
+            throw new IllegalStateException("New schema has wrong api key, " + edited.get("apiKey") + " should be " + original.get("apiKey"));
         }
         if (!Objects.equals(original.get("type"), edited.get("type"))) {
-            throw new RuntimeException("New schema has wrong record type, " + edited.get("type") + " should be " + original.get("type"));
+            throw new IllegalStateException("New schema has wrong record type, " + edited.get("type") + " should be " + original.get("type"));
         }
         String oldValidVersions = String.valueOf(original.get("validVersions"));
         String newValidVersions = String.valueOf(edited.get("validVersions"));
         oldLatestVersion = Character.getNumericValue(oldValidVersions.charAt(oldValidVersions.length() - 2));
         newLatestVersion = Character.getNumericValue(newValidVersions.charAt(newValidVersions.length() - 2));
         if (oldLatestVersion != newLatestVersion && oldLatestVersion + 1 != newLatestVersion) {
-            throw new RuntimeException("Invalid latest versions, can at most be one higher than the previous");
+            throw new IllegalStateException("Invalid latest versions, can at most be one higher than the previous");
         }
         oldFirstVersion = Character.getNumericValue(oldValidVersions.charAt(1));
         newFirstVersion = Character.getNumericValue(newValidVersions.charAt(1));
         if (oldFirstVersion != newFirstVersion) {
-            throw new RuntimeException("cannot change lower end of valid versions");
+            throw new IllegalStateException("cannot change lower end of valid versions");
         }
     }
 
@@ -178,7 +177,7 @@ public class MetadataSchemaChecker {
             isNewField = false;
 
             if (!iterNewNode.hasNext()) {
-                throw new RuntimeException("New schema is missing field ");
+                throw new IllegalStateException("New schema is missing field ");
             }
             JsonNode nodeNew = iterNewNode.next();
 
@@ -193,7 +192,7 @@ public class MetadataSchemaChecker {
             }
 
             if (!Objects.equals(nodeOrig.get("type"), nodeNew.get("type"))) {
-                throw new RuntimeException("Fields must have same type. Expected: " + nodeOrig.get("type") + " Received: " + nodeNew.get("type"));
+                throw new IllegalStateException("Fields must have same type. Expected: " + nodeOrig.get("type") + " Received: " + nodeNew.get("type"));
             }
 
             parseNullableVersion(nodeOrig, nodeNew);
@@ -224,17 +223,17 @@ public class MetadataSchemaChecker {
                     parseNewField(nodeNew);
                     return true;
                 } else {
-                    throw new RuntimeException("new schema cannot reopen already closed field");
+                    throw new IllegalStateException("new schema cannot reopen already closed field");
                 }
             } else if (oldVersion.length == 2 && newVersion.length == 2) {
-                throw new RuntimeException("cannot changed already closed field");
+                throw new IllegalStateException("cannot changed already closed field");
             } else if (oldVersion.length == 1 && newVersion.length == 2) {
                 if (!Objects.equals(oldVersion[0], newVersion[0])) {
-                    throw new RuntimeException("cannot change lower end of ");
+                    throw new IllegalStateException("cannot change lower end of ");
                 }
                 int cutoffVersion = Integer.parseInt(newVersion[1]);
                 if (cutoffVersion != newLatestVersion && cutoffVersion + 1 != newLatestVersion) {
-                    throw new RuntimeException("Invalid closing version for field");
+                    throw new IllegalStateException("Invalid closing version for field");
                 }
             } else if (oldVersion.length == 1 && newVersion.length == 1) {
                 int oldInt = Integer.parseInt(oldVersion[0]);
@@ -243,7 +242,7 @@ public class MetadataSchemaChecker {
                     parseNewField(nodeNew);
                     return true;
                 } else {
-                    throw new RuntimeException("new field needs to be on a new version");
+                    throw new IllegalStateException("new field needs to be on a new version");
                 }
             }
         }
@@ -255,23 +254,23 @@ public class MetadataSchemaChecker {
         String[] newVersion = cleanUpVersionStrings(String.valueOf(nodeNew.get("nullableVersions")));
         if (nodeOrig.has("nullableVersions")) {
             if (!nodeNew.has("nullableVersions")) {
-                throw new RuntimeException("field is missing nullable information");
+                throw new IllegalStateException("field is missing nullable information");
             }
             if (oldVersion.length == 2 && newVersion.length == 1) {
-                throw new RuntimeException("cannot make field nullable after closing nullable versions");
+                throw new IllegalStateException("cannot make field nullable after closing nullable versions");
             }
             if (oldVersion.length == 1 && newVersion.length == 2) {
                 if (!Objects.equals(oldVersion[0], newVersion[0])) {
-                    throw new RuntimeException("invalid closing version for nullable versions");
+                    throw new IllegalStateException("invalid closing version for nullable versions");
                 }
                 if (Integer.parseInt(newVersion[1]) != newLatestVersion) {
-                    throw new RuntimeException("incorrect closing version for nullable versions");
+                    throw new IllegalStateException("incorrect closing version for nullable versions");
                 }
             }
 
         } else if (nodeNew.has("nullableVersions")) {
             if (Integer.parseInt(newVersion[0]) != newLatestVersion) {
-                throw new RuntimeException("invalid version for new nullable version");
+                throw new IllegalStateException("invalid version for new nullable version");
             }
         }
     }
@@ -279,17 +278,16 @@ public class MetadataSchemaChecker {
     private static boolean checkTaggedFieldIfTag(JsonNode origNode, JsonNode newNode) {
         if (origNode.has("tag")) {
             if (!newNode.has("tag")) {
-                //throw new RuntimeException("new schema is missing tagged field ");
                 parseNewField(newNode);
                 return true;
             }
             if (!newNode.has("taggedVersions")) {
-                throw new RuntimeException("new schema tagged field is missing tagged version");
+                throw new IllegalStateException("new schema tagged field is missing tagged version");
             }
 
 
             if (latestTag + 1 != Integer.parseInt(newNode.get("tag").asText())) {
-                throw new RuntimeException(" tag from new schema not in numeric order, " + newNode.get("tag").asText()
+                throw new IllegalStateException(" tag from new schema not in numeric order, " + newNode.get("tag").asText()
                                            + " should be "  + (latestTag + 1));
             }
             latestTag = Integer.parseInt(newNode.get("tag").asText());
@@ -306,30 +304,30 @@ public class MetadataSchemaChecker {
     private static void parseNewField(JsonNode node) {
         String[] versions = cleanUpVersionStrings(String.valueOf(node.get("versions")));
         if (oldLatestVersion + 1 != newLatestVersion && !node.has("tag")) {
-            throw new RuntimeException("New schemas with new fields need to be on the next version iteration");
+            throw new IllegalStateException("New schemas with new fields need to be on the next version iteration");
         }
         if (newLatestVersion != Integer.parseInt(versions[0]) && !node.has("tag")) {
-            throw new RuntimeException("new field version not correct");
+            throw new IllegalStateException("new field version not correct");
         }
         if (!node.has("type") && !node.has("fields")) {
-            throw new RuntimeException("new field requires a type if it doesn't have fields node ");
+            throw new IllegalStateException("new field requires a type if it doesn't have fields node ");
         }
 
         if (Integer.parseInt(versions[0]) != (oldLatestVersion + 1) && !node.has("tag")) {
-            throw new RuntimeException("New field must be on next version");
+            throw new IllegalStateException("New field must be on next version");
         }
         if (node.has("tag")) {
             if (!node.has("taggedVersions")) {
-                throw new RuntimeException("new tagged field is missing tagged versions");
+                throw new IllegalStateException("new tagged field is missing tagged versions");
             }
             String[] taggedVersions = cleanUpVersionStrings(String.valueOf(node.get("taggedVersions")));
 
             if (Integer.parseInt(taggedVersions[0]) != latestTagVersion + 1) {
-                throw new RuntimeException("taggedVersion incorrect for new tagged field");
+                throw new IllegalStateException("taggedVersion incorrect for new tagged field");
             }
             if (Integer.parseInt(versions[0]) < oldLatestVersion ||
                 Integer.parseInt(versions[0]) > newLatestVersion) {
-                throw new RuntimeException("Invalid version for new tagged field");
+                throw new IllegalStateException("Invalid version for new tagged field");
             }
         }
     }
