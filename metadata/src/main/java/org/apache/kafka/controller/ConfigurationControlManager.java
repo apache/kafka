@@ -437,7 +437,7 @@ public class ConfigurationControlManager {
 
     /**
      * Get the config value for the give topic and give config key.
-     * If the config value is not found, NoSuchElementException.
+     * If the config value is not found, return null.
      *
      * @param topicName            The topic name for the config.
      * @param configKey            The key for the config.
@@ -447,7 +447,7 @@ public class ConfigurationControlManager {
         if (map == null || !map.containsKey(configKey)) {
             Map<String, ConfigEntry> effectiveConfigMap = computeEffectiveTopicConfigs(Collections.emptyMap());
             if (!effectiveConfigMap.containsKey(configKey)) {
-                throw new NoSuchElementException("Given key does not exist in the topic config:" + configKey);
+                return null;
             }
             return effectiveConfigMap.get(configKey).value();
         }

@@ -2036,11 +2036,11 @@ public class ReplicationControlManager {
     // Visible to test.
     int getTopicEffectiveMinIsr(String topicName) {
         int currentMinIsr = defaultMinIsr;
-        try {
-            String minIsrConfig = configurationControl.getTopicConfig(topicName, MIN_IN_SYNC_REPLICAS_CONFIG);
+        String minIsrConfig = configurationControl.getTopicConfig(topicName, MIN_IN_SYNC_REPLICAS_CONFIG);
+        if (minIsrConfig != null) {
             currentMinIsr = Integer.parseInt(minIsrConfig);
-        } catch (Exception e) {
-            log.warn("Can't find the min isr config for topic: " + topicName + " using default value " + defaultMinIsr + ". Error=" + e);
+        } else {
+            log.warn("Can't find the min isr config for topic: " + topicName + " using default value " + defaultMinIsr);
         }
 
         int replicationFactor = defaultReplicationFactor;
