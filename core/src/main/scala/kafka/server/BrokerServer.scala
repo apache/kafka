@@ -36,6 +36,7 @@ import org.apache.kafka.common.security.token.delegation.internals.DelegationTok
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.common.{ClusterResource, KafkaException, TopicPartition}
 import org.apache.kafka.coordinator.group
+import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorRuntimeMetrics
 import org.apache.kafka.coordinator.group.util.SystemTimerReaper
 import org.apache.kafka.coordinator.group.{GroupCoordinator, GroupCoordinatorConfig, GroupCoordinatorService, RecordSerde}
 import org.apache.kafka.image.publisher.MetadataPublisher
@@ -531,6 +532,7 @@ class BrokerServer(
         new SystemTimer("group-coordinator")
       )
       val loader = new CoordinatorLoaderImpl[group.Record](
+        time,
         replicaManager,
         serde,
         config.offsetsLoadBufferSize
@@ -546,6 +548,7 @@ class BrokerServer(
         .withTimer(timer)
         .withLoader(loader)
         .withWriter(writer)
+        .withCoordinatorRuntimeMetrics(new GroupCoordinatorRuntimeMetrics(metrics))
         .build()
     } else {
       GroupCoordinatorAdapter(
