@@ -867,6 +867,20 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
     }
 
     @SuppressWarnings("unchecked")
+    public KTableValueGetterSupplier<Bytes, byte[]> rawValueGetterSupplier() {
+        if (processorSupplier instanceof KTableSource) {
+            final KTableSource<K, V> source = (KTableSource<K, V>) processorSupplier;
+            // whenever a source ktable is required for getter, it should be materialized
+            source.materialize();
+            return new KTableSourceRawValueGetterSupplier(source.queryableName());
+        } else if (processorSupplier instanceof KStreamAggProcessorSupplier) {
+            return ((KStreamAggProcessorSupplier<?, S, K, V>) processorSupplier).rawView();
+        } else {
+            return ((KTableProcessorSupplier<?, ?, K, V>) processorSupplier).rawView();
+        }
+    }
+
+    @SuppressWarnings("unchecked")
     public boolean enableSendingOldValues(final boolean forceMaterialization) {
         if (!sendOldValues) {
             if (processorSupplier instanceof KTableSource) {
@@ -1129,10 +1143,10 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
         builder.internalTopologyBuilder.addInternalTopic(subscriptionTopicName, InternalTopicProperties.empty());
 
-        final Serde<KO> foreignKeySerde = ((KTableImpl<KO, VO, ?>) foreignKeyTable).keySerde;
+        final Serde<KO> foreignKeySerde = ((KTableImpl<KO, ?, ?>) foreignKeyTable).keySerde;
+        final Serde<VO> foreignValueSerde = ((KTableImpl<KO, ?, VO>) foreignKeyTable).valueSerde;
         final Serde<SubscriptionWrapper<K>> subscriptionWrapperSerde = new SubscriptionWrapperSerde<>(subscriptionPrimaryKeySerdePseudoTopic, keySerde);
-        final SubscriptionResponseWrapperSerde<VO> responseWrapperSerde =
-            new SubscriptionResponseWrapperSerde<>(((KTableImpl<KO, VO, VO>) foreignKeyTable).valueSerde);
+        final SubscriptionResponseWrapperSerde<VO> responseWrapperSerde = new SubscriptionResponseWrapperSerde<>(foreignValueSerde);
 
         final CombinedKeySchema<KO, K> combinedKeySchema = new CombinedKeySchema<>(
             subscriptionForeignKeySerdePseudoTopic,
@@ -1246,10 +1260,11 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         builder.addGraphNode(subscriptionJoinNode, foreignResponseSink);
         builder.addGraphNode(foreignTableJoinNode, foreignResponseSink);
 
-        final StreamSourceNode<K, SubscriptionResponseWrapper<VO>> foreignResponseSource = new StreamSourceNode<>(
+        final SubscriptionResponseWrapperSerde<byte[]> rawResponseWrapperSerde = new SubscriptionResponseWrapperSerde<>(Serdes.ByteArray());
+        final StreamSourceNode<Bytes, SubscriptionResponseWrapper<byte[]>> foreignResponseSource = new StreamSourceNode<>(
             renamed.suffixWithOrElseGet("-subscription-response-source", builder, SOURCE_NAME),
             Collections.singleton(finalRepartitionTopicName),
-            new ConsumedInternal<>(Consumed.with(keySerde, responseWrapperSerde))
+            new ConsumedInternal<>(Consumed.with(Serdes.Bytes(), rawResponseWrapperSerde))
         );
         builder.addGraphNode(foreignResponseSink, foreignResponseSource);
 
@@ -1258,12 +1273,14 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         resultSourceNodes.add(foreignResponseSource.nodeName());
         builder.internalTopologyBuilder.copartitionSources(resultSourceNodes);
 
-        final KTableValueGetterSupplier<K, V> primaryKeyValueGetter = valueGetterSupplier();
-        final StatefulProcessorNode<K, SubscriptionResponseWrapper<VO>> responseJoinNode = new StatefulProcessorNode<>(
+        final KTableValueGetterSupplier<Bytes, byte[]> primaryKeyValueGetter = rawValueGetterSupplier();
+        final StatefulProcessorNode<Bytes, SubscriptionResponseWrapper<byte[]>> responseJoinNode = new StatefulProcessorNode<>(
             new ProcessorParameters<>(
                 new ResponseJoinProcessorSupplier<>(
                         primaryKeyValueGetter,
-                        valueSerde == null ? null : valueSerde.serializer(),
+                        keySerde == null ? null : keySerde.deserializer(),
+                        valueSerde == null ? null : valueSerde.deserializer(),
+                        foreignValueSerde == null ? null : foreignValueSerde.deserializer(),
                         valueHashSerdePseudoTopic,
                         joiner,
                         leftJoin

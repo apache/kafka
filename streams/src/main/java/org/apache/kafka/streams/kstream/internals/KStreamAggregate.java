@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.processor.api.ContextualProcessor;
@@ -26,6 +27,7 @@ import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.internals.KeyValueRawStoreWrapper;
 import org.apache.kafka.streams.state.internals.KeyValueStoreWrapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -168,4 +170,44 @@ public class KStreamAggregate<KIn, VIn, VAgg> implements KStreamAggProcessorSupp
             return store.isVersionedStore();
         }
     }
+
+    @Override
+    public KTableValueGetterSupplier<Bytes, byte[]> rawView() {
+        return new KTableValueGetterSupplier<Bytes, byte[]>() {
+
+            public KTableValueGetter<Bytes, byte[]> get() {
+                return new KStreamAggregateRawValueGetter();
+            }
+
+            @Override
+            public String[] storeNames() {
+                return new String[]{storeName};
+            }
+        };
+    }
+
+    private class KStreamAggregateRawValueGetter implements KTableValueGetter<Bytes, byte[]> {
+        private KeyValueRawStoreWrapper<Bytes, byte[]> store;
+
+        @Override
+        public void init(final ProcessorContext<?, ?> context) {
+            store = new KeyValueRawStoreWrapper<>(context, storeName);
+        }
+
+        @Override
+        public ValueAndTimestamp<byte[]> get(final Bytes key) {
+            return store.get(key);
+        }
+
+        @Override
+        public ValueAndTimestamp<byte[]> get(final Bytes key, final long asOfTimestamp) {
+            return store.get(key, asOfTimestamp);
+        }
+
+        @Override
+        public boolean isVersioned() {
+            return store.isVersionedStore();
+        }
+    }
+
 }

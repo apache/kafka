@@ -16,11 +16,16 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 
 public interface KStreamAggProcessorSupplier<KIn, VIn, KAgg, VAgg> extends ProcessorSupplier<KIn, VIn, KAgg, Change<VAgg>> {
 
     KTableValueGetterSupplier<KAgg, VAgg> view();
+
+    default KTableValueGetterSupplier<Bytes, byte[]> rawView() {
+        return null;
+    };
 
     void enableSendingOldValues();
 }

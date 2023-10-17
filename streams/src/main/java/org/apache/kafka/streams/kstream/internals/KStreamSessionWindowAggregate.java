@@ -266,20 +266,22 @@ public class KStreamSessionWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
 
             // Only time ordered (indexed) session store should have implemented
             // this function, otherwise a not-supported exception would throw
-            final KeyValueIterator<Windowed<KIn>, VAgg> windowToEmit = store
-                .findSessions(emitRangeLowerBound, emitRangeUpperBound);
-
             int emittedCount = 0;
-            while (windowToEmit.hasNext()) {
-                emittedCount++;
-                final KeyValue<Windowed<KIn>, VAgg> kv = windowToEmit.next();
 
-                tupleForwarder.maybeForward(
-                    record.withKey(kv.key)
-                        .withValue(new Change<>(kv.value, null))
-                        // set the timestamp as the window end timestamp
-                        .withTimestamp(kv.key.window().end())
-                        .withHeaders(record.headers()));
+            try (final KeyValueIterator<Windowed<KIn>, VAgg> windowToEmit =
+                     store.findSessions(emitRangeLowerBound, emitRangeUpperBound)) {
+
+                while (windowToEmit.hasNext()) {
+                    emittedCount++;
+                    final KeyValue<Windowed<KIn>, VAgg> kv = windowToEmit.next();
+
+                    tupleForwarder.maybeForward(
+                            record.withKey(kv.key)
+                                    .withValue(new Change<>(kv.value, null))
+                                    // set the timestamp as the window end timestamp
+                                    .withTimestamp(kv.key.window().end())
+                                    .withHeaders(record.headers()));
+                }
             }
             emittedRecordsSensor.record(emittedCount);
             emitFinalLatencySensor.record(time.milliseconds() - startMs);
