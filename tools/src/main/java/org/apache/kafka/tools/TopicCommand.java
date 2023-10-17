@@ -469,7 +469,7 @@ public abstract class TopicCommand {
                 CreateTopicsResult createResult = adminClient.createTopics(Collections.singleton(newTopic),
                     new CreateTopicsOptions().retryOnQuotaViolation(false));
                 createResult.all().get();
-                System.out.println("Created topic " + topic.name + ".");
+                System.out.println("Created topic " + topic.name.get() + ".");
             } catch (ExecutionException e) {
                 if (e.getCause() == null) {
                     throw e;
@@ -481,10 +481,11 @@ public abstract class TopicCommand {
         }
 
         public void listTopics(TopicCommandOptions opts) throws ExecutionException, InterruptedException {
-            String results = getTopics(opts.topic(), opts.excludeInternalTopics())
-                .stream()
-                .collect(Collectors.joining("\n"));
-            System.out.println(results);
+            List<String> topics = getTopics(opts.topic(), opts.excludeInternalTopics());
+
+            if (!topics.isEmpty()) {
+                System.out.println(String.join("\n", topics));
+            }
         }
 
         public void alterTopic(TopicCommandOptions opts) throws ExecutionException, InterruptedException {
@@ -507,7 +508,7 @@ public abstract class TopicCommand {
             String topicName) {
             if (topic.hasReplicaAssignment()) {
                 try {
-                    Integer startPartitionId = topicsInfo.get(topicName).get().partitions().size();
+                    int startPartitionId = topicsInfo.get(topicName).get().partitions().size();
                     Map<Integer, List<Integer>> replicaMap = topic.replicaAssignment.entrySet().stream()
                         .skip(startPartitionId)
                         .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
@@ -540,7 +541,7 @@ public abstract class TopicCommand {
             // If topicId is provided and not zero, will use topicId regardless of topic name
             Optional<Uuid> inputTopicId = opts.topicId()
                 .map(Uuid::fromString).filter(uuid -> uuid != Uuid.ZERO_UUID);
-            Boolean useTopicId = inputTopicId.isPresent();
+            boolean useTopicId = inputTopicId.isPresent();
 
             List<Uuid> topicIds;
             List<String> topics;

@@ -260,7 +260,7 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
             .get()
             .get(testTopicName)
             .partitions();
-        
+
         assertEquals(3, partitions.size());
         assertEquals(Arrays.asList(5, 4), getPartitionReplicas(partitions, 0));
         assertEquals(Arrays.asList(3, 2), getPartitionReplicas(partitions, 1));
@@ -311,6 +311,13 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
 
         String output = captureListTopicStandardOut(buildTopicCommandOptionsWithBootstrap("--list"));
         assertTrue(output.contains(testTopicName));
+    }
+
+    @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ValueSource(strings = {"zk", "kraft"})
+    public void testListNoTopics(String quorum) {
+        String output = captureListTopicStandardOut(buildTopicCommandOptionsWithBootstrap("--list"));
+        assertTrue(output.isEmpty());
     }
 
     @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
