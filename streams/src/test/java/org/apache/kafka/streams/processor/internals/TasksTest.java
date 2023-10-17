@@ -56,7 +56,7 @@ public class TasksTest {
     private final Tasks tasks = new Tasks(new LogContext());
 
     @Test
-    public void shouldCheckStateWhenClosedTasks() {
+    public void shouldCheckStateWhenRemoveTask() {
         final StreamTask closedTask = statefulTask(TASK_0_0, mkSet(TOPIC_PARTITION_A_0)).inState(State.CLOSED).build();
         final StandbyTask suspendedTask = standbyTask(TASK_0_1, mkSet(TOPIC_PARTITION_A_1)).inState(State.SUSPENDED).build();
         final StreamTask runningTask = statelessTask(TASK_1_0).inState(State.RUNNING).build();
