@@ -86,7 +86,7 @@ public class MembershipManagerImpl implements MembershipManager {
     private Optional<ConsumerGroupHeartbeatResponseData.Assignment> targetAssignment;
 
     /**
-     * slf4j logger.
+     * Logger.
      */
     private final Logger log;
 
