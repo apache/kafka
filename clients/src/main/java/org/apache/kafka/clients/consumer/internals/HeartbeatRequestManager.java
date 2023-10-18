@@ -179,7 +179,7 @@ public class HeartbeatRequestManager implements RequestManager {
             data.setSubscribedTopicNames(new ArrayList<>(this.subscriptions.subscription()));
         }
 
-        this.membershipManager.assignorSelection().serverAssignor().ifPresent(data::setServerAssignor);
+        this.membershipManager.serverAssignor().ifPresent(data::setServerAssignor);
 
         NetworkClientDelegate.UnsentRequest request = new NetworkClientDelegate.UnsentRequest(
             new ConsumerGroupHeartbeatRequest.Builder(data),
