@@ -20,7 +20,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 public class VerificationGuard {
 
-    // The sentinel verification guard will be used as a default when no verification guard is provided.
+    // The sentinel VerificationGuard will be used as a default when no verification guard is provided.
     // It can not be used to verify a transaction is ongoing and its verificationGuardValue is always 0.
     public static final VerificationGuard SENTINEL_VERIFICATION_GUARD = new VerificationGuard(0);
     private static final AtomicLong INCREMENTING_ID = new AtomicLong(0L);
