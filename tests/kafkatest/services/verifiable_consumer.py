@@ -168,7 +168,7 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
     def __init__(self, context, num_nodes, kafka, topic, group_id,
                  static_membership=False, max_messages=-1, session_timeout_sec=30, enable_autocommit=False,
                  assignment_strategy=None,
-                 version=DEV_BRANCH, stop_timeout_sec=30, log_level="INFO", jaas_override_variables=None,
+                 version=DEV_BRANCH, stop_timeout_sec=30, log_level="DEBUG", jaas_override_variables=None,
                  on_record_consumed=None, reset_policy="earliest", verify_offsets=True):
         """
         :param jaas_override_variables: A dict of variables to be used in the jaas.conf template file
