@@ -1494,8 +1494,8 @@ public class DistributedHerderTest {
 
     @Test
     public void testRequestProcessingOrder() {
-        Callable<Void> action = mock();
-        Callback<Void> callback = mock();
+        Callable<Void> action = mock(Callable.class);
+        Callback<Void> callback = mock(Callback.class);
 
         final DistributedHerder.DistributedHerderRequest req1 = herder.addRequest(100, action, callback);
         final DistributedHerder.DistributedHerderRequest req2 = herder.addRequest(10, action, callback);
