@@ -35,6 +35,10 @@ public interface ClientTelemetry {
      * instance.
      * <p>
      * This instance may be cached by the client.
+     * <p>
+     * This method must always be called after the initial call to
+     * {@link MetricsReporter#contextChange(MetricsContext)} on the {@link MetricsReporter}
+     * implementing this interface.
      *
      * @return Optional client side instance of {@link ClientTelemetrySender}.
      */

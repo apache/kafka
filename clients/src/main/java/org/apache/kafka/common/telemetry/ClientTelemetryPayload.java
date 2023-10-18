@@ -41,7 +41,7 @@ public interface ClientTelemetryPayload {
     String contentType();
 
     /**
-     * Serialized uncompressed metrics data.
+     * Serialized metrics data.
      */
     ByteBuffer data();
 }
