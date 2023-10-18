@@ -890,7 +890,7 @@ public class GroupMetadataManager {
         if (instanceId == null) {
             member = group.getOrMaybeCreateMember(memberId, createIfNotExists);
         } else {
-            existingStaticMember = group.getStaticMember(instanceId);
+            existingStaticMember = group.staticMember(instanceId);
             throwIfStaticMemberValidationFails(groupId, instanceId, existingStaticMember, memberEpoch, memberId);
             member = group.getOrMaybeCreateMember(memberId, createIfNotExists);
         }
@@ -1091,7 +1091,7 @@ public class GroupMetadataManager {
         try {
             TargetAssignmentBuilder.TargetAssignmentResult assignmentResult =
                 new TargetAssignmentBuilder(groupId, groupEpoch, assignors.get(preferredServerAssignor))
-                    .withMembers(group.members())
+                    .removeMember(member.memberId())
                     .withSubscriptionMetadata(subscriptionMetadata)
                     .withTargetAssignment(group.targetAssignment())
                     .addOrUpdateMember(memberId, updatedMember)
@@ -1128,7 +1128,7 @@ public class GroupMetadataManager {
     ) throws ApiException {
         ConsumerGroup group = getOrMaybeCreateConsumerGroup(groupId, false);
         ConsumerGroupMember member = memberEpoch == LEAVE_GROUP_STATIC_MEMBER_EPOCH ?
-                group.getStaticMember(instanceId) :
+                group.staticMember(instanceId) :
                 group.getOrMaybeCreateMember(memberId, false);
 
         List<Record> records = new ArrayList<>();
