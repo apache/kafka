@@ -317,14 +317,38 @@ class ZkMigrationIntegrationTest {
         "Timed out waiting for migration to complete",
         30000)
 
-      Thread.sleep(30000)
-
       admin = zkCluster.createAdminClient()
       TestUtils.waitUntilTrue(
         () => admin.listTopics().names().get(30, TimeUnit.SECONDS).isEmpty,
         "Timed out waiting for topics to be deleted",
         300000)
-      log.info("Topics after migration {}", admin.listTopics().names().get(30, TimeUnit.SECONDS))
+
+      val newTopics = new util.ArrayList[NewTopic]()
+      newTopics.add(new NewTopic("test-topic-1", 2, 3.toShort))
+      newTopics.add(new NewTopic("test-topic-2", 1, 3.toShort))
+      newTopics.add(new NewTopic("test-topic-3", 10, 3.toShort))
+      val createTopicResult = admin.createTopics(newTopics)
+      createTopicResult.all().get(60, TimeUnit.SECONDS)
+
+      TestUtils.waitUntilTrue(
+        () => admin.listTopics().names().get(30, TimeUnit.SECONDS).size() == 3,
+        "Timed out waiting for topics to be created",
+        300000)
+
+      val topicDescriptions = admin.describeTopics(Seq("test-topic-1", "test-topic-2", "test-topic-3").asJavaCollection)
+        .topicNameValues().asScala.map { case (name, description) =>
+          name -> description.get(60, TimeUnit.SECONDS)
+      }.toMap
+
+      assertEquals(2, topicDescriptions("test-topic-1").partitions().size())
+      assertEquals(1, topicDescriptions("test-topic-2").partitions().size())
+      assertEquals(10, topicDescriptions("test-topic-3").partitions().size())
+      topicDescriptions.foreach { case (topic, description) =>
+        description.partitions().forEach(partition => {
+          assertEquals(3, partition.replicas().size(), s"Unexpected number of replicas for ${topic}-${partition.partition()}")
+          assertEquals(3, partition.isr().size(), s"Unexpected ISR for ${topic}-${partition.partition()}")
+        })
+      }
       admin.close()
     } finally {
       shutdownInSequence(zkCluster, kraftCluster)

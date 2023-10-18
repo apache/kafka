@@ -44,9 +44,13 @@ public interface TopicMigrationClient {
 
     Set<String> readPendingTopicDeletions();
 
+    ZkMigrationLeadershipState clearPendingTopicDeletions(
+        Set<String> pendingTopicDeletions,
+        ZkMigrationLeadershipState state
+    );
+
     ZkMigrationLeadershipState deleteTopic(
         String topicName,
-        boolean removePendingDeletion,
         ZkMigrationLeadershipState state
     );
 

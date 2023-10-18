@@ -377,6 +377,7 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
   val stopReplicaRequestMap = mutable.Map.empty[Int, mutable.Map[TopicPartition, StopReplicaPartitionState]]
   val updateMetadataRequestBrokerSet = mutable.Set.empty[Int]
   val updateMetadataRequestPartitionInfoMap = mutable.Map.empty[TopicPartition, UpdateMetadataPartitionState]
+  private var updateType: LeaderAndIsrRequest.Type = LeaderAndIsrRequest.Type.None
   private var metadataInstance: ControllerChannelContext = _
 
   def sendRequest(brokerId: Int,
@@ -396,6 +397,10 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
         s"new one. Some UpdateMetadata state changes to brokers $updateMetadataRequestBrokerSet with partition info " +
         s"$updateMetadataRequestPartitionInfoMap might be lost ")
     metadataInstance = metadataProvider()
+  }
+
+  def setUpdateType(updateType: LeaderAndIsrRequest.Type): Unit = {
+    this.updateType = updateType
   }
 
   def clear(): Unit = {
@@ -543,8 +548,17 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
           .toSet[String]
           .map(topic => (topic, metadataInstance.topicIds.getOrElse(topic, Uuid.ZERO_UUID)))
           .toMap
-        val leaderAndIsrRequestBuilder = new LeaderAndIsrRequest.Builder(leaderAndIsrRequestVersion, controllerId,
-          controllerEpoch, brokerEpoch, leaderAndIsrPartitionStates.values.toBuffer.asJava, topicIds.asJava, leaders.asJava, kraftController)
+        val leaderAndIsrRequestBuilder = new LeaderAndIsrRequest.Builder(
+          leaderAndIsrRequestVersion,
+          controllerId,
+          controllerEpoch,
+          brokerEpoch,
+          leaderAndIsrPartitionStates.values.toBuffer.asJava,
+          topicIds.asJava,
+          leaders.asJava,
+          kraftController,
+          updateType
+        )
         sendRequest(broker, leaderAndIsrRequestBuilder, (r: AbstractResponse) => {
           val leaderAndIsrResponse = r.asInstanceOf[LeaderAndIsrResponse]
           handleLeaderAndIsrResponse(leaderAndIsrResponse, broker)

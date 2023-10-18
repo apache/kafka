@@ -561,7 +561,9 @@ class ReplicaManagerTest {
             .setIsNew(true)).asJava,
           Collections.singletonMap(topic, Uuid.randomUuid()),
           Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava,
-          false).build()
+          false,
+          LeaderAndIsrRequest.Type.None
+        ).build()
         replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest, (_, _) => ())
         replicaManager.getPartitionOrException(new TopicPartition(topic, partition))
           .localLogOrException
@@ -2541,6 +2543,55 @@ class ReplicaManagerTest {
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }
+  }
+
+  @Test
+  def testUpdateStrayLogs(): Unit = {
+    val logManager = TestUtils.createLogManager(config.logDirs.map(new File(_)), defaultConfig = new LogConfig(new Properties()), time = time)
+    val replicaManager = new ReplicaManager(
+      metrics = metrics,
+      config = config,
+      time = time,
+      scheduler = time.scheduler,
+      logManager = logManager,
+      quotaManagers = QuotaFactory.instantiate(config, metrics, time, ""),
+      metadataCache = MetadataCache.zkMetadataCache(config.brokerId, config.interBrokerProtocolVersion),
+      logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
+      alterPartitionManager = alterPartitionManager,
+      threadNamePrefix = Option(this.getClass.getName))
+
+    logManager.startup(Set.empty[String])
+
+    // Create a hosted topic, a hosted topic that will become stray, and a stray topic
+    val validLogs = createHostedLogs("hosted-topic", numLogs = 2, replicaManager).toSet
+    createHostedLogs("hosted-stray", numLogs = 10, replicaManager).toSet
+    createStrayLogs(10, logManager)
+
+    val allReplicasFromLISR = Set(new TopicPartition("hosted-topic", 0), new TopicPartition("hosted-topic", 1))
+
+    replicaManager.updateStrayLogs(replicaManager.findStrayPartitionsFromLeaderAndIsr(allReplicasFromLISR))
+
+    assertEquals(validLogs, logManager.allLogs.toSet)
+    assertEquals(validLogs.size, replicaManager.partitionCount.value)
+
+    replicaManager.shutdown()
+    logManager.shutdown()
+  }
+
+  private def createHostedLogs(name: String, numLogs: Int, replicaManager: ReplicaManager): Seq[UnifiedLog] = {
+    for (i <- 0 until numLogs) yield {
+      val topicPartition = new TopicPartition(name, i)
+      val partition = replicaManager.createPartition(topicPartition)
+      partition.createLogIfNotExists(isNew = true, isFutureReplica = false,
+        new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints), topicId = None)
+      partition.log.get
+    }
+  }
+
+  private def createStrayLogs(numLogs: Int, logManager: LogManager): Seq[UnifiedLog] = {
+    val name = "stray"
+    for (i <- 0 until numLogs)
+      yield logManager.getOrCreateLog(new TopicPartition(name, i), topicId = None)
   }
 
   private def sendProducerAppend(

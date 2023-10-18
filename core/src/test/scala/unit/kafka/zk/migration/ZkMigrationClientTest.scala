@@ -97,7 +97,7 @@ class ZkMigrationClientTest extends ZkMigrationTestHarness {
     assertEquals(List(3), partition1.isr)
 
     // Delete whole topic
-    migrationState = migrationClient.topicClient().deleteTopic("test", false, migrationState)
+    migrationState = migrationClient.topicClient().deleteTopic("test", migrationState)
     assertEquals(2, migrationState.migrationZkVersion())
   }
 

@@ -57,9 +57,16 @@ public class CapturingTopicMigrationClient implements TopicMigrationClient {
     }
 
     @Override
+    public ZkMigrationLeadershipState clearPendingTopicDeletions(
+        Set<String> pendingTopicDeletions,
+        ZkMigrationLeadershipState state
+    ) {
+        return state;
+    }
+
+    @Override
     public ZkMigrationLeadershipState deleteTopic(
         String topicName,
-        boolean removePendingDeletion,
         ZkMigrationLeadershipState state
     ) {
         deletedTopics.add(topicName);
