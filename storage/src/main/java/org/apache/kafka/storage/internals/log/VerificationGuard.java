@@ -49,8 +49,7 @@ public class VerificationGuard {
 
     @Override
     public int hashCode() {
-        long value = verificationGuardValue;
-        return (int) (value ^ (value >>> 32));
+        return Long.hashCode(verificationGuardValue);
     }
 
     private long verificationGuardValue() {
