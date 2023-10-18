@@ -40,7 +40,7 @@ public class HerderRequestHandler {
 
     private final RestClient restClient;
 
-    private long requestTimeoutMs;
+    private volatile long requestTimeoutMs;
 
     public HerderRequestHandler(RestClient restClient, long requestTimeoutMs) {
         this.restClient = restClient;
