@@ -272,9 +272,6 @@ public class MirrorSourceTask extends SourceTask {
         log.info("Starting with {} previously uncommitted partitions.", topicPartitionOffsets.values().stream()
                 .filter(this::isUncommitted).count());
 
-        log.trace("Seeking offsets: {}", topicPartitionOffsets.entrySet().stream()
-                .filter(tpo -> !isUncommitted(tpo.getValue())));
-
         topicPartitionOffsets.forEach((topicPartition, offset) -> {
             // Do not call seek on partitions that don't have an existing offset committed.
             if (isUncommitted(offset)) {
