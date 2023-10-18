@@ -1412,27 +1412,24 @@ class LogManager(logDirs: Seq[File],
   }
 
   def readBrokerEpochFromCleanShutdownFiles(): Long = {
-    // Verify whether all the log dirs have the same broker epoch in their clean shutdown files. If there are dir is not
+    // Verify whether all the log dirs have the same broker epoch in their clean shutdown files. If there is any dir not
     // live, fail the broker epoch check.
     if (liveLogDirs.size < logDirs.size) {
       return -1L
     }
     var brokerEpoch = -1L
     for (dir <- liveLogDirs) {
-        val cleanShutdownFileHandler = new CleanShutdownFileHandler(dir.getPath)
-        var textBrokerEpoch = -1L
-        try {
-          textBrokerEpoch = cleanShutdownFileHandler.read
-        } catch {
-          case e: Throwable =>
-            info(s"loading broker epoch from ${dir.toPath} with exception ${e.toString}")
-            return -1L
-        }
-        if (brokerEpoch != -1 && textBrokerEpoch != brokerEpoch) {
-          info(s"Found different broker epochs a=$brokerEpoch vs b=$textBrokerEpoch")
-          return -1L
-        }
-        brokerEpoch = textBrokerEpoch
+      val cleanShutdownFileHandler = new CleanShutdownFileHandler(dir.getPath)
+      val currentBrokerEpoch = cleanShutdownFileHandler.read
+      if (currentBrokerEpoch == -1L) {
+        info(s"Unable to read the broker epoch in ${dir.toString}.")
+        return -1L
+      }
+      if (brokerEpoch != -1 && currentBrokerEpoch != brokerEpoch) {
+        info(s"Found different broker epochs in ${dir.toString}. Other=$brokerEpoch vs current=$currentBrokerEpoch.")
+        return -1L
+      }
+      brokerEpoch = currentBrokerEpoch
     }
     brokerEpoch
   }

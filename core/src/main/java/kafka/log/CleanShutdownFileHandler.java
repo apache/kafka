@@ -93,7 +93,7 @@ public class CleanShutdownFileHandler {
 
             brokerEpoch = Long.parseLong(content.getOrDefault(Fields.BROKER_EPOCH.toString(), "-1L"));
         } catch (Exception e) {
-            logger.warn("Fail to read the clean shutdown file:" + e);
+            logger.warn("Fail to read the clean shutdown file in " + cleanShutdownFile.toPath() + ":" + e);
         } finally {
             return brokerEpoch;
         }
