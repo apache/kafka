@@ -72,7 +72,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
-import java.net.InetSocketAddress;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
@@ -437,7 +436,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     transactionManager,
                     new BufferPool(this.totalMemorySize, batchSize, metrics, time, PRODUCER_METRIC_GROUP_NAME));
 
-            List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config);
             if (metadata != null) {
                 this.metadata = metadata;
             } else {
@@ -448,7 +446,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                         logContext,
                         clusterResourceListeners,
                         Time.SYSTEM);
-                this.metadata.bootstrap(addresses);
             }
             this.errors = this.metrics.sensor("errors");
             this.sender = newSender(logContext, kafkaClient, this.metadata);

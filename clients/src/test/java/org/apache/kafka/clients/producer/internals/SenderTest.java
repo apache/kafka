@@ -127,6 +127,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -155,6 +156,7 @@ public class SenderTest {
     private Sender sender = null;
     private SenderMetricsRegistry senderMetricsRegistry = null;
     private final LogContext logContext = new LogContext();
+    private NetworkClient.BootstrapConfiguration bootstrapConfig = mock(NetworkClient.BootstrapConfiguration.class);
 
     @BeforeEach
     public void setup() {
@@ -290,7 +292,7 @@ public class SenderTest {
         Node node = cluster.nodes().get(0);
         NetworkClient client = new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
                 1000, 1000, 64 * 1024, 64 * 1024, 1000, 10 * 1000, 127 * 1000,
-                time, true, new ApiVersions(), throttleTimeSensor, logContext);
+                bootstrapConfig, time, true, new ApiVersions(), throttleTimeSensor, logContext);
 
         ApiVersionsResponse apiVersionsResponse = TestUtils.defaultApiVersionsResponse(
             400, ApiMessageType.ListenerType.ZK_BROKER);

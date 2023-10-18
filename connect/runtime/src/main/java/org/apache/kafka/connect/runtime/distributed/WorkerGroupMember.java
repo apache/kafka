@@ -17,18 +17,19 @@
 package org.apache.kafka.connect.runtime.distributed;
 
 import org.apache.kafka.clients.ApiVersions;
+import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
-import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
-import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.Selector;
@@ -101,42 +102,48 @@ public class WorkerGroupMember {
             metadata.bootstrap(addresses);
             String metricGrpPrefix = "connect";
             ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(config, time, logContext);
+            NetworkClient.BootstrapConfiguration bootstrapConfig = new NetworkClient.BootstrapConfiguration(
+                config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG),
+                ClientDnsLookup.forConfig(config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG)),
+                config.getLong(CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG));
             NetworkClient netClient = new NetworkClient(
-                    new Selector(config.getLong(CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG), metrics, time, metricGrpPrefix, channelBuilder, logContext),
-                    metadata,
-                    clientId,
-                    100, // a fixed large enough value will suffice
-                    config.getLong(CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG),
-                    config.getLong(CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_CONFIG),
-                    config.getInt(CommonClientConfigs.SEND_BUFFER_CONFIG),
-                    config.getInt(CommonClientConfigs.RECEIVE_BUFFER_CONFIG),
-                    config.getInt(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG),
-                    config.getLong(CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG),
-                    config.getLong(CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG),
-                    time,
-                    true,
-                    new ApiVersions(),
-                    logContext);
+                new Selector(config.getLong(CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG), metrics, time, metricGrpPrefix, channelBuilder, logContext),
+                metadata,
+                clientId,
+                100, // a fixed large enough value will suffice
+                config.getLong(CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG),
+                config.getLong(CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_CONFIG),
+                config.getInt(CommonClientConfigs.SEND_BUFFER_CONFIG),
+                config.getInt(CommonClientConfigs.RECEIVE_BUFFER_CONFIG),
+                config.getInt(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG),
+                config.getLong(CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG),
+                config.getLong(CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG),
+                bootstrapConfig,
+                time,
+                true,
+                new ApiVersions(),
+                logContext);
             this.client = new ConsumerNetworkClient(
-                    logContext,
-                    netClient,
-                    metadata,
-                    time,
-                    retryBackoffMs,
-                    config.getInt(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG),
-                    Integer.MAX_VALUE);
+                logContext,
+                netClient,
+                metadata,
+                time,
+                retryBackoffMs,
+                config.getInt(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG),
+                Integer.MAX_VALUE);
             this.coordinator = new WorkerCoordinator(
-                    new GroupRebalanceConfig(config, GroupRebalanceConfig.ProtocolType.CONNECT),
-                    logContext,
-                    this.client,
-                    metrics,
-                    metricGrpPrefix,
-                    time,
-                    restUrl,
-                    configStorage,
-                    listener,
-                    ConnectProtocolCompatibility.compatibility(config.getString(DistributedConfig.CONNECT_PROTOCOL_CONFIG)),
-                    config.getInt(DistributedConfig.SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG));
+                new GroupRebalanceConfig(config, GroupRebalanceConfig.ProtocolType.CONNECT),
+                logContext,
+                this.client,
+                metrics,
+                metricGrpPrefix,
+                time,
+                restUrl,
+                configStorage,
+                listener,
+                ConnectProtocolCompatibility.compatibility(config.getString(DistributedConfig.CONNECT_PROTOCOL_CONFIG)),
+                config.getInt(DistributedConfig.SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG));
+
 
             AppInfoParser.registerAppInfo(JMX_PREFIX, clientId, metrics, time.milliseconds());
             log.debug("Connect group member created");
