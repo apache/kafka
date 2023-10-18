@@ -63,6 +63,7 @@ import java.io.{File, IOException}
 import java.net.{InetAddress, SocketTimeoutException}
 import java.util.concurrent._
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
+import java.util.Properties
 import scala.collection.{Map, Seq}
 import scala.compat.java8.OptionConverters.RichOptionForJava8
 import scala.jdk.CollectionConverters._
@@ -1025,9 +1026,11 @@ class KafkaServer(
    */
   private def checkpointBrokerMetadata(brokerMetadata: ZkMetaProperties) = {
     for (logDir <- config.logDirs if logManager.isLogDirOnline(new File(logDir).getAbsolutePath)) {
+      val props = brokerMetadata.toProperties.clone().asInstanceOf[Properties]
+      props.setProperty("directory.id", logManager.directoryId(logDir).get.toString)
       val checkpoint = brokerMetadataCheckpoints(logDir)
       try {
-        checkpoint.write(brokerMetadata.toProperties)
+        checkpoint.write(props)
       } catch {
         case e: IOException =>
           val dirPath = checkpoint.file.getAbsolutePath

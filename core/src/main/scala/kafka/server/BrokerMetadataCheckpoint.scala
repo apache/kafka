@@ -166,6 +166,7 @@ case class MetaProperties(
   }
 }
 
+// Return only the RawMetaProperties that are the same across all directoris.
 object BrokerMetadataCheckpoint extends Logging {
   def getBrokerMetadataAndOfflineDirs(
     logDirs: collection.Seq[String],
@@ -184,6 +185,8 @@ object BrokerMetadataCheckpoint extends Logging {
       try {
         brokerCheckpoint.read() match {
           case Some(properties) =>
+            // XXX Should we check for duplicates here
+            properties.remove(DirectoryIdKey)
             brokerMetadataMap += logDir -> properties
           case None =>
             if (!ignoreMissing) {
