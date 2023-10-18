@@ -14,9 +14,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients;
+package org.apache.kafka.common.telemetry;
 
-import org.apache.kafka.common.errors.IllegalClientTelemetryStateException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.function.Executable;
 
@@ -105,7 +104,7 @@ public class ClientTelemetryStateTest {
         for (ClientTelemetryState newState : invalidStates) {
             Executable e = () -> oldState.validateTransition(newState);
             String unexpectedSuccessMessage = "Should have thrown an IllegalTelemetryStateException for transitioning from " + oldState + " to " + newState;
-            assertThrows(IllegalClientTelemetryStateException.class, e, unexpectedSuccessMessage);
+            assertThrows(IllegalStateException.class, e, unexpectedSuccessMessage);
         }
     }
 

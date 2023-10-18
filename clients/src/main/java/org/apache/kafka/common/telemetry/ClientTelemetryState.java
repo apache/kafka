@@ -15,9 +15,8 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.clients;
+package org.apache.kafka.common.telemetry;
 
-import org.apache.kafka.common.errors.IllegalClientTelemetryStateException;
 import org.apache.kafka.common.utils.Utils;
 
 import java.util.Arrays;
@@ -136,7 +135,7 @@ public enum ClientTelemetryState {
      *                 non-<code>null</code>
      * @return {@code TelemetryState} <code>newState</code> if validation succeeds. Returning
      * <code>newState</code> helps state assignment chaining.
-     * @throws IllegalClientTelemetryStateException if the state transition validation fails.
+     * @throws IllegalStateException if the state transition validation fails.
      */
 
     public ClientTelemetryState validateTransition(ClientTelemetryState newState) {
@@ -161,7 +160,7 @@ public enum ClientTelemetryState {
             newState,
             validStatesClause);
 
-        throw new IllegalClientTelemetryStateException(message);
+        throw new IllegalStateException(message);
     }
 
 }
