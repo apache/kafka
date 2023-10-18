@@ -16,7 +16,7 @@
 {
   "apiKey": 72,
   "type": "request",
-  "listeners": ["broker", "controller"],
+  "listeners": ["broker"],
   "name": "PushTelemetryRequest",
   "validVersions": "0",
   "flexibleVersions": "0+",
