@@ -22,7 +22,7 @@ package org.apache.kafka.connect.util.clusters;
 @Deprecated
 public class EmbeddedConnectClusterAssertions extends ConnectAssertions {
 
-    public EmbeddedConnectClusterAssertions(EmbeddedConnect connect) {
+   EmbeddedConnectClusterAssertions(EmbeddedConnect connect) {
         super(connect);
     }
 
