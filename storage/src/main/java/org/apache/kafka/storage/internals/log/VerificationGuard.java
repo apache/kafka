@@ -19,11 +19,19 @@ package org.apache.kafka.storage.internals.log;
 import java.util.concurrent.atomic.AtomicLong;
 
 public class VerificationGuard {
+
+    // The sentinel verification guard will be used as a default when no verification guard is provided.
+    // It can not be used to verify a transaction is ongoing and its verificationGuardValue is always 0.
+    public static final VerificationGuard SENTINEL_VERIFICATION_GUARD = new VerificationGuard(0);
     private static final AtomicLong INCREMENTING_ID = new AtomicLong(0L);
     private final long verificationGuardValue;
 
     public VerificationGuard() {
         verificationGuardValue = INCREMENTING_ID.incrementAndGet();
+    }
+
+    private VerificationGuard(long value) {
+        verificationGuardValue = value;
     }
 
     @Override
@@ -45,7 +53,11 @@ public class VerificationGuard {
         return (int) (value ^ (value >>> 32));
     }
 
-    public long verificationGuardValue() {
+    private long verificationGuardValue() {
         return verificationGuardValue;
+    }
+
+    public boolean verifiedBy(VerificationGuard verifyingGuard) {
+        return verifyingGuard != SENTINEL_VERIFICATION_GUARD && verifyingGuard.equals(this);
     }
 }
