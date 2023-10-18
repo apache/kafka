@@ -27,10 +27,10 @@ import org.apache.kafka.common.record.RecordVersion;
  * This class contains the different Kafka versions.
  * Right now, we use them for upgrades - users can configure the version of the API brokers will use to communicate between themselves.
  * This is only for inter-broker communications - when communicating with clients, the client decides on the API version.
- *
+ * <br>
  * Note that the ID we initialize for each version is important.
  * We consider a version newer than another if it is lower in the enum list (to avoid depending on lexicographic order)
- *
+ * <br>
  * Since the api protocol may change more than once within the same release and to facilitate people deploying code from
  * trunk, we have the concept of internal versions (first introduced during the 0.10.0 development cycle). For example,
  * the first time we introduce a version change in a release, say 0.10.0, we will add a config value "0.10.0-IV0" and a

@@ -30,7 +30,7 @@ import java.util.Optional;
  * Provides methods for parsing JSON with Jackson and encoding to JSON with a simple and naive custom implementation.
  */
 public final class Json {
-    private static ObjectMapper mapper = new ObjectMapper();
+    private static final ObjectMapper mapper = new ObjectMapper();
 
     /**
      * Parse a JSON string into a JsonValue if possible. `None` is returned if `input` is not valid JSON.
