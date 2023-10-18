@@ -33,7 +33,7 @@ import java.util.Objects;
 import java.util.TreeMap;
 
 /**
- * Manges logging levels on a single worker. Supports dynamic adjustment and querying
+ * Manages logging levels on a single worker. Supports dynamic adjustment and querying
  * of logging levels.
  * <p>
  * This class is thread-safe; concurrent calls to all of its public methods from any number
