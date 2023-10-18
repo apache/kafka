@@ -179,6 +179,7 @@ public class AlterConsumerGroupOffsetsHandler extends AdminApiHandler.Batched<Co
             case INVALID_GROUP_ID:
             case INVALID_COMMIT_OFFSET_SIZE:
             case GROUP_AUTHORIZATION_FAILED:
+            case GROUP_ID_NOT_FOUND:
             // Member level errors.
             case UNKNOWN_MEMBER_ID:
             case STALE_MEMBER_EPOCH:
@@ -191,7 +192,6 @@ public class AlterConsumerGroupOffsetsHandler extends AdminApiHandler.Batched<Co
             case UNKNOWN_TOPIC_OR_PARTITION:
             case OFFSET_METADATA_TOO_LARGE:
             case TOPIC_AUTHORIZATION_FAILED:
-            case UNKNOWN_TOPIC_ID:
                 log.debug("OffsetCommit request for group id {} and partition {} failed due" +
                     " to error {}.", groupId.idValue, topicPartition, error);
                 partitionResults.put(topicPartition, error);
