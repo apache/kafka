@@ -19,17 +19,24 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.query.KeyQuery;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.query.RangeQuery;
+import org.apache.kafka.streams.query.TimestampedKeyQuery;
+import org.apache.kafka.streams.query.TimestampedRangeQuery;
+import org.apache.kafka.streams.query.internals.InternalQueryResultUtil;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.TimestampedBytesStore;
 
 import java.util.List;
 
@@ -46,7 +53,9 @@ import static org.apache.kafka.streams.state.internals.ValueAndTimestampDeserial
  *
  * @see KeyValueToTimestampedKeyValueIteratorAdapter
  */
-public class KeyValueToTimestampedKeyValueByteStoreAdapter implements KeyValueStore<Bytes, byte[]> {
+
+@SuppressWarnings("unchecked")
+public class KeyValueToTimestampedKeyValueByteStoreAdapter implements KeyValueStore<Bytes, byte[]>, TimestampedBytesStore {
     final KeyValueStore<Bytes, byte[]> store;
 
     KeyValueToTimestampedKeyValueByteStoreAdapter(final KeyValueStore<Bytes, byte[]> store) {
@@ -127,9 +136,25 @@ public class KeyValueToTimestampedKeyValueByteStoreAdapter implements KeyValueSt
         final QueryConfig config) {
 
 
+
         final long start = config.isCollectExecutionInfo() ? System.nanoTime() : -1L;
-        final QueryResult<R> result = store.query(query, positionBound, config);
+        QueryResult<R> result = store.query(query, positionBound, config);
+
+        if (result.isSuccess()) {
+            if (query instanceof KeyQuery || query instanceof TimestampedKeyQuery) {
+                final byte[] plainValue = (byte[]) result.getResult();
+                final byte[] valueWithTimestamp = convertToTimestampedFormat(plainValue);
+                result = (QueryResult<R>) InternalQueryResultUtil.copyAndSubstituteDeserializedResult(result, valueWithTimestamp);
+            } else if (query instanceof RangeQuery || query instanceof TimestampedRangeQuery) {
+                final KeyValueToTimestampedKeyValueAdapterIterator wrappedRocksDBRangeIterator = new KeyValueToTimestampedKeyValueAdapterIterator((RocksDbIterator) result.getResult());
+                result = (QueryResult<R>) InternalQueryResultUtil.copyAndSubstituteDeserializedResult(result, wrappedRocksDBRangeIterator);
+            } else {
+                throw new StreamsException("unsupported query type");
+            }
+        }
+
         if (config.isCollectExecutionInfo()) {
+
             final long end = System.nanoTime();
             result.addExecutionInfo(
                 "Handled in " + getClass() + " in " + (end - start) + "ns"
@@ -181,4 +206,41 @@ public class KeyValueToTimestampedKeyValueByteStoreAdapter implements KeyValueSt
         return store.approximateNumEntries();
     }
 
+    private static class KeyValueToTimestampedKeyValueAdapterIterator implements ManagedKeyValueIterator<Bytes, byte[]> {
+
+        private RocksDbIterator rocksDbIterator;
+
+        public KeyValueToTimestampedKeyValueAdapterIterator(final RocksDbIterator rocksDbIterator) {
+            this.rocksDbIterator = rocksDbIterator;
+        }
+
+        @Override
+        public void close() {
+            rocksDbIterator.close();
+        }
+
+        @Override
+        public Bytes peekNextKey() {
+            return rocksDbIterator.peekNextKey();
+        }
+
+        @Override
+        public void onClose(final Runnable closeCallback) {
+            rocksDbIterator.onClose(closeCallback);
+        }
+
+        @Override
+        public boolean hasNext() {
+            return rocksDbIterator.hasNext();
+        }
+
+        @Override
+        public KeyValue<Bytes, byte[]> next() {
+            final KeyValue<Bytes, byte[]> next = rocksDbIterator.next();
+            if (next == null) {
+                return null;
+            }
+            return KeyValue.pair(next.key, convertToTimestampedFormat(next.value));
+        }
+    }
 }
