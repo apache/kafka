@@ -3551,7 +3551,7 @@ class PartitionTest extends AbstractPartitionTest {
 
     // Before appendRecordsToLeader is called, ReplicaManager will call maybeStartTransactionVerification. We should get a non-sentinel VerificationGuard.
     val verificationGuard = partition.maybeStartTransactionVerification(producerId, 3, 0)
-    assertNotEquals(VerificationGuard.SENTINEL_VERIFICATION_GUARD, verificationGuard)
+    assertNotEquals(VerificationGuard.SENTINEL, verificationGuard)
 
     // With the wrong VerificationGuard, append should fail.
     assertThrows(classOf[InvalidTxnStateException], () => partition.appendRecordsToLeader(transactionRecords(),
@@ -3564,7 +3564,7 @@ class PartitionTest extends AbstractPartitionTest {
 
     // We should no longer need a VerificationGuard. Future appends without VerificationGuard will also succeed.
     val verificationGuard3 = partition.maybeStartTransactionVerification(producerId, 3, 0)
-    assertEquals(VerificationGuard.SENTINEL_VERIFICATION_GUARD, verificationGuard3)
+    assertEquals(VerificationGuard.SENTINEL, verificationGuard3)
     partition.appendRecordsToLeader(transactionRecords(), origin = AppendOrigin.CLIENT, requiredAcks = 1, RequestLocal.withThreadConfinedCaching)
   }
 

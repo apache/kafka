@@ -2163,7 +2163,7 @@ class ReplicaManagerTest {
         new SimpleRecord("message".getBytes))
       appendRecords(replicaManager, tp0, idempotentRecords)
       verify(addPartitionsToTxnManager, times(0)).verifyTransaction(any(), any(), any(), any(), any[AddPartitionsToTxnManager.AppendCallback]())
-      assertEquals(VerificationGuard.SENTINEL_VERIFICATION_GUARD, getVerificationGuard(replicaManager, tp0, producerId))
+      assertEquals(VerificationGuard.SENTINEL, getVerificationGuard(replicaManager, tp0, producerId))
 
       // If we supply a transactional ID and some transactional and some idempotent records, we should only verify the topic partition with transactional records.
       val transactionalRecords = MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, producerEpoch, sequence + 1,
@@ -2179,8 +2179,8 @@ class ReplicaManagerTest {
         ArgumentMatchers.eq(Seq(tp0)),
         any[AddPartitionsToTxnManager.AppendCallback]()
       )
-      assertNotEquals(VerificationGuard.SENTINEL_VERIFICATION_GUARD, getVerificationGuard(replicaManager, tp0, producerId))
-      assertEquals(VerificationGuard.SENTINEL_VERIFICATION_GUARD, getVerificationGuard(replicaManager, tp1, producerId))
+      assertNotEquals(VerificationGuard.SENTINEL, getVerificationGuard(replicaManager, tp0, producerId))
+      assertEquals(VerificationGuard.SENTINEL, getVerificationGuard(replicaManager, tp1, producerId))
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }
@@ -2238,7 +2238,7 @@ class ReplicaManagerTest {
 
       val callback2: AddPartitionsToTxnManager.AppendCallback = appendCallback2.getValue()
       callback2(Map.empty[TopicPartition, Errors].toMap)
-      assertEquals(VerificationGuard.SENTINEL_VERIFICATION_GUARD, getVerificationGuard(replicaManager, tp0, producerId))
+      assertEquals(VerificationGuard.SENTINEL, getVerificationGuard(replicaManager, tp0, producerId))
       assertTrue(replicaManager.localLog(tp0).get.hasOngoingTransaction(producerId))
     } finally {
       replicaManager.shutdown(checkpointHW = false)
@@ -2424,7 +2424,7 @@ class ReplicaManagerTest {
       val transactionalRecords = MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, producerEpoch, sequence,
         new SimpleRecord(s"message $sequence".getBytes))
       appendRecords(replicaManager, tp, transactionalRecords, transactionalId = transactionalId)
-      assertEquals(VerificationGuard.SENTINEL_VERIFICATION_GUARD, getVerificationGuard(replicaManager, tp, producerId))
+      assertEquals(VerificationGuard.SENTINEL, getVerificationGuard(replicaManager, tp, producerId))
 
       // We should not add these partitions to the manager to verify.
       verify(addPartitionsToTxnManager, times(0)).verifyTransaction(any(), any(), any(), any(), any())
@@ -2442,7 +2442,7 @@ class ReplicaManagerTest {
 
       appendRecords(replicaManager, tp, moreTransactionalRecords, transactionalId = transactionalId)
       verify(addPartitionsToTxnManager, times(0)).verifyTransaction(any(), any(), any(), any(), any())
-      assertEquals(VerificationGuard.SENTINEL_VERIFICATION_GUARD, getVerificationGuard(replicaManager, tp, producerId))
+      assertEquals(VerificationGuard.SENTINEL, getVerificationGuard(replicaManager, tp, producerId))
       assertTrue(replicaManager.localLog(tp).get.hasOngoingTransaction(producerId))
     } finally {
       replicaManager.shutdown(checkpointHW = false)
@@ -2496,7 +2496,7 @@ class ReplicaManagerTest {
       // This time we do not verify
       appendRecords(replicaManager, tp0, transactionalRecords, transactionalId = transactionalId)
       verify(addPartitionsToTxnManager, times(1)).verifyTransaction(any(), any(), any(), any(), any())
-      assertEquals(VerificationGuard.SENTINEL_VERIFICATION_GUARD, getVerificationGuard(replicaManager, tp0, producerId))
+      assertEquals(VerificationGuard.SENTINEL, getVerificationGuard(replicaManager, tp0, producerId))
       assertTrue(replicaManager.localLog(tp0).get.hasOngoingTransaction(producerId))
     } finally {
       replicaManager.shutdown(checkpointHW = false)

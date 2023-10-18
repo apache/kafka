@@ -21,22 +21,22 @@ import java.util.concurrent.atomic.AtomicLong;
 public class VerificationGuard {
 
     // The sentinel VerificationGuard will be used as a default when no verification guard is provided.
-    // It can not be used to verify a transaction is ongoing and its verificationGuardValue is always 0.
-    public static final VerificationGuard SENTINEL_VERIFICATION_GUARD = new VerificationGuard(0);
+    // It can not be used to verify a transaction is ongoing and its value is always 0.
+    public static final VerificationGuard SENTINEL = new VerificationGuard(0);
     private static final AtomicLong INCREMENTING_ID = new AtomicLong(0L);
-    private final long verificationGuardValue;
+    private final long value;
 
     public VerificationGuard() {
-        verificationGuardValue = INCREMENTING_ID.incrementAndGet();
+        value = INCREMENTING_ID.incrementAndGet();
     }
 
     private VerificationGuard(long value) {
-        verificationGuardValue = value;
+        this.value = value;
     }
 
     @Override
     public String toString() {
-        return "VerificationGuard: " + verificationGuardValue;
+        return "VerificationGuard: " + value;
     }
 
     @Override
@@ -44,19 +44,19 @@ public class VerificationGuard {
         if ((null == obj) || (obj.getClass() != this.getClass()))
             return false;
         VerificationGuard guard = (VerificationGuard) obj;
-        return verificationGuardValue == guard.verificationGuardValue();
+        return value == guard.value();
     }
 
     @Override
     public int hashCode() {
-        return Long.hashCode(verificationGuardValue);
+        return Long.hashCode(value);
     }
 
-    private long verificationGuardValue() {
-        return verificationGuardValue;
+    private long value() {
+        return value;
     }
 
     public boolean verifiedBy(VerificationGuard verifyingGuard) {
-        return verifyingGuard != SENTINEL_VERIFICATION_GUARD && verifyingGuard.equals(this);
+        return verifyingGuard != SENTINEL && verifyingGuard.equals(this);
     }
 }

@@ -3738,8 +3738,8 @@ class UnifiedLogTest {
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 2048 * 5)
     val log = createLog(logDir, logConfig, producerStateManagerConfig = producerStateManagerConfig)
     assertFalse(log.hasOngoingTransaction(producerId))
-    assertEquals(VerificationGuard.SENTINEL_VERIFICATION_GUARD, log.verificationGuard(producerId))
-    assertFalse(log.verificationGuard(producerId).verifiedBy(VerificationGuard.SENTINEL_VERIFICATION_GUARD))
+    assertEquals(VerificationGuard.SENTINEL, log.verificationGuard(producerId))
+    assertFalse(log.verificationGuard(producerId).verifiedBy(VerificationGuard.SENTINEL))
 
     val idempotentRecords = MemoryRecords.withIdempotentRecords(
       CompressionType.NONE,
@@ -3764,7 +3764,7 @@ class UnifiedLogTest {
     )
 
     val verificationGuard = log.maybeStartTransactionVerification(producerId, sequence, producerEpoch)
-    assertNotEquals(VerificationGuard.SENTINEL_VERIFICATION_GUARD, verificationGuard)
+    assertNotEquals(VerificationGuard.SENTINEL, verificationGuard)
 
     log.appendAsLeader(idempotentRecords, origin = appendOrigin, leaderEpoch = 0)
     assertFalse(log.hasOngoingTransaction(producerId))
@@ -3777,10 +3777,10 @@ class UnifiedLogTest {
     log.appendAsLeader(transactionalRecords, origin = appendOrigin, leaderEpoch = 0, verificationGuard = verificationGuard)
     assertTrue(log.hasOngoingTransaction(producerId))
     // VerificationGuard should be cleared now.
-    assertEquals(VerificationGuard.SENTINEL_VERIFICATION_GUARD, log.verificationGuard(producerId))
+    assertEquals(VerificationGuard.SENTINEL, log.verificationGuard(producerId))
 
     // A subsequent maybeStartTransactionVerification will be empty since we are already verified.
-    assertEquals(VerificationGuard.SENTINEL_VERIFICATION_GUARD, log.maybeStartTransactionVerification(producerId, sequence, producerEpoch))
+    assertEquals(VerificationGuard.SENTINEL, log.maybeStartTransactionVerification(producerId, sequence, producerEpoch))
 
     val endTransactionMarkerRecord = MemoryRecords.withEndTransactionMarker(
       producerId,
@@ -3790,14 +3790,14 @@ class UnifiedLogTest {
 
     log.appendAsLeader(endTransactionMarkerRecord, origin = AppendOrigin.COORDINATOR, leaderEpoch = 0)
     assertFalse(log.hasOngoingTransaction(producerId))
-    assertEquals(VerificationGuard.SENTINEL_VERIFICATION_GUARD, log.verificationGuard(producerId))
+    assertEquals(VerificationGuard.SENTINEL, log.verificationGuard(producerId))
 
     if (appendOrigin == AppendOrigin.CLIENT)
       sequence = sequence + 1
 
     // A new maybeStartTransactionVerification will not be empty, as we need to verify the next transaction.
     val newVerificationGuard = log.maybeStartTransactionVerification(producerId, sequence, producerEpoch)
-    assertNotEquals(VerificationGuard.SENTINEL_VERIFICATION_GUARD, newVerificationGuard)
+    assertNotEquals(VerificationGuard.SENTINEL, newVerificationGuard)
     assertNotEquals(verificationGuard, newVerificationGuard)
     assertFalse(verificationGuard.verifiedBy(newVerificationGuard))
   }
@@ -3812,7 +3812,7 @@ class UnifiedLogTest {
     val log = createLog(logDir, logConfig, producerStateManagerConfig = producerStateManagerConfig)
 
     val verificationGuard = log.maybeStartTransactionVerification(producerId, 0, producerEpoch)
-    assertNotEquals(VerificationGuard.SENTINEL_VERIFICATION_GUARD, verificationGuard)
+    assertNotEquals(VerificationGuard.SENTINEL, verificationGuard)
 
     val endTransactionMarkerRecord = MemoryRecords.withEndTransactionMarker(
       producerId,
@@ -3822,7 +3822,7 @@ class UnifiedLogTest {
 
     log.appendAsLeader(endTransactionMarkerRecord, origin = AppendOrigin.COORDINATOR, leaderEpoch = 0)
     assertFalse(log.hasOngoingTransaction(producerId))
-    assertEquals(VerificationGuard.SENTINEL_VERIFICATION_GUARD, log.verificationGuard(producerId))
+    assertEquals(VerificationGuard.SENTINEL, log.verificationGuard(producerId))
   }
 
   @Test
@@ -3835,7 +3835,7 @@ class UnifiedLogTest {
     val log = createLog(logDir, logConfig, producerStateManagerConfig = producerStateManagerConfig)
 
     val verificationGuard = log.maybeStartTransactionVerification(producerId, 0, producerEpoch)
-    assertNotEquals(VerificationGuard.SENTINEL_VERIFICATION_GUARD, verificationGuard)
+    assertNotEquals(VerificationGuard.SENTINEL, verificationGuard)
 
     producerStateManagerConfig.setTransactionVerificationEnabled(false)
 
@@ -3850,7 +3850,7 @@ class UnifiedLogTest {
     log.appendAsLeader(transactionalRecords, leaderEpoch = 0)
 
     assertTrue(log.hasOngoingTransaction(producerId))
-    assertEquals(VerificationGuard.SENTINEL_VERIFICATION_GUARD, log.verificationGuard(producerId))
+    assertEquals(VerificationGuard.SENTINEL, log.verificationGuard(producerId))
   }
 
   @Test
@@ -3875,14 +3875,14 @@ class UnifiedLogTest {
     )
     assertThrows(classOf[InvalidTxnStateException], () => log.appendAsLeader(transactionalRecords, leaderEpoch = 0))
     assertFalse(log.hasOngoingTransaction(producerId))
-    assertEquals(VerificationGuard.SENTINEL_VERIFICATION_GUARD, log.verificationGuard(producerId))
+    assertEquals(VerificationGuard.SENTINEL, log.verificationGuard(producerId))
 
     val verificationGuard = log.maybeStartTransactionVerification(producerId, sequence, producerEpoch)
-    assertNotEquals(VerificationGuard.SENTINEL_VERIFICATION_GUARD, verificationGuard)
+    assertNotEquals(VerificationGuard.SENTINEL, verificationGuard)
 
     log.appendAsLeader(transactionalRecords, leaderEpoch = 0, verificationGuard = verificationGuard)
     assertTrue(log.hasOngoingTransaction(producerId))
-    assertEquals(VerificationGuard.SENTINEL_VERIFICATION_GUARD, log.verificationGuard(producerId))
+    assertEquals(VerificationGuard.SENTINEL, log.verificationGuard(producerId))
   }
 
   @Test
@@ -3895,7 +3895,7 @@ class UnifiedLogTest {
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 2048 * 5)
     val log = createLog(logDir, logConfig, producerStateManagerConfig = producerStateManagerConfig)
     assertFalse(log.hasOngoingTransaction(producerId))
-    assertEquals(VerificationGuard.SENTINEL_VERIFICATION_GUARD, log.verificationGuard(producerId))
+    assertEquals(VerificationGuard.SENTINEL, log.verificationGuard(producerId))
 
     val transactionalRecords = MemoryRecords.withTransactionalRecords(
       CompressionType.NONE,

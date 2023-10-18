@@ -604,7 +604,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    */
   def maybeStartTransactionVerification(producerId: Long, sequence: Int, epoch: Short): VerificationGuard = lock synchronized {
     if (hasOngoingTransaction(producerId))
-      VerificationGuard.SENTINEL_VERIFICATION_GUARD
+      VerificationGuard.SENTINEL
     else
       maybeCreateVerificationGuard(producerId, sequence, epoch)
   }
@@ -624,7 +624,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    */
   def verificationGuard(producerId: Long): VerificationGuard = lock synchronized {
     val entry = producerStateManager.verificationStateEntry(producerId)
-    if (entry != null) entry.verificationGuard else VerificationGuard.SENTINEL_VERIFICATION_GUARD
+    if (entry != null) entry.verificationGuard else VerificationGuard.SENTINEL
   }
 
   /**
@@ -716,7 +716,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
                      origin: AppendOrigin = AppendOrigin.CLIENT,
                      interBrokerProtocolVersion: MetadataVersion = MetadataVersion.latest,
                      requestLocal: RequestLocal = RequestLocal.NoCaching,
-                     verificationGuard: VerificationGuard = VerificationGuard.SENTINEL_VERIFICATION_GUARD): LogAppendInfo = {
+                     verificationGuard: VerificationGuard = VerificationGuard.SENTINEL): LogAppendInfo = {
     val validateAndAssignOffsets = origin != AppendOrigin.RAFT_LEADER
     append(records, origin, interBrokerProtocolVersion, validateAndAssignOffsets, leaderEpoch, Some(requestLocal), verificationGuard, ignoreRecordSize = false)
   }
@@ -735,7 +735,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
       validateAndAssignOffsets = false,
       leaderEpoch = -1,
       requestLocal = None,
-      verificationGuard = VerificationGuard.SENTINEL_VERIFICATION_GUARD,
+      verificationGuard = VerificationGuard.SENTINEL,
       // disable to check the validation of record size since the record is already accepted by leader.
       ignoreRecordSize = true)
   }
