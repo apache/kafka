@@ -17,13 +17,18 @@
 
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.UnknownTopicIdException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.protocol.Errors;
 
 import java.util.Optional;
 import java.util.Set;
+import java.util.SortedSet;
+import java.util.TreeSet;
 
 /**
  * Membership manager that maintains group membership for a single member following the new
@@ -57,18 +62,27 @@ public class MembershipManagerImpl implements MembershipManager {
      */
     private Optional<ConsumerGroupHeartbeatResponseData.Assignment> nextTargetAssignment;
     /**
+     * Metadata that allows us to create the partitions needed for {@link ConsumerRebalanceListener}.
+     */
+    private final ConsumerMetadata metadata;
+    /**
      * AssignmentReconciler that handles updates to partition assignments.
      */
     private final AssignmentReconciler assignmentReconciler;
 
-    public MembershipManagerImpl(String groupId, AssignmentReconciler assignmentReconciler) {
-        this(groupId, null, null, assignmentReconciler);
+
+    public MembershipManagerImpl(ConsumerMetadata metadata,
+                                 String groupId,
+                                 AssignmentReconciler assignmentReconciler) {
+        this(metadata, groupId, null, null, assignmentReconciler);
     }
 
-    public MembershipManagerImpl(String groupId,
+    public MembershipManagerImpl(ConsumerMetadata metadata,
+                                 String groupId,
                                  String groupInstanceId,
                                  AssignorSelection assignorSelection,
                                  AssignmentReconciler assignmentReconciler) {
+        this.metadata = metadata;
         this.groupId = groupId;
         this.state = MemberState.UNJOINED;
         if (assignorSelection == null) {
@@ -168,9 +182,31 @@ public class MembershipManagerImpl implements MembershipManager {
             transitionTo(MemberState.STABLE);
         } else {
             transitionTo(MemberState.RECONCILING);
-            targetAssignment.ifPresent(assignmentReconciler::startReconcile);
+            startReconciliation();
         }
         return state.equals(MemberState.STABLE);
+    }
+
+    private void startReconciliation() {
+        if (!targetAssignment.isPresent())
+            return;
+
+        SortedSet<TopicPartition> targetPartitions = new TreeSet<>(new Utils.TopicPartitionComparator());
+
+        for (ConsumerGroupHeartbeatResponseData.TopicPartitions topicPartitions : targetAssignment.get().topicPartitions()) {
+            Uuid topicId = topicPartitions.topicId();
+            String topicName = metadata.topicNames().get(topicId);
+
+            // TODO... I don't think this is right...
+            if (topicName == null)
+                throw new UnknownTopicIdException("A topic name for the topic ID " + topicId + " was not found in the local metadata cache");
+
+            for (Integer partition : topicPartitions.partitions()) {
+                targetPartitions.add(new TopicPartition(topicName, partition));
+            }
+        }
+
+        assignmentReconciler.startReconcile(targetPartitions);
     }
 
     private void setTargetAssignment(ConsumerGroupHeartbeatResponseData.Assignment newTargetAssignment) {

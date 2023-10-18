@@ -18,25 +18,19 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+import org.apache.kafka.clients.consumer.internals.Utils.TopicPartitionComparator;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.PartitionLostStartedEvent;
 import org.apache.kafka.clients.consumer.internals.events.PartitionReconciliationCompleteEvent;
 import org.apache.kafka.clients.consumer.internals.events.PartitionReconciliationStartedEvent;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData.Assignment;
-import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData.TopicPartitions;
-import org.apache.kafka.clients.consumer.internals.Utils.TopicPartitionComparator;
 import org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.SortedSet;
@@ -51,7 +45,7 @@ import java.util.concurrent.BlockingQueue;
  * responsibility of the consumer to work toward that target by performing the necessary internal modifications to
  * satisfy the assignment from the coordinator. In practical terms, this means that it must first determine the set
  * difference between the <em>{@link SubscriptionState#assignedPartitions() current assignment}</em> and the
- * <em>{@link Assignment#topicPartitions() target assignment}</em>.
+ * <em>target assignment</em>.
  *
  * <p/>
  *
@@ -60,12 +54,12 @@ import java.util.concurrent.BlockingQueue;
  * <ol>
  *     <li>
  *         On the background thread, upon receipt of a new assignment from the group coordinator, the
- *         {@link MembershipManager} should call {@link #startReconcile(Assignment)} to start reconciliation.
+ *         {@link MembershipManager} should call {@link #startReconcile(Set)} to start reconciliation.
  *     </li>
  *     <li>
- *         Internally, the partitions to revoke are determined via {@link #getPartitionsToRevoke(Assignment)};
+ *         Internally, the partitions to revoke are determined via {@link #getPartitionsToRevoke(Set)};
  *         these are the partitions in the current assignment that are <em>not in</em> the target assignment.
- *         Next, we calculate the partitions to assign using {@link #getPartitionsToAssign(Assignment)};
+ *         Next, we calculate the partitions to assign using {@link #getPartitionsToAssign(Set)};
  *         these are the partitions in the target assignment that are <em>not in</em> the current assignment.
  *     </li>
  *     <li>
@@ -90,28 +84,18 @@ import java.util.concurrent.BlockingQueue;
  *         {@link HeartbeatRequestManager#poll(long)}
  *     </li>
  * </ol>
- *
- * <p/>
- *
- * The comparison against the {@link SubscriptionState#assignedPartitions() current set of assigned partitions} and
- * the {@link Assignment#topicPartitions() target set of assigned partitions} is performed by essentially
- * <em>flattening</em> the respective entries into two sets of {@link TopicPartition partitions}
- * which are then compared using basic {@link Set} comparisons.
  */
 public class AssignmentReconciler {
 
     private final Logger log;
     private final SubscriptionState subscriptions;
-    private final ConsumerMetadata metadata;
     private final BlockingQueue<BackgroundEvent> backgroundEventQueue;
 
     AssignmentReconciler(LogContext logContext,
                          SubscriptionState subscriptions,
-                         ConsumerMetadata metadata,
                          BlockingQueue<BackgroundEvent> backgroundEventQueue) {
         this.log = logContext.logger(getClass());
         this.subscriptions = subscriptions;
-        this.metadata = metadata;
         this.backgroundEventQueue = backgroundEventQueue;
     }
 
@@ -155,11 +139,11 @@ public class AssignmentReconciler {
     /**
      * Performs the assignment phase of the reconciliation process as described in the top-level class documentation.
      *
-     * @param assignment Holds the {@link Assignment} which includes the target set of topics
+     * @param target Set of {@link TopicPartition} which represents the target set of topics
      */
-    void startReconcile(Assignment assignment) {
-        SortedSet<TopicPartition> partitionsToRevoke = getPartitionsToRevoke(assignment);
-        SortedSet<TopicPartition> partitionsToAssign = getPartitionsToAssign(assignment);
+    void startReconcile(Set<TopicPartition> target) {
+        SortedSet<TopicPartition> partitionsToRevoke = getPartitionsToRevoke(target);
+        SortedSet<TopicPartition> partitionsToAssign = getPartitionsToAssign(target);
 
         if (partitionsToRevoke.isEmpty() && partitionsToAssign.isEmpty()) {
             log.debug("Skipping invocation of {} callbacks as no partitions changed in the new assignment",
@@ -203,34 +187,32 @@ public class AssignmentReconciler {
     }
 
     /**
-     * Determine which partitions are newly revoked. This is done by comparing the
-     * {@link Assignment#topicPartitions() target set from the assignment} against the
-     * {@link SubscriptionState#assignedPartitions() current set}. The returned set of
+     * Determine which partitions are newly revoked. This is done by comparing the target set from the assignment
+     * against the {@link SubscriptionState#assignedPartitions() current set}. The returned set of
      * {@link TopicPartition partitions} are composed of any partitions that are in the current set but
      * are no longer in the target set.
      *
-     * @param assignment Holds the {@link Assignment} which includes the target set of topics
+     * @param target Set of {@link TopicPartition} which represents the target set of topics
      * @return Set of partitions to revoke
      */
-    SortedSet<TopicPartition> getPartitionsToRevoke(Assignment assignment) {
+    SortedSet<TopicPartition> getPartitionsToRevoke(Set<TopicPartition> target) {
         SortedSet<TopicPartition> partitions = new TreeSet<>(new TopicPartitionComparator());
         partitions.addAll(subscriptions.assignedPartitions());
-        partitions.removeAll(targetPartitions(assignment));
+        partitions.removeAll(target);
         return partitions;
     }
 
     /**
-     * Determine which partitions are newly assigned. This is done by comparing the
-     * {@link Assignment#topicPartitions() target set from the assignment} against the
-     * {@link SubscriptionState#assignedPartitions() current set}. Any {@link TopicPartition partitions} from the
-     * target set that are not already in the current set are included in the returned set.
+     * Determine which partitions are newly assigned. This is done by comparing the target set from the assignment
+     * against the {@link SubscriptionState#assignedPartitions() current set}. Any {@link TopicPartition partitions}
+     * from the target set that are not already in the current set are included in the returned set.
      *
-     * @param assignment {@link Optional} that holds the {@link Assignment} which includes the target set of topics
+     * @param target Set of {@link TopicPartition} which represents the target set of topics
      * @return Set of partitions to assign
      */
-    SortedSet<TopicPartition> getPartitionsToAssign(Assignment assignment) {
+    SortedSet<TopicPartition> getPartitionsToAssign(Set<TopicPartition> target) {
         SortedSet<TopicPartition> partitions = new TreeSet<>(new TopicPartitionComparator());
-        partitions.addAll(targetPartitions(assignment));
+        partitions.addAll(target);
         partitions.removeAll(subscriptions.assignedPartitions());
         return partitions;
     }
@@ -247,22 +229,6 @@ public class AssignmentReconciler {
         return partitions;
     }
 
-    private SortedSet<TopicPartition> targetPartitions(Assignment assignment) {
-        Map<Uuid, String> topicIdToNameMap = createTopicIdToNameMapping();
-        SortedSet<TopicPartition> partitions = new TreeSet<>(new TopicPartitionComparator());
-
-        for (TopicPartitions topicPartitions : assignment.topicPartitions()) {
-            Uuid topicId = topicPartitions.topicId();
-            String topicName = Objects.requireNonNull(topicIdToNameMap.get(topicId), () -> String.format("No topic name was found in the metadata for topic ID %s", topicId));
-
-            for (Integer partition : topicPartitions.partitions()) {
-                partitions.add(new TopicPartition(topicName, partition));
-            }
-        }
-
-        return partitions;
-    }
-
     /**
      * When asynchronously committing offsets prior to the revocation of a set of partitions, there will be a
      * window of time between when the offset commit is sent and when it returns and revocation completes. It is
@@ -275,14 +241,5 @@ public class AssignmentReconciler {
         Set<TopicPartition> partitions = subscriptions.assignedPartitions();
         log.debug("Marking assigned partitions pending for revocation: {}", partitions);
         subscriptions.markPendingRevocation(partitions);
-    }
-
-    private Map<Uuid, String> createTopicIdToNameMapping() {
-        Map<Uuid, String> map = new HashMap<>();
-
-        for (Map.Entry<String, Uuid> entry : metadata.topicIds().entrySet())
-            map.put(entry.getValue(), entry.getKey());
-
-        return map;
     }
 }

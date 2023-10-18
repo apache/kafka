@@ -54,6 +54,7 @@ public class MembershipManagerImplTest {
     private static final String GROUP_ID = "test-group";
     private static final String MEMBER_ID = "test-member-1";
     private static final int MEMBER_EPOCH = 1;
+    private ConsumerMetadata metadata;
     private AssignmentReconciler assignmentReconciler;
 
     @BeforeEach
@@ -78,7 +79,7 @@ public class MembershipManagerImplTest {
         props.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         props.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         ConsumerConfig config = new ConsumerConfig(props);
-        ConsumerMetadata metadata = new ConsumerMetadata(
+        metadata = new ConsumerMetadata(
                 config,
                 subscriptions,
                 logContext,
@@ -87,7 +88,7 @@ public class MembershipManagerImplTest {
         metadata.updateWithCurrentRequestVersion(metadataResponse, false, 0L);
 
         BlockingQueue<BackgroundEvent> backgroundEventQueue = new LinkedBlockingQueue<>();
-        assignmentReconciler = new AssignmentReconciler(logContext, subscriptions, metadata, backgroundEventQueue);
+        assignmentReconciler = new AssignmentReconciler(logContext, subscriptions, backgroundEventQueue);
     }
 
     @Test
@@ -255,12 +256,12 @@ public class MembershipManagerImplTest {
     }
 
     private MembershipManagerImpl createMembershipManager(String groupId) {
-        return new MembershipManagerImpl(groupId, assignmentReconciler);
+        return new MembershipManagerImpl(metadata, groupId, assignmentReconciler);
     }
 
     private MembershipManagerImpl createMembershipManager(String groupId,
                                                           String instanceId,
                                                           AssignorSelection assignorSelection) {
-        return new MembershipManagerImpl(groupId, instanceId, assignorSelection, assignmentReconciler);
+        return new MembershipManagerImpl(metadata, groupId, instanceId, assignorSelection, assignmentReconciler);
     }
 }

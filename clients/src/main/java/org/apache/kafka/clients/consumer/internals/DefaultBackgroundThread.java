@@ -198,10 +198,9 @@ public class DefaultBackgroundThread extends KafkaThread {
                 AssignmentReconciler assignmentReconciler = new AssignmentReconciler(
                         logContext,
                         subscriptionState,
-                        metadata,
                         backgroundEventQueue
                 );
-                membershipManager = new MembershipManagerImpl(groupState.groupId, assignmentReconciler);
+                membershipManager = new MembershipManagerImpl(metadata, groupState.groupId, assignmentReconciler);
                 heartbeatRequestManager = new HeartbeatRequestManager(
                         this.time,
                         logContext,

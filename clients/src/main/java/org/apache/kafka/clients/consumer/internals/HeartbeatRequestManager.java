@@ -20,6 +20,7 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.RetriableException;
+import org.apache.kafka.common.errors.UnknownTopicIdException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest;
@@ -215,7 +216,15 @@ public class HeartbeatRequestManager implements RequestManager {
             this.heartbeatRequestState.updateHeartbeatIntervalMs(response.data().heartbeatIntervalMs());
             this.heartbeatRequestState.onSuccessfulAttempt(currentTimeMs);
             this.heartbeatRequestState.resetTimer();
-            this.membershipManager.updateState(response.data());
+
+            try {
+                this.membershipManager.updateState(response.data());
+            } catch (UnknownTopicIdException e) {
+                // This can occur when the assignment has a topic ID that we don't know about yet.
+                //
+                // TODO: I have no idea what to do here
+                // metadata.requestUpdate();
+            }
             return;
         }
         onErrorResponse(response, currentTimeMs);
