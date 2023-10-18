@@ -140,7 +140,7 @@ public enum ApiKeys {
     /** indicates the minimum required inter broker magic required to support the API */
     public final byte minRequiredInterBrokerMagic;
 
-    /** indicates whether the API is enabled for forwarding **/
+    /** indicates whether the API is enabled for forwarding */
     public final boolean forwardable;
 
     public final boolean requiresDelayedAllocation;

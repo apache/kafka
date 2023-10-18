@@ -2237,7 +2237,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @return This {@code Consumer} instance's current lag for the given partition.
      *
      * @throws IllegalStateException if the {@code topicPartition} is not assigned
-     **/
+     */
     @Override
     public OptionalLong currentLag(TopicPartition topicPartition) {
         acquireAndEnsureOpen();
