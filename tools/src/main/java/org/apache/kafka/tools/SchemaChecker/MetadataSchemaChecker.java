@@ -22,17 +22,16 @@ package org.apache.kafka.tools.SchemaChecker;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
-import org.eclipse.jgit.api.CheckoutCommand;
 import org.eclipse.jgit.api.Git;
-import org.eclipse.jgit.api.InitCommand;
 import org.eclipse.jgit.api.errors.GitAPIException;
-import org.eclipse.jgit.internal.storage.file.FileRepository;
-import org.eclipse.jgit.lib.*;
+
+import org.eclipse.jgit.lib.ObjectId;
+import org.eclipse.jgit.lib.ObjectLoader;
+import org.eclipse.jgit.lib.Ref;
+import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.revwalk.RevCommit;
 import org.eclipse.jgit.revwalk.RevTree;
 import org.eclipse.jgit.revwalk.RevWalk;
-import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
-import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider;
 import org.eclipse.jgit.treewalk.TreeWalk;
 import org.eclipse.jgit.treewalk.filter.PathFilter;
 
@@ -42,9 +41,12 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Objects;
+
 
 public class MetadataSchemaChecker {
 
@@ -55,11 +57,13 @@ public class MetadataSchemaChecker {
     static int newLatestVersion = -1;
     static int newFirstVersion = -1;
 
-    static String[] filesCheckMetadata = {"AccessControlEntryRecord.json", "BrokerRegistrationChangeRecord.json", "ClientQuotaRecord.json",
+    static String[] filesCheckMetadata1 = {"AccessControlEntryRecord.json", "BrokerRegistrationChangeRecord.json", "ClientQuotaRecord.json",
             "ConfigRecord.json", "DelegationTokenRecord.json", "FeatureLevelRecord.json", "FenceBrokerRecord.json", "NoOpRecord.json",
             "PartitionChangeRecord.json", "PartitionRecord.json", "ProducerIdsRecord.json", "RegisterBrokerRecord.json",
             "RemoveAccessControlEntryRecord.json", "RemoveTopicRecord.json", "RemoveUserScramCredentialRecord.json", "TopicRecord.json",
             "UnfenceBrokerRecord.json", "UnregisterBrokerRecord.json", "UserScramCredentialRecord.json", "ZkMigrationRecord.json"};
+
+    static String[] filesCheckMetadata = new File(System.getProperty("user.dir") + "/metadata/src/main/resources/common/metadata/").list();
     public static void main(String[] args) throws Exception {
 
         try {
@@ -72,8 +76,14 @@ public class MetadataSchemaChecker {
                     reader.readLine();
                 }
                 StringBuilder content = new StringBuilder();
+                boolean print = false;
                 for (String line = reader.readLine(); line != null; line = reader.readLine()) {
-                    content.append(line);
+                    if (line.charAt(0) == '{') {
+                        print = true;
+                    }
+                    if (print && !line.contains("//")) {
+                        content.append(line);
+                    }
                 }
                 localContent.add(content.toString());
             }
@@ -95,9 +105,6 @@ public class MetadataSchemaChecker {
                 parser((ArrayNode) jsonNode1.get("fields"), (ArrayNode) jsonNode2.get("fields"));
             }
 
-        } catch (FileNotFoundException e) {
-            System.out.println("An error occurred.");
-            e.printStackTrace();
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -113,14 +120,14 @@ public class MetadataSchemaChecker {
         try (RevWalk revWalk = new RevWalk(repository)) {
             RevCommit commit = revWalk.parseCommit(head.getObjectId());
             RevTree tree = commit.getTree();
-            for (String jsonSchema : filesCheckMetadata) {
+            for (String fileName : filesCheckMetadata) {
                 StringBuilder stringBuilder = new StringBuilder();
                 try (TreeWalk treeWalk = new TreeWalk(repository)) {
                     treeWalk.addTree(tree);
                     treeWalk.setRecursive(true);
-                    treeWalk.setFilter(PathFilter.create("metadata/src/main/resources/common/metadata/" + jsonSchema));
+                    treeWalk.setFilter(PathFilter.create("metadata/src/main/resources/common/metadata/" + fileName));
                     if (!treeWalk.next()) {
-                        throw new IllegalStateException("Did not find expected file /metadata/src/main/resources/common/metadata/" + jsonSchema);
+                        throw new IllegalStateException("Did not find expected file /metadata/src/main/resources/common/metadata/" + fileName);
                     }
                     ObjectId objectId = treeWalk.getObjectId(0);
                     ObjectLoader loader = repository.open(objectId);
@@ -146,20 +153,32 @@ public class MetadataSchemaChecker {
 
     private static void checkApiTypeVersions(JsonNode original, JsonNode edited) {
         if (!Objects.equals(original.get("apiKey"), edited.get("apiKey"))) {
-            throw new IllegalStateException("New schema has wrong api key, " + edited.get("apiKey") + " should be " + original.get("apiKey"));
+            throw new IllegalStateException("New schema has wrong api key, Original api key: " + edited.get("apiKey") +
+                                            ", New api key: " + original.get("apiKey"));
         }
         if (!Objects.equals(original.get("type"), edited.get("type"))) {
-            throw new IllegalStateException("New schema has wrong record type, " + edited.get("type") + " should be " + original.get("type"));
+            throw new IllegalStateException("New schema has wrong record type, Original type: " + edited.get("type") +
+                                            ", New Type: " + original.get("type"));
         }
-        String oldValidVersions = String.valueOf(original.get("validVersions"));
-        String newValidVersions = String.valueOf(edited.get("validVersions"));
-        oldLatestVersion = Character.getNumericValue(oldValidVersions.charAt(oldValidVersions.length() - 2));
-        newLatestVersion = Character.getNumericValue(newValidVersions.charAt(newValidVersions.length() - 2));
+        String[] oldValidVersions = cleanUpVersionStrings(String.valueOf(original.get("validVersions")));
+        String[] newValidVersions = cleanUpVersionStrings(String.valueOf(original.get("validVersions")));
+        oldFirstVersion = Integer.parseInt(oldValidVersions[0]);
+        newFirstVersion = Integer.parseInt(newValidVersions[0]);
+        if (oldValidVersions.length == 1) {
+            oldLatestVersion = Integer.parseInt(oldValidVersions[0]);
+        } else {
+            oldLatestVersion = Integer.parseInt(oldValidVersions[1]);
+        }
+        if (newValidVersions.length == 1) {
+            newLatestVersion = Integer.parseInt(newValidVersions[0]);
+        } else {
+            newLatestVersion = Integer.parseInt(newValidVersions[1]);
+        }
+
         if (oldLatestVersion != newLatestVersion && oldLatestVersion + 1 != newLatestVersion) {
-            throw new IllegalStateException("Invalid latest versions, can at most be one higher than the previous");
+            throw new IllegalStateException("Invalid latest version, can at most be one higher than the previous. Original version: "
+                                            + oldLatestVersion + ", New Version: " + newLatestVersion);
         }
-        oldFirstVersion = Character.getNumericValue(oldValidVersions.charAt(1));
-        newFirstVersion = Character.getNumericValue(newValidVersions.charAt(1));
         if (oldFirstVersion != newFirstVersion) {
             throw new IllegalStateException("cannot change lower end of valid versions");
         }
