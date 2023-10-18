@@ -27,7 +27,7 @@ USER appuser
 RUN go test ./...
 
 
-FROM eclipse-temurin:17-jre
+FROM eclipse-temurin:21-jre
 
 # exposed ports
 EXPOSE 9092
@@ -65,7 +65,8 @@ RUN set -eux ; \
     chown appuser:appuser -R /etc/kafka/ /usr/logs /opt/kafka; \
     chown appuser:root -R /etc/kafka /var/lib/kafka /etc/kafka/secrets /var/lib/kafka /etc/kafka /var/log/kafka /var/lib/zookeeper; \
     chmod -R ug+w /etc/kafka /var/lib/kafka /var/lib/kafka /etc/kafka/secrets /etc/kafka /var/log/kafka /var/lib/zookeeper; \
-    rm kafka.tgz;
+    rm kafka.tgz; \
+    rm kafka.tgz.asc;
 
 COPY --from=build-ub /build/ub /usr/bin
 COPY --chown=appuser:appuser resources/common-scripts /etc/kafka/docker
