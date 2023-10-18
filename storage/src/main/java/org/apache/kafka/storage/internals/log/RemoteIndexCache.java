@@ -479,7 +479,7 @@ public class RemoteIndexCache implements Closeable {
         // underlying files of the index) isn't performed while a read is in-progress for the entry. This is required in
         // addition to using the thread safe cache because, while the thread safety of the cache ensures that we can read
         // entries concurrently, it does not ensure that we won't mutate underlying files belonging to an entry.
-        private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
+        private final ReentrantReadWriteLock entryLock = new ReentrantReadWriteLock();
 
         private boolean cleanStarted = false;
 
@@ -524,41 +524,41 @@ public class RemoteIndexCache implements Closeable {
         }
 
         private long estimatedEntrySize() {
-            lock.readLock().lock();
+            entryLock.readLock().lock();
             try {
                 return offsetIndex.sizeInBytes() + timeIndex.sizeInBytes() + Files.size(txnIndex.file().toPath());
             } catch (IOException e) {
                 log.warn("Error occurred when estimating remote index cache entry bytes size, just set 0 firstly.", e);
                 return 0L;
             } finally {
-                lock.readLock().unlock();
+                entryLock.readLock().unlock();
             }
         }
 
         public OffsetPosition lookupOffset(long targetOffset) {
-            lock.readLock().lock();
+            entryLock.readLock().lock();
             try {
                 if (markedForCleanup) throw new IllegalStateException("This entry is marked for cleanup");
                 else return offsetIndex.lookup(targetOffset);
             } finally {
-                lock.readLock().unlock();
+                entryLock.readLock().unlock();
             }
         }
 
         public OffsetPosition lookupTimestamp(long timestamp, long startingOffset) throws IOException {
-            lock.readLock().lock();
+            entryLock.readLock().lock();
             try {
                 if (markedForCleanup) throw new IllegalStateException("This entry is marked for cleanup");
 
                 TimestampOffset timestampOffset = timeIndex.lookup(timestamp);
                 return offsetIndex.lookup(Math.max(startingOffset, timestampOffset.offset));
             } finally {
-                lock.readLock().unlock();
+                entryLock.readLock().unlock();
             }
         }
 
         public void markForCleanup() throws IOException {
-            lock.writeLock().lock();
+            entryLock.writeLock().lock();
             try {
                 if (!markedForCleanup) {
                     markedForCleanup = true;
@@ -567,12 +567,12 @@ public class RemoteIndexCache implements Closeable {
                     txnIndex.renameTo(new File(Utils.replaceSuffix(txnIndex.file().getPath(), "", LogFileUtils.DELETED_FILE_SUFFIX)));
                 }
             } finally {
-                lock.writeLock().unlock();
+                entryLock.writeLock().unlock();
             }
         }
 
         public void cleanup() throws IOException {
-            lock.writeLock().lock();
+            entryLock.writeLock().lock();
             try {
                 markForCleanup();
                 // no-op if clean is done already
@@ -593,19 +593,19 @@ public class RemoteIndexCache implements Closeable {
                     tryAll(actions);
                 }
             } finally {
-                lock.writeLock().unlock();
+                entryLock.writeLock().unlock();
             }
         }
 
         @Override
         public void close() {
-            lock.writeLock().lock();
+            entryLock.writeLock().lock();
             try {
                 Utils.closeQuietly(offsetIndex, "OffsetIndex");
                 Utils.closeQuietly(timeIndex, "TimeIndex");
                 Utils.closeQuietly(txnIndex, "TransactionIndex");
             } finally {
-                lock.writeLock().unlock();
+                entryLock.writeLock().unlock();
             }
         }
 
