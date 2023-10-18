@@ -44,7 +44,6 @@ public class PartitionRegistration {
         private int[] addingReplicas = Replicas.NONE;
         private int[] elr = Replicas.NONE;
         private int[] lastKnownElr = Replicas.NONE;
-        private Integer lastKnownLeader = -1;
         private Integer leader;
         private LeaderRecoveryState leaderRecoveryState;
         private Integer leaderEpoch;
@@ -77,11 +76,6 @@ public class PartitionRegistration {
 
         public Builder setLastKnownElr(int[] lastKnownElr) {
             this.lastKnownElr = lastKnownElr;
-            return this;
-        }
-
-        public Builder setLastKnownLeader(Integer lastKnownLeader) {
-            this.lastKnownLeader = lastKnownLeader;
             return this;
         }
 
@@ -126,8 +120,6 @@ public class PartitionRegistration {
                 throw new IllegalStateException("You must set ELR.");
             } else if (lastKnownElr == null) {
                 throw new IllegalStateException("You must set last known elr.");
-            } else if (lastKnownLeader == null) {
-                throw new IllegalStateException("You must set last known leader.");
             }
 
             return new PartitionRegistration(
@@ -140,8 +132,7 @@ public class PartitionRegistration {
                 leaderEpoch,
                 partitionEpoch,
                 elr,
-                lastKnownElr,
-                lastKnownLeader
+                lastKnownElr
             );
         }
     }
@@ -152,7 +143,6 @@ public class PartitionRegistration {
     public final int[] addingReplicas;
     public final int[] elr;
     public final int[] lastKnownElr;
-    public final int lastKnownLeader;
     public final int leader;
     public final LeaderRecoveryState leaderRecoveryState;
     public final int leaderEpoch;
@@ -172,14 +162,12 @@ public class PartitionRegistration {
             record.leaderEpoch(),
             record.partitionEpoch(),
             Replicas.toArray(record.eligibleLeaderReplicas()),
-            Replicas.toArray(record.lastKnownELR()),
-            record.lastKnownLeader());
+            Replicas.toArray(record.lastKnownELR()));
     }
 
     private PartitionRegistration(int[] replicas, int[] isr, int[] removingReplicas,
                                  int[] addingReplicas, int leader, LeaderRecoveryState leaderRecoveryState,
-                                 int leaderEpoch, int partitionEpoch, int[] elr, int[] lastKnownElr,
-                                 int lastKnownLeader) {
+                                 int leaderEpoch, int partitionEpoch, int[] elr, int[] lastKnownElr) {
         this.replicas = replicas;
         this.isr = isr;
         this.removingReplicas = removingReplicas;
@@ -192,7 +180,6 @@ public class PartitionRegistration {
         // We could parse a lower version record without elr/lastKnownElr.
         this.elr = elr == null ? new int[0] : elr;
         this.lastKnownElr = lastKnownElr == null ? new int[0] : lastKnownElr;
-        this.lastKnownLeader = lastKnownLeader;
     }
 
     public PartitionRegistration merge(PartitionChangeRecord record) {
@@ -218,7 +205,6 @@ public class PartitionRegistration {
 
         int[] newElr = (record.eligibleLeaderReplicas() == null) ? elr : Replicas.toArray(record.eligibleLeaderReplicas());
         int[] newLastKnownElr = (record.lastKnownELR() == null) ? lastKnownElr : Replicas.toArray(record.lastKnownELR());
-        int newLastKnownLeader = (record.lastKnownLeader() == NO_LEADER_CHANGE) ? lastKnownLeader : record.lastKnownLeader();
         return new PartitionRegistration(newReplicas,
             newIsr,
             newRemovingReplicas,
@@ -228,8 +214,7 @@ public class PartitionRegistration {
             newLeaderEpoch,
             partitionEpoch + 1,
             newElr,
-            newLastKnownElr,
-            newLastKnownLeader);
+            newLastKnownElr);
     }
 
     public String diff(PartitionRegistration prev) {
@@ -286,10 +271,6 @@ public class PartitionRegistration {
                 append(" -> ").append(Arrays.toString(lastKnownElr));
             prefix = ", ";
         }
-        if (lastKnownLeader != prev.lastKnownLeader) {
-            builder.append(prefix).append("lastKnownLeader: ").
-                append(prev.lastKnownLeader).append(" -> ").append(lastKnownLeader);
-        }
         if (partitionEpoch != prev.partitionEpoch) {
             builder.append(prefix).append("partitionEpoch: ").
                 append(prev.partitionEpoch).append(" -> ").append(partitionEpoch);
@@ -331,8 +312,7 @@ public class PartitionRegistration {
             setPartitionEpoch(partitionEpoch);
         if (version > 0) {
             record.setEligibleLeaderReplicas(Replicas.toList(elr)).
-                setLastKnownELR(Replicas.toList(lastKnownElr)).
-                setLastKnownLeader(lastKnownLeader);
+                setLastKnownELR(Replicas.toList(lastKnownElr));
         }
         return new ApiMessageAndVersion(record, version);
     }
@@ -357,7 +337,7 @@ public class PartitionRegistration {
     @Override
     public int hashCode() {
         return Objects.hash(Arrays.hashCode(replicas), Arrays.hashCode(isr), Arrays.hashCode(removingReplicas),
-            Arrays.hashCode(elr), Arrays.hashCode(lastKnownElr), lastKnownLeader,
+            Arrays.hashCode(elr), Arrays.hashCode(lastKnownElr),
             Arrays.hashCode(addingReplicas), leader, leaderRecoveryState, leaderEpoch, partitionEpoch);
     }
 
@@ -371,7 +351,6 @@ public class PartitionRegistration {
             Arrays.equals(addingReplicas, other.addingReplicas) &&
             Arrays.equals(elr, other.elr) &&
             Arrays.equals(lastKnownElr, other.lastKnownElr) &&
-            lastKnownLeader == other.lastKnownLeader &&
             leader == other.leader &&
             leaderRecoveryState == other.leaderRecoveryState &&
             leaderEpoch == other.leaderEpoch &&
@@ -387,7 +366,6 @@ public class PartitionRegistration {
         builder.append(", addingReplicas=").append(Arrays.toString(addingReplicas));
         builder.append(", elr=").append(Arrays.toString(elr));
         builder.append(", lastKnownElr=").append(Arrays.toString(lastKnownElr));
-        builder.append(", lastKnownLeader=").append(lastKnownLeader);
         builder.append(", leader=").append(leader);
         builder.append(", leaderRecoveryState=").append(leaderRecoveryState);
         builder.append(", leaderEpoch=").append(leaderEpoch);

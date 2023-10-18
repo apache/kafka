@@ -64,7 +64,7 @@ public class PartitionChangeBuilderTest {
         assertEquals(0, PartitionChangeRecord.LOWEST_SUPPORTED_VERSION);
         // For the latest version check that the number of tagged fields hasn't changed
         TaggedFields taggedFields = (TaggedFields) PartitionChangeRecord.SCHEMA_0.get(2).def.type;
-        assertEquals(9, taggedFields.numFields());
+        assertEquals(8, taggedFields.numFields());
 
         assertTrue(changeRecordIsNoOp(new PartitionChangeRecord()));
         assertFalse(changeRecordIsNoOp(new PartitionChangeRecord().setLeader(1)));
@@ -78,8 +78,6 @@ public class PartitionChangeBuilderTest {
             setEligibleLeaderReplicas(Arrays.asList(4))));
         assertFalse(changeRecordIsNoOp(new PartitionChangeRecord().
             setLastKnownELR(Arrays.asList(4))));
-        assertFalse(changeRecordIsNoOp(new PartitionChangeRecord().
-            setLastKnownLeader(1)));
         assertFalse(
             changeRecordIsNoOp(
                 new PartitionChangeRecord()

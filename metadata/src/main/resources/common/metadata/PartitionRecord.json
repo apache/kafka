@@ -47,9 +47,6 @@
       "about": "The eligible leader replicas of this partition." },
     { "name": "LastKnownELR", "type": "[]int32", "default": "null", "entityType": "brokerId",
       "versions": "1+", "nullableVersions": "1+", "taggedVersions": "1+", "tag": 2,
-      "about": "The last known eligible leader replicas of this partition." },
-    { "name": "LastKnownLeader", "type": "int32", "default": "-1", "entityType": "brokerId",
-      "versions": "1+",
-      "about": "The last known leader of this partition. -1 means there is no last known leader" }
+      "about": "The last known eligible leader replicas of this partition." }
   ]
 }

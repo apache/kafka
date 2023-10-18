@@ -49,7 +49,6 @@ public class PartitionChangeBuilder {
         if (record.isr() != null) return false;
         if (record.eligibleLeaderReplicas() != null) return false;
         if (record.lastKnownELR() != null) return false;
-        if (record.lastKnownLeader() != NO_LEADER_CHANGE) return false;
         if (record.leader() != NO_LEADER_CHANGE) return false;
         if (record.replicas() != null) return false;
         if (record.removingReplicas() != null) return false;
