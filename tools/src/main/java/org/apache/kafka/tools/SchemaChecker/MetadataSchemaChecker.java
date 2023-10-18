@@ -56,13 +56,6 @@ public class MetadataSchemaChecker {
     static int oldFirstVersion = -1;
     static int newLatestVersion = -1;
     static int newFirstVersion = -1;
-
-    static String[] filesCheckMetadata1 = {"AccessControlEntryRecord.json", "BrokerRegistrationChangeRecord.json", "ClientQuotaRecord.json",
-            "ConfigRecord.json", "DelegationTokenRecord.json", "FeatureLevelRecord.json", "FenceBrokerRecord.json", "NoOpRecord.json",
-            "PartitionChangeRecord.json", "PartitionRecord.json", "ProducerIdsRecord.json", "RegisterBrokerRecord.json",
-            "RemoveAccessControlEntryRecord.json", "RemoveTopicRecord.json", "RemoveUserScramCredentialRecord.json", "TopicRecord.json",
-            "UnfenceBrokerRecord.json", "UnregisterBrokerRecord.json", "UserScramCredentialRecord.json", "ZkMigrationRecord.json"};
-
     static String[] filesCheckMetadata = new File(System.getProperty("user.dir") + "/metadata/src/main/resources/common/metadata/").list();
     public static void main(String[] args) throws Exception {
 
