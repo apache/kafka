@@ -330,10 +330,10 @@ public class TaskManagerTest {
         final KafkaFuture<Void> mockFuture = KafkaFuture.completedFuture(null);
         when(schedulingTaskManager.lockTasks(any())).thenReturn(mockFuture);
 
-        taskManager.commit(mkSet(activeTask1));
+        taskManager.commit(mkSet(activeTask1, activeTask2));
 
-        Mockito.verify(schedulingTaskManager).lockTasks(mkSet(taskId00));
-        Mockito.verify(schedulingTaskManager).unlockTasks(mkSet(taskId00));
+        Mockito.verify(schedulingTaskManager).lockTasks(mkSet(taskId00, taskId01));
+        Mockito.verify(schedulingTaskManager).unlockTasks(mkSet(taskId00, taskId01));
     }
 
     @Test

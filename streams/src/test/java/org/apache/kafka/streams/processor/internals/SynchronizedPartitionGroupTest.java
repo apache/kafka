@@ -15,19 +15,20 @@
  * limitations under the License.
  */
 package org.apache.kafka.streams.processor.internals;
+
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.processor.internals.AbstractPartitionGroup.RecordInfo;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import java.util.Collections;
 import java.util.Set;
 import java.util.function.Function;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verify;
@@ -42,13 +43,13 @@ public class SynchronizedPartitionGroupTest {
 
     private AutoCloseable closeable;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         closeable = MockitoAnnotations.openMocks(this);
         synchronizedPartitionGroup = new SynchronizedPartitionGroup(wrapped);
     }
 
-    @After
+    @AfterEach
     public void tearDown() throws Exception {
         closeable.close();
     }
@@ -76,7 +77,7 @@ public class SynchronizedPartitionGroupTest {
     @Test
     public void testSetPartitionTime() {
         final TopicPartition partition = new TopicPartition("topic", 0);
-        final long partitionTime = System.currentTimeMillis();
+        final long partitionTime = 12345678L;
 
         synchronizedPartitionGroup.setPartitionTime(partition, partitionTime);
 
@@ -86,7 +87,7 @@ public class SynchronizedPartitionGroupTest {
     @Test
     public void testNextRecord() {
         final RecordInfo info = mock(RecordInfo.class);
-        final long wallClockTime = System.currentTimeMillis();
+        final long wallClockTime = 12345678L;
         final StampedRecord stampedRecord = mock(StampedRecord.class);
         when(wrapped.nextRecord(info, wallClockTime)).thenReturn(stampedRecord);
 
@@ -111,7 +112,7 @@ public class SynchronizedPartitionGroupTest {
     @Test
     public void testPartitionTimestamp() {
         final TopicPartition partition = new TopicPartition("topic", 0);
-        final long timestamp = System.currentTimeMillis();
+        final long timestamp = 12345678L;
         when(wrapped.partitionTimestamp(partition)).thenReturn(timestamp);
 
         final long result = synchronizedPartitionGroup.partitionTimestamp(partition);
@@ -122,7 +123,7 @@ public class SynchronizedPartitionGroupTest {
 
     @Test
     public void testStreamTime() {
-        final long streamTime = System.currentTimeMillis();
+        final long streamTime = 12345678L;
         when(wrapped.streamTime()).thenReturn(streamTime);
 
         final long result = synchronizedPartitionGroup.streamTime();

@@ -677,7 +677,7 @@ public class NamedTopologyIntegrationTest {
         }
     }
 
-    @Ignore
+    @Test
     public void shouldAddToEmptyInitialTopologyRemoveResetOffsetsThenAddSameNamedTopologyWithRepartitioning() throws Exception {
         CLUSTER.createTopics(SUM_OUTPUT, COUNT_OUTPUT);
         // Build up named topology with two stateful subtopologies
