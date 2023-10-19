@@ -14,13 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.telemetry.emitter;
+package org.apache.kafka.common.telemetry.internals;
 
 import java.util.Collections;
 import java.util.List;
-import org.apache.kafka.common.telemetry.metrics.MetricKey;
-import org.apache.kafka.common.telemetry.metrics.MetricKeyable;
-import org.apache.kafka.common.telemetry.metrics.SinglePointMetric;
 
 import java.io.Closeable;
 

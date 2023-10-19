@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.telemetry;
+package org.apache.kafka.common.telemetry.internals;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.requests.AbstractRequest.Builder;

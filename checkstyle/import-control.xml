@@ -200,14 +200,6 @@
     <subpackage name="telemetry">
       <allow pkg="org.apache.kafka.common" />
       <allow class="org.apache.kafka.server.authorizer.AuthorizableRequestContext" />
-
-      <subpackage name="collector">
-        <allow pkg="org.apache.kafka.common.telemetry.emitter"/>
-      </subpackage>
-
-      <subpackage name="emitter">
-        <allow pkg="org.apache.kafka.common.telemetry.metrics"/>
-      </subpackage>
     </subpackage>
 
   </subpackage>
