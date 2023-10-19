@@ -645,7 +645,7 @@ object ConsumerGroupCommand extends Logging {
       }.toMap
     }
 
-    private def getLogStartOffsets(groupId: String, topicPartitions: Seq[TopicPartition]): Map[TopicPartition, LogOffsetResult] = {
+    private def getLogStartOffsets(topicPartitions: Seq[TopicPartition]): Map[TopicPartition, LogOffsetResult] = {
       val startOffsets = topicPartitions.map { topicPartition =>
         topicPartition -> OffsetSpec.earliest
       }.toMap
@@ -797,7 +797,7 @@ object ConsumerGroupCommand extends Logging {
           case (topicPartition, newOffset) => (topicPartition, new OffsetAndMetadata(newOffset))
         }
       } else if (opts.options.has(opts.resetToEarliestOpt)) {
-        val logStartOffsets = getLogStartOffsets(groupId, partitionsToReset)
+        val logStartOffsets = getLogStartOffsets(partitionsToReset)
         partitionsToReset.map { topicPartition =>
           logStartOffsets.get(topicPartition) match {
             case Some(LogOffsetResult.LogOffset(offset)) => (topicPartition, new OffsetAndMetadata(offset))
@@ -885,7 +885,7 @@ object ConsumerGroupCommand extends Logging {
     }
 
     private def checkOffsetsRange(groupId: String, requestedOffsets: Map[TopicPartition, Long]) = {
-      val logStartOffsets = getLogStartOffsets(groupId, requestedOffsets.keySet.toSeq)
+      val logStartOffsets = getLogStartOffsets(requestedOffsets.keySet.toSeq)
       val logEndOffsets = getLogEndOffsets(groupId, requestedOffsets.keySet.toSeq)
       requestedOffsets.map { case (topicPartition, offset) => (topicPartition,
         logEndOffsets.get(topicPartition) match {
