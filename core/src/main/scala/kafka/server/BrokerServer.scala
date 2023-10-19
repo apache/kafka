@@ -335,7 +335,8 @@ class BrokerServer(
         brokerLifecycleChannelManager,
         sharedServer.metaProps.clusterId,
         listenerInfo.toBrokerRegistrationRequest,
-        featuresRemapped
+        featuresRemapped,
+        logManager.readBrokerEpochFromCleanShutdownFiles()
       )
       // If the BrokerLifecycleManager's initial catch-up future fails, it means we timed out
       // or are shutting down before we could catch up. Therefore, also fail the firstPublishFuture.
@@ -645,7 +646,7 @@ class BrokerServer(
         CoreUtils.swallow(clientToControllerChannelManager.shutdown(), this)
 
       if (logManager != null)
-        CoreUtils.swallow(logManager.shutdown(), this)
+        CoreUtils.swallow(logManager.shutdown(lifecycleManager.brokerEpoch), this)
 
       // Close remote log manager to give a chance to any of its underlying clients
       // (especially in RemoteStorageManager and RemoteLogMetadataManager) to close gracefully.

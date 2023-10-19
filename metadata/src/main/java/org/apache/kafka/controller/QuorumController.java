@@ -2157,7 +2157,7 @@ public final class QuorumController implements Controller {
             () -> {
                 ControllerResult<BrokerRegistrationReply> result = clusterControl.
                     registerBroker(request, offsetControl.nextWriteOffset(), featureControl.
-                        finalizedFeatures(Long.MAX_VALUE));
+                        finalizedFeatures(Long.MAX_VALUE), context.requestHeader().requestApiVersion());
                 rescheduleMaybeFenceStaleBrokers();
                 return result;
             },
