@@ -18,7 +18,7 @@ package org.apache.kafka.storage.internals.log;
 
 import java.util.concurrent.atomic.AtomicLong;
 
-public class VerificationGuard {
+public final class VerificationGuard {
 
     // The sentinel VerificationGuard will be used as a default when no verification guard is provided.
     // It can not be used to verify a transaction is ongoing and its value is always 0.
@@ -36,7 +36,7 @@ public class VerificationGuard {
 
     @Override
     public String toString() {
-        return "VerificationGuard: " + value;
+        return "VerificationGuard(value=" + value + ")";
     }
 
     @Override
@@ -56,7 +56,7 @@ public class VerificationGuard {
         return value;
     }
 
-    public boolean verifiedBy(VerificationGuard verifyingGuard) {
+    public boolean verifies(VerificationGuard verifyingGuard) {
         return verifyingGuard != SENTINEL && verifyingGuard.equals(this);
     }
 }

@@ -1083,7 +1083,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
   private def batchMissingRequiredVerification(batch: MutableRecordBatch, requestVerificationGuard: VerificationGuard): Boolean = {
     producerStateManager.producerStateManagerConfig().transactionVerificationEnabled() && !batch.isControlBatch &&
-      !verificationGuard(batch.producerId).verifiedBy(requestVerificationGuard)
+      !verificationGuard(batch.producerId).verifies(requestVerificationGuard)
   }
 
   /**

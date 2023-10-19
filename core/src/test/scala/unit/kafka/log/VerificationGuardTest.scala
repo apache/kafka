@@ -43,11 +43,11 @@ class VerificationGuardTest {
     val verificationGuard1 = new VerificationGuard
     val verificationGuard2 = new VerificationGuard
 
-    assertFalse(verificationGuard1.verifiedBy(verificationGuard2))
-    assertFalse(verificationGuard1.verifiedBy(SENTINEL))
-    assertFalse(SENTINEL.verifiedBy(verificationGuard1))
-    assertFalse(SENTINEL.verifiedBy(SENTINEL))
-    assertTrue(verificationGuard1.verifiedBy(verificationGuard1))
+    assertFalse(verificationGuard1.verifies(verificationGuard2))
+    assertFalse(verificationGuard1.verifies(SENTINEL))
+    assertFalse(SENTINEL.verifies(verificationGuard1))
+    assertFalse(SENTINEL.verifies(SENTINEL))
+    assertTrue(verificationGuard1.verifies(verificationGuard1))
   }
 
 }
