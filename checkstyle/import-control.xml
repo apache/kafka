@@ -90,7 +90,6 @@
 
     <subpackage name="metrics">
       <allow pkg="org.apache.kafka.common.metrics" />
-      <allow class="org.apache.kafka.common.telemetry.ClientTelemetry" />
     </subpackage>
 
     <subpackage name="memory">

@@ -26,22 +26,24 @@ import java.nio.ByteBuffer;
 public interface ClientTelemetryPayload {
 
     /**
-     * Client's instance id.
+     * @return Client's instance id.
      */
     Uuid clientInstanceId();
 
     /**
      * Indicates whether client is terminating, e.g., the last metrics push from this client instance.
+     *
+     * @return {@code true} if client is terminating, else false
      */
     boolean isTerminating();
 
     /**
-     * Metrics data content-type/serialization format.
+     * @return Metrics data content-type/serialization format.
      */
     String contentType();
 
     /**
-     * Serialized metrics data.
+     * @return Serialized metrics data.
      */
     ByteBuffer data();
 }

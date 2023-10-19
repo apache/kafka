@@ -30,7 +30,7 @@ import java.io.Closeable;
  * the entity that is familiar with the underlying method of making the metrics visible to the
  * broker. Thus, it is the primary place in the code where the implementation details are known.
  *
- * <p/>
+ * <p>
  *
  * An {@code Emitter} is stateless and the telemetry reporter should assume that the object is
  * not thread safe and thus concurrent access to either the
@@ -86,7 +86,7 @@ public interface Emitter extends Closeable {
      * Allows the {@code Emitter} implementation to initialize itself. This method should be invoked
      * by the telemetry reporter before calls to {@link #emitMetric(SinglePointMetric)} are made.
      *
-     * <p/>
+     * <p>
      *
      * The telemetry reporter should not invoke this method more than once.
      */
@@ -98,7 +98,7 @@ public interface Emitter extends Closeable {
      * Allows the {@code Emitter} implementation to stop itself and dispose of any resources. This
      * method should ideally be invoked only once by the telemetry reporter.
      *
-     * <p/>
+     * <p>
      *
      * Calls to {@link #emitMetric(SinglePointMetric)} once this method has been invoked should be
      * expected to fail by the telemetry reporter; it should take caution to handle that case.

@@ -24,14 +24,13 @@ import java.util.Set;
 import org.apache.kafka.common.Reconfigurable;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.telemetry.ClientTelemetry;
 
 /**
  * A plugin interface to allow things to listen as new metrics are created so they can be reported.
  * <p>
  * Implement {@link org.apache.kafka.common.ClusterResourceListener} to receive cluster metadata once it's available. Please see the class documentation for ClusterResourceListener for more information.
  */
-public interface MetricsReporter extends Reconfigurable, AutoCloseable, ClientTelemetry {
+public interface MetricsReporter extends Reconfigurable, AutoCloseable {
 
     /**
      * This is called when the reporter is first registered to initially register all existing metrics

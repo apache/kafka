@@ -18,19 +18,15 @@
 package org.apache.kafka.common.telemetry;
 
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.annotation.InterfaceStability;
-import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.AbstractRequest.Builder;
+import org.apache.kafka.common.requests.AbstractResponse;
 
 import java.util.Optional;
 
 /**
- * A {@link MetricsReporter} may implement this interface to indicate support for sending client
- * telemetry to the broker.
+ * The interface used by the `NetworkClient` to send telemetry requests.
  */
-@InterfaceStability.Evolving
 public interface ClientTelemetrySender extends AutoCloseable {
 
     /**

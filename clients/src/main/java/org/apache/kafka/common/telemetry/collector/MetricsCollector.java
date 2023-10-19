@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.telemetry.collector;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.telemetry.emitter.Emitter;
 
 /**
@@ -45,7 +44,6 @@ import org.apache.kafka.common.telemetry.emitter.Emitter;
  *
  * @see Emitter
  */
-@InterfaceStability.Evolving
 public interface MetricsCollector {
 
     /**
@@ -54,7 +52,7 @@ public interface MetricsCollector {
      * {@link Emitter}. The implementation may choose to collect all the metrics before forwarding
      * them to the {@code emitter}, or they may be forwarded as they are collected.
      *
-     * <p/>
+     * <p>
      *
      * In general, the implementation should try not to presume the characteristics of the
      * {@link Emitter} so as to keep a loose coupling.
@@ -76,7 +74,7 @@ public interface MetricsCollector {
      * Allows the {@code MetricsCollector} implementation to stop itself and dispose of any resources.
      * This method should ideally be invoked only once by the telemetry reporter.
      *
-     * <p/>
+     * <p>
      *
      * Calls to {@link #collect(Emitter)} once this method has been invoked should be expected to
      * fail by the telemetry reporter; it should take caution to handle that case.

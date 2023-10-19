@@ -21,30 +21,12 @@ import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
-import java.util.Optional;
-
 /**
  * A {@link MetricsReporter} may implement this interface to indicate support for collecting client
- * telemetry on the client or server side.
+ * telemetry on the server side.
  */
 @InterfaceStability.Evolving
 public interface ClientTelemetry {
-
-    /**
-     * Implemented by the client {@link MetricsReporter} to provide a {@link ClientTelemetrySender}
-     * instance.
-     * <p>
-     * This instance may be cached by the client.
-     * <p>
-     * This method must always be called after the initial call to
-     * {@link MetricsReporter#contextChange(MetricsContext)} on the {@link MetricsReporter}
-     * implementing this interface.
-     *
-     * @return Optional client side instance of {@link ClientTelemetrySender}.
-     */
-    default Optional<ClientTelemetrySender> clientSender() {
-        return Optional.empty();
-    }
 
     /**
      * Implemented by the broker {@link MetricsReporter} to provide a {@link ClientTelemetryReceiver}
@@ -56,9 +38,7 @@ public interface ClientTelemetry {
      * {@link MetricsReporter#contextChange(MetricsContext)} on the {@link MetricsReporter}
      * implementing this interface.
      *
-     * @return Optional broker side instance of {@link ClientTelemetryReceiver}.
+     * @return broker side instance of {@link ClientTelemetryReceiver}.
      */
-    default Optional<ClientTelemetryReceiver> clientReceiver() {
-        return Optional.empty();
-    }
+    ClientTelemetryReceiver clientReceiver();
 }
