@@ -99,6 +99,7 @@ public class OffsetDeleteResponse extends AbstractResponse {
             // Uses the new data if top level error exists.
             if (newData.errorCode() != Errors.NONE.code()) {
                 data = newData;
+                return this;
             }
 
             if (data.topics().isEmpty()) {
