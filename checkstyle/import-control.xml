@@ -303,6 +303,14 @@
       <allow pkg="kafka.server" />
       <allow pkg="scala" />
     </subpackage>
+
+    <subpackage name="other">
+      <allow pkg="kafka.log" />
+      <allow pkg="kafka.zk" />
+      <allow pkg="org.jfree"/>
+      <allow pkg="javax.imageio" />
+      <allow pkg="scala" />
+    </subpackage>
   </subpackage>
 
   <subpackage name="trogdor">
