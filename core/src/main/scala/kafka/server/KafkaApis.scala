@@ -1455,7 +1455,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       offsetFetchRequest,
       requireStable
     ).handle[OffsetFetchResponseData.OffsetFetchResponseGroup] { (offsetFetchResponse, exception) =>
-      if (exception != null) {
+      if (exception != null || offsetFetchResponse.errorCode() != Errors.NONE.code()) {
         new OffsetFetchResponseData.OffsetFetchResponseGroup()
           .setGroupId(offsetFetchRequest.groupId)
           .setErrorCode(Errors.forException(exception).code)
