@@ -408,7 +408,7 @@ object ConsumerGroupCommand extends Logging {
           getLag(offset, logEndOffsetOpt), consumerIdOpt, hostOpt, clientIdOpt, logEndOffsetOpt)
       }
 
-      getLogEndOffsets(group, topicPartitions).map {
+      getLogEndOffsets(topicPartitions).map {
         logEndOffsetResult =>
           logEndOffsetResult._2 match {
             case LogOffsetResult.LogOffset(logEndOffset) => getDescribePartitionResult(logEndOffsetResult._1, Some(logEndOffset))
@@ -629,7 +629,7 @@ object ConsumerGroupCommand extends Logging {
       }).toMap
     }
 
-    private def getLogEndOffsets(groupId: String, topicPartitions: Seq[TopicPartition]): Map[TopicPartition, LogOffsetResult] = {
+    private def getLogEndOffsets(topicPartitions: Seq[TopicPartition]): Map[TopicPartition, LogOffsetResult] = {
       val endOffsets = topicPartitions.map { topicPartition =>
         topicPartition -> OffsetSpec.latest
       }.toMap
@@ -681,7 +681,7 @@ object ConsumerGroupCommand extends Logging {
           " is empty. Falling back to latest known offset.")
       }
 
-      successfulLogTimestampOffsets ++ getLogEndOffsets(groupId, unsuccessfulOffsetsForTimes.keySet.toSeq)
+      successfulLogTimestampOffsets ++ getLogEndOffsets(unsuccessfulOffsetsForTimes.keySet.toSeq)
     }
 
     def close(): Unit = {
@@ -805,7 +805,7 @@ object ConsumerGroupCommand extends Logging {
           }
         }.toMap
       } else if (opts.options.has(opts.resetToLatestOpt)) {
-        val logEndOffsets = getLogEndOffsets(groupId, partitionsToReset)
+        val logEndOffsets = getLogEndOffsets(partitionsToReset)
         partitionsToReset.map { topicPartition =>
           logEndOffsets.get(topicPartition) match {
             case Some(LogOffsetResult.LogOffset(offset)) => (topicPartition, new OffsetAndMetadata(offset))
@@ -873,7 +873,7 @@ object ConsumerGroupCommand extends Logging {
           }))
         }.toMap
 
-        val preparedOffsetsForPartitionsWithoutCommittedOffset = getLogEndOffsets(groupId, partitionsToResetWithoutCommittedOffset).map {
+        val preparedOffsetsForPartitionsWithoutCommittedOffset = getLogEndOffsets(partitionsToResetWithoutCommittedOffset).map {
           case (topicPartition, LogOffsetResult.LogOffset(offset)) => (topicPartition, new OffsetAndMetadata(offset))
           case (topicPartition, _) => ToolsUtils.printUsageAndExit(opts.parser, s"Error getting ending offset of topic partition: $topicPartition")
         }
@@ -886,7 +886,7 @@ object ConsumerGroupCommand extends Logging {
 
     private def checkOffsetsRange(groupId: String, requestedOffsets: Map[TopicPartition, Long]) = {
       val logStartOffsets = getLogStartOffsets(requestedOffsets.keySet.toSeq)
-      val logEndOffsets = getLogEndOffsets(groupId, requestedOffsets.keySet.toSeq)
+      val logEndOffsets = getLogEndOffsets(requestedOffsets.keySet.toSeq)
       requestedOffsets.map { case (topicPartition, offset) => (topicPartition,
         logEndOffsets.get(topicPartition) match {
           case Some(LogOffsetResult.LogOffset(endOffset)) if offset > endOffset =>
