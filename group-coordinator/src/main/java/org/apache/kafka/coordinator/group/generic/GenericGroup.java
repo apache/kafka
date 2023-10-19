@@ -33,6 +33,8 @@ import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.Group;
+import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
+import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
 import org.apache.kafka.coordinator.group.Record;
 import org.apache.kafka.coordinator.group.RecordHelpers;
 import org.slf4j.Logger;
@@ -898,6 +900,46 @@ public class GenericGroup implements Group {
         records.add(RecordHelpers.newGroupMetadataTombstoneRecord(groupId()));
     }
 
+    @Override
+    public boolean isEmpty() {
+        return isInState(EMPTY);
+    }
+
+    /**
+     * Return the offset expiration condition to be used for this group. This is based on several factors
+     * such as the group state, the protocol type, and the GroupMetadata record version.
+     *
+     * See {@link org.apache.kafka.coordinator.group.OffsetExpirationCondition}
+     *
+     * @return The offset expiration condition for the group or Empty if no such condition exists.
+     */
+    @Override
+    public Optional<OffsetExpirationCondition> offsetExpirationCondition() {
+        if (protocolType.isPresent()) {
+            if (isInState(EMPTY)) {
+                // No members exist in the group =>
+                // - If current state timestamp exists and retention period has passed since group became Empty,
+                //   expire all offsets with no pending offset commit;
+                // - If there is no current state timestamp (old group metadata schema) and retention period has passed
+                //   since the last commit timestamp, expire the offset
+                return Optional.of(new OffsetExpirationConditionImpl(
+                    offsetAndMetadata -> currentStateTimestamp.orElse(offsetAndMetadata.commitTimestampMs))
+                );
+            } else if (usesConsumerGroupProtocol() && subscribedTopics.isPresent() && isInState(STABLE)) {
+                // Consumers exist in the group and group is Stable =>
+                // - If the group is aware of the subscribed topics and retention period has passed since the
+                //   last commit timestamp, expire the offset.
+                return Optional.of(new OffsetExpirationConditionImpl(offsetAndMetadata -> offsetAndMetadata.commitTimestampMs));
+            }
+        } else {
+            // protocolType is None => standalone (simple) consumer, that uses Kafka for offset storage. Only
+            // expire offsets where retention period has passed since their last commit.
+            return Optional.of(new OffsetExpirationConditionImpl(offsetAndMetadata -> offsetAndMetadata.commitTimestampMs));
+        }
+        // If none of the conditions above are met, do not expire any offsets.
+        return Optional.empty();
+    }
+
     /**
      * Verify the member id is up to date for static members. Return true if both conditions met:
      *   1. given member is a known static member to group
@@ -1063,16 +1105,18 @@ public class GenericGroup implements Group {
     }
 
     /**
-     * Returns true if the consumer group is actively subscribed to the topic. When the consumer
-     * group does not know, because the information is not available yet or because it has
-     * failed to parse the Consumer Protocol, it returns true to be safe.
+     * Returns true if the generic group is actively subscribed to the topic. When the generic group does not know,
+     * because the information is not available yet or because it has failed to parse the Consumer Protocol, we
+     * consider the group not subscribed to the topic if the group is not using any protocol or not using the
+     * consumer group protocol.
      *
-     * @param topic The topic name.
+     * @param topic  The topic name.
+     *
      * @return whether the group is subscribed to the topic.
      */
     public boolean isSubscribedToTopic(String topic) {
         return subscribedTopics.map(topics -> topics.contains(topic))
-            .orElse(true);
+            .orElse(usesConsumerGroupProtocol());
     }
 
     /**

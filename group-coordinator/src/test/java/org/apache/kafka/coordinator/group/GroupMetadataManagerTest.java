@@ -33,6 +33,7 @@ import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnsupportedAssignorException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.HeartbeatRequestData;
 import org.apache.kafka.common.message.HeartbeatResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
@@ -425,6 +426,7 @@ public class GroupMetadataManagerTest {
             this.groupMetadataManager = groupMetadataManager;
             this.genericGroupInitialRebalanceDelayMs = genericGroupInitialRebalanceDelayMs;
             this.genericGroupNewMemberJoinTimeoutMs = genericGroupNewMemberJoinTimeoutMs;
+            snapshotRegistry.getOrCreateSnapshot(lastWrittenOffset);
         }
 
         public void commit() {
@@ -1029,6 +1031,10 @@ public class GroupMetadataManagerTest {
             return groupMetadataManager.listGroups(statesFilter, lastCommittedOffset);
         }
 
+        public List<DescribeGroupsResponseData.DescribedGroup> describeGroups(List<String> groupIds) {
+            return groupMetadataManager.describeGroups(groupIds, lastCommittedOffset);
+        }
+
         public void verifyHeartbeat(
             String groupId,
             JoinGroupResponseData joinResponse,
@@ -1132,6 +1138,19 @@ public class GroupMetadataManagerTest {
             );
 
             return groupMetadataManager.genericGroupLeave(context, request);
+        }
+
+        private void verifyDescribeGroupsReturnsDeadGroup(String groupId) {
+            List<DescribeGroupsResponseData.DescribedGroup> describedGroups =
+                describeGroups(Collections.singletonList(groupId));
+
+            assertEquals(
+                Collections.singletonList(new DescribeGroupsResponseData.DescribedGroup()
+                    .setGroupId("group-id")
+                    .setGroupState(DEAD.toString())
+                ),
+                describedGroups
+            );
         }
 
         private ApiMessage messageOrNull(ApiMessageAndVersion apiMessageAndVersion) {
@@ -8641,6 +8660,113 @@ public class GroupMetadataManagerTest {
         assertEquals(expectAllGroupMap, actualAllGroupMap);
     }
 
+    @Test
+    public void testDescribeGroupStable() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+
+        GroupMetadataValue.MemberMetadata memberMetadata = new GroupMetadataValue.MemberMetadata()
+            .setMemberId("member-id")
+            .setGroupInstanceId("group-instance-id")
+            .setClientHost("client-host")
+            .setClientId("client-id")
+            .setAssignment(new byte[]{0})
+            .setSubscription(new byte[]{0, 1, 2});
+        GroupMetadataValue groupMetadataValue = new GroupMetadataValue()
+            .setMembers(Collections.singletonList(memberMetadata))
+            .setProtocolType("consumer")
+            .setProtocol("range")
+            .setCurrentStateTimestamp(context.time.milliseconds());
+
+        context.replay(newGroupMetadataRecord(
+            "group-id",
+            groupMetadataValue,
+            MetadataVersion.latest()
+        ));
+        context.verifyDescribeGroupsReturnsDeadGroup("group-id");
+        context.commit();
+
+        List<DescribeGroupsResponseData.DescribedGroup> expectedDescribedGroups = Collections.singletonList(
+            new DescribeGroupsResponseData.DescribedGroup()
+                .setGroupId("group-id")
+                .setGroupState(STABLE.toString())
+                .setProtocolType(groupMetadataValue.protocolType())
+                .setProtocolData(groupMetadataValue.protocol())
+                .setMembers(Collections.singletonList(
+                    new DescribeGroupsResponseData.DescribedGroupMember()
+                        .setMemberId(memberMetadata.memberId())
+                        .setGroupInstanceId(memberMetadata.groupInstanceId())
+                        .setClientId(memberMetadata.clientId())
+                        .setClientHost(memberMetadata.clientHost())
+                        .setMemberMetadata(memberMetadata.subscription())
+                        .setMemberAssignment(memberMetadata.assignment())
+                ))
+        );
+
+        List<DescribeGroupsResponseData.DescribedGroup> describedGroups =
+            context.describeGroups(Collections.singletonList("group-id"));
+
+        assertEquals(expectedDescribedGroups, describedGroups);
+    }
+
+    @Test
+    public void testDescribeGroupRebalancing() throws Exception {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+
+        GroupMetadataValue.MemberMetadata memberMetadata = new GroupMetadataValue.MemberMetadata()
+            .setMemberId("member-id")
+            .setGroupInstanceId("group-instance-id")
+            .setClientHost("client-host")
+            .setClientId("client-id")
+            .setAssignment(new byte[]{0})
+            .setSubscription(new byte[]{0, 1, 2});
+        GroupMetadataValue groupMetadataValue = new GroupMetadataValue()
+            .setMembers(Collections.singletonList(memberMetadata))
+            .setProtocolType("consumer")
+            .setProtocol("range")
+            .setCurrentStateTimestamp(context.time.milliseconds());
+
+        context.replay(newGroupMetadataRecord(
+            "group-id",
+            groupMetadataValue,
+            MetadataVersion.latest()
+        ));
+        GenericGroup group = context.groupMetadataManager.getOrMaybeCreateGenericGroup("group-id", false);
+        context.groupMetadataManager.prepareRebalance(group, "trigger rebalance");
+
+        context.verifyDescribeGroupsReturnsDeadGroup("group-id");
+        context.commit();
+
+        List<DescribeGroupsResponseData.DescribedGroup> expectedDescribedGroups = Collections.singletonList(
+            new DescribeGroupsResponseData.DescribedGroup()
+                .setGroupId("group-id")
+                .setGroupState(PREPARING_REBALANCE.toString())
+                .setProtocolType(groupMetadataValue.protocolType())
+                .setProtocolData("")
+                .setMembers(Collections.singletonList(
+                    new DescribeGroupsResponseData.DescribedGroupMember()
+                        .setMemberId(memberMetadata.memberId())
+                        .setGroupInstanceId(memberMetadata.groupInstanceId())
+                        .setClientId(memberMetadata.clientId())
+                        .setClientHost(memberMetadata.clientHost())
+                        .setMemberAssignment(memberMetadata.assignment())
+                ))
+        );
+
+        List<DescribeGroupsResponseData.DescribedGroup> describedGroups =
+            context.describeGroups(Collections.singletonList("group-id"));
+
+        assertEquals(expectedDescribedGroups, describedGroups);
+    }
+
+    @Test
+    public void testDescribeGroupsGroupIdNotFoundException() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+        context.verifyDescribeGroupsReturnsDeadGroup("group-id");
+    }
+
     public static <T> void assertUnorderedListEquals(
         List<T> expected,
         List<T> actual
@@ -9369,6 +9495,27 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testGenericGroupMaybeDelete() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+        GenericGroup group = context.createGenericGroup("group-id");
+
+        List<Record> expectedRecords = Collections.singletonList(RecordHelpers.newGroupMetadataTombstoneRecord("group-id"));
+        List<Record> records = new ArrayList<>();
+        context.groupMetadataManager.maybeDeleteGroup("group-id", records);
+        assertEquals(expectedRecords, records);
+
+        records = new ArrayList<>();
+        group.transitionTo(PREPARING_REBALANCE);
+        context.groupMetadataManager.maybeDeleteGroup("group-id", records);
+        assertEquals(Collections.emptyList(), records);
+
+        records = new ArrayList<>();
+        context.groupMetadataManager.maybeDeleteGroup("invalid-group-id", records);
+        assertEquals(Collections.emptyList(), records);
+    }
+
+    @Test
     public void testConsumerGroupDelete() {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .build();
@@ -9382,6 +9529,32 @@ public class GroupMetadataManagerTest {
         List<Record> records = new ArrayList<>();
         context.groupMetadataManager.deleteGroup("group-id", records);
         assertEquals(expectedRecords, records);
+    }
+
+    @Test
+    public void testConsumerGroupMaybeDelete() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+        ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreateConsumerGroup("group-id", true);
+
+        List<Record> expectedRecords = Arrays.asList(
+            RecordHelpers.newTargetAssignmentEpochTombstoneRecord("group-id"),
+            RecordHelpers.newGroupSubscriptionMetadataTombstoneRecord("group-id"),
+            RecordHelpers.newGroupEpochTombstoneRecord("group-id")
+        );
+        List<Record> records = new ArrayList<>();
+        context.groupMetadataManager.maybeDeleteGroup("group-id", records);
+        assertEquals(expectedRecords, records);
+
+        records = new ArrayList<>();
+        group.updateMember(new ConsumerGroupMember.Builder("member")
+            .setMemberEpoch(10)
+            .setTargetMemberEpoch(10)
+            .setPreviousMemberEpoch(10)
+            .build()
+        );
+        context.groupMetadataManager.maybeDeleteGroup("group-id", records);
+        assertEquals(Collections.emptyList(), records);
     }
 
     private static void assertNoOrEmptyResult(List<ExpiredTimeout<Void, Record>> timeouts) {

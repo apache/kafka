@@ -40,6 +40,7 @@ import java.nio.ByteBuffer
 import java.nio.file.{Files, Path}
 import java.util
 import java.util.{Collections, Optional, Properties}
+import scala.jdk.CollectionConverters._
 
 final class KafkaMetadataLogTest {
   import KafkaMetadataLogTest._
@@ -974,7 +975,7 @@ final class KafkaMetadataLogTest {
     // The clean up code requires that there are at least two snapshots
     // Generate first snapshots that includes the first segment by using the base offset of the second segment
     val snapshotId1 = new OffsetAndEpoch(
-      log.log.logSegments.drop(1).head.baseOffset,
+      log.log.logSegments.asScala.drop(1).head.baseOffset,
       1
     )
     TestUtils.resource(log.storeSnapshot(snapshotId1).get()) { snapshot =>
@@ -982,7 +983,7 @@ final class KafkaMetadataLogTest {
     }
     // Generate second snapshots that includes the second segment by using the base offset of the third segment
     val snapshotId2 = new OffsetAndEpoch(
-      log.log.logSegments.drop(2).head.baseOffset,
+      log.log.logSegments.asScala.drop(2).head.baseOffset,
       1
     )
     TestUtils.resource(log.storeSnapshot(snapshotId2).get()) { snapshot =>

@@ -23,6 +23,7 @@ import java.util.concurrent.CompletionStage
 import java.util.concurrent.atomic.AtomicReference
 import kafka.controller.KafkaController
 import kafka.log.LogManager
+import kafka.log.remote.RemoteLogManager
 import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.utils.TestUtils
 import kafka.zk.KafkaZkClient
@@ -785,6 +786,31 @@ class DynamicBrokerConfigTest {
     verifyIncorrectLogLocalRetentionProps(-1, 1000L, 200, 100)
     // Check for incorrect case of logLocalRetentionBytes(-1 viz unlimited) > retentionBytes
     verifyIncorrectLogLocalRetentionProps(2000L, 1000L, -1, 100)
+  }
+
+  @Test
+  def testUpdateDynamicRemoteLogManagerConfig(): Unit = {
+    val origProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
+    origProps.put(RemoteLogManagerConfig.REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP, "2")
+
+    val config = KafkaConfig(origProps)
+    val serverMock = Mockito.mock(classOf[KafkaBroker])
+    val remoteLogManagerMockOpt = Option(Mockito.mock(classOf[RemoteLogManager]))
+
+    Mockito.when(serverMock.config).thenReturn(config)
+    Mockito.when(serverMock.remoteLogManagerOpt).thenReturn(remoteLogManagerMockOpt)
+
+    config.dynamicConfig.initialize(None)
+    config.dynamicConfig.addBrokerReconfigurable(new DynamicRemoteLogConfig(serverMock))
+
+    val props = new Properties()
+
+    props.put(RemoteLogManagerConfig.REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP, "4")
+    config.dynamicConfig.updateDefaultConfig(props)
+    assertEquals(4L, config.getLong(RemoteLogManagerConfig.REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP))
+    Mockito.verify(remoteLogManagerMockOpt.get).resizeCacheSize(4)
+
+    Mockito.verifyNoMoreInteractions(remoteLogManagerMockOpt.get)
   }
 
   def verifyIncorrectLogLocalRetentionProps(logLocalRetentionMs: Long,

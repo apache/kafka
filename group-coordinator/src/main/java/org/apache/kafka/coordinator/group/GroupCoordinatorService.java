@@ -53,6 +53,7 @@ import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.DescribeGroupsRequest;
 import org.apache.kafka.common.requests.DeleteGroupsRequest;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.RequestContext;
@@ -61,6 +62,7 @@ import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.coordinator.group.metrics.CoordinatorRuntimeMetrics;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorShardBuilderSupplier;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorEventProcessor;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorLoader;
@@ -77,9 +79,9 @@ import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.HashMap;
 import java.util.OptionalInt;
 import java.util.Properties;
 import java.util.Set;
@@ -101,6 +103,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         private CoordinatorLoader<Record> loader;
         private Time time;
         private Timer timer;
+        private CoordinatorRuntimeMetrics coordinatorRuntimeMetrics;
 
         public Builder(
             int nodeId,
@@ -130,6 +133,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
             return this;
         }
 
+        public Builder withCoordinatorRuntimeMetrics(CoordinatorRuntimeMetrics coordinatorRuntimeMetrics) {
+            this.coordinatorRuntimeMetrics = coordinatorRuntimeMetrics;
+            return this;
+        }
+
         public GroupCoordinatorService build() {
             if (config == null)
                 throw new IllegalArgumentException("Config must be set.");
@@ -141,6 +149,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 throw new IllegalArgumentException("Time must be set.");
             if (timer == null)
                 throw new IllegalArgumentException("Timer must be set.");
+            if (coordinatorRuntimeMetrics == null)
+                throw new IllegalArgumentException("CoordinatorRuntimeMetrics must be set.");
 
             String logPrefix = String.format("GroupCoordinator id=%d", nodeId);
             LogContext logContext = new LogContext(String.format("[%s] ", logPrefix));
@@ -151,7 +161,9 @@ public class GroupCoordinatorService implements GroupCoordinator {
             CoordinatorEventProcessor processor = new MultiThreadedEventProcessor(
                 logContext,
                 "group-coordinator-event-processor-",
-                config.numThreads
+                config.numThreads,
+                time,
+                coordinatorRuntimeMetrics
             );
 
             CoordinatorRuntime<GroupCoordinatorShard, Record> runtime =
@@ -165,6 +177,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     .withLoader(loader)
                     .withCoordinatorShardBuilderSupplier(supplier)
                     .withTime(time)
+                    .withCoordinatorRuntimeMetrics(coordinatorRuntimeMetrics)
                     .build();
 
             return new GroupCoordinatorService(
@@ -508,9 +521,52 @@ public class GroupCoordinatorService implements GroupCoordinator {
             return FutureUtils.failedFuture(Errors.COORDINATOR_NOT_AVAILABLE.exception());
         }
 
-        return FutureUtils.failedFuture(Errors.UNSUPPORTED_VERSION.exception(
-            "This API is not implemented yet."
-        ));
+        final List<CompletableFuture<List<DescribeGroupsResponseData.DescribedGroup>>> futures =
+            new ArrayList<>(groupIds.size());
+        final Map<TopicPartition, List<String>> groupsByTopicPartition = new HashMap<>();
+        groupIds.forEach(groupId -> {
+            // For backwards compatibility, we support DescribeGroups for the empty group id.
+            if (groupId == null) {
+                futures.add(CompletableFuture.completedFuture(Collections.singletonList(
+                    new DescribeGroupsResponseData.DescribedGroup()
+                        .setGroupId(null)
+                        .setErrorCode(Errors.INVALID_GROUP_ID.code())
+                )));
+            } else {
+                final TopicPartition topicPartition = topicPartitionFor(groupId);
+                groupsByTopicPartition
+                    .computeIfAbsent(topicPartition, __ -> new ArrayList<>())
+                    .add(groupId);
+            }
+        });
+
+        groupsByTopicPartition.forEach((topicPartition, groupList) -> {
+            CompletableFuture<List<DescribeGroupsResponseData.DescribedGroup>> future =
+                runtime.scheduleReadOperation(
+                    "describe-groups",
+                    topicPartition,
+                    (coordinator, lastCommittedOffset) -> coordinator.describeGroups(context, groupList, lastCommittedOffset)
+                ).exceptionally(exception -> {
+                    if (!(exception instanceof KafkaException)) {
+                        log.error("DescribeGroups request {} hit an unexpected exception: {}",
+                            groupList, exception.getMessage());
+                    }
+
+                    return DescribeGroupsRequest.getErrorDescribedGroupList(
+                        groupList,
+                        Errors.forException(exception)
+                    );
+                });
+
+            futures.add(future);
+        });
+
+        final CompletableFuture<Void> allFutures = CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]));
+        return allFutures.thenApply(v -> {
+            final List<DescribeGroupsResponseData.DescribedGroup> res = new ArrayList<>();
+            futures.forEach(future -> res.addAll(future.join()));
+            return res;
+        });
     }
 
     /**
