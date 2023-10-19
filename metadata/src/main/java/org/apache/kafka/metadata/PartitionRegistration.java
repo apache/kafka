@@ -42,6 +42,8 @@ public class PartitionRegistration {
         private int[] isr;
         private int[] removingReplicas = Replicas.NONE;
         private int[] addingReplicas = Replicas.NONE;
+        private int[] elr = Replicas.NONE;
+        private int[] lastKnownElr = Replicas.NONE;
         private Integer leader;
         private LeaderRecoveryState leaderRecoveryState;
         private Integer leaderEpoch;
@@ -64,6 +66,16 @@ public class PartitionRegistration {
 
         public Builder setAddingReplicas(int[] addingReplicas) {
             this.addingReplicas = addingReplicas;
+            return this;
+        }
+
+        public Builder setElr(int[] elr) {
+            this.elr = elr;
+            return this;
+        }
+
+        public Builder setLastKnownElr(int[] lastKnownElr) {
+            this.lastKnownElr = lastKnownElr;
             return this;
         }
 
@@ -104,6 +116,10 @@ public class PartitionRegistration {
                 throw new IllegalStateException("You must set leader epoch.");
             } else if (partitionEpoch == null) {
                 throw new IllegalStateException("You must set partition epoch.");
+            } else if (elr == null) {
+                throw new IllegalStateException("You must set ELR.");
+            } else if (lastKnownElr == null) {
+                throw new IllegalStateException("You must set last known elr.");
             }
 
             return new PartitionRegistration(
@@ -114,7 +130,9 @@ public class PartitionRegistration {
                 leader,
                 leaderRecoveryState,
                 leaderEpoch,
-                partitionEpoch
+                partitionEpoch,
+                elr,
+                lastKnownElr
             );
         }
     }
@@ -123,6 +141,8 @@ public class PartitionRegistration {
     public final int[] isr;
     public final int[] removingReplicas;
     public final int[] addingReplicas;
+    public final int[] elr;
+    public final int[] lastKnownElr;
     public final int leader;
     public final LeaderRecoveryState leaderRecoveryState;
     public final int leaderEpoch;
@@ -140,12 +160,14 @@ public class PartitionRegistration {
             record.leader(),
             LeaderRecoveryState.of(record.leaderRecoveryState()),
             record.leaderEpoch(),
-            record.partitionEpoch());
+            record.partitionEpoch(),
+            Replicas.toArray(record.eligibleLeaderReplicas()),
+            Replicas.toArray(record.lastKnownELR()));
     }
 
     private PartitionRegistration(int[] replicas, int[] isr, int[] removingReplicas,
                                  int[] addingReplicas, int leader, LeaderRecoveryState leaderRecoveryState,
-                                 int leaderEpoch, int partitionEpoch) {
+                                 int leaderEpoch, int partitionEpoch, int[] elr, int[] lastKnownElr) {
         this.replicas = replicas;
         this.isr = isr;
         this.removingReplicas = removingReplicas;
@@ -154,6 +176,10 @@ public class PartitionRegistration {
         this.leaderRecoveryState = leaderRecoveryState;
         this.leaderEpoch = leaderEpoch;
         this.partitionEpoch = partitionEpoch;
+
+        // We could parse a lower version record without elr/lastKnownElr.
+        this.elr = elr == null ? new int[0] : elr;
+        this.lastKnownElr = lastKnownElr == null ? new int[0] : lastKnownElr;
     }
 
     public PartitionRegistration merge(PartitionChangeRecord record) {
@@ -177,6 +203,8 @@ public class PartitionRegistration {
 
         LeaderRecoveryState newLeaderRecoveryState = leaderRecoveryState.changeTo(record.leaderRecoveryState());
 
+        int[] newElr = (record.eligibleLeaderReplicas() == null) ? elr : Replicas.toArray(record.eligibleLeaderReplicas());
+        int[] newLastKnownElr = (record.lastKnownELR() == null) ? lastKnownElr : Replicas.toArray(record.lastKnownELR());
         return new PartitionRegistration(newReplicas,
             newIsr,
             newRemovingReplicas,
@@ -184,7 +212,9 @@ public class PartitionRegistration {
             newLeader,
             newLeaderRecoveryState,
             newLeaderEpoch,
-            partitionEpoch + 1);
+            partitionEpoch + 1,
+            newElr,
+            newLastKnownElr);
     }
 
     public String diff(PartitionRegistration prev) {
@@ -229,6 +259,18 @@ public class PartitionRegistration {
                 append(prev.leaderEpoch).append(" -> ").append(leaderEpoch);
             prefix = ", ";
         }
+        if (!Arrays.equals(elr, prev.elr)) {
+            builder.append(prefix).append("elr: ").
+                append(Arrays.toString(prev.elr)).
+                append(" -> ").append(Arrays.toString(elr));
+            prefix = ", ";
+        }
+        if (!Arrays.equals(lastKnownElr, prev.lastKnownElr)) {
+            builder.append(prefix).append("lastKnownElr: ").
+                append(Arrays.toString(prev.lastKnownElr)).
+                append(" -> ").append(Arrays.toString(lastKnownElr));
+            prefix = ", ";
+        }
         if (partitionEpoch != prev.partitionEpoch) {
             builder.append(prefix).append("partitionEpoch: ").
                 append(prev.partitionEpoch).append(" -> ").append(partitionEpoch);
@@ -256,8 +298,8 @@ public class PartitionRegistration {
         return replicas.length == 0 ? LeaderConstants.NO_LEADER : replicas[0];
     }
 
-    public ApiMessageAndVersion toRecord(Uuid topicId, int partitionId) {
-        return new ApiMessageAndVersion(new PartitionRecord().
+    public ApiMessageAndVersion toRecord(Uuid topicId, int partitionId, short version) {
+        PartitionRecord record = new PartitionRecord().
             setPartitionId(partitionId).
             setTopicId(topicId).
             setReplicas(Replicas.toList(replicas)).
@@ -267,7 +309,12 @@ public class PartitionRegistration {
             setLeader(leader).
             setLeaderRecoveryState(leaderRecoveryState.value()).
             setLeaderEpoch(leaderEpoch).
-            setPartitionEpoch(partitionEpoch), (short) 0);
+            setPartitionEpoch(partitionEpoch);
+        if (version > 0) {
+            record.setEligibleLeaderReplicas(Replicas.toList(elr)).
+                setLastKnownELR(Replicas.toList(lastKnownElr));
+        }
+        return new ApiMessageAndVersion(record, version);
     }
 
     public LeaderAndIsrPartitionState toLeaderAndIsrPartitionState(TopicPartition tp,
@@ -290,6 +337,7 @@ public class PartitionRegistration {
     @Override
     public int hashCode() {
         return Objects.hash(Arrays.hashCode(replicas), Arrays.hashCode(isr), Arrays.hashCode(removingReplicas),
+            Arrays.hashCode(elr), Arrays.hashCode(lastKnownElr),
             Arrays.hashCode(addingReplicas), leader, leaderRecoveryState, leaderEpoch, partitionEpoch);
     }
 
@@ -301,6 +349,8 @@ public class PartitionRegistration {
             Arrays.equals(isr, other.isr) &&
             Arrays.equals(removingReplicas, other.removingReplicas) &&
             Arrays.equals(addingReplicas, other.addingReplicas) &&
+            Arrays.equals(elr, other.elr) &&
+            Arrays.equals(lastKnownElr, other.lastKnownElr) &&
             leader == other.leader &&
             leaderRecoveryState == other.leaderRecoveryState &&
             leaderEpoch == other.leaderEpoch &&
@@ -314,6 +364,8 @@ public class PartitionRegistration {
         builder.append(", isr=").append(Arrays.toString(isr));
         builder.append(", removingReplicas=").append(Arrays.toString(removingReplicas));
         builder.append(", addingReplicas=").append(Arrays.toString(addingReplicas));
+        builder.append(", elr=").append(Arrays.toString(elr));
+        builder.append(", lastKnownElr=").append(Arrays.toString(lastKnownElr));
         builder.append(", leader=").append(leader);
         builder.append(", leaderRecoveryState=").append(leaderRecoveryState);
         builder.append(", leaderEpoch=").append(leaderEpoch);
