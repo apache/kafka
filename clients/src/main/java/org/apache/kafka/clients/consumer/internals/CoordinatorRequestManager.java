@@ -114,7 +114,7 @@ public class CoordinatorRequestManager implements RequestManager {
             Optional.empty()
         );
 
-        unsentRequest.future().whenComplete((clientResponse, throwable) -> {
+        return unsentRequest.whenComplete((clientResponse, throwable) -> {
             if (clientResponse != null) {
                 FindCoordinatorResponse response = (FindCoordinatorResponse) clientResponse.responseBody();
                 onResponse(clientResponse.receivedTimeMs(), response);
@@ -122,8 +122,6 @@ public class CoordinatorRequestManager implements RequestManager {
                 onFailedResponse(unsentRequest.handler().completionTimeMs(), throwable);
             }
         });
-
-        return unsentRequest;
     }
 
     /**
