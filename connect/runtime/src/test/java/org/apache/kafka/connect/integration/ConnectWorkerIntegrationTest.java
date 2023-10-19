@@ -820,6 +820,7 @@ public class ConnectWorkerIntegrationTest {
                 e.getMessage().contains("Request timed out. The worker is currently polling the group coordinator")
         );
         connect.kafka().startOnlyKafkaOnSamePorts();
+        connect.assertions().assertExactlyNumBrokersAreUp(1, "Broker did not complete startup in time");
 
         connect.requestTimeout(DEFAULT_REST_REQUEST_TIMEOUT_MS);
         // Reconfigure the connector to ensure that the broker has completed startup
