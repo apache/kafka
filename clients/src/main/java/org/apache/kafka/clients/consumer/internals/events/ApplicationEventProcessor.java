@@ -133,7 +133,7 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         }
 
         CommitRequestManager manager = requestManagers.commitRequestManager.get();
-        event.chain(manager.addOffsetCommitRequest(event.offsets()));
+        event.chain(manager.addOffsetCommitRequest(event.offsets()).future());
     }
 
     private void process(final OffsetFetchApplicationEvent event) {

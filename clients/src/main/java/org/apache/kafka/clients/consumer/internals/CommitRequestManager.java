@@ -16,17 +16,23 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.ClientResponse;
+import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
+import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
+import org.apache.kafka.common.message.OffsetCommitResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
+import org.apache.kafka.common.requests.OffsetCommitResponse;
 import org.apache.kafka.common.requests.OffsetFetchRequest;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
 import org.apache.kafka.common.utils.LogContext;
@@ -104,7 +110,6 @@ public class CommitRequestManager implements RequestManager {
         maybeAutoCommit(this.subscriptions.allConsumed());
         if (!pendingRequests.hasUnsentRequests())
             return EMPTY;
-
         return new NetworkClientDelegate.PollResult(pendingRequests.drain(currentTimeMs));
     }
 
@@ -127,7 +132,7 @@ public class CommitRequestManager implements RequestManager {
      * Handles {@link org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent}. It creates an
      * {@link OffsetCommitRequestState} and enqueue it to send later.
      */
-    public CompletableFuture<Void> addOffsetCommitRequest(final Map<TopicPartition, OffsetAndMetadata> offsets) {
+    public OffsetCommitRequestState addOffsetCommitRequest(final Map<TopicPartition, OffsetAndMetadata> offsets) {
         return pendingRequests.addOffsetCommitRequest(offsets);
     }
 
@@ -151,25 +156,29 @@ public class CommitRequestManager implements RequestManager {
     // Visible for testing
     CompletableFuture<Void> sendAutoCommit(final Map<TopicPartition, OffsetAndMetadata> allConsumedOffsets) {
         log.debug("Enqueuing autocommit offsets: {}", allConsumedOffsets);
-        return this.addOffsetCommitRequest(allConsumedOffsets)
-                .whenComplete((response, throwable) -> {
-                    this.autoCommitState.ifPresent(autoCommitState -> autoCommitState.setInflightCommitStatus(false));
-
-                    if (throwable == null) {
-                        log.debug("Completed asynchronous auto-commit of offsets {}", allConsumedOffsets);
-                    }
-                })
-                .exceptionally(t -> {
-                    if (t instanceof RetriableCommitFailedException) {
-                        log.debug("Asynchronous auto-commit of offsets {} failed due to retriable error: {}", allConsumedOffsets, t.getMessage());
-                    } else {
-                        log.warn("Asynchronous auto-commit of offsets {} failed", allConsumedOffsets, t);
-                    }
-                    return null;
-                });
+        OffsetCommitRequestState requestState = addOffsetCommitRequest(allConsumedOffsets);
+        return requestState.future.whenComplete((response, throwable) -> {
+            autoCommitState.ifPresent(autoCommitState -> autoCommitState.setInflightCommitStatus(false));
+            if (throwable == null) {
+                log.debug("Completed asynchronous auto-commit of offsets {}", allConsumedOffsets);
+            } else {
+                if (throwable instanceof RetriableCommitFailedException) {
+                    log.debug("Asynchronous auto-commit of offsets {} failed due to retriable error: {}",
+                        allConsumedOffsets, throwable.getMessage());
+                } else {
+                    log.warn("Asynchronous auto-commit of offsets {} failed", allConsumedOffsets, throwable);
+                }
+            }
+        });
     }
 
-    private class OffsetCommitRequestState {
+    private void handleCoordinatorDisconnect(Throwable exception, long currentTimeMs) {
+        if (exception instanceof DisconnectException) {
+            coordinatorRequestManager.markCoordinatorUnknown(exception.getMessage(), currentTimeMs);
+        }
+    }
+
+    public class OffsetCommitRequestState extends RequestState {
         private final Map<TopicPartition, OffsetAndMetadata> offsets;
         private final String groupId;
         private final GroupState.Generation generation;
@@ -179,7 +188,10 @@ public class CommitRequestManager implements RequestManager {
         public OffsetCommitRequestState(final Map<TopicPartition, OffsetAndMetadata> offsets,
                                         final String groupId,
                                         final String groupInstanceId,
-                                        final GroupState.Generation generation) {
+                                        final GroupState.Generation generation,
+                                        final long retryBackoffMs,
+                                        final long retryBackoffMaxMs) {
+            super(logContext, CommitRequestManager.class.getSimpleName(), retryBackoffMs, retryBackoffMaxMs);
             this.offsets = offsets;
             this.future = new CompletableFuture<>();
             this.groupId = groupId;
@@ -215,14 +227,113 @@ public class CommitRequestManager implements RequestManager {
                     .setMemberId(generation.memberId)
                     .setGroupInstanceId(groupInstanceId)
                     .setTopics(new ArrayList<>(requestTopicDataMap.values())));
-            return new NetworkClientDelegate.UnsentRequest(builder, coordinatorRequestManager.coordinator())
-                .whenComplete((response, throwable) -> {
-                    if (throwable == null) {
-                        future.complete(null);
-                    } else {
-                        future.completeExceptionally(throwable);
+
+            NetworkClientDelegate.UnsentRequest resp = new NetworkClientDelegate.UnsentRequest(
+                builder,
+                coordinatorRequestManager.coordinator());
+            resp.whenComplete(
+                (response, throwable) -> {
+                    try {
+                        if (throwable == null) {
+                            onResponse(response);
+                        } else {
+                            onError(throwable, resp.handler().completionTimeMs());
+                        }
+                    } catch (Throwable t) {
+                        log.error("Unexpected error in commit callback: ", t);
+                        future.completeExceptionally(t);
                     }
                 });
+            return resp;
+        }
+
+        public CompletableFuture<Void> future() {
+            return future;
+        }
+
+        public void onError(final Throwable exception, final long currentTimeMs) {
+            if (exception instanceof RetriableException) {
+                handleCoordinatorDisconnect(exception, currentTimeMs);
+                // retry
+            }
+        }
+
+        public void onResponse(final ClientResponse response) {
+            long responseTime = response.receivedTimeMs();
+            OffsetCommitResponse commitResponse = (OffsetCommitResponse) response.responseBody();
+            Set<String> unauthorizedTopics = new HashSet<>();
+            for (OffsetCommitResponseData.OffsetCommitResponseTopic topic : commitResponse.data().topics()) {
+                for (OffsetCommitResponseData.OffsetCommitResponsePartition partition : topic.partitions()) {
+                    TopicPartition tp = new TopicPartition(topic.name(), partition.partitionIndex());
+                    OffsetAndMetadata offsetAndMetadata = offsets.get(tp);
+                    long offset = offsetAndMetadata.offset();
+                    Errors error = Errors.forCode(partition.errorCode());
+                    if (error == Errors.NONE) {
+                        log.debug("OffsetCommit {} for partition {}", offset, tp);
+                        continue;
+                    }
+
+                    if (error.exception() instanceof RetriableException) {
+                        log.warn("OffsetCommit failed on partition {} at offset {}: {}", tp, offset,
+                            error.message());
+                    } else {
+                        log.error("OffsetCommit failed on partition {} at offset {}: {}", tp, offset, error.message());
+                    }
+
+                    if (!handlePartitionError(error, tp, offset, unauthorizedTopics, responseTime)) {
+                        return;
+                    }
+                }
+            }
+
+            if (!unauthorizedTopics.isEmpty()) {
+                log.error("Not authorized to commit to topics {}", unauthorizedTopics);
+                future.completeExceptionally(new TopicAuthorizationException(unauthorizedTopics));
+            } else {
+                future.complete(null);
+            }
+        }
+
+        private void retry(final long currentTimeMs) {
+            onFailedAttempt(currentTimeMs);
+            pendingRequests.addOffsetCommitRequest(this);
+        }
+
+        private boolean handlePartitionError(Errors error, TopicPartition tp, long offset,
+                                          Set<String> unauthorizedTopics, long responseTime) {
+            switch (error) {
+                case GROUP_AUTHORIZATION_FAILED:
+                    future.completeExceptionally(GroupAuthorizationException.forGroupId(groupId));
+                    return false;
+                case TOPIC_AUTHORIZATION_FAILED:
+                    unauthorizedTopics.add(tp.topic());
+                    return true;
+                case OFFSET_METADATA_TOO_LARGE:
+                case INVALID_COMMIT_OFFSET_SIZE:
+                case COORDINATOR_LOAD_IN_PROGRESS:
+                case UNKNOWN_TOPIC_OR_PARTITION:
+                    System.out.println("d-----");
+                    // retry
+                    retry(responseTime);
+                    return false;
+                case COORDINATOR_NOT_AVAILABLE:
+                case NOT_COORDINATOR:
+                case REQUEST_TIMED_OUT:
+                    retry(responseTime);
+                    coordinatorRequestManager.markCoordinatorUnknown(error.message(), responseTime);
+                    return false;
+                case FENCED_INSTANCE_ID:
+                    log.info("OffsetCommit failed due to group instance id {} fenced: {}", groupInstanceId, error.message());
+                    future.completeExceptionally(new CommitFailedException());
+                    return false;
+                case UNKNOWN_MEMBER_ID:
+                    log.info("OffsetCommit failed due to unknown member id memberId {}: {}", null, error.message());
+                    future.completeExceptionally(error.exception());
+                    return false;
+                default:
+                    future.completeExceptionally(new KafkaException("Unexpected error in commit: " + error.message()));
+                    return false;
+            }
         }
     }
 
@@ -267,19 +378,24 @@ public class CommitRequestManager implements RequestManager {
 
         private void onFailure(final long currentTimeMs,
                                final Errors responseError) {
+            handleCoordinatorDisconnect(responseError.exception(), currentTimeMs);
             log.debug("Offset fetch failed: {}", responseError.message());
-
             // TODO: should we retry on COORDINATOR_NOT_AVAILABLE as well ?
             if (responseError == Errors.COORDINATOR_LOAD_IN_PROGRESS) {
                 retry(currentTimeMs);
             } else if (responseError == Errors.NOT_COORDINATOR) {
                 // re-discover the coordinator and retry
-                coordinatorRequestManager.markCoordinatorUnknown(responseError.message(), currentTimeMs);
                 retry(currentTimeMs);
             } else if (responseError == Errors.GROUP_AUTHORIZATION_FAILED) {
                 future.completeExceptionally(GroupAuthorizationException.forGroupId(groupState.groupId));
             } else {
                 future.completeExceptionally(new KafkaException("Unexpected error in fetch offset response: " + responseError.message()));
+            }
+        }
+
+        private void handleCoordinatorDisconnect(Throwable exception, long currentTimeMs) {
+            if (exception instanceof DisconnectException) {
+                coordinatorRequestManager.markCoordinatorUnknown(exception.getMessage(), currentTimeMs);
             }
         }
 
@@ -385,15 +501,21 @@ public class CommitRequestManager implements RequestManager {
             return !unsentOffsetCommits.isEmpty() || !unsentOffsetFetches.isEmpty();
         }
 
-        CompletableFuture<Void> addOffsetCommitRequest(final Map<TopicPartition, OffsetAndMetadata> offsets) {
+        OffsetCommitRequestState addOffsetCommitRequest(final Map<TopicPartition, OffsetAndMetadata> offsets) {
             // TODO: Dedupe committing the same offsets to the same partitions
             OffsetCommitRequestState request = new OffsetCommitRequestState(
-                    offsets,
-                    groupState.groupId,
-                    groupState.groupInstanceId.orElse(null),
-                    groupState.generation);
+                offsets,
+                groupState.groupId,
+                groupState.groupInstanceId.orElse(null),
+                groupState.generation,
+                retryBackoffMs,
+                retryBackoffMaxMs);
+            return addOffsetCommitRequest(request);
+        }
+
+        OffsetCommitRequestState addOffsetCommitRequest(OffsetCommitRequestState request) {
             unsentOffsetCommits.add(request);
-            return request.future;
+            return request;
         }
 
         /**
@@ -443,11 +565,17 @@ public class CommitRequestManager implements RequestManager {
         List<NetworkClientDelegate.UnsentRequest> drain(final long currentTimeMs) {
             List<NetworkClientDelegate.UnsentRequest> unsentRequests = new ArrayList<>();
 
+            // not ready to sent request
+            List<OffsetCommitRequestState> notReady = unsentOffsetCommits.stream()
+                .filter(request -> !request.canSendRequest(currentTimeMs))
+                .collect(Collectors.toList());
+
             // Add all unsent offset commit requests to the unsentRequests list
             unsentRequests.addAll(
                     unsentOffsetCommits.stream()
-                            .map(OffsetCommitRequestState::toUnsentRequest)
-                            .collect(Collectors.toList()));
+                        .filter(request -> request.canSendRequest(currentTimeMs))
+                        .map(OffsetCommitRequestState::toUnsentRequest)
+                        .collect(Collectors.toList()));
 
             // Partition the unsent offset fetch requests into sendable and non-sendable lists
             Map<Boolean, List<OffsetFetchRequestState>> partitionedBySendability =
@@ -465,6 +593,7 @@ public class CommitRequestManager implements RequestManager {
             unsentOffsetCommits.clear();
             unsentOffsetFetches.clear();
             unsentOffsetFetches.addAll(partitionedBySendability.get(false));
+            unsentOffsetCommits.addAll(notReady);
 
             return Collections.unmodifiableList(unsentRequests);
         }
