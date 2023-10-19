@@ -222,11 +222,38 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         );
     }
 
+    /**
+     * Starts the closing process.
+     *
+     * <p/>
+     *
+     * This method is called from the application thread, but our resources are owned by the network thread. As such,
+     * we don't actually close any of those resources here, immediately, on the application thread. Instead, we just
+     * update our internal state on the application thread. When the network thread next
+     * {@link #run() executes its loop}, it will notice that state, cease processing any further events, and begin
+     * {@link #cleanup() closing its resources}.
+     *
+     * <p/>
+     *
+     * This method will wait (i.e. block the application thread) for up to the duration of the given timeout to give
+     * the network thread the time to close down cleanly.
+     *
+     * @param timeout Upper bound of time to wait for the network thread to close its resources
+     */
     private void closeInternal(final Duration timeout) {
-        log.trace("Signaling the consumer network thread to close in {}ms", timeout.toMillis());
+        long timeoutMs = timeout.toMillis();
+        log.trace("Signaling the consumer network thread to close in {}ms", timeoutMs);
         running = false;
         closeTimeout = timeout;
         wakeup();
+
+        if (timeoutMs > 0) {
+            try {
+                join(timeoutMs);
+            } catch (InterruptedException e) {
+                log.error("Interrupted while waiting for consumer network thread to complete", e);
+            }
+        }
     }
 
     void cleanup() {
