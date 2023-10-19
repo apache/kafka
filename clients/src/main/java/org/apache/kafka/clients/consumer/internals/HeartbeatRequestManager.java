@@ -186,7 +186,7 @@ public class HeartbeatRequestManager implements RequestManager {
             coordinatorRequestManager.coordinator());
         request.future().whenComplete((response, exception) -> {
             if (response != null) {
-                onResponse((ConsumerGroupHeartbeatResponse) response.responseBody(), response.receivedTimeMs());
+                onResponse((ConsumerGroupHeartbeatResponse) response.responseBody(), request.handler().completionTimeMs());
             } else {
                 onFailure(exception, request.handler().completionTimeMs());
             }

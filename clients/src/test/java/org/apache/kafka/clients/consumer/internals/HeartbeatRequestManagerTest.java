@@ -171,7 +171,7 @@ public class HeartbeatRequestManagerTest {
     }
 
     @Test
-    public void testBackoffOnTimeout() {
+    public void testNetworkTimeout() {
         heartbeatRequestState = new HeartbeatRequestManager.HeartbeatRequestState(
             logContext,
             time,
@@ -299,7 +299,7 @@ public class HeartbeatRequestManagerTest {
         ClientResponse response = createHeartbeatResponse(
             result.unsentRequests.get(0),
             error);
-        result.unsentRequests.get(0).future().complete(response);
+        result.unsentRequests.get(0).handler().onComplete(response);
         ConsumerGroupHeartbeatResponse mockResponse = (ConsumerGroupHeartbeatResponse) response.responseBody();
 
         switch (error) {
