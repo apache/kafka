@@ -55,7 +55,6 @@ import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import java.nio.file.Files;
 import java.time.Duration;
 import java.util.ArrayList;
-import org.easymock.EasyMock;
 import org.easymock.EasyMockRunner;
 import org.easymock.Mock;
 import org.easymock.MockType;
