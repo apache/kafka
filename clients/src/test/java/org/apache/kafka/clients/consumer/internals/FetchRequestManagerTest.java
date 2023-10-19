@@ -320,8 +320,8 @@ public class FetchRequestManagerTest {
         // validate that closing the fetcher has sent a request with final epoch. 2 requests are sent, one for the
         // normal fetch earlier and another for the finish fetch here.
         verify(networkClientDelegate, times(2)).doSend(argument.capture(), any(Long.class));
-        NetworkClientDelegate.UnsentRequest unsentRequest = argument.getValue();
-        FetchRequest.Builder builder = (FetchRequest.Builder) unsentRequest.requestBuilder();
+        NetworkClientDelegate.UnsentRequest lastUnsentRequest = argument.getValue();
+        FetchRequest.Builder builder = (FetchRequest.Builder) lastUnsentRequest.requestBuilder();
         // session Id is the same
         assertEquals(fetchResponse.sessionId(), builder.metadata().sessionId());
         // contains final epoch
