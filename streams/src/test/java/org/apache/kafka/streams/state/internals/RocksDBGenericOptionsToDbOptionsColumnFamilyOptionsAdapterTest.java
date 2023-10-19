@@ -142,7 +142,7 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
             method.invoke(optionsFacadeDbOptions, parameters);
             final Collection<Invocation> invocations = mockingDetails(mockedDbOptions).getInvocations();
             final Set<String> invokedMethodNames = invocations.stream().map(invocation -> invocation.getMethod().getName()).collect(Collectors.toSet());
-            assertTrue(invokedMethodNames.contains(method.getName()));
+            assertTrue(invokedMethodNames.contains(method.getName()), "Should have called DBOptions." + method.getName() + "()");
         } catch (final InvocationTargetException undeclaredMockMethodCall) {
             assertThat(undeclaredMockMethodCall.getCause(), instanceOf(AssertionError.class));
             assertThat(undeclaredMockMethodCall.getCause().getMessage().trim(),
@@ -248,7 +248,7 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
             method.invoke(optionsFacadeColumnFamilyOptions, parameters);
             final Collection<Invocation> invocations = mockingDetails(mockedColumnFamilyOptions).getInvocations();
             final Set<String> invokedMethodNames = invocations.stream().map(invocation -> invocation.getMethod().getName()).collect(Collectors.toSet());
-            assertTrue(invokedMethodNames.contains(method.getName()));
+            assertTrue(invokedMethodNames.contains(method.getName()), "Should have called ColumnFamilyOptions." + method.getName() + "()");
         } catch (final InvocationTargetException undeclaredMockMethodCall) {
             assertThat(undeclaredMockMethodCall.getCause(), instanceOf(AssertionError.class));
             assertThat(undeclaredMockMethodCall.getCause().getMessage().trim(),
