@@ -1595,7 +1595,7 @@ public class IQv2StoreIntegrationTest {
         final Optional<Integer> upper,
         final boolean isKeyAscending,
         final Function<V, Integer> valueExtactor,
-        final List<Integer> expectedValue) {
+        final List<Integer> expectedValues) {
 
         RangeQuery<Integer, V> query;
         query = RangeQuery.withRange(lower.orElse(null), upper.orElse(null));
@@ -1614,7 +1614,7 @@ public class IQv2StoreIntegrationTest {
         if (result.getGlobalResult() != null) {
             fail("global tables aren't implemented");
         } else {
-            final List<Integer> actualValue = new ArrayList<>();
+            final List<Integer> actualValues = new ArrayList<>();
             final Map<Integer, QueryResult<KeyValueIterator<Integer, V>>> queryResult = result.getPartitionResults();
             final TreeSet<Integer> partitions = new TreeSet<>(queryResult.keySet());
             for (final int partition : partitions) {
@@ -1635,12 +1635,12 @@ public class IQv2StoreIntegrationTest {
 
                 try (final KeyValueIterator<Integer, V> iterator = queryResult.get(partition).getResult()) {
                     while (iterator.hasNext()) {
-                        actualValue.add(valueExtactor.apply(iterator.next().value));
+                        actualValues.add(valueExtactor.apply(iterator.next().value));
                     }
                 }
                 assertThat(queryResult.get(partition).getExecutionInfo(), is(empty()));
             }
-            assertThat("Result:" + result, actualValue, is(expectedValue));
+            assertThat("Result:" + result, actualValues, is(expectedValues));
             assertThat("Result:" + result, result.getPosition(), is(INPUT_POSITION));
         }
     }
@@ -1650,7 +1650,7 @@ public class IQv2StoreIntegrationTest {
         final Instant timeFrom,
         final Instant timeTo,
         final Function<V, Integer> valueExtactor,
-        final Set<Integer> expectedValue) {
+        final Set<Integer> expectedValues) {
 
         final WindowKeyQuery<Integer, V> query = WindowKeyQuery.withKeyAndWindowStartRange(
             key,
@@ -1670,7 +1670,7 @@ public class IQv2StoreIntegrationTest {
         if (result.getGlobalResult() != null) {
             fail("global tables aren't implemented");
         } else {
-            final Set<Integer> actualValue = new HashSet<>();
+            final Set<Integer> actualValues = new HashSet<>();
             final Map<Integer, QueryResult<WindowStoreIterator<V>>> queryResult = result.getPartitionResults();
             for (final int partition : queryResult.keySet()) {
                 final boolean failure = queryResult.get(partition).isFailure();
@@ -1690,12 +1690,12 @@ public class IQv2StoreIntegrationTest {
 
                 try (final WindowStoreIterator<V> iterator = queryResult.get(partition).getResult()) {
                     while (iterator.hasNext()) {
-                        actualValue.add(valueExtactor.apply(iterator.next().value));
+                        actualValues.add(valueExtactor.apply(iterator.next().value));
                     }
                 }
                 assertThat(queryResult.get(partition).getExecutionInfo(), is(empty()));
             }
-            assertThat("Result:" + result, actualValue, is(expectedValue));
+            assertThat("Result:" + result, actualValues, is(expectedValues));
             assertThat("Result:" + result, result.getPosition(), is(INPUT_POSITION));
         }
     }
@@ -1704,7 +1704,7 @@ public class IQv2StoreIntegrationTest {
         final Instant timeFrom,
         final Instant timeTo,
         final Function<V, Integer> valueExtactor,
-        final Set<Integer> expectedValue) {
+        final Set<Integer> expectedValues) {
 
         final WindowRangeQuery<Integer, V> query = WindowRangeQuery.withWindowStartRange(timeFrom, timeTo);
 
@@ -1720,7 +1720,7 @@ public class IQv2StoreIntegrationTest {
         if (result.getGlobalResult() != null) {
             fail("global tables aren't implemented");
         } else {
-            final Set<Integer> actualValue = new HashSet<>();
+            final Set<Integer> actualValues = new HashSet<>();
             final Map<Integer, QueryResult<KeyValueIterator<Windowed<Integer>, V>>> queryResult = result.getPartitionResults();
             for (final int partition : queryResult.keySet()) {
                 final boolean failure = queryResult.get(partition).isFailure();
@@ -1740,19 +1740,19 @@ public class IQv2StoreIntegrationTest {
 
                 try (final KeyValueIterator<Windowed<Integer>, V> iterator = queryResult.get(partition).getResult()) {
                     while (iterator.hasNext()) {
-                        actualValue.add(valueExtactor.apply(iterator.next().value));
+                        actualValues.add(valueExtactor.apply(iterator.next().value));
                     }
                 }
                 assertThat(queryResult.get(partition).getExecutionInfo(), is(empty()));
             }
-            assertThat("Result:" + result, actualValue, is(expectedValue));
+            assertThat("Result:" + result, actualValues, is(expectedValues));
             assertThat("Result:" + result, result.getPosition(), is(INPUT_POSITION));
         }
     }
 
     public <V> void shouldHandleSessionRangeQuery(
         final Integer key,
-        final Set<Integer> expectedValue) {
+        final Set<Integer> expectedValues) {
 
         final WindowRangeQuery<Integer, V> query = WindowRangeQuery.withKey(key);
 
@@ -1767,7 +1767,7 @@ public class IQv2StoreIntegrationTest {
         if (result.getGlobalResult() != null) {
             fail("global tables aren't implemented");
         } else {
-            final Set<Integer> actualValue = new HashSet<>();
+            final Set<Integer> actualValues = new HashSet<>();
             final Map<Integer, QueryResult<KeyValueIterator<Windowed<Integer>, V>>> queryResult = result.getPartitionResults();
             for (final int partition : queryResult.keySet()) {
                 final boolean failure = queryResult.get(partition).isFailure();
@@ -1787,12 +1787,12 @@ public class IQv2StoreIntegrationTest {
 
                 try (final KeyValueIterator<Windowed<Integer>, V> iterator = queryResult.get(partition).getResult()) {
                     while (iterator.hasNext()) {
-                        actualValue.add((Integer) iterator.next().value);
+                        actualValues.add((Integer) iterator.next().value);
                     }
                 }
                 assertThat(queryResult.get(partition).getExecutionInfo(), is(empty()));
             }
-            assertThat("Result:" + result, actualValue, is(expectedValue));
+            assertThat("Result:" + result, actualValues, is(expectedValues));
             assertThat("Result:" + result, result.getPosition(), is(INPUT_POSITION));
         }
     }
