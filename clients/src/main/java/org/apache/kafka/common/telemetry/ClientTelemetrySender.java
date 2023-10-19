@@ -18,9 +18,9 @@
 package org.apache.kafka.common.telemetry;
 
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.requests.AbstractRequest.Builder;
-import org.apache.kafka.common.requests.AbstractResponse;
+import org.apache.kafka.common.requests.GetTelemetrySubscriptionsResponse;
+import org.apache.kafka.common.requests.PushTelemetryResponse;
 
 import java.util.Optional;
 
@@ -50,18 +50,30 @@ public interface ClientTelemetrySender extends AutoCloseable {
     Optional<Builder<?>> createRequest();
 
     /**
-     * Handle response for telemetry APIs
+     * Handle successful response for get telemetry subscriptions request.
      *
-     * @param response either {@link org.apache.kafka.common.requests.GetTelemetrySubscriptionsResponse} or
-     *                 {@link org.apache.kafka.common.requests.PushTelemetryResponse} telemetry API response.
+     * @param response subscriptions telemetry API response
      */
-    void handleResponse(AbstractResponse response);
+    void handleResponse(GetTelemetrySubscriptionsResponse response);
 
     /**
-     * Handle response for failed telemetry request.
+     * Handle successful response for push telemetry request.
      *
-     * @param apiKey determining the telemetry API request type.
+     * @param response push telemetry API response
+     */
+    void handleResponse(PushTelemetryResponse response);
+
+    /**
+     * Handle response for failed get telemetry subscriptions request.
+     *
      * @param kafkaException the fatal exception.
      */
-    void handleFailedRequest(ApiKeys apiKey, KafkaException kafkaException);
+    void handleFailedGetTelemetrySubscriptionsRequest(KafkaException kafkaException);
+
+    /**
+     * Handle response for failed push telemetry request.
+     *
+     * @param kafkaException the fatal exception.
+     */
+    void handleFailedPushTelemetryRequest(KafkaException kafkaException);
 }
