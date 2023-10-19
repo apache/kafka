@@ -311,7 +311,6 @@ public class FetchRequestManagerTest {
 
         final ArgumentCaptor<NetworkClientDelegate.UnsentRequest> argument = ArgumentCaptor.forClass(NetworkClientDelegate.UnsentRequest.class);
 
-        // send request to close the fetcher
         Timer timer = time.timer(Duration.ofSeconds(10));
         // NOTE: by design the FetchRequestManager doesn't perform network I/O internally. That means that calling
         // the close() method with a Timer will NOT send out the close session requests on close. The network
