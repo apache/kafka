@@ -44,6 +44,18 @@ class CoreUtilsTest extends Logging {
   }
 
   @Test
+  def testSwallowLogging(): Unit = {
+    var loggedMessage: Option[String] = None
+    val testLogging: Logging = new Logging {
+      override def info(msg: => String, e: => Throwable): Unit = {
+        loggedMessage = Some(msg)
+      }
+    }
+    CoreUtils.swallow(throw new KafkaException("test"), testLogging, Level.INFO)
+    assertEquals(Some("test"), loggedMessage)
+  }
+
+  @Test
   def testReadBytes(): Unit = {
     for(testCase <- List("", "a", "abcd")) {
       val bytes = testCase.getBytes
