@@ -43,7 +43,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -152,7 +151,6 @@ public class ReassignPartitionsUnitTest {
         ), Collections.emptyMap());
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void testFindPartitionReassignmentStates() throws Exception {
         try (MockAdminClient adminClient = new MockAdminClient.Builder().numBrokers(4).build()) {
@@ -186,7 +184,7 @@ public class ReassignPartitionsUnitTest {
 
             // Cancel the reassignment and test findPartitionReassignmentStates again.
             Map<TopicPartition, Throwable> cancelResult = cancelPartitionReassignments(adminClient,
-                set(new TopicPartition("foo", 0), new TopicPartition("quux", 2)));
+                new HashSet<>(asList(new TopicPartition("foo", 0), new TopicPartition("quux", 2))));
 
             assertEquals(1, cancelResult.size());
             assertEquals(UnknownTopicOrPartitionException.class, cancelResult.get(new TopicPartition("quux", 2)).getClass());
@@ -299,7 +297,7 @@ public class ReassignPartitionsUnitTest {
             assignments.put(new TopicPartition("bar", 0), asList(2, 3, 0));
 
             assertEquals(assignments,
-                getReplicaAssignmentForPartitions(adminClient, set(new TopicPartition("foo", 0), new TopicPartition("bar", 0))));
+                getReplicaAssignmentForPartitions(adminClient, new HashSet<>(asList(new TopicPartition("foo", 0), new TopicPartition("bar", 0)))));
         }
     }
 
@@ -504,16 +502,16 @@ public class ReassignPartitionsUnitTest {
 
         Map<Integer, PartitionMove> fooMoves = new HashMap<>();
 
-        fooMoves.put(0, new PartitionMove(set(1, 2, 3), set(5)));
-        fooMoves.put(1, new PartitionMove(set(4, 5, 6), set(7, 8)));
-        fooMoves.put(2, new PartitionMove(set(1, 2), set(3, 4)));
-        fooMoves.put(3, new PartitionMove(set(1, 2), set(5, 6)));
-        fooMoves.put(4, new PartitionMove(set(1, 2), set(3)));
-        fooMoves.put(5, new PartitionMove(set(1, 2), set(3, 4, 5, 6)));
+        fooMoves.put(0, new PartitionMove(new HashSet<>(asList(1, 2, 3)), new HashSet<>(asList(5))));
+        fooMoves.put(1, new PartitionMove(new HashSet<>(asList(4, 5, 6)), new HashSet<>(asList(7, 8))));
+        fooMoves.put(2, new PartitionMove(new HashSet<>(asList(1, 2)), new HashSet<>(asList(3, 4))));
+        fooMoves.put(3, new PartitionMove(new HashSet<>(asList(1, 2)), new HashSet<>(asList(5, 6))));
+        fooMoves.put(4, new PartitionMove(new HashSet<>(asList(1, 2)), new HashSet<>(asList(3))));
+        fooMoves.put(5, new PartitionMove(new HashSet<>(asList(1, 2)), new HashSet<>(asList(3, 4, 5, 6))));
 
         Map<Integer, PartitionMove> barMoves = new HashMap<>();
 
-        barMoves.put(0, new PartitionMove(set(2, 3, 4), set(1)));
+        barMoves.put(0, new PartitionMove(new HashSet<>(asList(2, 3, 4)), new HashSet<>(asList(1))));
 
         assertEquals(fooMoves, moveMap.get("foo"));
         assertEquals(barMoves, moveMap.get("bar"));
@@ -532,10 +530,10 @@ public class ReassignPartitionsUnitTest {
 
         assertEquals(expFollowerThrottle, calculateFollowerThrottles(moveMap));
 
-        assertEquals(set(1, 2, 3, 4, 5, 6, 7, 8), calculateReassigningBrokers(moveMap));
-        assertEquals(set(0, 2), calculateMovingBrokers(set(
+        assertEquals(new HashSet<>(asList(1, 2, 3, 4, 5, 6, 7, 8)), calculateReassigningBrokers(moveMap));
+        assertEquals(new HashSet<>(asList(0, 2)), calculateMovingBrokers(new HashSet<>(asList(
             new TopicPartitionReplica("quux", 0, 0),
-            new TopicPartitionReplica("quux", 1, 2))));
+            new TopicPartitionReplica("quux", 1, 2)))));
     }
 
     @Test
@@ -621,8 +619,8 @@ public class ReassignPartitionsUnitTest {
     @Test
     public void testModifyBrokerInterBrokerThrottle() throws Exception {
         try (MockAdminClient adminClient = new MockAdminClient.Builder().numBrokers(4).build()) {
-            modifyInterBrokerThrottle(adminClient, set(0, 1, 2), 1000);
-            modifyInterBrokerThrottle(adminClient, set(0, 3), 100);
+            modifyInterBrokerThrottle(adminClient, new HashSet<>(asList(0, 1, 2)), 1000);
+            modifyInterBrokerThrottle(adminClient, new HashSet<>(asList(0, 3)), 100);
             List<ConfigResource> brokers = new ArrayList<>();
             for (int i = 0; i < 4; i++)
                 brokers.add(new ConfigResource(ConfigResource.Type.BROKER, Integer.toString(i)));
@@ -637,8 +635,8 @@ public class ReassignPartitionsUnitTest {
     @Test
     public void testModifyLogDirThrottle() throws Exception {
         try (MockAdminClient adminClient = new MockAdminClient.Builder().numBrokers(4).build()) {
-            modifyLogDirThrottle(adminClient, set(0, 1, 2), 2000);
-            modifyLogDirThrottle(adminClient, set(0, 3), -1);
+            modifyLogDirThrottle(adminClient, new HashSet<>(asList(0, 1, 2)), 2000);
+            modifyLogDirThrottle(adminClient, new HashSet<>(asList(0, 3)), -1);
 
             List<ConfigResource> brokers = new ArrayList<>();
             for (int i = 0; i < 4; i++)
@@ -742,7 +740,7 @@ public class ReassignPartitionsUnitTest {
             assignment.put(new TopicPartitionReplica("quux", 1, 0), "/tmp/kafka-logs1");
 
             assertEquals(
-                set(new TopicPartitionReplica("foo", 0, 0)),
+                new HashSet<>(asList(new TopicPartitionReplica("foo", 0, 0))),
                 alterReplicaLogDirs(adminClient, assignment)
             );
         }
@@ -759,10 +757,5 @@ public class ReassignPartitionsUnitTest {
             assertStartsWith("Unexpected character",
                 assertThrows(AdminOperationException.class, () -> executeAssignment(adminClient, false, "{invalid_json", -1L, -1L, 10000L, Time.SYSTEM)).getMessage());
         }
-    }
-
-    @SuppressWarnings("unchecked")
-    private static <T> Set<T> set(final T... set) {
-        return new HashSet<>(asList(set));
     }
 }
