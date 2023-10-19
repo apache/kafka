@@ -22,7 +22,6 @@ import org.apache.kafka.common.annotation.InterfaceStability;
  * An object that provides a MetricKey that we can use to uniquely identify a metric. This
  * is useful for filtering as well as calculating delta metrics.
  */
-@InterfaceStability.Evolving
 public interface MetricKeyable {
 
     /**
