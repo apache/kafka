@@ -38,6 +38,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.log4j.PropertyConfigurator;
 import org.jfree.chart.ChartFactory;
 import org.jfree.chart.ChartFrame;
 import org.jfree.chart.JFreeChart;
@@ -94,6 +95,8 @@ public class ReplicationQuotasTestRig {
     private static final String DIR;
 
     static {
+        PropertyConfigurator.configure("tools/src/test/resources/log4j-off.properties");
+
         new File("Experiments").mkdir();
         DIR = "Experiments/Run" + Long.valueOf(System.currentTimeMillis()).toString().substring(8);
         new File(DIR).mkdir();
