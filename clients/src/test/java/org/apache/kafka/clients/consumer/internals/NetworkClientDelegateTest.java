@@ -32,6 +32,7 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
 import java.util.Collections;
 import java.util.Objects;
 import java.util.Optional;
@@ -41,6 +42,7 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -95,6 +97,29 @@ public class NetworkClientDelegateTest {
             assertTrue(unsentRequest.future().isDone());
             TestUtils.assertFutureThrows(unsentRequest.future(), DisconnectException.class);
         }
+    }
+
+    @Test
+    public void testEnsureCorrectCompletionTimeOnFailure() {
+        NetworkClientDelegate.UnsentRequest unsentRequest = newUnsentFindCoordinatorRequest();
+        long timeMs = time.milliseconds();
+        unsentRequest.handler().onFailure(timeMs, new TimeoutException());
+
+        time.sleep(100);
+        assertEquals(timeMs, unsentRequest.handler().completionTimeMs());
+    }
+
+    @Test
+    public void testEnsureCorrectCompletionTimeOnComplete() throws IOException {
+        NetworkClientDelegate.UnsentRequest unsentRequest = newUnsentFindCoordinatorRequest();
+        prepareFindCoordinatorResponse(Errors.NONE);
+        long timeMs = time.milliseconds();
+        try (NetworkClientDelegate delegate = newNetworkClientDelegate()) {
+            delegate.send(unsentRequest);
+            delegate.poll(0, timeMs);
+        }
+        time.sleep(100);
+        assertEquals(timeMs, unsentRequest.handler().completionTimeMs());
     }
 
     public NetworkClientDelegate newNetworkClientDelegate() {
