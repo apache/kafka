@@ -53,7 +53,9 @@
           "about": "The configuration name." },
         { "name": "Value", "type": "string", "versions": "0+", "nullableVersions": "0+",
           "about": "The configuration value." }
-      ]}
+      ]},
+      { "name": "Id", "type": "uuid", "tag": 0, "taggedVersions":  "5+", "versions": "5+", "ignorable":  true,
+        "about": "Optional topic id."}
     ]},
     { "name": "timeoutMs", "type": "int32", "versions": "0+", "default": "60000",
       "about": "How long to wait in milliseconds before timing out the request." },

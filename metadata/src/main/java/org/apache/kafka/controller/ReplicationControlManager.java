@@ -625,6 +625,15 @@ public class ReplicationControlManager {
                                  boolean authorizedToReturnConfigs) {
         Map<String, String> creationConfigs = translateCreationConfigs(topic.configs());
         Map<Integer, PartitionRegistration> newParts = new HashMap<>();
+        Uuid topicId;
+        if (topic.id() == null || topic.id() == Uuid.ZERO_UUID) {
+            topicId = Uuid.randomUuid();
+        } else {
+            if (topics.containsKey(topic.id())) {
+                return ApiError.fromThrowable(new InvalidTopicException("Topic id " + topic.id() + " already exists"));
+            }
+            topicId = topic.id();
+        }
         if (!topic.assignments().isEmpty()) {
             if (topic.replicationFactor() != -1) {
                 return new ApiError(INVALID_REQUEST,
@@ -725,7 +734,6 @@ public class ReplicationControlManager {
                 numPartitions, e.throttleTimeMs());
             return ApiError.fromThrowable(e);
         }
-        Uuid topicId = Uuid.randomUuid();
         CreatableTopicResult result = new CreatableTopicResult().
             setName(topic.name()).
             setTopicId(topicId).

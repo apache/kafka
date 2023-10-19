@@ -90,6 +90,7 @@ object TopicCommand extends Logging {
     val replicationFactor = opts.replicationFactor
     val replicaAssignment = opts.replicaAssignment
     val configsToAdd = parseTopicConfigsToBeAdded(opts)
+    val topicId = opts.topicId.map(Uuid.fromString)
 
     def hasReplicaAssignment: Boolean = replicaAssignment.isDefined
     def ifTopicDoesntExist(): Boolean = opts.ifNotExists
@@ -229,6 +230,7 @@ object TopicCommand extends Logging {
           new NewTopic(topic.name, asJavaReplicaReassignment(topic.replicaAssignment.get))
         else {
           new NewTopic(
+            topic.topicId.orNull,
             topic.name,
             topic.partitions.asJava,
             topic.replicationFactor.map(_.toShort).map(Short.box).asJava)

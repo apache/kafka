@@ -29,8 +29,7 @@ import org.apache.kafka.admin.AdminUtils
 import org.apache.kafka.clients.admin.{AlterConfigOp, ScramMechanism}
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.config.{ConfigDef, ConfigException, ConfigResource}
-import org.apache.kafka.common.errors.ThrottlingQuotaExceededException
-import org.apache.kafka.common.errors.{ApiException, InvalidConfigurationException, InvalidPartitionsException, InvalidReplicaAssignmentException, InvalidRequestException, ReassignmentInProgressException, TopicExistsException, UnknownTopicOrPartitionException, UnsupportedVersionException}
+import org.apache.kafka.common.errors.{ApiException, InvalidConfigurationException, InvalidPartitionsException, InvalidReplicaAssignmentException, InvalidRequestException, ReassignmentInProgressException, ThrottlingQuotaExceededException, TopicExistsException, UnknownTopicOrPartitionException, UnsupportedVersionException}
 import org.apache.kafka.common.message.AlterUserScramCredentialsResponseData.AlterUserScramCredentialsResult
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
@@ -167,6 +166,14 @@ class ZkAdminManager(val config: KafkaConfig,
       try {
         if (metadataCache.contains(topic.name))
           throw new TopicExistsException(s"Topic '${topic.name}' already exists.")
+        val maybeUuid = topic.id() match {
+          case Uuid.ZERO_UUID => None
+          case id =>
+            if (metadataCache.topicNamesToIds().containsValue(id)) {
+              throw new TopicExistsException(s"Topic id '$id' already exists.")
+            }
+            Some(id)
+        }
 
         val nullConfigs = topic.configs.asScala.filter(_.value == null).map(_.name)
         if (nullConfigs.nonEmpty)
@@ -211,7 +218,7 @@ class ZkAdminManager(val config: KafkaConfig,
           CreatePartitionsMetadata(topic.name, assignments.keySet)
         } else {
           controllerMutationQuota.record(assignments.size)
-          adminZkClient.createTopicWithAssignment(topic.name, configs, assignments, validate = false, config.usesTopicId)
+          adminZkClient.createTopicWithAssignment(topic.name, configs, assignments, validate = false, config.usesTopicId, maybeUuid)
           populateIds(includeConfigsAndMetadata, topic.name)
           CreatePartitionsMetadata(topic.name, assignments.keySet)
         }
