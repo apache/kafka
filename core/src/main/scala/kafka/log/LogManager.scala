@@ -1230,11 +1230,10 @@ class LogManager(logDirs: Seq[File],
         if (isStray) {
           // Move aside stray partitions, don't delete them
           removedLog.renameDir(UnifiedLog.logStrayDirName(topicPartition), false)
-          info(s"Log for partition ${removedLog.topicPartition} is renamed to ${removedLog.dir.getAbsolutePath}")
+          warn(s"Log for partition ${removedLog.topicPartition} is marked as stray and renamed to ${removedLog.dir.getAbsolutePath}")
         } else {
           removedLog.renameDir(UnifiedLog.logDeleteDirName(topicPartition), false)
           addLogToBeDeleted(removedLog)
-
           info(s"Log for partition ${removedLog.topicPartition} is renamed to ${removedLog.dir.getAbsolutePath} and is scheduled for deletion")
         }
         if (checkpoint) {
