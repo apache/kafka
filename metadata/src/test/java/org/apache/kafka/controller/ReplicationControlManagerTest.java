@@ -281,12 +281,14 @@ public class ReplicationControlManagerTest {
             replicationControl.handleBrokerShutdown(brokerId, isCleanShutdown, records);
         }
 
-        CreatableTopicResult createTestTopic(String name,
+        CreatableTopicResult createTestTopic(Uuid id,
+                                             String name,
                                              int numPartitions,
                                              short replicationFactor,
                                              short expectedErrorCode) {
             CreateTopicsRequestData request = new CreateTopicsRequestData();
             CreatableTopic topic = new CreatableTopic().setName(name);
+            if (id != null) topic.setId(id);
             topic.setNumPartitions(numPartitions).setReplicationFactor(replicationFactor);
             request.topics().add(topic);
             ControllerRequestContext requestContext = anonymousContextFor(ApiKeys.CREATE_TOPICS);
@@ -299,6 +301,13 @@ public class ReplicationControlManagerTest {
                 replay(result.records());
             }
             return topicResult;
+        }
+
+        CreatableTopicResult createTestTopic(String name,
+                                             int numPartitions,
+                                             short replicationFactor,
+                                             short expectedErrorCode) {
+            return createTestTopic(null, name, numPartitions, replicationFactor, expectedErrorCode);
         }
 
         CreatableTopicResult createTestTopic(String name, int[][] replicas) {
@@ -894,6 +903,19 @@ public class ReplicationControlManagerTest {
                 "replication factor of 4 cannot be reached because only 3 broker(s) " +
                 "are registered."));
         assertEquals(expectedResponse, result.response());
+    }
+
+    @Test
+    public void testCreateTopicsWithId() throws Exception {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().build();
+        ctx.registerBrokers(0, 1, 2);
+        ctx.unfenceBrokers(0, 1, 2);
+
+        Uuid id = Uuid.randomUuid();
+        CreatableTopicResult initialTopic = ctx.createTestTopic(id, "foo.bar", 2, (short) 2, NONE.code());
+        assertEquals(id, ctx.replicationControl.getTopic(initialTopic.topicId()).topicId());
+        CreatableTopicResult resultWithErrors = ctx.createTestTopic(id, "foo.baz", 2, (short) 2, INVALID_TOPIC_EXCEPTION.code());
+        assertEquals("Topic id " + id + " already exists", resultWithErrors.errorMessage());
     }
 
     @Test
