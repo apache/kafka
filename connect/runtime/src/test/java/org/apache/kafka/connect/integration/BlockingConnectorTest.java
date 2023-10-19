@@ -191,6 +191,13 @@ public class BlockingConnectorTest {
 
         createNormalConnector();
         verifyNormalConnector();
+
+        // Try to restart the connector
+        assertRequestTimesOut(
+                "restart connector that blocks during initialize",
+                () -> connect.restartConnector(BLOCKING_CONNECTOR_NAME),
+                "The worker is currently starting the connector"
+        );
     }
 
     @Test
@@ -201,6 +208,13 @@ public class BlockingConnectorTest {
 
         createNormalConnector();
         verifyNormalConnector();
+
+        // Try to restart the connector
+        assertRequestTimesOut(
+                "restart connector that blocks during start",
+                () -> connect.restartConnector(BLOCKING_CONNECTOR_NAME),
+                "The worker is currently starting the connector"
+        );
     }
 
     @Test

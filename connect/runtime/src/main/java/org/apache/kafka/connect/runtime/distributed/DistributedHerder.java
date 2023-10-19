@@ -1388,6 +1388,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                     try (TickThreadStage stage = new TickThreadStage("restarting connector " + connName)) {
                         worker.stopAndAwaitConnector(connName);
                         startConnector(connName, callback);
+                        currentRequest = null;
                     } catch (Throwable t) {
                         callback.onCompletion(t, null);
                     }
@@ -2039,6 +2040,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 callback.onCompletion(null, null);
             }
         };
+        callback.recordStage(new Stage("starting the connector", time.milliseconds()));
         worker.startConnector(connectorName, configProps, ctx, this, initialState, onInitialStateChange);
     }
 
