@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.Node;
@@ -32,7 +33,6 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.io.IOException;
 import java.util.Collections;
 import java.util.Objects;
 import java.util.Optional;
@@ -45,6 +45,8 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZE
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class NetworkClientDelegateTest {
     private static final int REQUEST_TIMEOUT_MS = 5000;
@@ -110,14 +112,12 @@ public class NetworkClientDelegateTest {
     }
 
     @Test
-    public void testEnsureCorrectCompletionTimeOnComplete() throws IOException {
+    public void testEnsureCorrectCompletionTimeOnComplete() {
         NetworkClientDelegate.UnsentRequest unsentRequest = newUnsentFindCoordinatorRequest();
-        prepareFindCoordinatorResponse(Errors.NONE);
         long timeMs = time.milliseconds();
-        try (NetworkClientDelegate delegate = newNetworkClientDelegate()) {
-            delegate.send(unsentRequest);
-            delegate.poll(0, timeMs);
-        }
+        final ClientResponse response = mock(ClientResponse.class);
+        when(response.receivedTimeMs()).thenReturn(timeMs);
+        unsentRequest.handler().onComplete(response);
         time.sleep(100);
         assertEquals(timeMs, unsentRequest.handler().completionTimeMs());
     }
