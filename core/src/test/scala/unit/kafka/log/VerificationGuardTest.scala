@@ -39,7 +39,7 @@ class VerificationGuardTest {
   }
 
   @Test
-  def testVerifiedBy(): Unit = {
+  def testVerify(): Unit = {
     val verificationGuard1 = new VerificationGuard
     val verificationGuard2 = new VerificationGuard
 
