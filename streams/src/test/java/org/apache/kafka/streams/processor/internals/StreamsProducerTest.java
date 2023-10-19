@@ -65,6 +65,8 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -1053,7 +1055,8 @@ public class StreamsProducerTest {
     }
 
     private void testSwallowExceptionOnEosAbortTx(final RuntimeException exception) {
-        when(mockedProducer.send(record, null)).thenReturn(null);
+        doReturn(null).when(mockedProducer).send(record, null);
+        doThrow(exception).when(mockedProducer).abortTransaction();
 
         eosAlphaStreamsProducerWithMock.initTransaction();
         // call `send()` to start a transaction
@@ -1062,7 +1065,6 @@ public class StreamsProducerTest {
 
         verify(mockedProducer).initTransactions();
         verify(mockedProducer).beginTransaction();
-        verify(mockedProducer).abortTransaction();
     }
 
     @Test
