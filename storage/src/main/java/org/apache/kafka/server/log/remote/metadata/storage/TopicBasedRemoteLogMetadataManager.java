@@ -433,7 +433,6 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
                     log.info("Initialized topic-based RLMM resources successfully");
                 } catch (Exception e) {
                     log.error("Encountered error while initializing producer/consumer", e);
-                    initializationFailed = true;
                     return;
                 } finally {
                     lock.writeLock().unlock();
