@@ -3739,7 +3739,7 @@ class UnifiedLogTest {
     val log = createLog(logDir, logConfig, producerStateManagerConfig = producerStateManagerConfig)
     assertFalse(log.hasOngoingTransaction(producerId))
     assertEquals(VerificationGuard.SENTINEL, log.verificationGuard(producerId))
-    assertFalse(log.verificationGuard(producerId).verifies(VerificationGuard.SENTINEL))
+    assertFalse(log.verificationGuard(producerId).verify(VerificationGuard.SENTINEL))
 
     val idempotentRecords = MemoryRecords.withIdempotentRecords(
       CompressionType.NONE,
@@ -3773,7 +3773,7 @@ class UnifiedLogTest {
     assertEquals(verificationGuard, log.verificationGuard(producerId))
 
     // Now write the transactional records
-    assertTrue(log.verificationGuard(producerId).verifies(verificationGuard))
+    assertTrue(log.verificationGuard(producerId).verify(verificationGuard))
     log.appendAsLeader(transactionalRecords, origin = appendOrigin, leaderEpoch = 0, verificationGuard = verificationGuard)
     assertTrue(log.hasOngoingTransaction(producerId))
     // VerificationGuard should be cleared now.
@@ -3799,7 +3799,7 @@ class UnifiedLogTest {
     val newVerificationGuard = log.maybeStartTransactionVerification(producerId, sequence, producerEpoch)
     assertNotEquals(VerificationGuard.SENTINEL, newVerificationGuard)
     assertNotEquals(verificationGuard, newVerificationGuard)
-    assertFalse(verificationGuard.verifies(newVerificationGuard))
+    assertFalse(verificationGuard.verify(newVerificationGuard))
   }
 
   @Test

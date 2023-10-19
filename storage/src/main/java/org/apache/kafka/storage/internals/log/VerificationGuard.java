@@ -56,7 +56,7 @@ public final class VerificationGuard {
         return value;
     }
 
-    public boolean verifies(VerificationGuard verifyingGuard) {
+    public boolean verify(VerificationGuard verifyingGuard) {
         return verifyingGuard != SENTINEL && verifyingGuard.equals(this);
     }
 }
