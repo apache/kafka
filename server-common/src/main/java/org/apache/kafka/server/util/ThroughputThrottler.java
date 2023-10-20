@@ -64,7 +64,7 @@ public class ThroughputThrottler {
      * @param amountSoFar bytes produced so far if you want to throttle data throughput, or
      *                    messages produced so far if you want to throttle message throughput.
      * @param sendStartMs timestamp of the most recently sent message
-     * @return <code>true</code> if throttling happened
+     * @return <code>true</code> if throttling should happen
      */
     public boolean shouldThrottle(long amountSoFar, long sendStartMs) {
         if (this.targetThroughput < 0) {
