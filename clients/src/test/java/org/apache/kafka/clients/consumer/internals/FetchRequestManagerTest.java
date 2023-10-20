@@ -3468,7 +3468,7 @@ public class FetchRequestManagerTest {
         }
 
         @Override
-        protected void checkDisconnects() {
+        protected void checkDisconnects(final long currentTimeMs) {
             // any disconnects affecting requests that have already been transmitted will be handled
             // by NetworkClient, so we just need to check whether connections for any of the unsent
             // requests have been disconnected; if they have, then we complete the corresponding future
@@ -3504,8 +3504,8 @@ public class FetchRequestManagerTest {
         private void failUnsentRequests(Node node, RuntimeException e) {
             // clear unsent requests to node and fail their corresponding futures
             for (UnsentRequest unsentRequest : removeUnsentRequestByNode(node)) {
-                FutureCompletionHandler handler = unsentRequest.callback();
-                handler.onFailure(e);
+                FutureCompletionHandler handler = unsentRequest.handler();
+                handler.onFailure(time.milliseconds(), e);
             }
         }
     }

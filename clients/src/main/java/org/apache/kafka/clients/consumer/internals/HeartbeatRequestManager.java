@@ -178,18 +178,16 @@ public class HeartbeatRequestManager implements RequestManager {
             data.setSubscribedTopicNames(new ArrayList<>(this.subscriptions.subscription()));
         }
 
-        this.membershipManager.assignorSelection().serverAssignor().ifPresent(data::setServerAssignor);
+        this.membershipManager.serverAssignor().ifPresent(data::setServerAssignor);
 
         NetworkClientDelegate.UnsentRequest request = new NetworkClientDelegate.UnsentRequest(
             new ConsumerGroupHeartbeatRequest.Builder(data),
             coordinatorRequestManager.coordinator());
         request.future().whenComplete((response, exception) -> {
             if (response != null) {
-                onResponse((ConsumerGroupHeartbeatResponse) response.responseBody(), response.receivedTimeMs());
+                onResponse((ConsumerGroupHeartbeatResponse) response.responseBody(), request.handler().completionTimeMs());
             } else {
-                // TODO: Currently, we lack a good way to propagate the response time from the network client to the
-                //  request handler. We will need to store the response time in the handler to make it accessible.
-                onFailure(exception, time.milliseconds());
+                onFailure(exception, request.handler().completionTimeMs());
             }
         });
         return request;

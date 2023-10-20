@@ -73,16 +73,19 @@
     <allow pkg="org.apache.kafka.clients" />
   </subpackage>
 
-  <subpackage name="log.remote">
-    <allow pkg="org.apache.kafka.server.common" />
-    <allow pkg="org.apache.kafka.server.log.remote" />
-    <allow pkg="org.apache.kafka.server.metrics" />
-    <allow pkg="org.apache.kafka.storage.internals" />
-    <allow pkg="kafka.log" />
-    <allow pkg="kafka.cluster" />
-    <allow pkg="kafka.server" />
-    <allow pkg="org.mockito" />
+  <subpackage name="log">
+    <allow pkg="com.fasterxml.jackson" />
     <allow pkg="org.apache.kafka.test" />
+    <subpackage name="remote">
+      <allow pkg="org.apache.kafka.server.common" />
+      <allow pkg="org.apache.kafka.server.log.remote" />
+      <allow pkg="org.apache.kafka.server.metrics" />
+      <allow pkg="org.apache.kafka.storage.internals" />
+      <allow pkg="kafka.log" />
+      <allow pkg="kafka.cluster" />
+      <allow pkg="kafka.server" />
+      <allow pkg="org.mockito" />
+    </subpackage>
   </subpackage>
 
   <subpackage name="server">

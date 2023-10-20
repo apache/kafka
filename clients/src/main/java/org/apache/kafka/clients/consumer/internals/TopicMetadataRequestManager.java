@@ -148,30 +148,32 @@ public class TopicMetadataRequestManager implements RequestManager {
 
         private NetworkClientDelegate.UnsentRequest createUnsentRequest(
                 final MetadataRequest.Builder request) {
-            return new NetworkClientDelegate.UnsentRequest(
-                    request,
-                    Optional.empty(),
-                    this::processResponseOrException
-            );
+            NetworkClientDelegate.UnsentRequest unsent = new NetworkClientDelegate.UnsentRequest(
+                request,
+                Optional.empty());
+
+            unsent.future().whenComplete((response, exception) -> {
+                if (response == null) {
+                    handleError(exception, unsent.handler().completionTimeMs());
+                } else {
+                    handleResponse(response);
+                }
+            });
+
+            return unsent;
         }
 
-        private void processResponseOrException(final ClientResponse response,
-                                                final Throwable exception) {
-            if (exception == null) {
-                handleResponse(response, response.receivedTimeMs());
-                return;
-            }
-
+        private void handleError(final Throwable exception,
+                                 final long completionTimeMs) {
             if (exception instanceof RetriableException) {
-                // We continue to retry on RetriableException
-                // TODO: TimeoutException will continue to retry despite user API timeout.
-                onFailedAttempt(response.receivedTimeMs());
+                onFailedAttempt(completionTimeMs);
             } else {
-                completeFutureAndRemoveRequest(new KafkaException(exception));
+                completeFutureAndRemoveRequest(exception);
             }
         }
 
-        private void handleResponse(final ClientResponse response, final long responseTimeMs) {
+        private void handleResponse(final ClientResponse response) {
+            long responseTimeMs = response.receivedTimeMs();
             try {
                 Map<String, List<PartitionInfo>> res = handleTopicMetadataResponse((MetadataResponse) response.responseBody());
                 future.complete(res);

@@ -182,7 +182,14 @@ public class ConsumerTestBuilder implements Closeable {
                     config,
                     coordinator,
                     groupState));
-            MembershipManager mm = spy(new MembershipManagerImpl(gi.groupState.groupId, gi.groupState.groupInstanceId.orElse(null), null));
+            MembershipManager mm = spy(
+                    new MembershipManagerImpl(
+                        gi.groupState.groupId,
+                        gi.groupState.groupInstanceId.orElse(null),
+                        null,
+                        logContext
+                )
+            );
             HeartbeatRequestManager.HeartbeatRequestState state = spy(new HeartbeatRequestManager.HeartbeatRequestState(logContext,
                     time,
                     gi.heartbeatIntervalMs,

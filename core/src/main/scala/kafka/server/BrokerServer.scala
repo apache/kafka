@@ -36,6 +36,7 @@ import org.apache.kafka.common.security.token.delegation.internals.DelegationTok
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.common.{ClusterResource, KafkaException, TopicPartition}
 import org.apache.kafka.coordinator.group
+import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorRuntimeMetrics
 import org.apache.kafka.coordinator.group.util.SystemTimerReaper
 import org.apache.kafka.coordinator.group.{GroupCoordinator, GroupCoordinatorConfig, GroupCoordinatorService, RecordSerde}
 import org.apache.kafka.image.publisher.MetadataPublisher
@@ -334,7 +335,8 @@ class BrokerServer(
         brokerLifecycleChannelManager,
         sharedServer.metaProps.clusterId,
         listenerInfo.toBrokerRegistrationRequest,
-        featuresRemapped
+        featuresRemapped,
+        logManager.readBrokerEpochFromCleanShutdownFiles()
       )
       // If the BrokerLifecycleManager's initial catch-up future fails, it means we timed out
       // or are shutting down before we could catch up. Therefore, also fail the firstPublishFuture.
@@ -531,6 +533,7 @@ class BrokerServer(
         new SystemTimer("group-coordinator")
       )
       val loader = new CoordinatorLoaderImpl[group.Record](
+        time,
         replicaManager,
         serde,
         config.offsetsLoadBufferSize
@@ -546,6 +549,7 @@ class BrokerServer(
         .withTimer(timer)
         .withLoader(loader)
         .withWriter(writer)
+        .withCoordinatorRuntimeMetrics(new GroupCoordinatorRuntimeMetrics(metrics))
         .build()
     } else {
       GroupCoordinatorAdapter(
@@ -642,7 +646,7 @@ class BrokerServer(
         CoreUtils.swallow(clientToControllerChannelManager.shutdown(), this)
 
       if (logManager != null)
-        CoreUtils.swallow(logManager.shutdown(), this)
+        CoreUtils.swallow(logManager.shutdown(lifecycleManager.brokerEpoch), this)
 
       // Close remote log manager to give a chance to any of its underlying clients
       // (especially in RemoteStorageManager and RemoteLogMetadataManager) to close gracefully.

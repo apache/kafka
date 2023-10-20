@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,10 +14,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.storage.internals.log;
 
-package kafka.common
-
-import kafka.log.LogSegment
+import org.apache.kafka.common.KafkaException;
 
 /**
  * Indicates that the log segment contains one or more messages that overflow the offset (and / or time) index. This is
@@ -25,6 +24,13 @@ import kafka.log.LogSegment
  * KAFKA-5413. With KAFKA-6264, we have the ability to split such log segments into multiple log segments such that we
  * do not have any segments with offset overflow.
  */
-class LogSegmentOffsetOverflowException(val segment: LogSegment, val offset: Long)
-  extends org.apache.kafka.common.KafkaException(s"Detected offset overflow at offset $offset in segment $segment") {
+public class LogSegmentOffsetOverflowException extends KafkaException {
+    public final LogSegment segment;
+    public final long offset;
+
+    public LogSegmentOffsetOverflowException(LogSegment segment, long offset) {
+        super("Detected offset overflow at offset " + offset + " in segment " + segment);
+        this.segment = segment;
+        this.offset = offset;
+    }
 }
