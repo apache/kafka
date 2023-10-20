@@ -47,7 +47,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
-import scala.None$;
 import scala.Option;
 import scala.Some$;
 import scala.collection.JavaConverters;
@@ -206,7 +205,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
 
         // Set the high water mark of foo-0 to 123 on its leader.
         TopicPartition part = new TopicPartition("foo", 0);
-        cluster.servers.get(0).replicaManager().logManager().truncateFullyAndStartAt(part, 123L, false, None$.empty());
+        cluster.servers.get(0).replicaManager().logManager().truncateFullyAndStartAt(part, 123L, false, Option.empty());
 
         // Execute the assignment
         runExecuteAssignment(cluster.adminClient, false, assignment, -1L, -1L);
@@ -342,8 +341,8 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
             false,
             500,
             SecurityProtocol.PLAINTEXT,
-            None$.empty(),
-            None$.empty(),
+            Option.empty(),
+            Option.empty(),
             new ByteArrayDeserializer(),
             new ByteArrayDeserializer()
         );
@@ -777,9 +776,9 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
                     false, // shorten test time
                     true,
                     TestUtils.RandomPort(),
-                    scala.None$.empty(),
-                    scala.None$.empty(),
-                    scala.None$.empty(),
+                    Option.empty(),
+                    Option.empty(),
+                    Option.empty(),
                     true,
                     false,
                     TestUtils.RandomPort(),
@@ -812,7 +811,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
 
         public void createServers() {
             brokers.keySet().forEach(brokerId ->
-                servers.add(createBroker(brokerConfigs.get(brokerId), Time.SYSTEM, true, scala.None$.empty()))
+                servers.add(createBroker(brokerConfigs.get(brokerId), Time.SYSTEM, true, Option.empty()))
             );
         }
 
