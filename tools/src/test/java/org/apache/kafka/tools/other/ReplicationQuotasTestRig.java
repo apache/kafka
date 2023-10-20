@@ -183,7 +183,7 @@ public class ReplicationQuotasTestRig {
             ));
         }
 
-        public void tearDown() {
+        @Override public void tearDown() {
             Utils.closeQuietly(adminClient, "adminClient");
             TestUtils.shutdownServers(seq(servers), true);
             super.tearDown();
