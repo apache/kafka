@@ -397,4 +397,22 @@ class LogConfigTest {
       LogConfig.validateBrokerLogConfigValues(kafkaConfig.extractLogConfigMap, kafkaConfig.isRemoteLogStorageSystemEnabled)
     }
   }
+
+  /* Verify that when the deprecated config LogMessageTimestampDifferenceMaxMsProp has non default value the new configs
+   * LogMessageTimestampBeforeMaxMsProp and LogMessageTimestampAfterMaxMsProp are not changed from the default we are using
+   * the deprecated config for backward compatibility.
+   * See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for deprecation details */
+  @nowarn("cat=deprecation")
+  @Test
+  def testTimestampBeforeMaxMsUsesDeprecatedConfig(): Unit = {
+    val oneDayInMillis = 24 * 60 * 60 * 1000L
+    val kafkaProps = TestUtils.createBrokerConfig(nodeId = 0, zkConnect = "")
+    kafkaProps.put(KafkaConfig.LogMessageTimestampBeforeMaxMsProp, Long.MaxValue.toString)
+    kafkaProps.put(KafkaConfig.LogMessageTimestampAfterMaxMsProp, Long.MaxValue.toString)
+    kafkaProps.put(KafkaConfig.LogMessageTimestampDifferenceMaxMsProp, oneDayInMillis.toString)
+
+    val logProps = KafkaConfig.fromProps(kafkaProps).extractLogConfigMap
+    assertEquals(oneDayInMillis, logProps.get(TopicConfig.MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG))
+    assertEquals(oneDayInMillis, logProps.get(TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG))
+  }
 }

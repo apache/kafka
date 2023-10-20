@@ -39,7 +39,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.kafka.server.log.remote.storage.LocalTieredStorageCondition.expectEvent;
 import static org.apache.kafka.server.log.remote.storage.LocalTieredStorageEvent.EventType.COPY_SEGMENT;
-import static org.apache.kafka.tiered.storage.utils.ActionUtils.tieredStorageRecords;
+import static org.apache.kafka.tiered.storage.utils.TieredStorageTestUtils.tieredStorageRecords;
 import static org.apache.kafka.tiered.storage.utils.RecordsKeyValueMatcher.correspondTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 
@@ -80,6 +80,7 @@ public final class ProduceAction implements TieredStorageTestAction {
                         COPY_SEGMENT,
                         spec.getSourceBrokerId(),
                         spec.getTopicPartition(),
+                        spec.getBaseOffset(),
                         false))
                 .collect(Collectors.toList());
 

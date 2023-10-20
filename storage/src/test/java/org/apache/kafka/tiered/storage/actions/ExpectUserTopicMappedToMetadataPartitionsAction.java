@@ -34,7 +34,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.apache.kafka.tiered.storage.utils.ActionUtils.describeTopics;
+import static org.apache.kafka.tiered.storage.utils.TieredStorageTestUtils.describeTopics;
 
 public final class ExpectUserTopicMappedToMetadataPartitionsAction implements TieredStorageTestAction {
 

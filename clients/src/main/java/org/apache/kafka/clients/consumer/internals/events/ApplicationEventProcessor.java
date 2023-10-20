@@ -16,14 +16,15 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.internals.CommitRequestManager;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
-import org.apache.kafka.clients.consumer.internals.NoopBackgroundEvent;
-import org.apache.kafka.clients.consumer.internals.RequestManager;
+import org.apache.kafka.clients.consumer.internals.RequestManagers;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -33,20 +34,22 @@ import java.util.concurrent.CompletableFuture;
 public class ApplicationEventProcessor {
 
     private final BlockingQueue<BackgroundEvent> backgroundEventQueue;
-    private final Map<RequestManager.Type, Optional<RequestManager>> registry;
+
     private final ConsumerMetadata metadata;
 
+    private final RequestManagers requestManagers;
+
     public ApplicationEventProcessor(final BlockingQueue<BackgroundEvent> backgroundEventQueue,
-                                     final Map<RequestManager.Type, Optional<RequestManager>> requestManagerRegistry,
+                                     final RequestManagers requestManagers,
                                      final ConsumerMetadata metadata) {
         this.backgroundEventQueue = backgroundEventQueue;
-        this.registry = requestManagerRegistry;
+        this.requestManagers = requestManagers;
         this.metadata = metadata;
     }
 
     public boolean process(final ApplicationEvent event) {
         Objects.requireNonNull(event);
-        switch (event.type) {
+        switch (event.type()) {
             case NOOP:
                 return process((NoopApplicationEvent) event);
             case COMMIT:
@@ -59,35 +62,41 @@ public class ApplicationEventProcessor {
                 return process((NewTopicsMetadataUpdateRequestEvent) event);
             case ASSIGNMENT_CHANGE:
                 return process((AssignmentChangeApplicationEvent) event);
+            case TOPIC_METADATA:
+                return process((TopicMetadataApplicationEvent) event);
+            case LIST_OFFSETS:
+                return process((ListOffsetsApplicationEvent) event);
+            case RESET_POSITIONS:
+                return processResetPositionsEvent();
+            case VALIDATE_POSITIONS:
+                return processValidatePositionsEvent();
         }
         return false;
     }
 
     /**
-     * Processes {@link NoopApplicationEvent} and equeue a
+     * Processes {@link NoopApplicationEvent} and enqueue a
      * {@link NoopBackgroundEvent}. This is intentionally left here for
      * demonstration purpose.
      *
      * @param event a {@link NoopApplicationEvent}
      */
     private boolean process(final NoopApplicationEvent event) {
-        return backgroundEventQueue.add(new NoopBackgroundEvent(event.message));
+        return backgroundEventQueue.add(new NoopBackgroundEvent(event.message()));
     }
 
     private boolean process(final PollApplicationEvent event) {
-        Optional<RequestManager> commitRequestManger = registry.get(RequestManager.Type.COMMIT);
-        if (!commitRequestManger.isPresent()) {
+        if (!requestManagers.commitRequestManager.isPresent()) {
             return true;
         }
 
-        CommitRequestManager manager = (CommitRequestManager) commitRequestManger.get();
-        manager.updateAutoCommitTimer(event.pollTimeMs);
+        CommitRequestManager manager = requestManagers.commitRequestManager.get();
+        manager.updateAutoCommitTimer(event.pollTimeMs());
         return true;
     }
 
     private boolean process(final CommitApplicationEvent event) {
-        Optional<RequestManager> commitRequestManger = registry.get(RequestManager.Type.COMMIT);
-        if (!commitRequestManger.isPresent()) {
+        if (!requestManagers.commitRequestManager.isPresent()) {
             // Leaving this error handling here, but it is a bit strange as the commit API should enforce the group.id
             // upfront so we should never get to this block.
             Exception exception = new KafkaException("Unable to commit offset. Most likely because the group.id wasn't set");
@@ -95,33 +104,19 @@ public class ApplicationEventProcessor {
             return false;
         }
 
-        CommitRequestManager manager = (CommitRequestManager) commitRequestManger.get();
-        manager.addOffsetCommitRequest(event.offsets()).whenComplete((r, e) -> {
-            if (e != null) {
-                event.future().completeExceptionally(e);
-                return;
-            }
-            event.future().complete(null);
-        });
+        CommitRequestManager manager = requestManagers.commitRequestManager.get();
+        event.chain(manager.addOffsetCommitRequest(event.offsets()));
         return true;
     }
 
     private boolean process(final OffsetFetchApplicationEvent event) {
-        Optional<RequestManager> commitRequestManger = registry.get(RequestManager.Type.COMMIT);
-        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = event.future();
-        if (!commitRequestManger.isPresent()) {
-            future.completeExceptionally(new KafkaException("Unable to fetch committed offset because the " +
-                    "CommittedRequestManager is not available. Check if group.id was set correctly"));
+        if (!requestManagers.commitRequestManager.isPresent()) {
+            event.future().completeExceptionally(new KafkaException("Unable to fetch committed " +
+                    "offset because the CommittedRequestManager is not available. Check if group.id was set correctly"));
             return false;
         }
-        CommitRequestManager manager = (CommitRequestManager) commitRequestManger.get();
-        manager.addOffsetFetchRequest(event.partitions()).whenComplete((r, e) -> {
-            if (e != null) {
-                future.completeExceptionally(e);
-                return;
-            }
-            future.complete(r);
-        });
+        CommitRequestManager manager = requestManagers.commitRequestManager.get();
+        event.chain(manager.addOffsetFetchRequest(event.partitions()));
         return true;
     }
 
@@ -131,13 +126,37 @@ public class ApplicationEventProcessor {
     }
 
     private boolean process(final AssignmentChangeApplicationEvent event) {
-        Optional<RequestManager> commitRequestManger = registry.get(RequestManager.Type.COMMIT);
-        if (!commitRequestManger.isPresent()) {
+        if (!requestManagers.commitRequestManager.isPresent()) {
             return false;
         }
-        CommitRequestManager manager = (CommitRequestManager) commitRequestManger.get();
-        manager.updateAutoCommitTimer(event.currentTimeMs);
-        manager.maybeAutoCommit(event.offsets);
+        CommitRequestManager manager = requestManagers.commitRequestManager.get();
+        manager.updateAutoCommitTimer(event.currentTimeMs());
+        manager.maybeAutoCommit(event.offsets());
+        return true;
+    }
+
+    private boolean process(final ListOffsetsApplicationEvent event) {
+        final CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> future =
+                requestManagers.offsetsRequestManager.fetchOffsets(event.timestampsToSearch(),
+                        event.requireTimestamps());
+        event.chain(future);
+        return true;
+    }
+
+    private boolean processResetPositionsEvent() {
+        requestManagers.offsetsRequestManager.resetPositionsIfNeeded();
+        return true;
+    }
+
+    private boolean processValidatePositionsEvent() {
+        requestManagers.offsetsRequestManager.validatePositionsIfNeeded();
+        return true;
+    }
+
+    private boolean process(final TopicMetadataApplicationEvent event) {
+        final CompletableFuture<Map<String, List<PartitionInfo>>> future =
+            this.requestManagers.topicMetadataRequestManager.requestTopicMetadata(Optional.of(event.topic()));
+        event.chain(future);
         return true;
     }
 }

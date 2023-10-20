@@ -113,7 +113,7 @@ trait KafkaBroker extends Logging {
   def shutdown(): Unit
   def brokerTopicStats: BrokerTopicStats
   def credentialProvider: CredentialProvider
-  def clientToControllerChannelManager: BrokerToControllerChannelManager
+  def clientToControllerChannelManager: NodeToControllerChannelManager
   def tokenCache: DelegationTokenCache
 
   private val metricsGroup = new KafkaMetricsGroup(this.getClass) {

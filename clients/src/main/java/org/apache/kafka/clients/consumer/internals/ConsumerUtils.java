@@ -24,23 +24,34 @@ import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerInterceptor;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.IsolationLevel;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.errors.InterruptException;
+import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.apache.kafka.common.utils.Timer;
 
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
 public final class ConsumerUtils {
@@ -54,6 +65,7 @@ public final class ConsumerUtils {
     public static final int CONSUMER_MAX_INFLIGHT_REQUESTS_PER_CONNECTION = 100;
 
     private static final String CONSUMER_CLIENT_ID_METRIC_TAG = "client-id";
+    private static final Logger log = LoggerFactory.getLogger(ConsumerUtils.class);
 
     public static ConsumerNetworkClient createConsumerNetworkClient(ConsumerConfig config,
                                                                     Metrics metrics,
@@ -87,22 +99,19 @@ public final class ConsumerUtils {
     }
 
     public static LogContext createLogContext(ConsumerConfig config, GroupRebalanceConfig groupRebalanceConfig) {
-        String groupId = String.valueOf(groupRebalanceConfig.groupId);
-        String clientId = config.getString(CommonClientConfigs.CLIENT_ID_CONFIG);
-        String logPrefix;
-        String groupInstanceId = groupRebalanceConfig.groupInstanceId.orElse(null);
+        Optional<String> groupId = Optional.ofNullable(groupRebalanceConfig.groupId);
+        String clientId = config.getString(ConsumerConfig.CLIENT_ID_CONFIG);
 
-        if (groupInstanceId != null) {
-            // If group.instance.id is set, we will append it to the log context.
-            logPrefix = String.format("[Consumer instanceId=%s, clientId=%s, groupId=%s] ", groupInstanceId, clientId, groupId);
+        // If group.instance.id is set, we will append it to the log context.
+        if (groupRebalanceConfig.groupInstanceId.isPresent()) {
+            return new LogContext("[Consumer instanceId=" + groupRebalanceConfig.groupInstanceId.get() +
+                    ", clientId=" + clientId + ", groupId=" + groupId.orElse("null") + "] ");
         } else {
-            logPrefix = String.format("[Consumer clientId=%s, groupId=%s] ", clientId, groupId);
+            return new LogContext("[Consumer clientId=" + clientId + ", groupId=" + groupId.orElse("null") + "] ");
         }
-
-        return new LogContext(logPrefix);
     }
 
-    public static IsolationLevel createIsolationLevel(ConsumerConfig config) {
+    public static IsolationLevel configuredIsolationLevel(ConsumerConfig config) {
         String s = config.getString(ConsumerConfig.ISOLATION_LEVEL_CONFIG).toUpperCase(Locale.ROOT);
         return IsolationLevel.valueOf(s);
     }
@@ -134,44 +143,82 @@ public final class ConsumerUtils {
     }
 
     public static <K, V> FetchConfig<K, V> createFetchConfig(ConsumerConfig config,
-                                                             Deserializer<K> keyDeserializer,
-                                                             Deserializer<V> valueDeserializer) {
-        IsolationLevel isolationLevel = createIsolationLevel(config);
-        return new FetchConfig<>(config, keyDeserializer, valueDeserializer, isolationLevel);
+                                                             Deserializers<K, V> deserializers) {
+        IsolationLevel isolationLevel = configuredIsolationLevel(config);
+        return new FetchConfig<>(config, deserializers, isolationLevel);
     }
 
     @SuppressWarnings("unchecked")
-    public static <K, V> List<ConsumerInterceptor<K, V>> createConsumerInterceptors(ConsumerConfig config) {
-        return ClientUtils.createConfiguredInterceptors(config,
-                ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG,
-                ConsumerInterceptor.class);
+    public static <K, V> List<ConsumerInterceptor<K, V>> configuredConsumerInterceptors(ConsumerConfig config) {
+        return (List<ConsumerInterceptor<K, V>>) ClientUtils.configuredInterceptors(config, ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, ConsumerInterceptor.class);
     }
 
-    @SuppressWarnings("unchecked")
-    public static <K> Deserializer<K> createKeyDeserializer(ConsumerConfig config, Deserializer<K> keyDeserializer) {
-        String clientId = config.getString(ConsumerConfig.CLIENT_ID_CONFIG);
+    /**
+     * Update subscription state and metadata using the provided committed offsets:
+     * <li>Update partition offsets with the committed offsets</li>
+     * <li>Update the metadata with any newer leader epoch discovered in the committed offsets
+     * metadata</li>
+     * </p>
+     * This will ignore any partition included in the <code>offsetsAndMetadata</code> parameter that
+     * may no longer be assigned.
+     *
+     * @param offsetsAndMetadata Committed offsets and metadata to be used for updating the
+     *                           subscription state and metadata object.
+     * @param metadata           Metadata object to update with a new leader epoch if discovered in the
+     *                           committed offsets' metadata.
+     * @param subscriptions      Subscription state to update, setting partitions' offsets to the
+     *                           committed offsets.
+     * @return False if null <code>offsetsAndMetadata</code> is provided, indicating that the
+     * refresh operation could not be performed. True in any other case.
+     */
+    public static boolean refreshCommittedOffsets(final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata,
+                                                  final ConsumerMetadata metadata,
+                                                  final SubscriptionState subscriptions) {
+        if (offsetsAndMetadata == null) return false;
 
-        if (keyDeserializer == null) {
-            keyDeserializer = config.getConfiguredInstance(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, Deserializer.class);
-            keyDeserializer.configure(config.originals(Collections.singletonMap(ConsumerConfig.CLIENT_ID_CONFIG, clientId)), true);
-        } else {
-            config.ignore(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG);
+        for (final Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsetsAndMetadata.entrySet()) {
+            final TopicPartition tp = entry.getKey();
+            final OffsetAndMetadata offsetAndMetadata = entry.getValue();
+            if (offsetAndMetadata != null) {
+                // first update the epoch if necessary
+                entry.getValue().leaderEpoch().ifPresent(epoch -> metadata.updateLastSeenEpochIfNewer(entry.getKey(), epoch));
+
+                // it's possible that the partition is no longer assigned when the response is received,
+                // so we need to ignore seeking if that's the case
+                if (subscriptions.isAssigned(tp)) {
+                    final ConsumerMetadata.LeaderAndEpoch leaderAndEpoch = metadata.currentLeader(tp);
+                    final SubscriptionState.FetchPosition position = new SubscriptionState.FetchPosition(
+                            offsetAndMetadata.offset(), offsetAndMetadata.leaderEpoch(),
+                            leaderAndEpoch);
+
+                    subscriptions.seekUnvalidated(tp, position);
+
+                    log.info("Setting offset for partition {} to the committed offset {}", tp, position);
+                } else {
+                    log.info("Ignoring the returned {} since its partition {} is no longer assigned",
+                            offsetAndMetadata, tp);
+                }
+            }
         }
-
-        return keyDeserializer;
+        return true;
     }
 
-    @SuppressWarnings("unchecked")
-    public static <V> Deserializer<V> createValueDeserializer(ConsumerConfig config, Deserializer<V> valueDeserializer) {
-        String clientId = config.getString(ConsumerConfig.CLIENT_ID_CONFIG);
+    public static <T> T getResult(CompletableFuture<T> future, Timer timer) {
+        try {
+            return future.get(timer.remainingMs(), TimeUnit.MILLISECONDS);
+        } catch (ExecutionException e) {
+            Throwable t = e.getCause();
 
-        if (valueDeserializer == null) {
-            valueDeserializer = config.getConfiguredInstance(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, Deserializer.class);
-            valueDeserializer.configure(config.originals(Collections.singletonMap(ConsumerConfig.CLIENT_ID_CONFIG, clientId)), false);
-        } else {
-            config.ignore(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG);
+            if (t instanceof WakeupException)
+                throw new WakeupException();
+            else if (t instanceof KafkaException)
+                throw (KafkaException) t;
+            else
+                throw new KafkaException(t);
+        } catch (InterruptedException e) {
+            throw new InterruptException(e);
+        } catch (java.util.concurrent.TimeoutException e) {
+            throw new TimeoutException(e);
         }
-
-        return valueDeserializer;
     }
 }

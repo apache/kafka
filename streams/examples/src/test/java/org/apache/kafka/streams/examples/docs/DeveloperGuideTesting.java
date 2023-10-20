@@ -54,8 +54,8 @@ public class DeveloperGuideTesting {
     private TestOutputTopic<String, Long> outputTopic;
     private KeyValueStore<String, Long> store;
 
-    private Serde<String> stringSerde = new Serdes.StringSerde();
-    private Serde<Long> longSerde = new Serdes.LongSerde();
+    private final Serde<String> stringSerde = new Serdes.StringSerde();
+    private final Serde<Long> longSerde = new Serdes.LongSerde();
 
     @BeforeEach
     public void setup() {
@@ -72,8 +72,8 @@ public class DeveloperGuideTesting {
 
         // setup test driver
         final Properties props = new Properties();
-        props.setProperty(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
-        props.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Long().getClass().getName());
+        props.setProperty(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class.getName());
+        props.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.LongSerde.class.getName());
         testDriver = new TopologyTestDriver(topology, props);
 
         // setup test topics
@@ -155,7 +155,6 @@ public class DeveloperGuideTesting {
         ProcessorContext<String, Long> context;
         private KeyValueStore<String, Long> store;
 
-        @SuppressWarnings("unchecked")
         @Override
         public void init(final ProcessorContext<String, Long> context) {
             this.context = context;

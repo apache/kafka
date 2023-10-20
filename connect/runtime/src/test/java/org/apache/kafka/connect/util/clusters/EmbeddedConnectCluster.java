@@ -18,6 +18,8 @@ package org.apache.kafka.connect.util.clusters;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -25,10 +27,13 @@ import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.entities.ActiveTopicsInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffset;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ServerInfo;
+import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
+import org.apache.kafka.connect.util.SinkUtils;
 import org.eclipse.jetty.client.HttpClient;
 import org.eclipse.jetty.client.api.ContentResponse;
 import org.eclipse.jetty.client.api.Request;
@@ -607,19 +612,19 @@ public class EmbeddedConnectCluster {
 
     /**
      * Get the task configs of a connector running in this cluster.
-
+     *
      * @param connectorName name of the connector
-     * @return a map from task ID (connector name + "-" + task number) to task config
+     * @return a list of task configurations for the connector
      */
-    public Map<String, Map<String, String>> taskConfigs(String connectorName) {
+    public List<TaskInfo> taskConfigs(String connectorName) {
         ObjectMapper mapper = new ObjectMapper();
-        String url = endpointForResource(String.format("connectors/%s/tasks-config", connectorName));
+        String url = endpointForResource(String.format("connectors/%s/tasks", connectorName));
         Response response = requestGet(url);
         try {
             if (response.getStatus() < Response.Status.BAD_REQUEST.getStatusCode()) {
                 // We use String instead of ConnectorTaskId as the key here since the latter can't be automatically
                 // deserialized by Jackson when used as a JSON object key (i.e., when it's serialized as a JSON string)
-                return mapper.readValue(responseToString(response), new TypeReference<Map<String, Map<String, String>>>() { });
+                return mapper.readValue(responseToString(response), new TypeReference<List<TaskInfo>>() { });
             }
         } catch (IOException e) {
             log.error("Could not read task configs from response: {}",
@@ -670,10 +675,46 @@ public class EmbeddedConnectCluster {
     }
 
     /**
+     * Alter the offset for a source connector's partition via the <strong><em>PATCH /connectors/{connector}/offsets</em></strong>
+     * endpoint
+     *
+     * @param connectorName name of the source connector whose offset is to be altered
+     * @param partition the source partition for which the offset is to be altered
+     * @param offset the source offset to be written
+     *
+     * @return the API response as a {@link java.lang.String}
+     */
+    public String alterSourceConnectorOffset(String connectorName, Map<String, ?> partition, Map<String, ?> offset) {
+        return alterConnectorOffsets(
+            connectorName,
+            new ConnectorOffsets(Collections.singletonList(new ConnectorOffset(partition, offset)))
+        );
+    }
+
+    /**
+     * Alter the offset for a sink connector's topic partition via the <strong><em>PATCH /connectors/{connector}/offsets</em></strong>
+     * endpoint
+     *
+     * @param connectorName name of the sink connector whose offset is to be altered
+     * @param topicPartition the topic partition for which the offset is to be altered
+     * @param offset the offset to be written
+     *
+     * @return the API response as a {@link java.lang.String}
+     */
+    public String alterSinkConnectorOffset(String connectorName, TopicPartition topicPartition, Long offset) {
+        return alterConnectorOffsets(
+            connectorName,
+            SinkUtils.consumerGroupOffsetsToConnectorOffsets(Collections.singletonMap(topicPartition, new OffsetAndMetadata(offset)))
+        );
+    }
+
+    /**
      * Alter a connector's offsets via the <strong><em>PATCH /connectors/{connector}/offsets</em></strong> endpoint
      *
      * @param connectorName name of the connector whose offsets are to be altered
      * @param offsets offsets to alter
+     *
+     * @return the API response as a {@link java.lang.String}
      */
     public String alterConnectorOffsets(String connectorName, ConnectorOffsets offsets) {
         String url = endpointForResource(String.format("connectors/%s/offsets", connectorName));

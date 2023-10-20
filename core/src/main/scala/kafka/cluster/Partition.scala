@@ -849,7 +849,7 @@ class Partition(val topicPartition: TopicPartition,
 
   /**
    * Update the follower's state in the leader based on the last fetch request. See
-   * [[Replica.updateFetchState()]] for details.
+   * [[Replica.updateFetchStateOrThrow()]] for details.
    *
    * This method is visible for performance testing (see `UpdateFollowerFetchStateBenchmark`)
    */
@@ -864,13 +864,18 @@ class Partition(val topicPartition: TopicPartition,
     // No need to calculate low watermark if there is no delayed DeleteRecordsRequest
     val oldLeaderLW = if (delayedOperations.numDelayedDelete > 0) lowWatermarkIfLeader else -1L
     val prevFollowerEndOffset = replica.stateSnapshot.logEndOffset
-    replica.updateFetchState(
-      followerFetchOffsetMetadata,
-      followerStartOffset,
-      followerFetchTimeMs,
-      leaderEndOffset,
-      brokerEpoch
-    )
+
+    // Apply read lock here to avoid the race between ISR updates and the fetch requests from rebooted follower. It
+    // could break the broker epoch checks in the ISR expansion.
+    inReadLock(leaderIsrUpdateLock) {
+      replica.updateFetchStateOrThrow(
+        followerFetchOffsetMetadata,
+        followerStartOffset,
+        followerFetchTimeMs,
+        leaderEndOffset,
+        brokerEpoch
+      )
+    }
 
     val newLeaderLW = if (delayedOperations.numDelayedDelete > 0) lowWatermarkIfLeader else -1L
     // check if the LW of the partition has incremented
@@ -929,8 +934,8 @@ class Partition(val topicPartition: TopicPartition,
       val removedReplicas = remoteReplicasMap.keys.filterNot(followers.contains(_))
 
       // Due to code paths accessing remoteReplicasMap without a lock,
-      // first add the new replicas and then remove the old ones
-      followers.foreach(id => remoteReplicasMap.getAndMaybePut(id, new Replica(id, topicPartition)))
+      // first add the new replicas and then remove the old ones.
+      followers.foreach(id => remoteReplicasMap.getAndMaybePut(id, new Replica(id, topicPartition, metadataCache)))
       remoteReplicasMap.removeAll(removedReplicas)
     } else {
       remoteReplicasMap.clear()
@@ -1646,12 +1651,15 @@ class Partition(val topicPartition: TopicPartition,
     *
     * @param newOffset The new offset to start the log with
     * @param isFuture True iff the truncation should be performed on the future log of this partition
+    * @param logStartOffsetOpt The log start offset to set for the log. If None, the new offset will be used.
     */
-  def truncateFullyAndStartAt(newOffset: Long, isFuture: Boolean): Unit = {
+  def truncateFullyAndStartAt(newOffset: Long,
+                              isFuture: Boolean,
+                              logStartOffsetOpt: Option[Long] = None): Unit = {
     // The read lock is needed to prevent the follower replica from being truncated while ReplicaAlterDirThread
     // is executing maybeReplaceCurrentWithFutureReplica() to replace follower replica with the future replica.
     inReadLock(leaderIsrUpdateLock) {
-      logManager.truncateFullyAndStartAt(topicPartition, newOffset, isFuture = isFuture)
+      logManager.truncateFullyAndStartAt(topicPartition, newOffset, isFuture = isFuture, logStartOffsetOpt)
     }
   }
 

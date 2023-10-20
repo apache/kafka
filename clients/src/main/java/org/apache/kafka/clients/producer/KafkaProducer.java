@@ -40,6 +40,7 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.AuthenticationException;
@@ -74,6 +75,7 @@ import org.slf4j.Logger;
 
 import java.net.InetSocketAddress;
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -332,7 +334,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     }
 
     // visible for testing
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "this-escape"})
     KafkaProducer(ProducerConfig config,
                   Serializer<K> keySerializer,
                   Serializer<V> valueSerializer,
@@ -373,6 +375,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             warnIfPartitionerDeprecated();
             this.partitionerIgnoreKeys = config.getBoolean(ProducerConfig.PARTITIONER_IGNORE_KEYS_CONFIG);
             long retryBackoffMs = config.getLong(ProducerConfig.RETRY_BACKOFF_MS_CONFIG);
+            long retryBackoffMaxMs = config.getLong(ProducerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
             if (keySerializer == null) {
                 this.keySerializer = config.getConfiguredInstance(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
                                                                                          Serializer.class);
@@ -390,15 +393,17 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 this.valueSerializer = valueSerializer;
             }
 
-            List<ProducerInterceptor<K, V>> interceptorList = ClientUtils.createConfiguredInterceptors(config,
+            List<ProducerInterceptor<K, V>> interceptorList = ClientUtils.configuredInterceptors(config,
                     ProducerConfig.INTERCEPTOR_CLASSES_CONFIG,
                     ProducerInterceptor.class);
             if (interceptors != null)
                 this.interceptors = interceptors;
             else
                 this.interceptors = new ProducerInterceptors<>(interceptorList);
-            ClusterResourceListeners clusterResourceListeners = configureClusterResourceListeners(this.keySerializer,
-                    this.valueSerializer, interceptorList, reporters);
+            ClusterResourceListeners clusterResourceListeners = ClientUtils.configureClusterResourceListeners(
+                    interceptorList,
+                    reporters,
+                    Arrays.asList(this.keySerializer, this.valueSerializer));
             this.maxRequestSize = config.getInt(ProducerConfig.MAX_REQUEST_SIZE_CONFIG);
             this.totalMemorySize = config.getLong(ProducerConfig.BUFFER_MEMORY_CONFIG);
             this.compressionType = CompressionType.forName(config.getString(ProducerConfig.COMPRESSION_TYPE_CONFIG));
@@ -423,6 +428,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     this.compressionType,
                     lingerMs(config),
                     retryBackoffMs,
+                    retryBackoffMaxMs,
                     deliveryTimeoutMs,
                     partitionerConfig,
                     metrics,
@@ -437,6 +443,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 this.metadata = metadata;
             } else {
                 this.metadata = new ProducerMetadata(retryBackoffMs,
+                        retryBackoffMaxMs,
                         config.getLong(ProducerConfig.METADATA_MAX_AGE_CONFIG),
                         config.getLong(ProducerConfig.METADATA_MAX_IDLE_CONFIG),
                         logContext,
@@ -1247,6 +1254,36 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     }
 
     /**
+     * Determines the client's unique client instance ID used for telemetry. This ID is unique to
+     * this specific client instance and will not change after it is initially generated.
+     * The ID is useful for correlating client operations with telemetry sent to the broker and
+     * to its eventual monitoring destinations.
+     * <p>
+     * If telemetry is enabled, this will first require a connection to the cluster to generate
+     * the unique client instance ID. This method waits up to {@code timeout} for the producer
+     * client to complete the request.
+     * <p>
+     * Client telemetry is controlled by the {@link ProducerConfig#ENABLE_METRICS_PUSH_CONFIG}
+     * configuration option.
+     *
+     * @param timeout The maximum time to wait for producer client to determine its client instance ID.
+     *                The value must be non-negative. Specifying a timeout of zero means do not
+     *                wait for the initial request to complete if it hasn't already.
+     * @throws InterruptException If the thread is interrupted while blocked.
+     * @throws KafkaException If an unexpected error occurs while trying to determine the client
+     *                        instance ID, though this error does not necessarily imply the
+     *                        producer client is otherwise unusable.
+     * @throws IllegalArgumentException If the {@code timeout} is negative.
+     * @throws IllegalStateException If telemetry is not enabled ie, config `{@code enable.metrics.push}`
+     *                               is set to `{@code false}`.
+     * @return The client's assigned instance id used for metrics collection.
+     */
+    @Override
+    public Uuid clientInstanceId(Duration timeout) {
+        throw new UnsupportedOperationException();
+    }
+
+    /**
      * Close this producer. This method blocks until all previously sent requests complete.
      * This method is equivalent to <code>close(Long.MAX_VALUE, TimeUnit.MILLISECONDS)</code>.
      * <p>
@@ -1346,16 +1383,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             throw new KafkaException("Failed to close kafka producer", exception);
         }
         log.debug("Kafka producer has been closed");
-    }
-
-    private ClusterResourceListeners configureClusterResourceListeners(Serializer<K> keySerializer, Serializer<V> valueSerializer, List<?>... candidateLists) {
-        ClusterResourceListeners clusterResourceListeners = new ClusterResourceListeners();
-        for (List<?> candidateList: candidateLists)
-            clusterResourceListeners.maybeAddAll(candidateList);
-
-        clusterResourceListeners.maybeAdd(keySerializer);
-        clusterResourceListeners.maybeAdd(valueSerializer);
-        return clusterResourceListeners;
     }
 
     /**

@@ -17,6 +17,7 @@
 
 package kafka.server
 
+import com.yammer.metrics.core.Meter
 import kafka.common.ClientIdAndBroker
 import kafka.server.AbstractFetcherThread.{ReplicaFetch, ResultWithPartitions}
 import kafka.utils.CoreUtils.inLock
@@ -364,10 +365,11 @@ abstract class AbstractFetcherThread(name: String,
 
                         // ReplicaDirAlterThread may have removed topicPartition from the partitionStates after processing the partition data
                         if ((validBytes > 0 || currentFetchState.lag.isEmpty) && partitionStates.contains(topicPartition)) {
+                          val lastFetchedEpoch =
+                            if (logAppendInfo.lastLeaderEpoch.isPresent) logAppendInfo.lastLeaderEpoch.asScala else currentFetchState.lastFetchedEpoch
                           // Update partitionStates only if there is no exception during processPartitionData
                           val newFetchState = PartitionFetchState(currentFetchState.topicId, nextOffset, Some(lag),
-                            currentFetchState.currentLeaderEpoch, state = Fetching,
-                            logAppendInfo.lastLeaderEpoch.asScala)
+                            currentFetchState.currentLeaderEpoch, state = Fetching, lastFetchedEpoch)
                           partitionStates.updateAndMoveToEnd(topicPartition, newFetchState)
                           if (validBytes > 0) fetcherStats.byteRate.mark(validBytes)
                         }
@@ -758,7 +760,7 @@ abstract class AbstractFetcherThread(name: String,
                                                 leaderEpochInRequest: Optional[Integer],
                                                 fetchPartitionData: PartitionData): Boolean = {
     try {
-      val newFetchState = fetchTierStateMachine.start(topicPartition, fetchState, fetchPartitionData);
+      val newFetchState = fetchTierStateMachine.start(topicPartition, fetchState, fetchPartitionData)
 
       // TODO: use fetchTierStateMachine.maybeAdvanceState when implementing async tiering logic in KAFKA-13560
 
@@ -878,7 +880,7 @@ class FetcherLagMetrics(metricId: ClientIdTopicPartition) {
     lagVal.set(newLag)
   }
 
-  def lag = lagVal.get
+  def lag: Long = lagVal.get
 
   def unregister(): Unit = {
     metricsGroup.removeMetric(FetcherMetrics.ConsumerLag, tags)
@@ -908,13 +910,13 @@ class FetcherLagStats(metricId: ClientIdAndBroker) {
 class FetcherStats(metricId: ClientIdAndBroker) {
   private val metricsGroup = new KafkaMetricsGroup(this.getClass)
 
-  val tags = Map("clientId" -> metricId.clientId,
+  val tags: util.Map[String, String] = Map("clientId" -> metricId.clientId,
     "brokerHost" -> metricId.brokerHost,
     "brokerPort" -> metricId.brokerPort.toString).asJava
 
-  val requestRate = metricsGroup.newMeter(FetcherMetrics.RequestsPerSec, "requests", TimeUnit.SECONDS, tags)
+  val requestRate: Meter = metricsGroup.newMeter(FetcherMetrics.RequestsPerSec, "requests", TimeUnit.SECONDS, tags)
 
-  val byteRate = metricsGroup.newMeter(FetcherMetrics.BytesPerSec, "bytes", TimeUnit.SECONDS, tags)
+  val byteRate: Meter = metricsGroup.newMeter(FetcherMetrics.BytesPerSec, "bytes", TimeUnit.SECONDS, tags)
 
   def unregister(): Unit = {
     metricsGroup.removeMetric(FetcherMetrics.RequestsPerSec, tags)
