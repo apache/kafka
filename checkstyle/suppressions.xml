@@ -139,6 +139,8 @@
               files="Worker(SinkTask|SourceTask|Coordinator).java"/>
     <suppress checks="ParameterNumber"
               files="(ConfigKeyInfo|DistributedHerder).java"/>
+    <suppress checks="DefaultComesLast"
+              files="LoggingResource.java" />
 
     <suppress checks="ClassDataAbstractionCoupling"
               files="(RestServer|AbstractHerder|DistributedHerder|Worker).java"/>

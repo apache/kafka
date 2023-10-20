@@ -496,6 +496,7 @@
       <allow pkg="org.reflections.util"/>
       <allow pkg="javax.crypto"/>
       <allow pkg="org.eclipse.jetty.util" />
+      <allow pkg="org.apache.log4j" />
 
       <subpackage name="rest">
         <allow pkg="org.eclipse.jetty" />
@@ -505,9 +506,6 @@
         <allow pkg="com.fasterxml.jackson" />
         <allow pkg="org.apache.http"/>
         <allow pkg="io.swagger.v3.oas.annotations"/>
-        <subpackage name="resources">
-          <allow pkg="org.apache.log4j" />
-        </subpackage>
       </subpackage>
 
       <subpackage name="isolation">
