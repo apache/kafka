@@ -23,8 +23,8 @@ import kafka.log.remote.RemoteLogManager
 import kafka.metrics.LinuxIoMetricsCollector
 import kafka.network.SocketServer
 import kafka.security.CredentialProvider
-import kafka.server.KafkaBroker.{BrokerStateMetricName, ClusterIdMetricName, KafkaVersionMetricName, LinuxDiskReadBytesMetricName, LinuxDiskWriteBytesMetricName, LinuxMetricNames, MetricNames, YammerMetricsCountMetricName}
-import kafka.utils.{Logging, VersionInfo}
+import kafka.server.KafkaBroker.{BrokerStateMetricName, ClusterIdMetricName, LinuxDiskReadBytesMetricName, LinuxDiskWriteBytesMetricName, LinuxMetricNames, MetricNames, YammerMetricsCountMetricName}
+import kafka.utils.Logging
 import org.apache.kafka.common.ClusterResource
 import org.apache.kafka.common.internals.ClusterResourceListeners
 import org.apache.kafka.common.metrics.{Metrics, MetricsReporter}
@@ -73,7 +73,6 @@ object KafkaBroker {
   private val BrokerStateMetricName = "BrokerState"
   private val ClusterIdMetricName = "ClusterId"
   private val YammerMetricsCountMetricName = "yammer-metrics-count"
-  private val KafkaVersionMetricName = "KafkaVersion"
   private val LinuxDiskReadBytesMetricName = "linux-disk-read-bytes"
   private val LinuxDiskWriteBytesMetricName = "linux-disk-write-bytes"
 
@@ -81,8 +80,7 @@ object KafkaBroker {
   private[server] val MetricNames = Set(
     BrokerStateMetricName,
     ClusterIdMetricName,
-    YammerMetricsCountMetricName,
-    KafkaVersionMetricName
+    YammerMetricsCountMetricName
   )
   // Visible for testing
   private[server] val LinuxMetricNames = Set(
@@ -129,7 +127,6 @@ trait KafkaBroker extends Logging {
   metricsGroup.newGauge(BrokerStateMetricName, () => brokerState.value)
   metricsGroup.newGauge(ClusterIdMetricName, () => clusterId)
   metricsGroup.newGauge(YammerMetricsCountMetricName, () =>  KafkaYammerMetrics.defaultRegistry.allMetrics.size)
-  metricsGroup.newGauge(KafkaVersionMetricName, () => VersionInfo.getVersion)
 
   // Visible for testing
   private[server] val linuxIoMetricsCollector = new LinuxIoMetricsCollector("/proc", Time.SYSTEM, logger.underlying)
