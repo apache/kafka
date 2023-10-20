@@ -338,9 +338,6 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
                 final Fetch<K, V> fetch = pollForFetches(timer);
 
                 if (!fetch.isEmpty()) {
-                    // Notify the network thread to wake up and start the next round of fetching.
-                    applicationEventHandler.wakeup();
-
                     if (fetch.records().isEmpty()) {
                         log.trace("Returning empty records from `poll()` "
                                 + "since the consumer's position has advanced for at least one topic partition");
@@ -912,13 +909,10 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         long pollTimeout = timer.remainingMs();
 
         // if data is available already, return it immediately
-        final Fetch<K, V> fetch = fetchCollector.collectFetch(fetchBuffer);
+        final Fetch<K, V> fetch = collectFetch();
         if (!fetch.isEmpty()) {
             return fetch;
         }
-
-        // Wake up the network thread to send any new fetches (won't resend pending fetches)
-        applicationEventHandler.wakeup();
 
         // We do not want to be stuck blocking in poll if we are missing some positions
         // since the offset lookup may be backing off after a failure
@@ -944,9 +938,31 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
             timer.update(pollTimer.currentTimeMs());
         }
 
-        return fetchCollector.collectFetch(fetchBuffer);
+        return collectFetch();
     }
 
+    /**
+     * Perform the "{@link FetchCollector#collectFetch(FetchBuffer) fetch collection}" step by reading raw data out
+     * of the {@link #fetchBuffer}, converting it to a well-formed {@link CompletedFetch}, validating that it and
+     * the internal {@link SubscriptionState state} are correct, and then converting it all into a {@link Fetch}
+     * for returning.
+     *
+     * <p/>
+     *
+     * Note that if the {@link Fetch#isEmpty() is not empty}, this method will
+     * {@link ApplicationEventHandler#wakeup() wake up} the {@link ConsumerNetworkThread} before retuning. This is
+     * done as an optimization so that the <em>next round of data can be pre-fetched</em>.
+     */
+    private Fetch<K, V> collectFetch() {
+        final Fetch<K, V> fetch = fetchCollector.collectFetch(fetchBuffer);
+
+        if (!fetch.isEmpty()) {
+            // Notify the network thread to wake up and start the next round of fetching.
+            applicationEventHandler.wakeup();
+        }
+
+        return fetch;
+    }
     /**
      * Set the fetch position to the committed position (if there is one)
      * or reset it using the offset reset policy the user has configured.
