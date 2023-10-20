@@ -884,7 +884,7 @@ public class FetchRequestManagerTest {
         networkClientDelegate.poll(time.timer(0));
 
         for (int i = 0; i < 2; i++) {
-            // The fetcher should block on Deserialization error
+            // The fetcher should throw a Deserialization error
             assertThrows(SerializationException.class, this::collectFetch);
             // the position should not advance since no data has been returned
             assertEquals(1, subscriptions.position(tp0).offset);
