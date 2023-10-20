@@ -49,7 +49,6 @@ import org.apache.kafka.common.message.ListOffsetsResponseData.{ListOffsetsParti
 import org.apache.kafka.common.message.MetadataResponseData.{MetadataResponsePartition, MetadataResponseTopic}
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopic
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.{EpochEndOffset, OffsetForLeaderTopicResult, OffsetForLeaderTopicResultCollection}
-import org.apache.kafka.common.message.ProduceResponseData.LeaderIdAndEpoch
 import org.apache.kafka.common.message._
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ListenerName, NetworkSend, Send}
@@ -645,17 +644,14 @@ class KafkaApis(val requestChannel: RequestChannel,
             status.error.exceptionName))
 
           if (request.header.apiVersion >= 10) {
-            status.currentLeader = {
-              status.error match {
-                case Errors.NOT_LEADER_OR_FOLLOWER =>
-                  val leaderNode = getCurrentLeader(topicPartition, request.context.listenerName)
-                  nodeEndpoints.put(leaderNode.node.id(), leaderNode.node)
-                  new LeaderIdAndEpoch()
-                    .setLeaderId(leaderNode.leaderId)
-                    .setLeaderEpoch(leaderNode.leaderEpoch)
+            status.error match {
+              case Errors.NOT_LEADER_OR_FOLLOWER =>
+                val leaderNode = getCurrentLeader(topicPartition, request.context.listenerName)
+                nodeEndpoints.put(leaderNode.node.id(), leaderNode.node)
+                status.currentLeader
+                  .setLeaderId(leaderNode.leaderId)
+                  .setLeaderEpoch(leaderNode.leaderEpoch)
                 case _ =>
-                  null
-              }
             }
           }
         }
