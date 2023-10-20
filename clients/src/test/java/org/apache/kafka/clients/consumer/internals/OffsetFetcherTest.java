@@ -564,7 +564,7 @@ public class OffsetFetcherTest {
     }
 
     @Test
-    public void testRestOffsetsAuthorizationFailure() {
+    public void testResetOffsetsAuthorizationFailure() {
         buildFetcher();
         assignFromUser(singleton(tp0));
         subscriptions.requestOffsetReset(tp0, OffsetResetStrategy.LATEST);

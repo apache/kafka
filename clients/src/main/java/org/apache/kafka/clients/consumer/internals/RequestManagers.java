@@ -134,6 +134,7 @@ public class RequestManagers implements Closeable {
                         requestTimeoutMs,
                         apiVersions,
                         networkClientDelegate,
+                        backgroundEventHandler,
                         logContext);
                 final FetchRequestManager fetch = new FetchRequestManager(logContext,
                         time,

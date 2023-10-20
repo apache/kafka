@@ -163,6 +163,7 @@ public class ConsumerTestBuilder implements Closeable {
                 requestTimeoutMs,
                 apiVersions,
                 networkClientDelegate,
+                backgroundEventHandler,
                 logContext));
 
         if (groupInfo.isPresent()) {
