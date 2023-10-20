@@ -285,8 +285,7 @@ public class NetworkClientDelegate implements AutoCloseable {
         public UnsentRequest(final AbstractRequest.Builder<?> requestBuilder,
                              final Node node,
                              final BiConsumer<ClientResponse, Throwable> callback) {
-            this(requestBuilder, Optional.of(node));
-            this.handler.future.whenComplete(callback);
+            this(requestBuilder, Optional.of(node), callback);
         }
 
         public void setTimer(final Time time, final long requestTimeoutMs) {
