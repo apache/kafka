@@ -186,11 +186,9 @@ public class HeartbeatRequestManager implements RequestManager {
             coordinatorRequestManager.coordinator());
         request.future().whenComplete((response, exception) -> {
             if (response != null) {
-                onResponse((ConsumerGroupHeartbeatResponse) response.responseBody(), response.receivedTimeMs());
+                onResponse((ConsumerGroupHeartbeatResponse) response.responseBody(), request.handler().completionTimeMs());
             } else {
-                // TODO: Currently, we lack a good way to propage the response time from the network client to the
-                //  request handler. We will need to store the response time in the handler to make it accessible.
-                onFailure(exception, time.milliseconds());
+                onFailure(exception, request.handler().completionTimeMs());
             }
         });
         return request;

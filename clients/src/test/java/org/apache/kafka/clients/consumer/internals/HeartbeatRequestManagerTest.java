@@ -171,7 +171,7 @@ public class HeartbeatRequestManagerTest {
     }
 
     @Test
-    public void testBackoffOnTimeout() {
+    public void testNetworkTimeout() {
         heartbeatRequestState = new HeartbeatRequestManager.HeartbeatRequestState(
             logContext,
             time,
@@ -184,7 +184,8 @@ public class HeartbeatRequestManagerTest {
         when(membershipManager.shouldSendHeartbeat()).thenReturn(true);
         NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(1, result.unsentRequests.size());
-        result.unsentRequests.get(0).future().completeExceptionally(new TimeoutException("timeout"));
+        // Mimic network timeout
+        result.unsentRequests.get(0).handler().onFailure(time.milliseconds(), new TimeoutException("timeout"));
 
         // Assure the manager will backoff on timeout
         time.sleep(RETRY_BACKOFF_MS - 1);
@@ -298,7 +299,7 @@ public class HeartbeatRequestManagerTest {
         ClientResponse response = createHeartbeatResponse(
             result.unsentRequests.get(0),
             error);
-        result.unsentRequests.get(0).future().complete(response);
+        result.unsentRequests.get(0).handler().onComplete(response);
         ConsumerGroupHeartbeatResponse mockResponse = (ConsumerGroupHeartbeatResponse) response.responseBody();
 
         switch (error) {
@@ -385,7 +386,7 @@ public class HeartbeatRequestManagerTest {
         ConsumerGroupHeartbeatResponse response = new ConsumerGroupHeartbeatResponse(data);
         return new ClientResponse(
             new RequestHeader(ApiKeys.CONSUMER_GROUP_HEARTBEAT, ApiKeys.CONSUMER_GROUP_HEARTBEAT.latestVersion(), "client-id", 1),
-            request.callback(),
+            request.handler(),
             "0",
             time.milliseconds(),
             time.milliseconds(),

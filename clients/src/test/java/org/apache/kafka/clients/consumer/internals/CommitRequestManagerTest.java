@@ -328,7 +328,8 @@ public class CommitRequestManagerTest {
 
         NetworkClientDelegate.PollResult res = commitRequestManger.poll(time.milliseconds());
         assertEquals(1, res.unsentRequests.size());
-        res.unsentRequests.get(0).future().complete(buildOffsetFetchClientResponse(res.unsentRequests.get(0), partitions, error));
+        res.unsentRequests.get(0).future().complete(buildOffsetFetchClientResponse(res.unsentRequests.get(0),
+            partitions, error));
         res = commitRequestManger.poll(time.milliseconds());
         assertEquals(0, res.unsentRequests.size());
         return futures;
@@ -391,7 +392,7 @@ public class CommitRequestManagerTest {
                 new OffsetFetchResponse(error, topicPartitionData);
         return new ClientResponse(
                 new RequestHeader(ApiKeys.OFFSET_FETCH, offsetFetchRequest.version(), "", 1),
-                request.callback(),
+                request.handler(),
                 "-1",
                 time.milliseconds(),
                 time.milliseconds(),
