@@ -54,7 +54,7 @@ public class KafkaPrincipal implements Principal {
 
     public KafkaPrincipal(String principalType, String name, boolean tokenAuthenticated) {
         //Sharing USER_TYPE reference.
-        if (principalType.equals(USER_TYPE)){
+        if (principalType.equals(USER_TYPE)) {
             this.principalType = USER_TYPE;
         } else {
             this.principalType = requireNonNull(principalType, "Principal type cannot be null");
@@ -76,7 +76,7 @@ public class KafkaPrincipal implements Principal {
         KafkaPrincipal that = (KafkaPrincipal) o;
 
         // hashes are cached, so this goes quicker than the string compare
-        if (this.hashCode() != o.hashCode()){
+        if (this.hashCode() != o.hashCode()) {
             return false;
         }
 

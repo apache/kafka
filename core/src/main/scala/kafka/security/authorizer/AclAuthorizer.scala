@@ -40,7 +40,7 @@ import org.apache.zookeeper.client.ZKClientConfig
 
 import scala.annotation.nowarn
 import scala.collection.mutable.ArrayBuffer
-import scala.collection.{Seq, immutable, mutable}
+import scala.collection.{immutable, mutable}
 import scala.jdk.CollectionConverters._
 import scala.util.{Failure, Random, Success, Try}
 
@@ -331,10 +331,11 @@ class AclAuthorizer extends Authorizer with Logging {
 
   override def acls(filter: AclBindingFilter): lang.Iterable[AclBinding] = {
     val aclBindings = new util.ArrayList[AclBinding](32)
-
+    val pattern =  filter.patternFilter()
+    val entry =  filter.entryFilter()
     for ((resource, versionedAcls) <- aclCache.iterator) {
       for (acl <- versionedAcls.aclsArray) {
-        if (filter.patternFilter().matches(resource) && filter.entryFilter().matches(acl.ace)) {
+        if (pattern.matches(resource) && entry.matches(acl.ace)) {
           //only create binding when needed
           aclBindings.add(new AclBinding(resource, acl.ace))
         }
@@ -410,9 +411,13 @@ class AclAuthorizer extends Authorizer with Logging {
                                 principal: String, host: String, op: AclOperation, permission: AclPermissionType,
                                 resourceType: ResourceType, patternType: PatternType): ArrayBuffer[Set[String]] = {
     val matched = ArrayBuffer[immutable.Set[String]]()
-    for (p <- Set(principal, AclEntry.WildcardPrincipalString);
-         h <- Set(host, AclEntry.WildcardHost);
-         o <- Set(op, AclOperation.ALL)) {
+    val ps = if (principal == AclEntry.WildcardPrincipalString) Array(AclEntry.WildcardPrincipalString) else Array(principal, AclEntry.WildcardPrincipalString)
+    val hs = if (host == AclEntry.WildcardHost) Array(AclEntry.WildcardHost) else Array(host, AclEntry.WildcardHost)
+    val ops = if (op.code() == AclOperation.ALL.code()) Array(AclOperation.ALL) else Array(op, AclOperation.ALL)
+
+    for (p <- ps;
+         h <- hs;
+         o <- ops) {
       val resourceTypeKey = ResourceTypeKey(
         new AccessControlEntry(p, h, o, permission), resourceType, patternType)
       resourceSnapshot.get(resourceTypeKey) match {
@@ -461,11 +466,12 @@ class AclAuthorizer extends Authorizer with Logging {
   }
 
   private def hasDominantPrefixedDeny(resourceName: String, denyPrefixes: ArrayBuffer[immutable.Set[String]]): Boolean = {
-    val sb = new StringBuilder
-    for (ch <- resourceName.toCharArray) {
-      sb.append(ch)
-      if (denyPrefixes.exists(p => p.contains(sb.toString()))) {
-        return true
+    for (length <- 0 to resourceName.length) {
+      val s = resourceName.substring(0, length)
+      for (denyPrefix <- denyPrefixes){
+        if (denyPrefix.contains(s)){
+          return true
+        }
       }
     }
     false
