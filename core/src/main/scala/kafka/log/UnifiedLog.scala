@@ -40,7 +40,7 @@ import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.util.Scheduler
 import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
-import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, BatchMetadata, CompletedTxn, EpochEntry, FetchDataInfo, FetchIsolation, LastRecord, LeaderHwChange, LogAppendInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogSegment, LogSegments, LogStartOffsetIncrementReason, LogValidator, ProducerAppendInfo, ProducerStateManager, ProducerStateManagerConfig, RollParams}
+import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, BatchMetadata, CompletedTxn, EpochEntry, FetchDataInfo, FetchIsolation, LastRecord, LeaderHwChange, LogAppendInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogSegment, LogSegments, LogStartOffsetIncrementReason, LogValidator, ProducerAppendInfo, ProducerStateManager, ProducerStateManagerConfig, RollParams, VerificationGuard}
 
 import java.io.{File, IOException}
 import java.nio.file.Files
@@ -599,31 +599,32 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   }
 
   /**
-   * Maybe create and return the verification guard object for the given producer ID if the transaction is not yet ongoing.
-   * Creation starts the verification process. Otherwise return null.
+   * Maybe create and return the VerificationGuard for the given producer ID if the transaction is not yet ongoing.
+   * Creation starts the verification process. Otherwise return the sentinel VerificationGuard.
    */
-  def maybeStartTransactionVerification(producerId: Long, sequence: Int, epoch: Short): Object = lock synchronized {
+  def maybeStartTransactionVerification(producerId: Long, sequence: Int, epoch: Short): VerificationGuard = lock synchronized {
     if (hasOngoingTransaction(producerId))
-      null
+      VerificationGuard.SENTINEL
     else
       maybeCreateVerificationGuard(producerId, sequence, epoch)
   }
 
   /**
-   * Maybe create the VerificationStateEntry for the given producer ID -- always return the verification guard
+   * Maybe create the VerificationStateEntry for the given producer ID -- always return the VerificationGuard
    */
   def maybeCreateVerificationGuard(producerId: Long,
                                    sequence: Int,
-                                   epoch: Short): Object = lock synchronized {
+                                   epoch: Short): VerificationGuard = lock synchronized {
     producerStateManager.maybeCreateVerificationStateEntry(producerId, sequence, epoch).verificationGuard
   }
 
   /**
-   * If an VerificationStateEntry is present for the given producer ID, return its verification guard, otherwise, return null.
+   * If an VerificationStateEntry is present for the given producer ID, return its VerificationGuard, otherwise, return the
+   * sentinel VerificationGuard.
    */
-  def verificationGuard(producerId: Long): Object = lock synchronized {
+  def verificationGuard(producerId: Long): VerificationGuard = lock synchronized {
     val entry = producerStateManager.verificationStateEntry(producerId)
-    if (entry != null) entry.verificationGuard else null
+    if (entry != null) entry.verificationGuard else VerificationGuard.SENTINEL
   }
 
   /**
@@ -715,7 +716,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
                      origin: AppendOrigin = AppendOrigin.CLIENT,
                      interBrokerProtocolVersion: MetadataVersion = MetadataVersion.latest,
                      requestLocal: RequestLocal = RequestLocal.NoCaching,
-                     verificationGuard: Object = null): LogAppendInfo = {
+                     verificationGuard: VerificationGuard = VerificationGuard.SENTINEL): LogAppendInfo = {
     val validateAndAssignOffsets = origin != AppendOrigin.RAFT_LEADER
     append(records, origin, interBrokerProtocolVersion, validateAndAssignOffsets, leaderEpoch, Some(requestLocal), verificationGuard, ignoreRecordSize = false)
   }
@@ -734,7 +735,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
       validateAndAssignOffsets = false,
       leaderEpoch = -1,
       requestLocal = None,
-      verificationGuard = null,
+      verificationGuard = VerificationGuard.SENTINEL,
       // disable to check the validation of record size since the record is already accepted by leader.
       ignoreRecordSize = true)
   }
@@ -763,7 +764,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
                      validateAndAssignOffsets: Boolean,
                      leaderEpoch: Int,
                      requestLocal: Option[RequestLocal],
-                     verificationGuard: Object,
+                     verificationGuard: VerificationGuard,
                      ignoreRecordSize: Boolean): LogAppendInfo = {
     // We want to ensure the partition metadata file is written to the log dir before any log data is written to disk.
     // This will ensure that any log data can be recovered with the correct topic ID in the case of failure.
@@ -1024,7 +1025,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   private def analyzeAndValidateProducerState(appendOffsetMetadata: LogOffsetMetadata,
                                               records: MemoryRecords,
                                               origin: AppendOrigin,
-                                              requestVerificationGuard: Object):
+                                              requestVerificationGuard: VerificationGuard):
   (mutable.Map[Long, ProducerAppendInfo], List[CompletedTxn], Option[BatchMetadata]) = {
     val updatedProducers = mutable.Map.empty[Long, ProducerAppendInfo]
     val completedTxns = ListBuffer.empty[CompletedTxn]
@@ -1049,17 +1050,17 @@ class UnifiedLog(@volatile var logStartOffset: Long,
           // the partition. If we do not have an ongoing transaction or correct guard, return an error and do not append.
           // There are two phases -- the first append to the log and subsequent appends.
           //
-          // 1. First append: Verification starts with creating a verification guard object, sending a verification request to the transaction coordinator, and
-          // given a "verified" response, continuing the append path. (A non-verified response throws an error.) We create the unique verification guard for the transaction
+          // 1. First append: Verification starts with creating a VerificationGuard, sending a verification request to the transaction coordinator, and
+          // given a "verified" response, continuing the append path. (A non-verified response throws an error.) We create the unique VerificationGuard for the transaction
           // to ensure there is no race between the transaction coordinator response and an abort marker getting written to the log. We need a unique guard because we could
           // have a sequence of events where we start a transaction verification, have the transaction coordinator send a verified response, write an abort marker,
-          // start a new transaction not aware of the partition, and receive the stale verification (ABA problem). With a unique verification guard object, this sequence would not
+          // start a new transaction not aware of the partition, and receive the stale verification (ABA problem). With a unique VerificationGuard, this sequence would not
           // result in appending to the log and would return an error. The guard is removed after the first append to the transaction and from then, we can rely on phase 2.
           //
           // 2. Subsequent appends: Once we write to the transaction, the in-memory state currentTxnFirstOffset is populated. This field remains until the
           // transaction is completed or aborted. We can guarantee the transaction coordinator knows about the transaction given step 1 and that the transaction is still
-          // ongoing. If the transaction is expected to be ongoing, we will not set a verification guard. If the transaction is aborted, hasOngoingTransaction is false and
-          // requestVerificationGuard is null, so we will throw an error. A subsequent produce request (retry) should create verification state and return to phase 1.
+          // ongoing. If the transaction is expected to be ongoing, we will not set a VerificationGuard. If the transaction is aborted, hasOngoingTransaction is false and
+          // requestVerificationGuard is the sentinel, so we will throw an error. A subsequent produce request (retry) should create verification state and return to phase 1.
           if (batch.isTransactional && !hasOngoingTransaction(batch.producerId) && batchMissingRequiredVerification(batch, requestVerificationGuard))
             throw new InvalidTxnStateException("Record was not part of an ongoing transaction")
         }
@@ -1080,9 +1081,9 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     (updatedProducers, completedTxns.toList, None)
   }
 
-  private def batchMissingRequiredVerification(batch: MutableRecordBatch, requestVerificationGuard: Object): Boolean = {
+  private def batchMissingRequiredVerification(batch: MutableRecordBatch, requestVerificationGuard: VerificationGuard): Boolean = {
     producerStateManager.producerStateManagerConfig().transactionVerificationEnabled() && !batch.isControlBatch &&
-      (requestVerificationGuard != verificationGuard(batch.producerId) || requestVerificationGuard == null)
+      !verificationGuard(batch.producerId).verify(requestVerificationGuard)
   }
 
   /**
@@ -1991,7 +1992,7 @@ object UnifiedLog extends Logging {
     val producerId = batch.producerId
     val appendInfo = producers.getOrElseUpdate(producerId, producerStateManager.prepareUpdate(producerId, origin))
     val completedTxn = appendInfo.append(batch, firstOffsetMetadata.asJava).asScala
-    // Whether we wrote a control marker or a data batch, we can remove verification guard since either the transaction is complete or we have a first offset.
+    // Whether we wrote a control marker or a data batch, we can remove VerificationGuard since either the transaction is complete or we have a first offset.
     if (batch.isTransactional)
       producerStateManager.clearVerificationStateEntry(producerId)
     completedTxn
