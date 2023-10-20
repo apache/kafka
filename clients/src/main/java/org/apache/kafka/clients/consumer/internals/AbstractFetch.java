@@ -220,13 +220,10 @@ public abstract class AbstractFetch implements Closeable {
                     .filter(e -> !e.equals(Node.noNode()))
                     .collect(
                     Collectors.toList());
-                Set<TopicPartition> updatedPartitions = metadata.updatePartially(partitionsWithUpdatedLeaderInfo, leaderNodes);
+                Set<TopicPartition> updatedPartitions = metadata.updatePartitionLeadership(partitionsWithUpdatedLeaderInfo, leaderNodes);
                 updatedPartitions.forEach(
                     tp -> {
-                        log.trace("For {}, the leader was updated, so clear preferred replica & validate position.");
-                        // Called via FetchCollector.handleInitializeErrors -> requestMetadataUpdate
-                        // TBD - assert in test maybe, no needed otherwise.
-                        // subscriptions.clearPreferredReadReplica(tp);
+                        log.trace("For {}, as the leader was updated, leader's position wil be updated.", tp);
                         subscriptions.maybeValidatePositionForCurrentLeader(apiVersions, tp, metadata.currentLeader(tp));
                     }
                 );

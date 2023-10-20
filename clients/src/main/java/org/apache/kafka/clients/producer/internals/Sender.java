@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
+import static org.apache.kafka.common.requests.ProduceResponse.INVALID_OFFSET;
+
 import java.util.Optional;
 import java.util.Set;
 import org.apache.kafka.clients.ApiVersions;
@@ -610,31 +612,34 @@ public class Sender implements Runnable {
                     ProduceResponse.PartitionResponse partResp = new ProduceResponse.PartitionResponse(
                             Errors.forCode(p.errorCode()),
                             p.baseOffset(),
+                            INVALID_OFFSET,
                             p.logAppendTimeMs(),
                             p.logStartOffset(),
                             p.recordErrors()
                                 .stream()
                                 .map(e -> new ProduceResponse.RecordError(e.batchIndex(), e.batchIndexErrorMessage()))
                                 .collect(Collectors.toList()),
-                            p.errorMessage());
+                            p.errorMessage(),
+                            p.currentLeader());
                     ProducerBatch batch = batches.get(tp);
                     completeBatch(batch, partResp, correlationId, now, partitionsWithUpdatedLeaderInfo);
-
-                    final short requestVersion = response.requestHeader().apiVersion();
-                    if (requestVersion >= 16 && !partitionsWithUpdatedLeaderInfo.isEmpty()) {
-                        List<Node> leaderNodes = produceResponse.data().nodeEndpoints().stream()
-                            .map(e -> new Node(e.nodeId(), e.host(), e.port(), e.rack()))
-                            .filter(e -> !e.equals(Node.noNode()))
-                            .collect(
-                                Collectors.toList());
-                        Set<TopicPartition> updatedPartitions = metadata.updatePartially(partitionsWithUpdatedLeaderInfo, leaderNodes);
-                        if (log.isTraceEnabled()) {
-                            updatedPartitions.forEach(
-                                part -> log.trace("For {} leader was updated.", part)
-                            );
-                        }
-                    }
                 }));
+
+                final short requestVersion = response.requestHeader().apiVersion();
+                if (requestVersion >= 10 && !partitionsWithUpdatedLeaderInfo.isEmpty()) {
+                    List<Node> leaderNodes = produceResponse.data().nodeEndpoints().stream()
+                        .map(e -> new Node(e.nodeId(), e.host(), e.port(), e.rack()))
+                        .filter(e -> !e.equals(Node.noNode()))
+                        .collect(
+                            Collectors.toList());
+                    Set<TopicPartition> updatedPartitions = metadata.updatePartitionLeadership(partitionsWithUpdatedLeaderInfo, leaderNodes);
+                    if (log.isTraceEnabled()) {
+                        updatedPartitions.forEach(
+                            part -> log.debug("For {} leader was updated.", part)
+                        );
+                    }
+                }
+
                 this.sensors.recordLatency(response.destination(), response.requestLatencyMs());
             } else {
                 // this is the acks = 0 case, just complete all requests
