@@ -47,7 +47,7 @@ import org.jfree.data.xy.XYSeries;
 import org.jfree.data.xy.XYSeriesCollection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import scala.None$;
+import scala.Option;
 import scala.collection.JavaConverters;
 import scala.collection.Seq;
 
@@ -86,6 +86,8 @@ import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
  *
  * Currently you'll need about 40GB of disk space to run these experiments (largest data written x2). Tune the msgSize
  * & #partitions and throttle to adjust this.
+ *
+ * To run this tool without excessive logging add to jvm params "-Dlog4j2.configurationFile=classpath:log4j2-off.properties"
  */
 public class ReplicationQuotasTestRig {
     public static final Logger LOGGER = LoggerFactory.getLogger(ReplicationQuotasTestRig.class);
@@ -121,7 +123,7 @@ public class ReplicationQuotasTestRig {
         experiments.forEach(def -> run(def, journal, displayChartsOnScreen));
 
         if (!displayChartsOnScreen)
-            Exit.exit(0, None$.empty());
+            Exit.exit(0, Option.empty());
     }
 
     static void run(ExperimentDef config, Journal journal, boolean displayChartsOnScreen) {
@@ -384,8 +386,8 @@ public class ReplicationQuotasTestRig {
                 "none",
                 20 * 1000,
                 SecurityProtocol.PLAINTEXT,
-                None$.empty(),
-                None$.empty(),
+                Option.empty(),
+                Option.empty(),
                 new ByteArraySerializer(),
                 new ByteArraySerializer(),
                 false
@@ -399,9 +401,9 @@ public class ReplicationQuotasTestRig {
                 false, // shorten test time
                 true,
                 TestUtils.RandomPort(),
-                scala.None$.empty(),
-                scala.None$.empty(),
-                scala.None$.empty(),
+                Option.empty(),
+                Option.empty(),
+                Option.empty(),
                 true,
                 false,
                 TestUtils.RandomPort(),
@@ -409,7 +411,7 @@ public class ReplicationQuotasTestRig {
                 TestUtils.RandomPort(),
                 false,
                 TestUtils.RandomPort(),
-                scala.None$.empty(),
+                Option.empty(),
                 3,
                 false,
                 1,
