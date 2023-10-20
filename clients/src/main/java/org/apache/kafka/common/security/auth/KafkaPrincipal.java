@@ -53,7 +53,12 @@ public class KafkaPrincipal implements Principal {
     }
 
     public KafkaPrincipal(String principalType, String name, boolean tokenAuthenticated) {
-        this.principalType = requireNonNull(principalType, "Principal type cannot be null");
+        //Sharing USER_TYPE reference.
+        if (principalType.equals(USER_TYPE)){
+            this.principalType = USER_TYPE;
+        } else {
+            this.principalType = requireNonNull(principalType, "Principal type cannot be null");
+        }
         this.name = requireNonNull(name, "Principal name cannot be null");
         this.tokenAuthenticated = tokenAuthenticated;
     }
@@ -68,9 +73,15 @@ public class KafkaPrincipal implements Principal {
         if (this == o) return true;
         if (o == null) return false;
         if (getClass() != o.getClass()) return false;
-
         KafkaPrincipal that = (KafkaPrincipal) o;
-        return principalType.equals(that.principalType) && name.equals(that.name);
+
+        // hashes are cached, so this goes quicker than the string compare
+        if (this.hashCode() != o.hashCode()){
+            return false;
+        }
+
+        //principalType is almost always the same so first checking the name
+        return name.equals(that.name) && principalType.equals(that.principalType);
     }
 
     @Override
