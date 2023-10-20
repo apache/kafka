@@ -54,6 +54,7 @@ public class PartitionChangeBuilder {
         if (record.removingReplicas() != null) return false;
         if (record.addingReplicas() != null) return false;
         if (record.leaderRecoveryState() != LeaderRecoveryState.NO_CHANGE) return false;
+        if (record.assignment() != null) return false;
         return true;
     }
 
@@ -382,7 +383,20 @@ public class PartitionChangeBuilder {
 
     private void setAssignmentChanges(PartitionChangeRecord record) {
         if (!targetReplicas.isEmpty() && !targetReplicas.equals(Replicas.toList(partition.replicas))) {
-            record.setReplicas(targetReplicas);
+            if (metadataVersion.isDirectoryAssignmentSupported()) {
+                record.setReplicas(null);
+                record.setAssignment(
+                        targetReplicas.stream()
+                                .map(id -> new PartitionChangeRecord.ReplicaAssignment()
+                                        .setBroker(id)
+                                        .setDirectory(Uuid.UNKNOWN_DIR)
+                                )
+                                .collect(Collectors.toList())
+                );
+            } else {
+                record.setAssignment(null);
+                record.setReplicas(targetReplicas);
+            }
         }
         if (!targetRemoving.equals(Replicas.toList(partition.removingReplicas))) {
             record.setRemovingReplicas(targetRemoving);

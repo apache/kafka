@@ -293,6 +293,10 @@ public enum MetadataVersion {
         return this.isAtLeast(IBP_3_7_IV1);
     }
 
+    public boolean isDirectoryAssignmentSupported() {
+        return false; // TODO: Bump IBP for JBOD support in KRaft
+    }
+
     public boolean isKRaftSupported() {
         return this.featureLevel > 0;
     }
@@ -344,7 +348,9 @@ public enum MetadataVersion {
     }
 
     public short partitionChangeRecordVersion() {
-        if (isElrSupported()) {
+        if (isDirectoryAssignmentSupported()) {
+            return (short) 2;
+        } else if (isElrSupported()) {
             return (short) 1;
         } else {
             return (short) 0;

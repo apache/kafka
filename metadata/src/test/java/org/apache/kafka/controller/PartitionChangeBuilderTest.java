@@ -54,7 +54,9 @@ import static org.junit.jupiter.params.provider.Arguments.arguments;
 @Timeout(value = 40)
 public class PartitionChangeBuilderTest {
     private static Stream<Arguments> partitionChangeRecordVersions() {
-        return IntStream.range(PartitionChangeRecord.LOWEST_SUPPORTED_VERSION, PartitionChangeRecord.HIGHEST_SUPPORTED_VERSION + 1).mapToObj(version -> Arguments.of((short) version));
+        return IntStream.range(PartitionChangeRecord.LOWEST_SUPPORTED_VERSION, PartitionChangeRecord.HIGHEST_SUPPORTED_VERSION + 1)
+                .filter(v -> v != PartitionChangeRecord.HIGHEST_SUPPORTED_VERSION) // TODO test latest record version in KAFKA-15514
+                .mapToObj(version -> Arguments.of((short) version));
     }
 
     @Test
@@ -63,7 +65,7 @@ public class PartitionChangeBuilderTest {
          * to update changeRecordIsNoOp to take into account the new schema or tagged fields.
          */
         // Check that the supported versions haven't changed
-        assertEquals(1, PartitionChangeRecord.HIGHEST_SUPPORTED_VERSION);
+        assertEquals(2, PartitionChangeRecord.HIGHEST_SUPPORTED_VERSION);
         assertEquals(0, PartitionChangeRecord.LOWEST_SUPPORTED_VERSION);
         // For the latest version check that the number of tagged fields hasn't changed
         TaggedFields taggedFields = (TaggedFields) PartitionChangeRecord.SCHEMA_0.get(2).def.type;
@@ -86,6 +88,15 @@ public class PartitionChangeBuilderTest {
                 new PartitionChangeRecord()
                   .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value())
             )
+        );
+        assertFalse(
+                changeRecordIsNoOp(
+                        new PartitionChangeRecord()
+                                .setAssignment(Arrays.asList(
+                                        new PartitionChangeRecord.ReplicaAssignment()
+                                        .setBroker(1)
+                                        .setDirectory(Uuid.randomUuid())))
+                )
         );
     }
 

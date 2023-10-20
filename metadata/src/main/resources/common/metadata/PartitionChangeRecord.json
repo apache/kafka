@@ -17,9 +17,9 @@
   "apiKey": 5,
   "type": "metadata",
   "name": "PartitionChangeRecord",
-  "validVersions": "0-1",
   // Version 1 implements Eligiable Leader Replicas and LastKnownELR as described in KIP-966.
-  //
+  // Version 2 replaces Replicas with Assignment
+  "validVersions": "0-2",
   "flexibleVersions": "0+",
   "fields": [
     { "name": "PartitionId", "type": "int32", "versions": "0+", "default": "-1",
@@ -48,6 +48,14 @@
       "about": "null if the ELR didn't change; the new eligible leader replicas otherwise." },
     { "name": "LastKnownELR", "type": "[]int32", "default": "null", "entityType": "brokerId",
       "versions": "1+", "nullableVersions": "1+", "taggedVersions": "1+", "tag": 7,
-      "about": "null if the LastKnownELR didn't change; the last known eligible leader replicas otherwise." }
+      "about": "null if the LastKnownELR didn't change; the last known eligible leader replicas otherwise." },
+    { "name": "Assignment", "type": "[]ReplicaAssignment", "default": "null",
+      "versions": "2+", "nullableVersions": "2+", "taggedVersions": "2+", "tag": 8,
+      "about": "null if the replica assignment didn't change; the new replica assignment otherwise.", "fields": [
+      { "name": "Broker", "type": "int32", "versions": "2+", "entityType": "brokerId",
+        "about": "The broker ID hosting the replica." },
+      { "name": "Directory", "type": "uuid", "versions": "2+",
+        "about": "The log directory hosting the replica" }
+    ]}
   ]
 }
