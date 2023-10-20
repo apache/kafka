@@ -163,8 +163,8 @@ public class ReplicationQuotasTestRig {
 
     static class Experiment extends QuorumTestHarness {
         static final String TOPIC_NAME = "my-topic";
-        String experimentName = "unset";
 
+        String experimentName = "unset";
         List<KafkaServer> servers;
         Map<Integer, List<Double>> leaderRates = new HashMap<>();
         Map<Integer, List<Double>> followerRates = new HashMap<>();
