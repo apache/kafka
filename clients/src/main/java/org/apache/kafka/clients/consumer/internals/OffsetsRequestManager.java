@@ -325,7 +325,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
     /**
      * Build ListOffsets request to send to a specific broker for the partitions and
      * target timestamps. This also adds the request to the list of unsentRequests.
-     **/
+     */
     private CompletableFuture<ListOffsetResult> buildListOffsetRequestToNode(
             Node node,
             Map<TopicPartition, ListOffsetsRequestData.ListOffsetsPartition> targetTimes,
@@ -477,7 +477,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
     /**
      * Build OffsetsForLeaderEpoch request to send to a specific broker for the partitions and
      * positions to fetch. This also adds the request to the list of unsentRequests.
-     **/
+     */
     private CompletableFuture<OffsetsForLeaderEpochUtils.OffsetForEpochResult> buildOffsetsForLeaderEpochRequestToNode(
             final Node node,
             final Map<TopicPartition, SubscriptionState.FetchPosition> fetchPositions,

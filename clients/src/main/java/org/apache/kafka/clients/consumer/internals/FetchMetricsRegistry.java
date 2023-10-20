@@ -66,7 +66,7 @@ public class FetchMetricsRegistry {
 
     public FetchMetricsRegistry(Set<String> tags, String metricGrpPrefix) {
 
-        /***** Client level *****/
+        /* Client level */
         String groupName = metricGrpPrefix + "-fetch-manager-metrics";
 
         this.fetchSizeAvg = new MetricNameTemplate("fetch-size-avg", groupName,
@@ -105,7 +105,7 @@ public class FetchMetricsRegistry {
         this.fetchThrottleTimeMax = new MetricNameTemplate("fetch-throttle-time-max", groupName,
                 "The maximum throttle time in ms", tags);
 
-        /***** Topic level *****/
+        /*  Topic level */
         Set<String> topicTags = new LinkedHashSet<>(tags);
         topicTags.add("topic");
 
@@ -125,7 +125,7 @@ public class FetchMetricsRegistry {
         this.topicRecordsConsumedTotal = new MetricNameTemplate("records-consumed-total", groupName,
                 "The total number of records consumed for a topic", topicTags);
 
-        /***** Partition level *****/
+        /* Partition level */
         Set<String> partitionTags = new HashSet<>(topicTags);
         partitionTags.add("partition");
         this.partitionRecordsLag = new MetricNameTemplate("records-lag", groupName,

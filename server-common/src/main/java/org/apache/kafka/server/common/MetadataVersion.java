@@ -186,7 +186,10 @@ public enum MetadataVersion {
     IBP_3_6_IV2(14, "3.6", "IV2", true),
 
     // Implement KIP-919 controller registration.
-    IBP_3_7_IV0(15, "3.7", "IV0", true);
+    IBP_3_7_IV0(15, "3.7", "IV0", true),
+
+    // Add ELR related supports (KIP-966).
+    IBP_3_7_IV1(16, "3.7", "IV1", true);
 
     // NOTES when adding a new version:
     //   Update the default version in @ClusterTest annotation to point to the latest version
@@ -286,6 +289,10 @@ public enum MetadataVersion {
         return this.isAtLeast(IBP_3_6_IV2);
     }
 
+    public boolean isElrSupported() {
+        return this.isAtLeast(IBP_3_7_IV1);
+    }
+
     public boolean isKRaftSupported() {
         return this.featureLevel > 0;
     }
@@ -334,6 +341,22 @@ public enum MetadataVersion {
 
     public boolean isControllerRegistrationSupported() {
         return this.isAtLeast(MetadataVersion.IBP_3_7_IV0);
+    }
+
+    public short partitionChangeRecordVersion() {
+        if (isElrSupported()) {
+            return (short) 1;
+        } else {
+            return (short) 0;
+        }
+    }
+
+    public short partitionRecordVersion() {
+        if (isElrSupported()) {
+            return (short) 1;
+        } else {
+            return (short) 0;
+        }
     }
 
     public short fetchRequestVersion() {

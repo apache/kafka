@@ -70,6 +70,7 @@ import org.slf4j.Logger;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 
 /**
  * The group coordinator shard is a replicated state machine that manages the metadata of all
@@ -159,16 +160,25 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
                 .withSnapshotRegistry(snapshotRegistry)
                 .withTime(time)
                 .withGroupMetadataManager(groupMetadataManager)
-                .withOffsetMetadataMaxSize(config.offsetMetadataMaxSize)
+                .withGroupCoordinatorConfig(config)
                 .build();
 
             return new GroupCoordinatorShard(
                 logContext,
                 groupMetadataManager,
-                offsetMetadataManager
+                offsetMetadataManager,
+                timer,
+                config
             );
         }
     }
+
+    /**
+     * The group/offsets expiration key to schedule a timer task.
+     *
+     * Visible for testing.
+     */
+    static final String GROUP_EXPIRATION_KEY = "expire-group-metadata";
 
     /**
      * The logger.
@@ -186,6 +196,16 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
     private final OffsetMetadataManager offsetMetadataManager;
 
     /**
+     * The coordinator timer.
+     */
+    private final CoordinatorTimer<Void, Record> timer;
+
+    /**
+     * The group coordinator config.
+     */
+    private final GroupCoordinatorConfig config;
+
+    /**
      * Constructor.
      *
      * @param logContext            The log context.
@@ -195,11 +215,15 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
     GroupCoordinatorShard(
         LogContext logContext,
         GroupMetadataManager groupMetadataManager,
-        OffsetMetadataManager offsetMetadataManager
+        OffsetMetadataManager offsetMetadataManager,
+        CoordinatorTimer<Void, Record> timer,
+        GroupCoordinatorConfig config
     ) {
         this.log = logContext.logger(GroupCoordinatorShard.class);
         this.groupMetadataManager = groupMetadataManager;
         this.offsetMetadataManager = offsetMetadataManager;
+        this.timer = timer;
+        this.config = config;
     }
 
     /**
@@ -436,6 +460,39 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
     }
 
     /**
+     * For each group, remove all expired offsets. If all offsets for the group are removed and the group is eligible
+     * for deletion, delete the group.
+     *
+     * @return The list of tombstones (offset commit and group metadata) to append.
+     */
+    public CoordinatorResult<Void, Record> cleanupGroupMetadata() {
+        List<Record> records = new ArrayList<>();
+        groupMetadataManager.groupIds().forEach(groupId -> {
+            if (offsetMetadataManager.cleanupExpiredOffsets(groupId, records)) {
+                groupMetadataManager.maybeDeleteGroup(groupId, records);
+            }
+        });
+
+        // Reschedule the next cycle.
+        scheduleGroupMetadataExpiration();
+        return new CoordinatorResult<>(records);
+    }
+
+    /**
+     * Schedule the group/offsets expiration job. If any exceptions are thrown above, the timer will retry.
+     */
+    private void scheduleGroupMetadataExpiration() {
+        timer.schedule(
+            GROUP_EXPIRATION_KEY,
+            config.offsetsRetentionCheckIntervalMs,
+            TimeUnit.MILLISECONDS,
+            true,
+            this::cleanupGroupMetadata
+        );
+    }
+
+
+    /**
      * The coordinator has been loaded. This is used to apply any
      * post loading operations (e.g. registering timers).
      *
@@ -448,6 +505,12 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
         offsetMetadataManager.onNewMetadataImage(newImage, emptyDelta);
 
         groupMetadataManager.onLoaded();
+        scheduleGroupMetadataExpiration();
+    }
+
+    @Override
+    public void onUnloaded() {
+        timer.cancel(GROUP_EXPIRATION_KEY);
     }
 
     /**

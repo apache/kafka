@@ -317,8 +317,7 @@ public class FeatureControlManagerTest {
         assertEquals(ControllerResult.of(Collections.emptyList(),
             singletonMap(MetadataVersion.FEATURE_NAME, new ApiError(Errors.INVALID_UPDATE_VERSION,
                 "Invalid metadata.version 4. Refusing to perform the requested downgrade because " +
-                "it might delete metadata information. Retry using UNSAFE_DOWNGRADE if you want to " +
-                "force the downgrade to proceed."))),
+                "it might delete metadata information."))),
             manager.updateFeatures(
                 singletonMap(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_3_IV0.featureLevel()),
                 singletonMap(MetadataVersion.FEATURE_NAME, FeatureUpdate.UpgradeType.SAFE_DOWNGRADE),
