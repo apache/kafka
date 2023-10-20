@@ -64,14 +64,14 @@ public interface ClientTelemetrySender extends AutoCloseable {
     void handleResponse(PushTelemetryResponse response);
 
     /**
-     * Handle response for failed get telemetry subscriptions request.
+     * Handle get telemetry subscriptions request failure.
      *
      * @param kafkaException the fatal exception.
      */
     void handleFailedGetTelemetrySubscriptionsRequest(KafkaException kafkaException);
 
     /**
-     * Handle response for failed push telemetry request.
+     * Handle push telemetry request failure.
      *
      * @param kafkaException the fatal exception.
      */

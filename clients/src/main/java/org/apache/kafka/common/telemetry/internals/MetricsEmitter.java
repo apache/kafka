@@ -22,14 +22,14 @@ import java.util.List;
 import java.io.Closeable;
 
 /**
- * An {@code Emitter} emits the values held by the {@link SinglePointMetric}, likely first converting them
+ * An {@code MetricsEmitter} emits the values held by the {@link SinglePointMetric}, likely first converting them
  * to a format suitable for exposure, storage, or transmission. The telemetry reporter is likely
  * the entity that is familiar with the underlying method of making the metrics visible to the
  * broker. Thus, it is the primary place in the code where the implementation details are known.
  *
  * <p>
  *
- * An {@code Emitter} is stateless and the telemetry reporter should assume that the object is
+ * An {@code MetricsEmitter} is stateless and the telemetry reporter should assume that the object is
  * not thread safe and thus concurrent access to either the
  * {@link #shouldEmitMetric(MetricKeyable)} or {@link #emitMetric(SinglePointMetric)} should be avoided.
  *
@@ -39,7 +39,7 @@ import java.io.Closeable;
  * ensure that the {@link #emitMetric(SinglePointMetric)} method should only be invoked in a synchronous
  * manner.
  */
-public interface Emitter extends Closeable {
+public interface MetricsEmitter extends Closeable {
 
     /**
      * Performs the necessary logic to determine if the metric is to be emitted. The telemetry
@@ -71,7 +71,7 @@ public interface Emitter extends Closeable {
     }
 
     /**
-     * Emits a metric if {@link Emitter#shouldEmitMetric(MetricKeyable)} returns <tt>true</tt>.
+     * Emits a metric if {@link MetricsEmitter#shouldEmitMetric(MetricKeyable)} returns <tt>true</tt>.
      * @param metric to emit
      * @return true if emit is successful, false otherwise
      */
@@ -80,7 +80,7 @@ public interface Emitter extends Closeable {
     }
 
     /**
-     * Allows the {@code Emitter} implementation to initialize itself. This method should be invoked
+     * Allows the {@code MetricsEmitter} implementation to initialize itself. This method should be invoked
      * by the telemetry reporter before calls to {@link #emitMetric(SinglePointMetric)} are made.
      *
      * <p>
@@ -92,7 +92,7 @@ public interface Emitter extends Closeable {
     }
 
     /**
-     * Allows the {@code Emitter} implementation to stop itself and dispose of any resources. This
+     * Allows the {@code MetricsEmitter} implementation to stop itself and dispose of any resources. This
      * method should ideally be invoked only once by the telemetry reporter.
      *
      * <p>

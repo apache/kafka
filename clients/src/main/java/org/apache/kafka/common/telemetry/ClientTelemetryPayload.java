@@ -32,6 +32,10 @@ public interface ClientTelemetryPayload {
 
     /**
      * Indicates whether client is terminating, e.g., the last metrics push from this client instance.
+     * <p>
+     *To avoid the receiving broker’s metrics rate-limiter discarding this out-of-profile push, the
+     * PushTelemetryRequest.Terminating field must be set to true. A broker must only allow one such
+     * unthrottled metrics push for each combination of client instance ID and SubscriptionId.
      *
      * @return {@code true} if client is terminating, else false
      */

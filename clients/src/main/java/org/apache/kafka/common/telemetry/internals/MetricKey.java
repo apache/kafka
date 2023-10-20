@@ -88,7 +88,7 @@ public class MetricKey implements MetricKeyable {
 
     @Override
     public String toString() {
-        return "MetricKey [name=" + getName() + ", tags=" + tags() + "]";
+        return "MetricKey {name=" + getName() + ", tags=" + tags() + "}";
     }
 
 }
