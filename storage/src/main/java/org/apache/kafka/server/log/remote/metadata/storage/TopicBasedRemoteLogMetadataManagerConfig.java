@@ -207,7 +207,6 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
 
     private Map<String, Object> createConsumerProps(HashMap<String, Object> allConsumerConfigs) {
         Map<String, Object> props = new HashMap<>(allConsumerConfigs);
-
         props.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientIdPrefix + "_consumer");
         props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
@@ -219,13 +218,11 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
 
     private Map<String, Object> createProducerProps(HashMap<String, Object> allProducerConfigs) {
         Map<String, Object> props = new HashMap<>(allProducerConfigs);
-
         props.put(ProducerConfig.CLIENT_ID_CONFIG, clientIdPrefix + "_producer");
         props.put(ProducerConfig.ACKS_CONFIG, "all");
-        props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, 1);
+        props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, 5);
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
-
         return Collections.unmodifiableMap(props);
     }
 
