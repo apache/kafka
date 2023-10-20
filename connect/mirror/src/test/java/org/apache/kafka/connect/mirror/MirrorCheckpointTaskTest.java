@@ -178,8 +178,8 @@ public class MirrorCheckpointTaskTest {
         String topic = "topic";
         Map<TopicPartition, OffsetAndMetadata> ct = new HashMap<>();
         TopicPartition tp = new TopicPartition(topic, 0);
-        // Simulate other clients such as sarama to reset the group offset of the target cluster to -1. At this time,
-        // the obtained `OffsetAndMetadata` of the target cluster is null.
+        // Simulate other clients such as Sarama, which may reset group offsets to -1. This can cause
+        // the obtained `OffsetAndMetadata` of the target cluster to be null.
         ct.put(tp, null);
         idleConsumerGroupsOffset.put(consumer, ct);
 
