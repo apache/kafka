@@ -22,14 +22,16 @@ import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException
 import org.apache.kafka.common.record.{CompressionType, FileRecords, MemoryRecords, SimpleRecord}
+import org.apache.kafka.common.utils.{MockTime, Time}
 import org.apache.kafka.coordinator.group.runtime.CoordinatorLoader.UnknownRecordTypeException
 import org.apache.kafka.coordinator.group.runtime.{CoordinatorLoader, CoordinatorPlayback}
 import org.apache.kafka.storage.internals.log.{FetchDataInfo, FetchIsolation, LogOffsetMetadata}
 import org.apache.kafka.test.TestUtils.assertFutureThrows
-import org.junit.jupiter.api.Assertions.{assertEquals, assertNull}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull}
 import org.junit.jupiter.api.{Test, Timeout}
 import org.mockito.{ArgumentCaptor, ArgumentMatchers}
 import org.mockito.Mockito.{mock, verify, when}
+import org.mockito.invocation.InvocationOnMock
 
 import java.nio.ByteBuffer
 import java.nio.charset.Charset
@@ -54,6 +56,7 @@ class CoordinatorLoaderImplTest {
     val coordinator = mock(classOf[CoordinatorPlayback[(String, String)]])
 
     TestUtils.resource(new CoordinatorLoaderImpl[(String, String)](
+      time = Time.SYSTEM,
       replicaManager = replicaManager,
       deserializer = serde,
       loadBufferSize = 1000
@@ -73,6 +76,7 @@ class CoordinatorLoaderImplTest {
     val coordinator = mock(classOf[CoordinatorPlayback[(String, String)]])
 
     TestUtils.resource(new CoordinatorLoaderImpl[(String, String)](
+      time = Time.SYSTEM,
       replicaManager = replicaManager,
       deserializer = serde,
       loadBufferSize = 1000
@@ -93,6 +97,7 @@ class CoordinatorLoaderImplTest {
     val coordinator = mock(classOf[CoordinatorPlayback[(String, String)]])
 
     TestUtils.resource(new CoordinatorLoaderImpl[(String, String)](
+      time = Time.SYSTEM,
       replicaManager = replicaManager,
       deserializer = serde,
       loadBufferSize = 1000
@@ -126,7 +131,7 @@ class CoordinatorLoaderImplTest {
         minOneMessage = true
       )).thenReturn(readResult2)
 
-      assertNull(loader.load(tp, coordinator).get(10, TimeUnit.SECONDS))
+      assertNotNull(loader.load(tp, coordinator).get(10, TimeUnit.SECONDS))
 
       verify(coordinator).replay(("k1", "v1"))
       verify(coordinator).replay(("k2", "v2"))
@@ -145,6 +150,7 @@ class CoordinatorLoaderImplTest {
     val coordinator = mock(classOf[CoordinatorPlayback[(String, String)]])
 
     TestUtils.resource(new CoordinatorLoaderImpl[(String, String)](
+      time = Time.SYSTEM,
       replicaManager = replicaManager,
       deserializer = serde,
       loadBufferSize = 1000
@@ -187,6 +193,7 @@ class CoordinatorLoaderImplTest {
     val coordinator = mock(classOf[CoordinatorPlayback[(String, String)]])
 
     TestUtils.resource(new CoordinatorLoaderImpl[(String, String)](
+      time = Time.SYSTEM,
       replicaManager = replicaManager,
       deserializer = serde,
       loadBufferSize = 1000
@@ -226,6 +233,7 @@ class CoordinatorLoaderImplTest {
     val coordinator = mock(classOf[CoordinatorPlayback[(String, String)]])
 
     TestUtils.resource(new CoordinatorLoaderImpl[(String, String)](
+      time = Time.SYSTEM,
       replicaManager = replicaManager,
       deserializer = serde,
       loadBufferSize = 1000
@@ -266,6 +274,7 @@ class CoordinatorLoaderImplTest {
     val coordinator = mock(classOf[CoordinatorPlayback[(String, String)]])
 
     TestUtils.resource(new CoordinatorLoaderImpl[(String, String)](
+      time = Time.SYSTEM,
       replicaManager = replicaManager,
       deserializer = serde,
       loadBufferSize = 1000
@@ -283,7 +292,63 @@ class CoordinatorLoaderImplTest {
         minOneMessage = true
       )).thenReturn(readResult)
 
-      assertNull(loader.load(tp, coordinator).get(10, TimeUnit.SECONDS))
+      assertNotNull(loader.load(tp, coordinator).get(10, TimeUnit.SECONDS))
+    }
+  }
+
+  @Test
+  def testLoadSummary(): Unit = {
+    val tp = new TopicPartition("foo", 0)
+    val replicaManager = mock(classOf[ReplicaManager])
+    val serde = new StringKeyValueDeserializer
+    val log = mock(classOf[UnifiedLog])
+    val coordinator = mock(classOf[CoordinatorPlayback[(String, String)]])
+    val time = new MockTime()
+
+    TestUtils.resource(new CoordinatorLoaderImpl[(String, String)](
+      time,
+      replicaManager = replicaManager,
+      deserializer = serde,
+      loadBufferSize = 1000
+    )) { loader =>
+      val startTimeMs = time.milliseconds()
+      when(replicaManager.getLog(tp)).thenReturn(Some(log))
+      when(log.logStartOffset).thenReturn(0L)
+      when(replicaManager.getLogEndOffset(tp)).thenReturn(Some(5L))
+
+      val readResult1 = logReadResult(startOffset = 0, records = Seq(
+        new SimpleRecord("k1".getBytes, "v1".getBytes),
+        new SimpleRecord("k2".getBytes, "v2".getBytes)
+      ))
+
+      when(log.read(
+        startOffset = 0L,
+        maxLength = 1000,
+        isolation = FetchIsolation.LOG_END,
+        minOneMessage = true
+      )).thenAnswer((_: InvocationOnMock) => {
+        time.sleep(1000)
+        readResult1
+      })
+
+      val readResult2 = logReadResult(startOffset = 2, records = Seq(
+        new SimpleRecord("k3".getBytes, "v3".getBytes),
+        new SimpleRecord("k4".getBytes, "v4".getBytes),
+        new SimpleRecord("k5".getBytes, "v5".getBytes)
+      ))
+
+      when(log.read(
+        startOffset = 2L,
+        maxLength = 1000,
+        isolation = FetchIsolation.LOG_END,
+        minOneMessage = true
+      )).thenReturn(readResult2)
+
+      val summary = loader.load(tp, coordinator).get(10, TimeUnit.SECONDS)
+      assertEquals(startTimeMs, summary.startTimeMs())
+      assertEquals(startTimeMs + 1000, summary.endTimeMs())
+      assertEquals(5, summary.numRecords())
+      assertEquals(readResult1.records.sizeInBytes() + readResult2.records.sizeInBytes(), summary.numBytes())
     }
   }
 

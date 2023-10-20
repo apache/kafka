@@ -239,6 +239,10 @@
       <allow pkg="org.apache.kafka.server.util"/>
       <allow pkg="org.apache.kafka.test" />
       <allow pkg="org.apache.kafka.timeline" />
+      <subpackage name="metrics">
+        <allow pkg="org.apache.kafka.common.metrics" />
+        <allow pkg="org.apache.kafka.server.metrics" />
+      </subpackage>
     </subpackage>
   </subpackage>
 

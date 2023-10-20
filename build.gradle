@@ -1260,6 +1260,7 @@ project(':group-coordinator') {
     implementation project(':clients')
     implementation project(':metadata')
     implementation libs.slf4jApi
+    implementation libs.metrics
 
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':server-common').sourceSets.test.output

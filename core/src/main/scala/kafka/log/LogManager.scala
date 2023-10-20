@@ -408,11 +408,11 @@ class LogManager(logDirs: Seq[File],
           new LogRecoveryThreadFactory(logDirAbsolutePath))
         threadPools.append(pool)
 
-        val cleanShutdownFile = new File(dir, LogLoader.CleanShutdownFile)
-        if (cleanShutdownFile.exists) {
+        val cleanShutdownFileHandler = new CleanShutdownFileHandler(dir.getPath)
+        if (cleanShutdownFileHandler.exists()) {
           // Cache the clean shutdown status and use that for rest of log loading workflow. Delete the CleanShutdownFile
           // so that if broker crashes while loading the log, it is considered hard shutdown during the next boot up. KAFKA-10471
-          Files.deleteIfExists(cleanShutdownFile.toPath)
+          cleanShutdownFileHandler.delete()
           hadCleanShutdown = true
         }
         hadCleanShutdownFlags.put(logDirAbsolutePath, hadCleanShutdown)
@@ -625,7 +625,7 @@ class LogManager(logDirs: Seq[File],
   /**
    * Close all the logs
    */
-  def shutdown(): Unit = {
+  def shutdown(brokerEpoch: Long = -1): Unit = {
     info("Shutting down.")
 
     metricsGroup.removeMetric("OfflineLogDirectoryCount")
@@ -684,8 +684,9 @@ class LogManager(logDirs: Seq[File],
           val logDirAbsolutePath = dir.getAbsolutePath
           if (hadCleanShutdownFlags.getOrDefault(logDirAbsolutePath, false) ||
               loadLogsCompletedFlags.getOrDefault(logDirAbsolutePath, false)) {
-            debug(s"Writing clean shutdown marker at $dir")
-            CoreUtils.swallow(Files.createFile(new File(dir, LogLoader.CleanShutdownFile).toPath), this)
+            val cleanShutdownFileHandler = new CleanShutdownFileHandler(dir.getPath)
+            debug(s"Writing clean shutdown marker at $dir with broker epoch=$brokerEpoch")
+            CoreUtils.swallow(cleanShutdownFileHandler.write(brokerEpoch), this)
           }
         }
       }
@@ -1408,6 +1409,29 @@ class LogManager(logDirs: Seq[File],
     } else {
       None
     }
+  }
+
+  def readBrokerEpochFromCleanShutdownFiles(): Long = {
+    // Verify whether all the log dirs have the same broker epoch in their clean shutdown files. If there is any dir not
+    // live, fail the broker epoch check.
+    if (liveLogDirs.size < logDirs.size) {
+      return -1L
+    }
+    var brokerEpoch = -1L
+    for (dir <- liveLogDirs) {
+      val cleanShutdownFileHandler = new CleanShutdownFileHandler(dir.getPath)
+      val currentBrokerEpoch = cleanShutdownFileHandler.read
+      if (currentBrokerEpoch == -1L) {
+        info(s"Unable to read the broker epoch in ${dir.toString}.")
+        return -1L
+      }
+      if (brokerEpoch != -1 && currentBrokerEpoch != brokerEpoch) {
+        info(s"Found different broker epochs in ${dir.toString}. Other=$brokerEpoch vs current=$currentBrokerEpoch.")
+        return -1L
+      }
+      brokerEpoch = currentBrokerEpoch
+    }
+    brokerEpoch
   }
 }
 

@@ -17,7 +17,9 @@
   "apiKey": 3,
   "type": "metadata",
   "name": "PartitionRecord",
-  "validVersions": "0",
+  "validVersions": "0-1",
+  // Version 1 implements Eligiable Leader Replicas and LastKnownELR as described in KIP-966.
+  //
   "flexibleVersions": "0+",
   "fields": [
     { "name": "PartitionId", "type": "int32", "versions": "0+", "default": "-1",
@@ -39,6 +41,12 @@
     { "name": "LeaderEpoch", "type": "int32", "versions": "0+", "default": "-1",
       "about": "The epoch of the partition leader." },
     { "name": "PartitionEpoch", "type": "int32", "versions": "0+", "default": "-1",
-      "about": "An epoch that gets incremented each time we change anything in the partition." }
+      "about": "An epoch that gets incremented each time we change anything in the partition." },
+    { "name": "EligibleLeaderReplicas", "type": "[]int32", "default": "null", "entityType": "brokerId",
+      "versions": "1+", "nullableVersions": "1+", "taggedVersions": "1+", "tag": 1,
+      "about": "The eligible leader replicas of this partition." },
+    { "name": "LastKnownELR", "type": "[]int32", "default": "null", "entityType": "brokerId",
+      "versions": "1+", "nullableVersions": "1+", "taggedVersions": "1+", "tag": 2,
+      "about": "The last known eligible leader replicas of this partition." }
   ]
 }
