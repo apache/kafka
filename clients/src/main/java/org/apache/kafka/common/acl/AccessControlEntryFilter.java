@@ -105,11 +105,13 @@ public class AccessControlEntryFilter {
     public boolean matches(AccessControlEntry other) {
         if ((principal() != null) && (!principal().equals(other.principal())))
             return false;
-        if ((host() != null) && (!host().equals(other.host())))
+        // try to make the jvm inline the host function
+        String host = host();
+        if ((host != null) && (!host.equals(other.host())))
             return false;
-        if ((operation() != AclOperation.ANY) && (!operation().equals(other.operation())))
+        if ((operation().code() != AclOperation.ANY.code()) && operation().code() != other.operation().code())
             return false;
-        return (permissionType() == AclPermissionType.ANY) || (permissionType().equals(other.permissionType()));
+        return (permissionType().code() == AclPermissionType.ANY.code()) || (permissionType().code() == other.permissionType().code());
     }
 
     /**

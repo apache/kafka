@@ -42,10 +42,12 @@ public class AccessControlEntry {
         Objects.requireNonNull(principal);
         Objects.requireNonNull(host);
         Objects.requireNonNull(operation);
-        if (operation == AclOperation.ANY)
+
+        // enum comparison is rather slow using value instead.
+        if (operation.code() == AclOperation.ANY.code())
             throw new IllegalArgumentException("operation must not be ANY");
         Objects.requireNonNull(permissionType);
-        if (permissionType == AclPermissionType.ANY)
+        if (permissionType.code() == AclPermissionType.ANY.code())
             throw new IllegalArgumentException("permissionType must not be ANY");
         this.data = new AccessControlEntryData(principal, host, operation, permissionType);
     }
