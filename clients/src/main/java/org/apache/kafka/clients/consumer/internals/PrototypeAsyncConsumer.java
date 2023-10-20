@@ -955,17 +955,14 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
      *
      * <p/>
      *
-     * Note that if the {@link Fetch#isEmpty() is not empty}, this method will
-     * {@link ApplicationEventHandler#wakeup() wake up} the {@link ConsumerNetworkThread} before retuning. This is
-     * done as an optimization so that the <em>next round of data can be pre-fetched</em>.
+     * This method will {@link ApplicationEventHandler#wakeupNetworkThread() wake up} the {@link ConsumerNetworkThread} before
+     * retuning. This is done as an optimization so that the <em>next round of data can be pre-fetched</em>.
      */
     private Fetch<K, V> collectFetch() {
         final Fetch<K, V> fetch = fetchCollector.collectFetch(fetchBuffer);
 
-        if (!fetch.isEmpty()) {
-            // Notify the network thread to wake up and start the next round of fetching.
-            applicationEventHandler.wakeup();
-        }
+        // Notify the network thread to wake up and start the next round of fetching.
+        applicationEventHandler.wakeupNetworkThread();
 
         return fetch;
     }
