@@ -1033,7 +1033,7 @@ public class GroupMetadataManagerTest {
         }
 
         public List<ConsumerGroupDescribeResponseData.DescribedGroup> sendConsumerGroupDescribe(List<String> groupIds) {
-            return groupMetadataManager.consumerGroupDescribe(groupIds);
+            return groupMetadataManager.consumerGroupDescribe(groupIds, lastCommittedOffset);
         }
 
         public List<DescribeGroupsResponseData.DescribedGroup> describeGroups(List<String> groupIds) {

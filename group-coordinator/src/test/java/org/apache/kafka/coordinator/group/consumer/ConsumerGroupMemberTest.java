@@ -308,7 +308,7 @@ public class ConsumerGroupMemberTest {
     }
 
     @Test
-    void testAsConsumerGroupDescribeMember() {
+    public void testAsConsumerGroupDescribeMember() {
         Uuid topicId1 = Uuid.randomUuid();
         Uuid topicId2 = Uuid.randomUuid();
         Uuid topicId3 = Uuid.randomUuid();

@@ -3709,12 +3709,24 @@ class KafkaApis(val requestChannel: RequestChannel,
         }
       }
 
-      groupCoordinator.consumerGroupDescribe(
+      val future = groupCoordinator.consumerGroupDescribe(
         request.context,
         authorizedGroups.asJava
-      ).handle[Unit] { (response, exception) =>
+      )
+
+      future.handle[Unit] { (results, exception) =>
         if (exception != null) {
           requestHelper.sendMaybeThrottle(request, consumerGroupDescribeRequest.getErrorResponse(exception))
+        } else {
+          if (response.groups.isEmpty) {
+            // If the response is empty, we can directly reuse the results.
+            response.setGroups(results)
+          } else {
+            // Otherwise, we have to copy the results into the existing ones.
+            response.groups.addAll(results)
+          }
+
+          requestHelper.sendMaybeThrottle(request, new ConsumerGroupDescribeResponse(response))
         }
       }
     }

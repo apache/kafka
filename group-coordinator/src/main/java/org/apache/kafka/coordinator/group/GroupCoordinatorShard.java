@@ -414,13 +414,16 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
     /**
      * Handles a ConsumerGroupDescribe request.
      *
-     * @param
+     * @param groupIds      The IDs of the groups to describe.
+     *
+     * @return A list containing the ConsumerGroupDescribeResponseData.DescribedGroup.
      *
      */
     public List<ConsumerGroupDescribeResponseData.DescribedGroup> consumerGroupDescribe(
-        List<String> groupIds
+        List<String> groupIds,
+        long committedOffset
     ) {
-        return groupMetadataManager.consumerGroupDescribe(groupIds);
+        return groupMetadataManager.consumerGroupDescribe(groupIds, committedOffset);
     }
 
     /**

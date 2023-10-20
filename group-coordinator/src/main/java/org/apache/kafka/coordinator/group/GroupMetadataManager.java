@@ -448,12 +448,13 @@ public class GroupMetadataManager {
 
 
     public List<ConsumerGroupDescribeResponseData.DescribedGroup> consumerGroupDescribe(
-        List<String> groupIds
+        List<String> groupIds,
+        long committedOffset
     ) {
         List<ConsumerGroupDescribeResponseData.DescribedGroup> response = new ArrayList<>();
 
         for (String groupId: groupIds) {
-            Group group = groups.get(groupId);
+            Group group = groups.get(groupId, committedOffset);
 
             ConsumerGroupDescribeResponseData.DescribedGroup describedGroup = new ConsumerGroupDescribeResponseData.DescribedGroup()
                 .setGroupId(groupId);
