@@ -92,13 +92,13 @@ public class AuthorizerBenchmark {
         }
     }
 
-    @Param({"10000", "50000", "200000"})
+    @Param({"5000", "200000"})
     private int resourceCount;
     //no. of. rules per resource
-    @Param({"10", "50"})
+    @Param({"10","500"})
     private int aclCount;
 
-    @Param({"0", "20", "50", "90", "99", "99.9", "99.99", "100"})
+    @Param({"20","50", "90"})
     private double denyPercentage;
 
     @Param({"ACL", "KRAFT"})
