@@ -51,8 +51,13 @@ class ZkTopicMigrationClient(zkClient: KafkaZkClient) extends TopicMigrationClie
     val topicDeletions = readPendingTopicDeletions().asScala
     val topicsToMigrated = allTopics -- topicDeletions
     if (topicDeletions.nonEmpty) {
-      warn(s"Found ${topicDeletions.size} pending topic deletions: $topicDeletions. These will be not migrated " +
+      warn(s"Found ${topicDeletions.size} pending topic deletions. These will be not migrated " +
         s"to KRaft. After the migration, the brokers will reconcile their logs with these pending topic deletions.")
+    }
+    logger.whenTraceEnabled {
+      topicDeletions.foreach {
+        deletion => logger.trace(s"Not migrating pending deleted topic: $deletion")
+      }
     }
     val replicaAssignmentAndTopicIds = zkClient.getReplicaAssignmentAndTopicIdForTopics(topicsToMigrated)
     replicaAssignmentAndTopicIds.foreach { case TopicIdReplicaAssignment(topic, topicIdOpt, partitionAssignments) =>

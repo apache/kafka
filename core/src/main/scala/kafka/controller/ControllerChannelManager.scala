@@ -377,7 +377,7 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
   val stopReplicaRequestMap = mutable.Map.empty[Int, mutable.Map[TopicPartition, StopReplicaPartitionState]]
   val updateMetadataRequestBrokerSet = mutable.Set.empty[Int]
   val updateMetadataRequestPartitionInfoMap = mutable.Map.empty[TopicPartition, UpdateMetadataPartitionState]
-  private var updateType: LeaderAndIsrRequest.Type = LeaderAndIsrRequest.Type.None
+  private var updateType: LeaderAndIsrRequest.Type = LeaderAndIsrRequest.Type.Unknown
   private var metadataInstance: ControllerChannelContext = _
 
   def sendRequest(brokerId: Int,
