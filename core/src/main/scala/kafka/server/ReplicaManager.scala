@@ -1844,7 +1844,11 @@ class ReplicaManager(val config: KafkaConfig,
           // In migration mode, reconcile missed topic deletions when handling full LISR from KRaft controller.
           // LISR "type" field was previously unspecified (0), so if we see it set to Full (2), then we know the
           // request came from a KRaft controller.
-          if (config.migrationEnabled && leaderAndIsrRequest.requestType() == LeaderAndIsrRequest.Type.Full) {
+          if (
+            config.migrationEnabled &&
+            leaderAndIsrRequest.isKRaftController &&
+            leaderAndIsrRequest.requestType() == LeaderAndIsrRequest.Type.Full
+          ) {
             updateStrayLogs(findStrayPartitionsFromLeaderAndIsr(partitions.map(_.topicPartition)))
           }
 

@@ -47,7 +47,7 @@ import org.apache.kafka.metadata.migration.ZkMigrationLeadershipState
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion, ProducerIdsBlock}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotEquals, assertNotNull, assertTrue}
-import org.junit.jupiter.api.Timeout
+import org.junit.jupiter.api.{Assumptions, Timeout}
 import org.junit.jupiter.api.extension.ExtendWith
 import org.slf4j.LoggerFactory
 
@@ -273,6 +273,8 @@ class ZkMigrationIntegrationTest {
     newTopics.add(new NewTopic("test-topic-1", 100, 3.toShort))
     newTopics.add(new NewTopic("test-topic-2", 100, 3.toShort))
     newTopics.add(new NewTopic("test-topic-3", 100, 3.toShort))
+    newTopics.add(new NewTopic("test-topic-4", 100, 3.toShort))
+    newTopics.add(new NewTopic("test-topic-5", 100, 3.toShort))
     val createTopicResult = admin.createTopics(newTopics)
     createTopicResult.all().get(300, TimeUnit.SECONDS)
     admin.close()
@@ -296,7 +298,7 @@ class ZkMigrationIntegrationTest {
 
       // Start a delete, but don't wait for it
       admin = zkCluster.createAdminClient()
-      admin.deleteTopics(Seq("test-topic-1", "test-topic-2", "test-topic-3").asJava)
+      admin.deleteTopics(Seq("test-topic-1", "test-topic-2", "test-topic-3", "test-topic-4", "test-topic-5").asJava)
       admin.close()
 
       // Enable migration configs and restart brokers
@@ -309,6 +311,11 @@ class ZkMigrationIntegrationTest {
 
       zkCluster.waitForReadyBrokers()
       readyFuture.get(30, TimeUnit.SECONDS)
+
+      val topicDeletions = zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying.zkClient.getTopicDeletions
+      // This will mark the test as "skipped" instead of failed if the topics all get deleted in time.
+      Assumptions.assumeTrue(topicDeletions.nonEmpty,
+        "This test needs pending topic deletions after a migration in order to verify the behavior")
 
       // Wait for migration to begin
       log.info("Waiting for ZK migration to complete")
@@ -349,6 +356,13 @@ class ZkMigrationIntegrationTest {
           assertEquals(3, partition.isr().size(), s"Unexpected ISR for ${topic}-${partition.partition()}")
         })
       }
+
+      val absentTopics = admin.listTopics().names().get(60, TimeUnit.SECONDS).asScala
+      assertTrue(absentTopics.contains("test-topic-1"))
+      assertTrue(absentTopics.contains("test-topic-2"))
+      assertTrue(absentTopics.contains("test-topic-3"))
+      assertFalse(absentTopics.contains("test-topic-4"))
+      assertFalse(absentTopics.contains("test-topic-5"))
       admin.close()
     } finally {
       shutdownInSequence(zkCluster, kraftCluster)

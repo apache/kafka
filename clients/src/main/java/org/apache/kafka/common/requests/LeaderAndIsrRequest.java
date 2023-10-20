@@ -43,16 +43,16 @@ import java.util.stream.Collectors;
 public class LeaderAndIsrRequest extends AbstractControlRequest {
 
     public enum Type {
-        None(0),
+        Unknown(0),
         Incremental(1),
         Full(2);
 
         private final byte type;
-        Type(int type) {
+        private Type(int type) {
             this.type = (byte) type;
         }
 
-        public byte asByte() {
+        public byte toByte() {
             return type;
         }
 
@@ -62,7 +62,7 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
                     return t;
                 }
             }
-            throw new IllegalArgumentException("No Type enum for value " + type);
+            return Unknown;
         }
     }
 
@@ -77,7 +77,7 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
                        List<LeaderAndIsrPartitionState> partitionStates, Map<String, Uuid> topicIds,
                        Collection<Node> liveLeaders) {
             this(version, controllerId, controllerEpoch, brokerEpoch, partitionStates, topicIds,
-                liveLeaders, false, Type.None);
+                liveLeaders, false, Type.Unknown);
         }
 
         public Builder(short version, int controllerId, int controllerEpoch, long brokerEpoch,
@@ -109,7 +109,7 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
             }
 
             if (version >= 5) {
-                data.setType(updateType.asByte());
+                data.setType(updateType.toByte());
             }
 
             if (version >= 2) {
