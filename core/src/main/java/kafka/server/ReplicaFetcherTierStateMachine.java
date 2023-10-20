@@ -69,8 +69,8 @@ import static org.apache.kafka.storage.internals.log.LogStartOffsetIncrementReas
 public class ReplicaFetcherTierStateMachine implements TierStateMachine {
     private static final Logger log = LoggerFactory.getLogger(ReplicaFetcherTierStateMachine.class);
 
-    private LeaderEndPoint leader;
-    private ReplicaManager replicaMgr;
+    private final LeaderEndPoint leader;
+    private final ReplicaManager replicaMgr;
 
     public ReplicaFetcherTierStateMachine(LeaderEndPoint leader,
                                           ReplicaManager replicaMgr) {

@@ -62,6 +62,7 @@ import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.coordinator.group.metrics.CoordinatorRuntimeMetrics;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorShardBuilderSupplier;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorEventProcessor;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorLoader;
@@ -102,6 +103,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         private CoordinatorLoader<Record> loader;
         private Time time;
         private Timer timer;
+        private CoordinatorRuntimeMetrics coordinatorRuntimeMetrics;
 
         public Builder(
             int nodeId,
@@ -131,6 +133,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
             return this;
         }
 
+        public Builder withCoordinatorRuntimeMetrics(CoordinatorRuntimeMetrics coordinatorRuntimeMetrics) {
+            this.coordinatorRuntimeMetrics = coordinatorRuntimeMetrics;
+            return this;
+        }
+
         public GroupCoordinatorService build() {
             if (config == null)
                 throw new IllegalArgumentException("Config must be set.");
@@ -142,6 +149,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 throw new IllegalArgumentException("Time must be set.");
             if (timer == null)
                 throw new IllegalArgumentException("Timer must be set.");
+            if (coordinatorRuntimeMetrics == null)
+                throw new IllegalArgumentException("CoordinatorRuntimeMetrics must be set.");
 
             String logPrefix = String.format("GroupCoordinator id=%d", nodeId);
             LogContext logContext = new LogContext(String.format("[%s] ", logPrefix));
@@ -152,7 +161,9 @@ public class GroupCoordinatorService implements GroupCoordinator {
             CoordinatorEventProcessor processor = new MultiThreadedEventProcessor(
                 logContext,
                 "group-coordinator-event-processor-",
-                config.numThreads
+                config.numThreads,
+                time,
+                coordinatorRuntimeMetrics
             );
 
             CoordinatorRuntime<GroupCoordinatorShard, Record> runtime =
@@ -166,6 +177,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     .withLoader(loader)
                     .withCoordinatorShardBuilderSupplier(supplier)
                     .withTime(time)
+                    .withCoordinatorRuntimeMetrics(coordinatorRuntimeMetrics)
                     .build();
 
             return new GroupCoordinatorService(

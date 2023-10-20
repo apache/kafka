@@ -4757,7 +4757,7 @@ public class KafkaAdminClientTest {
 
         final TopicPartition tp1 = new TopicPartition("foo", 0);
         final List<Errors> nonRetriableErrors = Arrays.asList(
-            Errors.GROUP_AUTHORIZATION_FAILED, Errors.INVALID_GROUP_ID, Errors.GROUP_ID_NOT_FOUND);
+            Errors.GROUP_AUTHORIZATION_FAILED, Errors.INVALID_GROUP_ID, Errors.GROUP_ID_NOT_FOUND, Errors.STALE_MEMBER_EPOCH);
 
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
