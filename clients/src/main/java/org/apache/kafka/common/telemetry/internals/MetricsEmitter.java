@@ -36,8 +36,8 @@ import java.io.Closeable;
  * Regarding threading, the {@link #init()} and {@link #close()} methods may be called from
  * different threads and so proper care should be taken by implementations of the
  * {@code MetricsCollector} interface to be thread-safe. However, the telemetry reporter must
- * ensure that the {@link #emitMetric(SinglePointMetric)} method should only be invoked in a synchronous
- * manner.
+ * ensure that the {@link #emitMetric(SinglePointMetric)} and {@link #emittedMetrics()} methods
+ * should only be invoked in a synchronous manner.
  */
 public interface MetricsEmitter extends Closeable {
 

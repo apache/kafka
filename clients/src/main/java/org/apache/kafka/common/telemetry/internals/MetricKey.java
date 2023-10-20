@@ -33,7 +33,7 @@ public class MetricKey implements MetricKeyable {
     /**
      * Create a {@code MetricKey}
      *
-     * @param name metric name. This should be the .converted. name of the metric (the final name
+     * @param name metric name. This should be the telemetry metric name of the metric (the final name
      *             under which this metric is emitted).
      */
     public MetricKey(String name) {
