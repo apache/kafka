@@ -292,12 +292,6 @@ public class MeteredVersionedKeyValueStoreTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    public void shouldThrowOnIQv2KeyQuery() {
-        assertThrows(UnsupportedOperationException.class, () -> store.query(mock(KeyQuery.class), null, null));
-    }
-
-    @SuppressWarnings("unchecked")
-    @Test
     public void shouldDelegateAndAddExecutionInfoOnCustomQuery() {
         final Query query = mock(Query.class);
         final PositionBound positionBound = mock(PositionBound.class);
