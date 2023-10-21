@@ -55,7 +55,7 @@ import java.util.Map;
 public class ConnectStandalone extends AbstractConnectCli<StandaloneConfig> {
     private static final Logger log = LoggerFactory.getLogger(ConnectStandalone.class);
 
-    protected ConnectStandalone(String... args) {
+    public ConnectStandalone(String... args) {
         super(args);
     }
 

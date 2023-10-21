@@ -60,7 +60,7 @@ import org.apache.kafka.server.common.OffsetAndEpoch
 import org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0
 import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
 import org.apache.kafka.server.util.{MockScheduler, MockTime}
-import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, FetchIsolation, FetchParams, FetchPartitionData, LogConfig, LogDirFailureChannel, LogOffsetMetadata, LogStartOffsetIncrementReason, ProducerStateManager, ProducerStateManagerConfig, RemoteStorageFetchInfo}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, FetchIsolation, FetchParams, FetchPartitionData, LogConfig, LogDirFailureChannel, LogOffsetMetadata, LogSegments, LogStartOffsetIncrementReason, ProducerStateManager, ProducerStateManagerConfig, RemoteStorageFetchInfo, VerificationGuard}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
@@ -2163,7 +2163,7 @@ class ReplicaManagerTest {
         new SimpleRecord("message".getBytes))
       appendRecords(replicaManager, tp0, idempotentRecords)
       verify(addPartitionsToTxnManager, times(0)).verifyTransaction(any(), any(), any(), any(), any[AddPartitionsToTxnManager.AppendCallback]())
-      assertNull(getVerificationGuard(replicaManager, tp0, producerId))
+      assertEquals(VerificationGuard.SENTINEL, getVerificationGuard(replicaManager, tp0, producerId))
 
       // If we supply a transactional ID and some transactional and some idempotent records, we should only verify the topic partition with transactional records.
       val transactionalRecords = MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, producerEpoch, sequence + 1,
@@ -2179,15 +2179,16 @@ class ReplicaManagerTest {
         ArgumentMatchers.eq(Seq(tp0)),
         any[AddPartitionsToTxnManager.AppendCallback]()
       )
-      assertNotNull(getVerificationGuard(replicaManager, tp0, producerId))
-      assertNull(getVerificationGuard(replicaManager, tp1, producerId))
+      assertNotEquals(VerificationGuard.SENTINEL, getVerificationGuard(replicaManager, tp0, producerId))
+      assertEquals(VerificationGuard.SENTINEL, getVerificationGuard(replicaManager, tp1, producerId))
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }
   }
 
-  @Test
-  def testTransactionVerificationFlow(): Unit = {
+  @ParameterizedTest
+  @EnumSource(value = classOf[AppendOrigin], names = Array("CLIENT", "COORDINATOR"))
+  def testTransactionVerificationFlow(appendOrigin: AppendOrigin): Unit = {
     val tp0 = new TopicPartition(topic, 0)
     val producerId = 24L
     val producerEpoch = 0.toShort
@@ -2205,7 +2206,7 @@ class ReplicaManagerTest {
         new SimpleRecord("message".getBytes))
 
       // We should add these partitions to the manager to verify.
-      val result = appendRecords(replicaManager, tp0, transactionalRecords, transactionalId = transactionalId)
+      val result = appendRecords(replicaManager, tp0, transactionalRecords, origin = appendOrigin, transactionalId = transactionalId)
       val appendCallback = ArgumentCaptor.forClass(classOf[AddPartitionsToTxnManager.AppendCallback])
       verify(addPartitionsToTxnManager, times(1)).verifyTransaction(
         ArgumentMatchers.eq(transactionalId),
@@ -2224,7 +2225,7 @@ class ReplicaManagerTest {
       assertEquals(verificationGuard, getVerificationGuard(replicaManager, tp0, producerId))
 
       // This time verification is successful.
-      appendRecords(replicaManager, tp0, transactionalRecords, transactionalId = transactionalId)
+      appendRecords(replicaManager, tp0, transactionalRecords, origin = appendOrigin, transactionalId = transactionalId)
       val appendCallback2 = ArgumentCaptor.forClass(classOf[AddPartitionsToTxnManager.AppendCallback])
       verify(addPartitionsToTxnManager, times(2)).verifyTransaction(
         ArgumentMatchers.eq(transactionalId),
@@ -2237,7 +2238,7 @@ class ReplicaManagerTest {
 
       val callback2: AddPartitionsToTxnManager.AppendCallback = appendCallback2.getValue()
       callback2(Map.empty[TopicPartition, Errors].toMap)
-      assertEquals(null, getVerificationGuard(replicaManager, tp0, producerId))
+      assertEquals(VerificationGuard.SENTINEL, getVerificationGuard(replicaManager, tp0, producerId))
       assertTrue(replicaManager.localLog(tp0).get.hasOngoingTransaction(producerId))
     } finally {
       replicaManager.shutdown(checkpointHW = false)
@@ -2296,7 +2297,7 @@ class ReplicaManagerTest {
       )
       assertEquals(verificationGuard, getVerificationGuard(replicaManager, tp0, producerId))
 
-      // Verification should succeed, but we expect to fail with OutOfOrderSequence and for the verification guard to remain.
+      // Verification should succeed, but we expect to fail with OutOfOrderSequence and for the VerificationGuard to remain.
       val callback2: AddPartitionsToTxnManager.AppendCallback = appendCallback2.getValue()
       callback2(Map.empty[TopicPartition, Errors].toMap)
       assertEquals(verificationGuard, getVerificationGuard(replicaManager, tp0, producerId))
@@ -2423,7 +2424,7 @@ class ReplicaManagerTest {
       val transactionalRecords = MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, producerEpoch, sequence,
         new SimpleRecord(s"message $sequence".getBytes))
       appendRecords(replicaManager, tp, transactionalRecords, transactionalId = transactionalId)
-      assertNull(getVerificationGuard(replicaManager, tp, producerId))
+      assertEquals(VerificationGuard.SENTINEL, getVerificationGuard(replicaManager, tp, producerId))
 
       // We should not add these partitions to the manager to verify.
       verify(addPartitionsToTxnManager, times(0)).verifyTransaction(any(), any(), any(), any(), any())
@@ -2441,7 +2442,7 @@ class ReplicaManagerTest {
 
       appendRecords(replicaManager, tp, moreTransactionalRecords, transactionalId = transactionalId)
       verify(addPartitionsToTxnManager, times(0)).verifyTransaction(any(), any(), any(), any(), any())
-      assertEquals(null, getVerificationGuard(replicaManager, tp, producerId))
+      assertEquals(VerificationGuard.SENTINEL, getVerificationGuard(replicaManager, tp, producerId))
       assertTrue(replicaManager.localLog(tp).get.hasOngoingTransaction(producerId))
     } finally {
       replicaManager.shutdown(checkpointHW = false)
@@ -2495,7 +2496,7 @@ class ReplicaManagerTest {
       // This time we do not verify
       appendRecords(replicaManager, tp0, transactionalRecords, transactionalId = transactionalId)
       verify(addPartitionsToTxnManager, times(1)).verifyTransaction(any(), any(), any(), any(), any())
-      assertEquals(null, getVerificationGuard(replicaManager, tp0, producerId))
+      assertEquals(VerificationGuard.SENTINEL, getVerificationGuard(replicaManager, tp0, producerId))
       assertTrue(replicaManager.localLog(tp0).get.hasOngoingTransaction(producerId))
     } finally {
       replicaManager.shutdown(checkpointHW = false)
@@ -2616,7 +2617,7 @@ class ReplicaManagerTest {
       segments,
       0L,
       0L,
-      leaderEpochCache,
+      leaderEpochCache.asJava,
       producerStateManager
     ).load()
     val localLog = new LocalLog(logDir, logConfig, segments, offsets.recoveryPoint,

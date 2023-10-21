@@ -20,7 +20,11 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.CreateTopicsResult;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
+import org.apache.kafka.common.errors.InvalidConfigurationException;
+import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.TopicExistsException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.junit.jupiter.api.Test;
 
@@ -71,15 +75,67 @@ public class MirrorUtilsTest {
     }
 
     @Test
-    public void testCreateCompactedTopicFails() throws Exception {
+    public void testCreateCompactedTopicAssumeTopicAlreadyExistsWithUnsupportedVersionException() throws Exception {
         Map<String, KafkaFuture<Void>> values = Collections.singletonMap(TOPIC, future);
-        when(future.get()).thenThrow(new ExecutionException(new ClusterAuthorizationException("not authorized")));
+        when(future.get()).thenThrow(new ExecutionException(new UnsupportedVersionException("unsupported")));
+        when(ctr.values()).thenReturn(values);
+        when(admin.createTopics(any(), any())).thenReturn(ctr);
+        MirrorUtils.createCompactedTopic(TOPIC, (short) 1, (short) 1, admin);
+
+        verify(future).get();
+        verify(ctr).values();
+        verify(admin).createTopics(any(), any());
+    }
+
+    @Test
+    public void testCreateCompactedTopicAssumeTopicAlreadyExistsWithClusterAuthorizationException() throws Exception {
+        Map<String, KafkaFuture<Void>> values = Collections.singletonMap(TOPIC, future);
+        when(future.get()).thenThrow(new ExecutionException(new ClusterAuthorizationException("not authorised")));
+        when(ctr.values()).thenReturn(values);
+        when(admin.createTopics(any(), any())).thenReturn(ctr);
+        MirrorUtils.createCompactedTopic(TOPIC, (short) 1, (short) 1, admin);
+
+        verify(future).get();
+        verify(ctr).values();
+        verify(admin).createTopics(any(), any());
+    }
+
+    @Test
+    public void testCreateCompactedTopicAssumeTopicAlreadyExistsWithTopicAuthorizationException() throws Exception {
+        Map<String, KafkaFuture<Void>> values = Collections.singletonMap(TOPIC, future);
+        when(future.get()).thenThrow(new ExecutionException(new TopicAuthorizationException("not authorised")));
+        when(ctr.values()).thenReturn(values);
+        when(admin.createTopics(any(), any())).thenReturn(ctr);
+        MirrorUtils.createCompactedTopic(TOPIC, (short) 1, (short) 1, admin);
+
+        verify(future).get();
+        verify(ctr).values();
+        verify(admin).createTopics(any(), any());
+    }
+
+    @Test
+    public void testCreateCompactedTopicFailsWithInvalidConfigurationException() throws Exception {
+        Map<String, KafkaFuture<Void>> values = Collections.singletonMap(TOPIC, future);
+        when(future.get()).thenThrow(new ExecutionException(new InvalidConfigurationException("wrong config")));
         when(ctr.values()).thenReturn(values);
         when(admin.createTopics(any(), any())).thenReturn(ctr);
         Throwable ce = assertThrows(ConnectException.class, () -> MirrorUtils.createCompactedTopic(TOPIC, (short) 1, (short) 1, admin), "Should have exception thrown");
 
-        assertTrue(ce.getCause() instanceof ExecutionException);
-        assertTrue(ce.getCause().getCause() instanceof ClusterAuthorizationException);
+        assertTrue(ce.getCause() instanceof InvalidConfigurationException);
+        verify(future).get();
+        verify(ctr).values();
+        verify(admin).createTopics(any(), any());
+    }
+
+    @Test
+    public void testCreateCompactedTopicFailsWithTimeoutException() throws Exception {
+        Map<String, KafkaFuture<Void>> values = Collections.singletonMap(TOPIC, future);
+        when(future.get()).thenThrow(new ExecutionException(new TimeoutException("Timeout")));
+        when(ctr.values()).thenReturn(values);
+        when(admin.createTopics(any(), any())).thenReturn(ctr);
+        Throwable ce = assertThrows(ConnectException.class, () -> MirrorUtils.createCompactedTopic(TOPIC, (short) 1, (short) 1, admin), "Should have exception thrown");
+
+        assertTrue(ce.getCause() instanceof TimeoutException);
         verify(future).get();
         verify(ctr).values();
         verify(admin).createTopics(any(), any());

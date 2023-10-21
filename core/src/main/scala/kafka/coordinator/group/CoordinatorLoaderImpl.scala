@@ -21,7 +21,8 @@ import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException
 import org.apache.kafka.common.record.{FileRecords, MemoryRecords}
-import org.apache.kafka.coordinator.group.runtime.CoordinatorLoader.{Deserializer, UnknownRecordTypeException}
+import org.apache.kafka.common.utils.Time
+import org.apache.kafka.coordinator.group.runtime.CoordinatorLoader.{Deserializer, LoadSummary, UnknownRecordTypeException}
 import org.apache.kafka.coordinator.group.runtime.{CoordinatorLoader, CoordinatorPlayback}
 import org.apache.kafka.server.util.KafkaScheduler
 import org.apache.kafka.storage.internals.log.FetchIsolation
@@ -41,6 +42,7 @@ import scala.jdk.CollectionConverters._
  * @tparam T The record type.
  */
 class CoordinatorLoaderImpl[T](
+  time: Time,
   replicaManager: ReplicaManager,
   deserializer: Deserializer[T],
   loadBufferSize: Int
@@ -59,10 +61,11 @@ class CoordinatorLoaderImpl[T](
   override def load(
     tp: TopicPartition,
     coordinator: CoordinatorPlayback[T]
-): CompletableFuture[Void] = {
-    val future = new CompletableFuture[Void]()
+): CompletableFuture[LoadSummary] = {
+    val future = new CompletableFuture[LoadSummary]()
+    val startTimeMs = time.milliseconds()
     val result = scheduler.scheduleOnce(s"Load coordinator from $tp",
-      () => doLoad(tp, coordinator, future))
+      () => doLoad(tp, coordinator, future, startTimeMs))
     if (result.isCancelled) {
       future.completeExceptionally(new RuntimeException("Coordinator loader is closed."))
     }
@@ -72,7 +75,8 @@ class CoordinatorLoaderImpl[T](
   private def doLoad(
     tp: TopicPartition,
     coordinator: CoordinatorPlayback[T],
-    future: CompletableFuture[Void]
+    future: CompletableFuture[LoadSummary],
+    startTimeMs: Long
   ): Unit = {
     try {
       replicaManager.getLog(tp) match {
@@ -92,6 +96,8 @@ class CoordinatorLoaderImpl[T](
           // the log end offset but the log is empty. This could happen with compacted topics.
           var readAtLeastOneRecord = true
 
+          var numRecords = 0
+          var numBytes = 0
           while (currentOffset < logEndOffset && readAtLeastOneRecord && isRunning.get) {
             val fetchDataInfo = log.read(
               startOffset = currentOffset,
@@ -131,6 +137,7 @@ class CoordinatorLoaderImpl[T](
                 throw new IllegalStateException("Control batches are not supported yet.")
               } else {
                 batch.asScala.foreach { record =>
+                  numRecords = numRecords + 1
                   try {
                     coordinator.replay(deserializer.deserialize(record.key, record.value))
                   } catch {
@@ -143,10 +150,12 @@ class CoordinatorLoaderImpl[T](
 
               currentOffset = batch.nextOffset
             }
+            numBytes = numBytes + memoryRecords.sizeInBytes()
           }
+          val endTimeMs = time.milliseconds()
 
           if (isRunning.get) {
-            future.complete(null)
+            future.complete(new LoadSummary(startTimeMs, endTimeMs, numRecords, numBytes))
           } else {
             future.completeExceptionally(new RuntimeException("Coordinator loader is closed."))
           }

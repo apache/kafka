@@ -820,7 +820,7 @@ public class OffsetsRequestManagerTest {
         OffsetsForLeaderEpochResponse response = new OffsetsForLeaderEpochResponse(data);
         return new ClientResponse(
                 new RequestHeader(ApiKeys.OFFSET_FOR_LEADER_EPOCH, offsetsForLeaderEpochRequest.version(), "", 1),
-                request.callback(),
+                request.handler(),
                 "-1",
                 time.milliseconds(),
                 time.milliseconds(),
@@ -853,7 +853,7 @@ public class OffsetsRequestManagerTest {
         OffsetsForLeaderEpochResponse response = new OffsetsForLeaderEpochResponse(data);
         return new ClientResponse(
                 new RequestHeader(ApiKeys.OFFSET_FOR_LEADER_EPOCH, offsetsForLeaderEpochRequest.version(), "", 1),
-                request.callback(),
+                request.handler(),
                 "-1",
                 time.milliseconds(),
                 time.milliseconds(),
@@ -902,7 +902,7 @@ public class OffsetsRequestManagerTest {
         ListOffsetsResponse response = buildListOffsetsResponse(topicResponses);
         return new ClientResponse(
                 new RequestHeader(ApiKeys.OFFSET_FETCH, offsetFetchRequest.version(), "", 1),
-                request.callback(),
+                request.handler(),
                 "-1",
                 time.milliseconds(),
                 time.milliseconds(),

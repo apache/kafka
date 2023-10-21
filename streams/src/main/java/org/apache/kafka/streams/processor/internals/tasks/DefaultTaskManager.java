@@ -16,12 +16,12 @@
  */
 package org.apache.kafka.streams.processor.internals.tasks;
 
+import java.time.Duration;
 import java.util.concurrent.locks.Condition;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ReadOnlyTask;
@@ -65,7 +65,7 @@ public class DefaultTaskManager implements TaskManager {
 
     private final List<TaskExecutor> taskExecutors;
 
-    static class DefaultTaskExecutorCreator implements TaskExecutorCreator {
+    public static class DefaultTaskExecutorCreator implements TaskExecutorCreator {
         @Override
         public TaskExecutor create(final TaskManager taskManager, final String name, final Time time, final TaskExecutionMetadata taskExecutionMetadata) {
             return new DefaultTaskExecutor(taskManager, name, time, taskExecutionMetadata);
@@ -76,9 +76,9 @@ public class DefaultTaskManager implements TaskManager {
     public DefaultTaskManager(final Time time,
                               final String clientId,
                               final TasksRegistry tasks,
-                              final StreamsConfig config,
                               final TaskExecutorCreator executorCreator,
-                              final TaskExecutionMetadata taskExecutionMetadata
+                              final TaskExecutionMetadata taskExecutionMetadata,
+                              final int numExecutors
                               ) {
         final String logPrefix = String.format("%s ", clientId);
         final LogContext logContext = new LogContext(logPrefix);
@@ -87,7 +87,6 @@ public class DefaultTaskManager implements TaskManager {
         this.tasks = tasks;
         this.taskExecutionMetadata = taskExecutionMetadata;
 
-        final int numExecutors = config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG);
         this.taskExecutors = new ArrayList<>(numExecutors);
         for (int i = 1; i <= numExecutors; i++) {
             final String name = clientId + "-TaskExecutor-" + i;
@@ -106,7 +105,8 @@ public class DefaultTaskManager implements TaskManager {
             for (final Task task : tasks.activeTasks()) {
                 if (!assignedTasks.containsKey(task.id()) &&
                     !lockedTasks.contains(task.id()) &&
-                    canProgress((StreamTask) task, time.milliseconds())
+                    canProgress((StreamTask) task, time.milliseconds()) &&
+                    !hasUncaughtException(task.id())
                 ) {
 
                     assignedTasks.put(task.id(), executor);
@@ -116,6 +116,8 @@ public class DefaultTaskManager implements TaskManager {
                     return (StreamTask) task;
                 }
             }
+
+            log.debug("Found no assignable task for executor {}", executor.name());
 
             return null;
         });
@@ -127,7 +129,8 @@ public class DefaultTaskManager implements TaskManager {
             for (final Task task : tasks.activeTasks()) {
                 if (!assignedTasks.containsKey(task.id()) &&
                     !lockedTasks.contains(task.id()) &&
-                    canProgress((StreamTask) task, time.milliseconds())
+                    canProgress((StreamTask) task, time.milliseconds()) &&
+                    !hasUncaughtException(task.id())
                 ) {
                     log.debug("Await unblocked: returning early from await since a processable task {} was found", task.id());
                     return false;
@@ -151,7 +154,7 @@ public class DefaultTaskManager implements TaskManager {
         }
     }
 
-    public void signalProcessableTasks() {
+    public void signalTaskExecutors() {
         log.debug("Waking up task executors");
         executeWithTasksLocked(tasksCondition::signalAll);
     }
@@ -177,10 +180,16 @@ public class DefaultTaskManager implements TaskManager {
 
     @Override
     public KafkaFuture<Void> lockTasks(final Set<TaskId> taskIds) {
+        final KafkaFutureImpl<Void> result = new KafkaFutureImpl<>();
+
+        if (taskIds.isEmpty()) {
+            result.complete(null);
+            return result;
+        }
+
         return returnWithTasksLocked(() -> {
             lockedTasks.addAll(taskIds);
 
-            final KafkaFutureImpl<Void> result = new KafkaFutureImpl<>();
             final Set<TaskId> remainingTaskIds = new ConcurrentSkipListSet<>(taskIds);
 
             for (final TaskId taskId : taskIds) {
@@ -195,12 +204,18 @@ public class DefaultTaskManager implements TaskManager {
                 }
 
                 if (assignedTasks.containsKey(taskId)) {
-                    final KafkaFuture<StreamTask> future = assignedTasks.get(taskId).unassign();
+                    final TaskExecutor executor = assignedTasks.get(taskId);
+                    log.debug("Requesting release of task {} from {}", taskId, executor.name());
+                    final KafkaFuture<StreamTask> future = executor.unassign();
                     future.whenComplete((streamTask, throwable) -> {
                         if (throwable != null) {
                             result.completeExceptionally(throwable);
                         } else {
-                            remainingTaskIds.remove(streamTask.id());
+                            assert !assignedTasks.containsKey(taskId);
+                            // It can happen that the executor handed back the task before we asked it to
+                            // in which case `streamTask` will be null here.
+                            assert streamTask == null || streamTask.id() == taskId;
+                            remainingTaskIds.remove(taskId);
                             if (remainingTaskIds.isEmpty()) {
                                 result.complete(null);
                             }
@@ -227,6 +242,11 @@ public class DefaultTaskManager implements TaskManager {
 
     @Override
     public void unlockTasks(final Set<TaskId> taskIds) {
+
+        if (taskIds.isEmpty()) {
+            return;
+        }
+
         executeWithTasksLocked(() -> {
             lockedTasks.removeAll(taskIds);
             log.debug("Waking up task executors");
@@ -306,9 +326,15 @@ public class DefaultTaskManager implements TaskManager {
             return result;
         });
 
-        log.debug("Drained {} uncaught exceptions", returnValue.size());
+        if (!returnValue.isEmpty()) {
+            log.debug("Drained {} uncaught exceptions", returnValue.size());
+        }
 
         return returnValue;
+    }
+
+    public boolean hasUncaughtException(final TaskId taskId) {
+        return returnWithTasksLocked(() -> uncaughtExceptions.containsKey(taskId));
     }
 
     private void executeWithTasksLocked(final Runnable action) {
@@ -333,6 +359,22 @@ public class DefaultTaskManager implements TaskManager {
         return
             taskExecutionMetadata.canProcessTask(task, nowMs) && task.isProcessable(nowMs) ||
                 taskExecutionMetadata.canPunctuateTask(task) && (task.canPunctuateStreamTime() || task.canPunctuateSystemTime());
+    }
+
+    public void startTaskExecutors() {
+        for (final TaskExecutor t: taskExecutors) {
+            t.start();
+        }
+    }
+
+    public void shutdown(final Duration duration) {
+        for (final TaskExecutor t: taskExecutors) {
+            t.requestShutdown();
+        }
+        signalTaskExecutors();
+        for (final TaskExecutor t: taskExecutors) {
+            t.awaitShutdown(duration);
+        }
     }
 }
 

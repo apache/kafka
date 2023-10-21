@@ -1462,6 +1462,71 @@ public class KafkaConfigBackingStoreTest {
     }
 
     @Test
+    public void testPutLogLevel() throws Exception {
+        final String logger1 = "org.apache.zookeeper";
+        final String logger2 = "org.apache.cassandra";
+        final String logger3 = "org.apache.kafka.clients";
+        final String logger4 = "org.apache.kafka.connect";
+        final String level1 = "ERROR";
+        final String level3 = "WARN";
+        final String level4 = "DEBUG";
+
+        final Struct existingLogLevel = new Struct(KafkaConfigBackingStore.LOGGER_LEVEL_V0)
+                .put("level", level1);
+
+        // Pre-populate the config topic with a couple of logger level records; these should be ignored (i.e.,
+        // not reported to the update listener)
+        List<ConsumerRecord<String, byte[]>> existingRecords = Arrays.asList(
+                new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0, 0, "logger-cluster-" + logger1,
+                        CONFIGS_SERIALIZED.get(0), new RecordHeaders(), Optional.empty()
+                ),
+                new ConsumerRecord<>(TOPIC, 0, 1, 0L, TimestampType.CREATE_TIME, 0, 0, "logger-cluster-" + logger2,
+                        CONFIGS_SERIALIZED.get(1), new RecordHeaders(), Optional.empty()
+                )
+        );
+        LinkedHashMap<byte[], Struct> deserialized = new LinkedHashMap<>();
+        deserialized.put(CONFIGS_SERIALIZED.get(0), existingLogLevel);
+        // Make sure we gracefully handle tombstones
+        deserialized.put(CONFIGS_SERIALIZED.get(1), null);
+        logOffset = 2;
+
+        expectConfigure();
+        expectStart(existingRecords, deserialized);
+        expectPartitionCount(1);
+        expectStop();
+
+        expectConvertWriteRead(
+                "logger-cluster-" + logger3, KafkaConfigBackingStore.LOGGER_LEVEL_V0, CONFIGS_SERIALIZED.get(2),
+                "level", level3);
+        expectConvertWriteRead(
+                "logger-cluster-" + logger4, KafkaConfigBackingStore.LOGGER_LEVEL_V0, CONFIGS_SERIALIZED.get(3),
+                "level", level4);
+
+        LinkedHashMap<String, byte[]> newRecords = new LinkedHashMap<>();
+        newRecords.put("logger-cluster-" + logger3, CONFIGS_SERIALIZED.get(2));
+        newRecords.put("logger-cluster-" + logger4, CONFIGS_SERIALIZED.get(3));
+        expectReadToEnd(newRecords);
+
+        configUpdateListener.onLoggingLevelUpdate(logger3, level3);
+        EasyMock.expectLastCall();
+        configUpdateListener.onLoggingLevelUpdate(logger4, level4);
+        EasyMock.expectLastCall();
+
+        PowerMock.replayAll();
+
+        configStorage.setupAndCreateKafkaBasedLog(TOPIC, config);
+        configStorage.start();
+
+        configStorage.putLoggerLevel(logger3, level3);
+        configStorage.putLoggerLevel(logger4, level4);
+        configStorage.refresh(0, TimeUnit.SECONDS);
+
+        configStorage.stop();
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
     public void testExceptionOnStartWhenConfigTopicHasMultiplePartitions() throws Exception {
         expectConfigure();
         expectStart(Collections.emptyList(), Collections.emptyMap());
