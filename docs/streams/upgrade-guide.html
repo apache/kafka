@@ -135,11 +135,8 @@
 
     <h3><a id="streams_api_changes_370" href="#streams_api_changes_370">Streams API changes in 3.7.0</a></h3>
     <p>
-        IQv2 supports a <code>RangeQuery</code> that allows to specify unbounded, bounded, or half-open key-ranges.
-        Now, we add reverseRange and reverseAll query for <code>RangeQuery</code>. The concepts of reverseRange and reverseAll are not tied to any specific method or class.
-        Rather, they represent functionalities we wish to achieve. To achieve the functionalities of reverseRange and reverseAll, we can introduce a method named <code>withDescendingKeys()</code> for reversed queries.
-        Utilizing these, the query results are ordered based on the serialized byte[] of the keys, not the 'logical' key order.
-        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-985%3A+Add+reverseRange+and+reverseAll+query+over+kv-store+in+IQv2">KIP-985</a>
+        IQv2 supports <code>RangeQuery</code> that allows to specify unbounded, bounded, or half-open key-ranges, which return data in ascending (byte[]-lexicographical) order (per partition).
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-985%3A+Add+reverseRange+and+reverseAll+query+over+kv-store+in+IQv2">KIP-985</a> extends this functionality by adding <code>.withDescendingKeys()<code> to allow user to receive data in descending order.
     </p>
 
     <h3><a id="streams_api_changes_360" href="#streams_api_changes_360">Streams API changes in 3.6.0</a></h3>

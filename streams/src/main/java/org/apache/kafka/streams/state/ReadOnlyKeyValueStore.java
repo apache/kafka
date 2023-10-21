@@ -48,7 +48,7 @@ public interface ReadOnlyKeyValueStore<K, V> {
      * Get an iterator over a given range of keys. This iterator must be closed after use.
      * The returned iterator must be safe from {@link java.util.ConcurrentModificationException}s
      * and must not return null values.
-     * Order based on the serialized byte[] of the keys, not the 'logical' key order.
+     * Order is based on the serialized byte[] of the keys, not the 'logical' key order.
      *
      * @param from The first key that could be in the range, where iteration starts from.
      *             A null value indicates that the range starts with the first element in the store.
@@ -63,7 +63,7 @@ public interface ReadOnlyKeyValueStore<K, V> {
      * Get a reverse iterator over a given range of keys. This iterator must be closed after use.
      * The returned iterator must be safe from {@link java.util.ConcurrentModificationException}s
      * and must not return null values.
-     * Order based on the serialized byte[] of the keys, not the 'logical' key order.
+     * Order is based on the serialized byte[] of the keys, not the 'logical' key order.
      *
      * @param from The first key that could be in the range, where iteration ends.
      *             A null value indicates that the range starts with the first element in the store.
