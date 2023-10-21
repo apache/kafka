@@ -536,9 +536,9 @@ public class ConnectAssertions {
                     () -> {
                         String result = conditionMessage;
                         if (lastInfo.get() != null) {
-                            return result + ". When last checked, " + stateSummary(lastInfo.get());
+                            return result + " When last checked, " + stateSummary(lastInfo.get());
                         } else if (lastInfoError.get() != null) {
-                            result +=  ". The last attempt to check the connector state failed: " + lastInfoError.get().getClass();
+                            result +=  " The last attempt to check the connector state failed: " + lastInfoError.get().getClass();
                             String exceptionMessage = lastInfoError.get().getMessage();
                             if (exceptionMessage != null) {
                                 result += ": " + exceptionMessage;
