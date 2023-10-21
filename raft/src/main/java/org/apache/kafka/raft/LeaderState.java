@@ -86,7 +86,8 @@ public class LeaderState<T> implements EpochState {
         this.grantingVoters = Collections.unmodifiableSet(new HashSet<>(grantingVoters));
         this.log = logContext.logger(LeaderState.class);
         this.accumulator = Objects.requireNonNull(accumulator, "accumulator must be non-null");
-        this.fetchTimeoutMs = fetchTimeoutMs;
+        // use the 1.5x fetch timeout to tolerate some network transition time or other IO time.
+        this.fetchTimeoutMs = (int) (fetchTimeoutMs * 1.5);
         this.fetchTimer = time.timer(fetchTimeoutMs);
     }
 

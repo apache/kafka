@@ -716,6 +716,7 @@ final public class KafkaRaftClientSnapshotTest {
                 .appendToLog(snapshotId.epoch(), Arrays.asList("a"))
                 .build();
 
+        int resignLeadershipTimeout = (int) (context.fetchTimeoutMs * 1.5);
         context.becomeLeader();
         int epoch = context.currentEpoch();
 
@@ -757,7 +758,7 @@ final public class KafkaRaftClientSnapshotTest {
         }
 
         // fetch timeout is not expired, the leader should not get resigned
-        context.time.sleep(context.fetchTimeoutMs / 2);
+        context.time.sleep(resignLeadershipTimeout / 2);
         context.client.poll();
         assertFalse(context.client.quorum().isResigned());
 
@@ -767,7 +768,7 @@ final public class KafkaRaftClientSnapshotTest {
         context.assertSentFetchSnapshotResponse(context.metadataPartition);
 
         // Since the fetch timer is reset, the leader should not get resigned
-        context.time.sleep(context.fetchTimeoutMs / 2);
+        context.time.sleep(resignLeadershipTimeout / 2);
         context.client.poll();
         assertFalse(context.client.quorum().isResigned());
 
@@ -777,7 +778,7 @@ final public class KafkaRaftClientSnapshotTest {
         context.assertSentFetchSnapshotResponse(context.metadataPartition);
 
         // Since the fetch timer is reset, the leader should not get resigned
-        context.time.sleep(context.fetchTimeoutMs / 2);
+        context.time.sleep(resignLeadershipTimeout / 2);
         context.client.poll();
         assertFalse(context.client.quorum().isResigned());
 
@@ -787,7 +788,7 @@ final public class KafkaRaftClientSnapshotTest {
         context.assertSentFetchSnapshotResponse(context.metadataPartition);
 
         // After this sleep, the fetch timeout should expire since we don't receive fetch request from the majority voters within fetchTimeoutMs
-        context.time.sleep(context.fetchTimeoutMs / 2);
+        context.time.sleep(resignLeadershipTimeout / 2);
         context.client.poll();
         assertTrue(context.client.quorum().isResigned());
     }

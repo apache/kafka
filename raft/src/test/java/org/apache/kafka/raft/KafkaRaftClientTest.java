@@ -494,13 +494,14 @@ public class KafkaRaftClientTest {
         Set<Integer> voters = Utils.mkSet(localId, remoteId1, remoteId2);
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters).build();
+        int resignLeadershipTimeout = (int) (context.fetchTimeoutMs * 1.5);
 
         context.becomeLeader();
         int epoch = context.currentEpoch();
         assertEquals(OptionalInt.of(localId), context.currentLeader());
 
         // fetch timeout is not expired, the leader should not get resigned
-        context.time.sleep(context.fetchTimeoutMs / 2);
+        context.time.sleep(resignLeadershipTimeout / 2);
         context.client.poll();
 
         assertFalse(context.client.quorum().isResigned());
@@ -510,7 +511,7 @@ public class KafkaRaftClientTest {
         context.pollUntilRequest();
 
         // Since the fetch timer is reset, the leader should not get resigned
-        context.time.sleep(context.fetchTimeoutMs / 2);
+        context.time.sleep(resignLeadershipTimeout / 2);
         context.client.poll();
 
         assertFalse(context.client.quorum().isResigned());
@@ -520,7 +521,7 @@ public class KafkaRaftClientTest {
         context.pollUntilRequest();
 
         // Since the fetch timer is reset, the leader should not get resigned
-        context.time.sleep(context.fetchTimeoutMs / 2);
+        context.time.sleep(resignLeadershipTimeout / 2);
         context.client.poll();
 
         assertFalse(context.client.quorum().isResigned());
@@ -530,7 +531,7 @@ public class KafkaRaftClientTest {
         context.pollUntilRequest();
 
         // After this sleep, the fetch timeout should expire since we don't receive fetch request from the majority voters within fetchTimeoutMs
-        context.time.sleep(context.fetchTimeoutMs / 2);
+        context.time.sleep(resignLeadershipTimeout / 2);
         context.client.poll();
 
         // The leadership should get resigned now

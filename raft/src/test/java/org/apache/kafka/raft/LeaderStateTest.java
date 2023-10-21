@@ -461,9 +461,10 @@ public class LeaderStateTest {
         int observer5 = 5;
         LeaderState<?> state = newLeaderState(mkSet(localId, node1, node2, node3, node4), 0L);
         assertFalse(state.hasMajorityFollowerFetchExpired(time.milliseconds()));
+        int resignLeadershipTimeout = (int) (fetchTimeoutMs * 1.5);
 
         // fetch timeout not exceeded, should not expire the timer
-        time.sleep(fetchTimeoutMs / 2);
+        time.sleep(resignLeadershipTimeout / 2);
         assertFalse(state.hasMajorityFollowerFetchExpired(time.milliseconds()));
 
         // received fetch requests from 2 voter nodes, the timer should be reset
@@ -471,7 +472,7 @@ public class LeaderStateTest {
         state.maybeResetMajorityFollowerFetchTimer(node2, time.milliseconds());
 
         // Since the timer was reset, it won't expire this time.
-        time.sleep(fetchTimeoutMs / 2);
+        time.sleep(resignLeadershipTimeout / 2);
         assertFalse(state.hasMajorityFollowerFetchExpired(time.milliseconds()));
 
         // received fetch requests from 1 voter and 1 observer nodes, the timer should not be reset.
@@ -479,7 +480,7 @@ public class LeaderStateTest {
         state.maybeResetMajorityFollowerFetchTimer(observer5, time.milliseconds());
 
         // This time, the fetch timer will be expired
-        time.sleep(fetchTimeoutMs / 2);
+        time.sleep(resignLeadershipTimeout / 2);
         assertTrue(state.hasMajorityFollowerFetchExpired(time.milliseconds()));
     }
 
