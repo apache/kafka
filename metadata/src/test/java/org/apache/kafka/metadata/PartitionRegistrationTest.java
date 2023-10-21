@@ -318,6 +318,31 @@ public class PartitionRegistrationTest {
         assertEquals(Replicas.toList(Replicas.NONE), Replicas.toList(partitionRegistration.addingReplicas));
     }
 
+    @ParameterizedTest
+    @MethodSource("partitionRecordVersions")
+    public void testPartitionRegistrationToRecord_ElrShouldBeNullIfEmpty(short version) {
+        PartitionRegistration.Builder builder = new PartitionRegistration.Builder().
+                setReplicas(new int[]{0, 1, 2, 3, 4}).
+                setIsr(new int[]{0, 1}).
+                setLeader(0).
+                setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
+                setLeaderEpoch(0).
+                setPartitionEpoch(0);
+        PartitionRegistration partitionRegistration = builder.build();
+        Uuid topicID = Uuid.randomUuid();
+        PartitionRecord expectRecord = new PartitionRecord().
+                setTopicId(topicID).
+                setPartitionId(0).
+                setReplicas(Arrays.asList(new Integer[]{0, 1, 2, 3, 4})).
+                setIsr(Arrays.asList(new Integer[]{0, 1})).
+                setLeader(0).
+                setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value()).
+                setLeaderEpoch(0).
+                setPartitionEpoch(0);
+        assertEquals(new ApiMessageAndVersion(expectRecord, version), partitionRegistration.toRecord(topicID, 0, version));
+        assertEquals(Replicas.toList(Replicas.NONE), Replicas.toList(partitionRegistration.addingReplicas));
+    }
+
     @Property
     public void testConsistentEqualsAndHashCode(
         @ForAll("uniqueSamples") PartitionRegistration a,

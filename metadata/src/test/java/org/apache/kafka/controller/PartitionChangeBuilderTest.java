@@ -34,11 +34,8 @@ import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
-<<<<<<< HEAD
 import org.mockito.Mockito;
-=======
 import org.junit.jupiter.params.provider.ValueSource;
->>>>>>> 6a120de966 (Leader election with ELR)
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -920,24 +917,13 @@ public class PartitionChangeBuilderTest {
     @MethodSource("partitionChangeRecordVersions")
     public void testEligibleLeaderReplicas_RemoveUncleanShutdownReplicasFromElr(short version) {
         PartitionRegistration partition = new PartitionRegistration.Builder()
-<<<<<<< HEAD
-                .setReplicas(new int[] {1, 2, 3, 4})
-                .setDirectories(new Uuid[] {
-                        Uuid.fromString("keB9ssIPRlibyVJT5FcBVA"),
-                        Uuid.fromString("FhezfoReTSmHoKxi8wOIOg"),
-                        Uuid.fromString("QHtFxu8LShm6RiyAP6PxYg"),
-                        Uuid.fromString("tUJOMtvMQkGga30ydluvbQ")
-                })
-                .setIsr(new int[] {1})
-                .setElr(new int[] {2, 3})
-                .setLastKnownElr(new int[] {})
-                .setLeader(1)
-                .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED)
-                .setLeaderEpoch(100)
-                .setPartitionEpoch(200)
-                .build();
-=======
             .setReplicas(new int[] {1, 2, 3, 4})
+            .setDirectories(new Uuid[] {
+                Uuid.fromString("keB9ssIPRlibyVJT5FcBVA"),
+                Uuid.fromString("FhezfoReTSmHoKxi8wOIOg"),
+                Uuid.fromString("QHtFxu8LShm6RiyAP6PxYg"),
+                Uuid.fromString("tUJOMtvMQkGga30ydluvbQ")
+            })
             .setIsr(new int[] {1})
             .setElr(new int[] {2, 3})
             .setLastKnownElr(new int[] {})
@@ -946,7 +932,6 @@ public class PartitionChangeBuilderTest {
             .setLeaderEpoch(100)
             .setPartitionEpoch(200)
             .build();
->>>>>>> 6a120de966 (Leader election with ELR)
         Uuid topicId = Uuid.fromString("FbrrdcfiR-KC2CPSTHaJrg");
         // Min ISR is 3.
         PartitionChangeBuilder builder = new PartitionChangeBuilder(partition, topicId, 0, r -> r != 3, metadataVersionForPartitionChangeRecordVersion(version), 3)
@@ -1015,7 +1000,7 @@ public class PartitionChangeBuilderTest {
         ));
         assertEquals(expected, built);
     }
-    
+
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     public void testEligibleLeaderReplicas_ElrCanBeElected(boolean lastKnownLeaderEnabled) {
