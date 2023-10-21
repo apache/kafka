@@ -95,7 +95,7 @@ class PartitionReassignmentReplicas {
     }
 
 
-    Optional<CompletedReassignment> maybeCompleteReassignment(List<Integer> targetIsr) {
+    Optional<CompletedReassignment> maybeCompleteReassignment(List<Integer> targetIsr, int minIsrCount) {
         // Check if there is a reassignment to complete.
         if (!isReassignmentInProgress()) {
             return Optional.empty();
@@ -123,6 +123,8 @@ class PartitionReassignmentReplicas {
         for (int replica : adding) {
             if (!newTargetIsr.contains(replica)) return Optional.empty();
         }
+
+        if (newTargetIsr.size() < Math.min(minIsrCount, newTargetReplicas.size())) return Optional.empty();
 
         return Optional.of(
             new CompletedReassignment(

@@ -85,7 +85,7 @@ public class PartitionReassignmentReplicasTest {
             new PartitionAssignment(Arrays.asList(0, 1, 2)), new PartitionAssignment(Arrays.asList(3, 4, 5)));
         assertTrue(replicas.isReassignmentInProgress());
         Optional<PartitionReassignmentReplicas.CompletedReassignment> reassignmentOptional =
-            replicas.maybeCompleteReassignment(Arrays.asList(0, 1, 2, 3, 4));
+            replicas.maybeCompleteReassignment(Arrays.asList(0, 1, 2, 3, 4), 3);
         assertFalse(reassignmentOptional.isPresent());
     }
 
@@ -99,7 +99,7 @@ public class PartitionReassignmentReplicasTest {
         assertFalse(replicas.isReassignmentInProgress());
 
         Optional<PartitionReassignmentReplicas.CompletedReassignment> reassignmentOptional =
-            replicas.maybeCompleteReassignment(Arrays.asList(0, 1, 2));
+            replicas.maybeCompleteReassignment(Arrays.asList(0, 1, 2), 3);
         assertFalse(reassignmentOptional.isPresent());
     }
 
@@ -109,11 +109,34 @@ public class PartitionReassignmentReplicasTest {
             new PartitionAssignment(Arrays.asList(0, 1, 2)), new PartitionAssignment(Arrays.asList(3, 4, 5)));
         assertTrue(replicas.isReassignmentInProgress());
         Optional<PartitionReassignmentReplicas.CompletedReassignment> reassignmentOptional =
-            replicas.maybeCompleteReassignment(Arrays.asList(0, 1, 2, 3, 4, 5));
+            replicas.maybeCompleteReassignment(Arrays.asList(0, 1, 2, 3, 4, 5), 3);
         assertTrue(reassignmentOptional.isPresent());
         PartitionReassignmentReplicas.CompletedReassignment completedReassignment = reassignmentOptional.get();
         assertEquals(Arrays.asList(3, 4, 5), completedReassignment.isr);
         assertEquals(Arrays.asList(3, 4, 5), completedReassignment.replicas);
+    }
+
+    @Test
+    public void testDoesNotCompleteReassignmentIfUnderMinIsr() {
+        PartitionReassignmentReplicas replicas = new PartitionReassignmentReplicas(
+                new PartitionAssignment(Arrays.asList(0, 1, 2)), new PartitionAssignment(Arrays.asList(0, 1, 3)));
+        assertTrue(replicas.isReassignmentInProgress());
+        Optional<PartitionReassignmentReplicas.CompletedReassignment> reassignmentOptional =
+                replicas.maybeCompleteReassignment(Arrays.asList(3), 2);
+        assertFalse(reassignmentOptional.isPresent());
+    }
+
+    @Test
+    public void testDoesCompleteReassignmentIfUnderNewEffectiveMinIsr() {
+        PartitionReassignmentReplicas replicas = new PartitionReassignmentReplicas(
+                new PartitionAssignment(Arrays.asList(0, 1, 2, 4, 5)), new PartitionAssignment(Arrays.asList(6, 7)));
+        assertTrue(replicas.isReassignmentInProgress());
+        Optional<PartitionReassignmentReplicas.CompletedReassignment> reassignmentOptional =
+                replicas.maybeCompleteReassignment(Arrays.asList(6, 7), 5);
+        assertTrue(reassignmentOptional.isPresent());
+        PartitionReassignmentReplicas.CompletedReassignment completedReassignment = reassignmentOptional.get();
+        assertEquals(Arrays.asList(6, 7), completedReassignment.isr);
+        assertEquals(Arrays.asList(6, 7), completedReassignment.replicas);
     }
 
     @Test
@@ -122,7 +145,7 @@ public class PartitionReassignmentReplicasTest {
             new PartitionAssignment(Arrays.asList(0, 1, 2)), new PartitionAssignment(Arrays.asList(0, 1, 3)));
         assertTrue(replicas.isReassignmentInProgress());
         Optional<PartitionReassignmentReplicas.CompletedReassignment> reassignmentOptional =
-            replicas.maybeCompleteReassignment(Arrays.asList(0, 1, 2, 3));
+            replicas.maybeCompleteReassignment(Arrays.asList(0, 1, 2, 3), 3);
         assertTrue(reassignmentOptional.isPresent());
         PartitionReassignmentReplicas.CompletedReassignment completedReassignment = reassignmentOptional.get();
         assertEquals(Arrays.asList(0, 1, 3), completedReassignment.isr);

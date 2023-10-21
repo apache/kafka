@@ -91,7 +91,7 @@ public class PartitionChangeBuilder {
     private LeaderRecoveryState targetLeaderRecoveryState;
     private boolean zkMigrationEnabled;
     private boolean eligibleLeaderReplicasEnabled;
-    private int minISR;
+    private int minIsrCount;
 
 
     public PartitionChangeBuilder(
@@ -100,7 +100,7 @@ public class PartitionChangeBuilder {
         int partitionId,
         IntPredicate isAcceptableLeader,
         MetadataVersion metadataVersion,
-        int minISR
+        int minIsrCount
     ) {
         this.partition = partition;
         this.topicId = topicId;
@@ -109,7 +109,7 @@ public class PartitionChangeBuilder {
         this.metadataVersion = metadataVersion;
         this.zkMigrationEnabled = false;
         this.eligibleLeaderReplicasEnabled = false;
-        this.minISR = minISR;
+        this.minIsrCount = minIsrCount;
 
         this.targetIsr = Replicas.toList(partition.isr);
         this.targetReplicas = Replicas.toList(partition.replicas);
@@ -333,7 +333,7 @@ public class PartitionChangeBuilder {
                 targetReplicas);
 
         Optional<PartitionReassignmentReplicas.CompletedReassignment> completedReassignmentOpt =
-            reassignmentReplicas.maybeCompleteReassignment(targetIsr);
+            reassignmentReplicas.maybeCompleteReassignment(targetIsr, minIsrCount);
         if (!completedReassignmentOpt.isPresent()) {
             return;
         }
@@ -415,7 +415,7 @@ public class PartitionChangeBuilder {
         if (!eligibleLeaderReplicasEnabled) return;
 
         // If the ISR is larger or equal to the min ISR, clear the ELR and lastKnownELR.
-        if (targetIsr.size() >= minISR) {
+        if (targetIsr.size() >= minIsrCount) {
             targetElr = Collections.emptyList();
             targetLastKnownElr = Collections.emptyList();
             return;
