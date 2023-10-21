@@ -42,6 +42,7 @@ import org.apache.kafka.storage.internals.log.LogConfig.MessageFormatVersion
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.Scheduler
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig, RemoteIndexCache}
+import org.apache.kafka.storage.internals.util.CleanShutdownFileHandler
 
 import scala.annotation.nowarn
 

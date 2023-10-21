@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package kafka.log;
+package org.apache.kafka.storage.internals.util;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.common.utils.LogContext;
@@ -85,6 +85,7 @@ public class CleanShutdownFileHandler {
         }
     }
 
+    @SuppressWarnings("unchecked")
     public long read() {
         long brokerEpoch = -1L;
         try {

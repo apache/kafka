@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package kafka.log;
+package org.apache.kafka.storage.internals.util;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
