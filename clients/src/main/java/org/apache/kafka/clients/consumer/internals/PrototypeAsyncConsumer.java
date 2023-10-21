@@ -101,6 +101,7 @@ import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createFe
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createLogContext;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createMetrics;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createSubscriptionState;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.refreshCommittedOffsets;
 import static org.apache.kafka.common.utils.Utils.closeQuietly;
 import static org.apache.kafka.common.utils.Utils.isBlank;
 import static org.apache.kafka.common.utils.Utils.join;
@@ -990,7 +991,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         // will only do a coordinator lookup if there are partitions which have missing
         // positions, so a consumer with manually assigned partitions can avoid a coordinator
         // dependence by always ensuring that assigned partitions have an initial position.
-        if (isCommittedOffsetsManagementEnabled() && !refreshCommittedOffsetsIfNeeded(timer))
+        if (isCommittedOffsetsManagementEnabled() && !initWithCommittedOffsetsIfNeeded(timer))
             return false;
 
         // If there are partitions still needing a position and a reset policy is defined,
@@ -1021,14 +1022,16 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
      * @param timer Timer bounding how long this method can block
      * @return true iff the operation completed within the timeout
      */
-    private boolean refreshCommittedOffsetsIfNeeded(Timer timer) {
+    private boolean initWithCommittedOffsetsIfNeeded(Timer timer) {
         final Set<TopicPartition> initializingPartitions = subscriptions.initializingPartitions();
 
         log.debug("Refreshing committed offsets for partitions {}", initializingPartitions);
         try {
-            final Map<TopicPartition, OffsetAndMetadata> offsets = applicationEventHandler.addAndGet(new OffsetFetchApplicationEvent(initializingPartitions), timer);
-            return ConsumerUtils.refreshCommittedOffsets(offsets, metadata, subscriptions);
-        } catch (org.apache.kafka.common.errors.TimeoutException e) {
+            final OffsetFetchApplicationEvent event = new OffsetFetchApplicationEvent(initializingPartitions);
+            final Map<TopicPartition, OffsetAndMetadata> offsets = applicationEventHandler.addAndGet(event, timer);
+            refreshCommittedOffsets(offsets, metadata, subscriptions);
+            return true;
+        } catch (TimeoutException e) {
             log.error("Couldn't refresh committed offsets before timeout expired");
             return false;
         }

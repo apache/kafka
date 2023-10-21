@@ -163,14 +163,10 @@ public final class ConsumerUtils {
      *                           committed offsets' metadata.
      * @param subscriptions      Subscription state to update, setting partitions' offsets to the
      *                           committed offsets.
-     * @return False if null <code>offsetsAndMetadata</code> is provided, indicating that the
-     * refresh operation could not be performed. True in any other case.
      */
-    public static boolean refreshCommittedOffsets(final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata,
-                                                  final ConsumerMetadata metadata,
-                                                  final SubscriptionState subscriptions) {
-        if (offsetsAndMetadata == null) return false;
-
+    public static void refreshCommittedOffsets(final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata,
+                                               final ConsumerMetadata metadata,
+                                               final SubscriptionState subscriptions) {
         for (final Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsetsAndMetadata.entrySet()) {
             final TopicPartition tp = entry.getKey();
             final OffsetAndMetadata offsetAndMetadata = entry.getValue();
@@ -195,7 +191,6 @@ public final class ConsumerUtils {
                 }
             }
         }
-        return true;
     }
 
     public static <T> T getResult(CompletableFuture<T> future, Timer timer) {
