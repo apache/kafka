@@ -521,7 +521,7 @@ public class ConnectAssertions {
                                 return false;
 
                             int numTasks = info.tasks().size();
-                            int expectedTasksInState = Optional.of(numTasksInTasksState).orElse(numTasks);
+                            int expectedTasksInState = Optional.ofNullable(numTasksInTasksState).orElse(numTasks);
                             return expectedNumTasks.test(info.tasks().size())
                                     && info.connector().state().equals(connectorState.toString())
                                     && info.tasks().stream().filter(s -> s.state().equals(tasksState.toString())).count() == expectedTasksInState;
