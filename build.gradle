@@ -109,6 +109,7 @@ ext {
     throw new GradleException("Unexpected value for scalaOptimizerMode property. Expected one of $scalaOptimizerValues, but received: $userScalaOptimizerMode")
 
   generatedDocsDir = new File("${project.rootDir}/docs/generated")
+  repo = file("$rootDir/.git").isDirectory() ? Grgit.open(currentDir: project.getRootDir()) : null
 
   commitId = determineCommitId()
 }
@@ -164,16 +165,8 @@ def determineCommitId() {
   def takeFromHash = 16
   if (project.hasProperty('commitId')) {
     commitId.take(takeFromHash)
-  } else if (file("$rootDir/.git/HEAD").exists()) {
-    def headRef = file("$rootDir/.git/HEAD").text
-    if (headRef.contains('ref: ')) {
-      headRef = headRef.replaceAll('ref: ', '').trim()
-      if (file("$rootDir/.git/$headRef").exists()) {
-        file("$rootDir/.git/$headRef").text.trim().take(takeFromHash)
-      }
-    } else {
-      headRef.trim().take(takeFromHash)
-    }
+  } else if (repo != null) {
+    repo.head().id.take(takeFromHash)
   } else {
     "unknown"
   }
@@ -181,7 +174,7 @@ def determineCommitId() {
 
 apply from: file('wrapper.gradle')
 
-if (file('.git').exists()) {
+if (repo != null) {
   rat {
     dependsOn subprojects.collect {
       it.tasks.matching {
@@ -195,7 +188,6 @@ if (file('.git').exists()) {
 
     // Exclude everything under the directory that git should be ignoring via .gitignore or that isn't checked in. These
     // restrict us only to files that are checked in or are staged.
-    def repo = Grgit.open(currentDir: project.getRootDir())
     excludes = new ArrayList<String>(repo.clean(ignore: false, directories: true, dryRun: true))
     // And some of the files that we have checked in should also be excluded from this check
     excludes.addAll([
