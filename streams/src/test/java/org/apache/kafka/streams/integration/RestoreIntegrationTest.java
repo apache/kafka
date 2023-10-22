@@ -609,7 +609,7 @@ public class RestoreIntegrationTest {
 
     private KafkaStreams startKafkaStreams(final StreamsBuilder streamsBuilder,
                                            final StateRestoreListener stateRestoreListener,
-                                           final Map<String, Object> extraConfiguration) throws InterruptedException {
+                                           final Map<String, Object> extraConfiguration) {
         final Properties streamsConfiguration = props(mkObjectProperties(extraConfiguration));
         final KafkaStreams kafkaStreams = new KafkaStreams(streamsBuilder.build(), streamsConfiguration);
 
