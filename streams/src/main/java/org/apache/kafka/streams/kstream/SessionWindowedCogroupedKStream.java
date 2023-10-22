@@ -174,7 +174,8 @@ public interface SessionWindowedCogroupedKStream<K, V> {
      * <pre>{@code
      * KafkaStreams streams = ... // counting words
      * Store queryableStoreName = ... // the queryableStoreName should be the name of the store as defined by the Materialized instance
-     * ReadOnlySessionStore<String,Long> localWindowStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>sessionStore());
+     * StoreQueryParameters<ReadOnlySessionStore<String, Long>> storeQueryParams = StoreQueryParameters.fromNameAndType(queryableStoreName, QueryableStoreTypes.sessionStore());
+     * ReadOnlySessionStore<String,Long> localWindowStore = streams.store(storeQueryParams);
      *
      * String key = "some-word";
      * long fromTime = ...;
@@ -234,7 +235,8 @@ public interface SessionWindowedCogroupedKStream<K, V> {
      * <pre>{@code
      * KafkaStreams streams = ... // some windowed aggregation on value type double
      * Sting queryableStoreName = ... // the queryableStoreName should be the name of the store as defined by the Materialized instance
-     * ReadOnlySessionStore<String, Long> sessionStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>sessionStore());
+     * StoreQueryParameters<ReadOnlySessionStore<String, Long>> storeQueryParams = StoreQueryParameters.fromNameAndType(queryableStoreName, QueryableStoreTypes.sessionStore());
+     * ReadOnlySessionStore<String,Long> localWindowStore = streams.store(storeQueryParams);
      * String key = "some-key";
      * KeyValueIterator<Windowed<String>, Long> aggForKeyForSession = localWindowStore.fetch(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>

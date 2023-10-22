@@ -18,7 +18,7 @@
 #
 
 """
-Utility for creating release candidates and promoting release candidates to a final relase.
+Utility for creating release candidates and promoting release candidates to a final release.
 
 Usage: release.py [subcommand]
 
@@ -91,7 +91,7 @@ def fail(msg):
     sys.exit(1)
 
 def print_output(output):
-    if output is None or len(output) == 0:
+    if output is None or not output:
         return
     for line in output.split('\n'):
         print(">", line)
@@ -160,7 +160,7 @@ def regexReplace(path, pattern, replacement):
             f.write(line)
 
 def user_ok(msg):
-    ok = input(msg)
+    ok = sanitize_input(msg)
     return ok.strip().lower() == 'y'
 
 def sftp_mkdir(dir):
@@ -209,7 +209,7 @@ def get_jdk(prefs, version):
     """
     Get settings for the specified JDK version.
     """
-    jdk_java_home = get_pref(prefs, 'jdk%d' % version, lambda: input("Enter the path for JAVA_HOME for a JDK%d compiler (blank to use default JAVA_HOME): " % version))
+    jdk_java_home = get_pref(prefs, 'jdk%d' % version, lambda: sanitize_input("Enter the path for JAVA_HOME for a JDK%d compiler (blank to use default JAVA_HOME): " % version))
     jdk_env = dict(os.environ)
     if jdk_java_home.strip(): jdk_env['JAVA_HOME'] = jdk_java_home
     else: jdk_java_home = jdk_env['JAVA_HOME']
@@ -310,22 +310,30 @@ def validate_release_num(version):
         fail("The specified version is not a valid release version number")
     validate_release_version_parts(version)
 
+def sanitize_input(input_msg: str) -> str:
+    """Sanitize inputs from users. This removes leading and trailing spaces.
+       Use this function instead of input where user input is needed.
+    """
+    input_from_user = input(input_msg)
+    return input_from_user.strip()
+     
+
 def command_release_announcement_email():
     tags = cmd_output('git tag').split()
     release_tag_pattern = re.compile('^[0-9]+\.[0-9]+\.[0-9]+$')
     release_tags = sorted([t for t in tags if re.match(release_tag_pattern, t)])
     release_version_num = release_tags[-1]
     if not user_ok("""Is the current release %s ? (y/n): """ % release_version_num):
-        release_version_num = input('What is the current release version:')
+        release_version_num = sanitize_input('What is the current release version:')
         validate_release_num(release_version_num)
     previous_release_version_num = release_tags[-2]
     if not user_ok("""Is the previous release %s ? (y/n): """ % previous_release_version_num):
-        previous_release_version_num = input('What is the previous release version:')
+        previous_release_version_num = sanitize_input('What is the previous release version:')
         validate_release_num(previous_release_version_num)
     if release_version_num < previous_release_version_num :
         fail("Current release version number can't be less than previous release version number")
-    number_of_contributors = int(subprocess.check_output('git shortlog -sn --no-merges %s..%s | wc -l' % (previous_release_version_num, release_version_num) , shell=True).decode('utf-8'))
-    contributors = subprocess.check_output("git shortlog -sn --no-merges %s..%s | cut -f2 | sort --ignore-case" % (previous_release_version_num, release_version_num), shell=True).decode('utf-8')
+    number_of_contributors = int(subprocess.check_output('git shortlog -sn --group=author --group=trailer:co-authored-by --group=trailer:Reviewers --no-merges %s..%s | uniq | wc -l' % (previous_release_version_num, release_version_num) , shell=True).decode('utf-8'))
+    contributors = subprocess.check_output("git shortlog -sn --group=author --group=trailer:co-authored-by --group=trailer:Reviewers  --no-merges %s..%s | cut -f2 | sort --ignore-case | uniq" % (previous_release_version_num, release_version_num), shell=True).decode('utf-8')
     release_announcement_data = {
         'number_of_contributors': number_of_contributors,
         'contributors': ', '.join(str(x) for x in filter(None, contributors.split('\n'))),
@@ -383,7 +391,7 @@ Apache Kafka is in use at large and small companies worldwide, including
 Capital One, Goldman Sachs, ING, LinkedIn, Netflix, Pinterest, Rabobank,
 Target, The New York Times, Uber, Yelp, and Zalando, among others.
 
-A big thank you for the following %(number_of_contributors)d contributors to this release!
+A big thank you for the following %(number_of_contributors)d contributors to this release! (Please report an unintended omission)
 
 %(contributors)s
 
@@ -396,7 +404,8 @@ Thank you!
 
 Regards,
 
-<YOU>""" % release_announcement_data
+<YOU>
+Release Manager for Apache Kafka %(release_version)s""" % release_announcement_data
 
     print()
     print("*****************************************************************")
@@ -488,10 +497,10 @@ starting_branch = cmd_output('git rev-parse --abbrev-ref HEAD')
 cmd("Verifying that you have no unstaged git changes", 'git diff --exit-code --quiet')
 cmd("Verifying that you have no staged git changes", 'git diff --cached --exit-code --quiet')
 
-release_version = input("Release version (without any RC info, e.g. 1.0.0): ")
+release_version = sanitize_input("Release version (without any RC info, e.g. 1.0.0): ")
 release_version_parts = get_release_version_parts(release_version)
 
-rc = input("Release candidate number: ")
+rc = sanitize_input("Release candidate number: ")
 
 dev_branch = '.'.join(release_version_parts[:2])
 docs_release_version = docs_version(release_version)
@@ -515,7 +524,7 @@ if not rc:
     sys.exit(0)
 
 # Prereq checks
-apache_id = get_pref(prefs, 'apache_id', lambda: input("Enter your apache username: "))
+apache_id = get_pref(prefs, 'apache_id', lambda: sanitize_input("Enter your apache username: "))
 
 jdk8_env = get_jdk(prefs, 8)
 jdk17_env = get_jdk(prefs, 17)
@@ -524,7 +533,7 @@ def select_gpg_key():
     print("Here are the available GPG keys:")
     available_keys = cmd_output("gpg --list-secret-keys")
     print(available_keys)
-    key_name = input("Which user name (enter the user name without email address): ")
+    key_name = sanitize_input("Which user name (enter the user name without email address): ")
     if key_name not in available_keys:
         fail("Couldn't find the requested key.")
     return key_name
@@ -684,6 +693,8 @@ if not user_ok("Have you sufficiently verified the release artifacts (y/n)?: "):
 print("Next, we need to get the Maven artifacts we published into the staging repository.")
 # TODO: Can we get this closed via a REST API since we already need to collect credentials for this repo?
 print("Go to https://repository.apache.org/#stagingRepositories and hit 'Close' for the new repository that was created by uploading artifacts.")
+print("There will be more than one repository entries created, please close all of them.")
+print("In some cases, you may get errors on some repositories while closing them, see KAFKA-15033.")
 print("If this is not the first RC, you need to 'Drop' the previous artifacts.")
 print("Confirm the correct artifacts are visible at https://repository.apache.org/content/groups/staging/org/apache/kafka/")
 if not user_ok("Have you successfully deployed the artifacts (y/n)?: "):
@@ -711,6 +722,7 @@ Release notes for the %(release_version)s release:
 https://home.apache.org/~%(apache_id)s/kafka-%(rc_tag)s/RELEASE_NOTES.html
 
 *** Please download, test and vote by <VOTING DEADLINE, e.g. Monday, March 28, 9am PT>
+<THE RELEASE POLICY (https://www.apache.org/legal/release-policy.html#release-approval) REQUIRES VOTES TO BE OPEN FOR MINIMUM OF 3 DAYS THEREFORE VOTING DEADLINE SHOULD BE AT LEAST 72 HOURS FROM THE TIME THIS EMAIL IS SENT.>
 
 Kafka's KEYS file containing PGP keys we use to sign the release:
 https://kafka.apache.org/KEYS

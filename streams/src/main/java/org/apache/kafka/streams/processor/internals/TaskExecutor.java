@@ -88,7 +88,7 @@ public class TaskExecutor {
         return totalProcessed;
     }
 
-    private long processTask(final Task task, final int maxNumRecords, final long begin, final Time time) {
+    private int processTask(final Task task, final int maxNumRecords, final long begin, final Time time) {
         int processed = 0;
         long now = begin;
 
@@ -178,7 +178,7 @@ public class TaskExecutor {
         final Set<TaskId> corruptedTasks = new HashSet<>();
 
         if (executionMetadata.processingMode() == EXACTLY_ONCE_ALPHA) {
-            for (final Task task : taskManager.activeTaskIterable()) {
+            for (final Task task : taskManager.activeRunningTaskIterable()) {
                 final Map<TopicPartition, OffsetAndMetadata> taskOffsetsToCommit = offsetsPerTask.getOrDefault(task, emptyMap());
                 if (!taskOffsetsToCommit.isEmpty() || taskManager.streamsProducerForTask(task.id()).transactionInFlight()) {
                     try {

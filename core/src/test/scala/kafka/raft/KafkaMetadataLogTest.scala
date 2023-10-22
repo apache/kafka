@@ -19,7 +19,7 @@ package kafka.raft
 import kafka.log.UnifiedLog
 import kafka.server.KafkaConfig.{MetadataLogSegmentBytesProp, MetadataLogSegmentMillisProp, MetadataLogSegmentMinBytesProp, NodeIdProp, ProcessRolesProp, QuorumVotersProp}
 import kafka.server.{KafkaConfig, KafkaRaftServer}
-import kafka.utils.{MockTime, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.common.errors.{InvalidConfigurationException, RecordTooLargeException}
 import org.apache.kafka.common.protocol
 import org.apache.kafka.common.protocol.{ObjectSerializationCache, Writable}
@@ -28,6 +28,7 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.raft._
 import org.apache.kafka.raft.internals.BatchBuilder
 import org.apache.kafka.server.common.serialization.RecordSerde
+import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.snapshot.{FileRawSnapshotWriter, RawSnapshotReader, RawSnapshotWriter, SnapshotPath, Snapshots}
 import org.apache.kafka.storage.internals.log.{LogConfig, LogStartOffsetIncrementReason}
 import org.apache.kafka.test.TestUtils.assertOptional
@@ -39,6 +40,7 @@ import java.nio.ByteBuffer
 import java.nio.file.{Files, Path}
 import java.util
 import java.util.{Collections, Optional, Properties}
+import scala.jdk.CollectionConverters._
 
 final class KafkaMetadataLogTest {
   import KafkaMetadataLogTest._
@@ -973,7 +975,7 @@ final class KafkaMetadataLogTest {
     // The clean up code requires that there are at least two snapshots
     // Generate first snapshots that includes the first segment by using the base offset of the second segment
     val snapshotId1 = new OffsetAndEpoch(
-      log.log.logSegments.drop(1).head.baseOffset,
+      log.log.logSegments.asScala.drop(1).head.baseOffset,
       1
     )
     TestUtils.resource(log.storeSnapshot(snapshotId1).get()) { snapshot =>
@@ -981,7 +983,7 @@ final class KafkaMetadataLogTest {
     }
     // Generate second snapshots that includes the second segment by using the base offset of the third segment
     val snapshotId2 = new OffsetAndEpoch(
-      log.log.logSegments.drop(2).head.baseOffset,
+      log.log.logSegments.asScala.drop(2).head.baseOffset,
       1
     )
     TestUtils.resource(log.storeSnapshot(snapshotId2).get()) { snapshot =>
@@ -1041,7 +1043,6 @@ object KafkaMetadataLogTest {
       KafkaRaftServer.MetadataPartition,
       KafkaRaftServer.MetadataTopicId,
       logDir,
-      new ByteArraySerde,
       time,
       time.scheduler,
       metadataLogConfig

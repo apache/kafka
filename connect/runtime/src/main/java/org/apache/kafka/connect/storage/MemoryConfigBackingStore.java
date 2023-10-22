@@ -170,6 +170,11 @@ public class MemoryConfigBackingStore implements ConfigBackingStore {
     }
 
     @Override
+    public void putLoggerLevel(String namespace, String level) {
+        // no-op
+    }
+
+    @Override
     public synchronized void setUpdateListener(UpdateListener listener) {
         this.updateListener = listener;
     }

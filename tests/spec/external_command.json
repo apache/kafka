@@ -17,7 +17,7 @@
 // An example task specification for running an external command in Trogdor.
 // Note that this task spec uses a relative path, so make sure you launch
 // Trogdor from the project root directory when using it.
-// See TROGDOR.md for details.
+// See trogdor/README.md for details.
 //
 
 {

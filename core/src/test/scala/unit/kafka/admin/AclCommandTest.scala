@@ -16,7 +16,7 @@
  */
 package kafka.admin
 
-import java.io.{File, PrintWriter}
+import java.io.File
 import java.util.Properties
 import javax.management.InstanceAlreadyExistsException
 import kafka.admin.AclCommand.AclCommandOptions
@@ -195,10 +195,7 @@ class AclCommandTest extends QuorumTestHarness with Logging {
 
   @Test
   def testAclCliWithClientId(): Unit = {
-    val adminClientConfig = TestUtils.tempFile()
-    val pw = new PrintWriter(adminClientConfig)
-    pw.println("client.id=my-client")
-    pw.close()
+    val adminClientConfig = TestUtils.tempFile("client.id=my-client")
 
     createServer(Some(adminClientConfig))
 

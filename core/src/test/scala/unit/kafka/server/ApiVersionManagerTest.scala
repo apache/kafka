@@ -39,7 +39,7 @@ class ApiVersionManagerTest {
     val versionManager = new DefaultApiVersionManager(
       listenerType = apiScope,
       forwardingManager = None,
-      features = brokerFeatures,
+      brokerFeatures = brokerFeatures,
       metadataCache = metadataCache,
       enableUnstableLastVersion = true
     )
@@ -57,7 +57,7 @@ class ApiVersionManagerTest {
     val versionManager = new DefaultApiVersionManager(
       listenerType = apiScope,
       forwardingManager = None,
-      features = brokerFeatures,
+      brokerFeatures = brokerFeatures,
       metadataCache = metadataCache,
       enableUnstableLastVersion = false
     )
@@ -86,7 +86,7 @@ class ApiVersionManagerTest {
     val versionManager = new DefaultApiVersionManager(
       listenerType = ListenerType.ZK_BROKER,
       forwardingManager = Some(forwardingManager),
-      features = brokerFeatures,
+      brokerFeatures = brokerFeatures,
       metadataCache = metadataCache,
       enableUnstableLastVersion = true
     )
@@ -107,7 +107,7 @@ class ApiVersionManagerTest {
       val versionManager = new DefaultApiVersionManager(
         listenerType = ListenerType.BROKER,
         forwardingManager = forwardingManagerOpt,
-        features = brokerFeatures,
+        brokerFeatures = brokerFeatures,
         metadataCache = metadataCache,
         enableUnstableLastVersion = true
       )
@@ -129,7 +129,7 @@ class ApiVersionManagerTest {
     val versionManager = new DefaultApiVersionManager(
       listenerType = ListenerType.ZK_BROKER,
       forwardingManager = Some(forwardingManager),
-      features = brokerFeatures,
+      brokerFeatures = brokerFeatures,
       metadataCache = metadataCache,
       enableUnstableLastVersion = true
     )
@@ -148,7 +148,7 @@ class ApiVersionManagerTest {
     val versionManager = new DefaultApiVersionManager(
       listenerType = ListenerType.ZK_BROKER,
       forwardingManager = None,
-      features = brokerFeatures,
+      brokerFeatures = brokerFeatures,
       metadataCache = metadataCache,
       enableUnstableLastVersion = true
     )

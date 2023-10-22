@@ -22,6 +22,7 @@ import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionCollection;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
+import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -42,7 +43,7 @@ public class NodeApiVersionsTest {
         NodeApiVersions versions = new NodeApiVersions(new ApiVersionCollection(), Collections.emptyList(), false);
         StringBuilder bld = new StringBuilder();
         String prefix = "(";
-        for (ApiKeys apiKey : ApiKeys.zkBrokerApis()) {
+        for (ApiKeys apiKey : ApiKeys.clientApis()) {
             bld.append(prefix).append(apiKey.name).
                     append("(").append(apiKey.id).append("): UNSUPPORTED");
             prefix = ", ";
@@ -140,7 +141,7 @@ public class NodeApiVersionsTest {
     @ParameterizedTest
     @EnumSource(ApiMessageType.ListenerType.class)
     public void testUsableVersionLatestVersions(ApiMessageType.ListenerType scope) {
-        ApiVersionsResponse defaultResponse = ApiVersionsResponse.defaultApiVersionsResponse(scope);
+        ApiVersionsResponse defaultResponse = TestUtils.defaultApiVersionsResponse(scope);
         List<ApiVersion> versionList = new LinkedList<>(defaultResponse.data().apiKeys());
         // Add an API key that we don't know about.
         versionList.add(new ApiVersion()
@@ -156,7 +157,7 @@ public class NodeApiVersionsTest {
     @ParameterizedTest
     @EnumSource(ApiMessageType.ListenerType.class)
     public void testConstructionFromApiVersionsResponse(ApiMessageType.ListenerType scope) {
-        ApiVersionsResponse apiVersionsResponse = ApiVersionsResponse.defaultApiVersionsResponse(scope);
+        ApiVersionsResponse apiVersionsResponse = TestUtils.defaultApiVersionsResponse(scope);
         NodeApiVersions versions = new NodeApiVersions(apiVersionsResponse.data().apiKeys(), Collections.emptyList(), false);
 
         for (ApiVersion apiVersionKey : apiVersionsResponse.data().apiKeys()) {

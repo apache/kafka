@@ -160,16 +160,14 @@ class BrokerMetadataPublisherTest {
     partitions: Map[Int, Seq[Int]]
   ): TopicImage = {
     val partitionRegistrations = partitions.map { case (partitionId, replicas) =>
-      Int.box(partitionId) -> new PartitionRegistration(
-        replicas.toArray,
-        replicas.toArray,
-        Array.empty[Int],
-        Array.empty[Int],
-        replicas.head,
-        LeaderRecoveryState.RECOVERED,
-        0,
-        0
-      )
+      Int.box(partitionId) -> new PartitionRegistration.Builder().
+        setReplicas(replicas.toArray).
+        setIsr(replicas.toArray).
+        setLeader(replicas.head).
+        setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
+        setLeaderEpoch(0).
+        setPartitionEpoch(0).
+        build()
     }
     new TopicImage(topic, topicId, partitionRegistrations.asJava)
   }
@@ -291,7 +289,8 @@ class BrokerMetadataPublisherTest {
       mock(classOf[DynamicConfigPublisher]),
       mock(classOf[DynamicClientQuotaPublisher]),
       mock(classOf[ScramPublisher]),
-      None,
+      mock(classOf[DelegationTokenPublisher]),
+      mock(classOf[AclPublisher]),
       faultHandler,
       faultHandler
     )
@@ -302,7 +301,13 @@ class BrokerMetadataPublisherTest {
       .build()
 
     metadataPublisher.onMetadataUpdate(delta, image,
-      new LogDeltaManifest(MetadataProvenance.EMPTY, LeaderAndEpoch.UNKNOWN, 1, 100, 42));
+      LogDeltaManifest.newBuilder()
+        .provenance(MetadataProvenance.EMPTY)
+        .leaderAndEpoch(LeaderAndEpoch.UNKNOWN)
+        .numBatches(1)
+        .elapsedNs(100)
+        .numBytes(42)
+        .build());
 
     verify(groupCoordinator).onNewMetadataImage(image, delta)
   }

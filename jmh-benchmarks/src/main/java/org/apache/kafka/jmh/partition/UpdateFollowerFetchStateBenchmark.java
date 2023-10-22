@@ -74,7 +74,7 @@ public class UpdateFollowerFetchStateBenchmark {
     private Option<Uuid> topicId = OptionConverters.toScala(Optional.of(Uuid.randomUuid()));
     private File logDir = new File(System.getProperty("java.io.tmpdir"), topicPartition.toString());
     private KafkaScheduler scheduler = new KafkaScheduler(1, true, "scheduler");
-    private BrokerTopicStats brokerTopicStats = new BrokerTopicStats();
+    private BrokerTopicStats brokerTopicStats = new BrokerTopicStats(Optional.empty());
     private LogDirFailureChannel logDirFailureChannel = Mockito.mock(LogDirFailureChannel.class);
     private long nextOffset = 0;
     private LogManager logManager;
@@ -97,7 +97,7 @@ public class UpdateFollowerFetchStateBenchmark {
             setFlushRecoveryOffsetCheckpointMs(10000L).
             setFlushStartOffsetCheckpointMs(10000L).
             setRetentionCheckMs(1000L).
-            setMaxProducerIdExpirationMs(60000).
+            setProducerStateManagerConfig(60000, false).
             setInterBrokerProtocolVersion(MetadataVersion.latest()).
             setScheduler(scheduler).
             setBrokerTopicStats(brokerTopicStats).
@@ -147,7 +147,7 @@ public class UpdateFollowerFetchStateBenchmark {
 
     @TearDown(Level.Trial)
     public void tearDown() throws InterruptedException {
-        logManager.shutdown();
+        logManager.shutdown(-1L);
         scheduler.shutdown();
     }
 

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.Node;
@@ -41,8 +42,11 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class NetworkClientDelegateTest {
     private static final int REQUEST_TIMEOUT_MS = 5000;
@@ -95,6 +99,27 @@ public class NetworkClientDelegateTest {
             assertTrue(unsentRequest.future().isDone());
             TestUtils.assertFutureThrows(unsentRequest.future(), DisconnectException.class);
         }
+    }
+
+    @Test
+    public void testEnsureCorrectCompletionTimeOnFailure() {
+        NetworkClientDelegate.UnsentRequest unsentRequest = newUnsentFindCoordinatorRequest();
+        long timeMs = time.milliseconds();
+        unsentRequest.handler().onFailure(timeMs, new TimeoutException());
+
+        time.sleep(100);
+        assertEquals(timeMs, unsentRequest.handler().completionTimeMs());
+    }
+
+    @Test
+    public void testEnsureCorrectCompletionTimeOnComplete() {
+        NetworkClientDelegate.UnsentRequest unsentRequest = newUnsentFindCoordinatorRequest();
+        long timeMs = time.milliseconds();
+        final ClientResponse response = mock(ClientResponse.class);
+        when(response.receivedTimeMs()).thenReturn(timeMs);
+        unsentRequest.handler().onComplete(response);
+        time.sleep(100);
+        assertEquals(timeMs, unsentRequest.handler().completionTimeMs());
     }
 
     public NetworkClientDelegate newNetworkClientDelegate() {

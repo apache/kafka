@@ -48,7 +48,7 @@ import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
-import org.apache.kafka.connect.util.clusters.EmbeddedConnectClusterAssertions;
+import org.apache.kafka.connect.util.clusters.ConnectAssertions;
 import org.apache.kafka.connect.util.clusters.EmbeddedKafkaCluster;
 import org.apache.kafka.test.IntegrationTest;
 import org.junit.After;
@@ -394,9 +394,12 @@ public class ExactlyOnceSourceIntegrationTest {
         props.put(MESSAGES_PER_POLL_CONFIG, MESSAGES_PER_POLL);
         props.put(MAX_MESSAGES_PER_SECOND_CONFIG, MESSAGES_PER_SECOND);
 
-        // expect all records to be consumed and committed by the connector
-        connectorHandle.expectedRecords(MINIMUM_MESSAGES);
-        connectorHandle.expectedCommits(MINIMUM_MESSAGES);
+        // the connector aborts some transactions, which causes records that it has emitted (and for which
+        // SourceTask::commitRecord has been invoked) to be invisible to consumers; we expect the task to
+        // emit at most 233 records in total before 100 records have been emitted as part of one or more
+        // committed transactions
+        connectorHandle.expectedRecords(233);
+        connectorHandle.expectedCommits(233);
 
         // start a source connector
         connect.configureConnector(CONNECTOR_NAME, props);
@@ -413,10 +416,10 @@ public class ExactlyOnceSourceIntegrationTest {
         consumerProps.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed");
         // consume all records from the source topic or fail, to ensure that they were correctly produced
         ConsumerRecords<byte[], byte[]> sourceRecords = connect.kafka().consumeAll(
-                CONSUME_RECORDS_TIMEOUT_MS,
-                Collections.singletonMap(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed"),
-                null,
-                topic
+            CONSUME_RECORDS_TIMEOUT_MS,
+            Collections.singletonMap(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed"),
+            null,
+            topic
         );
         assertTrue("Not enough records produced by source connector. Expected at least: " + MINIMUM_MESSAGES + " + but got " + sourceRecords.count(),
                 sourceRecords.count() >= MINIMUM_MESSAGES);
@@ -647,7 +650,7 @@ public class ExactlyOnceSourceIntegrationTest {
         final String globalOffsetsTopic = "connect-worker-offsets-topic";
         workerProps.put(DistributedConfig.OFFSET_STORAGE_TOPIC_CONFIG, globalOffsetsTopic);
 
-        connectBuilder.clientConfigs(superUserClientConfig);
+        connectBuilder.clientProps(superUserClientConfig);
 
         startConnect();
 
@@ -806,13 +809,7 @@ public class ExactlyOnceSourceIntegrationTest {
             );
 
             // also consume from the cluster's global offsets topic
-            offsetRecords = connect.kafka()
-                    .consumeAll(
-                            TimeUnit.MINUTES.toMillis(1),
-                            null,
-                            null,
-                            globalOffsetsTopic
-                    );
+            offsetRecords = connect.kafka().consumeAll(TimeUnit.MINUTES.toMillis(1), globalOffsetsTopic);
             seqnos = parseAndAssertOffsetsForSingleTask(offsetRecords);
             seqnos.forEach(seqno ->
                 assertEquals("Offset commits should occur on connector-defined poll boundaries, which happen every " + MINIMUM_MESSAGES + " records",
@@ -1098,7 +1095,7 @@ public class ExactlyOnceSourceIntegrationTest {
     private void assertConnectorStarted(StartAndStopLatch connectorStart) throws InterruptedException {
         assertTrue("Connector and tasks did not finish startup in time",
                 connectorStart.await(
-                        EmbeddedConnectClusterAssertions.CONNECTOR_SETUP_DURATION_MS,
+                        ConnectAssertions.CONNECTOR_SETUP_DURATION_MS,
                         TimeUnit.MILLISECONDS
                 )
         );
@@ -1108,7 +1105,7 @@ public class ExactlyOnceSourceIntegrationTest {
         assertTrue(
                 "Connector and tasks did not finish shutdown in time",
                 connectorStop.await(
-                        EmbeddedConnectClusterAssertions.CONNECTOR_SHUTDOWN_DURATION_MS,
+                        ConnectAssertions.CONNECTOR_SHUTDOWN_DURATION_MS,
                         TimeUnit.MILLISECONDS
                 )
         );

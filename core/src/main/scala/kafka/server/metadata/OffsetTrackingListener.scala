@@ -41,7 +41,7 @@ class OffsetTrackingListener extends RaftClient.Listener[ApiMessageAndVersion] {
     reader.close()
   }
 
-  override def handleSnapshot(reader: SnapshotReader[ApiMessageAndVersion]): Unit = {
+  override def handleLoadSnapshot(reader: SnapshotReader[ApiMessageAndVersion]): Unit = {
     _highestOffset = reader.lastContainedLogOffset()
     reader.close()
   }

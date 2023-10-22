@@ -471,11 +471,6 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
         }
 
         @Override
-        public OptionalLong deleteHorizonMs() {
-            return OptionalLong.empty();
-        }
-
-        @Override
         public LegacyRecord outerRecord() {
             return record;
         }

@@ -149,7 +149,14 @@ public class ConsumerConfig extends AbstractConfig {
      * <code>auto.offset.reset</code>
      */
     public static final String AUTO_OFFSET_RESET_CONFIG = "auto.offset.reset";
-    public static final String AUTO_OFFSET_RESET_DOC = "What to do when there is no initial offset in Kafka or if the current offset does not exist any more on the server (e.g. because that data has been deleted): <ul><li>earliest: automatically reset the offset to the earliest offset<li>latest: automatically reset the offset to the latest offset</li><li>none: throw exception to the consumer if no previous offset is found for the consumer's group</li><li>anything else: throw exception to the consumer.</li></ul>";
+    public static final String AUTO_OFFSET_RESET_DOC = "What to do when there is no initial offset in Kafka or if the current offset does not exist any more on the server " +
+            "(e.g. because that data has been deleted): " +
+            "<ul><li>earliest: automatically reset the offset to the earliest offset" +
+            "<li>latest: automatically reset the offset to the latest offset</li>" +
+            "<li>none: throw exception to the consumer if no previous offset is found for the consumer's group</li>" +
+            "<li>anything else: throw exception to the consumer.</li></ul>" +
+            "<p>Note that altering partition numbers while setting this config to latest may cause message delivery loss since " +
+            "producers could start to send messages to newly added partitions (i.e. no initial offsets exist yet) before consumers reset their offsets.";
 
     /**
      * <code>fetch.min.bytes</code>
@@ -222,6 +229,17 @@ public class ConsumerConfig extends AbstractConfig {
      * <code>retry.backoff.ms</code>
      */
     public static final String RETRY_BACKOFF_MS_CONFIG = CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG;
+
+    /**
+     * <code>enable.metrics.push</code>
+     */
+    public static final String ENABLE_METRICS_PUSH_CONFIG = CommonClientConfigs.ENABLE_METRICS_PUSH_CONFIG;
+    public static final String ENABLE_METRICS_PUSH_DOC = CommonClientConfigs.ENABLE_METRICS_PUSH_DOC;
+
+    /**
+     * <code>retry.backoff.max.ms</code>
+     */
+    public static final String RETRY_BACKOFF_MAX_MS_CONFIG = CommonClientConfigs.RETRY_BACKOFF_MAX_MS_CONFIG;
 
     /**
      * <code>metrics.sample.window.ms</code>
@@ -459,10 +477,21 @@ public class ConsumerConfig extends AbstractConfig {
                                         CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_DOC)
                                 .define(RETRY_BACKOFF_MS_CONFIG,
                                         Type.LONG,
-                                        100L,
+                                        CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS,
                                         atLeast(0L),
                                         Importance.LOW,
                                         CommonClientConfigs.RETRY_BACKOFF_MS_DOC)
+                                .define(RETRY_BACKOFF_MAX_MS_CONFIG,
+                                        Type.LONG,
+                                        CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MAX_MS,
+                                        atLeast(0L),
+                                        Importance.LOW,
+                                        CommonClientConfigs.RETRY_BACKOFF_MAX_MS_DOC)
+                                .define(ENABLE_METRICS_PUSH_CONFIG,
+                                        Type.BOOLEAN,
+                                        true,
+                                        Importance.LOW,
+                                        ENABLE_METRICS_PUSH_DOC)
                                 .define(AUTO_OFFSET_RESET_CONFIG,
                                         Type.STRING,
                                         OffsetResetStrategy.LATEST.toString(),
@@ -590,7 +619,8 @@ public class ConsumerConfig extends AbstractConfig {
                                 .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
                                         Type.STRING,
                                         CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
-                                        in(Utils.enumOptions(SecurityProtocol.class)),
+                                        ConfigDef.CaseInsensitiveValidString
+                                                .in(Utils.enumOptions(SecurityProtocol.class)),
                                         Importance.MEDIUM,
                                         CommonClientConfigs.SECURITY_PROTOCOL_DOC)
                                 .withClientSslSupport()
@@ -600,6 +630,7 @@ public class ConsumerConfig extends AbstractConfig {
     @Override
     protected Map<String, Object> postProcessParsedConfig(final Map<String, Object> parsedValues) {
         CommonClientConfigs.postValidateSaslMechanismConfig(this);
+        CommonClientConfigs.warnDisablingExponentialBackoff(this);
         Map<String, Object> refinedConfigs = CommonClientConfigs.postProcessReconnectBackoffConfigs(this, parsedValues);
         maybeOverrideClientId(refinedConfigs);
         return refinedConfigs;
@@ -619,9 +650,9 @@ public class ConsumerConfig extends AbstractConfig {
         }
     }
 
-    protected static Map<String, Object> appendDeserializerToConfig(Map<String, Object> configs,
-                                                                    Deserializer<?> keyDeserializer,
-                                                                    Deserializer<?> valueDeserializer) {
+    public static Map<String, Object> appendDeserializerToConfig(Map<String, Object> configs,
+                                                                 Deserializer<?> keyDeserializer,
+                                                                 Deserializer<?> valueDeserializer) {
         // validate deserializer configuration, if the passed deserializer instance is null, the user must explicitly set a valid deserializer configuration value
         Map<String, Object> newConfigs = new HashMap<>(configs);
         if (keyDeserializer != null)

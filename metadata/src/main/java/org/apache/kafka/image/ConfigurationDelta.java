@@ -72,7 +72,7 @@ public final class ConfigurationDelta {
                 }
             }
         }
-        return new ConfigurationImage(newData);
+        return new ConfigurationImage(image.resource(), newData);
     }
 
     @Override

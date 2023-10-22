@@ -26,6 +26,7 @@ import kafka.server.DelayedElectLeader;
 import kafka.server.DelayedFetch;
 import kafka.server.DelayedOperationPurgatory;
 import kafka.server.DelayedProduce;
+import kafka.server.DelayedRemoteFetch;
 import kafka.server.KafkaConfig;
 import kafka.server.MetadataCache;
 import kafka.server.QuotaFactory.QuotaManagers;
@@ -53,7 +54,7 @@ public class ReplicaManagerBuilder {
     private MetadataCache metadataCache = null;
     private LogDirFailureChannel logDirFailureChannel = null;
     private AlterPartitionManager alterPartitionManager = null;
-    private BrokerTopicStats brokerTopicStats = new BrokerTopicStats();
+    private BrokerTopicStats brokerTopicStats = null;
     private AtomicBoolean isShuttingDown = new AtomicBoolean(false);
     private Optional<RemoteLogManager> remoteLogManager = Optional.empty();
     private Optional<KafkaZkClient> zkClient = Optional.empty();
@@ -61,6 +62,7 @@ public class ReplicaManagerBuilder {
     private Optional<DelayedOperationPurgatory<DelayedFetch>> delayedFetchPurgatory = Optional.empty();
     private Optional<DelayedOperationPurgatory<DelayedDeleteRecords>> delayedDeleteRecordsPurgatory = Optional.empty();
     private Optional<DelayedOperationPurgatory<DelayedElectLeader>> delayedElectLeaderPurgatory = Optional.empty();
+    private Optional<DelayedOperationPurgatory<DelayedRemoteFetch>> delayedRemoteFetchPurgatory = Optional.empty();
     private Optional<String> threadNamePrefix = Optional.empty();
     private Long brokerEpoch = -1L;
     private Optional<AddPartitionsToTxnManager> addPartitionsToTxnManager = Optional.empty();
@@ -140,6 +142,11 @@ public class ReplicaManagerBuilder {
         return this;
     }
 
+    public ReplicaManagerBuilder setDelayedRemoteFetchPurgatory(DelayedOperationPurgatory<DelayedRemoteFetch> delayedRemoteFetchPurgatory) {
+        this.delayedRemoteFetchPurgatory = Optional.of(delayedRemoteFetchPurgatory);
+        return this;
+    }
+
     public ReplicaManagerBuilder setDelayedDeleteRecordsPurgatory(DelayedOperationPurgatory<DelayedDeleteRecords> delayedDeleteRecordsPurgatory) {
         this.delayedDeleteRecordsPurgatory = Optional.of(delayedDeleteRecordsPurgatory);
         return this;
@@ -172,6 +179,7 @@ public class ReplicaManagerBuilder {
         if (metadataCache == null) throw new RuntimeException("You must set metadataCache");
         if (logDirFailureChannel == null) throw new RuntimeException("You must set logDirFailureChannel");
         if (alterPartitionManager == null) throw new RuntimeException("You must set alterIsrManager");
+        if (brokerTopicStats == null) brokerTopicStats = new BrokerTopicStats(Optional.of(config));
         return new ReplicaManager(config,
                              metrics,
                              time,
@@ -189,6 +197,7 @@ public class ReplicaManagerBuilder {
                              OptionConverters.toScala(delayedFetchPurgatory),
                              OptionConverters.toScala(delayedDeleteRecordsPurgatory),
                              OptionConverters.toScala(delayedElectLeaderPurgatory),
+                             OptionConverters.toScala(delayedRemoteFetchPurgatory),
                              OptionConverters.toScala(threadNamePrefix),
                              () -> brokerEpoch,
                              OptionConverters.toScala(addPartitionsToTxnManager));

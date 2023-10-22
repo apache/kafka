@@ -34,7 +34,6 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.RecordVersion;
 
 import java.nio.ByteBuffer;
-import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -104,59 +103,6 @@ public class ApiVersionsResponse extends AbstractResponse {
             else
                 throw e;
         }
-    }
-
-    public static ApiVersionsResponse defaultApiVersionsResponse(
-        ApiMessageType.ListenerType listenerType
-    ) {
-        return defaultApiVersionsResponse(0, listenerType);
-    }
-
-    public static ApiVersionsResponse defaultApiVersionsResponse(
-        int throttleTimeMs,
-        ApiMessageType.ListenerType listenerType
-    ) {
-        return createApiVersionsResponse(
-            throttleTimeMs,
-            filterApis(RecordVersion.current(), listenerType, true),
-            Features.emptySupportedFeatures(),
-            false
-        );
-    }
-
-    public static ApiVersionsResponse defaultApiVersionsResponse(
-        int throttleTimeMs,
-        ApiMessageType.ListenerType listenerType,
-        boolean enableUnstableLastVersion
-    ) {
-        return createApiVersionsResponse(
-            throttleTimeMs,
-            filterApis(RecordVersion.current(), listenerType, enableUnstableLastVersion),
-            Features.emptySupportedFeatures(),
-            false
-        );
-    }
-
-    public static ApiVersionsResponse createApiVersionsResponse(
-        int throttleTimeMs,
-        ApiVersionCollection apiVersions
-    ) {
-        return createApiVersionsResponse(throttleTimeMs, apiVersions, Features.emptySupportedFeatures(), false);
-    }
-
-    public static ApiVersionsResponse createApiVersionsResponse(
-        int throttleTimeMs,
-        ApiVersionCollection apiVersions,
-        Features<SupportedVersionRange> latestSupportedFeatures,
-        boolean zkMigrationEnabled
-    ) {
-        return createApiVersionsResponse(
-            throttleTimeMs,
-            apiVersions,
-            latestSupportedFeatures,
-            Collections.emptyMap(),
-            UNKNOWN_FINALIZED_FEATURES_EPOCH,
-            zkMigrationEnabled);
     }
 
     public static ApiVersionsResponse createApiVersionsResponse(

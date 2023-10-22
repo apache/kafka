@@ -24,7 +24,7 @@ import java.nio.channels.{SelectionKey, SocketChannel}
 import java.nio.charset.StandardCharsets
 import java.util
 import java.util.concurrent.{CompletableFuture, ConcurrentLinkedQueue, ExecutionException, Executors, TimeUnit}
-import java.util.{Properties, Random}
+import java.util.{Collections, Properties, Random}
 import com.fasterxml.jackson.databind.node.{JsonNodeFactory, ObjectNode, TextNode}
 import com.yammer.metrics.core.{Gauge, Meter}
 
@@ -46,6 +46,7 @@ import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.utils.{AppInfoParser, LogContext, MockTime, Time, Utils}
+import org.apache.kafka.server.common.{Features, MetadataVersion}
 import org.apache.kafka.test.{TestSslUtils, TestUtils => JTestUtils}
 import org.apache.log4j.Level
 import org.junit.jupiter.api.Assertions._
@@ -77,9 +78,9 @@ class SocketServerTest {
   // Clean-up any metrics left around by previous tests
   TestUtils.clearYammerMetrics()
 
-  private val apiVersionManager = new SimpleApiVersionManager(ListenerType.ZK_BROKER, true, false)
+  private val apiVersionManager = new SimpleApiVersionManager(ListenerType.BROKER, true, false,
+    () => new Features(MetadataVersion.latest(), Collections.emptyMap[String, java.lang.Short], 0, true))
   val server = new SocketServer(config, metrics, Time.SYSTEM, credentialProvider, apiVersionManager)
-  server.enableRequestProcessing(Map.empty).get(1, TimeUnit.MINUTES)
   val sockets = new ArrayBuffer[Socket]
 
   private val kafkaLogger = org.apache.log4j.LogManager.getLogger("kafka")
@@ -92,6 +93,7 @@ class SocketServerTest {
 
   @BeforeEach
   def setUp(): Unit = {
+    server.enableRequestProcessing(Map.empty).get(1, TimeUnit.MINUTES)
     // Run the tests with TRACE logging to exercise request logging path
     logLevelToRestore = kafkaLogger.getLevel
     kafkaLogger.setLevel(Level.TRACE)
@@ -887,7 +889,7 @@ class SocketServerTest {
       // except the Acceptor overriding a method to inject the exception
       override protected def createDataPlaneAcceptor(endPoint: EndPoint, isPrivilegedListener: Boolean, requestChannel: RequestChannel): DataPlaneAcceptor = {
 
-        new DataPlaneAcceptor(this, endPoint, config, nodeId, connectionQuotas, time, false, requestChannel, serverMetrics, credentialProvider, new LogContext(), MemoryPool.NONE, apiVersionManager) {
+        new DataPlaneAcceptor(this, endPoint, this.config, nodeId, connectionQuotas, time, false, requestChannel, serverMetrics, this.credentialProvider, new LogContext(), MemoryPool.NONE, this.apiVersionManager) {
           override protected def configureAcceptedSocketChannel(socketChannel: SocketChannel): Unit = {
             assertEquals(1, connectionQuotas.get(socketChannel.socket.getInetAddress))
             throw new IOException("test injected IOException")
@@ -1989,6 +1991,7 @@ class SocketServerTest {
     val sslProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, interBrokerSecurityProtocol = Some(SecurityProtocol.SSL),
       trustStoreFile = Some(trustStoreFile))
     sslProps.put(KafkaConfig.ListenersProp, "SSL://localhost:0")
+    sslProps.put(KafkaConfig.NumNetworkThreadsProp, "1")
     sslProps
   }
 
@@ -2146,7 +2149,7 @@ class SocketServerTest {
   ) {
 
     override def createDataPlaneAcceptor(endPoint: EndPoint, isPrivilegedListener: Boolean, requestChannel: RequestChannel) : DataPlaneAcceptor = {
-      new TestableAcceptor(this, endPoint, config, 0, connectionQuotas, time, isPrivilegedListener, requestChannel, metrics, credentialProvider, new LogContext, MemoryPool.NONE, apiVersionManager, connectionQueueSize)
+      new TestableAcceptor(this, endPoint, this.config, 0, connectionQuotas, time, isPrivilegedListener, requestChannel, this.metrics, this.credentialProvider, new LogContext, MemoryPool.NONE, this.apiVersionManager, connectionQueueSize)
     }
 
     def testableSelector: TestableSelector =

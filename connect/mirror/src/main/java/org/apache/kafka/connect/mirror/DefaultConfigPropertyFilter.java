@@ -53,10 +53,6 @@ public class DefaultConfigPropertyFilter implements ConfigPropertyFilter {
         useDefaultsFrom = config.useDefaultsFrom();
     }
 
-    @Override
-    public void close() {
-    }
-
     private boolean excluded(String prop) {
         return excludePattern != null && excludePattern.matcher(prop).matches();
     }

@@ -26,11 +26,14 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, LogDirFailureChannel, LogStartOffsetIncrementReason, ProducerStateManager, ProducerStateManagerConfig}
+import org.apache.kafka.server.util.MockTime
+import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, LogDirFailureChannel, LogSegment, LogSegments, LogStartOffsetIncrementReason, ProducerStateManager, ProducerStateManagerConfig}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 
+import java.util
 import scala.collection.mutable
+import scala.compat.java8.OptionConverters._
 
 /**
   * Unit tests for the log cleaning logic
@@ -50,7 +53,7 @@ class LogCleanerManagerTest extends Logging {
   val logConfig: LogConfig = new LogConfig(logProps)
   val time = new MockTime(1400000000000L, 1000L)  // Tue May 13 16:53:20 UTC 2014 for `currentTimeMs`
   val offset = 999
-  val producerStateManagerConfig = new ProducerStateManagerConfig(kafka.server.Defaults.ProducerIdExpirationMs)
+  val producerStateManagerConfig = new ProducerStateManagerConfig(kafka.server.Defaults.ProducerIdExpirationMs, false)
 
   val cleanerCheckpoints: mutable.Map[TopicPartition, Long] = mutable.Map[TopicPartition, Long]()
 
@@ -116,7 +119,7 @@ class LogCleanerManagerTest extends Logging {
       segments,
       0L,
       0L,
-      leaderEpochCache,
+      leaderEpochCache.asJava,
       producerStateManager
     ).load()
     val localLog = new LocalLog(tpDir, config, segments, offsets.recoveryPoint,
@@ -126,7 +129,7 @@ class LogCleanerManagerTest extends Logging {
         producerIdExpirationCheckIntervalMs, leaderEpochCache,
         producerStateManager, _topicId = None, keepPartitionMetadataFile = true) {
       // Throw an error in getFirstBatchTimestampForSegments since it is called in grabFilthiestLog()
-      override def getFirstBatchTimestampForSegments(segments: Iterable[LogSegment]): Iterable[Long] =
+      override def getFirstBatchTimestampForSegments(segments: util.Collection[LogSegment]): util.Collection[java.lang.Long] =
         throw new IllegalStateException("Error!")
     }
 

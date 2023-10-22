@@ -169,7 +169,7 @@ public class StandardAuthorizer implements ClusterMetadataAuthorizer {
         AuthorizationResult defaultResult = getDefaultResult(configs);
         int nodeId;
         try {
-            nodeId = Integer.parseInt(configs.get("node.id").toString());
+            nodeId = Integer.parseInt(configs.get("node.id").toString().trim());
         } catch (Exception e) {
             nodeId = -1;
         }
@@ -204,6 +204,6 @@ public class StandardAuthorizer implements ClusterMetadataAuthorizer {
     static AuthorizationResult getDefaultResult(Map<String, ?> configs) {
         Object configValue = configs.get(ALLOW_EVERYONE_IF_NO_ACL_IS_FOUND_CONFIG);
         if (configValue == null) return DENIED;
-        return Boolean.valueOf(configValue.toString()) ? ALLOWED : DENIED;
+        return Boolean.parseBoolean(configValue.toString().trim()) ? ALLOWED : DENIED;
     }
 }

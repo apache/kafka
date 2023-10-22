@@ -17,6 +17,9 @@
 
 package org.apache.kafka.deferred;
 
+import org.apache.kafka.common.utils.LogContext;
+import org.slf4j.Logger;
+
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -29,11 +32,17 @@ import java.util.TreeMap;
  * We wait for the high watermark of the log to advance before completing them.
  */
 public class DeferredEventQueue {
+    private final Logger log;
+
     /**
      * A map from log offsets to events.  Each event will be completed once the log
      * advances past its offset.
      */
     private final TreeMap<Long, List<DeferredEvent>> pending = new TreeMap<>();
+
+    public DeferredEventQueue(LogContext logContext) {
+        this.log = logContext.logger(DeferredEventQueue.class);
+    }
 
     /**
      * Complete some purgatory entries.
@@ -42,15 +51,22 @@ public class DeferredEventQueue {
      */
     public void completeUpTo(long offset) {
         Iterator<Entry<Long, List<DeferredEvent>>> iter = pending.entrySet().iterator();
+        int numCompleted = 0;
         while (iter.hasNext()) {
             Entry<Long, List<DeferredEvent>> entry = iter.next();
             if (entry.getKey() > offset) {
                 break;
             }
             for (DeferredEvent event : entry.getValue()) {
+                log.debug("completeUpTo({}): successfully completing {}", offset, event);
                 event.complete(null);
+                numCompleted++;
             }
             iter.remove();
+        }
+        if (log.isTraceEnabled()) {
+            log.trace("completeUpTo({}): successfully completed {} deferred entries",
+                    offset, numCompleted);
         }
     }
 
@@ -64,6 +80,7 @@ public class DeferredEventQueue {
         while (iter.hasNext()) {
             Entry<Long, List<DeferredEvent>> entry = iter.next();
             for (DeferredEvent event : entry.getValue()) {
+                log.info("failAll({}): failing {}.", exception.getClass().getSimpleName(), event);
                 event.complete(exception);
             }
             iter.remove();
@@ -91,6 +108,9 @@ public class DeferredEventQueue {
             pending.put(offset, events);
         }
         events.add(event);
+        if (log.isTraceEnabled()) {
+            log.trace("Adding deferred event {} at offset {}", event, offset);
+        }
     }
 
     /**

@@ -23,7 +23,6 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
@@ -91,7 +90,7 @@ import java.util.function.Supplier;
  * obviously cannot take into account in-flight requests.
  *
  */
-public class KafkaStatusBackingStore implements StatusBackingStore {
+public class KafkaStatusBackingStore extends KafkaTopicBasedBackingStore implements StatusBackingStore {
     private static final Logger log = LoggerFactory.getLogger(KafkaStatusBackingStore.class);
 
     public static final String TASK_STATUS_PREFIX = "status-task-";
@@ -221,26 +220,7 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
                 .build();
 
         Callback<ConsumerRecord<String, byte[]>> readCallback = (error, record) -> read(record);
-        this.kafkaLog = createKafkaBasedLog(statusTopic, producerProps, consumerProps, readCallback, topicDescription, adminSupplier);
-    }
-
-    // Visible for testing
-    protected KafkaBasedLog<String, byte[]> createKafkaBasedLog(String topic, Map<String, Object> producerProps,
-                                                              Map<String, Object> consumerProps,
-                                                              Callback<ConsumerRecord<String, byte[]>> consumedCallback,
-                                                              final NewTopic topicDescription, Supplier<TopicAdmin> adminSupplier) {
-        java.util.function.Consumer<TopicAdmin> createTopics = admin -> {
-            log.debug("Creating admin client to manage Connect internal status topic");
-            // Create the topic if it doesn't exist
-            Set<String> newTopics = admin.createTopics(topicDescription);
-            if (!newTopics.contains(topic)) {
-                // It already existed, so check that the topic cleanup policy is compact only and not delete
-                log.debug("Using admin client to check cleanup policy of '{}' topic is '{}'", topic, TopicConfig.CLEANUP_POLICY_COMPACT);
-                admin.verifyTopicCleanupPolicyOnlyCompact(topic,
-                        DistributedConfig.STATUS_STORAGE_TOPIC_CONFIG, "connector and task statuses");
-            }
-        };
-        return new KafkaBasedLog<>(topic, producerProps, consumerProps, adminSupplier, consumedCallback, time, createTopics);
+        this.kafkaLog = createKafkaBasedLog(statusTopic, producerProps, consumerProps, readCallback, topicDescription, adminSupplier, config, time);
     }
 
     @Override
@@ -608,6 +588,25 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
         synchronized (this) {
             log.trace("Received task {} status update {}", id, status);
             CacheEntry<TaskStatus> entry = getOrAdd(id);
+
+            // During frequent rebalances, there could be a race condition because of which
+            // an UNASSIGNED state of a prior or same generation can be sent by a worker despite a
+            // RUNNING status by another worker because the first worker
+            // couldn't read the latest RUNNING status. This can lead to an inaccurate status
+            // representation even though the task might be actually running.
+            // Note that this could also mean that when a generation reset happens, and an
+            // UNASSIGNED status is sent, then it would be ignored if the current status is RUNNING
+            // at a higher generation. But since it will be followed by a RUNNING or a different
+            // status message(at the lower generation) soon after, the misrepresentation of the UNASSIGNED
+            // status would be short-lived in most cases.
+            if (status.state() == TaskStatus.State.UNASSIGNED
+                    && entry.get() != null
+                    && entry.get().state() == TaskStatus.State.RUNNING
+                    && entry.get().generation() >= status.generation()) {
+                log.trace("Ignoring stale status {} in favour of more upto date status {}", status, entry.get());
+                return;
+            }
+
             entry.put(status);
         }
     }
@@ -668,6 +667,16 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
         } else {
             log.warn("Discarding record with invalid key {}", key);
         }
+    }
+
+    @Override
+    protected String getTopicConfig() {
+        return DistributedConfig.STATUS_STORAGE_TOPIC_CONFIG;
+    }
+
+    @Override
+    protected String getTopicPurpose() {
+        return "connector and task statuses";
     }
 
     private static class CacheEntry<T extends AbstractStatus<?>> {

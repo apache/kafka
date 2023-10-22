@@ -151,7 +151,7 @@ class LogConcurrencyTest {
       brokerTopicStats = brokerTopicStats,
       time = Time.SYSTEM,
       maxTransactionTimeoutMs = 5 * 60 * 1000,
-      producerStateManagerConfig = new ProducerStateManagerConfig(kafka.server.Defaults.ProducerIdExpirationMs),
+      producerStateManagerConfig = new ProducerStateManagerConfig(kafka.server.Defaults.ProducerIdExpirationMs, false),
       producerIdExpirationCheckIntervalMs = kafka.server.Defaults.ProducerIdExpirationCheckIntervalMs,
       logDirFailureChannel = new LogDirFailureChannel(10),
       topicId = None,
@@ -161,7 +161,7 @@ class LogConcurrencyTest {
 
   private def validateConsumedData(log: UnifiedLog, consumedBatches: Iterable[FetchedBatch]): Unit = {
     val iter = consumedBatches.iterator
-    log.logSegments.foreach { segment =>
+    log.logSegments.forEach { segment =>
       segment.log.batches.forEach { batch =>
         if (iter.hasNext) {
           val consumedBatch = iter.next()

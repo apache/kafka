@@ -25,8 +25,8 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.FetchResponse
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.{Test, Timeout}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
@@ -61,12 +61,13 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
   def testFollowerCompleteDelayedFetchesOnReplication(quorum: String): Unit = {
     // Create a topic with 2 replicas where broker 0 is the leader and 1 is the follower.
     val admin = createAdminClient()
-    TestUtils.createTopicWithAdmin(
+    val partitionLeaders = TestUtils.createTopicWithAdmin(
       admin,
       topic,
       brokers,
       replicaAssignment = Map(0 -> Seq(leaderBrokerId, followerBrokerId))
     )
+    assertTrue(partitionLeaders.values.forall(_ == leaderBrokerId))
 
     val version = ApiKeys.FETCH.latestVersion()
     val topicPartition = new TopicPartition(topic, 0)
@@ -97,8 +98,9 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
     }
   }
 
-  @Test
-  def testFetchFromLeaderWhilePreferredReadReplicaIsUnavailable(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testFetchFromLeaderWhilePreferredReadReplicaIsUnavailable(quorum: String): Unit = {
     // Create a topic with 2 replicas where broker 0 is the leader and 1 is the follower.
     val admin = createAdminClient()
     TestUtils.createTopicWithAdmin(
@@ -123,8 +125,9 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
     assertEquals(-1, getPreferredReplica)
   }
 
-  @Test
-  def testFetchFromFollowerWithRoll(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testFetchFromFollowerWithRoll(quorum: String): Unit = {
     // Create a topic with 2 replicas where broker 0 is the leader and 1 is the follower.
     val admin = createAdminClient()
     TestUtils.createTopicWithAdmin(
@@ -172,20 +175,21 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
     }
   }
 
-  @Test
-  def testRackAwareRangeAssignor(): Unit = {
-    val partitionList = servers.indices.toList
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testRackAwareRangeAssignor(quorum: String): Unit = {
+    val partitionList = brokers.indices.toList
 
     val topicWithAllPartitionsOnAllRacks = "topicWithAllPartitionsOnAllRacks"
-    createTopic(topicWithAllPartitionsOnAllRacks, servers.size, servers.size)
+    createTopic(topicWithAllPartitionsOnAllRacks, brokers.size, brokers.size)
 
     // Racks are in order of broker ids, assign leaders in reverse order
     val topicWithSingleRackPartitions = "topicWithSingleRackPartitions"
-    createTopicWithAssignment(topicWithSingleRackPartitions, partitionList.map(i => (i, Seq(servers.size - i - 1))).toMap)
+    createTopicWithAssignment(topicWithSingleRackPartitions, partitionList.map(i => (i, Seq(brokers.size - i - 1))).toMap)
 
     // Create consumers with instance ids in ascending order, with racks in the same order.
     consumerConfig.setProperty(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, classOf[RangeAssignor].getName)
-    val consumers = servers.map { server =>
+    val consumers = brokers.map { server =>
       consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
       consumerConfig.setProperty(ConsumerConfig.CLIENT_RACK_CONFIG, server.config.rack.orNull)
       consumerConfig.setProperty(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, s"instance-${server.config.brokerId}")
@@ -200,20 +204,28 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
       val assignments = partitionOrder.map { p =>
         topics.map(topic => new TopicPartition(topic, p)).toSet
       }
+
       val assignmentFutures = consumers.zipWithIndex.map { case (consumer, i) =>
         executor.submit(() => {
           val expectedAssignment = assignments(i)
           TestUtils.pollUntilTrue(consumer, () => consumer.assignment() == expectedAssignment.asJava,
-            s"Timed out while awaiting expected assignment $expectedAssignment. The current assignment is ${consumer.assignment()}")
+            s"Timed out while awaiting expected assignment $expectedAssignment. The current assignment is ${consumer.assignment()}",
+            waitTimeMs = 30000)
         }, 0)
       }
-      assignmentFutures.foreach(future => assertEquals(0, future.get(20, TimeUnit.SECONDS)))
+      assignmentFutures.foreach(future => assertEquals(0, future.get(30, TimeUnit.SECONDS)))
 
       assignments.flatten.foreach { tp =>
         producer.send(new ProducerRecord(tp.topic, tp.partition, s"key-$tp".getBytes, s"value-$tp".getBytes))
       }
-      consumers.zipWithIndex.foreach { case (consumer, i) =>
-        val records = TestUtils.pollUntilAtLeastNumRecords(consumer, assignments(i).size)
+
+      val recordFutures = consumers.zipWithIndex.map { case (consumer, i) =>
+        executor.submit(() => {
+          TestUtils.pollUntilAtLeastNumRecords(consumer, assignments(i).size, waitTimeMs = 30000)
+        })
+      }
+      recordFutures.zipWithIndex.foreach { case (future, i) =>
+        val records = future.get(30, TimeUnit.SECONDS)
         assertEquals(assignments(i), records.map(r => new TopicPartition(r.topic, r.partition)).toSet)
       }
     }
@@ -240,7 +252,7 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
         val newAssignment = new NewPartitionReassignment(Collections.singletonList(p))
         reassignments.put(new TopicPartition(topicWithSingleRackPartitions, p), util.Optional.of(newAssignment))
       }
-      admin.alterPartitionReassignments(reassignments).all().get(15, TimeUnit.SECONDS)
+      admin.alterPartitionReassignments(reassignments).all().get(30, TimeUnit.SECONDS)
       verifyAssignments(partitionList, topicWithAllPartitionsOnAllRacks, topicWithSingleRackPartitions)
 
     } finally {

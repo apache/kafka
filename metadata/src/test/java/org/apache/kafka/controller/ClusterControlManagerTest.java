@@ -17,13 +17,13 @@
 
 package org.apache.kafka.controller;
 
-import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InconsistentClusterIdException;
 import org.apache.kafka.common.errors.StaleBrokerEpochException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData;
+import org.apache.kafka.common.message.ControllerRegistrationRequestData;
 import org.apache.kafka.common.metadata.BrokerRegistrationChangeRecord;
 import org.apache.kafka.common.metadata.FenceBrokerRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
@@ -75,7 +75,7 @@ public class ClusterControlManagerTest {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         FeatureControlManager featureControl = new FeatureControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
-            setQuorumFeatures(new QuorumFeatures(0, new ApiVersions(),
+            setQuorumFeatures(new QuorumFeatures(0,
                 QuorumFeatures.defaultFeatureMap(),
                 Collections.singletonList(0))).
             setMetadataVersion(MetadataVersion.latest()).
@@ -136,7 +136,7 @@ public class ClusterControlManagerTest {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         FeatureControlManager featureControl = new FeatureControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
-            setQuorumFeatures(new QuorumFeatures(0, new ApiVersions(),
+            setQuorumFeatures(new QuorumFeatures(0,
                 QuorumFeatures.defaultFeatureMap(),
                 Collections.singletonList(0))).
             setMetadataVersion(MetadataVersion.latest()).
@@ -189,7 +189,7 @@ public class ClusterControlManagerTest {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         FeatureControlManager featureControl = new FeatureControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
-            setQuorumFeatures(new QuorumFeatures(0, new ApiVersions(),
+            setQuorumFeatures(new QuorumFeatures(0,
                 QuorumFeatures.defaultFeatureMap(),
                 Collections.singletonList(0))).
             setMetadataVersion(MetadataVersion.latest()).
@@ -244,7 +244,7 @@ public class ClusterControlManagerTest {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         FeatureControlManager featureControl = new FeatureControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
-            setQuorumFeatures(new QuorumFeatures(0, new ApiVersions(),
+            setQuorumFeatures(new QuorumFeatures(0,
                 QuorumFeatures.defaultFeatureMap(),
                 Collections.singletonList(0))).
             setMetadataVersion(MetadataVersion.latest()).
@@ -264,7 +264,8 @@ public class ClusterControlManagerTest {
                     setRack(null).
                     setIncarnationId(Uuid.fromString("0H4fUu1xQEKXFYwB1aBjhg")),
                 123L,
-                new FinalizedControllerFeatures(Collections.emptyMap(), 456L)));
+                new FinalizedControllerFeatures(Collections.emptyMap(), 456L),
+                (short) 1));
     }
 
     @ParameterizedTest
@@ -273,7 +274,7 @@ public class ClusterControlManagerTest {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         FeatureControlManager featureControl = new FeatureControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
-            setQuorumFeatures(new QuorumFeatures(0, new ApiVersions(),
+            setQuorumFeatures(new QuorumFeatures(0,
                 QuorumFeatures.defaultFeatureMap(),
                 Collections.singletonList(0))).
             setMetadataVersion(metadataVersion).
@@ -294,7 +295,8 @@ public class ClusterControlManagerTest {
                 setRack(null).
                 setIncarnationId(Uuid.fromString("0H4fUu1xQEKXFYwB1aBjhg")),
             123L,
-            new FinalizedControllerFeatures(Collections.emptyMap(), 456L));
+            new FinalizedControllerFeatures(Collections.emptyMap(), 456L),
+            (short) 1);
 
         short expectedVersion = metadataVersion.registerBrokerRecordVersion();
 
@@ -329,7 +331,7 @@ public class ClusterControlManagerTest {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         FeatureControlManager featureControl = new FeatureControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
-            setQuorumFeatures(new QuorumFeatures(0, new ApiVersions(),
+            setQuorumFeatures(new QuorumFeatures(0,
                 QuorumFeatures.defaultFeatureMap(),
                 Collections.singletonList(0))).
             setMetadataVersion(MetadataVersion.latest()).
@@ -363,7 +365,7 @@ public class ClusterControlManagerTest {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         FeatureControlManager featureControl = new FeatureControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
-            setQuorumFeatures(new QuorumFeatures(0, new ApiVersions(),
+            setQuorumFeatures(new QuorumFeatures(0,
                 QuorumFeatures.defaultFeatureMap(),
                 Collections.singletonList(0))).
             setMetadataVersion(MetadataVersion.latest()).
@@ -416,7 +418,7 @@ public class ClusterControlManagerTest {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         FeatureControlManager featureControl = new FeatureControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
-            setQuorumFeatures(new QuorumFeatures(0, new ApiVersions(),
+            setQuorumFeatures(new QuorumFeatures(0,
                 QuorumFeatures.defaultFeatureMap(),
                 Collections.singletonList(0))).
             setMetadataVersion(metadataVersion).
@@ -492,7 +494,7 @@ public class ClusterControlManagerTest {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         FeatureControlManager featureControl = new FeatureControlManager.Builder().
                 setSnapshotRegistry(snapshotRegistry).
-                setQuorumFeatures(new QuorumFeatures(0, new ApiVersions(),
+                setQuorumFeatures(new QuorumFeatures(0,
                         Collections.singletonMap(MetadataVersion.FEATURE_NAME, VersionRange.of(
                                 MetadataVersion.IBP_3_1_IV0.featureLevel(),
                                 MetadataVersion.IBP_3_3_IV0.featureLevel())),
@@ -517,7 +519,8 @@ public class ClusterControlManagerTest {
                         setRack(null).
                         setIncarnationId(Uuid.fromString("0H4fUu1xQEKXFYwB1aBjhg")),
                     123L,
-                    featureControl.finalizedFeatures(Long.MAX_VALUE))).getMessage());
+                    featureControl.finalizedFeatures(Long.MAX_VALUE),
+                    (short) 1)).getMessage());
 
         assertEquals("Unable to register because the broker does not support version 4 of " +
             "metadata.version. It wants a version between 7 and 7, inclusive.",
@@ -534,6 +537,22 @@ public class ClusterControlManagerTest {
                                     setMaxSupportedVersion(MetadataVersion.IBP_3_3_IV3.featureLevel())).iterator())).
                         setIncarnationId(Uuid.fromString("0H4fUu1xQEKXFYwB1aBjhg")),
                     123L,
-                    featureControl.finalizedFeatures(Long.MAX_VALUE))).getMessage());
+                    featureControl.finalizedFeatures(Long.MAX_VALUE),
+                    (short) 1)).getMessage());
+    }
+
+    @Test
+    public void testRegisterControlWithOlderMetadataVersion() {
+        FeatureControlManager featureControl = new FeatureControlManager.Builder().
+            setMetadataVersion(MetadataVersion.IBP_3_3_IV0).
+            build();
+        ClusterControlManager clusterControl = new ClusterControlManager.Builder().
+            setClusterId("fPZv1VBsRFmnlRvmGcOW9w").
+            setFeatureControlManager(featureControl).
+            build();
+        clusterControl.activate();
+        assertEquals("The current MetadataVersion is too old to support controller registrations.",
+            assertThrows(UnsupportedVersionException.class, () -> clusterControl.registerController(
+                new ControllerRegistrationRequestData().setControllerId(1))).getMessage());
     }
 }

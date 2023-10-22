@@ -21,6 +21,7 @@ import java.util.OptionalLong;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 
+import org.apache.kafka.common.utils.LogContext;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -51,7 +52,7 @@ public class DeferredEventQueueTest {
 
     @Test
     public void testCompleteEvents() {
-        DeferredEventQueue deferredEventQueue = new DeferredEventQueue();
+        DeferredEventQueue deferredEventQueue = new DeferredEventQueue(new LogContext());
         SampleDeferredEvent event1 = new SampleDeferredEvent();
         SampleDeferredEvent event2 = new SampleDeferredEvent();
         SampleDeferredEvent event3 = new SampleDeferredEvent();
@@ -72,7 +73,7 @@ public class DeferredEventQueueTest {
 
     @Test
     public void testFailOnIncorrectOrdering() {
-        DeferredEventQueue deferredEventQueue = new DeferredEventQueue();
+        DeferredEventQueue deferredEventQueue = new DeferredEventQueue(new LogContext());
         SampleDeferredEvent event1 = new SampleDeferredEvent();
         SampleDeferredEvent event2 = new SampleDeferredEvent();
         deferredEventQueue.add(2, event1);
@@ -81,7 +82,7 @@ public class DeferredEventQueueTest {
 
     @Test
     public void testFailEvents() {
-        DeferredEventQueue deferredEventQueue = new DeferredEventQueue();
+        DeferredEventQueue deferredEventQueue = new DeferredEventQueue(new LogContext());
         SampleDeferredEvent event1 = new SampleDeferredEvent();
         SampleDeferredEvent event2 = new SampleDeferredEvent();
         SampleDeferredEvent event3 = new SampleDeferredEvent();

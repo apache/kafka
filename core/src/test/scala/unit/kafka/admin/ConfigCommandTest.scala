@@ -21,7 +21,7 @@ import java.util.Properties
 import kafka.admin.ConfigCommand.ConfigCommandOptions
 import kafka.cluster.Broker
 import kafka.server.{ConfigEntityName, ConfigType}
-import kafka.utils.{Exit, Logging}
+import kafka.utils.{Exit, Logging, TestUtils}
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.common.Node
@@ -31,7 +31,6 @@ import org.apache.kafka.common.internals.KafkaFutureImpl
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter, ClientQuotaFilterComponent}
 import org.apache.kafka.common.security.scram.internals.ScramCredentialUtils
 import org.apache.kafka.common.utils.Sanitizer
-import org.apache.kafka.test.TestUtils
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.mockito.ArgumentMatchers.anyString
@@ -45,6 +44,10 @@ class ConfigCommandTest extends Logging {
   private val zkConnect = "localhost:2181"
   private val dummyAdminZkClient = new DummyAdminZkClient(null)
 
+  private val zookeeperBootstrap = Array("--zookeeper", zkConnect)
+  private val brokerBootstrap = Array("--bootstrap-server", "localhost:9092")
+  private val controllerBootstrap = Array("--bootstrap-controller", "localhost:9093")
+
   @Test
   def shouldExitWithNonZeroStatusOnArgError(): Unit = {
     assertNonZeroStatusExit(Array("--blah"))
@@ -52,32 +55,28 @@ class ConfigCommandTest extends Logging {
 
   @Test
   def shouldExitWithNonZeroStatusOnZkCommandWithTopicsEntity(): Unit = {
-    assertNonZeroStatusExit(Array(
-      "--zookeeper", zkConnect,
+    assertNonZeroStatusExit(zookeeperBootstrap  ++ Array(
       "--entity-type", "topics",
       "--describe"))
   }
 
   @Test
   def shouldExitWithNonZeroStatusOnZkCommandWithClientsEntity(): Unit = {
-    assertNonZeroStatusExit(Array(
-      "--zookeeper", zkConnect,
+    assertNonZeroStatusExit(zookeeperBootstrap ++ Array(
       "--entity-type", "clients",
       "--describe"))
   }
 
   @Test
   def shouldExitWithNonZeroStatusOnZkCommandWithIpsEntity(): Unit = {
-    assertNonZeroStatusExit(Array(
-      "--zookeeper", zkConnect,
+    assertNonZeroStatusExit(zookeeperBootstrap ++ Array(
       "--entity-type", "ips",
       "--describe"))
   }
 
   @Test
   def shouldExitWithNonZeroStatusAlterUserQuotaWithoutEntityName(): Unit = {
-    assertNonZeroStatusExit(Array(
-      "--bootstrap-server", "localhost:9092",
+    assertNonZeroStatusExit(brokerBootstrap ++ Array(
       "--entity-type", "users",
       "--alter", "--add-config", "consumer_byte_rate=20000"))
   }
@@ -89,6 +88,12 @@ class ConfigCommandTest extends Logging {
       "--entity-type", "brokers",
       "--entity-name", "1",
       "--describe"))
+  }
+
+  @Test
+  def shouldExitWithNonZeroStatusIfBothBootstrapServerAndBootstrapControllerGiven(): Unit = {
+    assertNonZeroStatusExit(brokerBootstrap ++ controllerBootstrap ++ Array(
+      "--describe", "--broker-defaults" ))
   }
 
   @Test
@@ -120,66 +125,96 @@ class ConfigCommandTest extends Logging {
 
   @Test
   def shouldFailParseArgumentsForClientsEntityTypeUsingZookeeper(): Unit = {
-    assertThrows(classOf[IllegalArgumentException], () => testArgumentParse("clients", zkConfig = true))
+    assertThrows(classOf[IllegalArgumentException], () => testArgumentParse(zookeeperBootstrap, "clients"))
   }
 
   @Test
-  def shouldParseArgumentsForClientsEntityType(): Unit = {
-    testArgumentParse("clients", zkConfig = false)
+  def shouldParseArgumentsForClientsEntityTypeWithBrokerBootstrap(): Unit = {
+    testArgumentParse(brokerBootstrap, "clients")
+  }
+
+  @Test
+  def shouldParseArgumentsForClientsEntityTypeWithControllerBootstrap(): Unit = {
+    testArgumentParse(controllerBootstrap, "clients")
   }
 
   @Test
   def shouldParseArgumentsForUsersEntityTypeUsingZookeeper(): Unit = {
-    testArgumentParse("users", zkConfig = true)
+    testArgumentParse(zookeeperBootstrap, "users")
   }
 
   @Test
-  def shouldParseArgumentsForUsersEntityType(): Unit = {
-    testArgumentParse("users", zkConfig = false)
+  def shouldParseArgumentsForUsersEntityTypeWithBrokerBootstrap(): Unit = {
+    testArgumentParse(brokerBootstrap, "users")
+  }
+
+  @Test
+  def shouldParseArgumentsForUsersEntityTypeWithControllerBootstrap(): Unit = {
+    testArgumentParse(controllerBootstrap, "users")
   }
 
   @Test
   def shouldFailParseArgumentsForTopicsEntityTypeUsingZookeeper(): Unit = {
-    assertThrows(classOf[IllegalArgumentException], () => testArgumentParse("topics", zkConfig = true))
+    assertThrows(classOf[IllegalArgumentException], () => testArgumentParse(zookeeperBootstrap, "topics"))
   }
 
   @Test
-  def shouldParseArgumentsForTopicsEntityType(): Unit = {
-    testArgumentParse("topics", zkConfig = false)
+  def shouldParseArgumentsForTopicsEntityTypeWithBrokerBootstrap(): Unit = {
+    testArgumentParse(brokerBootstrap, "topics")
+  }
+
+  @Test
+  def shouldParseArgumentsForTopicsEntityTypeWithControllerBootstrap(): Unit = {
+    testArgumentParse(controllerBootstrap, "topics")
   }
 
   @Test
   def shouldParseArgumentsForBrokersEntityTypeUsingZookeeper(): Unit = {
-    testArgumentParse("brokers", zkConfig = true)
+    testArgumentParse(zookeeperBootstrap, "brokers")
   }
 
   @Test
-  def shouldParseArgumentsForBrokersEntityType(): Unit = {
-    testArgumentParse("brokers", zkConfig = false)
+  def shouldParseArgumentsForBrokersEntityTypeWithBrokerBootstrap(): Unit = {
+    testArgumentParse(brokerBootstrap, "brokers")
   }
 
   @Test
-  def shouldParseArgumentsForBrokerLoggersEntityType(): Unit = {
-    testArgumentParse("broker-loggers", zkConfig = false)
+  def shouldParseArgumentsForBrokersEntityTypeWithControllerBootstrap(): Unit = {
+    testArgumentParse(controllerBootstrap, "brokers")
+  }
+
+  @Test
+  def shouldParseArgumentsForBrokerLoggersEntityTypeWithBrokerBootstrap(): Unit = {
+    testArgumentParse(brokerBootstrap, "broker-loggers")
+  }
+
+  @Test
+  def shouldParseArgumentsForBrokerLoggersEntityTypeWithControllerBootstrap(): Unit = {
+    testArgumentParse(controllerBootstrap, "broker-loggers")
   }
 
   @Test
   def shouldFailParseArgumentsForIpEntityTypeUsingZookeeper(): Unit = {
-    assertThrows(classOf[IllegalArgumentException], () => testArgumentParse("ips", zkConfig = true))
+    assertThrows(classOf[IllegalArgumentException], () => testArgumentParse(zookeeperBootstrap, "ips"))
   }
 
   @Test
-  def shouldParseArgumentsForIpEntityType(): Unit = {
-    testArgumentParse("ips", zkConfig = false)
+  def shouldParseArgumentsForIpEntityTypeWithBrokerBootstrap(): Unit = {
+    testArgumentParse(brokerBootstrap, "ips")
   }
 
-  def testArgumentParse(entityType: String, zkConfig: Boolean): Unit = {
+  @Test
+  def shouldParseArgumentsForIpEntityTypeWithControllerBootstrap(): Unit = {
+    testArgumentParse(controllerBootstrap, "ips")
+  }
+
+  def testArgumentParse(
+    bootstrapArguments: Array[String],
+    entityType: String
+  ): Unit = {
     val shortFlag: String = s"--${entityType.dropRight(1)}"
 
-    val connectOpts = if (zkConfig)
-      ("--zookeeper", zkConnect)
-    else
-      ("--bootstrap-server", "localhost:9092")
+    val connectOpts = (bootstrapArguments(0), bootstrapArguments(1))
 
     // Should parse correctly
     var createOpts = new ConfigCommandOptions(Array(connectOpts._1, connectOpts._2,
@@ -269,15 +304,31 @@ class ConfigCommandTest extends Logging {
     createOpts = new ConfigCommandOptions(Array(connectOpts._1, connectOpts._2,
       shortFlag, "1",
       "--alter",
-      "--add-config", "a=b,c=,d=e,f="))
+      "--add-config", "a._-c=b,c=,d=e,f="))
     createOpts.checkArgs()
 
     val addedProps2 = ConfigCommand.parseConfigsToBeAdded(createOpts)
     assertEquals(4, addedProps2.size())
-    assertEquals("b", addedProps2.getProperty("a"))
+    assertEquals("b", addedProps2.getProperty("a._-c"))
     assertEquals("e", addedProps2.getProperty("d"))
     assertTrue(addedProps2.getProperty("c").isEmpty)
     assertTrue(addedProps2.getProperty("f").isEmpty)
+
+    var inValidCreateOpts = new ConfigCommandOptions(Array(connectOpts._1, connectOpts._2,
+      shortFlag, "1",
+      "--alter",
+      "--add-config", "a;c=b"))
+
+    assertThrows(classOf[IllegalArgumentException],
+      () => ConfigCommand.parseConfigsToBeAdded(inValidCreateOpts))
+
+    inValidCreateOpts = new ConfigCommandOptions(Array(connectOpts._1, connectOpts._2,
+      shortFlag, "1",
+      "--alter",
+      "--add-config", "a,=b"))
+
+    assertThrows(classOf[IllegalArgumentException],
+      () => ConfigCommand.parseConfigsToBeAdded(inValidCreateOpts))
   }
 
   @Test
@@ -787,9 +838,9 @@ class ConfigCommandTest extends Logging {
 
   def doShouldAlterTopicConfig(file: Boolean): Unit = {
     var filePath = ""
-    val addedConfigs = Seq("delete.retention.ms=1000000", "min.insync.replicas=2")
+    val addedConfigs = Map("delete.retention.ms" -> "1000000", "min.insync.replicas" -> "2")
     if (file) {
-      val file = TestUtils.tempFile(addedConfigs.mkString("\n"))
+      val file = TestUtils.tempPropertiesFile(addedConfigs)
       filePath = file.getPath
     }
 
@@ -799,7 +850,7 @@ class ConfigCommandTest extends Logging {
       "--entity-type", "topics",
       "--alter",
       if (file) "--add-config-file" else "--add-config",
-      if (file) filePath else addedConfigs.mkString(","),
+      if (file) filePath else addedConfigs.map{case (k, v) => k + "=" + v}.mkString(","),
       "--delete-config", "unclean.leader.election.enable"))
     var alteredConfigs = false
 

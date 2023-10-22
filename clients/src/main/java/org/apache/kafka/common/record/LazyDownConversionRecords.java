@@ -116,7 +116,7 @@ public class LazyDownConversionRecords implements BaseRecords {
                 ")";
     }
 
-    public java.util.Iterator<ConvertedRecords<?>> iterator(long maximumReadSize) {
+    public final java.util.Iterator<ConvertedRecords<?>> iterator(long maximumReadSize) {
         // We typically expect only one iterator instance to be created, so null out the first converted batch after
         // first use to make it available for GC.
         ConvertedRecords firstBatch = firstConvertedBatch;

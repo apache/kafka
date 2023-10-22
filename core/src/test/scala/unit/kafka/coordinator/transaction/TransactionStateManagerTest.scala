@@ -768,7 +768,7 @@ class TransactionStateManagerTest {
 
     loadTransactionsForPartitions(partitionIds)
 
-    // When TransactionMetadata is intialized for the first time, it has the following
+    // When TransactionMetadata is initialized for the first time, it has the following
     // shape. Then, the producer id and producer epoch are initialized and we try to
     // write the change. If the write fails (e.g. under min isr), the TransactionMetadata
     // is left at it is. If the transactional id is never reused, the TransactionMetadata
@@ -1105,8 +1105,8 @@ class TransactionStateManagerTest {
       any(),
       any(),
       any(),
-      any())
-    ).thenAnswer(_ => capturedArgument.getValue.apply(
+      any()
+    )).thenAnswer(_ => capturedArgument.getValue.apply(
       Map(new TopicPartition(TRANSACTION_STATE_TOPIC_NAME, partitionId) ->
         new PartitionResponse(error, 0L, RecordBatch.NO_TIMESTAMP, 0L)))
     )

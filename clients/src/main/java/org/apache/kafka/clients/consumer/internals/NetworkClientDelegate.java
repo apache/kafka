@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.KafkaClient;
+import org.apache.kafka.clients.NetworkClientUtils;
 import org.apache.kafka.clients.RequestCompletionHandler;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.Node;
@@ -34,12 +35,15 @@ import org.slf4j.Logger;
 import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Queue;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.BiConsumer;
 
 /**
  * A wrapper around the {@link org.apache.kafka.clients.NetworkClient} to handle network poll and send operations.
@@ -51,6 +55,7 @@ public class NetworkClientDelegate implements AutoCloseable {
     private final int requestTimeoutMs;
     private final Queue<UnsentRequest> unsentRequests;
     private final long retryBackoffMs;
+    private final Set<Node> tryConnectNodes;
 
     public NetworkClientDelegate(
             final Time time,
@@ -63,6 +68,11 @@ public class NetworkClientDelegate implements AutoCloseable {
         this.unsentRequests = new ArrayDeque<>();
         this.requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
         this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
+        this.tryConnectNodes = new HashSet<>();
+    }
+
+    public void tryConnect(Node node) {
+        NetworkClientUtils.tryConnect(client, node, time);
     }
 
     /**
@@ -81,7 +91,7 @@ public class NetworkClientDelegate implements AutoCloseable {
             pollTimeoutMs = Math.min(retryBackoffMs, pollTimeoutMs);
         }
         this.client.poll(pollTimeoutMs, currentTimeMs);
-        checkDisconnects();
+        checkDisconnects(currentTimeMs);
     }
 
     /**
@@ -96,7 +106,7 @@ public class NetworkClientDelegate implements AutoCloseable {
             unsent.timer.update(currentTimeMs);
             if (unsent.timer.isExpired()) {
                 iterator.remove();
-                unsent.handler.onFailure(new TimeoutException(
+                unsent.handler.onFailure(currentTimeMs, new TimeoutException(
                     "Failed to send request after " + unsent.timer.timeoutMs() + " ms."));
                 continue;
             }
@@ -127,7 +137,7 @@ public class NetworkClientDelegate implements AutoCloseable {
         return true;
     }
 
-    private void checkDisconnects() {
+    private void checkDisconnects(final long currentTimeMs) {
         // Check the connection of the unsent request. Disconnect the disconnected node if it is unable to be connected.
         Iterator<UnsentRequest> iter = unsentRequests.iterator();
         while (iter.hasNext()) {
@@ -135,7 +145,7 @@ public class NetworkClientDelegate implements AutoCloseable {
             if (u.node.isPresent() && client.connectionFailed(u.node.get())) {
                 iter.remove();
                 AuthenticationException authenticationException = client.authenticationException(u.node.get());
-                u.handler.onFailure(authenticationException);
+                u.handler.onFailure(currentTimeMs, authenticationException);
             }
         }
     }
@@ -199,23 +209,22 @@ public class NetworkClientDelegate implements AutoCloseable {
     public static class UnsentRequest {
         private final AbstractRequest.Builder<?> requestBuilder;
         private final FutureCompletionHandler handler;
-        private Optional<Node> node; // empty if random node can be choosen
+        private Optional<Node> node; // empty if random node can be chosen
         private Timer timer;
 
-        public UnsentRequest(
-                final AbstractRequest.Builder<?> requestBuilder,
-                final Optional<Node> node) {
-            this(requestBuilder, node, new FutureCompletionHandler());
-        }
-
-        public UnsentRequest(
-                final AbstractRequest.Builder<?> requestBuilder,
-                final Optional<Node> node,
-                final FutureCompletionHandler handler) {
+        public UnsentRequest(final AbstractRequest.Builder<?> requestBuilder,
+                             final Optional<Node> node) {
             Objects.requireNonNull(requestBuilder);
             this.requestBuilder = requestBuilder;
             this.node = node;
-            this.handler = handler;
+            this.handler = new FutureCompletionHandler();
+        }
+
+        public UnsentRequest(final AbstractRequest.Builder<?> requestBuilder,
+                             final Optional<Node> node,
+                             final BiConsumer<ClientResponse, Throwable> callback) {
+            this(requestBuilder, node);
+            this.handler.future().whenComplete(callback);
         }
 
         public void setTimer(final Time time, final long requestTimeoutMs) {
@@ -226,7 +235,7 @@ public class NetworkClientDelegate implements AutoCloseable {
             return handler.future;
         }
 
-        RequestCompletionHandler callback() {
+        FutureCompletionHandler handler() {
             return handler;
         }
 
@@ -236,37 +245,50 @@ public class NetworkClientDelegate implements AutoCloseable {
 
         @Override
         public String toString() {
-            return "UnsentRequest(builder=" + requestBuilder + ")";
+            return "UnsentRequest{" +
+                    "requestBuilder=" + requestBuilder +
+                    ", handler=" + handler +
+                    ", node=" + node +
+                    ", timer=" + timer +
+                    '}';
         }
     }
 
     public static class FutureCompletionHandler implements RequestCompletionHandler {
+
+        private long responseCompletionTimeMs;
         private final CompletableFuture<ClientResponse> future;
 
         FutureCompletionHandler() {
-            this.future = new CompletableFuture<>();
+            future = new CompletableFuture<>();
         }
 
-        public void onFailure(final RuntimeException e) {
-            future.completeExceptionally(e);
+        public void onFailure(final long currentTimeMs, final RuntimeException e) {
+            this.responseCompletionTimeMs = currentTimeMs;
+            this.future.completeExceptionally(e);
+        }
+
+        public long completionTimeMs() {
+            return responseCompletionTimeMs;
+        }
+
+        @Override
+        public void onComplete(final ClientResponse response) {
+            long completionTimeMs = response.receivedTimeMs();
+            if (response.authenticationException() != null) {
+                onFailure(completionTimeMs, response.authenticationException());
+            } else if (response.wasDisconnected()) {
+                onFailure(completionTimeMs, DisconnectException.INSTANCE);
+            } else if (response.versionMismatch() != null) {
+                onFailure(completionTimeMs, response.versionMismatch());
+            } else {
+                responseCompletionTimeMs = completionTimeMs;
+                this.future.complete(response);
+            }
         }
 
         public CompletableFuture<ClientResponse> future() {
             return future;
         }
-
-        @Override
-        public void onComplete(final ClientResponse response) {
-            if (response.authenticationException() != null) {
-                onFailure(response.authenticationException());
-            } else if (response.wasDisconnected()) {
-                onFailure(DisconnectException.INSTANCE);
-            } else if (response.versionMismatch() != null) {
-                onFailure(response.versionMismatch());
-            } else {
-                future.complete(response);
-            }
-        }
     }
-
 }

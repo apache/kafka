@@ -112,7 +112,7 @@ public class EventAccumulatorTest {
     }
 
     @Test
-    public void testKeyConcurrentProcessingAndOrdering() {
+    public void testKeyConcurrentAndOrderingGuarantees() {
         EventAccumulator<Integer, MockEvent> accumulator = new EventAccumulator<>();
 
         MockEvent event0 = new MockEvent(1, 0);

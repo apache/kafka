@@ -68,7 +68,7 @@ public class MockMetaLogManagerListener implements RaftClient.Listener<ApiMessag
     }
 
     @Override
-    public synchronized void handleSnapshot(SnapshotReader<ApiMessageAndVersion> reader) {
+    public synchronized void handleLoadSnapshot(SnapshotReader<ApiMessageAndVersion> reader) {
         long lastCommittedOffset = reader.lastContainedLogOffset();
         try {
             while (reader.hasNext()) {

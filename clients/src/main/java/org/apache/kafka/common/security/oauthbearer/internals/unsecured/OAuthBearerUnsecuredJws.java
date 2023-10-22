@@ -121,7 +121,7 @@ public class OAuthBearerUnsecuredJws implements OAuthBearerToken {
      *
      * @return the 3 or 5 dot-separated sections of the JWT compact serialization
      */
-    public List<String> splits() {
+    public final List<String> splits() {
         return splits;
     }
 
@@ -130,7 +130,7 @@ public class OAuthBearerUnsecuredJws implements OAuthBearerToken {
      *
      * @return the JOSE header
      */
-    public Map<String, Object> header() {
+    public final Map<String, Object> header() {
         return header;
     }
 
@@ -159,7 +159,7 @@ public class OAuthBearerUnsecuredJws implements OAuthBearerToken {
      *
      * @return the (always non-null but possibly empty) claims
      */
-    public Map<String, Object> claims() {
+    public final Map<String, Object> claims() {
         return claims;
     }
 
@@ -191,7 +191,7 @@ public class OAuthBearerUnsecuredJws implements OAuthBearerToken {
      *            Number.class, or List.class
      * @return true if the claim exists and is the given type, otherwise false
      */
-    public boolean isClaimType(String claimName, Class<?> type) {
+    public final boolean isClaimType(String claimName, Class<?> type) {
         Object value = rawClaim(claimName);
         Objects.requireNonNull(type);
         if (value == null)
@@ -215,7 +215,7 @@ public class OAuthBearerUnsecuredJws implements OAuthBearerToken {
      * @throws OAuthBearerIllegalTokenException
      *             if the claim exists but is not the given type
      */
-    public <T> T claim(String claimName, Class<T> type) throws OAuthBearerIllegalTokenException {
+    public final <T> T claim(String claimName, Class<T> type) throws OAuthBearerIllegalTokenException {
         Object value = rawClaim(claimName);
         try {
             return Objects.requireNonNull(type).cast(value);
@@ -233,7 +233,7 @@ public class OAuthBearerUnsecuredJws implements OAuthBearerToken {
      *            the mandatory JWT claim name
      * @return the raw claim value, if it exists, otherwise null
      */
-    public Object rawClaim(String claimName) {
+    public final Object rawClaim(String claimName) {
         return claims().get(Objects.requireNonNull(claimName));
     }
 
@@ -248,7 +248,7 @@ public class OAuthBearerUnsecuredJws implements OAuthBearerToken {
      * @throws OAuthBearerIllegalTokenException
      *             if the claim value is the incorrect type
      */
-    public Number expirationTime() throws OAuthBearerIllegalTokenException {
+    public final Number expirationTime() throws OAuthBearerIllegalTokenException {
         return claim("exp", Number.class);
     }
 
@@ -343,7 +343,7 @@ public class OAuthBearerUnsecuredJws implements OAuthBearerToken {
     }
 
     private Set<String> calculateScope() {
-        String scopeClaimName = scopeClaimName();
+        String scopeClaimName = this.scopeClaimName;
         if (isClaimType(scopeClaimName, String.class)) {
             String scopeClaimValue = claim(scopeClaimName, String.class);
             if (Utils.isBlank(scopeClaimValue))

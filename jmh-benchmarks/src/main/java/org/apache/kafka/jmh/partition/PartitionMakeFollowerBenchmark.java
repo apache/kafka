@@ -94,7 +94,7 @@ public class PartitionMakeFollowerBenchmark {
         scheduler.startup();
         LogConfig logConfig = new LogConfig(new Properties());
 
-        BrokerTopicStats brokerTopicStats = new BrokerTopicStats();
+        BrokerTopicStats brokerTopicStats = new BrokerTopicStats(Optional.empty());
         LogDirFailureChannel logDirFailureChannel = Mockito.mock(LogDirFailureChannel.class);
         logManager = new LogManagerBuilder().
             setLogDirs(Collections.singletonList(logDir)).
@@ -107,7 +107,7 @@ public class PartitionMakeFollowerBenchmark {
             setFlushRecoveryOffsetCheckpointMs(10000L).
             setFlushStartOffsetCheckpointMs(10000L).
             setRetentionCheckMs(1000L).
-            setMaxProducerIdExpirationMs(60000).
+            setProducerStateManagerConfig(60000, false).
             setInterBrokerProtocolVersion(MetadataVersion.latest()).
             setScheduler(scheduler).
             setBrokerTopicStats(brokerTopicStats).
@@ -143,7 +143,7 @@ public class PartitionMakeFollowerBenchmark {
     @TearDown(Level.Trial)
     public void tearDown() throws IOException, InterruptedException {
         executorService.shutdownNow();
-        logManager.shutdown();
+        logManager.shutdown(-1L);
         scheduler.shutdown();
         Utils.delete(logDir);
     }

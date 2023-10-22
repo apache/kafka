@@ -19,7 +19,6 @@ package kafka.utils
 
 import java.io._
 import java.nio._
-import java.nio.channels._
 import java.util.concurrent.locks.{Lock, ReadWriteLock}
 import java.lang.management._
 import java.util.{Base64, Properties, UUID}
@@ -35,7 +34,9 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Utils
 import org.slf4j.event.Level
 
+import java.util
 import scala.annotation.nowarn
+import scala.jdk.CollectionConverters._
 
 /**
  * General helper functions!
@@ -54,28 +55,23 @@ object CoreUtils {
   private val inetAddressValidator = InetAddressValidator.getInstance()
 
   /**
-   * Return the smallest element in `iterable` if it is not empty. Otherwise return `ifEmpty`.
-   */
-  def min[A, B >: A](iterable: Iterable[A], ifEmpty: A)(implicit cmp: Ordering[B]): A =
-    if (iterable.isEmpty) ifEmpty else iterable.min(cmp)
-
-  /**
     * Do the given action and log any exceptions thrown without rethrowing them.
     *
     * @param action The action to execute.
     * @param logging The logging instance to use for logging the thrown exception.
     * @param logLevel The log level to use for logging.
     */
+  @noinline // inlining this method is not typically useful and it triggers spurious spotbugs warnings
   def swallow(action: => Unit, logging: Logging, logLevel: Level = Level.WARN): Unit = {
     try {
       action
     } catch {
       case e: Throwable => logLevel match {
-        case Level.ERROR => logger.error(e.getMessage, e)
-        case Level.WARN => logger.warn(e.getMessage, e)
-        case Level.INFO => logger.info(e.getMessage, e)
-        case Level.DEBUG => logger.debug(e.getMessage, e)
-        case Level.TRACE => logger.trace(e.getMessage, e)
+        case Level.ERROR => logging.error(e.getMessage, e)
+        case Level.WARN => logging.warn(e.getMessage, e)
+        case Level.INFO => logging.info(e.getMessage, e)
+        case Level.DEBUG => logging.debug(e.getMessage, e)
+        case Level.TRACE => logging.trace(e.getMessage, e)
       }
     }
   }
@@ -85,30 +81,6 @@ object CoreUtils {
    * @param files sequence of files to be deleted
    */
   def delete(files: Seq[String]): Unit = files.foreach(f => Utils.delete(new File(f)))
-
-  /**
-   * Invokes every function in `all` even if one or more functions throws an exception.
-   *
-   * If any of the functions throws an exception, the first one will be rethrown at the end with subsequent exceptions
-   * added as suppressed exceptions.
-   */
-  // Note that this is a generalised version of `Utils.closeAll`. We could potentially make it more general by
-  // changing the signature to `def tryAll[R](all: Seq[() => R]): Seq[R]`
-  def tryAll(all: Seq[() => Unit]): Unit = {
-    var exception: Throwable = null
-    all.foreach { element =>
-      try element.apply()
-      catch {
-        case e: Throwable =>
-          if (exception != null)
-            exception.addSuppressed(e)
-          else
-            exception = e
-      }
-    }
-    if (exception != null)
-      throw exception
-  }
 
   /**
    * Register the given mbean with the platform mbean server,
@@ -122,7 +94,7 @@ object CoreUtils {
    */
   def registerMBean(mbean: Object, name: String): Boolean = {
     try {
-      val mbs = ManagementFactory.getPlatformMBeanServer()
+      val mbs = ManagementFactory.getPlatformMBeanServer
       mbs synchronized {
         val objName = new ObjectName(name)
         if (mbs.isRegistered(objName))
@@ -134,30 +106,6 @@ object CoreUtils {
       case e: Exception =>
         logger.error(s"Failed to register Mbean $name", e)
         false
-    }
-  }
-
-  /**
-   * Unregister the mbean with the given name, if there is one registered
-   * @param name The mbean name to unregister
-   */
-  def unregisterMBean(name: String): Unit = {
-    val mbs = ManagementFactory.getPlatformMBeanServer()
-    mbs synchronized {
-      val objName = new ObjectName(name)
-      if (mbs.isRegistered(objName))
-        mbs.unregisterMBean(objName)
-    }
-  }
-
-  /**
-   * Read some bytes into the provided buffer, and return the number of bytes read. If the
-   * channel has been closed or we get -1 on the read for any reason, throw an EOFException
-   */
-  def read(channel: ReadableByteChannel, buffer: ByteBuffer): Int = {
-    channel.read(buffer) match {
-      case -1 => throw new EOFException("Received -1 when reading from channel, socket has likely been closed.")
-      case n => n
     }
   }
 
@@ -193,18 +141,10 @@ object CoreUtils {
    * Create an instance of the class with the given class name
    */
   def createObject[T <: AnyRef](className: String, args: AnyRef*): T = {
-    val klass = Class.forName(className, true, Utils.getContextOrKafkaClassLoader()).asInstanceOf[Class[T]]
+    val klass = Class.forName(className, true, Utils.getContextOrKafkaClassLoader).asInstanceOf[Class[T]]
     val constructor = klass.getConstructor(args.map(_.getClass): _*)
     constructor.newInstance(args: _*)
   }
-
-  /**
-   * Create a circular (looping) iterator over a collection.
-   * @param coll An iterable over the underlying collection.
-   * @return A circular iterator over the collection.
-   */
-  def circularIterator[T](coll: Iterable[T]) =
-    for (_ <- Iterator.continually(1); t <- coll) yield t
 
   /**
    * Execute the given function inside the lock
@@ -233,7 +173,7 @@ object CoreUtils {
   }
 
   def listenerListToEndPoints(listeners: String, securityProtocolMap: Map[ListenerName, SecurityProtocol]): Seq[EndPoint] = {
-    listenerListToEndPoints(listeners, securityProtocolMap, true)
+    listenerListToEndPoints(listeners, securityProtocolMap, requireDistinctPorts = true)
   }
 
   def checkDuplicateListenerPorts(endpoints: Seq[EndPoint], listeners: String): Unit = {
@@ -354,4 +294,7 @@ object CoreUtils {
     elements.groupMapReduce(key)(f)(reduce)
   }
 
+  def replicaToBrokerAssignmentAsScala(map: util.Map[Integer, util.List[Integer]]): Map[Int, Seq[Int]] = {
+    map.asScala.map(e => (e._1.asInstanceOf[Int], e._2.asScala.map(_.asInstanceOf[Int])))
+  }
 }

@@ -16,13 +16,17 @@
  */
 package org.apache.kafka.snapshot;
 
+import org.apache.kafka.common.utils.BufferSupplier;
+import org.apache.kafka.raft.KafkaRaftClient;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.raft.internals.IdentitySerde;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.text.NumberFormat;
@@ -149,6 +153,26 @@ public final class Snapshots {
                 ),
                 e
             );
+        }
+    }
+
+    public static long lastContainedLogTimestamp(RawSnapshotReader reader) {
+        try (RecordsSnapshotReader<ByteBuffer> recordsSnapshotReader =
+             RecordsSnapshotReader.of(
+                 reader,
+                 IdentitySerde.INSTANCE,
+                 new BufferSupplier.GrowableBufferSupplier(),
+                 KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
+                 true
+             )
+        ) {
+            return recordsSnapshotReader.lastContainedLogTimestamp();
+        }
+    }
+
+    public static long lastContainedLogTimestamp(Path logDir, OffsetAndEpoch snapshotId) {
+        try (FileRawSnapshotReader reader = FileRawSnapshotReader.open(logDir, snapshotId)) {
+            return lastContainedLogTimestamp(reader);
         }
     }
 }

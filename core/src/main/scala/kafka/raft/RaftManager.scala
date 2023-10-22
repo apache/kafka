@@ -30,7 +30,6 @@ import kafka.server.{KafkaConfig, MetaProperties}
 import kafka.utils.CoreUtils
 import kafka.utils.FileLock
 import kafka.utils.Logging
-import kafka.utils.timer.SystemTimer
 import org.apache.kafka.clients.{ApiVersions, ManualMetadataUpdater, NetworkClient}
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.TopicPartition
@@ -43,10 +42,11 @@ import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.raft.RaftConfig.{AddressSpec, InetAddressSpec, NON_ROUTABLE_ADDRESS, UnknownAddressSpec}
-import org.apache.kafka.raft.{FileBasedStateStore, KafkaRaftClient, LeaderAndEpoch, RaftClient, RaftConfig, RaftRequest, ReplicatedLog}
+import org.apache.kafka.raft.{FileBasedStateStore, KafkaNetworkChannel, KafkaRaftClient, LeaderAndEpoch, RaftClient, RaftConfig, RaftRequest, ReplicatedLog}
 import org.apache.kafka.server.common.serialization.RecordSerde
 import org.apache.kafka.server.util.{KafkaScheduler, ShutdownableThread}
 import org.apache.kafka.server.fault.FaultHandler
+import org.apache.kafka.server.util.timer.SystemTimer
 
 import scala.jdk.CollectionConverters._
 
@@ -152,7 +152,7 @@ class KafkaRaftManager[T](
   private val dataDir = createDataDir()
 
   private val dataDirLock = {
-    // Aquire the log dir lock if the metadata log dir is different from the log dirs
+    // Acquire the log dir lock if the metadata log dir is different from the log dirs
     val differentMetadataLogDir = !config
       .logDirs
       .map(Paths.get(_).toAbsolutePath)
@@ -195,7 +195,7 @@ class KafkaRaftManager[T](
 
   def shutdown(): Unit = {
     CoreUtils.swallow(expirationService.shutdown(), this)
-    CoreUtils.swallow(expirationTimer.shutdown(), this)
+    CoreUtils.swallow(expirationTimer.close(), this)
     CoreUtils.swallow(raftIoThread.shutdown(), this)
     CoreUtils.swallow(client.close(), this)
     CoreUtils.swallow(scheduler.shutdown(), this)
@@ -264,7 +264,6 @@ class KafkaRaftManager[T](
       topicPartition,
       topicId,
       dataDir,
-      recordSerde,
       time,
       scheduler,
       config = MetadataLogConfig(config, KafkaRaftClient.MAX_BATCH_SIZE_BYTES, KafkaRaftClient.MAX_FETCH_SIZE_BYTES)

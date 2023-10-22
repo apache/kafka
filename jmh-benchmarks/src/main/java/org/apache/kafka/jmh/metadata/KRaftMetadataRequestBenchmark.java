@@ -59,6 +59,8 @@ import org.apache.kafka.coordinator.group.GroupCoordinator;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
+import org.apache.kafka.server.common.Features;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.mockito.Mockito;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -115,7 +117,7 @@ public class KRaftMetadataRequestBenchmark {
             clientQuotaManager, clientRequestQuotaManager, controllerMutationQuotaManager, replicaQuotaManager,
             replicaQuotaManager, replicaQuotaManager, Option.empty());
     private FetchManager fetchManager = Mockito.mock(FetchManager.class);
-    private BrokerTopicStats brokerTopicStats = new BrokerTopicStats();
+    private BrokerTopicStats brokerTopicStats = new BrokerTopicStats(Optional.empty());
     private KafkaPrincipal principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "test-user");
     private KafkaApis kafkaApis;
     private RequestChannel.Request allTopicMetadataRequest;
@@ -197,7 +199,11 @@ public class KRaftMetadataRequestBenchmark {
                 setClusterId("clusterId").
                 setTime(Time.SYSTEM).
                 setTokenManager(null).
-                setApiVersionManager(new SimpleApiVersionManager(ApiMessageType.ListenerType.BROKER, false, false)).
+                setApiVersionManager(new SimpleApiVersionManager(
+                        ApiMessageType.ListenerType.BROKER,
+                        false,
+                        false,
+                        () -> Features.fromKRaftVersion(MetadataVersion.latest()))).
                 build();
     }
 

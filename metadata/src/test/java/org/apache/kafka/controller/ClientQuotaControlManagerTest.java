@@ -25,10 +25,8 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.common.requests.ApiError;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
-import org.apache.kafka.timeline.SnapshotRegistry;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -52,8 +50,7 @@ public class ClientQuotaControlManagerTest {
 
     @Test
     public void testInvalidEntityTypes() {
-        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
-        ClientQuotaControlManager manager = new ClientQuotaControlManager(snapshotRegistry);
+        ClientQuotaControlManager manager = new ClientQuotaControlManager.Builder().build();
 
         // Unknown type "foo"
         assertInvalidEntity(manager, entity("foo", "bar"));
@@ -79,8 +76,7 @@ public class ClientQuotaControlManagerTest {
 
     @Test
     public void testInvalidQuotaKeys() {
-        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
-        ClientQuotaControlManager manager = new ClientQuotaControlManager(snapshotRegistry);
+        ClientQuotaControlManager manager = new ClientQuotaControlManager.Builder().build();
         ClientQuotaEntity entity = entity(ClientQuotaEntity.USER, "user-1");
 
         // Invalid + valid keys
@@ -103,8 +99,7 @@ public class ClientQuotaControlManagerTest {
 
     @Test
     public void testAlterAndRemove() {
-        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
-        ClientQuotaControlManager manager = new ClientQuotaControlManager(snapshotRegistry);
+        ClientQuotaControlManager manager = new ClientQuotaControlManager.Builder().build();
 
         ClientQuotaEntity userEntity = userEntity("user-1");
         List<ClientQuotaAlteration> alters = new ArrayList<>();
@@ -178,8 +173,7 @@ public class ClientQuotaControlManagerTest {
 
     @Test
     public void testEntityTypes() throws Exception {
-        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
-        ClientQuotaControlManager manager = new ClientQuotaControlManager(snapshotRegistry);
+        ClientQuotaControlManager manager = new ClientQuotaControlManager.Builder().build();
 
         Map<ClientQuotaEntity, Map<String, Double>> quotasToTest = new HashMap<>();
         quotasToTest.put(userClientEntity("user-1", "client-id-1"),
@@ -248,6 +242,7 @@ public class ClientQuotaControlManagerTest {
             new ApiMessageAndVersion(new ClientQuotaRecord().setEntity(Arrays.asList(
                 new EntityData().setEntityType("client-id").setEntityName("client-id-2"))).
                     setKey("request_percentage").setValue(60.60).setRemove(false), (short) 0));
+        records = new ArrayList<>(records);
         RecordTestUtils.deepSortRecords(records);
         RecordTestUtils.deepSortRecords(expectedRecords);
         assertEquals(expectedRecords, records);

@@ -27,7 +27,6 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
@@ -193,7 +192,7 @@ import static org.apache.kafka.connect.util.ConnectUtils.className;
  * rebalance must be deferred.
  * </p>
  */
-public class KafkaConfigBackingStore implements ConfigBackingStore {
+public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore implements ConfigBackingStore {
     private static final Logger log = LoggerFactory.getLogger(KafkaConfigBackingStore.class);
 
     public static final String TARGET_STATE_PREFIX = "target-state-";
@@ -272,6 +271,14 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
             .field(ONLY_FAILED_FIELD_NAME, Schema.BOOLEAN_SCHEMA)
             .build();
 
+    public static final String LOGGER_CLUSTER_PREFIX = "logger-cluster-";
+    public static String LOGGER_CLUSTER_KEY(String namespace) {
+        return LOGGER_CLUSTER_PREFIX + namespace;
+    }
+    public static final Schema LOGGER_LEVEL_V0 = SchemaBuilder.struct()
+            .field("level", Schema.STRING_SCHEMA)
+            .build();
+
     // Visible for testing
     static final long READ_WRITE_TOTAL_TIMEOUT_MS = 30000;
 
@@ -332,6 +339,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         this(converter, config, configTransformer, adminSupplier, clientIdBase, Time.SYSTEM);
     }
 
+    @SuppressWarnings("this-escape")
     KafkaConfigBackingStore(Converter converter, DistributedConfig config, WorkerConfigTransformer configTransformer, Supplier<TopicAdmin> adminSupplier, String clientIdBase, Time time) {
         this.lock = new Object();
         this.started = false;
@@ -339,6 +347,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         this.offset = -1;
         this.topicAdminSupplier = adminSupplier;
         this.clientId = Objects.requireNonNull(clientIdBase) + "configs";
+        this.time = time;
 
         this.baseProducerProps = baseProducerProps(config);
         // By default, Connect disables idempotent behavior for all producers, even though idempotence became
@@ -357,7 +366,6 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
 
         configLog = setupAndCreateKafkaBasedLog(this.topic, config);
         this.configTransformer = configTransformer;
-        this.time = time;
     }
 
     @Override
@@ -646,7 +654,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         byte[] serializedTargetState = converter.fromConnectData(topic, TARGET_STATE_V1, connectTargetState);
         log.debug("Writing target state {} for connector {}", state, connector);
         try {
-            configLog.send(TARGET_STATE_KEY(connector), serializedTargetState).get(READ_WRITE_TOTAL_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+            configLog.sendWithReceipt(TARGET_STATE_KEY(connector), serializedTargetState).get(READ_WRITE_TOTAL_TIMEOUT_MS, TimeUnit.MILLISECONDS);
         } catch (InterruptedException | ExecutionException | TimeoutException e) {
             log.error("Failed to write target state to Kafka", e);
             throw new ConnectException("Error writing target state to Kafka", e);
@@ -732,6 +740,20 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         }
     }
 
+    @Override
+    public void putLoggerLevel(String namespace, String level) {
+        log.debug("Writing level {} for logging namespace {} to Kafka", level, namespace);
+        Struct value = new Struct(LOGGER_LEVEL_V0);
+        value.put("level", level);
+        byte[] serializedValue = converter.fromConnectData(topic, value.schema(), value);
+        try {
+            configLog.sendWithReceipt(LOGGER_CLUSTER_KEY(namespace), serializedValue).get(READ_WRITE_TOTAL_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException | ExecutionException | TimeoutException e) {
+            log.error("Failed to write logger level to Kafka", e);
+            throw new ConnectException("Error writing logger level to Kafka", e);
+        }
+    }
+
     // package private for testing
     KafkaBasedLog<String, byte[]> setupAndCreateKafkaBasedLog(String topic, final WorkerConfig config) {
         String clusterId = config.kafkaClusterId();
@@ -774,7 +796,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
                 .replicationFactor(config.getShort(DistributedConfig.CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG))
                 .build();
 
-        return createKafkaBasedLog(topic, producerProps, consumerProps, new ConsumeCallback(), topicDescription, adminSupplier);
+        return createKafkaBasedLog(topic, producerProps, consumerProps, new ConsumeCallback(), topicDescription, adminSupplier, config, time);
     }
 
     /**
@@ -798,7 +820,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         if (!usesFencableWriter) {
             List<Future<RecordMetadata>> producerFutures = new ArrayList<>();
             keyValues.forEach(
-                    keyValue -> producerFutures.add(configLog.send(keyValue.key, keyValue.value))
+                    keyValue -> producerFutures.add(configLog.sendWithReceipt(keyValue.key, keyValue.value))
             );
 
             timer.update();
@@ -845,22 +867,14 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         }
     }
 
-    private KafkaBasedLog<String, byte[]> createKafkaBasedLog(String topic, Map<String, Object> producerProps,
-                                                              Map<String, Object> consumerProps,
-                                                              Callback<ConsumerRecord<String, byte[]>> consumedCallback,
-                                                              final NewTopic topicDescription, Supplier<TopicAdmin> adminSupplier) {
-        java.util.function.Consumer<TopicAdmin> createTopics = admin -> {
-            log.debug("Creating admin client to manage Connect internal config topic");
-            // Create the topic if it doesn't exist
-            Set<String> newTopics = admin.createTopics(topicDescription);
-            if (!newTopics.contains(topic)) {
-                // It already existed, so check that the topic cleanup policy is compact only and not delete
-                log.debug("Using admin client to check cleanup policy of '{}' topic is '{}'", topic, TopicConfig.CLEANUP_POLICY_COMPACT);
-                admin.verifyTopicCleanupPolicyOnlyCompact(topic,
-                        DistributedConfig.CONFIG_TOPIC_CONFIG, "connector configurations");
-            }
-        };
-        return new KafkaBasedLog<>(topic, producerProps, consumerProps, adminSupplier, consumedCallback, Time.SYSTEM, createTopics);
+    @Override
+    protected String getTopicConfig() {
+        return DistributedConfig.CONFIG_TOPIC_CONFIG;
+    }
+
+    @Override
+    protected String getTopicPurpose() {
+        return "connector configurations";
     }
 
     private class ConsumeCallback implements Callback<ConsumerRecord<String, byte[]>> {
@@ -909,6 +923,9 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
                 processTaskCountRecord(connectorName, value);
             } else if (record.key().equals(SESSION_KEY_KEY)) {
                 processSessionKeyRecord(value);
+            } else if (record.key().startsWith(LOGGER_CLUSTER_PREFIX)) {
+                String loggingNamespace = record.key().substring(LOGGER_CLUSTER_PREFIX.length());
+                processLoggerLevelRecord(loggingNamespace, value);
             } else {
                 log.error("Discarding config update record with invalid key: {}", record.key());
             }
@@ -1191,6 +1208,37 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
 
         if (started)
             updateListener.onSessionKeyUpdate(KafkaConfigBackingStore.this.sessionKey);
+    }
+
+    private void processLoggerLevelRecord(String namespace, SchemaAndValue value) {
+        if (value.value() == null) {
+            log.error("Ignoring logging level for namespace {} because it is unexpectedly null", namespace);
+            return;
+        }
+        if (!(value.value() instanceof Map)) {
+            log.error("Ignoring logging level for namespace {} because the value is not a Map but is {}", namespace, className(value.value()));
+            return;
+        }
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> valueAsMap = (Map<String, Object>) value.value();
+
+        Object level = valueAsMap.get("level");
+        if (!(level instanceof String)) {
+            log.error("Invalid data for logging level key 'level' field with namespace {}; should be a String but it is {}", namespace, className(level));
+            return;
+        }
+
+        if (started) {
+            updateListener.onLoggingLevelUpdate(namespace, (String) level);
+        } else {
+            // TRACE level since there may be many of these records in the config topic
+            log.trace(
+                    "Ignoring old logging level {} for namespace {} that was writen to the config topic before this worker completed startup",
+                    level,
+                    namespace
+            );
+        }
     }
 
     private ConnectorTaskId parseTaskId(String key) {
