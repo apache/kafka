@@ -80,9 +80,9 @@ public class ConsumerGroupCommand {
             else if (opts.options.has(opts.deleteOpt))
                 consumerGroupService.deleteGroups();
             else if (opts.options.has(opts.resetOffsetsOpt)) {
-                val offsetsToReset = consumerGroupService.resetOffsets();
+                Map<String, Map<TopicPartition, OffsetAndMetadata>> offsetsToReset = consumerGroupService.resetOffsets();
                 if (opts.options.has(opts.exportOpt)) {
-                    val exported = consumerGroupService.exportOffsetsToCsv(offsetsToReset);
+                    String exported = consumerGroupService.exportOffsetsToCsv(offsetsToReset);
                     System.out.println(exported);
                 } else
                     printOffsetsToReset(offsetsToReset);
@@ -216,7 +216,6 @@ public class ConsumerGroupCommand {
                 default:
                     // the control should never reach here
                     throw new KafkaException("Expected a valid consumer group state, but found '" + state0 + "'.");
-
             }
 
             return !state0.contains("Dead") && num > 0;
@@ -263,7 +262,7 @@ public class ConsumerGroupCommand {
             });
         }
 
-        //TODO: printMembers
+        private void printMemgers(Map<String, Tuple>)
 
         @Override
         public void close() throws Exception {
