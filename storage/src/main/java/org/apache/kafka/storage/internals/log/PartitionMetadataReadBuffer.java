@@ -1,10 +1,10 @@
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -24,7 +24,7 @@ import java.io.IOException;
 import java.util.regex.Pattern;
 
 public class PartitionMetadataReadBuffer {
-    private static final Pattern whiteSpacesPattern = Pattern.compile(":\\s+");
+    private static final Pattern WHITE_SPACES_PATTERN = Pattern.compile(":\\s+");
 
     private final String location;
     private final BufferedReader reader;
@@ -43,13 +43,13 @@ public class PartitionMetadataReadBuffer {
 
         try {
             line = reader.readLine();
-            String[] versionArr = whiteSpacesPattern.split(line);
+            String[] versionArr = WHITE_SPACES_PATTERN.split(line);
 
             if (versionArr.length == 2) {
                 int version = Integer.parseInt(versionArr[1]);
                 if (version == PartitionMetadataFile.CURRENT_VERSION) {
                     line = reader.readLine();
-                    String[] topicIdArr = whiteSpacesPattern.split(line);
+                    String[] topicIdArr = WHITE_SPACES_PATTERN.split(line);
 
                     if (topicIdArr.length == 2) {
                         metadataTopicId = Uuid.fromString(topicIdArr[1]);
