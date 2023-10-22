@@ -155,12 +155,11 @@ public class RemoteLogManager implements Closeable {
     // topic ids that are received on leadership changes, this map is cleared on stop partitions
     private final ConcurrentMap<TopicPartition, Uuid> topicIdByPartitionMap = new ConcurrentHashMap<>();
     private final String clusterId;
+    private final KafkaMetricsGroup metricsGroup = new KafkaMetricsGroup(this.getClass());
 
     // The endpoint for remote log metadata manager to connect to
     private Optional<EndPoint> endpoint = Optional.empty();
     private boolean closed = false;
-
-    private KafkaMetricsGroup metricsGroup = new KafkaMetricsGroup(this.getClass());
 
     /**
      * Creates RemoteLogManager instance with the given arguments.
@@ -230,7 +229,6 @@ public class RemoteLogManager implements Closeable {
         }
     }
 
-    @SuppressWarnings("removal")
     RemoteStorageManager createRemoteStorageManager() {
         return java.security.AccessController.doPrivileged(new PrivilegedAction<RemoteStorageManager>() {
             private final String classPath = rlmConfig.remoteStorageManagerClassPath();
@@ -253,7 +251,6 @@ public class RemoteLogManager implements Closeable {
         remoteLogStorageManager.configure(rsmProps);
     }
 
-    @SuppressWarnings("removal")
     RemoteLogMetadataManager createRemoteLogMetadataManager() {
         return java.security.AccessController.doPrivileged(new PrivilegedAction<RemoteLogMetadataManager>() {
             private final String classPath = rlmConfig.remoteLogMetadataManagerClassPath();

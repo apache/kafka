@@ -63,7 +63,7 @@
               files="AbstractResponse.java"/>
 
     <suppress checks="MethodLength"
-              files="(KerberosLogin|RequestResponseTest|ConnectMetricsRegistry|KafkaConsumer|AbstractStickyAssignor).java"/>
+              files="(KerberosLogin|RequestResponseTest|ConnectMetricsRegistry|KafkaConsumer|AbstractStickyAssignor|AbstractRequest|AbstractResponse).java"/>
 
     <suppress checks="ParameterNumber"
               files="(NetworkClient|FieldSpec|KafkaRaftClient).java"/>
@@ -139,6 +139,8 @@
               files="Worker(SinkTask|SourceTask|Coordinator).java"/>
     <suppress checks="ParameterNumber"
               files="(ConfigKeyInfo|DistributedHerder).java"/>
+    <suppress checks="DefaultComesLast"
+              files="LoggingResource.java" />
 
     <suppress checks="ClassDataAbstractionCoupling"
               files="(RestServer|AbstractHerder|DistributedHerder|Worker).java"/>
@@ -307,6 +309,8 @@
               files="(QuorumController|QuorumControllerTest|ReplicationControlManager|ReplicationControlManagerTest).java"/>
     <suppress checks="(ParameterNumber|ClassDataAbstractionCoupling)"
               files="(QuorumController).java"/>
+    <suppress checks="NPathComplexity"
+              files="(PartitionRegistration|PartitionChangeBuilder).java"/>
     <suppress checks="CyclomaticComplexity"
               files="(ClientQuotasImage|KafkaEventQueue|MetadataDelta|QuorumController|ReplicationControlManager|KRaftMigrationDriver|ClusterControlManager).java"/>
     <suppress checks="NPathComplexity"

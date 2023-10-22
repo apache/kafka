@@ -253,7 +253,8 @@ public class MeteredKeyValueStore<K, V>
 
         final QueryResult<R> result;
         final RangeQuery<K, V> typedQuery = (RangeQuery<K, V>) query;
-        final RangeQuery<Bytes, byte[]> rawRangeQuery;
+        RangeQuery<Bytes, byte[]> rawRangeQuery;
+        final boolean isKeyAscending = typedQuery.isKeyAscending();
         if (typedQuery.getLowerBound().isPresent() && typedQuery.getUpperBound().isPresent()) {
             rawRangeQuery = RangeQuery.withRange(
                 keyBytes(typedQuery.getLowerBound().get()),
@@ -265,6 +266,9 @@ public class MeteredKeyValueStore<K, V>
             rawRangeQuery = RangeQuery.withUpperBound(keyBytes(typedQuery.getUpperBound().get()));
         } else {
             rawRangeQuery = RangeQuery.withNoBounds();
+        }
+        if (!isKeyAscending) {
+            rawRangeQuery = rawRangeQuery.withDescendingKeys();
         }
         final QueryResult<KeyValueIterator<Bytes, byte[]>> rawResult =
             wrapped().query(rawRangeQuery, positionBound, config);
@@ -287,7 +291,6 @@ public class MeteredKeyValueStore<K, V>
         }
         return result;
     }
-
 
     @SuppressWarnings("unchecked")
     protected <R> QueryResult<R> runKeyQuery(final Query<R> query,

@@ -4385,6 +4385,11 @@ public class KafkaAdminClient extends AdminClient {
         return new FenceProducersResult(future.all());
     }
 
+    @Override
+    public Uuid clientInstanceId(Duration timeout) {
+        throw new UnsupportedOperationException();
+    }
+
     private <K, V> void invokeDriver(
         AdminApiHandler<K, V> handler,
         AdminApiFuture<K, V> future,

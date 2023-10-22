@@ -147,7 +147,7 @@ public class UpdateFollowerFetchStateBenchmark {
 
     @TearDown(Level.Trial)
     public void tearDown() throws InterruptedException {
-        logManager.shutdown();
+        logManager.shutdown(-1L);
         scheduler.shutdown();
     }
 
