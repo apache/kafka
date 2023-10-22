@@ -40,14 +40,14 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.OffsetFetchResponse.PartitionData
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.{OffsetCommitRequest, OffsetFetchResponse}
-import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.utils.{BufferSupplier, Time, Utils}
 import org.apache.kafka.common.{KafkaException, MessageFormatter, TopicIdPartition, TopicPartition}
 import org.apache.kafka.coordinator.group.generated.{GroupMetadataValue, OffsetCommitKey, OffsetCommitValue, GroupMetadataKey => GroupMetadataKeyData}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_1_IV0, IBP_2_1_IV0, IBP_2_1_IV1, IBP_2_3_IV0}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.KafkaScheduler
-import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchIsolation, RequestLocal}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchIsolation}
 
 import scala.collection._
 import scala.collection.mutable.ArrayBuffer
@@ -247,7 +247,7 @@ class GroupMetadataManager(brokerId: Int,
   def storeGroup(group: GroupMetadata,
                  groupAssignment: Map[String, Array[Byte]],
                  responseCallback: Errors => Unit,
-                 requestLocal: RequestLocal = RequestLocal.NO_CACHING): Unit = {
+                 bufferSupplier: BufferSupplier = BufferSupplier.NO_CACHING): Unit = {
     getMagic(partitionFor(group.groupId)) match {
       case Some(magicValue) =>
         // We always use CREATE_TIME, like the producer. The conversion to LOG_APPEND_TIME (if necessary) happens automatically.
@@ -317,7 +317,7 @@ class GroupMetadataManager(brokerId: Int,
 
           responseCallback(responseError)
         }
-        appendForGroup(group, groupMetadataRecords, requestLocal, putCacheCallback)
+        appendForGroup(group, groupMetadataRecords, bufferSupplier, putCacheCallback)
 
       case None =>
         responseCallback(Errors.NOT_COORDINATOR)
@@ -326,7 +326,7 @@ class GroupMetadataManager(brokerId: Int,
 
   private def appendForGroup(group: GroupMetadata,
                              records: Map[TopicPartition, MemoryRecords],
-                             requestLocal: RequestLocal,
+                             bufferSupplier: BufferSupplier,
                              callback: Map[TopicPartition, PartitionResponse] => Unit,
                              transactionalId: String = null): Unit = {
     // call replica manager to append the group message
@@ -338,7 +338,7 @@ class GroupMetadataManager(brokerId: Int,
       entriesPerPartition = records,
       delayedProduceLock = Some(group.lock),
       responseCallback = callback,
-      requestLocal = requestLocal,
+      bufferSupplier = bufferSupplier,
       transactionalId = transactionalId)
   }
 
@@ -352,7 +352,7 @@ class GroupMetadataManager(brokerId: Int,
                    transactionalId: String = null,
                    producerId: Long = RecordBatch.NO_PRODUCER_ID,
                    producerEpoch: Short = RecordBatch.NO_PRODUCER_EPOCH,
-                   requestLocal: RequestLocal = RequestLocal.NO_CACHING): Unit = {
+                   bufferSupplier: BufferSupplier = BufferSupplier.NO_CACHING): Unit = {
     // first filter out partitions with offset metadata size exceeding limit
     val filteredOffsetMetadata = offsetMetadata.filter { case (_, offsetAndMetadata) =>
       validateOffsetMetadataLength(offsetAndMetadata.metadata)
@@ -480,7 +480,7 @@ class GroupMetadataManager(brokerId: Int,
             }
           }
 
-          appendForGroup(group, entries, requestLocal, putCacheCallback, transactionalId)
+          appendForGroup(group, entries, bufferSupplier, putCacheCallback, transactionalId)
 
         case None =>
           val commitStatus = offsetMetadata.map { case (topicIdPartition, _) =>
@@ -837,7 +837,7 @@ class GroupMetadataManager(brokerId: Int,
   // visible for testing
   private[group] def cleanupGroupMetadata(): Unit = {
     val currentTimestamp = time.milliseconds()
-    val numOffsetsRemoved = cleanupGroupMetadata(groupMetadataCache.values, RequestLocal.NO_CACHING,
+    val numOffsetsRemoved = cleanupGroupMetadata(groupMetadataCache.values, BufferSupplier.NO_CACHING,
       _.removeExpiredOffsets(currentTimestamp, config.offsetsRetentionMs))
     offsetExpiredSensor.record(numOffsetsRemoved)
     if (numOffsetsRemoved > 0)
@@ -851,7 +851,7 @@ class GroupMetadataManager(brokerId: Int,
     *                 a group lock is held, therefore there is no need for the caller to also obtain a group lock.
     * @return The cumulative number of offsets removed
     */
-  def cleanupGroupMetadata(groups: Iterable[GroupMetadata], requestLocal: RequestLocal,
+  def cleanupGroupMetadata(groups: Iterable[GroupMetadata], bufferSupplier: BufferSupplier,
                            selector: GroupMetadata => Map[TopicPartition, OffsetAndMetadata]): Int = {
     var offsetsRemoved = 0
 
@@ -900,7 +900,7 @@ class GroupMetadataManager(brokerId: Int,
                 // it will be appended again in the next purge cycle
                 val records = MemoryRecords.withRecords(magicValue, 0L, compressionType, timestampType, tombstones.toArray: _*)
                 partition.appendRecordsToLeader(records, origin = AppendOrigin.COORDINATOR, requiredAcks = 0,
-                  requestLocal = requestLocal)
+                  bufferSupplier = bufferSupplier)
 
                 offsetsRemoved += removedOffsets.size
                 trace(s"Successfully appended ${tombstones.size} tombstones to $appendPartition for expired/deleted " +

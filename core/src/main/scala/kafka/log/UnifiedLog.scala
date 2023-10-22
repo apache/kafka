@@ -30,7 +30,7 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.ListOffsetsRequest
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH_OFFSET
 import org.apache.kafka.common.requests.ProduceResponse.RecordError
-import org.apache.kafka.common.utils.{PrimitiveRef, Time, Utils}
+import org.apache.kafka.common.utils.{BufferSupplier, PrimitiveRef, Time, Utils}
 import org.apache.kafka.common.{InvalidRecordException, KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.server.common.{MetadataVersion, OffsetAndEpoch}
 import org.apache.kafka.server.common.MetadataVersion.IBP_0_10_0_IV0
@@ -40,7 +40,7 @@ import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.util.Scheduler
 import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
-import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, BatchMetadata, CompletedTxn, EpochEntry, FetchDataInfo, FetchIsolation, LastRecord, LeaderHwChange, LogAppendInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogSegment, LogSegments, LogStartOffsetIncrementReason, LogValidator, ProducerAppendInfo, ProducerStateManager, ProducerStateManagerConfig, RequestLocal, RollParams, VerificationGuard}
+import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, BatchMetadata, CompletedTxn, EpochEntry, FetchDataInfo, FetchIsolation, LastRecord, LeaderHwChange, LogAppendInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogSegment, LogSegments, LogStartOffsetIncrementReason, LogValidator, ProducerAppendInfo, ProducerStateManager, ProducerStateManagerConfig, RollParams, VerificationGuard}
 
 import java.io.{File, IOException}
 import java.nio.file.Files
@@ -707,7 +707,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    * @param records The records to append
    * @param origin Declares the origin of the append which affects required validations
    * @param interBrokerProtocolVersion Inter-broker message protocol version
-   * @param requestLocal request local instance
+   * @param bufferSupplier request local instance
    * @throws KafkaStorageException If the append fails due to an I/O error.
    * @return Information about the appended messages including the first and last offset.
    */
@@ -715,10 +715,10 @@ class UnifiedLog(@volatile var logStartOffset: Long,
                      leaderEpoch: Int,
                      origin: AppendOrigin = AppendOrigin.CLIENT,
                      interBrokerProtocolVersion: MetadataVersion = MetadataVersion.latest,
-                     requestLocal: RequestLocal = RequestLocal.NO_CACHING,
+                     bufferSupplier: BufferSupplier = BufferSupplier.NO_CACHING,
                      verificationGuard: VerificationGuard = VerificationGuard.SENTINEL): LogAppendInfo = {
     val validateAndAssignOffsets = origin != AppendOrigin.RAFT_LEADER
-    append(records, origin, interBrokerProtocolVersion, validateAndAssignOffsets, leaderEpoch, Some(requestLocal), verificationGuard, ignoreRecordSize = false)
+    append(records, origin, interBrokerProtocolVersion, validateAndAssignOffsets, leaderEpoch, Some(bufferSupplier), verificationGuard, ignoreRecordSize = false)
   }
 
   /**
@@ -734,7 +734,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
       interBrokerProtocolVersion = MetadataVersion.latest,
       validateAndAssignOffsets = false,
       leaderEpoch = -1,
-      requestLocal = None,
+      bufferSupplier = None,
       verificationGuard = VerificationGuard.SENTINEL,
       // disable to check the validation of record size since the record is already accepted by leader.
       ignoreRecordSize = true)
@@ -751,7 +751,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    * @param interBrokerProtocolVersion Inter-broker message protocol version
    * @param validateAndAssignOffsets Should the log assign offsets to this message set or blindly apply what it is given
    * @param leaderEpoch The partition's leader epoch which will be applied to messages when offsets are assigned on the leader
-   * @param requestLocal The request local instance if validateAndAssignOffsets is true
+   * @param bufferSupplier The request local instance if validateAndAssignOffsets is true
    * @param ignoreRecordSize true to skip validation of record size.
    * @throws KafkaStorageException If the append fails due to an I/O error.
    * @throws OffsetsOutOfOrderException If out of order offsets found in 'records'
@@ -763,7 +763,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
                      interBrokerProtocolVersion: MetadataVersion,
                      validateAndAssignOffsets: Boolean,
                      leaderEpoch: Int,
-                     requestLocal: Option[RequestLocal],
+                     bufferSupplier: Option[BufferSupplier],
                      verificationGuard: VerificationGuard,
                      ignoreRecordSize: Boolean): LogAppendInfo = {
     // We want to ensure the partition metadata file is written to the log dir before any log data is written to disk.
@@ -805,9 +805,9 @@ class UnifiedLog(@volatile var logStartOffset: Long,
               )
               validator.validateMessagesAndAssignOffsets(offset,
                 validatorMetricsRecorder,
-                requestLocal.getOrElse(throw new IllegalArgumentException(
-                  "requestLocal should be defined if assignOffsets is true")
-                ).bufferSupplier()
+                bufferSupplier.getOrElse(throw new IllegalArgumentException(
+                  "bufferSupplier should be defined if assignOffsets is true")
+                )
               )
             } catch {
               case e: IOException =>

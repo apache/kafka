@@ -47,14 +47,13 @@ import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourceType}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
-import org.apache.kafka.common.utils.MockTime
+import org.apache.kafka.common.utils.{BufferSupplier, MockTime}
 import org.apache.kafka.common.{ElectionType, Uuid}
 import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT
 import org.apache.kafka.controller.{Controller, ControllerRequestContext, ResultOrError}
 import org.apache.kafka.image.publisher.ControllerRegistrationsPublisher
 import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult, Authorizer}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, Features, MetadataVersion, ProducerIdsBlock}
-import org.apache.kafka.storage.internals.log.RequestLocal
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
@@ -254,7 +253,7 @@ class ControllerApisTest {
     val fetchRequestData = new FetchRequestData()
     val request = buildRequest(new FetchRequest(fetchRequestData, ApiKeys.FETCH.latestVersion))
     createControllerApis(None, new MockController.Builder().build())
-      .handle(request, RequestLocal.NO_CACHING)
+      .handle(request, BufferSupplier.NO_CACHING)
 
     verify(raftManager).handleRequest(
       ArgumentMatchers.eq(request.header),
@@ -430,7 +429,7 @@ class ControllerApisTest {
     val capturedResponse: ArgumentCaptor[AbstractResponse] = ArgumentCaptor.forClass(classOf[AbstractResponse])
 
     createControllerApis(Some(createDenyAllAuthorizer()), mock(classOf[Controller])).handle(request,
-      RequestLocal.withThreadConfinedCaching)
+      BufferSupplier.NO_CACHING)
     verify(requestChannel).sendResponse(
       ArgumentMatchers.eq(request),
       capturedResponse.capture(),
@@ -1105,7 +1104,7 @@ class ControllerApisTest {
   ): T = {
     val req = buildRequest(request)
 
-    controllerApis.handle(req, RequestLocal.NO_CACHING)
+    controllerApis.handle(req, BufferSupplier.NO_CACHING)
 
     val capturedResponse: ArgumentCaptor[AbstractResponse] =
       ArgumentCaptor.forClass(classOf[AbstractResponse])

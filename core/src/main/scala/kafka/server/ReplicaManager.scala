@@ -51,14 +51,14 @@ import org.apache.kafka.common.replica._
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests._
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.{BufferSupplier, Time}
 import org.apache.kafka.common.{ElectionType, IsolationLevel, Node, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.image.{LocalReplicaChanges, MetadataImage, TopicsDelta}
 import org.apache.kafka.metadata.LeaderConstants.NO_LEADER
 import org.apache.kafka.server.common.MetadataVersion._
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.{Scheduler, ShutdownableThread}
-import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, FetchParams, FetchPartitionData, LeaderHwChange, LogAppendInfo, LogConfig, LogDirFailureChannel, LogOffsetMetadata, LogReadInfo, RecordValidationException, RemoteLogReadResult, RemoteStorageFetchInfo, RequestLocal, VerificationGuard}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, FetchParams, FetchPartitionData, LeaderHwChange, LogAppendInfo, LogConfig, LogDirFailureChannel, LogOffsetMetadata, LogReadInfo, RecordValidationException, RemoteLogReadResult, RemoteStorageFetchInfo, VerificationGuard}
 
 import java.io.File
 import java.nio.file.{Files, Paths}
@@ -717,7 +717,7 @@ class ReplicaManager(val config: KafkaConfig,
    * @param responseCallback              callback for sending the response
    * @param delayedProduceLock            lock for the delayed actions
    * @param recordConversionStatsCallback callback for updating stats on record conversions
-   * @param requestLocal                  container for the stateful instances scoped to this request
+   * @param bufferSupplier                  container for the stateful instances scoped to this request
    * @param transactionalId               transactional ID if the request is from a producer and the producer is transactional
    * @param actionQueue                   the action queue to use. ReplicaManager#actionQueue is used by default.
    */
@@ -729,7 +729,7 @@ class ReplicaManager(val config: KafkaConfig,
                     responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
                     delayedProduceLock: Option[Lock] = None,
                     recordConversionStatsCallback: Map[TopicPartition, RecordConversionStats] => Unit = _ => (),
-                    requestLocal: RequestLocal = RequestLocal.NO_CACHING,
+                    bufferSupplier: BufferSupplier = BufferSupplier.NO_CACHING,
                     transactionalId: String = null,
                     actionQueue: ActionQueue = this.actionQueue): Unit = {
     if (isValidRequiredAcks(requiredAcks)) {
@@ -757,7 +757,7 @@ class ReplicaManager(val config: KafkaConfig,
             }
 
         val localProduceResults = appendToLocalLog(internalTopicsAllowed = internalTopicsAllowed,
-          origin, verifiedEntries, requiredAcks, requestLocal, verificationGuards.toMap)
+          origin, verifiedEntries, requiredAcks, bufferSupplier, verificationGuards.toMap)
         debug("Produce to local log in %d ms".format(time.milliseconds - sTime))
 
         val errorResults = (unverifiedEntries ++ errorsPerPartition).map {
@@ -1155,7 +1155,7 @@ class ReplicaManager(val config: KafkaConfig,
                                origin: AppendOrigin,
                                entriesPerPartition: Map[TopicPartition, MemoryRecords],
                                requiredAcks: Short,
-                               requestLocal: RequestLocal,
+                               bufferSupplier: BufferSupplier,
                                verificationGuards: Map[TopicPartition, VerificationGuard]): Map[TopicPartition, LogAppendResult] = {
     val traceEnabled = isTraceEnabled
     def processFailedRecord(topicPartition: TopicPartition, t: Throwable) = {
@@ -1183,7 +1183,7 @@ class ReplicaManager(val config: KafkaConfig,
       } else {
         try {
           val partition = getPartitionOrException(topicPartition)
-          val info = partition.appendRecordsToLeader(records, origin, requiredAcks, requestLocal,
+          val info = partition.appendRecordsToLeader(records, origin, requiredAcks, bufferSupplier,
             verificationGuards.getOrElse(topicPartition, VerificationGuard.SENTINEL))
           val numAppendedMessages = info.numMessages
 

@@ -32,7 +32,6 @@ import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.{BufferSupplier, Time}
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource
 import org.apache.kafka.server.util.MockTime
-import org.apache.kafka.storage.internals.log.RequestLocal
 import org.apache.kafka.test.TestUtils.assertFutureThrows
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.Test
@@ -123,7 +122,7 @@ class GroupCoordinatorAdapterTest {
       capturedProtocols.capture(),
       capturedCallback.capture(),
       ArgumentMatchers.eq(Some("reason")),
-      ArgumentMatchers.eq(new RequestLocal(bufferSupplier))
+      ArgumentMatchers.eq(bufferSupplier)
     )
 
     assertEquals(List(
@@ -207,7 +206,7 @@ class GroupCoordinatorAdapterTest {
       ArgumentMatchers.eq(Some(data.groupInstanceId)),
       capturedAssignment.capture(),
       capturedCallback.capture(),
-      ArgumentMatchers.eq(new RequestLocal(bufferSupplier))
+      ArgumentMatchers.eq(bufferSupplier)
     )
 
     assertEquals(Map(
@@ -438,7 +437,7 @@ class GroupCoordinatorAdapterTest {
 
     when(groupCoordinator.handleDeleteGroups(
       groupIds.toSet,
-      new RequestLocal(bufferSupplier)
+      bufferSupplier
     )).thenReturn(Map(
       "group-1" -> Errors.NONE,
       "group-2" -> Errors.NOT_COORDINATOR,
@@ -682,7 +681,7 @@ class GroupCoordinatorAdapterTest {
         )
       )),
       capturedCallback.capture(),
-      ArgumentMatchers.eq(new RequestLocal(bufferSupplier))
+      ArgumentMatchers.eq(bufferSupplier)
     )
 
     capturedCallback.getValue.apply(Map(
@@ -755,7 +754,7 @@ class GroupCoordinatorAdapterTest {
         )
       )),
       capturedCallback.capture(),
-      ArgumentMatchers.eq(new RequestLocal(bufferSupplier))
+      ArgumentMatchers.eq(bufferSupplier)
     )
 
     capturedCallback.getValue.apply(Map(
@@ -808,7 +807,7 @@ class GroupCoordinatorAdapterTest {
     when(groupCoordinator.handleDeleteOffsets(
       data.groupId,
       Seq(foo0, foo1, bar0, bar1),
-      new RequestLocal(bufferSupplier)
+      bufferSupplier
     )).thenReturn((
       Errors.NONE,
       Map(
@@ -873,7 +872,7 @@ class GroupCoordinatorAdapterTest {
     when(groupCoordinator.handleDeleteOffsets(
       data.groupId,
       Seq(foo0, foo1),
-      new RequestLocal(bufferSupplier)
+      bufferSupplier
     )).thenReturn((Errors.INVALID_GROUP_ID, Map.empty[TopicPartition, Errors]))
 
     val future = adapter.deleteOffsets(ctx, data, bufferSupplier)

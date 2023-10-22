@@ -31,7 +31,7 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.{AlterPartitionResponse, FetchRequest, ListOffsetsRequest, RequestHeader}
-import org.apache.kafka.common.utils.SystemTime
+import org.apache.kafka.common.utils.{BufferSupplier, SystemTime}
 import org.apache.kafka.common.{IsolationLevel, TopicPartition, Uuid}
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.junit.jupiter.api.Assertions._
@@ -56,7 +56,7 @@ import org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.{KafkaScheduler, MockTime}
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
-import org.apache.kafka.storage.internals.log.{AppendOrigin, CleanerConfig, EpochEntry, FetchIsolation, FetchParams, LogAppendInfo, LogDirFailureChannel, LogOffsetMetadata, LogReadInfo, LogSegments, LogStartOffsetIncrementReason, ProducerStateManager, ProducerStateManagerConfig, RequestLocal, VerificationGuard}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, CleanerConfig, EpochEntry, FetchIsolation, FetchParams, LogAppendInfo, LogDirFailureChannel, LogOffsetMetadata, LogReadInfo, LogSegments, LogStartOffsetIncrementReason, ProducerStateManager, ProducerStateManagerConfig, VerificationGuard}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
@@ -786,11 +786,11 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(leaderEpoch, partition.getLeaderEpoch, "Current leader epoch")
     assertEquals(Set[Integer](leader, follower2), partition.partitionState.isr, "ISR")
 
-    val requestLocal = RequestLocal.withThreadConfinedCaching
+    val bufferSupplier = BufferSupplier.create()
     // after makeLeader(() call, partition should know about all the replicas
     // append records with initial leader epoch
-    partition.appendRecordsToLeader(batch1, origin = AppendOrigin.CLIENT, requiredAcks = 0, requestLocal)
-    partition.appendRecordsToLeader(batch2, origin = AppendOrigin.CLIENT, requiredAcks = 0, requestLocal)
+    partition.appendRecordsToLeader(batch1, origin = AppendOrigin.CLIENT, requiredAcks = 0, bufferSupplier)
+    partition.appendRecordsToLeader(batch2, origin = AppendOrigin.CLIENT, requiredAcks = 0, bufferSupplier)
     assertEquals(partition.localLogOrException.logStartOffset, partition.localLogOrException.highWatermark,
       "Expected leader's HW not move")
 
@@ -1000,7 +1000,7 @@ class PartitionTest extends AbstractPartitionTest {
       baseOffset = 0L,
       producerId = 2L)
     val verificationGuard = partition.maybeStartTransactionVerification(2L, 0, 0)
-    partition.appendRecordsToLeader(records, origin = AppendOrigin.CLIENT, requiredAcks = 0, RequestLocal.withThreadConfinedCaching, verificationGuard)
+    partition.appendRecordsToLeader(records, origin = AppendOrigin.CLIENT, requiredAcks = 0, BufferSupplier.create(), verificationGuard)
 
     def fetchOffset(isolationLevel: Option[IsolationLevel], timestamp: Long): TimestampAndOffset = {
       val res = partition.fetchOffsetForTimestamp(timestamp,
@@ -1122,13 +1122,13 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(leaderEpoch, partition.getLeaderEpoch, "Current leader epoch")
     assertEquals(Set[Integer](leader, follower2), partition.partitionState.isr, "ISR")
 
-    val requestLocal = RequestLocal.withThreadConfinedCaching
+    val bufferSupplier = BufferSupplier.create()
 
     // after makeLeader(() call, partition should know about all the replicas
     // append records with initial leader epoch
     val lastOffsetOfFirstBatch = partition.appendRecordsToLeader(batch1, origin = AppendOrigin.CLIENT,
-      requiredAcks = 0, requestLocal).lastOffset
-    partition.appendRecordsToLeader(batch2, origin = AppendOrigin.CLIENT, requiredAcks = 0, requestLocal)
+      requiredAcks = 0, bufferSupplier).lastOffset
+    partition.appendRecordsToLeader(batch2, origin = AppendOrigin.CLIENT, requiredAcks = 0, bufferSupplier)
     assertEquals(partition.localLogOrException.logStartOffset, partition.log.get.highWatermark, "Expected leader's HW not move")
 
     // let the follower in ISR move leader's HW to move further but below LEO
@@ -1160,7 +1160,7 @@ class PartitionTest extends AbstractPartitionTest {
     val currentLeaderEpochStartOffset = partition.localLogOrException.logEndOffset
 
     // append records with the latest leader epoch
-    partition.appendRecordsToLeader(batch3, origin = AppendOrigin.CLIENT, requiredAcks = 0, requestLocal)
+    partition.appendRecordsToLeader(batch3, origin = AppendOrigin.CLIENT, requiredAcks = 0, bufferSupplier)
 
     // fetch from follower not in ISR from log start offset should not add this follower to ISR
     fetchFollower(partition, replicaId = follower1, fetchOffset = 0)
@@ -3288,7 +3288,7 @@ class PartitionTest extends AbstractPartitionTest {
       records = TestUtils.records(List(new SimpleRecord("k1".getBytes, "v1".getBytes))),
       origin = AppendOrigin.CLIENT,
       requiredAcks = 0,
-      requestLocal = RequestLocal.NO_CACHING
+      bufferSupplier = BufferSupplier.NO_CACHING
     )
 
     listener1.verify()
@@ -3301,7 +3301,7 @@ class PartitionTest extends AbstractPartitionTest {
       records = TestUtils.records(List(new SimpleRecord("k2".getBytes, "v2".getBytes))),
       origin = AppendOrigin.CLIENT,
       requiredAcks = 0,
-      requestLocal = RequestLocal.NO_CACHING
+      bufferSupplier = BufferSupplier.NO_CACHING
     )
 
     fetchFollower(
@@ -3319,7 +3319,7 @@ class PartitionTest extends AbstractPartitionTest {
       records = TestUtils.records(List(new SimpleRecord("k3".getBytes, "v3".getBytes))),
       origin = AppendOrigin.CLIENT,
       requiredAcks = 0,
-      requestLocal = RequestLocal.NO_CACHING
+      bufferSupplier = BufferSupplier.NO_CACHING
     )
 
     fetchFollower(
@@ -3377,7 +3377,7 @@ class PartitionTest extends AbstractPartitionTest {
       records = TestUtils.records(List(new SimpleRecord("k1".getBytes, "v1".getBytes))),
       origin = AppendOrigin.CLIENT,
       requiredAcks = 0,
-      requestLocal = RequestLocal.NO_CACHING
+      bufferSupplier = BufferSupplier.NO_CACHING
     )
 
     listener.verify()
@@ -3474,7 +3474,7 @@ class PartitionTest extends AbstractPartitionTest {
       records = records,
       origin = AppendOrigin.CLIENT,
       requiredAcks = 0,
-      requestLocal = RequestLocal.NO_CACHING
+      bufferSupplier = BufferSupplier.NO_CACHING
     )
 
     listener.verify()
@@ -3498,7 +3498,7 @@ class PartitionTest extends AbstractPartitionTest {
       records = TestUtils.records(List(new SimpleRecord("k3".getBytes, "v3".getBytes))),
       origin = AppendOrigin.CLIENT,
       requiredAcks = 0,
-      requestLocal = RequestLocal.NO_CACHING
+      bufferSupplier = BufferSupplier.NO_CACHING
     )
 
     fetchFollower(
@@ -3536,7 +3536,7 @@ class PartitionTest extends AbstractPartitionTest {
       new SimpleRecord("k3".getBytes, "v3".getBytes)),
       baseOffset = 0L,
       producerId = producerId)
-    partition.appendRecordsToLeader(idempotentRecords, origin = AppendOrigin.CLIENT, requiredAcks = 1, RequestLocal.withThreadConfinedCaching)
+    partition.appendRecordsToLeader(idempotentRecords, origin = AppendOrigin.CLIENT, requiredAcks = 1, BufferSupplier.create())
 
     def transactionRecords() = createTransactionalRecords(List(
       new SimpleRecord("k1".getBytes, "v1".getBytes),
@@ -3547,7 +3547,7 @@ class PartitionTest extends AbstractPartitionTest {
       producerId = producerId)
 
     // When VerificationGuard is not there, we should not be able to append.
-    assertThrows(classOf[InvalidTxnStateException], () => partition.appendRecordsToLeader(transactionRecords(), origin = AppendOrigin.CLIENT, requiredAcks = 1, RequestLocal.withThreadConfinedCaching))
+    assertThrows(classOf[InvalidTxnStateException], () => partition.appendRecordsToLeader(transactionRecords(), origin = AppendOrigin.CLIENT, requiredAcks = 1, BufferSupplier.create()))
 
     // Before appendRecordsToLeader is called, ReplicaManager will call maybeStartTransactionVerification. We should get a non-sentinel VerificationGuard.
     val verificationGuard = partition.maybeStartTransactionVerification(producerId, 3, 0)
@@ -3555,17 +3555,17 @@ class PartitionTest extends AbstractPartitionTest {
 
     // With the wrong VerificationGuard, append should fail.
     assertThrows(classOf[InvalidTxnStateException], () => partition.appendRecordsToLeader(transactionRecords(),
-      origin = AppendOrigin.CLIENT, requiredAcks = 1, RequestLocal.withThreadConfinedCaching, new VerificationGuard()))
+      origin = AppendOrigin.CLIENT, requiredAcks = 1, BufferSupplier.create(), new VerificationGuard()))
 
     // We should return the same VerificationGuard when we still need to verify. Append should proceed.
     val verificationGuard2 = partition.maybeStartTransactionVerification(producerId, 3, 0)
     assertEquals(verificationGuard, verificationGuard2)
-    partition.appendRecordsToLeader(transactionRecords(), origin = AppendOrigin.CLIENT, requiredAcks = 1, RequestLocal.withThreadConfinedCaching, verificationGuard)
+    partition.appendRecordsToLeader(transactionRecords(), origin = AppendOrigin.CLIENT, requiredAcks = 1, BufferSupplier.create(), verificationGuard)
 
     // We should no longer need a VerificationGuard. Future appends without VerificationGuard will also succeed.
     val verificationGuard3 = partition.maybeStartTransactionVerification(producerId, 3, 0)
     assertEquals(VerificationGuard.SENTINEL, verificationGuard3)
-    partition.appendRecordsToLeader(transactionRecords(), origin = AppendOrigin.CLIENT, requiredAcks = 1, RequestLocal.withThreadConfinedCaching)
+    partition.appendRecordsToLeader(transactionRecords(), origin = AppendOrigin.CLIENT, requiredAcks = 1, BufferSupplier.create())
   }
 
   private def makeLeader(

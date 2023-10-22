@@ -32,12 +32,12 @@ import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrParti
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.record.{MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.FetchRequest
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.{BufferSupplier, Utils}
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
-import org.apache.kafka.storage.internals.log.{AppendOrigin, CleanerConfig, FetchIsolation, FetchParams, LogAppendInfo, LogConfig, LogDirFailureChannel, LogSegments, ProducerStateManager, ProducerStateManagerConfig, RequestLocal, VerificationGuard}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, CleanerConfig, FetchIsolation, FetchParams, LogAppendInfo, LogConfig, LogDirFailureChannel, LogSegments, ProducerStateManager, ProducerStateManagerConfig, VerificationGuard}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.ArgumentMatchers
@@ -370,11 +370,11 @@ class PartitionLockTest extends Logging {
     partition: Partition,
     numRecords: Int
   ): Unit = {
-    val requestLocal = RequestLocal.withThreadConfinedCaching
+    val bufferSupplier = BufferSupplier.NO_CACHING
     (0 until numRecords).foreach { _ =>
       val batch = TestUtils.records(records = List(new SimpleRecord("k1".getBytes, "v1".getBytes),
         new SimpleRecord("k2".getBytes, "v2".getBytes)))
-      partition.appendRecordsToLeader(batch, origin = AppendOrigin.CLIENT, requiredAcks = 0, requestLocal)
+      partition.appendRecordsToLeader(batch, origin = AppendOrigin.CLIENT, requiredAcks = 0, bufferSupplier)
     }
   }
 
@@ -450,8 +450,8 @@ class PartitionLockTest extends Logging {
     keepPartitionMetadataFile = true) {
 
     override def appendAsLeader(records: MemoryRecords, leaderEpoch: Int, origin: AppendOrigin,
-                                interBrokerProtocolVersion: MetadataVersion, requestLocal: RequestLocal, verificationGuard: VerificationGuard): LogAppendInfo = {
-      val appendInfo = super.appendAsLeader(records, leaderEpoch, origin, interBrokerProtocolVersion, requestLocal, verificationGuard)
+                                interBrokerProtocolVersion: MetadataVersion, bufferSupplier: BufferSupplier, verificationGuard: VerificationGuard): LogAppendInfo = {
+      val appendInfo = super.appendAsLeader(records, leaderEpoch, origin, interBrokerProtocolVersion, bufferSupplier, verificationGuard)
       appendSemaphore.acquire()
       appendInfo
     }

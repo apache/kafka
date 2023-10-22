@@ -25,17 +25,16 @@ import java.util.concurrent.{CountDownLatch, TimeUnit}
 import java.util.concurrent.atomic.AtomicInteger
 import com.yammer.metrics.core.Meter
 import org.apache.kafka.common.internals.FatalExitError
-import org.apache.kafka.common.utils.{KafkaThread, Time}
+import org.apache.kafka.common.utils.{BufferSupplier, KafkaThread, Time}
 import org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
-import org.apache.kafka.storage.internals.log.RequestLocal
 
 import java.util.Collections
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 
 trait ApiRequestHandler {
-  def handle(request: RequestChannel.Request, requestLocal: RequestLocal): Unit
+  def handle(request: RequestChannel.Request, bufferSupplier: BufferSupplier): Unit
   def tryCompleteActions(): Unit = {}
 }
 
@@ -94,7 +93,7 @@ class KafkaRequestHandler(
 ) extends Runnable with Logging {
   this.logIdent = s"[Kafka Request Handler $id on ${nodeName.capitalize} $brokerId], "
   private val shutdownComplete = new CountDownLatch(1)
-  private val requestLocal = RequestLocal.withThreadConfinedCaching
+  private val bufferSupplier = BufferSupplier.create()
   @volatile private var stopped = false
 
   def run(): Unit = {
@@ -152,7 +151,7 @@ class KafkaRequestHandler(
             request.requestDequeueTimeNanos = endTime
             trace(s"Kafka request handler $id on broker $brokerId handling request $request")
             threadCurrentRequest.set(request)
-            apis.handle(request, requestLocal)
+            apis.handle(request, bufferSupplier)
           } catch {
             case e: FatalExitError =>
               completeShutdown()
@@ -174,7 +173,7 @@ class KafkaRequestHandler(
   }
 
   private def completeShutdown(): Unit = {
-    requestLocal.close()
+    bufferSupplier.close()
     shutdownComplete.countDown()
   }
 

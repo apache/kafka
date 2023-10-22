@@ -34,9 +34,9 @@ import org.apache.kafka.common.protocol.{Errors, MessageUtil}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.TransactionResult
-import org.apache.kafka.common.utils.MockTime
+import org.apache.kafka.common.utils.{BufferSupplier, MockTime}
 import org.apache.kafka.server.util.MockScheduler
-import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, FetchIsolation, LogConfig, LogOffsetMetadata, RequestLocal}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, FetchIsolation, LogConfig, LogOffsetMetadata}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.{ArgumentCaptor, ArgumentMatchers}
@@ -317,7 +317,7 @@ class TransactionStateManagerTest {
       new TopicPartition("topic1", 1)), time.milliseconds())
 
     // append the new metadata into log
-    transactionManager.appendTransactionToLog(transactionalId1, coordinatorEpoch, newMetadata, assertCallback, requestLocal = RequestLocal.withThreadConfinedCaching)
+    transactionManager.appendTransactionToLog(transactionalId1, coordinatorEpoch, newMetadata, assertCallback, bufferSupplier = BufferSupplier.create())
 
     assertEquals(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata1))), transactionManager.getTransactionState(transactionalId1))
     assertTrue(txnMetadata1.pendingState.isEmpty)
@@ -332,26 +332,26 @@ class TransactionStateManagerTest {
     var failedMetadata = txnMetadata1.prepareAddPartitions(Set[TopicPartition](new TopicPartition("topic2", 0)), time.milliseconds())
 
     prepareForTxnMessageAppend(Errors.UNKNOWN_TOPIC_OR_PARTITION)
-    val requestLocal = RequestLocal.withThreadConfinedCaching
-    transactionManager.appendTransactionToLog(transactionalId1, coordinatorEpoch = 10, failedMetadata, assertCallback, requestLocal = requestLocal)
+    val bufferSupplier = BufferSupplier.create()
+    transactionManager.appendTransactionToLog(transactionalId1, coordinatorEpoch = 10, failedMetadata, assertCallback, bufferSupplier = bufferSupplier)
     assertEquals(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata1))), transactionManager.getTransactionState(transactionalId1))
     assertTrue(txnMetadata1.pendingState.isEmpty)
 
     failedMetadata = txnMetadata1.prepareAddPartitions(Set[TopicPartition](new TopicPartition("topic2", 0)), time.milliseconds())
     prepareForTxnMessageAppend(Errors.NOT_ENOUGH_REPLICAS)
-    transactionManager.appendTransactionToLog(transactionalId1, coordinatorEpoch = 10, failedMetadata, assertCallback, requestLocal = requestLocal)
+    transactionManager.appendTransactionToLog(transactionalId1, coordinatorEpoch = 10, failedMetadata, assertCallback, bufferSupplier = bufferSupplier)
     assertEquals(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata1))), transactionManager.getTransactionState(transactionalId1))
     assertTrue(txnMetadata1.pendingState.isEmpty)
 
     failedMetadata = txnMetadata1.prepareAddPartitions(Set[TopicPartition](new TopicPartition("topic2", 0)), time.milliseconds())
     prepareForTxnMessageAppend(Errors.NOT_ENOUGH_REPLICAS_AFTER_APPEND)
-    transactionManager.appendTransactionToLog(transactionalId1, coordinatorEpoch = 10, failedMetadata, assertCallback, requestLocal = requestLocal)
+    transactionManager.appendTransactionToLog(transactionalId1, coordinatorEpoch = 10, failedMetadata, assertCallback, bufferSupplier = bufferSupplier)
     assertEquals(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata1))), transactionManager.getTransactionState(transactionalId1))
     assertTrue(txnMetadata1.pendingState.isEmpty)
 
     failedMetadata = txnMetadata1.prepareAddPartitions(Set[TopicPartition](new TopicPartition("topic2", 0)), time.milliseconds())
     prepareForTxnMessageAppend(Errors.REQUEST_TIMED_OUT)
-    transactionManager.appendTransactionToLog(transactionalId1, coordinatorEpoch = 10, failedMetadata, assertCallback, requestLocal = requestLocal)
+    transactionManager.appendTransactionToLog(transactionalId1, coordinatorEpoch = 10, failedMetadata, assertCallback, bufferSupplier = bufferSupplier)
     assertEquals(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata1))), transactionManager.getTransactionState(transactionalId1))
     assertTrue(txnMetadata1.pendingState.isEmpty)
   }
@@ -365,26 +365,26 @@ class TransactionStateManagerTest {
     var failedMetadata = txnMetadata1.prepareAddPartitions(Set[TopicPartition](new TopicPartition("topic2", 0)), time.milliseconds())
 
     prepareForTxnMessageAppend(Errors.NOT_LEADER_OR_FOLLOWER)
-    val requestLocal = RequestLocal.withThreadConfinedCaching
-    transactionManager.appendTransactionToLog(transactionalId1, coordinatorEpoch = 10, failedMetadata, assertCallback, requestLocal = requestLocal)
+    val bufferSupplier = BufferSupplier.create()
+    transactionManager.appendTransactionToLog(transactionalId1, coordinatorEpoch = 10, failedMetadata, assertCallback, bufferSupplier = bufferSupplier)
     assertEquals(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata1))), transactionManager.getTransactionState(transactionalId1))
     assertTrue(txnMetadata1.pendingState.isEmpty)
 
     failedMetadata = txnMetadata1.prepareAddPartitions(Set[TopicPartition](new TopicPartition("topic2", 0)), time.milliseconds())
     prepareForTxnMessageAppend(Errors.NONE)
     transactionManager.removeTransactionsForTxnTopicPartition(partitionId, coordinatorEpoch)
-    transactionManager.appendTransactionToLog(transactionalId1, coordinatorEpoch = 10, failedMetadata, assertCallback, requestLocal = requestLocal)
+    transactionManager.appendTransactionToLog(transactionalId1, coordinatorEpoch = 10, failedMetadata, assertCallback, bufferSupplier = bufferSupplier)
 
     prepareForTxnMessageAppend(Errors.NONE)
     transactionManager.removeTransactionsForTxnTopicPartition(partitionId, coordinatorEpoch)
     transactionManager.addLoadedTransactionsToCache(partitionId, coordinatorEpoch + 1, new Pool[String, TransactionMetadata]())
     transactionManager.putTransactionStateIfNotExists(txnMetadata1)
-    transactionManager.appendTransactionToLog(transactionalId1, coordinatorEpoch = 10, failedMetadata, assertCallback, requestLocal = requestLocal)
+    transactionManager.appendTransactionToLog(transactionalId1, coordinatorEpoch = 10, failedMetadata, assertCallback, bufferSupplier = bufferSupplier)
 
     prepareForTxnMessageAppend(Errors.NONE)
     transactionManager.removeTransactionsForTxnTopicPartition(partitionId, coordinatorEpoch)
     transactionManager.addLoadedTransactionsToCache(partitionId, coordinatorEpoch, new Pool[String, TransactionMetadata]())
-    transactionManager.appendTransactionToLog(transactionalId1, coordinatorEpoch = 10, failedMetadata, assertCallback, requestLocal = requestLocal)
+    transactionManager.appendTransactionToLog(transactionalId1, coordinatorEpoch = 10, failedMetadata, assertCallback, bufferSupplier = bufferSupplier)
   }
 
   @Test
@@ -398,7 +398,7 @@ class TransactionStateManagerTest {
     prepareForTxnMessageAppend(Errors.NONE)
     transactionManager.removeTransactionsForTxnTopicPartition(partitionId, coordinatorEpoch)
     transactionManager.addLoadingPartition(partitionId, coordinatorEpoch + 1)
-    transactionManager.appendTransactionToLog(transactionalId1, coordinatorEpoch = 10, failedMetadata, assertCallback,  requestLocal = RequestLocal.withThreadConfinedCaching)
+    transactionManager.appendTransactionToLog(transactionalId1, coordinatorEpoch = 10, failedMetadata, assertCallback,  bufferSupplier = BufferSupplier.create())
   }
 
   @Test
@@ -410,14 +410,14 @@ class TransactionStateManagerTest {
     var failedMetadata = txnMetadata1.prepareAddPartitions(Set[TopicPartition](new TopicPartition("topic2", 0)), time.milliseconds())
 
     prepareForTxnMessageAppend(Errors.MESSAGE_TOO_LARGE)
-    val requestLocal = RequestLocal.withThreadConfinedCaching
-    transactionManager.appendTransactionToLog(transactionalId1, coordinatorEpoch = 10, failedMetadata, assertCallback, requestLocal = requestLocal)
+    val bufferSupplier = BufferSupplier.create()
+    transactionManager.appendTransactionToLog(transactionalId1, coordinatorEpoch = 10, failedMetadata, assertCallback, bufferSupplier = bufferSupplier)
     assertEquals(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata1))), transactionManager.getTransactionState(transactionalId1))
     assertTrue(txnMetadata1.pendingState.isEmpty)
 
     failedMetadata = txnMetadata1.prepareAddPartitions(Set[TopicPartition](new TopicPartition("topic2", 0)), time.milliseconds())
     prepareForTxnMessageAppend(Errors.RECORD_LIST_TOO_LARGE)
-    transactionManager.appendTransactionToLog(transactionalId1, coordinatorEpoch = 10, failedMetadata, assertCallback, requestLocal = requestLocal)
+    transactionManager.appendTransactionToLog(transactionalId1, coordinatorEpoch = 10, failedMetadata, assertCallback, bufferSupplier = bufferSupplier)
     assertEquals(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata1))), transactionManager.getTransactionState(transactionalId1))
     assertTrue(txnMetadata1.pendingState.isEmpty)
   }
@@ -431,7 +431,7 @@ class TransactionStateManagerTest {
     val failedMetadata = txnMetadata1.prepareAddPartitions(Set[TopicPartition](new TopicPartition("topic2", 0)), time.milliseconds())
 
     prepareForTxnMessageAppend(Errors.UNKNOWN_TOPIC_OR_PARTITION)
-    transactionManager.appendTransactionToLog(transactionalId1, coordinatorEpoch = 10, failedMetadata, assertCallback, _ => true, RequestLocal.withThreadConfinedCaching)
+    transactionManager.appendTransactionToLog(transactionalId1, coordinatorEpoch = 10, failedMetadata, assertCallback, _ => true, BufferSupplier.create())
     assertEquals(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata1))), transactionManager.getTransactionState(transactionalId1))
     assertEquals(Some(Ongoing), txnMetadata1.pendingState)
   }
@@ -453,7 +453,7 @@ class TransactionStateManagerTest {
     txnMetadata1.producerEpoch = (txnMetadata1.producerEpoch + 1).toShort
 
     // append the new metadata into log
-    transactionManager.appendTransactionToLog(transactionalId1, coordinatorEpoch = 10, newMetadata, assertCallback,  requestLocal = RequestLocal.withThreadConfinedCaching)
+    transactionManager.appendTransactionToLog(transactionalId1, coordinatorEpoch = 10, newMetadata, assertCallback,  bufferSupplier = BufferSupplier.create())
   }
 
   @Test
@@ -473,7 +473,7 @@ class TransactionStateManagerTest {
 
     // append the new metadata into log
     assertThrows(classOf[IllegalStateException], () => transactionManager.appendTransactionToLog(transactionalId1,
-      coordinatorEpoch = 10, newMetadata, assertCallback,  requestLocal = RequestLocal.withThreadConfinedCaching))
+      coordinatorEpoch = 10, newMetadata, assertCallback,  bufferSupplier = BufferSupplier.create()))
   }
 
   @Test

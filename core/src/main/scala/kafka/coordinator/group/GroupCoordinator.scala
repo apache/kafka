@@ -19,7 +19,6 @@ package kafka.coordinator.group
 import java.util.{OptionalInt, Properties}
 import java.util.concurrent.atomic.AtomicBoolean
 import kafka.common.OffsetAndMetadata
-import org.apache.kafka.storage.internals.log.RequestLocal
 import kafka.server._
 import kafka.utils.Logging
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition}
@@ -31,7 +30,7 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.metrics.stats.Meter
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests._
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.{BufferSupplier, Time}
 import org.apache.kafka.server.record.BrokerCompressionType
 
 import scala.collection.{Map, Seq, Set, immutable, mutable}
@@ -168,7 +167,7 @@ private[group] class GroupCoordinator(
                       protocols: List[(String, Array[Byte])],
                       responseCallback: JoinCallback,
                       reason: Option[String] = None,
-                      requestLocal: RequestLocal = RequestLocal.NO_CACHING): Unit = {
+                      bufferSupplier: BufferSupplier = BufferSupplier.NO_CACHING): Unit = {
     validateGroupStatus(groupId, ApiKeys.JOIN_GROUP).foreach { error =>
       responseCallback(JoinGroupResult(memberId, error))
       return
@@ -203,7 +202,7 @@ private[group] class GroupCoordinator(
                 protocolType,
                 protocols,
                 responseCallback,
-                requestLocal,
+                bufferSupplier,
                 joinReason
               )
             } else {
@@ -232,19 +231,19 @@ private[group] class GroupCoordinator(
   }
 
   private def doNewMemberJoinGroup(
-    group: GroupMetadata,
-    groupInstanceId: Option[String],
-    requireKnownMemberId: Boolean,
-    supportSkippingAssignment: Boolean,
-    clientId: String,
-    clientHost: String,
-    rebalanceTimeoutMs: Int,
-    sessionTimeoutMs: Int,
-    protocolType: String,
-    protocols: List[(String, Array[Byte])],
-    responseCallback: JoinCallback,
-    requestLocal: RequestLocal,
-    reason: String
+                                    group: GroupMetadata,
+                                    groupInstanceId: Option[String],
+                                    requireKnownMemberId: Boolean,
+                                    supportSkippingAssignment: Boolean,
+                                    clientId: String,
+                                    clientHost: String,
+                                    rebalanceTimeoutMs: Int,
+                                    sessionTimeoutMs: Int,
+                                    protocolType: String,
+                                    protocols: List[(String, Array[Byte])],
+                                    responseCallback: JoinCallback,
+                                    bufferSupplier: BufferSupplier,
+                                    reason: String
   ): Unit = {
     group.inLock {
       if (group.is(Dead)) {
@@ -271,7 +270,7 @@ private[group] class GroupCoordinator(
               protocolType,
               protocols,
               responseCallback,
-              requestLocal,
+              bufferSupplier,
               reason
             )
           case None =>
@@ -305,7 +304,7 @@ private[group] class GroupCoordinator(
     protocolType: String,
     protocols: List[(String, Array[Byte])],
     responseCallback: JoinCallback,
-    requestLocal: RequestLocal,
+    bufferSupplier: BufferSupplier,
     reason: String
   ): Unit = {
     group.currentStaticMemberId(groupInstanceId) match {
@@ -322,7 +321,7 @@ private[group] class GroupCoordinator(
           rebalanceTimeoutMs,
           sessionTimeoutMs,
           responseCallback,
-          requestLocal,
+          bufferSupplier,
           reason,
           supportSkippingAssignment
         )
@@ -511,7 +510,7 @@ private[group] class GroupCoordinator(
                       groupInstanceId: Option[String],
                       groupAssignment: Map[String, Array[Byte]],
                       responseCallback: SyncCallback,
-                      requestLocal: RequestLocal = RequestLocal.NO_CACHING): Unit = {
+                      bufferSupplier: BufferSupplier = BufferSupplier.NO_CACHING): Unit = {
     validateGroupStatus(groupId, ApiKeys.SYNC_GROUP) match {
       case Some(error) if error == Errors.COORDINATOR_LOAD_IN_PROGRESS =>
         // The coordinator is loading, which means we've lost the state of the active rebalance and the
@@ -526,7 +525,7 @@ private[group] class GroupCoordinator(
         groupManager.getGroup(groupId) match {
           case None => responseCallback(SyncGroupResult(Errors.UNKNOWN_MEMBER_ID))
           case Some(group) => doSyncGroup(group, generation, memberId, protocolType, protocolName,
-            groupInstanceId, groupAssignment, requestLocal, responseCallback)
+            groupInstanceId, groupAssignment, bufferSupplier, responseCallback)
         }
     }
   }
@@ -572,7 +571,7 @@ private[group] class GroupCoordinator(
                           protocolName: Option[String],
                           groupInstanceId: Option[String],
                           groupAssignment: Map[String, Array[Byte]],
-                          requestLocal: RequestLocal,
+                          bufferSupplier: BufferSupplier,
                           responseCallback: SyncCallback): Unit = {
     group.inLock {
       val validationErrorOpt = validateSyncGroup(
@@ -626,7 +625,7 @@ private[group] class GroupCoordinator(
                     }
                   }
                 }
-              }, requestLocal)
+              }, bufferSupplier)
               groupCompletedRebalanceSensor.record()
             }
 
@@ -713,7 +712,7 @@ private[group] class GroupCoordinator(
   }
 
   def handleDeleteGroups(groupIds: Set[String],
-                         requestLocal: RequestLocal = RequestLocal.NO_CACHING): Map[String, Errors] = {
+                         bufferSupplier: BufferSupplier = BufferSupplier.NO_CACHING): Map[String, Errors] = {
     val groupErrors = mutable.Map.empty[String, Errors]
     val groupsEligibleForDeletion = mutable.ArrayBuffer[GroupMetadata]()
 
@@ -745,7 +744,7 @@ private[group] class GroupCoordinator(
     }
 
     if (groupsEligibleForDeletion.nonEmpty) {
-      val offsetsRemoved = groupManager.cleanupGroupMetadata(groupsEligibleForDeletion, requestLocal,
+      val offsetsRemoved = groupManager.cleanupGroupMetadata(groupsEligibleForDeletion, bufferSupplier,
         _.removeAllOffsets())
       groupErrors ++= groupsEligibleForDeletion.map(_.groupId -> Errors.NONE).toMap
       info(s"The following groups were deleted: ${groupsEligibleForDeletion.map(_.groupId).mkString(", ")}. " +
@@ -756,7 +755,7 @@ private[group] class GroupCoordinator(
   }
 
   def handleDeleteOffsets(groupId: String, partitions: Seq[TopicPartition],
-                          requestLocal: RequestLocal): (Errors, Map[TopicPartition, Errors]) = {
+                          bufferSupplier: BufferSupplier): (Errors, Map[TopicPartition, Errors]) = {
     var groupError: Errors = Errors.NONE
     var partitionErrors: Map[TopicPartition, Errors] = Map()
     var partitionsEligibleForDeletion: Seq[TopicPartition] = Seq()
@@ -794,7 +793,7 @@ private[group] class GroupCoordinator(
             }
 
             if (partitionsEligibleForDeletion.nonEmpty) {
-              val offsetsRemoved = groupManager.cleanupGroupMetadata(Seq(group), requestLocal,
+              val offsetsRemoved = groupManager.cleanupGroupMetadata(Seq(group), bufferSupplier,
                 _.removeOffsets(partitionsEligibleForDeletion))
 
               partitionErrors ++= partitionsEligibleForDeletion.map(_ -> Errors.NONE).toMap
@@ -903,7 +902,7 @@ private[group] class GroupCoordinator(
                              generationId: Int,
                              offsetMetadata: immutable.Map[TopicIdPartition, OffsetAndMetadata],
                              responseCallback: immutable.Map[TopicIdPartition, Errors] => Unit,
-                             requestLocal: RequestLocal = RequestLocal.NO_CACHING): Unit = {
+                             bufferSupplier: BufferSupplier = BufferSupplier.NO_CACHING): Unit = {
     validateGroupStatus(groupId, ApiKeys.TXN_OFFSET_COMMIT) match {
       case Some(error) => responseCallback(offsetMetadata.map { case (k, _) => k -> error })
       case None =>
@@ -911,7 +910,7 @@ private[group] class GroupCoordinator(
           groupManager.addGroup(new GroupMetadata(groupId, Empty, time))
         }
         doTxnCommitOffsets(group, transactionalId, memberId, groupInstanceId, generationId, producerId, producerEpoch,
-          offsetMetadata, requestLocal, responseCallback)
+          offsetMetadata, bufferSupplier, responseCallback)
     }
   }
 
@@ -921,7 +920,7 @@ private[group] class GroupCoordinator(
                           generationId: Int,
                           offsetMetadata: immutable.Map[TopicIdPartition, OffsetAndMetadata],
                           responseCallback: immutable.Map[TopicIdPartition, Errors] => Unit,
-                          requestLocal: RequestLocal = RequestLocal.NO_CACHING): Unit = {
+                          bufferSupplier: BufferSupplier = BufferSupplier.NO_CACHING): Unit = {
     validateGroupStatus(groupId, ApiKeys.OFFSET_COMMIT) match {
       case Some(error) => responseCallback(offsetMetadata.map { case (k, _) => k -> error })
       case None =>
@@ -931,7 +930,7 @@ private[group] class GroupCoordinator(
               // the group is not relying on Kafka for group management, so allow the commit
               val group = groupManager.addGroup(new GroupMetadata(groupId, Empty, time))
               doCommitOffsets(group, memberId, groupInstanceId, generationId, offsetMetadata,
-                responseCallback, requestLocal)
+                responseCallback, bufferSupplier)
             } else {
               // or this is a request coming from an older generation. either way, reject the commit
               responseCallback(offsetMetadata.map { case (k, _) => k -> Errors.ILLEGAL_GENERATION })
@@ -939,7 +938,7 @@ private[group] class GroupCoordinator(
 
           case Some(group) =>
             doCommitOffsets(group, memberId, groupInstanceId, generationId, offsetMetadata,
-              responseCallback, requestLocal)
+              responseCallback, bufferSupplier)
         }
     }
   }
@@ -960,7 +959,7 @@ private[group] class GroupCoordinator(
                                  producerId: Long,
                                  producerEpoch: Short,
                                  offsetMetadata: immutable.Map[TopicIdPartition, OffsetAndMetadata],
-                                 requestLocal: RequestLocal,
+                                 bufferSupplier: BufferSupplier,
                                  responseCallback: immutable.Map[TopicIdPartition, Errors] => Unit): Unit = {
     group.inLock {
       val validationErrorOpt = validateOffsetCommit(
@@ -975,7 +974,7 @@ private[group] class GroupCoordinator(
         responseCallback(offsetMetadata.map { case (k, _) => k -> validationErrorOpt.get })
       } else {
         groupManager.storeOffsets(group, memberId, offsetMetadata, responseCallback, transactionalId, producerId,
-          producerEpoch, requestLocal)
+          producerEpoch, bufferSupplier)
       }
     }
   }
@@ -1024,7 +1023,7 @@ private[group] class GroupCoordinator(
                               generationId: Int,
                               offsetMetadata: immutable.Map[TopicIdPartition, OffsetAndMetadata],
                               responseCallback: immutable.Map[TopicIdPartition, Errors] => Unit,
-                              requestLocal: RequestLocal): Unit = {
+                              bufferSupplier: BufferSupplier): Unit = {
     group.inLock {
       val validationErrorOpt = validateOffsetCommit(
         group,
@@ -1046,7 +1045,7 @@ private[group] class GroupCoordinator(
             // on heartbeat response to eventually notify the rebalance in progress signal to the consumer
             val member = group.get(memberId)
             completeAndScheduleNextHeartbeatExpiration(group, member)
-            groupManager.storeOffsets(group, memberId, offsetMetadata, responseCallback, requestLocal = requestLocal)
+            groupManager.storeOffsets(group, memberId, offsetMetadata, responseCallback, bufferSupplier = bufferSupplier)
 
           case CompletingRebalance =>
             // We should not receive a commit request if the group has not completed rebalance;
@@ -1105,8 +1104,8 @@ private[group] class GroupCoordinator(
     }
   }
 
-  def handleDeletedPartitions(topicPartitions: Seq[TopicPartition], requestLocal: RequestLocal): Unit = {
-    val offsetsRemoved = groupManager.cleanupGroupMetadata(groupManager.currentGroups, requestLocal,
+  def handleDeletedPartitions(topicPartitions: Seq[TopicPartition], bufferSupplier: BufferSupplier): Unit = {
+    val offsetsRemoved = groupManager.cleanupGroupMetadata(groupManager.currentGroups, bufferSupplier,
       _.removeOffsets(topicPartitions))
     info(s"Removed $offsetsRemoved offsets associated with deleted partitions: ${topicPartitions.mkString(", ")}.")
   }
@@ -1298,17 +1297,17 @@ private[group] class GroupCoordinator(
   }
 
   private def updateStaticMemberAndRebalance(
-    group: GroupMetadata,
-    oldMemberId: String,
-    newMemberId: String,
-    groupInstanceId: String,
-    protocols: List[(String, Array[Byte])],
-    rebalanceTimeoutMs: Int,
-    sessionTimeoutMs: Int,
-    responseCallback: JoinCallback,
-    requestLocal: RequestLocal,
-    reason: String,
-    supportSkippingAssignment: Boolean
+                                              group: GroupMetadata,
+                                              oldMemberId: String,
+                                              newMemberId: String,
+                                              groupInstanceId: String,
+                                              protocols: List[(String, Array[Byte])],
+                                              rebalanceTimeoutMs: Int,
+                                              sessionTimeoutMs: Int,
+                                              responseCallback: JoinCallback,
+                                              bufferSupplier: BufferSupplier,
+                                              reason: String,
+                                              supportSkippingAssignment: Boolean
   ): Unit = {
     val currentLeader = group.leaderOrNull
     val member = group.replaceStaticMember(groupInstanceId, oldMemberId, newMemberId)
@@ -1394,7 +1393,7 @@ private[group] class GroupCoordinator(
                 error = Errors.NONE
               ))
             }
-          }, requestLocal)
+          }, bufferSupplier)
         } else {
           maybePrepareRebalance(group, s"Group's selectedProtocol will change because static member ${member.memberId} with instance id $groupInstanceId joined with change of protocol; client reason: $reason")
         }
@@ -1523,7 +1522,7 @@ private[group] class GroupCoordinator(
               // This should be safe since there are no active members in an empty generation, so we just warn.
               warn(s"Failed to write empty metadata for group ${group.groupId}: ${error.message}")
             }
-          }, RequestLocal.NO_CACHING)
+          }, BufferSupplier.NO_CACHING)
         } else {
           info(s"Stabilized group ${group.groupId} generation ${group.generationId} " +
             s"(${Topic.GROUP_METADATA_TOPIC_NAME}-${partitionFor(group.groupId)}) with ${group.size} members")

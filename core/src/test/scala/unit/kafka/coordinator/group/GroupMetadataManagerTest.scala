@@ -41,13 +41,13 @@ import org.apache.kafka.common.protocol.{ByteBufferAccessor, Errors, MessageUtil
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.OffsetFetchResponse
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.{BufferSupplier, Utils}
 import org.apache.kafka.coordinator.group.generated.{GroupMetadataValue, OffsetCommitValue}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion._
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.{KafkaScheduler, MockTime}
-import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, FetchIsolation, LogAppendInfo, LogOffsetMetadata, RequestLocal}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, FetchIsolation, LogAppendInfo, LogOffsetMetadata}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
@@ -115,7 +115,7 @@ class GroupMetadataManagerTest {
     var expiredOffsets: Int = 0
     var infoCount = 0
     val gmm = new GroupMetadataManager(0, MetadataVersion.latest, offsetConfig, replicaManager, time, metrics) {
-      override def cleanupGroupMetadata(groups: Iterable[GroupMetadata], requestLocal: RequestLocal,
+      override def cleanupGroupMetadata(groups: Iterable[GroupMetadata], bufferSupplier: BufferSupplier,
                                         selector: GroupMetadata => Map[TopicPartition, OffsetAndMetadata]): Int = expiredOffsets
 
       override def info(msg: => String): Unit = infoCount += 1

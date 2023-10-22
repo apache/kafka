@@ -23,13 +23,13 @@ import kafka.utils.{CoreUtils, Logging}
 import org.apache.kafka.common.config.{AbstractConfig, TopicConfig}
 import org.apache.kafka.common.errors.InvalidConfigurationException
 import org.apache.kafka.common.record.{MemoryRecords, Records}
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.{BufferSupplier, Time}
 import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.raft.{Isolation, KafkaRaftClient, LogAppendInfo, LogFetchInfo, LogOffsetMetadata, OffsetAndEpoch, OffsetMetadata, ReplicatedLog, ValidOffsetAndEpoch}
 import org.apache.kafka.server.util.Scheduler
 import org.apache.kafka.snapshot.{FileRawSnapshotReader, FileRawSnapshotWriter, RawSnapshotReader, RawSnapshotWriter, SnapshotPath, Snapshots}
 import org.apache.kafka.storage.internals
-import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchIsolation, LogConfig, LogDirFailureChannel, LogStartOffsetIncrementReason, ProducerStateManagerConfig, RequestLocal}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchIsolation, LogConfig, LogDirFailureChannel, LogStartOffsetIncrementReason, ProducerStateManagerConfig}
 
 import java.io.File
 import java.nio.file.{Files, NoSuchFileException, Path}
@@ -83,7 +83,7 @@ final class KafkaMetadataLog private (
       log.appendAsLeader(records.asInstanceOf[MemoryRecords],
         leaderEpoch = epoch,
         origin = AppendOrigin.RAFT_LEADER,
-        requestLocal = RequestLocal.NO_CACHING
+        bufferSupplier = BufferSupplier.NO_CACHING
       )
     )
   }

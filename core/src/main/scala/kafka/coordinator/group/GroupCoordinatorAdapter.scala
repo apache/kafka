@@ -28,7 +28,6 @@ import org.apache.kafka.common.requests.{OffsetCommitRequest, RequestContext, Tr
 import org.apache.kafka.common.utils.{BufferSupplier, Time}
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.server.util.FutureUtils
-import org.apache.kafka.storage.internals.log.RequestLocal
 
 import java.util
 import java.util.{Optional, OptionalInt, Properties}
@@ -120,7 +119,7 @@ private[group] class GroupCoordinatorAdapter(
       protocols,
       callback,
       Option(request.reason),
-      new RequestLocal(bufferSupplier)
+      bufferSupplier
     )
 
     future
@@ -156,7 +155,7 @@ private[group] class GroupCoordinatorAdapter(
       Option(request.groupInstanceId),
       assignmentMap.result(),
       callback,
-      new RequestLocal(bufferSupplier)
+      bufferSupplier
     )
 
     future
@@ -265,7 +264,7 @@ private[group] class GroupCoordinatorAdapter(
     val results = new DeleteGroupsResponseData.DeletableGroupResultCollection()
     coordinator.handleDeleteGroups(
       groupIds.asScala.toSet,
-      new RequestLocal(bufferSupplier)
+      bufferSupplier
     ).forKeyValue { (groupId, error) =>
       results.add(new DeleteGroupsResponseData.DeletableGroupResult()
         .setGroupId(groupId)
@@ -412,7 +411,7 @@ private[group] class GroupCoordinatorAdapter(
       request.generationIdOrMemberEpoch,
       partitions.toMap,
       callback,
-      new RequestLocal(bufferSupplier)
+      bufferSupplier
     )
 
     future
@@ -474,7 +473,7 @@ private[group] class GroupCoordinatorAdapter(
       request.generationId,
       partitions.toMap,
       callback,
-      new RequestLocal(bufferSupplier)
+      bufferSupplier
     )
 
     future
@@ -523,7 +522,7 @@ private[group] class GroupCoordinatorAdapter(
     val (groupError, topicPartitionResults) = coordinator.handleDeleteOffsets(
       request.groupId,
       partitions,
-      new RequestLocal(bufferSupplier)
+      bufferSupplier
     )
 
     if (groupError != Errors.NONE) {
@@ -567,7 +566,7 @@ private[group] class GroupCoordinatorAdapter(
     topicPartitions: util.List[TopicPartition],
     bufferSupplier: BufferSupplier
   ): Unit = {
-    coordinator.handleDeletedPartitions(topicPartitions.asScala, new RequestLocal(bufferSupplier))
+    coordinator.handleDeletedPartitions(topicPartitions.asScala, bufferSupplier)
   }
 
   override def onElection(
