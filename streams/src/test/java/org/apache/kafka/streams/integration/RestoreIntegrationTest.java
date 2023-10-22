@@ -528,12 +528,12 @@ public class RestoreIntegrationTest {
         final Map<String, Object> kafkaStreams1Configuration = mkMap(
             mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId).getPath() + "-ks1"),
             mkEntry(StreamsConfig.CLIENT_ID_CONFIG, appId + "-ks1"),
-            mkEntry(StreamsConfig.restoreConsumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), 10)
+            mkEntry(StreamsConfig.restoreConsumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), 1)
         );
         final Map<String, Object> kafkaStreams2Configuration = mkMap(
             mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId).getPath() + "-ks2"),
             mkEntry(StreamsConfig.CLIENT_ID_CONFIG, appId + "-ks2"),
-            mkEntry(StreamsConfig.restoreConsumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), 10)
+            mkEntry(StreamsConfig.restoreConsumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), 1)
         );
 
         final StreamsBuilder builder = new StreamsBuilder();
@@ -604,8 +604,6 @@ public class RestoreIntegrationTest {
                                            final StateRestoreListener stateRestoreListener,
                                            final Map<String, Object> extraConfiguration) throws InterruptedException {
         final Properties streamsConfiguration = props(mkObjectProperties(extraConfiguration));
-        streamsConfiguration.put(StreamsConfig.restoreConsumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), 10);
-
         final KafkaStreams kafkaStreams = new KafkaStreams(streamsBuilder.build(), streamsConfiguration);
 
         kafkaStreams.setGlobalStateRestoreListener(stateRestoreListener);
