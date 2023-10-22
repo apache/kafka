@@ -173,7 +173,7 @@ public class PartitionCreationBench {
     @TearDown(Level.Invocation)
     public void tearDown() throws Exception {
         this.replicaManager.shutdown(false);
-        logManager.shutdown();
+        logManager.shutdown(-1L);
         this.metrics.close();
         this.scheduler.shutdown();
         this.quotaManagers.shutdown();

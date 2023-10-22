@@ -33,7 +33,7 @@ import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap}
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.server.util.Scheduler
 import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile
-import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, FetchDataInfo, FetchIsolation, LazyIndex, LogAppendInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetsListener, ProducerStateManager, ProducerStateManagerConfig, TransactionIndex}
+import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, FetchDataInfo, FetchIsolation, LazyIndex, LogAppendInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetsListener, LogSegment, ProducerStateManager, ProducerStateManagerConfig, TransactionIndex}
 
 import scala.jdk.CollectionConverters._
 
@@ -45,9 +45,9 @@ object LogTestUtils {
                     logDir: File,
                     indexIntervalBytes: Int = 10,
                     time: Time = Time.SYSTEM): LogSegment = {
-    val ms = FileRecords.open(UnifiedLog.logFile(logDir, offset))
-    val idx = LazyIndex.forOffset(UnifiedLog.offsetIndexFile(logDir, offset), offset, 1000)
-    val timeIdx = LazyIndex.forTime(UnifiedLog.timeIndexFile(logDir, offset), offset, 1500)
+    val ms = FileRecords.open(LogFileUtils.logFile(logDir, offset))
+    val idx = LazyIndex.forOffset(LogFileUtils.offsetIndexFile(logDir, offset), offset, 1000)
+    val timeIdx = LazyIndex.forTime(LogFileUtils.timeIndexFile(logDir, offset), offset, 1500)
     val txnIndex = new TransactionIndex(offset, UnifiedLog.transactionIndexFile(logDir, offset))
 
     new LogSegment(ms, idx, timeIdx, txnIndex, offset, indexIntervalBytes, 0, time)
@@ -128,7 +128,7 @@ object LogTestUtils {
     def hasOverflow(baseOffset: Long, batch: RecordBatch): Boolean =
       batch.lastOffset > baseOffset + Int.MaxValue || batch.baseOffset < baseOffset
 
-    for (segment <- log.logSegments) {
+    for (segment <- log.logSegments.asScala) {
       val overflowBatch = segment.log.batches.asScala.find(batch => hasOverflow(segment.baseOffset, batch))
       if (overflowBatch.isDefined)
         return Some(segment)
@@ -137,7 +137,7 @@ object LogTestUtils {
   }
 
   def rawSegment(logDir: File, baseOffset: Long): FileRecords =
-    FileRecords.open(UnifiedLog.logFile(logDir, baseOffset))
+    FileRecords.open(LogFileUtils.logFile(logDir, baseOffset))
 
   /**
    * Initialize the given log directory with a set of segments, one of which will have an
@@ -158,8 +158,8 @@ object LogTestUtils {
       segment.append(MemoryRecords.withRecords(baseOffset + Int.MaxValue - 1, CompressionType.NONE, 0,
         record(baseOffset + Int.MaxValue - 1)))
       // Need to create the offset files explicitly to avoid triggering segment recovery to truncate segment.
-      Files.createFile(UnifiedLog.offsetIndexFile(logDir, baseOffset).toPath)
-      Files.createFile(UnifiedLog.timeIndexFile(logDir, baseOffset).toPath)
+      Files.createFile(LogFileUtils.offsetIndexFile(logDir, baseOffset).toPath)
+      Files.createFile(LogFileUtils.timeIndexFile(logDir, baseOffset).toPath)
       baseOffset + Int.MaxValue
     }
 
@@ -186,7 +186,7 @@ object LogTestUtils {
 
   /* extract all the keys from a log */
   def keysInLog(log: UnifiedLog): Iterable[Long] = {
-    for (logSegment <- log.logSegments;
+    for (logSegment <- log.logSegments.asScala;
          batch <- logSegment.log.batches.asScala if !batch.isControlBatch;
          record <- batch.asScala if record.hasValue && record.hasKey)
       yield TestUtils.readString(record.key).toLong
@@ -238,7 +238,8 @@ object LogTestUtils {
     log.read(startOffset, maxLength, isolation, minOneMessage)
   }
 
-  def allAbortedTransactions(log: UnifiedLog): Iterable[AbortedTxn] = log.logSegments.flatMap(_.txnIndex.allAbortedTxns.asScala)
+  def allAbortedTransactions(log: UnifiedLog): Iterable[AbortedTxn] =
+    log.logSegments.asScala.flatMap(_.txnIndex.allAbortedTxns.asScala)
 
   def deleteProducerSnapshotFiles(logDir: File): Unit = {
     val files = logDir.listFiles.filter(f => f.isFile && f.getName.endsWith(LogFileUtils.PRODUCER_SNAPSHOT_FILE_SUFFIX))

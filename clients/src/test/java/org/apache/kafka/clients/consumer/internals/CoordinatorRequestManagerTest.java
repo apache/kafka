@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractRequest;
@@ -145,6 +146,25 @@ public class CoordinatorRequestManagerTest {
         assertEquals(this.node.id(), respNew.coordinatorByKey(GROUP_ID).get().nodeId());
     }
 
+    @Test
+    public void testNetworkTimeout() {
+        CoordinatorRequestManager coordinatorManager = setupCoordinatorManager(GROUP_ID);
+        NetworkClientDelegate.PollResult res = coordinatorManager.poll(time.milliseconds());
+        assertEquals(1, res.unsentRequests.size());
+
+        // Mimic a network timeout
+        res.unsentRequests.get(0).handler().onFailure(time.milliseconds(), new TimeoutException());
+
+        // Sleep for exponential backoff - 1ms
+        time.sleep(RETRY_BACKOFF_MS - 1);
+        NetworkClientDelegate.PollResult res2 = coordinatorManager.poll(this.time.milliseconds());
+        assertEquals(0, res2.unsentRequests.size());
+
+        time.sleep(1);
+        res2 = coordinatorManager.poll(time.milliseconds());
+        assertEquals(1, res2.unsentRequests.size());
+    }
+
     private void expectFindCoordinatorRequest(
         CoordinatorRequestManager  coordinatorManager,
         Errors error
@@ -182,7 +202,7 @@ public class CoordinatorRequestManagerTest {
             FindCoordinatorResponse.prepareResponse(error, GROUP_ID, node);
         return new ClientResponse(
             new RequestHeader(ApiKeys.FIND_COORDINATOR, findCoordinatorRequest.version(), "", 1),
-            request.callback(),
+            request.handler(),
             node.idString(),
             time.milliseconds(),
             time.milliseconds(),

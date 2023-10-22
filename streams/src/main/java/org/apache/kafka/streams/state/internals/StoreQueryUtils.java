@@ -186,12 +186,17 @@ public final class StoreQueryUtils {
         final RangeQuery<Bytes, byte[]> rangeQuery = (RangeQuery<Bytes, byte[]>) query;
         final Optional<Bytes> lowerRange = rangeQuery.getLowerBound();
         final Optional<Bytes> upperRange = rangeQuery.getUpperBound();
+        final boolean isKeyAscending = rangeQuery.isKeyAscending();
         final KeyValueIterator<Bytes, byte[]> iterator;
         try {
-            if (!lowerRange.isPresent() && !upperRange.isPresent()) {
+            if (!lowerRange.isPresent() && !upperRange.isPresent() && isKeyAscending) {
                 iterator = kvStore.all();
-            } else {
+            } else if (isKeyAscending) {
                 iterator = kvStore.range(lowerRange.orElse(null), upperRange.orElse(null));
+            } else if (!lowerRange.isPresent() && !upperRange.isPresent()) {
+                iterator = kvStore.reverseAll();
+            } else {
+                iterator = kvStore.reverseRange(lowerRange.orElse(null), upperRange.orElse(null));
             }
             final R result = (R) iterator;
             return QueryResult.forResult(result);

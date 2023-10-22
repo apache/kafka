@@ -6222,4 +6222,58 @@ class KafkaApisTest {
 
     assertEquals(expectedResponse, response.data)
   }
+
+  @Test
+  def testGetTelemetrySubscriptionsNotAllowedForZkClusters(): Unit = {
+    val data = new GetTelemetrySubscriptionsRequestData()
+
+    val request = buildRequest(new GetTelemetrySubscriptionsRequest.Builder(data, true).build())
+    createKafkaApis(enableForwarding = true).handle(request, RequestLocal.NoCaching)
+
+    val response = verifyNoThrottling[GetTelemetrySubscriptionsResponse](request)
+    assertEquals(Errors.UNKNOWN_SERVER_ERROR, Errors.forCode(response.data.errorCode))
+  }
+
+  @Test
+  def testGetTelemetrySubscriptionsUnsupportedVersionForKRaftClusters(): Unit = {
+    val data = new GetTelemetrySubscriptionsRequestData()
+
+    val request = buildRequest(new GetTelemetrySubscriptionsRequest.Builder(data, true).build())
+    val errorCode = Errors.UNSUPPORTED_VERSION.code
+    val expectedResponse = new GetTelemetrySubscriptionsResponseData()
+    expectedResponse.setErrorCode(errorCode)
+
+    metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
+    createKafkaApis(raftSupport = true).handle(request, RequestLocal.NoCaching)
+    val response = verifyNoThrottling[GetTelemetrySubscriptionsResponse](request)
+
+    assertEquals(expectedResponse, response.data)
+  }
+
+  @Test
+  def testPushTelemetryNotAllowedForZkClusters(): Unit = {
+    val data = new PushTelemetryRequestData()
+
+    val request = buildRequest(new PushTelemetryRequest.Builder(data, true).build())
+    createKafkaApis(enableForwarding = true).handle(request, RequestLocal.NoCaching)
+
+    val response = verifyNoThrottling[PushTelemetryResponse](request)
+    assertEquals(Errors.UNKNOWN_SERVER_ERROR, Errors.forCode(response.data.errorCode))
+  }
+
+  @Test
+  def testPushTelemetryUnsupportedVersionForKRaftClusters(): Unit = {
+    val data = new PushTelemetryRequestData()
+
+    val request = buildRequest(new PushTelemetryRequest.Builder(data, true).build())
+    val errorCode = Errors.UNSUPPORTED_VERSION.code
+    val expectedResponse = new PushTelemetryResponseData()
+    expectedResponse.setErrorCode(errorCode)
+
+    metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
+    createKafkaApis(raftSupport = true).handle(request, RequestLocal.NoCaching)
+    val response = verifyNoThrottling[PushTelemetryResponse](request)
+
+    assertEquals(expectedResponse, response.data)
+  }
 }

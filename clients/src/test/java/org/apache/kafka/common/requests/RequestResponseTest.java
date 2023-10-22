@@ -146,6 +146,8 @@ import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.FetchSnapshotRequestData;
 import org.apache.kafka.common.message.FetchSnapshotResponseData;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
+import org.apache.kafka.common.message.GetTelemetrySubscriptionsRequestData;
+import org.apache.kafka.common.message.GetTelemetrySubscriptionsResponseData;
 import org.apache.kafka.common.message.HeartbeatRequestData;
 import org.apache.kafka.common.message.HeartbeatResponseData;
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData;
@@ -193,6 +195,8 @@ import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEnd
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.OffsetForLeaderTopicResult;
 import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.message.ProduceResponseData;
+import org.apache.kafka.common.message.PushTelemetryRequestData;
+import org.apache.kafka.common.message.PushTelemetryResponseData;
 import org.apache.kafka.common.message.RenewDelegationTokenRequestData;
 import org.apache.kafka.common.message.RenewDelegationTokenResponseData;
 import org.apache.kafka.common.message.SaslAuthenticateRequestData;
@@ -1065,6 +1069,8 @@ public class RequestResponseTest {
             case CONSUMER_GROUP_HEARTBEAT: return createConsumerGroupHeartbeatRequest(version);
             case CONSUMER_GROUP_DESCRIBE: return createConsumerGroupDescribeRequest(version);
             case CONTROLLER_REGISTRATION: return createControllerRegistrationRequest(version);
+            case GET_TELEMETRY_SUBSCRIPTIONS: return createGetTelemetrySubscriptionsRequest(version);
+            case PUSH_TELEMETRY: return createPushTelemetryRequest(version);
             default: throw new IllegalArgumentException("Unknown API key " + apikey);
         }
     }
@@ -1142,6 +1148,8 @@ public class RequestResponseTest {
             case CONSUMER_GROUP_HEARTBEAT: return createConsumerGroupHeartbeatResponse();
             case CONSUMER_GROUP_DESCRIBE: return createConsumerGroupDescribeResponse();
             case CONTROLLER_REGISTRATION: return createControllerRegistrationResponse();
+            case GET_TELEMETRY_SUBSCRIPTIONS: return createGetTelemetrySubscriptionsResponse();
+            case PUSH_TELEMETRY: return createPushTelemetryResponse();
             default: throw new IllegalArgumentException("Unknown API key " + apikey);
         }
     }
@@ -3502,6 +3510,41 @@ public class RequestResponseTest {
                 .setTransactionState("PrepareAbort")
         ));
         return new ListTransactionsResponse(response);
+    }
+
+    private GetTelemetrySubscriptionsRequest createGetTelemetrySubscriptionsRequest(short version) {
+        return new GetTelemetrySubscriptionsRequest.Builder(new GetTelemetrySubscriptionsRequestData()
+            .setClientInstanceId(Uuid.randomUuid())
+        ).build(version);
+    }
+
+    private GetTelemetrySubscriptionsResponse createGetTelemetrySubscriptionsResponse() {
+        GetTelemetrySubscriptionsResponseData response = new GetTelemetrySubscriptionsResponseData();
+        response.setClientInstanceId(Uuid.randomUuid());
+        response.setSubscriptionId(1);
+        response.setAcceptedCompressionTypes(Collections.singletonList(CompressionType.GZIP.id));
+        response.setPushIntervalMs(60 * 1000);
+        response.setDeltaTemporality(false);
+        response.setErrorCode(Errors.NONE.code());
+        response.setThrottleTimeMs(10);
+        return new GetTelemetrySubscriptionsResponse(response);
+    }
+
+    private PushTelemetryRequest createPushTelemetryRequest(short version) {
+        return new PushTelemetryRequest.Builder(new PushTelemetryRequestData()
+            .setClientInstanceId(Uuid.randomUuid())
+            .setSubscriptionId(1)
+            .setTerminating(false)
+            .setCompressionType(CompressionType.ZSTD.id)
+            .setMetrics("test-metrics".getBytes(StandardCharsets.UTF_8))
+        ).build(version);
+    }
+
+    private PushTelemetryResponse createPushTelemetryResponse() {
+        PushTelemetryResponseData response = new PushTelemetryResponseData();
+        response.setErrorCode(Errors.NONE.code());
+        response.setThrottleTimeMs(10);
+        return new PushTelemetryResponse(response);
     }
 
     @Test

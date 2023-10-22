@@ -117,6 +117,9 @@ class LogManager(logDirs: Seq[File],
   }
 
   private val dirLocks = lockLogDirs(liveLogDirs)
+  private val dirIds = directoryIds(liveLogDirs)
+  // visible for testing
+  private[log] val directoryIds: Set[Uuid] = dirIds.values.toSet
   @volatile private var recoveryPointCheckpoints = liveLogDirs.map(dir =>
     (dir, new OffsetCheckpointFile(new File(dir, RecoveryPointCheckpointFile), logDirFailureChannel))).toMap
   @volatile private var logStartOffsetCheckpoints = liveLogDirs.map(dir =>
@@ -261,6 +264,40 @@ class LogManager(logDirs: Seq[File],
     }
   }
 
+  /**
+   * Retrieves the Uuid for the directory, given its absolute path.
+   */
+  def directoryId(dir: String): Option[Uuid] = dirIds.get(dir)
+
+  /**
+   * Determine directory ID for each directory with a meta.properties.
+   * If meta.properties does not include a directory ID, one is generated and persisted back to meta.properties.
+   * Directories without a meta.properties don't get a directory ID assigned.
+   */
+  private def directoryIds(dirs: Seq[File]): Map[String, Uuid] = {
+    dirs.flatMap { dir =>
+      try {
+        val metadataCheckpoint = new BrokerMetadataCheckpoint(new File(dir, KafkaServer.brokerMetaPropsFile))
+        metadataCheckpoint.read().map { props =>
+          val rawMetaProperties = new RawMetaProperties(props)
+          val uuid = rawMetaProperties.directoryId match {
+            case Some(uuidStr) => Uuid.fromString(uuidStr)
+            case None =>
+              val uuid = Uuid.randomUuid()
+              rawMetaProperties.directoryId = uuid.toString
+              metadataCheckpoint.write(rawMetaProperties.props)
+              uuid
+          }
+          dir.getAbsolutePath -> uuid
+        }.toMap
+      } catch {
+        case e: IOException =>
+          logDirFailureChannel.maybeAddOfflineLogDir(dir.getAbsolutePath, s"Disk error while loading ID $dir", e)
+          None
+      }
+    }.toMap
+  }
+
   private def addLogToBeDeleted(log: UnifiedLog): Unit = {
     this.logsToBeDeleted.add((log, time.milliseconds()))
   }
@@ -371,11 +408,11 @@ class LogManager(logDirs: Seq[File],
           new LogRecoveryThreadFactory(logDirAbsolutePath))
         threadPools.append(pool)
 
-        val cleanShutdownFile = new File(dir, LogLoader.CleanShutdownFile)
-        if (cleanShutdownFile.exists) {
+        val cleanShutdownFileHandler = new CleanShutdownFileHandler(dir.getPath)
+        if (cleanShutdownFileHandler.exists()) {
           // Cache the clean shutdown status and use that for rest of log loading workflow. Delete the CleanShutdownFile
           // so that if broker crashes while loading the log, it is considered hard shutdown during the next boot up. KAFKA-10471
-          Files.deleteIfExists(cleanShutdownFile.toPath)
+          cleanShutdownFileHandler.delete()
           hadCleanShutdown = true
         }
         hadCleanShutdownFlags.put(logDirAbsolutePath, hadCleanShutdown)
@@ -588,7 +625,7 @@ class LogManager(logDirs: Seq[File],
   /**
    * Close all the logs
    */
-  def shutdown(): Unit = {
+  def shutdown(brokerEpoch: Long = -1): Unit = {
     info("Shutting down.")
 
     metricsGroup.removeMetric("OfflineLogDirectoryCount")
@@ -647,8 +684,9 @@ class LogManager(logDirs: Seq[File],
           val logDirAbsolutePath = dir.getAbsolutePath
           if (hadCleanShutdownFlags.getOrDefault(logDirAbsolutePath, false) ||
               loadLogsCompletedFlags.getOrDefault(logDirAbsolutePath, false)) {
-            debug(s"Writing clean shutdown marker at $dir")
-            CoreUtils.swallow(Files.createFile(new File(dir, LogLoader.CleanShutdownFile).toPath), this)
+            val cleanShutdownFileHandler = new CleanShutdownFileHandler(dir.getPath)
+            debug(s"Writing clean shutdown marker at $dir with broker epoch=$brokerEpoch")
+            CoreUtils.swallow(cleanShutdownFileHandler.write(brokerEpoch), this)
           }
         }
       }
@@ -800,7 +838,7 @@ class LogManager(logDirs: Seq[File],
     try {
       logStartOffsetCheckpoints.get(logDir).foreach { checkpoint =>
         val logStartOffsets = logsToCheckpoint.collect {
-          case (tp, log) if log.logStartOffset > log.logSegments.head.baseOffset => tp -> log.logStartOffset
+          case (tp, log) if log.logStartOffset > log.logSegments.asScala.head.baseOffset => tp -> log.logStartOffset
         }
         checkpoint.write(logStartOffsets)
       }
@@ -1371,6 +1409,29 @@ class LogManager(logDirs: Seq[File],
     } else {
       None
     }
+  }
+
+  def readBrokerEpochFromCleanShutdownFiles(): Long = {
+    // Verify whether all the log dirs have the same broker epoch in their clean shutdown files. If there is any dir not
+    // live, fail the broker epoch check.
+    if (liveLogDirs.size < logDirs.size) {
+      return -1L
+    }
+    var brokerEpoch = -1L
+    for (dir <- liveLogDirs) {
+      val cleanShutdownFileHandler = new CleanShutdownFileHandler(dir.getPath)
+      val currentBrokerEpoch = cleanShutdownFileHandler.read
+      if (currentBrokerEpoch == -1L) {
+        info(s"Unable to read the broker epoch in ${dir.toString}.")
+        return -1L
+      }
+      if (brokerEpoch != -1 && currentBrokerEpoch != brokerEpoch) {
+        info(s"Found different broker epochs in ${dir.toString}. Other=$brokerEpoch vs current=$currentBrokerEpoch.")
+        return -1L
+      }
+      brokerEpoch = currentBrokerEpoch
+    }
+    brokerEpoch
   }
 }
 

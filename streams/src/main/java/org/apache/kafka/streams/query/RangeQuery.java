@@ -40,10 +40,12 @@ public final class RangeQuery<K, V> implements Query<KeyValueIterator<K, V>> {
     private final Optional<K> lower;
     private final Optional<K> upper;
 
+    private final boolean isKeyAscending;
 
-    private RangeQuery(final Optional<K> lower, final Optional<K> upper) {
+    private RangeQuery(final Optional<K> lower, final Optional<K> upper, final boolean isKeyAscending) {
         this.lower = lower;
         this.upper = upper;
+        this.isKeyAscending = isKeyAscending;
     }
 
     /**
@@ -54,7 +56,23 @@ public final class RangeQuery<K, V> implements Query<KeyValueIterator<K, V>> {
      * @param <V> The value type
      */
     public static <K, V> RangeQuery<K, V> withRange(final K lower, final K upper) {
-        return new RangeQuery<>(Optional.ofNullable(lower), Optional.ofNullable(upper));
+        return new RangeQuery<>(Optional.ofNullable(lower), Optional.ofNullable(upper), true);
+    }
+
+    /**
+     * Determines if the query keys are in ascending order.
+     * @return true if ascending, false otherwise.
+     */
+    public boolean isKeyAscending() {
+        return isKeyAscending;
+    }
+
+    /**
+     * Set the query to return keys in descending order.
+     * @return a new RangeQuery instance with descending flag set.
+     */
+    public RangeQuery<K, V> withDescendingKeys() {
+        return new RangeQuery<>(this.lower, this.upper, false);
     }
 
     /**
@@ -65,7 +83,7 @@ public final class RangeQuery<K, V> implements Query<KeyValueIterator<K, V>> {
      * @param <V> The value type
      */
     public static <K, V> RangeQuery<K, V> withUpperBound(final K upper) {
-        return new RangeQuery<>(Optional.empty(), Optional.of(upper));
+        return new RangeQuery<>(Optional.empty(), Optional.of(upper), true);
     }
 
     /**
@@ -75,7 +93,7 @@ public final class RangeQuery<K, V> implements Query<KeyValueIterator<K, V>> {
      * @param <V> The value type
      */
     public static <K, V> RangeQuery<K, V> withLowerBound(final K lower) {
-        return new RangeQuery<>(Optional.of(lower), Optional.empty());
+        return new RangeQuery<>(Optional.of(lower), Optional.empty(), true);
     }
 
     /**
@@ -84,7 +102,7 @@ public final class RangeQuery<K, V> implements Query<KeyValueIterator<K, V>> {
      * @param <V> The value type
      */
     public static <K, V> RangeQuery<K, V> withNoBounds() {
-        return new RangeQuery<>(Optional.empty(), Optional.empty());
+        return new RangeQuery<>(Optional.empty(), Optional.empty(), true);
     }
 
     /**

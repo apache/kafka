@@ -115,12 +115,11 @@ public class CoordinatorRequestManager implements RequestManager {
         );
 
         unsentRequest.future().whenComplete((clientResponse, throwable) -> {
-            long responseTimeMs = time.milliseconds();
             if (clientResponse != null) {
                 FindCoordinatorResponse response = (FindCoordinatorResponse) clientResponse.responseBody();
-                onResponse(responseTimeMs, response);
+                onResponse(clientResponse.receivedTimeMs(), response);
             } else {
-                onFailedResponse(responseTimeMs, throwable);
+                onFailedResponse(unsentRequest.handler().completionTimeMs(), throwable);
             }
         });
 
@@ -165,10 +164,7 @@ public class CoordinatorRequestManager implements RequestManager {
         coordinatorRequestState.onSuccessfulAttempt(currentTimeMs);
     }
 
-    private void onFailedResponse(
-        final long currentTimeMs,
-        final Throwable exception
-    ) {
+    private void onFailedResponse(final long currentTimeMs, final Throwable exception) {
         coordinatorRequestState.onFailedAttempt(currentTimeMs);
         markCoordinatorUnknown("FindCoordinator failed with exception", currentTimeMs);
 
