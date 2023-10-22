@@ -370,7 +370,7 @@ class PartitionLockTest extends Logging {
     partition: Partition,
     numRecords: Int
   ): Unit = {
-    val bufferSupplier = BufferSupplier.NO_CACHING
+    val bufferSupplier = BufferSupplier.create()
     (0 until numRecords).foreach { _ =>
       val batch = TestUtils.records(records = List(new SimpleRecord("k1".getBytes, "v1".getBytes),
         new SimpleRecord("k2".getBytes, "v2".getBytes)))

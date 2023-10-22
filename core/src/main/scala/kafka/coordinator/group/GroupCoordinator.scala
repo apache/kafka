@@ -231,19 +231,19 @@ private[group] class GroupCoordinator(
   }
 
   private def doNewMemberJoinGroup(
-                                    group: GroupMetadata,
-                                    groupInstanceId: Option[String],
-                                    requireKnownMemberId: Boolean,
-                                    supportSkippingAssignment: Boolean,
-                                    clientId: String,
-                                    clientHost: String,
-                                    rebalanceTimeoutMs: Int,
-                                    sessionTimeoutMs: Int,
-                                    protocolType: String,
-                                    protocols: List[(String, Array[Byte])],
-                                    responseCallback: JoinCallback,
-                                    bufferSupplier: BufferSupplier,
-                                    reason: String
+    group: GroupMetadata,
+    groupInstanceId: Option[String],
+    requireKnownMemberId: Boolean,
+    supportSkippingAssignment: Boolean,
+    clientId: String,
+    clientHost: String,
+    rebalanceTimeoutMs: Int,
+    sessionTimeoutMs: Int,
+    protocolType: String,
+    protocols: List[(String, Array[Byte])],
+    responseCallback: JoinCallback,
+    bufferSupplier: BufferSupplier,
+    reason: String
   ): Unit = {
     group.inLock {
       if (group.is(Dead)) {
@@ -1297,17 +1297,17 @@ private[group] class GroupCoordinator(
   }
 
   private def updateStaticMemberAndRebalance(
-                                              group: GroupMetadata,
-                                              oldMemberId: String,
-                                              newMemberId: String,
-                                              groupInstanceId: String,
-                                              protocols: List[(String, Array[Byte])],
-                                              rebalanceTimeoutMs: Int,
-                                              sessionTimeoutMs: Int,
-                                              responseCallback: JoinCallback,
-                                              bufferSupplier: BufferSupplier,
-                                              reason: String,
-                                              supportSkippingAssignment: Boolean
+    group: GroupMetadata,
+    oldMemberId: String,
+    newMemberId: String,
+    groupInstanceId: String,
+    protocols: List[(String, Array[Byte])],
+    rebalanceTimeoutMs: Int,
+    sessionTimeoutMs: Int,
+    responseCallback: JoinCallback,
+    bufferSupplier: BufferSupplier,
+    reason: String,
+    supportSkippingAssignment: Boolean
   ): Unit = {
     val currentLeader = group.leaderOrNull
     val member = group.replaceStaticMember(groupInstanceId, oldMemberId, newMemberId)
