@@ -20,12 +20,12 @@ package org.apache.kafka.tools;
 
 import java.util.Objects;
 
-public final class Tuple<V1, V2> {
+public final class Tuple2<V1, V2> {
     public final V1 v1;
 
     public final V2 v2;
 
-    public Tuple(V1 v1, V2 v2) {
+    public Tuple2(V1 v1, V2 v2) {
         this.v1 = v1;
         this.v2 = v2;
     }
@@ -34,7 +34,7 @@ public final class Tuple<V1, V2> {
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-        Tuple<?, ?> tuple = (Tuple<?, ?>) o;
+        Tuple2<?, ?> tuple = (Tuple2<?, ?>) o;
         return Objects.equals(v1, tuple.v1) && Objects.equals(v2, tuple.v2);
     }
 
@@ -45,6 +45,6 @@ public final class Tuple<V1, V2> {
 
     @Override
     public String toString() {
-        return "Tuple{v1=" + v1 + ", v2=" + v2 + '}';
+        return "Tuple2{v1=" + v1 + ", v2=" + v2 + '}';
     }
 }
