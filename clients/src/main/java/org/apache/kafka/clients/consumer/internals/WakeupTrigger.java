@@ -29,12 +29,12 @@ import java.util.concurrent.atomic.AtomicReference;
 public class WakeupTrigger {
     private AtomicReference<Wakeupable> pendingTask = new AtomicReference<>(null);
 
-    /*
-      Wakeup a pending task.  If there isn't any pending task, return a WakeupFuture, so that the subsequent call
-      would know wakeup was previously called.
-
-      If there are active tasks, complete it with WakeupException, then unset pending task (return null here.
-      If the current task has already been woken-up, do nothing.
+    /**
+     * Wakeup a pending task.  If there isn't any pending task, return a WakeupFuture, so that the subsequent call
+     * would know wakeup was previously called.
+     * <p>
+     * If there are active tasks, complete it with WakeupException, then unset pending task (return null here.
+     * If the current task has already been woken-up, do nothing.
      */
     public void wakeup() {
         pendingTask.getAndUpdate(task -> {
@@ -50,12 +50,15 @@ public class WakeupTrigger {
         });
     }
 
-    /*
-    If there is no pending task, set the pending task active.
-    If wakeup was called before setting an active task, the current task will complete exceptionally with
-    WakeupException right
-    away.
-    if there is an active task, throw exception.
+    /**
+     *     If there is no pending task, set the pending task active.
+     *     If wakeup was called before setting an active task, the current task will complete exceptionally with
+     *     WakeupException right
+     *     away.
+     *     if there is an active task, throw exception.
+     * @param currentTask
+     * @param <T>
+     * @return
      */
     public <T> CompletableFuture<T> setActiveTask(final CompletableFuture<T> currentTask) {
         Objects.requireNonNull(currentTask, "currentTask cannot be null");
@@ -87,7 +90,8 @@ public class WakeupTrigger {
         return pendingTask.get();
     }
 
-    interface Wakeupable { }
+    interface Wakeupable {
+    }
 
     static class ActiveFuture implements Wakeupable {
         private final CompletableFuture<?> future;
@@ -101,5 +105,6 @@ public class WakeupTrigger {
         }
     }
 
-    static class WakeupFuture implements Wakeupable { }
+    static class WakeupFuture implements Wakeupable {
+    }
 }
