@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -24,7 +24,7 @@ import java.io.IOException;
 import java.util.regex.Pattern;
 
 public class PartitionMetadataReadBuffer {
-    private static Pattern WHITESPACES_PATTERN = Pattern.compile(":\\s+");
+    private static final Pattern whiteSpacesPattern = Pattern.compile(":\\s+");
 
     private final String location;
     private final BufferedReader reader;
@@ -43,13 +43,13 @@ public class PartitionMetadataReadBuffer {
 
         try {
             line = reader.readLine();
-            String[] versionArr = WHITESPACES_PATTERN.split(line);
+            String[] versionArr = whiteSpacesPattern.split(line);
 
             if (versionArr.length == 2) {
                 int version = Integer.parseInt(versionArr[1]);
                 if (version == PartitionMetadataFile.CURRENT_VERSION) {
                     line = reader.readLine();
-                    String[] topicIdArr = WHITESPACES_PATTERN.split(line);
+                    String[] topicIdArr = whiteSpacesPattern.split(line);
 
                     if (topicIdArr.length == 2) {
                         metadataTopicId = Uuid.fromString(topicIdArr[1]);
@@ -63,7 +63,7 @@ public class PartitionMetadataReadBuffer {
                         throw malformedLineException(line);
                     }
                 } else {
-                    throw new IOException("Unrecognized version of partition metadata file + (" + location+ "): " + version);
+                    throw new IOException("Unrecognized version of partition metadata file + (" + location + "): " + version);
                 }
             } else {
                 throw malformedLineException(line);

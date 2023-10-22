@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -77,7 +77,7 @@ public class PartitionMetadataFile {
         if (dirtyTopicIdOpt != null && dirtyTopicIdOpt.isPresent()) {
             // We synchronize on the actual write to disk
             synchronized (lock) {
-                dirtyTopicIdOpt.ifPresent( topicId -> {
+                dirtyTopicIdOpt.ifPresent(topicId -> {
                     try {
                         FileOutputStream fileOutputStream = new FileOutputStream(tempPath().toFile());
                         try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(fileOutputStream, StandardCharsets.UTF_8))) {
