@@ -270,7 +270,8 @@ object ConsumerGroupCommand extends Logging {
 
           val format = s"%${-maxGroupLen}s %${-maxTopicLen}s %-10s %-15s %-15s %-15s %${-maxConsumerIdLen}s %${-maxHostLen}s %s"
           println()
-          println(format.format("GROUP", "TOPIC", "PARTITION", "CURRENT-OFFSET", "LOG-END-OFFSET", "LAG", "CONSUMER-ID", "HOST", "CLIENT-ID"))
+          println(format
+            .format("GROUP", "TOPIC", "PARTITION", "CURRENT-OFFSET", "LOG-END-OFFSET", "LAG", "CONSUMER-ID", "HOST", "CLIENT-ID"))
 
           assignments match {
             case None => // do nothing
@@ -312,9 +313,11 @@ object ConsumerGroupCommand extends Logging {
 
           println()
           if (includeGroupInstanceId) {
-            print(wideFormat.format("GROUP", "CONSUMER-ID", "GROUP-INSTANCE-ID", "HOST", "CLIENT-ID", "#PARTITIONS"))
+            print(wideFormat
+                .format("GROUP", "CONSUMER-ID", "GROUP-INSTANCE-ID", "HOST", "CLIENT-ID", "#PARTITIONS"))
           } else {
-            print(shortFormat.format("GROUP", "CONSUMER-ID", "HOST", "CLIENT-ID", "#PARTITIONS"))
+            print(shortFormat
+                .format("GROUP", "CONSUMER-ID", "HOST", "CLIENT-ID", "#PARTITIONS"))
           }
           if (verbose)
             print(s"%s".format("ASSIGNMENT"))
