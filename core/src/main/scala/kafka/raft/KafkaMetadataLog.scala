@@ -18,7 +18,7 @@ package kafka.raft
 
 import kafka.log.UnifiedLog
 import kafka.server.KafkaConfig.{MetadataLogSegmentBytesProp, MetadataLogSegmentMinBytesProp}
-import kafka.server.{BrokerTopicStats, KafkaConfig, RequestLocal}
+import kafka.server.{BrokerTopicStats, KafkaConfig}
 import kafka.utils.{CoreUtils, Logging}
 import org.apache.kafka.common.config.{AbstractConfig, TopicConfig}
 import org.apache.kafka.common.errors.InvalidConfigurationException
@@ -29,7 +29,7 @@ import org.apache.kafka.raft.{Isolation, KafkaRaftClient, LogAppendInfo, LogFetc
 import org.apache.kafka.server.util.Scheduler
 import org.apache.kafka.snapshot.{FileRawSnapshotReader, FileRawSnapshotWriter, RawSnapshotReader, RawSnapshotWriter, SnapshotPath, Snapshots}
 import org.apache.kafka.storage.internals
-import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchIsolation, LogConfig, LogDirFailureChannel, LogStartOffsetIncrementReason, ProducerStateManagerConfig}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchIsolation, LogConfig, LogDirFailureChannel, LogStartOffsetIncrementReason, ProducerStateManagerConfig, RequestLocal}
 
 import java.io.File
 import java.nio.file.{Files, NoSuchFileException, Path}
@@ -83,7 +83,7 @@ final class KafkaMetadataLog private (
       log.appendAsLeader(records.asInstanceOf[MemoryRecords],
         leaderEpoch = epoch,
         origin = AppendOrigin.RAFT_LEADER,
-        requestLocal = RequestLocal.NoCaching
+        requestLocal = RequestLocal.NO_CACHING
       )
     )
   }

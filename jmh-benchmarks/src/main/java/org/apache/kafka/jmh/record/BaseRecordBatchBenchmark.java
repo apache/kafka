@@ -18,7 +18,6 @@ package org.apache.kafka.jmh.record;
 
 import kafka.log.UnifiedLog;
 import kafka.server.BrokerTopicStats;
-import kafka.server.RequestLocal;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.record.AbstractRecords;
 import org.apache.kafka.common.record.CompressionType;
@@ -28,6 +27,7 @@ import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.storage.internals.log.LogValidator;
+import org.apache.kafka.storage.internals.log.RequestLocal;
 import org.openjdk.jmh.annotations.Param;
 import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.Setup;
@@ -90,7 +90,7 @@ public abstract class BaseRecordBatchBenchmark {
         startingOffset = messageVersion == 2 ? 0 : 42;
 
         if (bufferSupplierStr.equals("NO_CACHING")) {
-            requestLocal = RequestLocal.NoCaching();
+            requestLocal = RequestLocal.NO_CACHING;
         } else if (bufferSupplierStr.equals("CREATE")) {
             requestLocal = RequestLocal.withThreadConfinedCaching();
         } else {

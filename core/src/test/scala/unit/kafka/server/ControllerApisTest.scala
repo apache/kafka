@@ -54,6 +54,7 @@ import org.apache.kafka.controller.{Controller, ControllerRequestContext, Result
 import org.apache.kafka.image.publisher.ControllerRegistrationsPublisher
 import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult, Authorizer}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, Features, MetadataVersion, ProducerIdsBlock}
+import org.apache.kafka.storage.internals.log.RequestLocal
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
@@ -253,7 +254,7 @@ class ControllerApisTest {
     val fetchRequestData = new FetchRequestData()
     val request = buildRequest(new FetchRequest(fetchRequestData, ApiKeys.FETCH.latestVersion))
     createControllerApis(None, new MockController.Builder().build())
-      .handle(request, RequestLocal.NoCaching)
+      .handle(request, RequestLocal.NO_CACHING)
 
     verify(raftManager).handleRequest(
       ArgumentMatchers.eq(request.header),
@@ -1104,7 +1105,7 @@ class ControllerApisTest {
   ): T = {
     val req = buildRequest(request)
 
-    controllerApis.handle(req, RequestLocal.NoCaching)
+    controllerApis.handle(req, RequestLocal.NO_CACHING)
 
     val capturedResponse: ArgumentCaptor[AbstractResponse] =
       ArgumentCaptor.forClass(classOf[AbstractResponse])

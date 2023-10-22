@@ -28,6 +28,7 @@ import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.utils.{KafkaThread, Time}
 import org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
+import org.apache.kafka.storage.internals.log.RequestLocal
 
 import java.util.Collections
 import scala.collection.mutable

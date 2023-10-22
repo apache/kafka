@@ -20,7 +20,7 @@ package kafka.server.metadata
 import java.util.{OptionalInt, Properties}
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.log.{LogManager, UnifiedLog}
-import kafka.server.{KafkaConfig, ReplicaManager, RequestLocal}
+import kafka.server.{KafkaConfig, ReplicaManager}
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.TimeoutException
@@ -30,6 +30,7 @@ import org.apache.kafka.image.loader.LoaderManifest
 import org.apache.kafka.image.publisher.MetadataPublisher
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, TopicDelta, TopicsImage}
 import org.apache.kafka.server.fault.FaultHandler
+import org.apache.kafka.storage.internals.log.RequestLocal
 
 import java.util.concurrent.CompletableFuture
 import scala.collection.mutable
@@ -211,7 +212,7 @@ class BrokerMetadataPublisher(
             }
           }
           if (deletedTopicPartitions.nonEmpty) {
-            groupCoordinator.onPartitionsDeleted(deletedTopicPartitions.asJava, RequestLocal.NoCaching.bufferSupplier)
+            groupCoordinator.onPartitionsDeleted(deletedTopicPartitions.asJava, RequestLocal.NO_CACHING.bufferSupplier)
           }
         } catch {
           case t: Throwable => metadataPublishingFaultHandler.handleFault("Error updating group " +

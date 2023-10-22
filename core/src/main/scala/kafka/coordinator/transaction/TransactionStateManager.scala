@@ -21,7 +21,7 @@ import java.util.Properties
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantReadWriteLock
-import kafka.server.{Defaults, ReplicaManager, RequestLocal}
+import kafka.server.{Defaults, ReplicaManager}
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils.{Logging, Pool}
 import kafka.utils.Implicits._
@@ -38,7 +38,7 @@ import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.util.Scheduler
-import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchIsolation}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchIsolation, RequestLocal}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
@@ -287,7 +287,7 @@ class TransactionStateManager(brokerId: Int,
         origin = AppendOrigin.COORDINATOR,
         entriesPerPartition = Map(transactionPartition -> tombstoneRecords),
         removeFromCacheCallback,
-        requestLocal = RequestLocal.NoCaching)
+        requestLocal = RequestLocal.NO_CACHING)
     }
   }
 

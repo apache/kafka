@@ -97,7 +97,7 @@ import org.apache.kafka.coordinator.group.GroupCoordinator
 import org.apache.kafka.server.common.{Features, MetadataVersion}
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_2_IV0, IBP_2_2_IV1}
 import org.apache.kafka.server.util.MockTime
-import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchParams, FetchPartitionData}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchParams, FetchPartitionData, RequestLocal}
 
 class KafkaApisTest {
   private val requestChannel: RequestChannel = mock(classOf[RequestChannel])
@@ -1293,12 +1293,12 @@ class KafkaApisTest {
     when(groupCoordinator.commitOffsets(
       requestChannelRequest.context,
       offsetCommitRequest,
-      RequestLocal.NoCaching.bufferSupplier
+      RequestLocal.NO_CACHING.bufferSupplier
     )).thenReturn(future)
 
     createKafkaApis().handle(
       requestChannelRequest,
-      RequestLocal.NoCaching
+      RequestLocal.NO_CACHING
     )
 
     // This is the response returned by the group coordinator.
@@ -1337,12 +1337,12 @@ class KafkaApisTest {
     when(groupCoordinator.commitOffsets(
       requestChannelRequest.context,
       offsetCommitRequest,
-      RequestLocal.NoCaching.bufferSupplier
+      RequestLocal.NO_CACHING.bufferSupplier
     )).thenReturn(future)
 
     createKafkaApis().handle(
       requestChannelRequest,
-      RequestLocal.NoCaching
+      RequestLocal.NO_CACHING
     )
 
     val expectedOffsetCommitResponse = new OffsetCommitResponseData()
@@ -1433,12 +1433,12 @@ class KafkaApisTest {
     when(groupCoordinator.commitOffsets(
       requestChannelRequest.context,
       expectedOffsetCommitRequest,
-      RequestLocal.NoCaching.bufferSupplier
+      RequestLocal.NO_CACHING.bufferSupplier
     )).thenReturn(future)
 
     createKafkaApis().handle(
       requestChannelRequest,
-      RequestLocal.NoCaching
+      RequestLocal.NO_CACHING
     )
 
     // This is the response returned by the group coordinator.
@@ -1599,12 +1599,12 @@ class KafkaApisTest {
     when(groupCoordinator.commitTransactionalOffsets(
       requestChannelRequest.context,
       txnOffsetCommitRequest,
-      RequestLocal.NoCaching.bufferSupplier
+      RequestLocal.NO_CACHING.bufferSupplier
     )).thenReturn(future)
 
     createKafkaApis().handle(
       requestChannelRequest,
-      RequestLocal.NoCaching
+      RequestLocal.NO_CACHING
     )
 
     // This is the response returned by the group coordinator.
@@ -1644,12 +1644,12 @@ class KafkaApisTest {
     when(groupCoordinator.commitTransactionalOffsets(
       requestChannelRequest.context,
       txnOffsetCommitRequest,
-      RequestLocal.NoCaching.bufferSupplier
+      RequestLocal.NO_CACHING.bufferSupplier
     )).thenReturn(future)
 
     createKafkaApis().handle(
       requestChannelRequest,
-      RequestLocal.NoCaching
+      RequestLocal.NO_CACHING
     )
 
     val expectedTxnOffsetCommitResponse = new TxnOffsetCommitResponseData()
@@ -1741,12 +1741,12 @@ class KafkaApisTest {
     when(groupCoordinator.commitTransactionalOffsets(
       requestChannelRequest.context,
       expectedTxnOffsetCommitRequest,
-      RequestLocal.NoCaching.bufferSupplier
+      RequestLocal.NO_CACHING.bufferSupplier
     )).thenReturn(future)
 
     createKafkaApis().handle(
       requestChannelRequest,
-      RequestLocal.NoCaching
+      RequestLocal.NO_CACHING
     )
 
     // This is the response returned by the group coordinator.
@@ -2168,7 +2168,7 @@ class KafkaApisTest {
 
       createKafkaApis(authorizer = Some(authorizer)).handle(
         requestChannelRequest,
-        RequestLocal.NoCaching
+        RequestLocal.NO_CACHING
       )
 
       val response = verifyNoThrottlingAndUpdateMetrics[AddPartitionsToTxnResponse](requestChannelRequest)
@@ -2225,7 +2225,7 @@ class KafkaApisTest {
 
     createKafkaApis().handleAddPartitionsToTxnRequest(
       requestChannelRequest,
-      RequestLocal.NoCaching
+      RequestLocal.NO_CACHING
     )
 
     val response = verifyNoThrottling[AddPartitionsToTxnResponse](requestChannelRequest)
@@ -2723,12 +2723,12 @@ class KafkaApisTest {
     when(groupCoordinator.deleteGroups(
       requestChannelRequest.context,
       List("group-1", "group-2", "group-3").asJava,
-      RequestLocal.NoCaching.bufferSupplier
+      RequestLocal.NO_CACHING.bufferSupplier
     )).thenReturn(future)
 
     createKafkaApis().handleDeleteGroupsRequest(
       requestChannelRequest,
-      RequestLocal.NoCaching
+      RequestLocal.NO_CACHING
     )
 
     val results = new DeleteGroupsResponseData.DeletableGroupResultCollection(List(
@@ -2766,12 +2766,12 @@ class KafkaApisTest {
     when(groupCoordinator.deleteGroups(
       requestChannelRequest.context,
       List("group-1", "group-2", "group-3").asJava,
-      RequestLocal.NoCaching.bufferSupplier
+      RequestLocal.NO_CACHING.bufferSupplier
     )).thenReturn(future)
 
     createKafkaApis().handleDeleteGroupsRequest(
       requestChannelRequest,
-      RequestLocal.NoCaching
+      RequestLocal.NO_CACHING
     )
 
     future.completeExceptionally(Errors.NOT_CONTROLLER.exception)
@@ -2825,12 +2825,12 @@ class KafkaApisTest {
     when(groupCoordinator.deleteGroups(
       requestChannelRequest.context,
       List("group-2", "group-3").asJava,
-      RequestLocal.NoCaching.bufferSupplier
+      RequestLocal.NO_CACHING.bufferSupplier
     )).thenReturn(future)
 
     createKafkaApis(authorizer = Some(authorizer)).handleDeleteGroupsRequest(
       requestChannelRequest,
-      RequestLocal.NoCaching
+      RequestLocal.NO_CACHING
     )
 
     future.complete(new DeleteGroupsResponseData.DeletableGroupResultCollection(List(
@@ -3118,12 +3118,12 @@ class KafkaApisTest {
     when(groupCoordinator.deleteOffsets(
       requestChannelRequest.context,
       expectedOffsetDeleteRequest,
-      RequestLocal.NoCaching.bufferSupplier
+      RequestLocal.NO_CACHING.bufferSupplier
     )).thenReturn(future)
 
     createKafkaApis().handle(
       requestChannelRequest,
-      RequestLocal.NoCaching
+      RequestLocal.NO_CACHING
     )
 
     // This is the response returned by the group coordinator.
@@ -3223,12 +3223,12 @@ class KafkaApisTest {
       when(groupCoordinator.deleteOffsets(
         request.context,
         new OffsetDeleteRequestData().setGroupId(group),
-        RequestLocal.NoCaching.bufferSupplier
+        RequestLocal.NO_CACHING.bufferSupplier
       )).thenReturn(CompletableFuture.completedFuture(
         new OffsetDeleteResponseData()
       ))
 
-      createKafkaApis().handleOffsetDeleteRequest(request, RequestLocal.NoCaching)
+      createKafkaApis().handleOffsetDeleteRequest(request, RequestLocal.NO_CACHING)
 
       val response = verifyNoThrottling[OffsetDeleteResponse](request)
 
@@ -3255,10 +3255,10 @@ class KafkaApisTest {
     when(groupCoordinator.deleteOffsets(
       request.context,
       offsetDeleteRequest.data,
-      RequestLocal.NoCaching.bufferSupplier
+      RequestLocal.NO_CACHING.bufferSupplier
     )).thenReturn(future)
 
-    createKafkaApis().handleOffsetDeleteRequest(request, RequestLocal.NoCaching)
+    createKafkaApis().handleOffsetDeleteRequest(request, RequestLocal.NO_CACHING)
 
     future.completeExceptionally(Errors.GROUP_ID_NOT_FOUND.exception)
 
@@ -3648,12 +3648,12 @@ class KafkaApisTest {
     when(groupCoordinator.joinGroup(
       requestChannelRequest.context,
       expectedJoinGroupRequest,
-      RequestLocal.NoCaching.bufferSupplier
+      RequestLocal.NO_CACHING.bufferSupplier
     )).thenReturn(future)
 
     createKafkaApis().handleJoinGroupRequest(
       requestChannelRequest,
-      RequestLocal.NoCaching
+      RequestLocal.NO_CACHING
     )
 
     val expectedJoinGroupResponse = new JoinGroupResponseData()
@@ -3691,12 +3691,12 @@ class KafkaApisTest {
     when(groupCoordinator.joinGroup(
       requestChannelRequest.context,
       expectedJoinGroupRequest,
-      RequestLocal.NoCaching.bufferSupplier
+      RequestLocal.NO_CACHING.bufferSupplier
     )).thenReturn(future)
 
     createKafkaApis().handleJoinGroupRequest(
       requestChannelRequest,
-      RequestLocal.NoCaching
+      RequestLocal.NO_CACHING
     )
 
     val joinGroupResponse = new JoinGroupResponseData()
@@ -3729,12 +3729,12 @@ class KafkaApisTest {
     when(groupCoordinator.joinGroup(
       requestChannelRequest.context,
       joinGroupRequest,
-      RequestLocal.NoCaching.bufferSupplier
+      RequestLocal.NO_CACHING.bufferSupplier
     )).thenReturn(future)
 
     createKafkaApis().handleJoinGroupRequest(
       requestChannelRequest,
-      RequestLocal.NoCaching
+      RequestLocal.NO_CACHING
     )
 
     future.completeExceptionally(Errors.REQUEST_TIMED_OUT.exception)
@@ -3759,7 +3759,7 @@ class KafkaApisTest {
 
     createKafkaApis(authorizer = Some(authorizer)).handleJoinGroupRequest(
       requestChannelRequest,
-      RequestLocal.NoCaching
+      RequestLocal.NO_CACHING
     )
 
     val response = verifyNoThrottling[JoinGroupResponse](requestChannelRequest)
@@ -3781,7 +3781,7 @@ class KafkaApisTest {
     when(groupCoordinator.joinGroup(
       requestChannelRequest.context,
       joinGroupRequest,
-      RequestLocal.NoCaching.bufferSupplier
+      RequestLocal.NO_CACHING.bufferSupplier
     )).thenReturn(future)
 
     var response: JoinGroupResponse = null
@@ -3793,7 +3793,7 @@ class KafkaApisTest {
 
     createKafkaApis().handle(
       requestChannelRequest,
-      RequestLocal.NoCaching
+      RequestLocal.NO_CACHING
     )
 
     future.completeExceptionally(Errors.NOT_COORDINATOR.exception)
@@ -3824,12 +3824,12 @@ class KafkaApisTest {
     when(groupCoordinator.syncGroup(
       requestChannelRequest.context,
       expectedSyncGroupRequest,
-      RequestLocal.NoCaching.bufferSupplier
+      RequestLocal.NO_CACHING.bufferSupplier
     )).thenReturn(future)
 
     createKafkaApis().handleSyncGroupRequest(
       requestChannelRequest,
-      RequestLocal.NoCaching
+      RequestLocal.NO_CACHING
     )
 
     val expectedSyncGroupResponse = new SyncGroupResponseData()
@@ -3861,12 +3861,12 @@ class KafkaApisTest {
     when(groupCoordinator.syncGroup(
       requestChannelRequest.context,
       expectedSyncGroupRequest,
-      RequestLocal.NoCaching.bufferSupplier
+      RequestLocal.NO_CACHING.bufferSupplier
     )).thenReturn(future)
 
     createKafkaApis().handleSyncGroupRequest(
       requestChannelRequest,
-      RequestLocal.NoCaching
+      RequestLocal.NO_CACHING
     )
 
     future.completeExceptionally(Errors.UNKNOWN_SERVER_ERROR.exception)
@@ -3890,7 +3890,7 @@ class KafkaApisTest {
 
     createKafkaApis(authorizer = Some(authorizer)).handleSyncGroupRequest(
       requestChannelRequest,
-      RequestLocal.NoCaching
+      RequestLocal.NO_CACHING
     )
 
     val response = verifyNoThrottling[SyncGroupResponse](requestChannelRequest)
@@ -3914,12 +3914,12 @@ class KafkaApisTest {
     when(groupCoordinator.syncGroup(
       requestChannelRequest.context,
       expectedSyncGroupRequest,
-      RequestLocal.NoCaching.bufferSupplier
+      RequestLocal.NO_CACHING.bufferSupplier
     )).thenReturn(future)
 
     createKafkaApis().handleSyncGroupRequest(
       requestChannelRequest,
-      RequestLocal.NoCaching
+      RequestLocal.NO_CACHING
     )
 
     if (version < 5) {
@@ -4611,7 +4611,7 @@ class KafkaApisTest {
       false
     )).thenReturn(group3Future)
 
-    createKafkaApis(authorizer = Some(authorizer)).handle(requestChannelRequest, RequestLocal.NoCaching)
+    createKafkaApis(authorizer = Some(authorizer)).handle(requestChannelRequest, RequestLocal.NO_CACHING)
 
     val group1ResponseFromCoordinator = new OffsetFetchResponseData.OffsetFetchResponseGroup()
       .setGroupId("group-1")
@@ -6134,7 +6134,7 @@ class KafkaApisTest {
 
     val requestChannelRequest = buildRequest(new ConsumerGroupHeartbeatRequest.Builder(consumerGroupHeartbeatRequest, true).build())
 
-    createKafkaApis().handle(requestChannelRequest, RequestLocal.NoCaching)
+    createKafkaApis().handle(requestChannelRequest, RequestLocal.NO_CACHING)
 
     val expectedHeartbeatResponse = new ConsumerGroupHeartbeatResponseData()
       .setErrorCode(Errors.UNSUPPORTED_VERSION.code)
@@ -6156,7 +6156,7 @@ class KafkaApisTest {
 
     createKafkaApis(overrideProperties = Map(
       KafkaConfig.NewGroupCoordinatorEnableProp -> "true"
-    )).handle(requestChannelRequest, RequestLocal.NoCaching)
+    )).handle(requestChannelRequest, RequestLocal.NO_CACHING)
 
     val consumerGroupHeartbeatResponse = new ConsumerGroupHeartbeatResponseData()
       .setMemberId("member")
@@ -6180,7 +6180,7 @@ class KafkaApisTest {
 
     createKafkaApis(overrideProperties = Map(
       KafkaConfig.NewGroupCoordinatorEnableProp -> "true"
-    )).handle(requestChannelRequest, RequestLocal.NoCaching)
+    )).handle(requestChannelRequest, RequestLocal.NO_CACHING)
 
     future.completeExceptionally(Errors.FENCED_MEMBER_EPOCH.exception)
     val response = verifyNoThrottling[ConsumerGroupHeartbeatResponse](requestChannelRequest)
@@ -6200,7 +6200,7 @@ class KafkaApisTest {
     createKafkaApis(
       authorizer = Some(authorizer),
       overrideProperties = Map(KafkaConfig.NewGroupCoordinatorEnableProp -> "true")
-    ).handle(requestChannelRequest, RequestLocal.NoCaching)
+    ).handle(requestChannelRequest, RequestLocal.NO_CACHING)
 
     val response = verifyNoThrottling[ConsumerGroupHeartbeatResponse](requestChannelRequest)
     assertEquals(Errors.GROUP_AUTHORIZATION_FAILED.code, response.data.errorCode)
@@ -6217,7 +6217,7 @@ class KafkaApisTest {
     val expectedResponse = new ConsumerGroupDescribeResponseData()
     expectedResponse.groups.add(expectedDescribedGroup)
 
-    createKafkaApis().handle(requestChannelRequest, RequestLocal.NoCaching)
+    createKafkaApis().handle(requestChannelRequest, RequestLocal.NO_CACHING)
     val response = verifyNoThrottling[ConsumerGroupDescribeResponse](requestChannelRequest)
 
     assertEquals(expectedResponse, response.data)
@@ -6228,7 +6228,7 @@ class KafkaApisTest {
     val data = new GetTelemetrySubscriptionsRequestData()
 
     val request = buildRequest(new GetTelemetrySubscriptionsRequest.Builder(data, true).build())
-    createKafkaApis(enableForwarding = true).handle(request, RequestLocal.NoCaching)
+    createKafkaApis(enableForwarding = true).handle(request, RequestLocal.NO_CACHING)
 
     val response = verifyNoThrottling[GetTelemetrySubscriptionsResponse](request)
     assertEquals(Errors.UNKNOWN_SERVER_ERROR, Errors.forCode(response.data.errorCode))
@@ -6244,7 +6244,7 @@ class KafkaApisTest {
     expectedResponse.setErrorCode(errorCode)
 
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
-    createKafkaApis(raftSupport = true).handle(request, RequestLocal.NoCaching)
+    createKafkaApis(raftSupport = true).handle(request, RequestLocal.NO_CACHING)
     val response = verifyNoThrottling[GetTelemetrySubscriptionsResponse](request)
 
     assertEquals(expectedResponse, response.data)
@@ -6255,7 +6255,7 @@ class KafkaApisTest {
     val data = new PushTelemetryRequestData()
 
     val request = buildRequest(new PushTelemetryRequest.Builder(data, true).build())
-    createKafkaApis(enableForwarding = true).handle(request, RequestLocal.NoCaching)
+    createKafkaApis(enableForwarding = true).handle(request, RequestLocal.NO_CACHING)
 
     val response = verifyNoThrottling[PushTelemetryResponse](request)
     assertEquals(Errors.UNKNOWN_SERVER_ERROR, Errors.forCode(response.data.errorCode))
@@ -6271,7 +6271,7 @@ class KafkaApisTest {
     expectedResponse.setErrorCode(errorCode)
 
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
-    createKafkaApis(raftSupport = true).handle(request, RequestLocal.NoCaching)
+    createKafkaApis(raftSupport = true).handle(request, RequestLocal.NO_CACHING)
     val response = verifyNoThrottling[PushTelemetryResponse](request)
 
     assertEquals(expectedResponse, response.data)

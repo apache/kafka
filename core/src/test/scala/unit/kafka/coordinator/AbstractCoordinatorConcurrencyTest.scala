@@ -32,7 +32,7 @@ import org.apache.kafka.common.record.{MemoryRecords, RecordBatch, RecordConvers
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.server.util.timer.MockTimer
 import org.apache.kafka.server.util.{MockScheduler, MockTime}
-import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, RequestLocal}
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
 import org.mockito.Mockito.{CALLS_REAL_METHODS, mock, withSettings}
 
@@ -178,7 +178,7 @@ object AbstractCoordinatorConcurrencyTest {
                                responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
                                delayedProduceLock: Option[Lock] = None,
                                processingStatsCallback: Map[TopicPartition, RecordConversionStats] => Unit = _ => (),
-                               requestLocal: RequestLocal = RequestLocal.NoCaching,
+                               requestLocal: RequestLocal = RequestLocal.NO_CACHING,
                                transactionalId: String = null,
                                actionQueue: ActionQueue = null): Unit = {
 

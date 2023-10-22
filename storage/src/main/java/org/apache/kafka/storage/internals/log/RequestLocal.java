@@ -15,16 +15,9 @@
  * limitations under the License.
  */
 
-package kafka.server
+package org.apache.kafka.storage.internals.log;
 
-import org.apache.kafka.common.utils.BufferSupplier
-
-object RequestLocal {
-  val NoCaching: RequestLocal = RequestLocal(BufferSupplier.NO_CACHING)
-
-  /** The returned instance should be confined to a single thread. */
-  def withThreadConfinedCaching: RequestLocal = RequestLocal(BufferSupplier.create())
-}
+import org.apache.kafka.common.utils.BufferSupplier;
 
 /**
  * Container for stateful instances where the lifecycle is scoped to one request.
@@ -32,6 +25,25 @@ object RequestLocal {
  * When each request is handled by one thread, efficient data structures with no locking or atomic operations
  * can be used (see RequestLocal.withThreadConfinedCaching).
  */
-case class RequestLocal(bufferSupplier: BufferSupplier) {
-  def close(): Unit = bufferSupplier.close()
+public class RequestLocal {
+    public static final RequestLocal NO_CACHING = new RequestLocal(BufferSupplier.NO_CACHING);
+
+    private final BufferSupplier bufferSupplier;
+
+    public RequestLocal(BufferSupplier bufferSupplier) {
+        this.bufferSupplier = bufferSupplier;
+    }
+
+    public void close() {
+        bufferSupplier.close();
+    }
+
+    public BufferSupplier bufferSupplier() {
+        return bufferSupplier;
+    }
+
+    /** The returned instance should be confined to a single thread. */
+    public static RequestLocal withThreadConfinedCaching() {
+        return new RequestLocal(BufferSupplier.create());
+    }
 }
