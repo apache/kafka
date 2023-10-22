@@ -528,12 +528,12 @@ public class RestoreIntegrationTest {
         final Map<String, Object> kafkaStreams1Configuration = mkMap(
             mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId).getPath() + "-ks1"),
             mkEntry(StreamsConfig.CLIENT_ID_CONFIG, appId + "-ks1"),
-            mkEntry(StreamsConfig.restoreConsumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), 1)
+            mkEntry(StreamsConfig.restoreConsumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), 5)
         );
         final Map<String, Object> kafkaStreams2Configuration = mkMap(
             mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId).getPath() + "-ks2"),
             mkEntry(StreamsConfig.CLIENT_ID_CONFIG, appId + "-ks2"),
-            mkEntry(StreamsConfig.restoreConsumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), 1)
+            mkEntry(StreamsConfig.restoreConsumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), 5)
         );
 
         final StreamsBuilder builder = new StreamsBuilder();
@@ -568,7 +568,14 @@ public class RestoreIntegrationTest {
         // and kafkaStreams1 must call StateRestoreListener#onRestoreSuspended.
         final TestStateRestoreListener kafkaStreams2StateRestoreListener = new TestStateRestoreListener("ks2", RESTORATION_DELAY);
 
-        try (final KafkaStreams ignored = startKafkaStreams(builder, kafkaStreams2StateRestoreListener, kafkaStreams2Configuration)) {
+        try (final KafkaStreams kafkaStreams2 = startKafkaStreams(builder,
+                                                                  kafkaStreams2StateRestoreListener,
+                                                                  kafkaStreams2Configuration)) {
+
+            waitForCondition(() -> State.RUNNING == kafkaStreams2.state(),
+                             IntegrationTestUtils.DEFAULT_TIMEOUT,
+                             () -> "kafkaStreams2 never transitioned to a RUNNING state.");
+
             assertTrue(kafkaStreams1StateRestoreListener.awaitUntilRestorationSuspends());
 
             assertTrue(kafkaStreams2StateRestoreListener.awaitUntilRestorationStarts());
@@ -608,12 +615,6 @@ public class RestoreIntegrationTest {
 
         kafkaStreams.setGlobalStateRestoreListener(stateRestoreListener);
         kafkaStreams.start();
-
-        waitForCondition(
-            () -> State.RUNNING == kafkaStreams.state(),
-            IntegrationTestUtils.DEFAULT_TIMEOUT,
-            () -> "Kafka Streams client hasn't transition to a RUNNING state."
-        );
 
         return kafkaStreams;
     }
