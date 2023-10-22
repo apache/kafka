@@ -46,8 +46,7 @@ public class CsvUtils {
     }
 
     public interface CsvRecord {
-
-    };
+    }
 
     public static class CsvRecordWithGroup implements CsvRecord {
         public static final String[] FIELDS = new String[] {"group", "topic", "partition", "offset"};

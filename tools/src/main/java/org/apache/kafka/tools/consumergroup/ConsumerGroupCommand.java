@@ -157,7 +157,7 @@ public class ConsumerGroupCommand {
                     ? Collections.emptySet()
                     : consumerGroupStatesFromString(stateValue);
                 List<ConsumerGroupListing> listings = listConsumerGroupsWithState(states);
-                printGroupStates(listings.map(e => (e.groupId, e.state.get.toString)));
+                printGroupStates(listings.stream().map(e -> new Tuple2<>(e.groupId(), e.state().toString())));
             } else
                 listConsumerGroups().forEach(System.out::println);
         }
