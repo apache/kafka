@@ -40,6 +40,7 @@ import java.util.{Collections, Properties}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.log.{FetchDataInfo, FetchIsolation, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig, RemoteIndexCache}
+import org.apache.kafka.storage.internals.util.CleanShutdownFileHandler
 
 import scala.collection.{Map, mutable}
 import scala.collection.mutable.ArrayBuffer
