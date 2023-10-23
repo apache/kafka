@@ -121,14 +121,40 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public synchronized void subscribe(Collection<String> topics) {
-        subscribe(topics, null);
+        subscribe(topics, Optional.empty());
     }
 
     @Override
     public synchronized void subscribe(Pattern pattern, final ConsumerRebalanceListener listener) {
+        if (listener == null)
+            throw new IllegalArgumentException("RebalanceListener cannot be null");
+
+        subscribe(pattern, Optional.of(listener));
+    }
+
+    @Override
+    public synchronized void subscribe(Pattern pattern) {
+        subscribe(pattern, Optional.empty());
+    }
+
+    @Override
+    public void subscribe(Collection<String> topics, final ConsumerRebalanceListener listener) {
+        if (listener == null)
+            throw new IllegalArgumentException("RebalanceListener cannot be null");
+
+        subscribe(topics, Optional.of(listener));
+    }
+
+    private synchronized void subscribe(Collection<String> topics, Optional<ConsumerRebalanceListener> listener) {
         ensureNotClosed();
         committed.clear();
-        this.subscriptions.subscribe(pattern, Optional.ofNullable(listener));
+        this.subscriptions.subscribe(new HashSet<>(topics), listener);
+    }
+
+    private synchronized void subscribe(Pattern pattern, Optional<ConsumerRebalanceListener> listener) {
+        ensureNotClosed();
+        committed.clear();
+        this.subscriptions.subscribe(pattern, listener);
         Set<String> topicsToSubscribe = new HashSet<>();
         for (String topic: partitions.keySet()) {
             if (pattern.matcher(topic).matches() &&
@@ -145,18 +171,6 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
 
         }
         subscriptions.assignFromSubscribed(assignedPartitions);
-    }
-
-    @Override
-    public synchronized void subscribe(Pattern pattern) {
-        subscribe(pattern, null);
-    }
-
-    @Override
-    public synchronized void subscribe(Collection<String> topics, final ConsumerRebalanceListener listener) {
-        ensureNotClosed();
-        committed.clear();
-        this.subscriptions.subscribe(new HashSet<>(topics), Optional.ofNullable(listener));
     }
 
     @Override
