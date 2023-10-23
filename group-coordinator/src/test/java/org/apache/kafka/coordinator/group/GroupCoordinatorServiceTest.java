@@ -87,7 +87,6 @@ import java.util.stream.Stream;
 
 import static org.apache.kafka.common.requests.JoinGroupRequest.UNKNOWN_MEMBER_ID;
 import static org.apache.kafka.coordinator.group.TestUtil.requestContext;
-import static org.apache.kafka.test.TestUtils.assertFutureThrows;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -139,7 +138,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testConsumerGroupHeartbeatWhenNotStarted() {
+    public void testConsumerGroupHeartbeatWhenNotStarted() throws ExecutionException, InterruptedException {
         CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
         GroupCoordinatorService service = new GroupCoordinatorService(
             new LogContext(),
@@ -150,12 +149,15 @@ public class GroupCoordinatorServiceTest {
         ConsumerGroupHeartbeatRequestData request = new ConsumerGroupHeartbeatRequestData()
             .setGroupId("foo");
 
-        assertFutureThrows(
-            service.consumerGroupHeartbeat(
-                requestContext(ApiKeys.CONSUMER_GROUP_HEARTBEAT),
-                request
-            ),
-            CoordinatorNotAvailableException.class
+        CompletableFuture<ConsumerGroupHeartbeatResponseData> future = service.consumerGroupHeartbeat(
+            requestContext(ApiKeys.CONSUMER_GROUP_HEARTBEAT),
+            request
+        );
+
+        assertEquals(
+            new ConsumerGroupHeartbeatResponseData()
+                .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code()),
+            future.get()
         );
     }
 
