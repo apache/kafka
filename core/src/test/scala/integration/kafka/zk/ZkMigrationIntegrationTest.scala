@@ -312,8 +312,9 @@ class ZkMigrationIntegrationTest {
       zkCluster.waitForReadyBrokers()
       readyFuture.get(60, TimeUnit.SECONDS)
 
+      // Only continue with the test if there are some pending deletions to verify. If there are not any pending
+      // deletions, this will mark the test as "skipped" instead of failed.
       val topicDeletions = zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying.zkClient.getTopicDeletions
-      // This will mark the test as "skipped" instead of failed if the topics all get deleted in time.
       Assumptions.assumeTrue(topicDeletions.nonEmpty,
         "This test needs pending topic deletions after a migration in order to verify the behavior")
 
@@ -324,6 +325,8 @@ class ZkMigrationIntegrationTest {
         "Timed out waiting for migration to complete",
         30000)
 
+      // At this point, some of the topics may have been deleted by ZK controller and the rest will be
+      // implicitly deleted by the KRaft controller and remove from the ZK brokers as stray partitions
       admin = zkCluster.createAdminClient()
       TestUtils.waitUntilTrue(
         () => admin.listTopics().names().get(60, TimeUnit.SECONDS).isEmpty,
@@ -337,32 +340,37 @@ class ZkMigrationIntegrationTest {
       val createTopicResult = admin.createTopics(newTopics)
       createTopicResult.all().get(60, TimeUnit.SECONDS)
 
+      val expectedNewTopics = Seq("test-topic-1", "test-topic-2", "test-topic-3")
       TestUtils.waitUntilTrue(
-        () => admin.listTopics().names().get(60, TimeUnit.SECONDS).size() == 3,
+        () => admin.listTopics().names().get(60, TimeUnit.SECONDS).equals(expectedNewTopics.toSet.asJava),
         "Timed out waiting for topics to be created",
         300000)
 
-      val topicDescriptions = admin.describeTopics(Seq("test-topic-1", "test-topic-2", "test-topic-3").asJavaCollection)
-        .topicNameValues().asScala.map { case (name, description) =>
-          name -> description.get(60, TimeUnit.SECONDS)
-      }.toMap
+      TestUtils.retry(300000) {
+        // Need a retry here since topic metadata may be inconsistent between brokers
+        val topicDescriptions = admin.describeTopics(expectedNewTopics.asJavaCollection)
+          .topicNameValues().asScala.map { case (name, description) =>
+            name -> description.get(60, TimeUnit.SECONDS)
+        }.toMap
 
-      assertEquals(2, topicDescriptions("test-topic-1").partitions().size())
-      assertEquals(1, topicDescriptions("test-topic-2").partitions().size())
-      assertEquals(10, topicDescriptions("test-topic-3").partitions().size())
-      topicDescriptions.foreach { case (topic, description) =>
-        description.partitions().forEach(partition => {
-          assertEquals(3, partition.replicas().size(), s"Unexpected number of replicas for ${topic}-${partition.partition()}")
-          assertEquals(3, partition.isr().size(), s"Unexpected ISR for ${topic}-${partition.partition()}")
-        })
+        assertEquals(2, topicDescriptions("test-topic-1").partitions().size())
+        assertEquals(1, topicDescriptions("test-topic-2").partitions().size())
+        assertEquals(10, topicDescriptions("test-topic-3").partitions().size())
+        topicDescriptions.foreach { case (topic, description) =>
+          description.partitions().forEach(partition => {
+            assertEquals(3, partition.replicas().size(), s"Unexpected number of replicas for ${topic}-${partition.partition()}")
+            assertEquals(3, partition.isr().size(), s"Unexpected ISR for ${topic}-${partition.partition()}")
+          })
+        }
+
+        val absentTopics = admin.listTopics().names().get(60, TimeUnit.SECONDS).asScala
+        assertTrue(absentTopics.contains("test-topic-1"))
+        assertTrue(absentTopics.contains("test-topic-2"))
+        assertTrue(absentTopics.contains("test-topic-3"))
+        assertFalse(absentTopics.contains("test-topic-4"))
+        assertFalse(absentTopics.contains("test-topic-5"))
       }
 
-      val absentTopics = admin.listTopics().names().get(60, TimeUnit.SECONDS).asScala
-      assertTrue(absentTopics.contains("test-topic-1"))
-      assertTrue(absentTopics.contains("test-topic-2"))
-      assertTrue(absentTopics.contains("test-topic-3"))
-      assertFalse(absentTopics.contains("test-topic-4"))
-      assertFalse(absentTopics.contains("test-topic-5"))
       admin.close()
     } finally {
       shutdownInSequence(zkCluster, kraftCluster)
