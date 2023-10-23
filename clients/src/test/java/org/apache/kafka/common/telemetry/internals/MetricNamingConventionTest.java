@@ -189,7 +189,7 @@ public class MetricNamingConventionTest {
         MetricKey metricKey = metricNamingStrategy.derivedMetricKey(
             metricNamingStrategy.metricKey(metricName), "");
 
-        // Ends with dot, though derived component should
+        // Ends with dot, though derived component should not be blank, omitting the check in the code.
         assertEquals("org.apache.kafka.group.name.", metricKey.getName());
         assertEquals(Collections.emptyMap(), metricKey.tags());
     }
