@@ -14,7 +14,6 @@ package kafka.api
 
 import kafka.server.{KafkaServer, QuotaType}
 import kafka.utils.TestUtils
-import org.apache.kafka.clients.admin.{NewPartitions, NewTopic}
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.config.TopicConfig
@@ -22,20 +21,13 @@ import org.apache.kafka.common.errors.{InvalidGroupIdException, InvalidTopicExce
 import org.apache.kafka.common.header.Headers
 import org.apache.kafka.common.record.{CompressionType, TimestampType}
 import org.apache.kafka.common.serialization._
-import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{MetricName, TopicPartition}
-import org.apache.kafka.test.{MockConsumerInterceptor, MockProducerInterceptor}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{Disabled, Test}
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
 
 import java.time.Duration
 import java.util
 import java.util.Arrays.asList
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.locks.ReentrantLock
-import java.util.regex.Pattern
 import java.util.{Locale, Optional, Properties}
 import scala.collection.mutable
 import scala.collection.mutable.Buffer
