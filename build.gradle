@@ -774,7 +774,7 @@ def fineTuneEclipseClasspathFile(eclipse, project) {
       }
       /*
        * Set all eclipse build output to go to 'build_eclipse' directory. This is to ensure that gradle and eclipse use different
-       * build output directories, and also avoid using the eclpise default of 'bin' which clashes with some of our script directories.
+       * build output directories, and also avoid using the eclipse default of 'bin' which clashes with some of our script directories.
        * https://discuss.gradle.org/t/eclipse-generated-files-should-be-put-in-the-same-place-as-the-gradle-generated-files/6986/2
        */
       cp.entries.findAll { it.kind == "output" }*.path = "build_eclipse"
