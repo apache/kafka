@@ -196,6 +196,13 @@
     <subpackage name="quotas">
       <allow pkg="org.apache.kafka.common" />
     </subpackage>
+
+    <subpackage name="telemetry">
+      <allow pkg="io.opentelemetry.proto"/>
+      <allow pkg="org.apache.kafka.common" />
+      <allow class="org.apache.kafka.server.authorizer.AuthorizableRequestContext" />
+    </subpackage>
+
   </subpackage>
 
   <subpackage name="clients">
