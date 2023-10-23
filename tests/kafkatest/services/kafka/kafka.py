@@ -279,12 +279,18 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.isolated_controller_quorum = None # will define below if necessary
         self.configured_for_zk_migration = False
 
-        DEFAULT_USE_NEW_COORDINATOR = False
-        # Use the parameterized value if it exists or use the global default otherwise.
-        use_new_coordinator = (
-            context.injected_args.get('use_new_coordinator') or
-            context.globals.get('use_new_coordinator', DEFAULT_USE_NEW_COORDINATOR)
-        )
+        # If 'use_new_coordinator' is not explicitly set, determine it based on context.
+        if use_new_coordinator is None:
+            arg_name = 'use_new_coordinator'
+
+            # Default to the global setting if no arguments are injected.
+            if not context.injected_args:
+                use_new_coordinator = context.globals.get(arg_name, default_use_new_coordinator)
+            else:
+                # If arguments are injected, prefer the setting from 'injected_args'.
+                use_new_coordinator = context.injected_args.get(arg_name, default_use_new_coordinator)
+
+        # Assign the determined value.
         self.use_new_coordinator = use_new_coordinator
 
         if num_nodes < 1:
