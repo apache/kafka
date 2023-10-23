@@ -279,6 +279,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.isolated_controller_quorum = None # will define below if necessary
         self.configured_for_zk_migration = False
 
+        default_use_new_coordinator = False
+        
         # If 'use_new_coordinator' is not explicitly set, determine it based on context.
         if use_new_coordinator is None:
             arg_name = 'use_new_coordinator'
