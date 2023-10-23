@@ -1729,10 +1729,12 @@ class ReplicaManager(val config: KafkaConfig,
           val partitionsToBeLeader = new mutable.HashMap[Partition, LeaderAndIsrPartitionState]()
           val partitionsToBeFollower = new mutable.HashMap[Partition, LeaderAndIsrPartitionState]()
           val topicIdUpdateFollowerPartitions = new mutable.HashSet[Partition]()
+          val allTopicPartitionsInRequest = new mutable.HashSet[TopicPartition]()
 
           // First create the partition if it doesn't exist already
           requestPartitionStates.foreach { partitionState =>
             val topicPartition = new TopicPartition(partitionState.topicName, partitionState.partitionIndex)
+            allTopicPartitionsInRequest += topicPartition
             val partitionOpt = getPartition(topicPartition) match {
               case HostedPartition.Offline =>
                 stateChangeLogger.warn(s"Ignoring LeaderAndIsr request from " +
@@ -1849,7 +1851,7 @@ class ReplicaManager(val config: KafkaConfig,
             leaderAndIsrRequest.isKRaftController &&
             leaderAndIsrRequest.requestType() == LeaderAndIsrRequest.Type.Full
           ) {
-            updateStrayLogs(findStrayPartitionsFromLeaderAndIsr(partitions.map(_.topicPartition)))
+            updateStrayLogs(findStrayPartitionsFromLeaderAndIsr(allTopicPartitionsInRequest))
           }
 
           maybeAddLogDirFetchers(partitions, highWatermarkCheckpoints, topicIdFromRequest)

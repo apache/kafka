@@ -409,6 +409,7 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
     updateMetadataRequestBrokerSet.clear()
     updateMetadataRequestPartitionInfoMap.clear()
     metadataInstance = null
+    updateType = LeaderAndIsrRequest.Type.Unknown
   }
 
   def addLeaderAndIsrRequestForBrokers(brokerIds: Seq[Int],
@@ -566,6 +567,7 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
       }
     }
     leaderAndIsrRequestMap.clear()
+    updateType = LeaderAndIsrRequest.Type.Unknown
   }
 
   def handleLeaderAndIsrResponse(response: LeaderAndIsrResponse, broker: Int): Unit
