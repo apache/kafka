@@ -272,8 +272,30 @@ public class PartitionChangeBuilder {
     }
 
     private boolean canElectLastKnownLeader() {
-        return eligibleLeaderReplicasEnabled && lastKnownLeaderEnabled && targetElr.isEmpty() && targetIsr.isEmpty()
-            && partition.lastKnownElr.length == 1 && isAcceptableLeader.test(partition.lastKnownElr[0]);
+        if (!eligibleLeaderReplicasEnabled || !lastKnownLeaderEnabled) {
+            log.debug("Try to elect last known leader for " + topicId + "-" + partitionId + " but elrEnabled=" + eligibleLeaderReplicasEnabled + ", lastKnownLeaderEnabled=" + lastKnownLeaderEnabled);
+            return false;
+        }
+        if (!targetElr.isEmpty() || !targetIsr.isEmpty()) {
+            log.debug("Try to elect last known leader for " + topicId + "-" + partitionId + " but ELR/ISR is not empty. ISR=" + targetIsr + ", ELR=" + targetElr);
+            return false;
+        }
+
+        // When the last known leader is enabled:
+        // 1. The targetLastKnownElr will only be used to store the last known leader, and it is updated after the
+        //    leader election. So we can only refer to the lastKnownElr in the existing partition registration.
+        // 2. When lastKnownLeaderEnabled=false, it intends to use other type of unclean leader election and the
+        //    lastKnownElr is populated with the real last known ELR members. Then it may have multiple members in the
+        //    field even if lastKnownLeaderEnabled is set to true again. In this case, we can't refer to the
+        //    lastKnownElr.
+        if (partition.lastKnownElr.length != 1) {
+            log.debug("Try to elect last known leader for " + topicId + "-" + partitionId + " but lastKnownElr does not only have 1 member. lastKnownElr=" + Arrays.toString(partition.lastKnownElr));
+            return false;
+        }
+        if (isAcceptableLeader.test(partition.lastKnownElr[0])) {
+            log.debug("Try to elect last known leader for " + topicId + "-" + partitionId + " but last known leader is not alive. last known leader=" + partition.lastKnownElr[0]);
+        }
+        return true;
     }
 
     private boolean isValidNewLeader(int replica) {
@@ -290,8 +312,6 @@ public class PartitionChangeBuilder {
             if (targetElr.contains(electionResult.node)) {
                 targetIsr = Collections.singletonList(electionResult.node);
                 targetElr = targetElr.stream().filter(replica -> replica != electionResult.node).collect(Collectors.toList());
-                targetLastKnownElr = targetLastKnownElr.stream()
-                    .filter(replica -> replica != electionResult.node).collect(Collectors.toList());
                 log.trace("Setting new leader for topicId {}, partition {} to {} using ELR",
                         topicId, partitionId, electionResult.node);
             } else if (electionResult.unclean) {
