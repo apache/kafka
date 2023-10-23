@@ -225,10 +225,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
 
         this.rebalanceListenerInvoker = new ConsumerRebalanceListenerInvoker(
-                logContext,
-                subscriptions,
-                time,
-                coordinatorMetrics
+            logContext,
+            subscriptions,
+            time,
+            coordinatorMetrics
         );
         this.metadata.requestUpdate(true);
     }
