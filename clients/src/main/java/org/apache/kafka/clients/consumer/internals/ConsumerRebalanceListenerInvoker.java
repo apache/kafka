@@ -79,7 +79,7 @@ class ConsumerRebalanceListenerInvoker {
         Set<TopicPartition> revokePausedPartitions = subscriptions.pausedPartitions();
         revokePausedPartitions.retainAll(revokedPartitions);
         if (!revokePausedPartitions.isEmpty())
-            log.info("The pause flag in partitions [{}] will be removed due to revocation.", org.apache.kafka.common.utils.Utils.join(revokePausedPartitions, ", "));
+            log.info("The pause flag in partitions [{}] will be removed due to revocation.", Utils.join(revokePausedPartitions, ", "));
 
         Optional<ConsumerRebalanceListener> listener = subscriptions.rebalanceListener();
 
