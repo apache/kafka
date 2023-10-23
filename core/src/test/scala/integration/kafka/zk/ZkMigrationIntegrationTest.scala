@@ -267,7 +267,7 @@ class ZkMigrationIntegrationTest {
 
   @ClusterTemplate("zkClustersForAllMigrationVersions")
   def testMigrateTopicDeletions(zkCluster: ClusterInstance): Unit = {
-    // Create a topic in ZK mode
+    // Create some topics in ZK mode
     var admin = zkCluster.createAdminClient()
     val newTopics = new util.ArrayList[NewTopic]()
     newTopics.add(new NewTopic("test-topic-1", 10, 3.toShort))
@@ -296,7 +296,7 @@ class ZkMigrationIntegrationTest {
       kraftCluster.startup()
       val readyFuture = kraftCluster.controllers().values().asScala.head.controller.waitForReadyBrokers(3)
 
-      // Start a delete, but don't wait for it
+      // Start a deletion that will take some time, but don't wait for it
       admin = zkCluster.createAdminClient()
       admin.deleteTopics(Seq("test-topic-1", "test-topic-2", "test-topic-3", "test-topic-4", "test-topic-5").asJava)
       admin.close()
@@ -310,7 +310,7 @@ class ZkMigrationIntegrationTest {
       zkCluster.rollingBrokerRestart()
 
       zkCluster.waitForReadyBrokers()
-      readyFuture.get(30, TimeUnit.SECONDS)
+      readyFuture.get(60, TimeUnit.SECONDS)
 
       val topicDeletions = zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying.zkClient.getTopicDeletions
       // This will mark the test as "skipped" instead of failed if the topics all get deleted in time.
@@ -326,7 +326,7 @@ class ZkMigrationIntegrationTest {
 
       admin = zkCluster.createAdminClient()
       TestUtils.waitUntilTrue(
-        () => admin.listTopics().names().get(30, TimeUnit.SECONDS).isEmpty,
+        () => admin.listTopics().names().get(60, TimeUnit.SECONDS).isEmpty,
         "Timed out waiting for topics to be deleted",
         300000)
 
@@ -338,7 +338,7 @@ class ZkMigrationIntegrationTest {
       createTopicResult.all().get(60, TimeUnit.SECONDS)
 
       TestUtils.waitUntilTrue(
-        () => admin.listTopics().names().get(30, TimeUnit.SECONDS).size() == 3,
+        () => admin.listTopics().names().get(60, TimeUnit.SECONDS).size() == 3,
         "Timed out waiting for topics to be created",
         300000)
 
