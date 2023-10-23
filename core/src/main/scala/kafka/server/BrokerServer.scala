@@ -314,7 +314,8 @@ class BrokerServer(
 
       dynamicConfigHandlers = Map[String, ConfigHandler](
         ConfigType.Topic -> new TopicConfigHandler(replicaManager, config, quotaManagers, None),
-        ConfigType.Broker -> new BrokerConfigHandler(config, quotaManagers))
+        ConfigType.Broker -> new BrokerConfigHandler(config, quotaManagers),
+        ConfigType.ClientMetrics -> new ClientMetricsConfigHandler)
 
       val featuresRemapped = brokerFeatures.supportedFeatures.features().asScala.map {
         case (k: String, v: SupportedVersionRange) =>

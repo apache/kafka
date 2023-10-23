@@ -68,7 +68,12 @@ public enum ResourceType {
     /**
      * A user principal
      */
-    USER((byte) 7);
+    USER((byte) 7),
+
+    /**
+     *  Client metrics
+     */
+    CLIENT_METRICS((byte) 8);
 
     private final static HashMap<Byte, ResourceType> CODE_TO_VALUE = new HashMap<>();
 

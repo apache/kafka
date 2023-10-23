@@ -361,7 +361,8 @@ class ControllerServer(
         sharedServer.metadataPublishingFaultHandler,
         immutable.Map[String, ConfigHandler](
           // controllers don't host topics, so no need to do anything with dynamic topic config changes here
-          ConfigType.Broker -> new BrokerConfigHandler(config, quotaManagers)
+          ConfigType.Broker -> new BrokerConfigHandler(config, quotaManagers),
+          ConfigType.ClientMetrics -> new ClientMetricsConfigHandler
         ),
         "controller"))
 
