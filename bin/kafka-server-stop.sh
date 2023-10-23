@@ -15,8 +15,10 @@
 # limitations under the License.
 SIGNAL=${SIGNAL:-TERM}
 
-if [[ "$1" == "--process.roles" ]]; then
-    ProcessRole="$2"
+if [[ "$1" == *"process-role="* ]]; then
+      ProcessRole="${1#*=}"
+  elif [[ "$1" == *"node-id="* ]]; then
+      NodeID="${1#*=}"
 fi
 
 OSNAME=$(uname -s)
@@ -36,19 +38,21 @@ if [ -z "$PIDS" ]; then
   echo "No kafka server to stop"
   exit 1
 else
-  if [ -z "$ProcessRole" ]; then
+  if [ -z "$ProcessRole" ] && [ -z "$NodeID" ]; then
     kill -s $SIGNAL $PIDS
   else
     IFS=' ' read -ra ConfigFilesArray <<< "$ConfigFiles"
     IFS=' ' read -ra PIDSArray <<< "$PIDS"
-    keyword="process.roles="
     for ((i = 0; i < ${#ConfigFilesArray[@]}; i++)); do
-        PRCRole=$(sed -n "/$keyword/ { s/$keyword//p; q; }" "${ConfigFilesArray[i]}")
-        if [ "$PRCRole" == "$ProcessRole" ]; then
+        if [ -n "$ProcessRole" ]; then
+          keyword="process.roles="
+          PRCRole=$(sed -n "/$keyword/ { s/$keyword//p; q; }" "${ConfigFilesArray[i]}")
+        else
+          keyword="node.id="
+          NID=$(sed -n "/$keyword/ { s/$keyword//p; q; }" "${ConfigFilesArray[i]}")
+        fi
+        if [ -n "$ProcessRole" ] && [ "$PRCRole" == "$ProcessRole" ] || [ -n "$NodeID" ] && [ "$NID" == "$NodeID" ]; then
           kill -s $SIGNAL ${PIDSArray[i]}
-#          echo "Killed ${PRCRole} with PID ${PIDSArray[i]}"
-#        else
-#          echo "Skip killing ${PRCRole} with PID ${PIDSArray[i]}"
         fi
     done
   fi
