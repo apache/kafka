@@ -905,7 +905,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         if (listener == null)
             throw new IllegalArgumentException("RebalanceListener cannot be null");
 
-        subscribe(topics, listener);
+        subscribe(topics, Optional.of(listener));
     }
 
     /**
@@ -933,7 +933,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     public void subscribe(Collection<String> topics) {
         subscribe(topics, Optional.empty());
     }
-
 
     /**
      * Internal helper method for {@link #subscribe(Collection)} and
