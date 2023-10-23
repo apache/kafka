@@ -28,7 +28,7 @@ import org.junit.jupiter.api.{Disabled, Test}
 import java.time.Duration
 import java.util
 import java.util.Arrays.asList
-import java.util.{Locale, Optional, Properties}
+import java.util.{Optional, Properties}
 import scala.collection.mutable
 import scala.collection.mutable.Buffer
 import scala.jdk.CollectionConverters._
