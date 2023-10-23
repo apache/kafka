@@ -45,7 +45,7 @@ import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.security.{JaasContext, JaasUtils}
 import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time, Utils}
-import org.apache.kafka.common.{Endpoint, KafkaException, Node, TopicPartition, Uuid}
+import org.apache.kafka.common.{Endpoint, KafkaException, Node, TopicPartition}
 import org.apache.kafka.coordinator.group.GroupCoordinator
 import org.apache.kafka.metadata.{BrokerState, MetadataRecordSerde, VersionRange}
 import org.apache.kafka.raft.RaftConfig
@@ -1027,9 +1027,7 @@ class KafkaServer(
   private def checkpointBrokerMetadata(brokerMetadata: ZkMetaProperties) = {
     for (logDir <- config.logDirs if logManager.isLogDirOnline(new File(logDir).getAbsolutePath)) {
       val props = brokerMetadata.toProperties.clone().asInstanceOf[Properties]
-      // If the Uuid is not set then we set it here because originally we ignored
-      // directories with no meta.properties file and we are creating it here.
-      props.setProperty("directory.id", logManager.directoryId(logDir).getOrElse(Uuid.randomUuid()).toString)
+      props.setProperty("directory.id", logManager.directoryId(logDir).get.toString)
       val checkpoint = brokerMetadataCheckpoints(logDir)
       try {
         checkpoint.write(props)

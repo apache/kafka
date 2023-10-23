@@ -166,7 +166,7 @@ case class MetaProperties(
   }
 }
 
-// Return only the RawMetaProperties that are the same across all directoris.
+// Return only the RawMetaProperties that are the same across all directories.
 object BrokerMetadataCheckpoint extends Logging {
   def getBrokerMetadataAndOfflineDirs(
     logDirs: collection.Seq[String],

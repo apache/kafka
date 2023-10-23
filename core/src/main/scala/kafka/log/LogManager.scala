@@ -270,26 +270,33 @@ class LogManager(logDirs: Seq[File],
   def directoryId(dir: String): Option[Uuid] = dirIds.get(dir)
 
   /**
-   * Determine directory ID for each directory with a meta.properties.
+   * Determine directory ID for each directory.
    * If meta.properties does not include a directory ID, one is generated and persisted back to meta.properties.
-   * Directories without a meta.properties don't get a directory ID assigned.
+   * Directories without a meta.properties file, which can only occur in Zk mode, will file have a directory ID assigned.
+   * The ID will be written when the new meta.properties file is first written.
    */
   private def directoryIds(dirs: Seq[File]): Map[String, Uuid] = {
     dirs.flatMap { dir =>
       try {
         val metadataCheckpoint = new BrokerMetadataCheckpoint(new File(dir, KafkaServer.brokerMetaPropsFile))
-        metadataCheckpoint.read().map { props =>
-          val rawMetaProperties = new RawMetaProperties(props)
-          val uuid = rawMetaProperties.directoryId match {
-            case Some(uuidStr) => Uuid.fromString(uuidStr)
-            case None =>
-              val uuid = Uuid.randomUuid()
-              rawMetaProperties.directoryId = uuid.toString
-              metadataCheckpoint.write(rawMetaProperties.props)
-              uuid
+        val uuid = metadataCheckpoint.read() match {
+          case Some(props) => {
+            val rawMetaProperties = new RawMetaProperties(props)
+            val uuid_from_properties = rawMetaProperties.directoryId match {
+              case Some(uuidStr) => Uuid.fromString(uuidStr)
+              case None =>
+                val uuid_new = Uuid.randomUuid()
+                rawMetaProperties.directoryId = uuid_new.toString
+                metadataCheckpoint.write(rawMetaProperties.props)
+                uuid_new
+            }
+            uuid_from_properties
           }
-          dir.getAbsolutePath -> uuid
-        }.toMap
+          case None => {
+            Uuid.randomUuid()
+          }
+        }
+        Seq(dir.getAbsolutePath -> uuid)
       } catch {
         case e: IOException =>
           logDirFailureChannel.maybeAddOfflineLogDir(dir.getAbsolutePath, s"Disk error while loading ID $dir", e)
