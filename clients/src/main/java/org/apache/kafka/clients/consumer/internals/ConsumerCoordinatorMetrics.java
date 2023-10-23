@@ -48,6 +48,7 @@ class ConsumerCoordinatorMetrics {
                         "The number of commit calls per second"),
                 metrics.metricName("commit-total", metricGrpName,
                         "The total number of commit calls")));
+
         this.revokeCallbackSensor = metrics.sensor("partition-revoked-latency");
         this.revokeCallbackSensor.add(metrics.metricName("partition-revoked-latency-avg",
                 metricGrpName,
