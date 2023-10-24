@@ -2113,7 +2113,13 @@ public class GroupMetadataManagerTest {
                 .withAssignment(memberId2, mkAssignment(
                     mkTopicAssignment(fooTopicId, 3, 4, 5),
                     mkTopicAssignment(barTopicId, 2)))
-                .withAssignmentEpoch(10))
+                .withAssignmentEpoch(10)
+                .withSubscriptionMetadata(new HashMap<String, TopicMetadata>() {
+                    {
+                        put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6, mkMapOfPartitionRacks(6)));
+                        put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 3, mkMapOfPartitionRacks(3)));
+                    }
+                }))
             .build();
 
         assignor.prepareGroupAssignment(new GroupAssignment(
@@ -2183,29 +2189,21 @@ public class GroupMetadataManagerTest {
                 .setMemberId(member2RejoinId)
                 .setMemberEpoch(10)
                 .setHeartbeatIntervalMs(5000)
-                .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()
-                    .setTopicPartitions(Arrays.asList(
-                        new ConsumerGroupHeartbeatResponseData.TopicPartitions()
-                            .setTopicId(fooTopicId)
-                            .setPartitions(Arrays.asList(3, 4, 5)),
-                        new ConsumerGroupHeartbeatResponseData.TopicPartitions()
-                            .setTopicId(barTopicId)
-                            .setPartitions(Collections.singletonList(2))
-                    ))),
+                .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()),
                 rejoinResult.response()
         );
 
         ConsumerGroupMember expectedRejoinedMember = new ConsumerGroupMember.Builder(member2RejoinId)
             .setMemberEpoch(10)
             .setInstanceId(memberId2)
-            .setPreviousMemberEpoch(9)
+            .setPreviousMemberEpoch(0)
             .setTargetMemberEpoch(10)
             .setClientId("client")
             .setClientHost("localhost/127.0.0.1")
             .setRebalanceTimeoutMs(5000)
             .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
             .setServerAssignorName("range")
-            .setAssignedPartitions(mkAssignment(
+            .setPartitionsPendingAssignment(mkAssignment(
                     mkTopicAssignment(fooTopicId, 3, 4, 5),
                     mkTopicAssignment(barTopicId, 2)))
             .build();
