@@ -55,23 +55,23 @@ object KafkaRequestHandler {
    * @param fun Callback function to execute
    * @return Wrapped callback that would execute `fun` on a request thread
    */
-  def wrap[T](fun: T => Unit): T => Unit = {
+  def wrap[T](fun: (RequestLocal, T) => Unit, requestLocal: RequestLocal): T => Unit = {
     val requestChannel = threadRequestChannel.get()
     val currentRequest = threadCurrentRequest.get()
     if (requestChannel == null || currentRequest == null) {
       if (!bypassThreadCheck)
         throw new IllegalStateException("Attempted to reschedule to request handler thread from non-request handler thread.")
-      T => fun(T)
+      T => fun(requestLocal, T)
     } else {
       T => {
         if (threadCurrentRequest.get() != null) {
           // If the callback is actually executed on a request thread, we can directly execute
           // it without re-scheduling it.
-          fun(T)
+          fun(requestLocal, T)
         } else {
           // The requestChannel and request are captured in this lambda, so when it's executed on the callback thread
           // we can re-schedule the original callback on a request thread and update the metrics accordingly.
-          requestChannel.sendCallbackRequest(RequestChannel.CallbackRequest(() => fun(T), currentRequest))
+          requestChannel.sendCallbackRequest(RequestChannel.CallbackRequest(newRequestLocal => fun(newRequestLocal, T), currentRequest))
         }
       }
     }
@@ -132,7 +132,7 @@ class KafkaRequestHandler(
             }
             
             threadCurrentRequest.set(originalRequest)
-            callback.fun()
+            callback.fun(requestLocal)
           } catch {
             case e: FatalExitError =>
               completeShutdown()
