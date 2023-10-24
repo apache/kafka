@@ -1115,9 +1115,11 @@ class Partition(val topicPartition: TopicPartition,
    * @return true if the HW was incremented, and false otherwise.
    */
   private def maybeIncrementLeaderHW(leaderLog: UnifiedLog, currentTimeMs: Long = time.milliseconds): Boolean = {
-    if (isUnderMinIsr && metadataCache.isInstanceOf[KRaftMetadataCache] && interBrokerProtocolVersion.isElrSupported
-      && eligibleLeaderReplicasEnabled) {
-      return false
+    if (metadataCache.isInstanceOf[KRaftMetadataCache] && interBrokerProtocolVersion.isElrSupported && eligibleLeaderReplicasEnabled) {
+      if (isUnderMinIsr) {
+        debug(s"Skip checking whether HWM can advance because partition=$topicPartition is under min ISR(ISR=${partitionState.isr}")
+        return false
+      }
     }
     // maybeIncrementLeaderHW is in the hot path, the following code is written to
     // avoid unnecessary collection generation
