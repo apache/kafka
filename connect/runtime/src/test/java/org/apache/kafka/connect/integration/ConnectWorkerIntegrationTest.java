@@ -795,6 +795,7 @@ public class ConnectWorkerIntegrationTest {
         connectorConfig2.put(TASKS_MAX_CONFIG, Integer.toString(NUM_TASKS + 1));
 
         // Create a connector to ensure that the worker has completed startup
+        log.info("Creating initial connector");
         connect.configureConnector(CONNECTOR_NAME, connectorConfig1);
 
         connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(
@@ -802,6 +803,7 @@ public class ConnectWorkerIntegrationTest {
         );
 
         // Bring down Kafka, which should cause some REST requests to fail
+        log.info("Stopping Kafka cluster");
         connect.kafka().stopOnlyKafka();
         // Allow for the workers to discover that the coordinator is unavailable, wait is
         // heartbeat timeout * 2 + 4sec
@@ -809,6 +811,7 @@ public class ConnectWorkerIntegrationTest {
 
         connect.requestTimeout(5_000);
         // Try to reconfigure the connector, which should fail with a timeout error
+        log.info("Trying to reconfigure connector while Kafka cluster is down");
         ConnectRestException e = assertThrows(
                 ConnectRestException.class,
                 () -> connect.configureConnector(CONNECTOR_NAME, connectorConfig2)
@@ -819,21 +822,26 @@ public class ConnectWorkerIntegrationTest {
                 "Message '" + e.getMessage() + "' does not match expected format",
                 e.getMessage().contains("Request timed out. The worker is currently polling the group coordinator")
         );
+        log.info("Restarting Kafka cluster");
         connect.kafka().startOnlyKafkaOnSamePorts();
         connect.assertions().assertExactlyNumBrokersAreUp(1, "Broker did not complete startup in time");
+        log.info("Kafka cluster is restarted");
 
         connect.requestTimeout(DEFAULT_REST_REQUEST_TIMEOUT_MS);
         // Reconfigure the connector to ensure that the broker has completed startup
+        log.info("Reconfiguring connector with one more task");
         connect.configureConnector(CONNECTOR_NAME, connectorConfig2);
         connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(
                 CONNECTOR_NAME, NUM_TASKS + 1, "connector and tasks did not start in time"
         );
 
         // Delete the config topic--WCGW?
+        log.info("Deleting Kafka Connect config topic");
         connect.kafka().deleteTopic(configTopic);
 
         connect.requestTimeout(5_000);
         // Try to delete the connector, which should fail with a slightly-different timeout error
+        log.info("Trying to reconfigure connector after config topic has been deleted");
         e = assertThrows(
                 ConnectRestException.class,
                 () -> connect.deleteConnector(CONNECTOR_NAME)
@@ -848,6 +856,7 @@ public class ConnectWorkerIntegrationTest {
         );
 
         // The worker should still be blocked on the same operation
+        log.info("Trying again to reconfigure connector after config topic has been deleted");
         e = assertThrows(
                 ConnectRestException.class,
                 () -> connect.configureConnector(CONNECTOR_NAME, connectorConfig1)
