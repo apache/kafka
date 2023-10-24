@@ -30,6 +30,8 @@ import java.util.Collection;
 public class DescribeTopicsOptions extends AbstractOptions<DescribeTopicsOptions> {
 
     private boolean includeAuthorizedOperations;
+    private boolean useDescribeTopicPartitionsApi;
+    private int partitionSizeLimitPerResponse;
 
     /**
      * Set the timeout in milliseconds for this operation or {@code null} if the default api timeout for the
@@ -47,8 +49,30 @@ public class DescribeTopicsOptions extends AbstractOptions<DescribeTopicsOptions
         return this;
     }
 
+    /**
+     * Whether to use the DescribeTopicPartitions API. It should be set to false if DescribeTopicPartitions API is
+     * not supported.
+     *
+     */
+    public DescribeTopicsOptions useDescribeTopicPartitionsApi(boolean useDescribeTopicPartitionsApi) {
+        this.useDescribeTopicPartitionsApi = useDescribeTopicPartitionsApi;
+        return this;
+    }
+
+    public DescribeTopicsOptions partitionSizeLimitPerResponse(int partitionSizeLimitPerResponse) {
+        this.partitionSizeLimitPerResponse = partitionSizeLimitPerResponse;
+        return this;
+    }
+
     public boolean includeAuthorizedOperations() {
         return includeAuthorizedOperations;
     }
 
+    public boolean useDescribeTopicPartitionsApi() {
+        return useDescribeTopicPartitionsApi;
+    }
+
+    public int partitionSizeLimitPerResponse() {
+        return partitionSizeLimitPerResponse;
+    }
 }

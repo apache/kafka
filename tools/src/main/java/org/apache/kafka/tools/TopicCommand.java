@@ -28,6 +28,7 @@ import org.apache.kafka.clients.admin.CreatePartitionsOptions;
 import org.apache.kafka.clients.admin.CreateTopicsOptions;
 import org.apache.kafka.clients.admin.CreateTopicsResult;
 import org.apache.kafka.clients.admin.DeleteTopicsOptions;
+import org.apache.kafka.clients.admin.DescribeTopicsOptions;
 import org.apache.kafka.clients.admin.ListTopicsOptions;
 import org.apache.kafka.clients.admin.ListTopicsResult;
 import org.apache.kafka.clients.admin.NewPartitions;
@@ -367,6 +368,12 @@ public abstract class TopicCommand {
                     .map(node -> node.toString())
                     .collect(Collectors.joining(",")));
             }
+            System.out.print("\tElr: " + info.elr().stream()
+                .map(node -> Integer.toString(node.id()))
+                .collect(Collectors.joining(",")));
+            System.out.print("\tLastKnownElr: " + info.lastKnownElr().stream()
+                .map(node -> Integer.toString(node.id()))
+                .collect(Collectors.joining(",")));
             System.out.print(markedForDeletion ? "\tMarkedForDeletion: true" : "");
             System.out.println();
         }
@@ -537,6 +544,18 @@ public abstract class TopicCommand {
         }
 
         public void describeTopic(TopicCommandOptions opts) throws ExecutionException, InterruptedException {
+            try {
+                describeTopic(opts, true);
+            } catch (Exception e) {
+                if (e.getMessage().contains("UnsupportedVersionException")) {
+                    describeTopic(opts, false);
+                } else {
+                    throw e;
+                }
+            }
+        }
+
+        public void describeTopic(TopicCommandOptions opts, boolean useDescribeTopicPartitionsApi) throws ExecutionException, InterruptedException {
             // If topicId is provided and not zero, will use topicId regardless of topic name
             Optional<Uuid> inputTopicId = opts.topicId()
                 .map(Uuid::fromString).filter(uuid -> uuid != Uuid.ZERO_UUID);
@@ -568,13 +587,16 @@ public abstract class TopicCommand {
 
             if (!topics.isEmpty()) {
                 Map<String, org.apache.kafka.clients.admin.TopicDescription> descTopics =
-                    adminClient.describeTopics(TopicCollection.ofTopicNames(topics)).allTopicNames().get();
+                    adminClient.describeTopics(TopicCollection.ofTopicNames(topics),
+                        new DescribeTopicsOptions()
+                            .useDescribeTopicPartitionsApi(useDescribeTopicPartitionsApi)
+                            .partitionSizeLimitPerResponse(opts.partitionSizeLimitPerResponse().orElse(2000))).allTopicNames().get();
                 topicDescriptions = new ArrayList<>(descTopics.values());
             }
 
             List<String> topicNames = topicDescriptions.stream()
-                .map(org.apache.kafka.clients.admin.TopicDescription::name)
-                .collect(Collectors.toList());
+                        .map(org.apache.kafka.clients.admin.TopicDescription::name)
+                        .collect(Collectors.toList());
             Map<ConfigResource, KafkaFuture<Config>> allConfigs = adminClient.describeConfigs(
                 topicNames.stream()
                     .map(name -> new ConfigResource(ConfigResource.Type.TOPIC, name))
@@ -716,6 +738,8 @@ public abstract class TopicCommand {
 
         private final OptionSpecBuilder excludeInternalTopicOpt;
 
+        private final ArgumentAcceptingOptionSpec<Integer> partitionSizeLimitPerResponseOpt;
+
         private final Set<OptionSpec<?>> allTopicLevelOpts;
 
         private final Set<OptionSpecBuilder> allReplicationReportOpts;
@@ -799,6 +823,11 @@ public abstract class TopicCommand {
                 "if set when creating topics, the action will only execute if the topic does not already exist.");
             excludeInternalTopicOpt = parser.accepts("exclude-internal",
                 "exclude internal topics when running list or describe command. The internal topics will be listed by default");
+            partitionSizeLimitPerResponseOpt = parser.accepts("partition-size-limit-per-response",
+                "the maximum partition size to be included in one DescribeTopicPartitions response. Only valid if use-describe-topics-api is used")
+                    .withRequiredArg()
+                    .describedAs("maximun # of partitions in one response.")
+                    .ofType(java.lang.Integer.class);
             options = parser.parse(args);
 
             allTopicLevelOpts = new HashSet<>(Arrays.asList(alterOpt, createOpt, describeOpt, listOpt, deleteOpt));
@@ -916,6 +945,10 @@ public abstract class TopicCommand {
 
         public Boolean excludeInternalTopics() {
             return has(excludeInternalTopicOpt);
+        }
+
+        public Optional<Integer> partitionSizeLimitPerResponse() {
+            return valueAsOption(partitionSizeLimitPerResponseOpt);
         }
 
         public Optional<List<String>> topicConfig() {

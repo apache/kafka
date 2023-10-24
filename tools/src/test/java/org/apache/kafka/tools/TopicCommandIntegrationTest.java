@@ -52,8 +52,8 @@ import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import scala.collection.JavaConverters;
-import scala.collection.mutable.Buffer;
 import scala.collection.Seq;
+import scala.collection.mutable.Buffer;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -637,6 +637,25 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
         String[] rows = output.split(System.lineSeparator());
         assertEquals(3, rows.length, "Expected 3 rows in output, got " + rows.length);
         assertTrue(rows[0].startsWith(String.format("Topic: %s", testTopicName)), "Row does not start with " + testTopicName + ". Row is: " + rows[0]);
+    }
+
+    @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ValueSource(strings = {"quorum=zk", "quorum=kraft"})
+    public void testDescribeWithDescribeTopicPartitionsApi(String quorum) throws ExecutionException, InterruptedException {
+        TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, 3, (short) 2,
+            scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
+        );
+        String secondTopicName = "test-2";
+        TestUtils.createTopicWithAdmin(adminClient, secondTopicName, scalaBrokers, scalaControllers, 3, (short) 2,
+            scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
+        );
+
+        String output = captureDescribeTopicStandardOut(buildTopicCommandOptionsWithBootstrap(
+            "--describe", "--partition-size-limit-per-response=1"));
+        String[] rows = output.split("\n");
+        assertEquals(8, rows.length, String.join("\n", rows));
+        assertTrue(rows[2].contains("\tElr"), rows[2]);
+        assertTrue(rows[2].contains("LastKnownElr"), rows[2]);
     }
 
     @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
