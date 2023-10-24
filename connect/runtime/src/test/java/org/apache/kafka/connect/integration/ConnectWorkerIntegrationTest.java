@@ -61,6 +61,7 @@ import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_F
 import static org.apache.kafka.connect.runtime.WorkerConfig.CONNECTOR_CLIENT_POLICY_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.CONFIG_TOPIC_CONFIG;
+import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG;
 import static org.apache.kafka.connect.runtime.rest.resources.ConnectResource.DEFAULT_REST_REQUEST_TIMEOUT_MS;
 import static org.apache.kafka.connect.util.clusters.ConnectAssertions.CONNECTOR_SETUP_DURATION_MS;
 import static org.hamcrest.CoreMatchers.containsString;
@@ -781,6 +782,9 @@ public class ConnectWorkerIntegrationTest {
     public void testRequestTimeouts() throws Exception {
         final String configTopic = "test-request-timeout-configs";
         workerProps.put(CONFIG_TOPIC_CONFIG, configTopic);
+        // Workaround for KAFKA-15676, which can cause the scheduled rebalance delay to
+        // be spuriously triggered after the group coordinator for a Connect cluster is bounced
+        workerProps.put(SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG, "0");
         connect = connectBuilder
                 .numBrokers(1)
                 .numWorkers(1)
