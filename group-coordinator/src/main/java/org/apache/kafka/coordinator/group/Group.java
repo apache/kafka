@@ -20,6 +20,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Interface common for all groups.
@@ -106,7 +107,8 @@ public interface Group {
     /**
      * Returns true if the group is actively subscribed to the topic.
      *
-     * @param topic The topic name.
+     * @param topic  The topic name.
+     *
      * @return Whether the group is subscribed to the topic.
      */
     boolean isSubscribedToTopic(String topic);
@@ -117,4 +119,16 @@ public interface Group {
      * @param records The list of records.
      */
     void createGroupTombstoneRecords(List<Record> records);
+
+    /**
+     * @return Whether the group is in Empty state.
+     */
+    boolean isEmpty();
+
+    /**
+     * See {@link OffsetExpirationCondition}
+     *
+     * @return The offset expiration condition for the group or Empty if no such condition exists.
+     */
+    Optional<OffsetExpirationCondition> offsetExpirationCondition();
 }

@@ -253,6 +253,10 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
                 return ConsumerGroupDescribeResponse.parse(responseBuffer, version);
             case CONTROLLER_REGISTRATION:
                 return ControllerRegistrationResponse.parse(responseBuffer, version);
+            case GET_TELEMETRY_SUBSCRIPTIONS:
+                return GetTelemetrySubscriptionsResponse.parse(responseBuffer, version);
+            case PUSH_TELEMETRY:
+                return PushTelemetryResponse.parse(responseBuffer, version);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseResponse`, the " +
                         "code should be updated to do so.", apiKey));

@@ -47,6 +47,21 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     </Match>
 
     <Match>
+        <!-- Disable warnings about constructors that throw exceptions.
+            CT_CONSTRUCTOR_THROW: Be wary of letting constructors throw exceptions -->
+        <Bug pattern="CT_CONSTRUCTOR_THROW"/>
+    </Match>
+
+    <Match>
+        <!-- Disable warnings about identifiers that conflict with standard library identifiers.
+            PI_DO_NOT_REUSE_PUBLIC_IDENTIFIERS_CLASS_NAMES: Do not reuse public identifiers from JSL as class name
+            PI_DO_NOT_REUSE_PUBLIC_IDENTIFIERS_FIELD_NAMES: Do not reuse public identifiers from JSL as field name
+            PI_DO_NOT_REUSE_PUBLIC_IDENTIFIERS_METHOD_NAMES: Do not reuse public identifiers from JSL as method name
+            -->
+        <Bug pattern="PI_DO_NOT_REUSE_PUBLIC_IDENTIFIERS_CLASS_NAMES,PI_DO_NOT_REUSE_PUBLIC_IDENTIFIERS_FIELD_NAMES,PI_DO_NOT_REUSE_PUBLIC_IDENTIFIERS_METHOD_NAMES"/>
+    </Match>
+
+    <Match>
         <!-- Spotbugs tends to work a little bit better with Java than with Scala.  We suppress
              some categories of bug reports when using Scala, since spotbugs generates huge
              numbers of false positives in some of these categories when examining Scala code.
@@ -70,7 +85,8 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
             NP_ALWAYS_NULL: Null pointer dereference
             MS_CANNOT_BE_FINAL: Field isn't final and can't be protected from malicious code
             IC_INIT_CIRCULARITY: Initialization circularity
-            SE_NO_SUITABLE_CONSTRUCTOR: Class is Serializable but its superclass doesn't define a void constructor -->
+            SE_NO_SUITABLE_CONSTRUCTOR: Class is Serializable but its superclass doesn't define a void constructor
+            PA_PUBLIC_MUTABLE_OBJECT_ATTRIBUTE: Mutable object-type field is public -->
         <Source name="~.*\.scala" />
         <Or>
             <Bug pattern="NP_LOAD_OF_KNOWN_NULL_VALUE"/>
@@ -94,7 +110,14 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
             <Bug pattern="SE_NO_SUITABLE_CONSTRUCTOR"/>
             <Bug pattern="DMI_RANDOM_USED_ONLY_ONCE"/>
             <Bug pattern="SSD_DO_NOT_USE_INSTANCE_LOCK_ON_SHARED_STATIC_DATA"/>
+            <Bug pattern="PA_PUBLIC_MUTABLE_OBJECT_ATTRIBUTE"/>
         </Or>
+    </Match>
+
+    <Match>
+        <!-- disabled due to too many false positives
+            RV_EXCEPTION_NOT_THROWN: Exception created and dropped rather than thrown -->
+        <Bug pattern="RV_EXCEPTION_NOT_THROWN"/>
     </Match>
 
     <!-- false positive in Java 11, related to https://github.com/spotbugs/spotbugs/issues/756 but more complex -->
@@ -138,7 +161,10 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         <!-- Scala doesn't have checked exceptions so one cannot catch RuntimeException and rely
              on the compiler to fail if the code is changed to call a method that throws Exception.
              Given that, this bug pattern doesn't make sense for Scala code. -->
-        <Class name="kafka.log.Log"/>
+        <Or>
+            <Class name="kafka.log.Log"/>
+            <Class name="kafka.log.LocalLog$"/>
+        </Or>
         <Bug pattern="REC_CATCH_EXCEPTION"/>
     </Match>
 
@@ -266,8 +292,22 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     </Match>
 
     <Match>
+        <!-- Suppress aggressive and unnecessary warnings about switch fallthrough -->
+        <Class name="org.apache.kafka.connect.runtime.rest.resources.LoggingResource" />
+        <Method name="setLevel" />
+        <Bug pattern="SF_SWITCH_FALLTHROUGH" />
+    </Match>
+
+    <Match>
         <!-- Suppress some minor warnings about machine-generated code for benchmarking. -->
         <Package name="~org\.apache\.kafka\.jmh\..*\.jmh_generated"/>
+    </Match>
+
+    <Match>
+        <!-- JMH benchmarks often have fields that are modified by the framework.
+            SS_SHOULD_BE_STATIC: Unread field: should this field be static? -->
+        <Package name="~org\.apache\.kafka\.jmh\..*"/>
+        <Bug pattern="SS_SHOULD_BE_STATIC"/>
     </Match>
 
     <Match>
@@ -365,6 +405,16 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
             <Bug pattern="SF_SWITCH_NO_DEFAULT"/>
             <Bug pattern="SF_SWITCH_FALLTHROUGH"/>
         </Or>
+    </Match>
+
+    <Match>
+        <!-- Public mutable fields are intentional in some Streams classes.
+         PA_PUBLIC_PRIMITIVE_ATTRIBUTE: Primitive field is public -->
+        <Or>
+            <Class name="org.apache.kafka.streams.kstream.Materialized"/>
+            <Class name="org.apache.kafka.streams.state.internals.LeftOrRightValueDeserializer"/>
+        </Or>
+        <Bug pattern="PA_PUBLIC_PRIMITIVE_ATTRIBUTE"/>
     </Match>
 
     <Match>

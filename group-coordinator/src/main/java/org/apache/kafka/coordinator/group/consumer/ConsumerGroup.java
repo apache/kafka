@@ -24,6 +24,8 @@ import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.coordinator.group.Group;
+import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
+import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
 import org.apache.kafka.coordinator.group.Record;
 import org.apache.kafka.coordinator.group.RecordHelpers;
 import org.apache.kafka.image.ClusterImage;
@@ -349,9 +351,11 @@ public class ConsumerGroup implements Group {
     /**
      * Returns true if the consumer group is actively subscribed to the topic.
      *
-     * @param topic The topic name.
-     * @return whether the group is subscribed to the topic.
+     * @param topic  The topic name.
+     *
+     * @return Whether the group is subscribed to the topic.
      */
+    @Override
     public boolean isSubscribedToTopic(String topic) {
         return subscribedTopicNames.containsKey(topic);
     }
@@ -633,6 +637,21 @@ public class ConsumerGroup implements Group {
         records.add(RecordHelpers.newTargetAssignmentEpochTombstoneRecord(groupId()));
         records.add(RecordHelpers.newGroupSubscriptionMetadataTombstoneRecord(groupId()));
         records.add(RecordHelpers.newGroupEpochTombstoneRecord(groupId()));
+    }
+
+    @Override
+    public boolean isEmpty() {
+        return state() == ConsumerGroupState.EMPTY;
+    }
+
+    /**
+     * See {@link org.apache.kafka.coordinator.group.OffsetExpirationCondition}
+     *
+     * @return The offset expiration condition for the group or Empty if no such condition exists.
+     */
+    @Override
+    public Optional<OffsetExpirationCondition> offsetExpirationCondition() {
+        return Optional.of(new OffsetExpirationConditionImpl(offsetAndMetadata -> offsetAndMetadata.commitTimestampMs));
     }
 
     /**

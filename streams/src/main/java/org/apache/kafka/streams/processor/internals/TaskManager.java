@@ -223,10 +223,7 @@ public class TaskManager {
             final Collection<Task> tasksToCommit = allTasks()
                 .values()
                 .stream()
-                // TODO: once we remove state restoration from the stream thread, we can also remove
-                //  the RESTORING state here, since there will not be any restoring tasks managed
-                //  by the stream thread anymore.
-                .filter(t -> t.state() == Task.State.RUNNING || t.state() == Task.State.RESTORING)
+                .filter(t -> t.state() == Task.State.RUNNING)
                 .filter(t -> !corruptedTasks.contains(t.id()))
                 .collect(Collectors.toSet());
             commitTasksAndMaybeUpdateCommittableOffsets(tasksToCommit, new HashMap<>());
@@ -494,7 +491,7 @@ public class TaskManager {
             }
             final TaskId taskId = task.id();
             if (activeTasksToCreate.containsKey(taskId)) {
-                handleReAssignedActiveTask(task, activeTasksToCreate.get(taskId));
+                handleReassignedActiveTask(task, activeTasksToCreate.get(taskId));
                 activeTasksToCreate.remove(taskId);
             } else if (standbyTasksToCreate.containsKey(taskId)) {
                 tasksToRecycle.put(task, standbyTasksToCreate.get(taskId));
@@ -505,20 +502,16 @@ public class TaskManager {
         }
     }
 
-    private void handleReAssignedActiveTask(final Task task,
+    private void handleReassignedActiveTask(final Task task,
                                             final Set<TopicPartition> inputPartitions) {
         if (tasks.updateActiveTaskInputPartitions(task, inputPartitions)) {
             task.updateInputPartitions(inputPartitions, topologyMetadata.nodeToSourceTopics(task.id()));
         }
         if (task.state() == State.SUSPENDED) {
+            tasks.removeTask(task);
             task.resume();
-            moveTaskFromTasksRegistryToStateUpdater(task);
+            stateUpdater.add(task);
         }
-    }
-
-    private void moveTaskFromTasksRegistryToStateUpdater(final Task task) {
-        tasks.removeTask(task);
-        stateUpdater.add(task);
     }
 
     private void handleTasksInStateUpdater(final Map<TaskId, Set<TopicPartition>> activeTasksToCreate,

@@ -19,11 +19,11 @@ package org.apache.kafka.server.util;
 
 /**
  * This class helps producers throttle throughput.
- *
+ * <br>
  * If targetThroughput >= 0, the resulting average throughput will be approximately
  * min(targetThroughput, maximumPossibleThroughput). If targetThroughput < 0,
  * no throttling will occur.
- *
+ * <br>
  * To use, do this between successive send attempts:
  * <pre>
  *     {@code
@@ -64,7 +64,7 @@ public class ThroughputThrottler {
      * @param amountSoFar bytes produced so far if you want to throttle data throughput, or
      *                    messages produced so far if you want to throttle message throughput.
      * @param sendStartMs timestamp of the most recently sent message
-     * @return
+     * @return <code>true</code> if throttling should happen
      */
     public boolean shouldThrottle(long amountSoFar, long sendStartMs) {
         if (this.targetThroughput < 0) {
@@ -78,7 +78,7 @@ public class ThroughputThrottler {
 
     /**
      * Occasionally blocks for small amounts of time to achieve targetThroughput.
-     *
+     * <br>
      * Note that if targetThroughput is 0, this will block extremely aggressively.
      */
     public void throttle() {
