@@ -51,10 +51,13 @@ public final class VersionedKeyQuery<K, V> implements Query<VersionedRecord<V>> 
     /**
      * Specifies the timestamp for the key query. The key query returns the record version for the specified timestamp.
      * (To be more precise: The key query returns the record with the greatest timestamp <= asOfTimestamp)
+     * if @param asOfTimestamp is null, it will be considered as Optional.empty()
      * @param asOfTimestamp The as of timestamp for timestamp
-     * @throws NullPointerException if @param asOfTimestamp is null
      */
     public VersionedKeyQuery<K, V> asOf(final Instant asOfTimestamp) {
+        if (asOfTimestamp == null) {
+            return new VersionedKeyQuery<>(key, Optional.empty());
+        }
         return new VersionedKeyQuery<>(key, Optional.of(asOfTimestamp));
     }
 

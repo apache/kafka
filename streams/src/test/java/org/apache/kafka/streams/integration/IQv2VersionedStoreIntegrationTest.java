@@ -126,7 +126,7 @@ public class IQv2VersionedStoreIntegrationTest {
                 VersionedRecord :: timestamp;
             shouldHandleVersionedKeyQuery(2, valueExtractor, 2);
             shouldHandleVersionedKeyQueryWithTS(2, valueExtractor, 2, timestampExtractor, RECORD_TIMESTAMP_LONG);
-            shouldThrowNPEWithNullTimestamp(2);
+            shouldThrowNPEWithNullKey();
 
         } catch (final AssertionError e) {
             LOG.error("Failed assertion", e);
@@ -193,8 +193,7 @@ public class IQv2VersionedStoreIntegrationTest {
         assertThat(queryResult.getExecutionInfo(), is(empty()));
     }
 
-    public void shouldThrowNPEWithNullTimestamp(final Integer key) {
-        VersionedKeyQuery<Integer, Integer> query = VersionedKeyQuery.withKey(key);
-        assertThrows(NullPointerException.class, () -> query.asOf(null));
+    public void shouldThrowNPEWithNullKey() {
+        assertThrows(NullPointerException.class, () -> VersionedKeyQuery.withKey(null));
     }
 }
