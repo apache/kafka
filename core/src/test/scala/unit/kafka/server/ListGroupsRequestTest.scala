@@ -105,12 +105,14 @@ class ListGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBa
       leaveGroup(
         groupId = "grp",
         memberId = memberId1,
-        useNewProtocol = true
+        useNewProtocol = true,
+        version = ApiKeys.LEAVE_GROUP.latestVersion(isUnstableApiEnabled)
       )
       leaveGroup(
         groupId = "grp",
         memberId = memberId2,
-        useNewProtocol = true
+        useNewProtocol = true,
+        version = ApiKeys.LEAVE_GROUP.latestVersion(isUnstableApiEnabled)
       )
 
       checkListedGroups(
@@ -152,7 +154,7 @@ class ListGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBa
 
       // Join the consumer group. Note that we don't heartbeat here so we must use
       // a session long enough for the duration of the test.
-      val (memberId, memberEpoch) = joinConsumerGroupWithOldProtocol(groupId = "grp", completeRebalance = false)
+      val (memberId, memberEpoch) = joinDynamicConsumerGroupWithOldProtocol(groupId = "grp", completeRebalance = false)
 
       checkListedGroups(
         groupId = "grp",
@@ -177,7 +179,8 @@ class ListGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBa
       leaveGroup(
         groupId = "grp",
         memberId = memberId,
-        useNewProtocol = false
+        useNewProtocol = false,
+        version = ApiKeys.LEAVE_GROUP.latestVersion(isUnstableApiEnabled)
       )
 
       checkListedGroups(

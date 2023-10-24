@@ -67,11 +67,11 @@ class DescribeGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinat
 
     // Join the consumer group. Note that we don't heartbeat here so we must use
     // a session long enough for the duration of the test.
-    val (memberId1, _) = joinConsumerGroupWithOldProtocol(
+    val (memberId1, _) = joinDynamicConsumerGroupWithOldProtocol(
       groupId = "grp-1",
       metadata = Array(1, 2, 3)
     )
-    val (memberId2, _) = joinConsumerGroupWithOldProtocol(
+    val (memberId2, _) = joinDynamicConsumerGroupWithOldProtocol(
       groupId = "grp-2",
       metadata = Array(1, 2, 3),
       completeRebalance = false

@@ -16,6 +16,122 @@
  */
 package kafka.server
 
-class LeaveGroupRequestTest {
+import kafka.test.ClusterInstance
+import kafka.test.annotation.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
+import kafka.test.junit.ClusterTestExtensions
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.requests.JoinGroupRequest
+import org.junit.jupiter.api.{Tag, Timeout}
+import org.junit.jupiter.api.extension.ExtendWith
 
+@Timeout(120)
+@ExtendWith(value = Array(classOf[ClusterTestExtensions]))
+@ClusterTestDefaults(clusterType = Type.KRAFT, brokers = 1)
+@Tag("integration")
+class LeaveGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
+  @ClusterTest(serverProperties = Array(
+    new ClusterConfigProperty(key = "unstable.api.versions.enable", value = "true"),
+    new ClusterConfigProperty(key = "group.coordinator.new.enable", value = "true"),
+    new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
+    new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
+  ))
+  def testLeaveGroupWithOldConsumerGroupProtocolAndNewGroupCoordinator(): Unit = {
+    testLeaveGroup()
+  }
+
+  @ClusterTest(clusterType = Type.ALL, serverProperties = Array(
+    new ClusterConfigProperty(key = "unstable.api.versions.enable", value = "false"),
+    new ClusterConfigProperty(key = "group.coordinator.new.enable", value = "false"),
+    new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
+    new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
+  ))
+  def testLeaveGroupWithOldConsumerGroupProtocolAndOldGroupCoordinator(): Unit = {
+    testLeaveGroup()
+  }
+
+  private def testLeaveGroup(): Unit = {
+
+    // Creates the __consumer_offsets topics because it won't be created automatically
+    // in this test because it does not use FindCoordinator API.
+    createOffsetsTopic()
+
+    // Create the topic.
+    createTopic(
+      topic = "foo",
+      numPartitions = 3
+    )
+
+    for (version <- 3 to ApiKeys.LEAVE_GROUP.latestVersion(isUnstableApiEnabled)) {
+
+      // Join the consumer group. Note that we don't heartbeat here so we must use
+      // a session long enough for the duration of the test.
+      val (memberId1, _) = joinDynamicConsumerGroupWithOldProtocol("grp-1")
+      val (_, _) = joinStaticConsumerGroupWithOldProtocol("grp-2", "group-instance-id")
+
+      // Request with empty group id.
+      leaveGroupWithOldProtocol(
+        groupId = "",
+        memberIds = List(memberId1),
+        expectedLeaveGroupError = Errors.INVALID_GROUP_ID,
+        expectedMemberErrors = List(Errors.NONE),
+        version = version.toShort
+      )
+
+      // Request with invalid group id and unknown member id should still get Errors.INVALID_GROUP_ID.
+      leaveGroupWithOldProtocol(
+        groupId = "",
+        memberIds = List("member-id-unknown"),
+        expectedLeaveGroupError = Errors.INVALID_GROUP_ID,
+        expectedMemberErrors = List(Errors.NONE),
+        version = version.toShort
+      )
+
+      // Request with unknown group id gets Errors.UNKNOWN_MEMBER_ID.
+      leaveGroupWithOldProtocol(
+        groupId = "grp-unknown",
+        memberIds = List(memberId1),
+        expectedLeaveGroupError = Errors.NONE,
+        expectedMemberErrors = List(Errors.UNKNOWN_MEMBER_ID),
+        version = version.toShort
+      )
+
+      // Request with unknown member ids.
+      leaveGroupWithOldProtocol(
+        groupId = "grp-1",
+        memberIds = List("unknown-member-id", JoinGroupRequest.UNKNOWN_MEMBER_ID),
+        expectedLeaveGroupError = Errors.NONE,
+        expectedMemberErrors = List(Errors.UNKNOWN_MEMBER_ID, Errors.UNKNOWN_MEMBER_ID),
+        version = version.toShort
+      )
+
+      // Success GroupLeave request.
+      leaveGroupWithOldProtocol(
+        groupId = "grp-1",
+        memberIds = List(memberId1),
+        expectedLeaveGroupError = Errors.NONE,
+        expectedMemberErrors = List(Errors.NONE),
+        version = version.toShort
+      )
+
+      // Request with fenced group instance id.
+      leaveGroupWithOldProtocol(
+        groupId = "grp-2",
+        memberIds = List("member-id-fenced"),
+        groupInstanceId = "group-instance-id",
+        expectedLeaveGroupError = Errors.NONE,
+        expectedMemberErrors = List(Errors.FENCED_INSTANCE_ID),
+        version = version.toShort
+      )
+
+      // Having unknown member id will not affect the request processing.
+      leaveGroupWithOldProtocol(
+        groupId = "grp-2",
+        memberIds = List(JoinGroupRequest.UNKNOWN_MEMBER_ID),
+        groupInstanceId = "group-instance-id",
+        expectedLeaveGroupError = Errors.NONE,
+        expectedMemberErrors = List(Errors.NONE),
+        version = version.toShort
+      )
+    }
+  }
 }

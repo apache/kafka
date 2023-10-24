@@ -258,7 +258,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     assertEquals(expectedError.code, syncGroupResponse.data.errorCode)
   }
 
-  protected def joinConsumerGroupWithOldProtocol(
+  protected def joinDynamicConsumerGroupWithOldProtocol(
     groupId: String,
     metadata: Array[Byte] = Array.empty,
     completeRebalance: Boolean = true
@@ -304,6 +304,48 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     (joinGroupResponse.data.memberId, joinGroupResponse.data.generationId)
   }
 
+  protected def joinStaticConsumerGroupWithOldProtocol(
+    groupId: String,
+    groupInstanceId: String,
+    metadata: Array[Byte] = Array.empty,
+    completeRebalance: Boolean = true
+  ): (String, Int) = {
+    val joinGroupRequestData = new JoinGroupRequestData()
+      .setGroupId(groupId)
+      .setGroupInstanceId(groupInstanceId)
+      .setRebalanceTimeoutMs(5 * 50 * 1000)
+      .setSessionTimeoutMs(600000)
+      .setProtocolType("consumer")
+      .setProtocols(new JoinGroupRequestData.JoinGroupRequestProtocolCollection(
+        List(
+          new JoinGroupRequestData.JoinGroupRequestProtocol()
+            .setName("consumer-range")
+            .setMetadata(metadata)
+        ).asJava.iterator
+      ))
+
+    // Join the group as a static member.
+    // Send the request until receiving a successful response. There is a delay
+    // here because the group coordinator is loaded in the background.
+    val joinGroupRequest = new JoinGroupRequest.Builder(joinGroupRequestData).build()
+    var joinGroupResponse: JoinGroupResponse = null
+    TestUtils.waitUntilTrue(() => {
+      joinGroupResponse = connectAndReceive[JoinGroupResponse](joinGroupRequest)
+      joinGroupResponse != null
+    }, msg = s"Could not join the group successfully. Last response $joinGroupResponse.")
+
+    if (completeRebalance) {
+      // Send the sync group request to complete the rebalance.
+      syncGroupWithOldProtocol(
+        groupId = groupId,
+        memberId = joinGroupResponse.data.memberId(),
+        generationId = joinGroupResponse.data.generationId()
+      )
+    }
+
+    (joinGroupResponse.data.memberId, joinGroupResponse.data.generationId)
+  }
+
   protected def joinConsumerGroupWithNewProtocol(groupId: String): (String, Int) = {
     val consumerGroupHeartbeatResponseData = consumerGroupHeartbeat(
       groupId = groupId,
@@ -322,7 +364,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     } else {
       // Note that we don't heartbeat and assume that the test will
       // complete within the session timeout.
-      joinConsumerGroupWithOldProtocol(groupId)
+      joinDynamicConsumerGroupWithOldProtocol(groupId)
     }
   }
 
@@ -406,8 +448,10 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
   protected def leaveGroupWithOldProtocol(
     groupId: String,
     memberIds: List[String],
+    groupInstanceId: String = null,
     expectedLeaveGroupError: Errors,
-    expectedMemberErrors: List[Errors]
+    expectedMemberErrors: List[Errors],
+    version: Short
   ): Unit = {
     if (memberIds.size != expectedMemberErrors.size) {
       fail("genericGroupLeave: memberIds and expectedMemberErrors have unmatched sizes.")
@@ -415,17 +459,24 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
 
     val leaveGroupRequest = new LeaveGroupRequest.Builder(
       groupId,
-      memberIds.map(memberId => new MemberIdentity().setMemberId(memberId)).asJava
-    ).build()
+      memberIds.map(memberId => new MemberIdentity()
+        .setMemberId(memberId)
+        .setGroupInstanceId(groupInstanceId)
+      ).asJava
+    ).build(version)
 
     val expectedResponseData = new LeaveGroupResponseData()
-      .setErrorCode(expectedLeaveGroupError.code())
-      .setMembers(List.tabulate(memberIds.length) { i =>
-        new MemberResponse()
-          .setMemberId(memberIds(i))
-          .setGroupInstanceId(null)
-          .setErrorCode(expectedMemberErrors(i).code())
-      }.asJava)
+    if (expectedLeaveGroupError != Errors.NONE) {
+      expectedResponseData.setErrorCode(expectedLeaveGroupError.code())
+    } else {
+      expectedResponseData
+        .setMembers(List.tabulate(memberIds.length) { i =>
+          new MemberResponse()
+            .setMemberId(memberIds(i))
+            .setGroupInstanceId(groupInstanceId)
+            .setErrorCode(expectedMemberErrors(i).code())
+        }.asJava)
+    }
 
     val leaveGroupResponse = connectAndReceive[LeaveGroupResponse](leaveGroupRequest)
     assertEquals(expectedResponseData, leaveGroupResponse.data())
@@ -434,12 +485,13 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
   protected def leaveGroup(
     groupId: String,
     memberId: String,
-    useNewProtocol: Boolean
+    useNewProtocol: Boolean,
+    version: Short
   ): Unit = {
     if (useNewProtocol) {
       leaveGroupWithNewProtocol(groupId, memberId)
     } else {
-      leaveGroupWithOldProtocol(groupId, List(memberId), Errors.NONE, List(Errors.NONE))
+      leaveGroupWithOldProtocol(groupId, List(memberId), null, Errors.NONE, List(Errors.NONE), version)
     }
   }
 

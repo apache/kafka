@@ -97,7 +97,8 @@ class DeleteGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinator
       leaveGroup(
         groupId = "grp",
         memberId = memberId,
-        useNewProtocol = useNewProtocol
+        useNewProtocol = useNewProtocol,
+        version = ApiKeys.LEAVE_GROUP.latestVersion(isUnstableApiEnabled)
       )
 
       deleteGroups(

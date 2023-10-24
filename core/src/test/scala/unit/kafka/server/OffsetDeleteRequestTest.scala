@@ -120,7 +120,8 @@ class OffsetDeleteRequestTest(cluster: ClusterInstance) extends GroupCoordinator
         leaveGroup(
           groupId = "grp",
           memberId = memberId,
-          useNewProtocol = false
+          useNewProtocol = false,
+          version = ApiKeys.LEAVE_GROUP.latestVersion(isUnstableApiEnabled)
         )
       }
 
