@@ -1031,9 +1031,34 @@ class LogManagerTest {
 
     assertTrue(logManager.directoryId(dirs(0).getAbsolutePath).isDefined)
     assertEquals(Some(Uuid.fromString("ZwkGXjB0TvSF6mjVh6gO7Q")), logManager.directoryId(dirs(1).getAbsolutePath))
-    assertEquals(None, logManager.directoryId(dirs(2).getAbsolutePath))
+    // We allocate a directoryId even if there isn't a meta.properties.
+    assertTrue(logManager.directoryId(dirs(2).getAbsolutePath).isDefined)
     assertEquals(Some(Uuid.fromString("kQfNPJ2FTHq_6Qlyyv6Jqg")), logManager.directoryId(dirs(3).getAbsolutePath))
     assertTrue(logManager.directoryId(dirs(4).getAbsolutePath).isDefined)
-    assertEquals(4, logManager.directoryIds.size)
+    assertEquals(5, logManager.directoryIds.size)
+  }
+
+  @Test
+  def testLoadDirectoryIdsWithDuplicates(): Unit = {
+    def writeMetaProperties(dir: File, id: Option[String] = None): Unit = {
+      val rawProps = new RawMetaProperties()
+      rawProps.nodeId = 1
+      rawProps.clusterId = "IVT1Seu3QjacxS7oBTKhDQ"
+      id.foreach(v => rawProps.directoryId = v)
+      new BrokerMetadataCheckpoint(new File(dir, KafkaServer.brokerMetaPropsFile)).write(rawProps.props)
+    }
+    val dirs: Seq[File] = Seq.fill(5)(TestUtils.tempDir())
+    writeMetaProperties(dirs(0))
+    writeMetaProperties(dirs(1), Some("ZwkGXjB0TvSF6mjVh6gO7Q"))
+    // no meta.properties on dirs(2)
+    writeMetaProperties(dirs(3), Some("kQfNPJ2FTHq_6Qlyyv6Jqg"))
+    writeMetaProperties(dirs(4), Some("ZwkGXjB0TvSF6mjVh6gO7Q"))
+
+    assertTrue(try {
+       logManager = createLogManager(dirs)
+       false
+    } catch {
+       case e: RuntimeException => true
+    })
   }
 }
