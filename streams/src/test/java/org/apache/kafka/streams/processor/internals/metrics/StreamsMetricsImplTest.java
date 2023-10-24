@@ -136,7 +136,9 @@ public class StreamsMetricsImplTest {
     private final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, VERSION, time);
 
     private static boolean eqMetricConfig(final MetricConfig thisMetricConfig, final MetricConfig thatMetricConfig) {
-        return (thisMetricConfig.quota() == thatMetricConfig.quota() || thisMetricConfig.quota().equals(thatMetricConfig.quota())) &&
+        final boolean possiblyNullFields = thisMetricConfig.quota() == thatMetricConfig.quota() ||
+            thisMetricConfig.quota().equals(thatMetricConfig.quota());
+        return possiblyNullFields &&
             thisMetricConfig.samples() == thatMetricConfig.samples() &&
             thisMetricConfig.eventWindow() == thatMetricConfig.eventWindow() &&
             thisMetricConfig.timeWindowMs() == thatMetricConfig.timeWindowMs() &&
@@ -413,7 +415,7 @@ public class StreamsMetricsImplTest {
         final MetricName metricName =
             new MetricName(METRIC_NAME1, STATE_STORE_LEVEL_GROUP, DESCRIPTION1, STORE_LEVEL_TAG_MAP);
         final MetricConfig metricConfig = new MetricConfig().recordLevel(INFO_RECORDING_LEVEL);
-        ArgumentCaptor<MetricConfig> metricConfigArgumentCaptor = ArgumentCaptor.forClass(MetricConfig.class);
+        final ArgumentCaptor<MetricConfig> metricConfigArgumentCaptor = ArgumentCaptor.forClass(MetricConfig.class);
         when(metrics.metricName(METRIC_NAME1, STATE_STORE_LEVEL_GROUP, DESCRIPTION1, STORE_LEVEL_TAG_MAP))
             .thenReturn(metricName);
         when(metrics.metric(metricName)).thenReturn(null);
@@ -620,7 +622,7 @@ public class StreamsMetricsImplTest {
         final Metrics metrics = mock(Metrics.class);
         final RecordingLevel recordingLevel = RecordingLevel.INFO;
         final MetricConfig metricConfig = new MetricConfig().recordLevel(recordingLevel);
-        ArgumentCaptor<MetricConfig> metricConfigArgumentCaptor = ArgumentCaptor.forClass(MetricConfig.class);
+        final ArgumentCaptor<MetricConfig> metricConfigArgumentCaptor = ArgumentCaptor.forClass(MetricConfig.class);
         final String value = "immutable-value";
         final ImmutableMetricValue immutableValue = new ImmutableMetricValue<>(value);
         when(metrics.metricName(METRIC_NAME1, CLIENT_LEVEL_GROUP, DESCRIPTION1, clientLevelTags))
@@ -638,7 +640,7 @@ public class StreamsMetricsImplTest {
         final Metrics metrics = mock(Metrics.class);
         final RecordingLevel recordingLevel = RecordingLevel.INFO;
         final MetricConfig metricConfig = new MetricConfig().recordLevel(recordingLevel);
-        ArgumentCaptor<MetricConfig> metricConfigArgumentCaptor = ArgumentCaptor.forClass(MetricConfig.class);
+        final ArgumentCaptor<MetricConfig> metricConfigArgumentCaptor = ArgumentCaptor.forClass(MetricConfig.class);
         final Gauge<String> valueProvider = (config, now) -> "mutable-value";
         when(metrics.metricName(METRIC_NAME1, CLIENT_LEVEL_GROUP, DESCRIPTION1, clientLevelTags))
             .thenReturn(metricName1);
