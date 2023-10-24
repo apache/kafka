@@ -276,6 +276,7 @@ class LogManager(logDirs: Seq[File],
    * The ID will be written when the new meta.properties file is first written.
    */
   private def directoryIds(dirs: Seq[File]): Map[String, Uuid] = {
+    val s = scala.collection.mutable.Set[Uuid]()
     dirs.flatMap { dir =>
       try {
         val metadataCheckpoint = new BrokerMetadataCheckpoint(new File(dir, KafkaServer.brokerMetaPropsFile))
@@ -296,6 +297,10 @@ class LogManager(logDirs: Seq[File],
             Uuid.randomUuid()
           }
         }
+        if (s.contains(uuid)) {
+            throw new RuntimeException(s"Found duplicate directory.ids ${uuid.toString}")
+        }
+        s += uuid
         Seq(dir.getAbsolutePath -> uuid)
       } catch {
         case e: IOException =>
