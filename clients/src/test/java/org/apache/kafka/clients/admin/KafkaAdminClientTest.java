@@ -3383,7 +3383,8 @@ public class KafkaAdminClientTest {
     public void testListConsumerGroupOffsetsNonRetriableErrors() throws Exception {
         // Non-retriable errors throw an exception
         final List<Errors> nonRetriableErrors = Arrays.asList(
-            Errors.GROUP_AUTHORIZATION_FAILED, Errors.INVALID_GROUP_ID, Errors.GROUP_ID_NOT_FOUND);
+            Errors.GROUP_AUTHORIZATION_FAILED, Errors.INVALID_GROUP_ID, Errors.GROUP_ID_NOT_FOUND,
+            Errors.UNKNOWN_MEMBER_ID, Errors.STALE_MEMBER_EPOCH);
 
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
