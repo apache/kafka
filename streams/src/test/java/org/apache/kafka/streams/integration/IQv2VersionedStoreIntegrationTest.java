@@ -30,9 +30,13 @@ import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
+import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.resource.PatternType;
+import org.apache.kafka.common.resource.ResourcePattern;
+import org.apache.kafka.common.resource.ResourceType;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Utils;
@@ -126,6 +130,7 @@ public class IQv2VersionedStoreIntegrationTest {
                 VersionedRecord :: timestamp;
             shouldHandleVersionedKeyQuery(2, valueExtractor, 2);
             shouldHandleVersionedKeyQueryWithTS(2, valueExtractor, 2, timestampExtractor, RECORD_TIMESTAMP_LONG);
+            shouldThrowNPEWithNullTimestamp(2);
 
         } catch (final AssertionError e) {
             LOG.error("Failed assertion", e);
@@ -190,5 +195,10 @@ public class IQv2VersionedStoreIntegrationTest {
         assertThat(value, is(expectedValue));
         assertThat(timestamp, is(expectedTimestamp));
         assertThat(queryResult.getExecutionInfo(), is(empty()));
+    }
+
+    public void shouldThrowNPEWithNullTimestamp(final Integer key) {
+        VersionedKeyQuery<Integer, Integer> query = VersionedKeyQuery.withKey(key);
+        assertThrows(NullPointerException.class, () -> query.asOf(null));
     }
 }
