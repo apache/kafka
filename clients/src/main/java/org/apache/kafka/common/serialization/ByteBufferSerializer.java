@@ -19,7 +19,7 @@ package org.apache.kafka.common.serialization;
 import java.nio.ByteBuffer;
 
 /**
- * {@code ByteBufferSerializer} always {@link ByteBuffer#rewind() rewinds) the position of the input buffer to zero for
+ * {@code ByteBufferSerializer} always {@link ByteBuffer#rewind() rewinds} the position of the input buffer to zero for
  * serialization. A manual rewind is not necessary.
  * <p>
  * Note: any existing buffer position is ignored.
