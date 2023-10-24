@@ -1,0 +1,127 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.apache.kafka.streams.query;
+
+import java.time.Instant;
+import java.util.Objects;
+import java.util.Optional;
+import org.apache.kafka.common.annotation.InterfaceStability.Evolving;
+import org.apache.kafka.streams.state.ValueIterator;
+import org.apache.kafka.streams.state.VersionedRecord;
+
+/**
+ * Interactive query for retrieving a set of records with the same specified key and different timestamps within the specified time range.
+ */
+@Evolving
+public final class MultiVersionedKeyQuery<K, V> implements Query<ValueIterator<VersionedRecord<V>>> {
+
+    private final K key;
+    private final Optional<Instant> fromTime;
+    private final Optional<Instant> toTime;
+    private final boolean isAscending;
+
+    private MultiVersionedKeyQuery(final K key, final Optional<Instant> fromTime, final Optional<Instant> toTime, final boolean isAscending) {
+        this.key = Objects.requireNonNull(key);
+        this.fromTime = fromTime;
+        this.toTime = toTime;
+        this.isAscending = isAscending;
+    }
+
+      /**
+       * Creates a query that will retrieve the set of records identified by {@code key} if any exists
+       * (or {@code null} otherwise).
+       * @param key The key to retrieve
+       * @throws NullPointerException if @param key is null
+       * @param <K> The type of the key
+       * @param <V> The type of the value that will be retrieved
+       * @throws NullPointerException if @param key is null
+       */
+    public static <K, V> MultiVersionedKeyQuery<K, V> withKey(final K key) {
+        return new MultiVersionedKeyQuery<>(key, Optional.empty(), Optional.empty(), true);
+    }
+
+    /**
+     * Specifies the starting time point for the key query.
+     * <pre>
+     * The key query returns all the records that are still existing in the time range starting from the timestamp {@code fromTime}. There can be records which have been inserted before the {@code fromTime}
+     * and are valid in the query specified time range (the whole time range or even partially). The key query in fact returns all the records that have NOT become tombstone at or after {@code fromTime}.
+     * </pre>
+     * @param fromTime The starting time point
+     * If @param fromTime is null, will be considered as empty optional
+     */
+    public MultiVersionedKeyQuery<K, V> fromTime(final Instant fromTime) {
+        if (fromTime == null) {
+            return new MultiVersionedKeyQuery<>(key, Optional.empty(), toTime, true);
+        }
+        return new MultiVersionedKeyQuery<>(key, Optional.of(fromTime), toTime, true);
+    }
+
+    /**
+     * Specifies the ending time point for the key query.
+     * The key query returns all the records that have timestamp <= {@code toTime}.
+     * @param toTime The ending time point
+     * If @param toTime is null, will be considered as empty optional
+     */
+    public MultiVersionedKeyQuery<K, V> toTime(final Instant toTime) {
+        if (toTime == null) {
+            return new MultiVersionedKeyQuery<>(key, fromTime, Optional.empty(), true);
+        }
+        return new MultiVersionedKeyQuery<>(key, fromTime, Optional.of(toTime), true);
+    }
+
+    /**
+     * Specifies the order of the returned records by the query as descending by timestamp.
+     */
+    public MultiVersionedKeyQuery<K, V> withDescendingTimestamps() {
+        return new MultiVersionedKeyQuery<>(key, fromTime, toTime, false);
+    }
+
+    /**
+     * Specifies the order of the returned records by the query as ascending by timestamp.
+     */
+    public MultiVersionedKeyQuery<K, V> withAscendingTimestamps() {
+        return new MultiVersionedKeyQuery<>(key, fromTime, toTime, true);
+    }
+
+    /**
+     * The key that was specified for this query.
+     */
+    public K key() {
+        return key;
+    }
+
+    /**
+     * The starting time point of the query, if specified
+     */
+    public Optional<Instant> fromTime() {
+        return fromTime;
+    }
+
+    /**
+     * The ending time point of the query, if specified
+     */
+    public Optional<Instant> toTime() {
+        return toTime;
+    }
+
+    /**
+     * @return true if the query returns records in ascending order of timestamps
+     */
+    public boolean isAscending() {
+        return isAscending;
+    }
+}

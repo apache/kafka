@@ -27,6 +27,7 @@ import java.util.Objects;
 public final class VersionedRecord<V> {
     private final V value;
     private final long timestamp;
+    private final long validTo;
 
     /**
      * Create a new {@link VersionedRecord} instance. {@code value} cannot be {@code null}.
@@ -37,7 +38,22 @@ public final class VersionedRecord<V> {
     public VersionedRecord(final V value, final long timestamp) {
         this.value = Objects.requireNonNull(value);
         this.timestamp = timestamp;
+        this.validTo = Long.MAX_VALUE;
     }
+
+    /**
+     * Create a new {@link VersionedRecord} instance. {@code value} cannot be {@code null}.
+     *
+     * @param value      the value
+     * @param timestamp  the timestamp
+     * @param validTo    the latest timestamp that value is valid
+     */
+    public VersionedRecord(final V value, final long timestamp, final long validTo) {
+        this.value = Objects.requireNonNull(value);
+        this.timestamp = timestamp;
+        this.validTo = validTo;
+    }
+
 
     public V value() {
         return value;
@@ -45,6 +61,10 @@ public final class VersionedRecord<V> {
 
     public long timestamp() {
         return timestamp;
+    }
+
+    public long validTo() {
+        return validTo;
     }
 
     @Override

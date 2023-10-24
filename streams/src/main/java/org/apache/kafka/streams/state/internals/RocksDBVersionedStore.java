@@ -253,6 +253,11 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
         return null;
     }
 
+    private VersionedRecord<byte[]> get(final Bytes key, final long fromTimestamp, final long toTimestamp) {
+        return null;
+    }
+
+
     @Override
     public String name() {
         return name;
