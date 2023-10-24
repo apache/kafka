@@ -55,7 +55,7 @@ public class LastValueTracker<T> {
         InstantAndValue<T> previousValue = valueOrNull.getAndSet(instantAndValue);
 
         // Return the instance and the value.
-        return Optional.of(new InstantAndValue<>(previousValue.getIntervalStart(), previousValue.getValue()));
+        return Optional.of(previousValue);
     }
 
     public AtomicReference<InstantAndValue<T>> remove(MetricKey metricKey) {

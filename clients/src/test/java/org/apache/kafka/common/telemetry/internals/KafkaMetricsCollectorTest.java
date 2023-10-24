@@ -101,11 +101,11 @@ public class KafkaMetricsCollectorTest {
         assertEquals(3, result.size());
 
         Metric counter = result.stream()
-            .flatMap(metrics -> Stream.of(metrics.metric().build()))
+            .flatMap(metrics -> Stream.of(metrics.builder().build()))
             .filter(metric -> metric.getName().equals("test.domain.group1.name1")).findFirst().get();
 
         Metric delta = result.stream()
-            .flatMap(metrics -> Stream.of(metrics.metric().build()))
+            .flatMap(metrics -> Stream.of(metrics.builder().build()))
             .filter(metric -> metric.getName().equals("test.domain.group1.name1.delta")).findFirst().get();
 
         assertTrue(counter.hasSum());
@@ -151,11 +151,11 @@ public class KafkaMetricsCollectorTest {
         assertEquals(3, result.size());
 
         Metric counter = result.stream()
-            .flatMap(metrics -> Stream.of(metrics.metric().build()))
+            .flatMap(metrics -> Stream.of(metrics.builder().build()))
             .filter(metric -> metric.getName().equals("test.domain.group1.name1")).findFirst().get();
 
         Metric delta = result.stream()
-            .flatMap(metrics -> Stream.of(metrics.metric().build()))
+            .flatMap(metrics -> Stream.of(metrics.builder().build()))
             .filter(metric -> metric.getName().equals("test.domain.group1.name1.delta")).findFirst().get();
 
         assertTrue(counter.hasSum());
@@ -177,7 +177,7 @@ public class KafkaMetricsCollectorTest {
         assertEquals(2, result.size());
 
         Metric counter = result.stream()
-            .flatMap(metrics -> Stream.of(metrics.metric().build()))
+            .flatMap(metrics -> Stream.of(metrics.builder().build()))
             .filter(metric -> metric.getName().equals("test.domain.group1.name1")).findFirst().get();
 
         assertTrue(counter.hasGauge());
@@ -199,7 +199,7 @@ public class KafkaMetricsCollectorTest {
         assertEquals(5, result.size());
 
         result.stream()
-            .flatMap(metrics -> Stream.of(metrics.metric().build()))
+            .flatMap(metrics -> Stream.of(metrics.builder().build()))
             .filter(metric -> metric.getName().equals("test.domain.group1.(float|double)")).forEach(
                 doubleGauge -> {
                     assertTrue(doubleGauge.hasGauge());
@@ -208,7 +208,7 @@ public class KafkaMetricsCollectorTest {
                 });
 
         result.stream()
-            .flatMap(metrics -> Stream.of(metrics.metric().build()))
+            .flatMap(metrics -> Stream.of(metrics.builder().build()))
             .filter(metric -> metric.getName().equals("test.domain.group1.(int|long)")).forEach(
                 intGauge -> {
                     assertTrue(intGauge.hasGauge());
@@ -229,10 +229,10 @@ public class KafkaMetricsCollectorTest {
         //Verify only the global count of metrics exist
         assertEquals(1, result.size());
         // Group is registered as kafka-metrics-count
-        assertEquals("test.domain.kafka.count.count", result.get(0).metric().build().getName());
+        assertEquals("test.domain.kafka.count.count", result.get(0).builder().build().getName());
         //Verify metrics with measure() method throw exception is not returned
         assertFalse(result.stream()
-            .flatMap(metrics -> Stream.of(metrics.metric().build()))
+            .flatMap(metrics -> Stream.of(metrics.builder().build()))
             .anyMatch(metric -> metric.getName().equals("test.domain.group1.name1")));
     }
 
@@ -251,7 +251,7 @@ public class KafkaMetricsCollectorTest {
         collector.collect(emitter);
         List<SinglePointMetric> collected = emitter.emittedMetrics();
         assertEquals(1, collected.size());
-        assertEquals("test.domain.kafka.count.count", collected.get(0).metric().build().getName());
+        assertEquals("test.domain.kafka.count.count", collected.get(0).builder().build().getName());
     }
 
     @Test
@@ -281,11 +281,11 @@ public class KafkaMetricsCollectorTest {
 
 
         Metric cumulative = result.stream()
-            .flatMap(metrics -> Stream.of(metrics.metric().build()))
+            .flatMap(metrics -> Stream.of(metrics.builder().build()))
             .filter(metric -> metric.getName().equals("test.domain.group1.name1")).findFirst().get();
 
         Metric delta = result.stream()
-            .flatMap(metrics -> Stream.of(metrics.metric().build()))
+            .flatMap(metrics -> Stream.of(metrics.builder().build()))
             .filter(metric -> metric.getName().equals("test.domain.group1.name1.delta")).findFirst().get();
 
         NumberDataPoint point = delta.getSum().getDataPoints(0);
@@ -318,7 +318,7 @@ public class KafkaMetricsCollectorTest {
         // Should get exactly 1 Kafka measurables because we excluded the count measurable
         assertEquals(1, result.size());
 
-        Metric counter = result.get(0).metric().build();
+        Metric counter = result.get(0).builder().build();
 
         assertTrue(counter.hasGauge());
         assertEquals(100L, counter.getGauge().getDataPoints(0).getAsDouble(), 0.0);

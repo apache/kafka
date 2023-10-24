@@ -62,14 +62,14 @@ public class SinglePointMetricTest {
     public void testGaugeWithNumberValue() {
         SinglePointMetric gaugeNumber = SinglePointMetric.gauge(metricKey, Long.valueOf(1), now);
         assertEquals(getIntGaugeMetric("name", 1, now),
-            gaugeNumber.metric().build());
+            gaugeNumber.builder().build());
     }
 
     @Test
     public void testGaugeWithDoubleValue() {
         SinglePointMetric gaugeNumber = SinglePointMetric.gauge(metricKey, 1.0, now);
         assertEquals(getDoubleGaugeMetric("name", 1.0, now),
-            gaugeNumber.metric().build());
+            gaugeNumber.builder().build());
     }
 
     @Test
@@ -77,13 +77,13 @@ public class SinglePointMetricTest {
         MetricKey metricKey = new MetricKey("name", Collections.singletonMap("tag", "value"));
         SinglePointMetric gaugeNumber = SinglePointMetric.gauge(metricKey, 1.0, now);
         assertEquals(getDoubleGaugeMetric("name", 1.0, now,
-                Collections.singletonMap("tag", "value")), gaugeNumber.metric().build());
+                Collections.singletonMap("tag", "value")), gaugeNumber.builder().build());
     }
 
     @Test
     public void testSum() {
         SinglePointMetric sum = SinglePointMetric.sum(metricKey, 1.0, false, now);
-        assertEquals(getSumMetric("name", 1.0, false, now), sum.metric().build());
+        assertEquals(getSumMetric("name", 1.0, false, now), sum.builder().build());
     }
 
     @Test
@@ -91,14 +91,14 @@ public class SinglePointMetricTest {
         MetricKey metricKey = new MetricKey("name", Collections.singletonMap("tag", "value"));
         SinglePointMetric sum = SinglePointMetric.sum(metricKey, 1.0, true, now, now);
         assertEquals(getSumMetric("name", 1.0, true, now, now,
-            Collections.singletonMap("tag", "value"), false), sum.metric().build());
+            Collections.singletonMap("tag", "value"), false), sum.builder().build());
     }
 
     @Test
     public void testDeltaSum() {
         SinglePointMetric sum = SinglePointMetric.deltaSum(metricKey, 1.0, true, now, now);
         assertEquals(getSumMetric("name", 1.0, true, now, now, Collections.emptyMap(),
-            true), sum.metric().build());
+            true), sum.builder().build());
     }
 
     private Metric getDoubleGaugeMetric(String name, Double value, Instant time) {

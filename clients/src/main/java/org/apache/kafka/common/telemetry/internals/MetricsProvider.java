@@ -26,7 +26,7 @@ import java.util.Map;
 /**
  * Provides specification which are used to collect metrics.
  */
-public interface Provider extends Configurable {
+public interface MetricsProvider extends Configurable {
 
     /**
      * Validate that all the data required for generating correct metrics is present. The provider
@@ -48,7 +48,7 @@ public interface Provider extends Configurable {
     /**
      * The metrics resource for this provider which will be used to generate the metrics.
      *
-     * @return A fully formed {@link Resource} will all the tags.
+     * @return A fully formed {@link Resource} with all the tags.
      */
     Resource resource();
 

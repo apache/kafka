@@ -46,7 +46,7 @@ public class SinglePointMetric implements MetricKeyable {
         return key;
     }
 
-    public Metric.Builder metric() {
+    public Metric.Builder builder() {
         return metricBuilder;
     }
 

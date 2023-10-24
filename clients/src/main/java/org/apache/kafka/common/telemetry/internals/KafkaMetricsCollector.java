@@ -70,10 +70,10 @@ import java.util.concurrent.ConcurrentMap;
  *
  * <p>
  *
- * Should total and sum be treated as a monotonically increasing counter ?
- * The javadocs for Total metric type say "An un-windowed cumulative total maintained over all time.".
- * The standalone Total metrics in the KafkaExporter codebase seem to be cumulative metrics that will always increase.
- * The Total metric underlying Meter type is mostly a Total of a Count metric.
+ * Total and Sum are treated as a monotonically increasing counter. The javadocs for Total metric type
+ * say "An un-windowed cumulative total maintained over all time.". The standalone Total metrics in
+ * the codebase seem to be cumulative metrics that will always increase. The Total metric underlying
+ * Meter type is mostly a Total of a Count metric.
  * We can assume that a Total metric always increases (but it is not guaranteed as the sample values might be both
  * negative or positive).
  * For now, Total is converted to CUMULATIVE_DOUBLE unless we find a valid counter-example.
@@ -236,7 +236,8 @@ public class KafkaMetricsCollector implements MetricsCollector {
         InstantAndValue<Double> instantAndValue = ledger.delta(originalKey, timestamp, value);
 
         metricsEmitter.emitMetric(
-            SinglePointMetric.deltaSum(metricKey, instantAndValue.getValue(), true, timestamp, instantAndValue.getIntervalStart())
+            SinglePointMetric.deltaSum(metricKey, instantAndValue.getValue(), true, timestamp,
+                instantAndValue.getIntervalStart())
         );
     }
 
