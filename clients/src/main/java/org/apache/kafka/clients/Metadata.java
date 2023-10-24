@@ -372,25 +372,24 @@ public class Metadata implements Closeable {
         // 2. for which corresponding leader's node is missing in the new-nodes.
         // 3. for which the existing metadata doesn't know about the partition.
         List<PartitionMetadata> updatePartitionMetadata = new ArrayList<>();
-        Set<TopicPartition> updatedPartitions = new HashSet<>();
-        for (Entry partitionLeader: partitionLeaders.entrySet()) {
-            TopicPartition partition = (TopicPartition) partitionLeader.getKey();
+        for (Entry<TopicPartition, Metadata.LeaderIdAndEpoch> partitionLeader: partitionLeaders.entrySet()) {
+            TopicPartition partition = partitionLeader.getKey();
             Metadata.LeaderAndEpoch currentLeader = currentLeader(partition);
-            Metadata.LeaderIdAndEpoch newLeader = (LeaderIdAndEpoch) partitionLeader.getValue();
+            Metadata.LeaderIdAndEpoch newLeader = partitionLeader.getValue();
             if (!newLeader.epoch.isPresent() || !newLeader.leaderId.isPresent()) {
-                log.trace("For {}, incoming leader information is incomplete {}", partition, newLeader);
+                log.debug("For {}, incoming leader information is incomplete {}", partition, newLeader);
                 continue;
             }
             if (currentLeader.epoch.isPresent() && newLeader.epoch.get() <= currentLeader.epoch.get()) {
-                log.trace("For {}, incoming leader({}) is not-newer than the one in the existing metadata {}, so ignoring.", partition, newLeader, currentLeader);
+                log.debug("For {}, incoming leader({}) is not-newer than the one in the existing metadata {}, so ignoring.", partition, newLeader, currentLeader);
                 continue;
             }
             if (!newNodes.containsKey(newLeader.leaderId.get())) {
-                log.trace("For {}, incoming leader({}), the corresponding node information for node-id {} is missing, so ignoring.", partition, newLeader, newLeader.leaderId.get());
+                log.debug("For {}, incoming leader({}), the corresponding node information for node-id {} is missing, so ignoring.", partition, newLeader, newLeader.leaderId.get());
                 continue;
             }
             if (!this.cache.partitionMetadata(partition).isPresent()) {
-                log.trace("For {}, incoming leader({}), no longer has cached metadata so ignoring.", partition, newLeader);
+                log.debug("For {}, incoming leader({}), partition metadata is no longer cached, ignoring.", partition, newLeader);
                 continue;
             }
 
@@ -407,13 +406,11 @@ public class Metadata implements Closeable {
             updatePartitionMetadata.add(updatedMetadata);
 
             lastSeenLeaderEpochs.put(partition, newLeader.epoch.get());
-
-            updatedPartitions.add(partition);
         }
 
-        if (updatedPartitions.isEmpty()) {
+        if (updatePartitionMetadata.isEmpty()) {
             log.debug("No relevant metadata updates.");
-            return updatedPartitions;
+            return new HashSet<>();
         }
 
         Set<String> updatedTopics = updatePartitionMetadata.stream().map(MetadataResponse.PartitionMetadata::topic).collect(Collectors.toSet());
@@ -424,9 +421,9 @@ public class Metadata implements Closeable {
             .filter(e -> existingTopicIds.containsKey(e))
             .collect(Collectors.toMap(e -> e, e -> existingTopicIds.get(e)));
 
-        if (log.isTraceEnabled()) {
+        if (log.isDebugEnabled()) {
             updatePartitionMetadata.forEach(
-                partMetadata -> log.trace("For {} updating leader information, updated metadata is {}.", partMetadata.topicPartition, partMetadata)
+                partMetadata -> log.debug("For {} updating leader information, updated metadata is {}.", partMetadata.topicPartition, partMetadata)
             );
         }
 
@@ -436,7 +433,9 @@ public class Metadata implements Closeable {
                     (topic, isInternal) -> !updatedTopics.contains(topic));
         clusterResourceListeners.onUpdate(cache.clusterResource());
 
-        return updatedPartitions;
+        return updatePartitionMetadata.stream()
+            .map(metadata -> metadata.topicPartition)
+            .collect(Collectors.toSet());
     }
 
     private void maybeSetMetadataError(Cluster cluster) {

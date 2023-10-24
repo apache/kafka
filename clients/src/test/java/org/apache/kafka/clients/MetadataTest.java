@@ -1139,8 +1139,10 @@ public class MetadataTest {
         Map<TopicPartition, Metadata.LeaderIdAndEpoch> updates = new HashMap<>();
         // New leader info is empty/invalid.
         updates.put(new TopicPartition(topic1, 999), new Metadata.LeaderIdAndEpoch(Optional.empty(), Optional.empty()));
-        // Topic missing from existing metadata
-        updates.put(new TopicPartition("topic_missing_from_existing_metadata", 1), new  Metadata.LeaderIdAndEpoch(Optional.of(100), Optional.of(99999)));
+        // Leader's node is unknown
+        updates.put(partition2, new  Metadata.LeaderIdAndEpoch(Optional.of(99999), Optional.of(99999)));
+        // Partition missing from existing metadata
+        updates.put(new TopicPartition("topic_missing_from_existing_metadata", 1), new  Metadata.LeaderIdAndEpoch(Optional.of(0), Optional.of(99999)));
         // New leader info is stale.
         updates.put(partition1, new  Metadata.LeaderIdAndEpoch(part1Metadata.leaderId, Optional.of(part1Metadata.leaderEpoch.get() - 1)));
         Set<TopicPartition> updatedTps = metadata.updatePartitionLeadership(updates, nodes);

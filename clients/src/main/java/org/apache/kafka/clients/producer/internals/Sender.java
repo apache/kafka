@@ -34,7 +34,9 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
+import org.apache.kafka.common.errors.FencedLeaderEpochException;
 import org.apache.kafka.common.errors.InvalidMetadataException;
+import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
@@ -586,18 +588,18 @@ public class Sender implements Runnable {
                 requestHeader, response.destination());
             for (ProducerBatch batch : batches.values())
                 completeBatch(batch, new ProduceResponse.PartitionResponse(Errors.REQUEST_TIMED_OUT, String.format("Disconnected from node %s due to timeout", response.destination())),
-                        correlationId, now, new HashMap<>());
+                        correlationId, now, null);
         } else if (response.wasDisconnected()) {
             log.trace("Cancelled request with header {} due to node {} being disconnected",
                 requestHeader, response.destination());
             for (ProducerBatch batch : batches.values())
                 completeBatch(batch, new ProduceResponse.PartitionResponse(Errors.NETWORK_EXCEPTION, String.format("Disconnected from node %s", response.destination())),
-                        correlationId, now, new HashMap<>());
+                        correlationId, now, null);
         } else if (response.versionMismatch() != null) {
             log.warn("Cancelled request {} due to a version mismatch with node {}",
                     response, response.destination(), response.versionMismatch());
             for (ProducerBatch batch : batches.values())
-                completeBatch(batch, new ProduceResponse.PartitionResponse(Errors.UNSUPPORTED_VERSION), correlationId, now, new HashMap<>());
+                completeBatch(batch, new ProduceResponse.PartitionResponse(Errors.UNSUPPORTED_VERSION), correlationId, now, null);
         } else {
             log.trace("Received produce response from node {} with correlation id {}", response.destination(), correlationId);
             // if we have a response, parse it
@@ -625,8 +627,7 @@ public class Sender implements Runnable {
                     completeBatch(batch, partResp, correlationId, now, partitionsWithUpdatedLeaderInfo);
                 }));
 
-                final short requestVersion = response.requestHeader().apiVersion();
-                if (requestVersion >= 10 && !partitionsWithUpdatedLeaderInfo.isEmpty()) {
+                if (!partitionsWithUpdatedLeaderInfo.isEmpty()) {
                     List<Node> leaderNodes = produceResponse.data().nodeEndpoints().stream()
                         .map(e -> new Node(e.nodeId(), e.host(), e.port(), e.rack()))
                         .filter(e -> !e.equals(Node.noNode()))
@@ -644,7 +645,7 @@ public class Sender implements Runnable {
             } else {
                 // this is the acks = 0 case, just complete all requests
                 for (ProducerBatch batch : batches.values()) {
-                    completeBatch(batch, new ProduceResponse.PartitionResponse(Errors.NONE), correlationId, now, new HashMap<>());
+                    completeBatch(batch, new ProduceResponse.PartitionResponse(Errors.NONE), correlationId, now, null);
                 }
             }
         }
@@ -710,9 +711,9 @@ public class Sender implements Runnable {
                             "to request metadata update now", batch.topicPartition,
                             error.exception(response.errorMessage).toString());
                 }
-                if (error == Errors.NOT_LEADER_OR_FOLLOWER || error == Errors.FENCED_LEADER_EPOCH) {
-                    log.trace("For {}, received error {}, with leaderIdAndEpoch {}", batch.topicPartition, error, response.currentLeader);
-                    if (response.currentLeader.leaderId() != -1 && response.currentLeader.leaderEpoch() != -1) {
+                if (error.exception() instanceof NotLeaderOrFollowerException || error.exception() instanceof FencedLeaderEpochException) {
+                    log.debug("For {}, received error {}, with leaderIdAndEpoch {}", batch.topicPartition, error, response.currentLeader);
+                    if (partitionsWithUpdatedLeaderInfo != null && response.currentLeader.leaderId() != -1 && response.currentLeader.leaderEpoch() != -1) {
                         partitionsWithUpdatedLeaderInfo.put(batch.topicPartition, new Metadata.LeaderIdAndEpoch(
                             Optional.of(response.currentLeader.leaderId()), Optional.of(response.currentLeader.leaderEpoch())));
                     }
