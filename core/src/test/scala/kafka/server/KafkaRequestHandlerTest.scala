@@ -24,7 +24,7 @@ import org.apache.kafka.common.network.{ClientInformation, ListenerName}
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.{RequestContext, RequestHeader}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
-import org.apache.kafka.common.utils.{MockTime, Time}
+import org.apache.kafka.common.utils.{BufferSupplier, MockTime, Time}
 import org.apache.kafka.server.log.remote.storage.{RemoteLogManagerConfig, RemoteStorageMetrics}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.Test
@@ -129,9 +129,9 @@ class KafkaRequestHandlerTest {
     when(apiHandler.handle(ArgumentMatchers.eq(request), any())).thenAnswer { _ =>
       // Prepare the callback.
       val callback = KafkaRequestHandler.wrap((reqLocal: RequestLocal, ms: Int) => {
-        handler.stop()
         reqLocal.bufferSupplier.close()
         handledCount = handledCount + 1
+        handler.stop()
       }, originalRequestLocal)
       // Execute the callback asynchronously.
       CompletableFuture.runAsync(() => callback(1))
@@ -140,6 +140,39 @@ class KafkaRequestHandlerTest {
     handler.run()
     // Verify that we don't use the request local that we passed in.
     verify(originalRequestLocal, times(0)).bufferSupplier
+    assertEquals(1, handledCount)
+  }
+
+  @Test
+  def testCallbackOnSameThread(): Unit = {
+    val time = new MockTime()
+    val metrics = mock(classOf[RequestChannel.Metrics])
+    val apiHandler = mock(classOf[ApiRequestHandler])
+    val requestChannel = new RequestChannel(10, "", time, metrics)
+    val handler = new KafkaRequestHandler(0, 0, mock(classOf[Meter]), new AtomicInteger(1), requestChannel, apiHandler, time)
+
+    val originalRequestLocal = mock(classOf[RequestLocal])
+    when(originalRequestLocal.bufferSupplier).thenReturn(BufferSupplier.create())
+
+    var handledCount = 0
+
+    val request = makeRequest(time, metrics)
+    requestChannel.sendRequest(request)
+
+    when(apiHandler.handle(ArgumentMatchers.eq(request), any())).thenAnswer { _ =>
+      // Prepare the callback.
+      val callback = KafkaRequestHandler.wrap((reqLocal: RequestLocal, ms: Int) => {
+        reqLocal.bufferSupplier.close()
+        handledCount = handledCount + 1
+        handler.stop()
+      }, originalRequestLocal)
+      // Execute the callback before the request returns.
+      callback(1)
+    }
+
+    handler.run()
+    // Verify that we do use the request local that we passed in.
+    verify(originalRequestLocal, times(1)).bufferSupplier
     assertEquals(1, handledCount)
   }
 

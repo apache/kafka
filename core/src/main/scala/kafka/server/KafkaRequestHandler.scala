@@ -64,8 +64,8 @@ object KafkaRequestHandler {
       T => fun(requestLocal, T)
     } else {
       T => {
-        if (threadCurrentRequest.get() != null) {
-          // If the callback is actually executed on a request thread, we can directly execute
+        if (threadCurrentRequest.get() == currentRequest) {
+          // If the callback is actually executed on the same request thread, we can directly execute
           // it without re-scheduling it.
           fun(requestLocal, T)
         } else {
