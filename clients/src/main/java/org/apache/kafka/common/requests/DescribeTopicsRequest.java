@@ -17,7 +17,6 @@
 
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.message.ControllerRegistrationRequestData;
 import org.apache.kafka.common.message.DescribeTopicsRequestData;
 import org.apache.kafka.common.message.DescribeTopicsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;

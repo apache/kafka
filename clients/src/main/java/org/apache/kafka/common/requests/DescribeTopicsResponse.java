@@ -17,11 +17,8 @@
 
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.message.ControllerRegistrationResponseData;
 import org.apache.kafka.common.message.DescribeTopicsResponseData;
 import org.apache.kafka.common.message.DescribeTopicsResponseData.DescribeTopicsResponseTopic;
-import org.apache.kafka.common.message.MetadataResponseData;
-import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopic;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
@@ -31,7 +28,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class DescribeTopicsResponse extends AbstractResponse{
+public class DescribeTopicsResponse extends AbstractResponse {
     private final DescribeTopicsResponseData data;
 
     public DescribeTopicsResponse(DescribeTopicsResponseData data) {
