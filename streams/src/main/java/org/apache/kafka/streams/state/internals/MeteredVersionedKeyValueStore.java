@@ -21,15 +21,11 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.prepareKeySerde;
 import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.prepareValueSerde;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
-import static org.apache.kafka.streams.state.internals.VersionedStoreQueryUtils.getDeserializeValue;
 
 
 import java.util.Map;
 import java.util.Objects;
-import java.util.function.Function;
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.common.serialization.Serdes.ByteArraySerde;
-import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.ProcessorStateException;
@@ -110,7 +106,7 @@ public class MeteredVersionedKeyValueStore<K, V>
                 ),
                 mkEntry(
                     VersionedKeyQuery.class,
-                    (query, positionBound, config, store) -> runKeyQuery(query, positionBound, config)
+                    (query, positionBound, config, store) -> runVersionedKeyQuery(query, positionBound, config)
                 )
             );
 
@@ -166,9 +162,7 @@ public class MeteredVersionedKeyValueStore<K, V>
 
         @SuppressWarnings("unchecked")
         @Override
-        public <R> QueryResult<R> query(final Query<R> query,
-            final PositionBound positionBound,
-            final QueryConfig config) {
+        public <R> QueryResult<R> query(final Query<R> query, final PositionBound positionBound, final QueryConfig config) {
 
             final long start = time.nanoseconds();
             final QueryResult<R> result;
@@ -206,26 +200,21 @@ public class MeteredVersionedKeyValueStore<K, V>
         }
 
         @SuppressWarnings("unchecked")
-        @Override
-        protected <R> QueryResult<R> runKeyQuery(final Query<R> query,
+        protected <R> QueryResult<R> runVersionedKeyQuery(final Query<R> query,
             final PositionBound positionBound,
             final QueryConfig config) {
             if (query instanceof VersionedKeyQuery) {
                 final QueryResult<R> result;
                 final VersionedKeyQuery<K, V> typedKeyQuery = (VersionedKeyQuery<K, V>) query;
                 VersionedKeyQuery<Bytes, byte[]> rawKeyQuery;
+                rawKeyQuery = VersionedKeyQuery.withKey(keyBytes(typedKeyQuery.key()));
                 if (typedKeyQuery.asOfTimestamp().isPresent()) {
-                    rawKeyQuery = VersionedKeyQuery.withKey(keyBytes(typedKeyQuery.key()));
                     rawKeyQuery = rawKeyQuery.asOf(typedKeyQuery.asOfTimestamp().get());
-                } else {
-                    rawKeyQuery = VersionedKeyQuery.withKey(keyBytes(typedKeyQuery.key()));
                 }
                 final QueryResult<VersionedRecord<byte[]>> rawResult =
                     wrapped().query(rawKeyQuery, positionBound, config);
                 if (rawResult.isSuccess()) {
-                    final Function<byte[], ValueAndTimestamp<V>> deserializer = getDeserializeValue(plainValueSerdes);
-                    final ValueAndTimestamp<V>  valueAndTimestamp = deserializer.apply(serializeAsBytes(rawResult.getResult()));
-                    final VersionedRecord<V> versionedRecord = new VersionedRecord<>(valueAndTimestamp.value(), valueAndTimestamp.timestamp());
+                    final VersionedRecord<V> versionedRecord = VersionedStoreQueryUtils.deserializeVersionedRecord(plainValueSerdes, rawResult.getResult());
                     final QueryResult<VersionedRecord<V>> typedQueryResult =
                         InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, versionedRecord);
                     result = (QueryResult<R>) typedQueryResult;
@@ -236,7 +225,7 @@ public class MeteredVersionedKeyValueStore<K, V>
                 return result;
             }
             // reserved for other IQv2 query types (KIP-968, KIP-969)
-            return null;
+            throw new UnsupportedOperationException("Versioned stores do not support other types of versioned key queries at this time.");
         }
 
         @SuppressWarnings("unchecked")
@@ -279,19 +268,6 @@ public class MeteredVersionedKeyValueStore<K, V>
                 prepareKeySerde(keySerde, new SerdeGetter(context)),
                 prepareValueSerde(plainValueSerde, new SerdeGetter(context))
             );
-        }
-
-        private byte[] serializeAsBytes(final VersionedRecord<byte[]> versionedRecord) {
-            if (versionedRecord == null) {
-                return null;
-            }
-            final Serde<ValueAndTimestamp<byte[]>> VALUE_AND_TIMESTAMP_SERDE
-                = new ValueAndTimestampSerde<>(new ByteArraySerde());
-            final Serializer<ValueAndTimestamp<byte[]>> VALUE_AND_TIMESTAMP_SERIALIZER
-                = VALUE_AND_TIMESTAMP_SERDE.serializer();
-            return VALUE_AND_TIMESTAMP_SERIALIZER.serialize(
-                null,
-                ValueAndTimestamp.make(versionedRecord.value(), versionedRecord.timestamp()));
         }
     }
 

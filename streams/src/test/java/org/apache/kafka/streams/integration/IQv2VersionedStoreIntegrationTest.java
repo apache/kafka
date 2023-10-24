@@ -85,8 +85,8 @@ public class IQv2VersionedStoreIntegrationTest {
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class);
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class);
         Thread.sleep(10000);
-        KafkaProducer<Integer, Integer> producer = new KafkaProducer<>(producerProps);
-        producer.send(new ProducerRecord<>(INPUT_TOPIC_NAME, 0, RECORD_TIMESTAMP_LONG,2,2)).get();
+        final KafkaProducer<Integer, Integer> producer = new KafkaProducer<>(producerProps);
+        producer.send(new ProducerRecord<>(INPUT_TOPIC_NAME, 0, RECORD_TIMESTAMP_LONG, 2, 2)).get();
     }
 
     @Before
@@ -125,7 +125,7 @@ public class IQv2VersionedStoreIntegrationTest {
             final Function<VersionedRecord<Integer>, Long> timestampExtractor =
                 VersionedRecord :: timestamp;
             shouldHandleVersionedKeyQuery(2, valueExtractor, 2);
-            shouldHandleVersionedKeyQueryWithTS(2, valueExtractor, 2,timestampExtractor, RECORD_TIMESTAMP_LONG);
+            shouldHandleVersionedKeyQueryWithTS(2, valueExtractor, 2, timestampExtractor, RECORD_TIMESTAMP_LONG);
 
         } catch (final AssertionError e) {
             LOG.error("Failed assertion", e);

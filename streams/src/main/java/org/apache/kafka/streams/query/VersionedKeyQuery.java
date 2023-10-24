@@ -23,9 +23,7 @@ import org.apache.kafka.common.annotation.InterfaceStability.Evolving;
 import org.apache.kafka.streams.state.VersionedRecord;
 
 /**
- * Interactive query for retrieving a single record  from a versioned state store based on its key and timestamp.
- * <p>
- * See KIP-960 for more details.
+ * Interactive query for retrieving a single record from a versioned state store based on its key and timestamp.
  */
 @Evolving
 public final class VersionedKeyQuery<K, V> implements Query<VersionedRecord<V>> {
@@ -44,14 +42,15 @@ public final class VersionedKeyQuery<K, V> implements Query<VersionedRecord<V>> 
      * @param key The key to retrieve
      * @param <K> The type of the key
      * @param <V> The type of the value that will be retrieved
+     * @throws NullPointerException if @param key is null
      */
     public static <K, V> VersionedKeyQuery<K, V> withKey(final K key) {
         return new VersionedKeyQuery<>(key, Optional.empty());
     }
 
     /**
-     * Specifies the as of timestamp for the key query. The key query returns the record
-     * with the greatest timestamp <= asOfTimestamp
+     * Specifies the timestamp for the key query. The key query returns the record version for the specified timestamp.
+     * (To be more precise: The key query returns the record with the greatest timestamp <= asOfTimestamp)
      * @param asOfTimestamp The as of timestamp for timestamp
      * @throws NullPointerException if @param asOfTimestamp is null
      */

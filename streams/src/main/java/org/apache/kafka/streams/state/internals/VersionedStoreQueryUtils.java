@@ -23,7 +23,7 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.time.temporal.ChronoField;
 import java.util.Map;
-import java.util.function.Function;
+import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
@@ -35,7 +35,6 @@ import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.query.VersionedKeyQuery;
 import org.apache.kafka.streams.state.StateSerdes;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.VersionedKeyValueStore;
 import org.apache.kafka.streams.state.VersionedRecord;
 
@@ -61,7 +60,7 @@ public final class VersionedStoreQueryUtils {
         mkMap(
             mkEntry(
                 VersionedKeyQuery.class,
-                VersionedStoreQueryUtils::runKeyQuery
+                VersionedStoreQueryUtils::runVersionedKeyQuery
             )
         );
 
@@ -133,7 +132,7 @@ public final class VersionedStoreQueryUtils {
     }
 
     @SuppressWarnings("unchecked")
-    private static <R> QueryResult<R> runKeyQuery(final Query<R> query,
+    private static <R> QueryResult<R> runVersionedKeyQuery(final Query<R> query,
                                                   final PositionBound positionBound,
                                                   final QueryConfig config,
                                                   final StateStore store) {
@@ -169,14 +168,13 @@ public final class VersionedStoreQueryUtils {
         }
     }
 
-    @SuppressWarnings({"unchecked", "rawtypes"})
-    public static <V> Function<byte[], ValueAndTimestamp<V>> getDeserializeValue(
-        final StateSerdes<?, V> serdes) {
+    public static <V> VersionedRecord<V> deserializeVersionedRecord(final StateSerdes<?, V> serdes, final VersionedRecord<byte[]> rawVersionedRecord) {
 
-        final ValueAndTimestampSerde<V> valueSerde = new ValueAndTimestampSerde<>(serdes.valueSerde());
-        final ValueAndTimestampDeserializer<V> deserializer =
-            (ValueAndTimestampDeserializer<V>) valueSerde.deserializer();
-        return byteArray -> deserializer.deserialize(serdes.topic(), byteArray);
+        final Deserializer<V> valueDeserializer = serdes.valueDeserializer();
+        final long timestamp = rawVersionedRecord.timestamp();
+        final V value = valueDeserializer.deserialize(serdes.topic(), rawVersionedRecord.value());
+        valueDeserializer.close();
+        return new VersionedRecord<>(value, timestamp);
     }
 
     private static <R> String parseStoreException(final Exception e, final StateStore store, final Query<R> query) {
