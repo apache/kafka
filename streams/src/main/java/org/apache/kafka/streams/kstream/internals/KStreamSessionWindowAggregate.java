@@ -282,7 +282,7 @@ public class KStreamSessionWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
                             .withTimestamp(kv.key.window().end())
                             .withHeaders(record.headers()));
                 }
-          }
+            }
             emittedRecordsSensor.record(emittedCount);
             emitFinalLatencySensor.record(time.milliseconds() - startMs);
 
