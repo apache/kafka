@@ -17,9 +17,10 @@
 
 package kafka.server
 
+import kafka.metrics.ClientMetricsConfig
+
 import java.util
 import java.util.Properties
-import kafka.metrics.clientmetrics.ClientMetricsConfig
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, CLIENT_METRICS, TOPIC}
 import org.apache.kafka.controller.ConfigurationValidator

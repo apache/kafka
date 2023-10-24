@@ -17,7 +17,7 @@
 
 package kafka.server
 
-import kafka.metrics.clientmetrics.ClientMetricsConfig
+import kafka.metrics.ClientMetricsConfig
 
 import java.util.Properties
 

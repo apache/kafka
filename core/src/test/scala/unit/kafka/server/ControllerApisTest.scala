@@ -546,7 +546,14 @@ class ControllerApisTest {
             setValue("1").
             setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator())),
         new AlterConfigsResource().
-          setResourceName("sub").
+          setResourceName("sub1").
+          setResourceType(ConfigResource.Type.CLIENT_METRICS.id()).
+          setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
+            setName("interval.ms").
+            setValue("1").
+            setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator())),
+        new AlterConfigsResource().
+          setResourceName("sub1").
           setResourceType(ConfigResource.Type.CLIENT_METRICS.id()).
           setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
             setName("interval.ms").
@@ -586,9 +593,14 @@ class ControllerApisTest {
         setResourceName("foo").
         setResourceType(124.toByte),
       new AlterConfigsResourceResponse().
+        setErrorCode(if (denyAllAuthorizer) CLUSTER_AUTHORIZATION_FAILED.code() else NONE.code()).
+        setErrorMessage(if (denyAllAuthorizer) CLUSTER_AUTHORIZATION_FAILED.message() else null).
+        setResourceName("sub").
+        setResourceType(ConfigResource.Type.CLIENT_METRICS.id()),
+      new AlterConfigsResourceResponse().
         setErrorCode(INVALID_REQUEST.code()).
         setErrorMessage("Duplicate resource.").
-        setResourceName("sub").
+        setResourceName("sub1").
         setResourceType(ConfigResource.Type.CLIENT_METRICS.id())),
       response.data().responses().asScala.toSet)
   }

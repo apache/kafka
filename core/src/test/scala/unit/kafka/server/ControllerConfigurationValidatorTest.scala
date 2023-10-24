@@ -17,7 +17,7 @@
 
 package kafka.server
 
-import kafka.metrics.clientmetrics.ClientMetricsConfig
+import kafka.metrics.ClientMetricsConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, BROKER_LOGGER, CLIENT_METRICS, TOPIC}
@@ -126,12 +126,12 @@ class ControllerConfigurationValidatorTest {
   def testInvalidIntervalClientMetricsConfig(): Unit = {
     val config = new TreeMap[String, String]()
     config.put(ClientMetricsConfig.ClientMetrics.PushIntervalMs, "10")
-    assertEquals("Invalid parameter interval.ms",
+    assertEquals("Invalid value for interval.ms. Interval must be between 100 and 3600000 (1 hour)",
       assertThrows(classOf[InvalidRequestException], () => validator.validate(
         new ConfigResource(CLIENT_METRICS, "subscription-1"), config)). getMessage())
 
     config.put(ClientMetricsConfig.ClientMetrics.PushIntervalMs, "3600001")
-    assertEquals("Invalid parameter interval.ms",
+    assertEquals("Invalid value for interval.ms. Interval must be between 100 and 3600000 (1 hour)",
       assertThrows(classOf[InvalidRequestException], () => validator.validate(
         new ConfigResource(CLIENT_METRICS, "subscription-1"), config)). getMessage())
   }
@@ -140,7 +140,7 @@ class ControllerConfigurationValidatorTest {
   def testUndefinedConfigClientMetricsConfig(): Unit = {
     val config = new TreeMap[String, String]()
     config.put("random", "10")
-    assertEquals("Unknown client metric configuration: random",
+    assertEquals("Unknown client metrics configuration: random",
       assertThrows(classOf[InvalidRequestException], () => validator.validate(
         new ConfigResource(CLIENT_METRICS, "subscription-1"), config)). getMessage())
   }

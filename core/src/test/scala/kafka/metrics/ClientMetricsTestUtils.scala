@@ -16,8 +16,7 @@
  */
 package kafka.metrics
 
-import kafka.metrics.clientmetrics.ClientMetricsConfig
-import kafka.metrics.clientmetrics.ClientMetricsConfig.ClientMatchingParams.{CLIENT_SOFTWARE_NAME, CLIENT_SOFTWARE_VERSION}
+import ClientMetricsConfig.ClientMatchingParams.{CLIENT_SOFTWARE_NAME, CLIENT_SOFTWARE_VERSION}
 
 import java.util.Properties
 

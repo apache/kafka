@@ -14,10 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package kafka.metrics.clientmetrics
+package kafka.metrics
 
 import kafka.Kafka.info
-import kafka.metrics.clientmetrics.ClientMetricsConfig.ClientMatchingParams.{CLIENT_ID, CLIENT_INSTANCE_ID, CLIENT_SOFTWARE_NAME, CLIENT_SOFTWARE_VERSION, CLIENT_SOURCE_ADDRESS, CLIENT_SOURCE_PORT, isValidParam}
+import kafka.metrics.ClientMetricsConfig.ClientMatchingParams._
 import kafka.network.RequestChannel
 import org.apache.kafka.common.errors.InvalidConfigurationException
 
@@ -55,7 +55,7 @@ object ClientMetricsMetadata {
    *     occurrence of the character '='
    *  2. '*' is considered as invalid client match pattern
    * @param patterns List of client matching pattern strings
-   * @return
+   * @return map of client matching pattern entries
    */
   def parseMatchingPatterns(patterns: List[String]) : Map[String, String] = {
     val patternsMap = mutable.Map[String, String]()
@@ -85,7 +85,7 @@ object ClientMetricsMetadata {
 }
 
 class ClientMetricsMetadata {
-  var attributesMap = scala.collection.mutable.Map[String, String]()
+  var attributesMap: mutable.Map[String, String] = scala.collection.mutable.Map[String, String]()
 
   private def init(clientInstanceId: String,
                    clientId: String,
@@ -100,7 +100,7 @@ class ClientMetricsMetadata {
     attributesMap(CLIENT_SOURCE_ADDRESS) = clientHostAddress
     attributesMap(CLIENT_SOURCE_PORT) = clientPort
   }
-  def getClientId = attributesMap.get(CLIENT_ID)
+  def getClientId: Option[String] = attributesMap.get(CLIENT_ID)
 
   def isMatched(patterns: Map[String, String]) : Boolean = {
     // Empty pattern or missing pattern still considered as a match

@@ -484,8 +484,8 @@ class KafkaApisTest {
     val authorizedResource = new ConfigResource(ConfigResource.Type.CLIENT_METRICS, subscriptionName)
 
     val authorizer: Authorizer = mock(classOf[Authorizer])
-    authorizeResource(authorizer, AclOperation.ALTER_CONFIGS, ResourceType.CLIENT_METRICS,
-      subscriptionName, AuthorizationResult.ALLOWED)
+    authorizeResource(authorizer, AclOperation.ALTER_CONFIGS, ResourceType.CLUSTER,
+      Resource.CLUSTER_NAME, AuthorizationResult.ALLOWED)
 
     val props = ClientMetricsTestUtils.getDefaultProperties()
     val configEntries = new util.ArrayList[AlterConfigsRequest.ConfigEntry]()
@@ -516,16 +516,16 @@ class KafkaApisTest {
     val authorizer: Authorizer = mock(classOf[Authorizer])
 
     val subscriptionName = "client_metric_subscription_1"
-    val authorizedResource = new ConfigResource(ConfigResource.Type.CLIENT_METRICS, subscriptionName)
+    val resource = new ConfigResource(ConfigResource.Type.CLIENT_METRICS, subscriptionName)
 
-    authorizeResource(authorizer, AclOperation.ALTER_CONFIGS, ResourceType.CLIENT_METRICS,
-      subscriptionName, AuthorizationResult.ALLOWED)
+    authorizeResource(authorizer, AclOperation.ALTER_CONFIGS, ResourceType.CLUSTER,
+      Resource.CLUSTER_NAME, AuthorizationResult.ALLOWED)
 
     val requestHeader = new RequestHeader(ApiKeys.INCREMENTAL_ALTER_CONFIGS,
       ApiKeys.INCREMENTAL_ALTER_CONFIGS.latestVersion, clientId, 0)
 
     val incrementalAlterConfigsRequest = getIncrementalClientMetricsAlterConfigRequestBuilder(
-      Seq(authorizedResource)).build(requestHeader.apiVersion)
+      Seq(resource)).build(requestHeader.apiVersion)
     val request = buildRequest(incrementalAlterConfigsRequest,
       fromPrivilegedListener = true, requestHeader = Option(requestHeader))
 
@@ -533,7 +533,7 @@ class KafkaApisTest {
     when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
       any[Long])).thenReturn(0)
     when(adminManager.incrementalAlterConfigs(any(), ArgumentMatchers.eq(false)))
-      .thenReturn(Map(authorizedResource -> ApiError.NONE))
+      .thenReturn(Map(resource -> ApiError.NONE))
 
     createKafkaApis(authorizer = Some(authorizer)).handleIncrementalAlterConfigsRequest(request)
     val response = verifyNoThrottling[IncrementalAlterConfigsResponse](request)
@@ -554,30 +554,30 @@ class KafkaApisTest {
   def testDescribeConfigsClientMetrics(): Unit = {
     val authorizer: Authorizer = mock(classOf[Authorizer])
     val operation = AclOperation.DESCRIBE_CONFIGS
-    val resourceType = ResourceType.CLIENT_METRICS
-    val resourceName = "client_metric_subscription_1"
+    val resourceType = ResourceType.CLUSTER
+    val subscriptionName = "client_metric_subscription_1"
     val requestHeader =
       new RequestHeader(ApiKeys.DESCRIBE_CONFIGS, ApiKeys.DESCRIBE_CONFIGS.latestVersion, clientId, 0)
     val expectedActions = Seq(
-      new Action(operation, new ResourcePattern(resourceType, resourceName, PatternType.LITERAL),
+      new Action(operation, new ResourcePattern(resourceType, Resource.CLUSTER_NAME, PatternType.LITERAL),
         1, true, true)
     )
     // Verify that authorize is only called once
     when(authorizer.authorize(any[RequestContext], ArgumentMatchers.eq(expectedActions.asJava)))
       .thenReturn(Seq(AuthorizationResult.ALLOWED).asJava)
 
-    val resource = new ConfigResource(ConfigResource.Type.CLIENT_METRICS, resourceName)
+    val resource = new ConfigResource(ConfigResource.Type.CLIENT_METRICS, subscriptionName)
     val configRepository: ConfigRepository = mock(classOf[ConfigRepository])
     val cmConfigs = ClientMetricsTestUtils.getDefaultProperties()
     when(configRepository.config(resource)).thenReturn(cmConfigs)
 
     metadataCache = mock(classOf[ZkMetadataCache])
-    when(metadataCache.contains(resourceName)).thenReturn(true)
+    when(metadataCache.contains(subscriptionName)).thenReturn(true)
 
     val describeConfigsRequest = new DescribeConfigsRequest.Builder(new DescribeConfigsRequestData()
       .setIncludeSynonyms(true)
       .setResources(List(new DescribeConfigsRequestData.DescribeConfigsResource()
-        .setResourceName(resourceName)
+        .setResourceName(subscriptionName)
         .setResourceType(ConfigResource.Type.CLIENT_METRICS.id)).asJava))
       .build(requestHeader.apiVersion)
     val request = buildRequest(describeConfigsRequest,
@@ -595,7 +595,7 @@ class KafkaApisTest {
     val describeConfigsResult: DescribeConfigsResult = results.get(0)
 
     assertEquals(ConfigResource.Type.CLIENT_METRICS.id, describeConfigsResult.resourceType())
-    assertEquals(resourceName, describeConfigsResult.resourceName())
+    assertEquals(subscriptionName, describeConfigsResult.resourceName())
     val configs = describeConfigsResult.configs()
     assertEquals(cmConfigs.size(), configs.size())
   }
