@@ -28,9 +28,6 @@ import java.io.BufferedWriter;
 import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.util.HashMap;
-import java.util.Locale;
-import java.util.Map;
 import java.util.OptionalLong;
 
 /**
@@ -50,13 +47,15 @@ public class CleanShutdownFileHandler {
     private static final int CURRENT_VERSION = 0;
     private final Logger logger;
 
-    private enum Fields {
-        VERSION,
-        BROKER_EPOCH;
+    private static class Content {
+        public int version;
+        public Long brokerEpoch;
 
-        @Override
-        public String toString() {
-            return name().toLowerCase(Locale.ROOT);
+        public Content() {};
+
+        public Content(int version, Long brokerEpoch) {
+            this.version = version;
+            this.brokerEpoch = brokerEpoch;
         }
     }
 
@@ -74,10 +73,8 @@ public class CleanShutdownFileHandler {
         FileOutputStream os = new FileOutputStream(cleanShutdownFile);
         BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(os, StandardCharsets.UTF_8));
         try {
-            Map<String, String> payload = new HashMap<>();
-            payload.put(Fields.VERSION.toString(), Integer.toString(version));
-            payload.put(Fields.BROKER_EPOCH.toString(), Long.toString(brokerEpoch));
-            bw.write(new ObjectMapper().writeValueAsString(payload));
+            Content content = new Content(version, brokerEpoch);
+            bw.write(new ObjectMapper().writeValueAsString(content));
             bw.flush();
             os.getFD().sync();
         } finally {
@@ -88,17 +85,14 @@ public class CleanShutdownFileHandler {
 
     @SuppressWarnings("unchecked")
     public OptionalLong read() {
-        long brokerEpoch = -1L;
         try {
             String text = Utils.readFileAsString(cleanShutdownFile.toPath().toString());
-            Map<String, String> content = new ObjectMapper().readValue(text, HashMap.class);
-
-            brokerEpoch = Long.parseLong(content.getOrDefault(Fields.BROKER_EPOCH.toString(), "-1L"));
+            Content content = new ObjectMapper().readValue(text, Content.class);
+            return OptionalLong.of(content.brokerEpoch);
         } catch (Exception e) {
             logger.warn("Fail to read the clean shutdown file in " + cleanShutdownFile.toPath() + ":" + e);
             return OptionalLong.empty();
         }
-        return OptionalLong.of(brokerEpoch);
     }
 
     public void delete() throws Exception {
