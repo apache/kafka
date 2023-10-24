@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.storage.internals.util;
+package org.apache.kafka.storage.internals.log;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.common.utils.LogContext;
@@ -31,6 +31,7 @@ import java.nio.file.Files;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.OptionalLong;
 
 /**
  * Clean shutdown file that indicates the broker was cleanly shutdown in 0.8 and higher.
@@ -86,7 +87,7 @@ public class CleanShutdownFileHandler {
     }
 
     @SuppressWarnings("unchecked")
-    public long read() {
+    public OptionalLong read() {
         long brokerEpoch = -1L;
         try {
             String text = Utils.readFileAsString(cleanShutdownFile.toPath().toString());
@@ -95,8 +96,9 @@ public class CleanShutdownFileHandler {
             brokerEpoch = Long.parseLong(content.getOrDefault(Fields.BROKER_EPOCH.toString(), "-1L"));
         } catch (Exception e) {
             logger.warn("Fail to read the clean shutdown file in " + cleanShutdownFile.toPath() + ":" + e);
+            return OptionalLong.empty();
         }
-        return brokerEpoch;
+        return OptionalLong.of(brokerEpoch);
     }
 
     public void delete() throws Exception {

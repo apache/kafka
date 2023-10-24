@@ -15,13 +15,14 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.storage.internals.util;
+package org.apache.kafka.storage.internals.log;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.io.File;
 import java.nio.file.Files;
+import java.util.OptionalLong;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -38,7 +39,7 @@ class CleanShutdownFileHandlerTest {
         CleanShutdownFileHandler cleanShutdownFileHandler = new CleanShutdownFileHandler(logDir.getPath());
         assertDoesNotThrow(() -> cleanShutdownFileHandler.write(10L));
         assertTrue(cleanShutdownFileHandler.exists());
-        assertEquals(10L, cleanShutdownFileHandler.read());
+        assertEquals(OptionalLong.of(10L), cleanShutdownFileHandler.read());
         assertDoesNotThrow(() -> cleanShutdownFileHandler.delete());
         assertFalse(cleanShutdownFileHandler.exists());
     }
@@ -52,6 +53,6 @@ class CleanShutdownFileHandlerTest {
         assertTrue(cleanShutdownFileHandler.exists());
         assertDoesNotThrow(() -> cleanShutdownFileHandler.delete());
         assertFalse(cleanShutdownFileHandler.exists());
-        assertEquals(-1L, cleanShutdownFileHandler.read());
+        assertEquals(OptionalLong.empty(), cleanShutdownFileHandler.read());
     }
 }

@@ -42,7 +42,7 @@ import org.apache.kafka.storage.internals.log.LogConfig.MessageFormatVersion
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.Scheduler
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig, RemoteIndexCache}
-import org.apache.kafka.storage.internals.util.CleanShutdownFileHandler
+import org.apache.kafka.storage.internals.log.CleanShutdownFileHandler
 
 import scala.annotation.nowarn
 
@@ -1441,15 +1441,15 @@ class LogManager(logDirs: Seq[File],
     for (dir <- liveLogDirs) {
       val cleanShutdownFileHandler = new CleanShutdownFileHandler(dir.getPath)
       val currentBrokerEpoch = cleanShutdownFileHandler.read
-      if (currentBrokerEpoch == -1L) {
+      if (!currentBrokerEpoch.isPresent) {
         info(s"Unable to read the broker epoch in ${dir.toString}.")
         return -1L
       }
-      if (brokerEpoch != -1 && currentBrokerEpoch != brokerEpoch) {
+      if (brokerEpoch != -1 && currentBrokerEpoch.getAsLong != brokerEpoch) {
         info(s"Found different broker epochs in ${dir.toString}. Other=$brokerEpoch vs current=$currentBrokerEpoch.")
         return -1L
       }
-      brokerEpoch = currentBrokerEpoch
+      brokerEpoch = currentBrokerEpoch.getAsLong
     }
     brokerEpoch
   }
