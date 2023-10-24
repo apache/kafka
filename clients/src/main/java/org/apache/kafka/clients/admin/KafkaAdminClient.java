@@ -35,9 +35,9 @@ import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.admin.OffsetSpec.TimestampSpec;
 import org.apache.kafka.clients.admin.internals.AbortTransactionHandler;
 import org.apache.kafka.clients.admin.internals.AdminApiDriver;
-import org.apache.kafka.clients.admin.internals.AdminApiHandler;
 import org.apache.kafka.clients.admin.internals.AdminApiFuture;
 import org.apache.kafka.clients.admin.internals.AdminApiFuture.SimpleAdminApiFuture;
+import org.apache.kafka.clients.admin.internals.AdminApiHandler;
 import org.apache.kafka.clients.admin.internals.AdminBootstrapAddresses;
 import org.apache.kafka.clients.admin.internals.AdminMetadataManager;
 import org.apache.kafka.clients.admin.internals.AllBrokersStrategy;
@@ -137,6 +137,11 @@ import org.apache.kafka.common.message.DescribeLogDirsRequestData;
 import org.apache.kafka.common.message.DescribeLogDirsRequestData.DescribableLogDirTopic;
 import org.apache.kafka.common.message.DescribeLogDirsResponseData;
 import org.apache.kafka.common.message.DescribeQuorumResponseData;
+import org.apache.kafka.common.message.DescribeTopicPartitionsRequestData;
+import org.apache.kafka.common.message.DescribeTopicPartitionsRequestData.TopicRequest;
+import org.apache.kafka.common.message.DescribeTopicPartitionsResponseData;
+import org.apache.kafka.common.message.DescribeTopicPartitionsResponseData.DescribeTopicPartitionsResponsePartition;
+import org.apache.kafka.common.message.DescribeTopicPartitionsResponseData.DescribeTopicPartitionsResponseTopic;
 import org.apache.kafka.common.message.DescribeUserScramCredentialsRequestData;
 import org.apache.kafka.common.message.DescribeUserScramCredentialsRequestData.UserName;
 import org.apache.kafka.common.message.DescribeUserScramCredentialsResponseData;
@@ -201,11 +206,13 @@ import org.apache.kafka.common.requests.DescribeDelegationTokenRequest;
 import org.apache.kafka.common.requests.DescribeDelegationTokenResponse;
 import org.apache.kafka.common.requests.DescribeLogDirsRequest;
 import org.apache.kafka.common.requests.DescribeLogDirsResponse;
-import org.apache.kafka.common.requests.DescribeUserScramCredentialsRequest;
-import org.apache.kafka.common.requests.DescribeUserScramCredentialsResponse;
 import org.apache.kafka.common.requests.DescribeQuorumRequest;
 import org.apache.kafka.common.requests.DescribeQuorumRequest.Builder;
 import org.apache.kafka.common.requests.DescribeQuorumResponse;
+import org.apache.kafka.common.requests.DescribeTopicPartitionsRequest;
+import org.apache.kafka.common.requests.DescribeTopicPartitionsResponse;
+import org.apache.kafka.common.requests.DescribeUserScramCredentialsRequest;
+import org.apache.kafka.common.requests.DescribeUserScramCredentialsResponse;
 import org.apache.kafka.common.requests.ElectLeadersRequest;
 import org.apache.kafka.common.requests.ElectLeadersResponse;
 import org.apache.kafka.common.requests.ExpireDelegationTokenRequest;
@@ -991,6 +998,36 @@ public class KafkaAdminClient extends AdminClient {
 
         public boolean isInternal() {
             return internal;
+        }
+    }
+
+    abstract class RecurringCall {
+        private final String name;
+        final long deadlineMs;
+        private final AdminClientRunnable runnable;
+        KafkaFutureImpl<Boolean> nextRun;
+        abstract Call generateCall();
+
+        public RecurringCall(String name, long deadlineMs, AdminClientRunnable runnable) {
+            this.name = name;
+            this.deadlineMs = deadlineMs;
+            this.runnable = runnable;
+        }
+
+        public String toString() {
+            return "RecurCall(name=" + name + ", deadlineMs=" + deadlineMs + ")";
+        }
+
+        public void run() {
+            try {
+                do {
+                    nextRun = new KafkaFutureImpl<>();
+                    Call call = generateCall();
+                    runnable.call(call, time.milliseconds());
+                } while (nextRun.get());
+            } catch (Exception e) {
+                log.info("Stop the recurring call " + name + " because " + e);
+            }
         }
     }
 
@@ -2114,6 +2151,7 @@ public class KafkaAdminClient extends AdminClient {
             throw new IllegalArgumentException("The TopicCollection: " + topics + " provided did not match any supported classes for describeTopics.");
     }
 
+    @SuppressWarnings("MethodLength")
     private Map<String, KafkaFuture<TopicDescription>> handleDescribeTopicsByNames(final Collection<String> topicNames, DescribeTopicsOptions options) {
         final Map<String, KafkaFutureImpl<TopicDescription>> topicFutures = new HashMap<>(topicNames.size());
         final ArrayList<String> topicNamesList = new ArrayList<>();
@@ -2129,63 +2167,183 @@ public class KafkaAdminClient extends AdminClient {
             }
         }
         final long now = time.milliseconds();
-        Call call = new Call("describeTopics", calcDeadlineMs(now, options.timeoutMs()),
-            new LeastLoadedNodeProvider()) {
 
-            private boolean supportsDisablingTopicCreation = true;
+        if (options.useDescribeTopicsApi()) {
+            RecurringCall call = new RecurringCall("DescribeTopics-Recurring", calcDeadlineMs(now, options.timeoutMs()), runnable) {
+                Map<String, TopicRequest> pendingTopics =
+                    topicNames.stream().map(topicName -> new TopicRequest().setName(topicName))
+                        .collect(Collectors.toMap(topicRequest -> topicRequest.name(), topicRequest -> topicRequest, (t1, t2) -> t1, TreeMap::new)
+                    );
 
-            @Override
-            MetadataRequest.Builder createRequest(int timeoutMs) {
-                if (supportsDisablingTopicCreation)
-                    return new MetadataRequest.Builder(new MetadataRequestData()
-                        .setTopics(convertToMetadataRequestTopic(topicNamesList))
-                        .setAllowAutoTopicCreation(false)
-                        .setIncludeTopicAuthorizedOperations(options.includeAuthorizedOperations()));
-                else
-                    return MetadataRequest.Builder.allTopics();
-            }
+                String partiallyFinishedTopicName = "";
+                int partiallyFinishedTopicNextPartitionId = -1;
+                TopicDescription partiallyFinishedTopicDescription = null;
 
-            @Override
-            void handleResponse(AbstractResponse abstractResponse) {
-                MetadataResponse response = (MetadataResponse) abstractResponse;
-                // Handle server responses for particular topics.
-                Cluster cluster = response.buildCluster();
-                Map<String, Errors> errors = response.errors();
-                for (Map.Entry<String, KafkaFutureImpl<TopicDescription>> entry : topicFutures.entrySet()) {
-                    String topicName = entry.getKey();
-                    KafkaFutureImpl<TopicDescription> future = entry.getValue();
-                    Errors topicError = errors.get(topicName);
-                    if (topicError != null) {
-                        future.completeExceptionally(topicError.exception());
-                        continue;
-                    }
-                    if (!cluster.topics().contains(topicName)) {
-                        future.completeExceptionally(new UnknownTopicOrPartitionException("Topic " + topicName + " not found."));
-                        continue;
-                    }
-                    Uuid topicId = cluster.topicId(topicName);
-                    Integer authorizedOperations = response.topicAuthorizedOperations(topicName).get();
-                    TopicDescription topicDescription = getTopicDescriptionFromCluster(cluster, topicName, topicId, authorizedOperations);
-                    future.complete(topicDescription);
+                @Override
+                Call generateCall() {
+                    return new Call("describeTopics", this.deadlineMs, new LeastLoadedNodeProvider()) {
+                        @Override
+                        DescribeTopicPartitionsRequest.Builder createRequest(int timeoutMs) {
+                            DescribeTopicPartitionsRequestData request = new DescribeTopicPartitionsRequestData()
+                                .setTopics(pendingTopics.values().stream().collect(Collectors.toList()))
+                                .setResponsePartitionLimit(options.partitionSizeLimitPerResponse());
+                            if (!partiallyFinishedTopicName.isEmpty()) {
+                                request.setCursor(new DescribeTopicPartitionsRequestData.Cursor()
+                                    .setTopicName(partiallyFinishedTopicName)
+                                    .setPartitionIndex(partiallyFinishedTopicNextPartitionId)
+                                );
+                            }
+                            return new DescribeTopicPartitionsRequest.Builder(request);
+                        }
+
+                        @Override
+                        void handleResponse(AbstractResponse abstractResponse) {
+                            DescribeTopicPartitionsResponse response = (DescribeTopicPartitionsResponse) abstractResponse;
+                            String cursorTopicName = "";
+                            int cursorPartitionId = -1;
+                            if (response.data().nextCursor() != null) {
+                                DescribeTopicPartitionsResponseData.Cursor cursor = response.data().nextCursor();
+                                cursorTopicName = cursor.topicName();
+                                cursorPartitionId = cursor.partitionIndex();
+                            }
+
+                            for (DescribeTopicPartitionsResponseTopic topic : response.data().topics()) {
+                                String topicName = topic.name();
+                                Errors error = Errors.forCode(topic.errorCode());
+
+                                KafkaFutureImpl<TopicDescription> future = topicFutures.get(topicName);
+                                if (error != Errors.NONE) {
+                                    future.completeExceptionally(error.exception());
+                                    topicFutures.remove(topicName);
+                                    pendingTopics.remove(topicName);
+                                    if (partiallyFinishedTopicName.equals(topicName)) {
+                                        partiallyFinishedTopicName = "";
+                                        partiallyFinishedTopicNextPartitionId = -1;
+                                        partiallyFinishedTopicDescription = null;
+                                    }
+                                    if (cursorTopicName.equals(topicName)) {
+                                        cursorTopicName = "";
+                                        cursorPartitionId = -1;
+                                    }
+                                    continue;
+                                }
+
+                                TopicDescription currentTopicDescription = getTopicDescriptionFromDescribeTopicsResponseTopic(topic);
+
+                                if (partiallyFinishedTopicName.equals(topicName)) {
+                                    if (partiallyFinishedTopicDescription == null) {
+                                        partiallyFinishedTopicDescription = currentTopicDescription;
+                                    } else {
+                                        partiallyFinishedTopicDescription.partitions().addAll(currentTopicDescription.partitions());
+                                    }
+
+                                    if (!cursorTopicName.equals(topicName)) {
+                                        pendingTopics.remove(topicName);
+                                        future.complete(partiallyFinishedTopicDescription);
+                                        partiallyFinishedTopicDescription = null;
+                                    }
+                                    continue;
+                                }
+
+                                if (cursorTopicName.equals(topicName)) {
+                                    partiallyFinishedTopicDescription = currentTopicDescription;
+                                    continue;
+                                }
+
+                                pendingTopics.remove(topicName);
+                                future.complete(currentTopicDescription);
+                            }
+                            partiallyFinishedTopicName = cursorTopicName;
+                            partiallyFinishedTopicNextPartitionId = cursorPartitionId;
+                            if (pendingTopics.isEmpty()) {
+                                handleNonExistingTopics();
+                                nextRun.complete(false);
+                            } else {
+                                nextRun.complete(true);
+                            }
+                        }
+
+                        @Override
+                        boolean handleUnsupportedVersionException(UnsupportedVersionException exception) {
+                            return false;
+                        }
+
+                        @Override
+                        void handleFailure(Throwable throwable) {
+                            completeAllExceptionally(topicFutures.values(), throwable);
+                            nextRun.completeExceptionally(throwable);
+                        }
+                    };
                 }
-            }
 
-            @Override
-            boolean handleUnsupportedVersionException(UnsupportedVersionException exception) {
-                if (supportsDisablingTopicCreation) {
-                    supportsDisablingTopicCreation = false;
-                    return true;
+                void handleNonExistingTopics() {
+                    for (Map.Entry<String, KafkaFutureImpl<TopicDescription>> entry : topicFutures.entrySet()) {
+                        if (!entry.getValue().isDone()) {
+                            entry.getValue().completeExceptionally(new UnknownTopicOrPartitionException("Topic " + entry.getKey() + " not found."));
+                        }
+                    }
                 }
-                return false;
-            }
+            };
+            call.run();
+        } else {
+            Call call = new Call("describeTopics", calcDeadlineMs(now, options.timeoutMs()),
+                new LeastLoadedNodeProvider()) {
 
-            @Override
-            void handleFailure(Throwable throwable) {
-                completeAllExceptionally(topicFutures.values(), throwable);
+                private boolean supportsDisablingTopicCreation = true;
+
+                @Override
+                MetadataRequest.Builder createRequest(int timeoutMs) {
+                    if (supportsDisablingTopicCreation)
+                        return new MetadataRequest.Builder(new MetadataRequestData()
+                            .setTopics(convertToMetadataRequestTopic(topicNamesList))
+                            .setAllowAutoTopicCreation(false)
+                            .setIncludeTopicAuthorizedOperations(options.includeAuthorizedOperations()));
+                    else
+                        return MetadataRequest.Builder.allTopics();
+                }
+
+                @Override
+                void handleResponse(AbstractResponse abstractResponse) {
+                    MetadataResponse response = (MetadataResponse) abstractResponse;
+                    // Handle server responses for particular topics.
+                    Cluster cluster = response.buildCluster();
+                    Map<String, Errors> errors = response.errors();
+                    for (Map.Entry<String, KafkaFutureImpl<TopicDescription>> entry : topicFutures.entrySet()) {
+                        String topicName = entry.getKey();
+                        KafkaFutureImpl<TopicDescription> future = entry.getValue();
+                        Errors topicError = errors.get(topicName);
+                        if (topicError != null) {
+                            future.completeExceptionally(topicError.exception());
+                            continue;
+                        }
+                        if (!cluster.topics().contains(topicName)) {
+                            future.completeExceptionally(new UnknownTopicOrPartitionException("Topic " + topicName + " not found."));
+                            continue;
+                        }
+                        Uuid topicId = cluster.topicId(topicName);
+                        Integer authorizedOperations = response.topicAuthorizedOperations(topicName).get();
+                        TopicDescription topicDescription = getTopicDescriptionFromCluster(cluster, topicName, topicId, authorizedOperations);
+                        future.complete(topicDescription);
+                    }
+                }
+
+                @Override
+                boolean handleUnsupportedVersionException(UnsupportedVersionException exception) {
+                    if (supportsDisablingTopicCreation) {
+                        supportsDisablingTopicCreation = false;
+                        return true;
+                    }
+                    return false;
+                }
+
+                @Override
+                void handleFailure(Throwable throwable) {
+                    completeAllExceptionally(topicFutures.values(), throwable);
+                }
+            };
+            if (!topicNamesList.isEmpty()) {
+                runnable.call(call, now);
             }
-        };
-        if (!topicNamesList.isEmpty()) {
-            runnable.call(call, now);
         }
         return new HashMap<>(topicFutures);
     }
@@ -2255,6 +2413,23 @@ public class KafkaAdminClient extends AdminClient {
         return new HashMap<>(topicFutures);
     }
 
+    private TopicDescription getTopicDescriptionFromDescribeTopicsResponseTopic(DescribeTopicPartitionsResponseTopic topic) {
+        List<DescribeTopicPartitionsResponsePartition> partitionInfos = topic.partitions();
+        List<TopicPartitionInfo> partitions = new ArrayList<>(partitionInfos.size());
+        for (DescribeTopicPartitionsResponsePartition partitionInfo : partitionInfos) {
+            TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(
+                    partitionInfo.partitionIndex(),
+                    replicaToFakeNode(partitionInfo.leaderId()),
+                    partitionInfo.replicaNodes().stream().map(id -> replicaToFakeNode(id)).collect(Collectors.toList()),
+                    partitionInfo.isrNodes().stream().map(id -> replicaToFakeNode(id)).collect(Collectors.toList()),
+                    partitionInfo.eligibleLeaderReplicas().stream().map(id -> replicaToFakeNode(id)).collect(Collectors.toList()),
+                    partitionInfo.lastKnownElr().stream().map(id -> replicaToFakeNode(id)).collect(Collectors.toList()));
+            partitions.add(topicPartitionInfo);
+        }
+        partitions.sort(Comparator.comparingInt(TopicPartitionInfo::partition));
+        return new TopicDescription(topic.name(), topic.isInternal(), partitions, validAclOperations(topic.topicAuthorizedOperations()), topic.topicId());
+    }
+
     private TopicDescription getTopicDescriptionFromCluster(Cluster cluster, String topicName, Uuid topicId,
                                                             Integer authorizedOperations) {
         boolean isInternal = cluster.internalTopics().contains(topicName);
@@ -2263,7 +2438,7 @@ public class KafkaAdminClient extends AdminClient {
         for (PartitionInfo partitionInfo : partitionInfos) {
             TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(
                     partitionInfo.partition(), leader(partitionInfo), Arrays.asList(partitionInfo.replicas()),
-                    Arrays.asList(partitionInfo.inSyncReplicas()));
+                    Arrays.asList(partitionInfo.inSyncReplicas()), Collections.emptyList(), Collections.emptyList());
             partitions.add(topicPartitionInfo);
         }
         partitions.sort(Comparator.comparingInt(TopicPartitionInfo::partition));
@@ -2274,6 +2449,11 @@ public class KafkaAdminClient extends AdminClient {
         if (partitionInfo.leader() == null || partitionInfo.leader().id() == Node.noNode().id())
             return null;
         return partitionInfo.leader();
+    }
+
+    // This is used in the describe topics path if using DescribeTopics API.
+    private Node replicaToFakeNode(int id) {
+        return new Node(id, "Dummy", 0);
     }
 
     @Override
