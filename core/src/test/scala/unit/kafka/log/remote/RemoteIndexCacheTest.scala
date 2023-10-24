@@ -36,7 +36,7 @@ import org.mockito.invocation.InvocationOnMock
 import org.mockito.Mockito._
 import org.slf4j.{Logger, LoggerFactory}
 
-import java.io.{File, FileInputStream, IOException, PrintWriter}
+import java.io.{File, FileInputStream, IOException, PrintWriter, UncheckedIOException}
 import java.nio.file.{Files, NoSuchFileException, Paths}
 import java.util
 import java.util.{Collections, Optional}
@@ -1095,7 +1095,7 @@ class RemoteIndexCacheTest {
         .filter(path => path.getFileName.toString.endsWith(suffix))
         .findAny()
     } catch {
-      case _: NoSuchFileException => Optional.empty()
+      case e @ (_ : NoSuchFileException | _ : UncheckedIOException) => Optional.empty()
     }
   }
 }
