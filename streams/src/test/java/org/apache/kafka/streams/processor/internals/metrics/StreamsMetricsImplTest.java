@@ -33,7 +33,6 @@ import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.ArgumentMatcher;
 import org.mockito.junit.MockitoJUnitRunner;
 
 import java.time.Duration;
@@ -136,57 +135,14 @@ public class StreamsMetricsImplTest {
     private final MockTime time = new MockTime(0);
     private final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, VERSION, time);
 
-//    private static MetricConfig eqMetricConfig(final MetricConfig metricConfig) {
-//        EasyMock.reportMatcher(new ArgumentMatcher() {
-//            private final StringBuffer message = new StringBuffer();
-//
-//            @Override
-//            public boolean matches(final Object argument) {
-//                if (argument instanceof MetricConfig) {
-//                    final MetricConfig otherMetricConfig = (MetricConfig) argument;
-//                    final boolean equalsComparisons =
-//                        (otherMetricConfig.quota() == metricConfig.quota() ||
-//                        otherMetricConfig.quota().equals(metricConfig.quota())) &&
-//                        otherMetricConfig.tags().equals(metricConfig.tags());
-//                    if (otherMetricConfig.eventWindow() == metricConfig.eventWindow() &&
-//                        otherMetricConfig.recordLevel() == metricConfig.recordLevel() &&
-//                        equalsComparisons &&
-//                        otherMetricConfig.samples() == metricConfig.samples() &&
-//                        otherMetricConfig.timeWindowMs() == metricConfig.timeWindowMs()) {
-//
-//                        return true;
-//                    } else {
-//                        message.append("{ ");
-//                        message.append("eventWindow=");
-//                        message.append(otherMetricConfig.eventWindow());
-//                        message.append(", ");
-//                        message.append("recordLevel=");
-//                        message.append(otherMetricConfig.recordLevel());
-//                        message.append(", ");
-//                        message.append("quota=");
-//                        message.append(otherMetricConfig.quota().toString());
-//                        message.append(", ");
-//                        message.append("samples=");
-//                        message.append(otherMetricConfig.samples());
-//                        message.append(", ");
-//                        message.append("tags=");
-//                        message.append(otherMetricConfig.tags().toString());
-//                        message.append(", ");
-//                        message.append("timeWindowMs=");
-//                        message.append(otherMetricConfig.timeWindowMs());
-//                        message.append(" }");
-//                    }
-//                }
-//                message.append("not a MetricConfig object");
-//                return false;
-//            }
-//
-//            public void appendTo(final StringBuffer buffer) {
-//                buffer.append(message);
-//            }
-//        });
-//        return null;
-//    }
+    private static boolean eqMetricConfig(final MetricConfig thisMetricConfig, final MetricConfig thatMetricConfig) {
+        return (thisMetricConfig.quota() == thatMetricConfig.quota() || thisMetricConfig.quota().equals(thatMetricConfig.quota())) &&
+            thisMetricConfig.samples() == thatMetricConfig.samples() &&
+            thisMetricConfig.eventWindow() == thatMetricConfig.eventWindow() &&
+            thisMetricConfig.timeWindowMs() == thatMetricConfig.timeWindowMs() &&
+            thisMetricConfig.tags().equals(thatMetricConfig.tags()) &&
+            thisMetricConfig.recordLevel() == thatMetricConfig.recordLevel();
+    }
 
     private ArgumentCaptor<String> addSensorsOnAllLevels(final Metrics metrics, final StreamsMetricsImpl streamsMetrics) {
         final ArgumentCaptor<String> sensorKeys = ArgumentCaptor.forClass(String.class);
@@ -457,10 +413,11 @@ public class StreamsMetricsImplTest {
         final MetricName metricName =
             new MetricName(METRIC_NAME1, STATE_STORE_LEVEL_GROUP, DESCRIPTION1, STORE_LEVEL_TAG_MAP);
         final MetricConfig metricConfig = new MetricConfig().recordLevel(INFO_RECORDING_LEVEL);
+        ArgumentCaptor<MetricConfig> metricConfigArgumentCaptor = ArgumentCaptor.forClass(MetricConfig.class);
         when(metrics.metricName(METRIC_NAME1, STATE_STORE_LEVEL_GROUP, DESCRIPTION1, STORE_LEVEL_TAG_MAP))
             .thenReturn(metricName);
         when(metrics.metric(metricName)).thenReturn(null);
-        when(metrics.addMetricIfAbsent(metricName, metricConfig, VALUE_PROVIDER)).thenReturn(null);
+        when(metrics.addMetricIfAbsent(eq(metricName), metricConfigArgumentCaptor.capture(), eq(VALUE_PROVIDER))).thenReturn(null);
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, VERSION, time);
 
         streamsMetrics.addStoreLevelMutableMetric(
@@ -472,6 +429,8 @@ public class StreamsMetricsImplTest {
             INFO_RECORDING_LEVEL,
             VALUE_PROVIDER
         );
+
+        assertTrue(eqMetricConfig(metricConfig, metricConfigArgumentCaptor.getValue()));
     }
 
     @Test
@@ -661,14 +620,17 @@ public class StreamsMetricsImplTest {
         final Metrics metrics = mock(Metrics.class);
         final RecordingLevel recordingLevel = RecordingLevel.INFO;
         final MetricConfig metricConfig = new MetricConfig().recordLevel(recordingLevel);
+        ArgumentCaptor<MetricConfig> metricConfigArgumentCaptor = ArgumentCaptor.forClass(MetricConfig.class);
         final String value = "immutable-value";
         final ImmutableMetricValue immutableValue = new ImmutableMetricValue<>(value);
         when(metrics.metricName(METRIC_NAME1, CLIENT_LEVEL_GROUP, DESCRIPTION1, clientLevelTags))
             .thenReturn(metricName1);
-        doNothing().when(metrics).addMetric(metricName1, metricConfig, immutableValue);
+        doNothing().when(metrics).addMetric(eq(metricName1), metricConfigArgumentCaptor.capture(), eq(immutableValue));
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, VERSION, time);
 
         streamsMetrics.addClientLevelImmutableMetric(METRIC_NAME1, DESCRIPTION1, recordingLevel, value);
+
+        assertTrue(eqMetricConfig(metricConfig, metricConfigArgumentCaptor.getValue()));
     }
 
     @Test
@@ -676,13 +638,16 @@ public class StreamsMetricsImplTest {
         final Metrics metrics = mock(Metrics.class);
         final RecordingLevel recordingLevel = RecordingLevel.INFO;
         final MetricConfig metricConfig = new MetricConfig().recordLevel(recordingLevel);
+        ArgumentCaptor<MetricConfig> metricConfigArgumentCaptor = ArgumentCaptor.forClass(MetricConfig.class);
         final Gauge<String> valueProvider = (config, now) -> "mutable-value";
         when(metrics.metricName(METRIC_NAME1, CLIENT_LEVEL_GROUP, DESCRIPTION1, clientLevelTags))
             .thenReturn(metricName1);
-        doNothing().when(metrics).addMetric(metricName1, metricConfig, valueProvider);
+        doNothing().when(metrics).addMetric(eq(metricName1), metricConfigArgumentCaptor.capture(), eq(valueProvider));
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, VERSION, time);
 
         streamsMetrics.addClientLevelMutableMetric(METRIC_NAME1, DESCRIPTION1, recordingLevel, valueProvider);
+
+        assertTrue(eqMetricConfig(metricConfig, metricConfigArgumentCaptor.getValue()));
     }
 
     @Test
