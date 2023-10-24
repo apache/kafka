@@ -35,6 +35,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.CommandLineUtils;
 import org.apache.kafka.tools.Tuple2;
@@ -44,6 +45,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -52,6 +54,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.ExecutionException;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.ToIntFunction;
 import java.util.stream.Collectors;
@@ -379,7 +382,48 @@ public class ConsumerGroupCommand {
             Optional<String> hostOpt,
             Optional<String> clientIdOpt
         ) {
-            return null;
+            if (topicPartitions.isEmpty()) {
+                return new PartitionAssignmentState[] {
+                    new PartitionAssignmentState(group, coordinator, Optional.empty(), Optional.empty(), Optional.empty(),
+                        getLag(Optional.empty(), Optional.empty()), consumerIdOpt, hostOpt, clientIdOpt, Optional.empty())
+                };
+            } else {
+                List<TopicPartition> topicPartitionsSorted = topicPartitions.stream().sorted(Comparator.comparingInt(TopicPartition::partition)).collect(Collectors.toList());
+                return describePartitions(group, coordinator, topicPartitionsSorted, getPartitionOffset, consumerIdOpt, hostOpt, clientIdOpt);
+            }
+        }
+
+        private Optional<Long> getLag(Optional<Long> offset, Optional<Long> logEndOffset) {
+            return offset.filter(o -> o != -1).flatMap(offset0 -> logEndOffset.map(end -> end - offset0));
+        }
+
+        private PartitionAssignmentState[] describePartitions(String group,
+                                                              Optional<Node> coordinator,
+                                                              List<TopicPartition> topicPartitions,
+                                                              Function<TopicPartition, Optional<Long>> getPartitionOffset,
+                                                              Optional<String> consumerIdOpt,
+                                                              Optional<String> hostOpt,
+                                                              Optional<String> clientIdOpt) {
+            BiFunction<TopicPartition, Optional<Long>, PartitionAssignmentState> getDescribePartitionResult = (topicPartition, logEndOffsetOpt) -> {
+                Optional<Long> offset = getPartitionOffset.apply(topicPartition);
+                return new PartitionAssignmentState(group, coordinator, Optional.of(topicPartition.topic()),
+                    Optional.of(topicPartition.partition()), offset, getLag(offset, logEndOffsetOpt),
+                    consumerIdOpt, hostOpt, clientIdOpt, logEndOffsetOpt);
+            };
+
+            return getLogEndOffset(topicPartitions).entrySet().stream().map(logEndOffsetResult -> {
+                if (logEndOffsetResult.getValue() instanceof LogOffset)
+                    return getDescribePartitionResult.apply(
+                        logEndOffsetResult.getKey(),
+                        Optional.of(((LogOffset) logEndOffsetResult.getValue()).value)
+                    );
+                else if (logEndOffsetResult.getValue() instanceof Unknown)
+                    return getDescribePartitionResult.apply(logEndOffsetResult.getKey(), Optional.empty());
+                else if (logEndOffsetResult.getValue() instanceof Ignore)
+                    return null;
+
+                throw new IllegalStateException("Unknown LogOffset subclass: " + logEndOffsetResult.getValue());
+            }).collect(Collectors.toList()).toArray(new PartitionAssignmentState[0]);
         }
 
         Map<String, Map<TopicPartition, OffsetAndMetadata>> resetOffsets() {
