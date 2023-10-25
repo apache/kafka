@@ -17,6 +17,11 @@
 
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.UnknownTopicIdException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest;
@@ -24,6 +29,9 @@ import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
 import java.util.Optional;
+import java.util.Set;
+import java.util.SortedSet;
+import java.util.TreeSet;
 
 /**
  * Membership manager that maintains group membership for a single member, following the new
@@ -36,6 +44,21 @@ import java.util.Optional;
  * Member info and state are updated based on the heartbeat responses the member receives.
  */
 public class MembershipManagerImpl implements MembershipManager {
+
+    /**
+     * Logger.
+     */
+    private final Logger log;
+
+    /**
+     * For reconciling assignments.
+     */
+    private final AssignmentReconciler assignmentReconciler;
+
+    /**
+     * Metadata that allows us to create the partitions needed for {@link ConsumerRebalanceListener}.
+     */
+    private final ConsumerMetadata metadata;
 
     /**
      * Group ID of the consumer group the member will be part of, provided when creating the current
@@ -86,24 +109,26 @@ public class MembershipManagerImpl implements MembershipManager {
     private Optional<ConsumerGroupHeartbeatResponseData.Assignment> targetAssignment;
 
     /**
-     * Logger.
+     * Latest assignment that the member received from the server while a {@link #targetAssignment}
+     * was in process.
      */
-    private final Logger log;
+    private Optional<ConsumerGroupHeartbeatResponseData.Assignment> nextTargetAssignment;
 
-    public MembershipManagerImpl(String groupId, LogContext logContext) {
-        this(groupId, null, null, logContext);
-    }
-
-    public MembershipManagerImpl(String groupId,
-                                 String groupInstanceId,
-                                 String serverAssignor,
-                                 LogContext logContext) {
+    public MembershipManagerImpl(LogContext logContext,
+                                 AssignmentReconciler assignmentReconciler,
+                                 ConsumerMetadata metadata,
+                                 String groupId,
+                                 Optional<String> groupInstanceId,
+                                 Optional<String> serverAssignor) {
+        this.log = logContext.logger(MembershipManagerImpl.class);
+        this.assignmentReconciler = assignmentReconciler;
+        this.metadata = metadata;
         this.groupId = groupId;
         this.state = MemberState.UNJOINED;
-        this.serverAssignor = Optional.ofNullable(serverAssignor);
-        this.groupInstanceId = Optional.ofNullable(groupInstanceId);
+        this.serverAssignor = serverAssignor;
+        this.groupInstanceId = groupInstanceId;
         this.targetAssignment = Optional.empty();
-        this.log = logContext.logger(MembershipManagerImpl.class);
+        this.nextTargetAssignment = Optional.empty();
     }
 
     /**
@@ -181,6 +206,7 @@ public class MembershipManagerImpl implements MembershipManager {
     public void transitionToFenced() {
         resetEpoch();
         transitionTo(MemberState.FENCED);
+        assignmentReconciler.startLost();
     }
 
     /**
@@ -206,8 +232,31 @@ public class MembershipManagerImpl implements MembershipManager {
             transitionTo(MemberState.STABLE);
         } else {
             transitionTo(MemberState.RECONCILING);
+            startReconciliation();
         }
         return state.equals(MemberState.STABLE);
+    }
+
+    private void startReconciliation() {
+        if (!targetAssignment.isPresent())
+            return;
+
+        SortedSet<TopicPartition> targetPartitions = new TreeSet<>(new Utils.TopicPartitionComparator());
+
+        for (ConsumerGroupHeartbeatResponseData.TopicPartitions topicPartitions : targetAssignment.get().topicPartitions()) {
+            Uuid topicId = topicPartitions.topicId();
+            String topicName = metadata.topicNames().get(topicId);
+
+            // TODO... I don't think this is right...
+            if (topicName == null)
+                throw new UnknownTopicIdException("A topic name for the topic ID " + topicId + " was not found in the local metadata cache");
+
+            for (Integer partition : topicPartitions.partitions()) {
+                targetPartitions.add(new TopicPartition(topicName, partition));
+            }
+        }
+
+        assignmentReconciler.startReconcile(targetPartitions);
     }
 
     /**
@@ -297,5 +346,29 @@ public class MembershipManagerImpl implements MembershipManager {
         this.currentAssignment = assignment;
         targetAssignment = Optional.empty();
         transitionTo(MemberState.STABLE);
+    }
+
+    @Override
+    public void completeReconcile(Set<TopicPartition> revokedPartitions,
+                                  Set<TopicPartition> assignedPartitions,
+                                  Optional<KafkaException> callbackError) {
+        if (callbackError.isPresent()) {
+            // TODO: how to react to callback errors?
+        }
+
+        assignmentReconciler.completeReconcile(revokedPartitions, assignedPartitions);
+        transitionTo(MemberState.STABLE);
+        // TODO: update state to signal the HeartbeatRequestManager to send an ACK heartbeat
+    }
+
+    @Override
+    public void completeLost(Set<TopicPartition> lostPartitions, Optional<KafkaException> callbackError) {
+        if (callbackError.isPresent()) {
+            // TODO: how to react to callback errors?
+        }
+
+        assignmentReconciler.completeLost(lostPartitions);
+        transitionTo(MemberState.UNJOINED);
+        // TODO: update state to signal the HeartbeatRequestManager to send an ACK heartbeat
     }
 }

@@ -34,11 +34,11 @@ import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.ApplicationEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventProcessor;
-import org.apache.kafka.clients.consumer.internals.events.ApplicationEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
@@ -117,6 +117,7 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
 public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
 
     private final ApplicationEventHandler applicationEventHandler;
+    private final ConsumerNetworkThread consumerNetworkThread;
     private final Time time;
     private final Optional<String> groupId;
     private final KafkaConsumerMetrics kafkaConsumerMetrics;
@@ -143,10 +144,10 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     private final long defaultApiTimeoutMs;
     private volatile boolean closed = false;
     private final List<ConsumerPartitionAssignor> assignors;
+    private final WakeupTrigger wakeupTrigger = new WakeupTrigger();
 
     // to keep from repeatedly scanning subscriptions in poll(), cache the result during metadata updates
     private boolean cachedSubscriptionHasAllFetchPositions;
-    private final WakeupTrigger wakeupTrigger = new WakeupTrigger();
 
     public PrototypeAsyncConsumer(final Properties properties,
                                   final Deserializer<K> keyDeserializer,
@@ -232,16 +233,40 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
                     fetchMetricsManager,
                     networkClientDelegateSupplier);
             final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(logContext,
+                    requestManagersSupplier,
                     metadata,
                     applicationEventQueue,
-                    requestManagersSupplier);
-            this.applicationEventHandler = new ApplicationEventHandler(logContext,
+                    Optional.empty());
+            this.consumerNetworkThread = new ConsumerNetworkThread(logContext,
                     time,
-                    applicationEventQueue,
                     applicationEventProcessorSupplier,
                     networkClientDelegateSupplier,
                     requestManagersSupplier);
-            this.backgroundEventProcessor = new BackgroundEventProcessor(logContext, backgroundEventQueue);
+            ConsumerCoordinatorMetrics sensors = new ConsumerCoordinatorMetrics(
+                    subscriptions,
+                    metrics,
+                    CONSUMER_METRIC_GROUP_PREFIX
+            );
+            ConsumerRebalanceListenerInvoker rebalanceListenerInvoker = new ConsumerRebalanceListenerInvoker(
+                    logContext,
+                    subscriptions,
+                    time,
+                    sensors
+            );
+            this.applicationEventHandler = new ApplicationEventHandler(logContext, applicationEventQueue) {
+                @Override
+                public void add(ApplicationEvent event) {
+                    super.add(event);
+                    consumerNetworkThread.wakeup();
+                }
+            };
+
+            this.backgroundEventProcessor = new BackgroundEventProcessor(
+                    logContext,
+                    backgroundEventQueue,
+                    applicationEventHandler,
+                    rebalanceListenerInvoker
+            );
             this.assignors = ConsumerPartitionAssignor.getAssignorInstances(
                     config.getList(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG),
                     config.originals(Collections.singletonMap(ConsumerConfig.CLIENT_ID_CONFIG, clientId))
@@ -263,6 +288,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
                     time);
 
             this.kafkaConsumerMetrics = new KafkaConsumerMetrics(metrics, CONSUMER_METRIC_GROUP_PREFIX);
+            this.consumerNetworkThread.start();
 
             config.logUnused();
             AppInfoParser.registerAppInfo(CONSUMER_JMX_PREFIX, clientId, metrics, time.milliseconds());
@@ -286,7 +312,9 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
                                   ConsumerInterceptors<K, V> interceptors,
                                   Time time,
                                   ApplicationEventHandler applicationEventHandler,
+                                  ConsumerNetworkThread consumerNetworkThread,
                                   BlockingQueue<BackgroundEvent> backgroundEventQueue,
+                                  BackgroundEventProcessor backgroundEventProcessor,
                                   Metrics metrics,
                                   SubscriptionState subscriptions,
                                   ConsumerMetadata metadata,
@@ -302,7 +330,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         this.isolationLevel = IsolationLevel.READ_UNCOMMITTED;
         this.interceptors = Objects.requireNonNull(interceptors);
         this.time = time;
-        this.backgroundEventProcessor = new BackgroundEventProcessor(logContext, backgroundEventQueue);
+        this.backgroundEventProcessor = backgroundEventProcessor;
         this.metrics = metrics;
         this.groupId = Optional.ofNullable(groupId);
         this.metadata = metadata;
@@ -310,8 +338,11 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         this.defaultApiTimeoutMs = defaultApiTimeoutMs;
         this.deserializers = deserializers;
         this.applicationEventHandler = applicationEventHandler;
+        this.consumerNetworkThread = consumerNetworkThread;
         this.assignors = assignors;
         this.kafkaConsumerMetrics = new KafkaConsumerMetrics(metrics, "consumer");
+
+        this.consumerNetworkThread.start();
     }
 
     /**
@@ -336,6 +367,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
             }
 
             do {
+                backgroundEventProcessor.process();
                 updateAssignmentMetadataIfNeeded(timer);
                 final Fetch<K, V> fetch = pollForFetches(timer);
 
@@ -709,8 +741,8 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         log.trace("Closing the Kafka consumer");
         AtomicReference<Throwable> firstException = new AtomicReference<>();
 
-        if (applicationEventHandler != null)
-            closeQuietly(() -> applicationEventHandler.close(timeout), "Failed to close application event handler with a timeout(ms)=" + timeout, firstException);
+        if (consumerNetworkThread != null)
+            closeQuietly(() -> consumerNetworkThread.close(timeout), "Failed to close consumer network thread with a timeout(ms)=" + timeout, firstException);
 
         closeQuietly(fetchBuffer, "Failed to close the fetch buffer", firstException);
         closeQuietly(interceptors, "consumer interceptors", firstException);
@@ -956,14 +988,14 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
      *
      * <p/>
      *
-     * This method will {@link ApplicationEventHandler#wakeupNetworkThread() wake up} the {@link ConsumerNetworkThread} before
-     * retuning. This is done as an optimization so that the <em>next round of data can be pre-fetched</em>.
+     * This method will {@link ConsumerNetworkThread#wakeup() wake up the network thread} before returning. This is
+     * done as an optimization so that the <em>next round of data can be pre-fetched</em>.
      */
     private Fetch<K, V> collectFetch() {
         final Fetch<K, V> fetch = fetchCollector.collectFetch(fetchBuffer);
 
         // Notify the network thread to wake up and start the next round of fetching.
-        applicationEventHandler.wakeupNetworkThread();
+        consumerNetworkThread.wakeup();
 
         return fetch;
     }

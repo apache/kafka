@@ -279,6 +279,13 @@ public class Metadata implements Closeable {
         return cache.topicIds();
     }
 
+    /**
+     * @return a mapping from topic IDs to topic names for all topics with valid IDs in the cache
+     */
+    public synchronized Map<Uuid, String> topicNames() {
+        return cache.topicNames();
+    }
+
     public synchronized LeaderAndEpoch currentLeader(TopicPartition topicPartition) {
         Optional<MetadataResponse.PartitionMetadata> maybeMetadata = partitionMetadataIfCurrent(topicPartition);
         if (!maybeMetadata.isPresent())

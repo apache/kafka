@@ -18,11 +18,16 @@ package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkThread;
+import org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerInvoker;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
 
+import java.util.Optional;
+import java.util.SortedSet;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.atomic.AtomicReference;
+
 
 /**
  * An {@link EventProcessor} that is created and executes in the application thread for the purpose of processing
@@ -36,9 +41,16 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 public class BackgroundEventProcessor extends EventProcessor<BackgroundEvent> {
 
+    private final ApplicationEventHandler applicationEventHandler;
+    private final ConsumerRebalanceListenerInvoker rebalanceListenerInvoker;
+
     public BackgroundEventProcessor(final LogContext logContext,
-                                    final BlockingQueue<BackgroundEvent> backgroundEventQueue) {
+                                    final BlockingQueue<BackgroundEvent> backgroundEventQueue,
+                                    final ApplicationEventHandler applicationEventHandler,
+                                    final ConsumerRebalanceListenerInvoker rebalanceListenerInvoker) {
         super(logContext, backgroundEventQueue);
+        this.applicationEventHandler = applicationEventHandler;
+        this.rebalanceListenerInvoker = rebalanceListenerInvoker;
     }
 
     /**
@@ -58,10 +70,22 @@ public class BackgroundEventProcessor extends EventProcessor<BackgroundEvent> {
 
     @Override
     public void process(final BackgroundEvent event) {
-        if (event.type() == BackgroundEvent.Type.ERROR)
-            process((ErrorBackgroundEvent) event);
-        else
-            throw new IllegalArgumentException("Background event type " + event.type() + " was not expected");
+        switch (event.type()) {
+            case ERROR:
+                process((ErrorBackgroundEvent) event);
+                return;
+
+            case PARTITION_RECONCILIATION_STARTED:
+                process((RebalanceStartedEvent) event);
+                return;
+
+            case PARTITION_LOST_STARTED:
+                process((PartitionLostStartedEvent) event);
+                return;
+
+            default:
+                throw new IllegalArgumentException("Background event type " + event.type() + " was not expected");
+        }
     }
 
     @Override
@@ -71,5 +95,39 @@ public class BackgroundEventProcessor extends EventProcessor<BackgroundEvent> {
 
     private void process(final ErrorBackgroundEvent event) {
         throw event.error();
+    }
+
+    private void process(final RebalanceStartedEvent event) {
+        final SortedSet<TopicPartition> revokedPartitions = event.revokedPartitions();
+        final SortedSet<TopicPartition> assignedPartitions = event.assignedPartitions();
+        Optional<KafkaException> error = Optional.empty();
+
+        try {
+            rebalanceListenerInvoker.rebalance(revokedPartitions, assignedPartitions);
+        } catch (KafkaException e) {
+            error = Optional.of(e);
+            throw e;
+        } finally {
+            ApplicationEvent invokedEvent = new RebalanceCompleteEvent(
+                    revokedPartitions,
+                    assignedPartitions,
+                    error);
+            applicationEventHandler.add(invokedEvent);
+        }
+    }
+
+    private void process(final PartitionLostStartedEvent event) {
+        final SortedSet<TopicPartition> lostPartitions = event.lostPartitions();
+        Optional<KafkaException> error = Optional.empty();
+
+        try {
+            rebalanceListenerInvoker.lose(lostPartitions);
+        } catch (KafkaException e) {
+            error = Optional.of(e);
+            throw e;
+        } finally {
+            ApplicationEvent invokedEvent = new PartitionLostCompleteEvent(lostPartitions, error);
+            applicationEventHandler.add(invokedEvent);
+        }
     }
 }

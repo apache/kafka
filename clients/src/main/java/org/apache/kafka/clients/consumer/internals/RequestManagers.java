@@ -160,7 +160,19 @@ public class RequestManagers implements Closeable {
                             backgroundEventHandler,
                             groupState.groupId);
                     commit = new CommitRequestManager(time, logContext, subscriptions, config, coordinator, groupState);
-                    MembershipManager membershipManager = new MembershipManagerImpl(groupState.groupId, logContext);
+                    AssignmentReconciler assignmentReconciler = new AssignmentReconciler(
+                            logContext,
+                            subscriptions,
+                            backgroundEventQueue
+                    );
+                    MembershipManager membershipManager = new MembershipManagerImpl(
+                            logContext,
+                            assignmentReconciler,
+                            metadata,
+                            groupState.groupId,
+                            Optional.empty(),
+                            Optional.empty()
+                    );
                     heartbeatRequestManager = new HeartbeatRequestManager(
                             logContext,
                             time,

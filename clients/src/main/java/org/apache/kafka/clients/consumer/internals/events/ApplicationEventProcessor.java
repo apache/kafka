@@ -20,6 +20,7 @@ import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.internals.CachedSupplier;
 import org.apache.kafka.clients.consumer.internals.CommitRequestManager;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
+import org.apache.kafka.clients.consumer.internals.MembershipManager;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkThread;
 import org.apache.kafka.clients.consumer.internals.RequestManagers;
 import org.apache.kafka.common.KafkaException;
@@ -44,15 +45,18 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
     private final Logger log;
     private final ConsumerMetadata metadata;
     private final RequestManagers requestManagers;
+    private final Optional<MembershipManager> membershipManager;
 
     public ApplicationEventProcessor(final LogContext logContext,
                                      final BlockingQueue<ApplicationEvent> applicationEventQueue,
                                      final RequestManagers requestManagers,
-                                     final ConsumerMetadata metadata) {
+                                     final ConsumerMetadata metadata,
+                                     final Optional<MembershipManager> membershipManager) {
         super(logContext, applicationEventQueue);
         this.log = logContext.logger(ApplicationEventProcessor.class);
         this.requestManagers = requestManagers;
         this.metadata = metadata;
+        this.membershipManager = membershipManager;
     }
 
     /**
@@ -102,6 +106,14 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
 
             case VALIDATE_POSITIONS:
                 processValidatePositionsEvent();
+                return;
+
+            case PARTITION_RECONCILIATION_COMPLETE:
+                process((RebalanceCompleteEvent) event);
+                return;
+
+            case PARTITION_LOST_COMPLETE:
+                process((PartitionLostCompleteEvent) event);
                 return;
 
             default:
@@ -185,9 +197,10 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
      * {@link ConsumerNetworkThread}.
      */
     public static Supplier<ApplicationEventProcessor> supplier(final LogContext logContext,
+                                                               final Supplier<RequestManagers> requestManagersSupplier,
                                                                final ConsumerMetadata metadata,
                                                                final BlockingQueue<ApplicationEvent> applicationEventQueue,
-                                                               final Supplier<RequestManagers> requestManagersSupplier) {
+                                                               final Optional<MembershipManager> membershipManager) {
         return new CachedSupplier<ApplicationEventProcessor>() {
             @Override
             protected ApplicationEventProcessor create() {
@@ -196,9 +209,18 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
                         logContext,
                         applicationEventQueue,
                         requestManagers,
-                        metadata
+                        metadata,
+                        membershipManager
                 );
             }
         };
+    }
+
+    private void process(final RebalanceCompleteEvent event) {
+        membershipManager.ifPresent(mm -> mm.completeReconcile(event.revokedPartitions(), event.assignedPartitions(), event.error()));
+    }
+
+    private void process(final PartitionLostCompleteEvent event) {
+        membershipManager.ifPresent(mm -> mm.completeLost(event.lostPartitions(), event.error()));
     }
 }
