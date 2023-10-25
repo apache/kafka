@@ -778,6 +778,10 @@ class ReplicaManager(val config: KafkaConfig,
     }
   }
 
+  /*
+   * Note: This method can be used as a callback in a different request thread. Ensure the that correct RequestLocal
+   * is passed when executing this method. Accessing non-thread-safe data structures should be avoided if possible.
+   */
   private def appendEntries(allEntries: Map[TopicPartition, MemoryRecords],
                             internalTopicsAllowed: Boolean,
                             origin: AppendOrigin,
