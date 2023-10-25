@@ -26,10 +26,10 @@ import java.util.Objects;
 public abstract class BackgroundEvent {
 
     public enum Type {
-        ERROR,
+        ERROR, PARTITION_RECONCILIATION_STARTED, PARTITION_LOST_STARTED
     }
 
-    protected final Type type;
+    private final Type type;
 
     public BackgroundEvent(Type type) {
         this.type = Objects.requireNonNull(type);

@@ -184,10 +184,12 @@ public class ConsumerTestBuilder implements Closeable {
                     groupState));
             MembershipManager mm = spy(
                     new MembershipManagerImpl(
+                        logContext,
+                        metadata,
+                        subscriptions,
                         gi.groupState.groupId,
                         gi.groupState.groupInstanceId.orElse(null),
-                        null,
-                        logContext
+                        null
                 )
             );
             HeartbeatRequestManager.HeartbeatRequestState state = spy(new HeartbeatRequestManager.HeartbeatRequestState(logContext,
@@ -241,7 +243,8 @@ public class ConsumerTestBuilder implements Closeable {
                 logContext,
                 applicationEventQueue,
                 requestManagers,
-                metadata)
+                metadata,
+                membershipManager)
         );
         this.backgroundEventProcessor = spy(new BackgroundEventProcessor(logContext, backgroundEventQueue));
     }

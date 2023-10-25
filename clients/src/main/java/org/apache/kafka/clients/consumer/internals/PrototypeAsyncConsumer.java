@@ -34,15 +34,17 @@ import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.ApplicationEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventProcessor;
-import org.apache.kafka.clients.consumer.internals.events.ApplicationEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
 import org.apache.kafka.clients.consumer.internals.events.OffsetFetchApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.PartitionLostStartedEvent;
+import org.apache.kafka.clients.consumer.internals.events.PartitionReconciliationStartedEvent;
 import org.apache.kafka.clients.consumer.internals.events.ResetPositionsApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ValidatePositionsApplicationEvent;
 import org.apache.kafka.common.Cluster;
@@ -101,6 +103,7 @@ import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createFe
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createLogContext;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createMetrics;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createSubscriptionState;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.processRebalanceCallback;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.refreshCommittedOffsets;
 import static org.apache.kafka.common.utils.Utils.closeQuietly;
 import static org.apache.kafka.common.utils.Utils.isBlank;
@@ -143,10 +146,11 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     private final long defaultApiTimeoutMs;
     private volatile boolean closed = false;
     private final List<ConsumerPartitionAssignor> assignors;
+    private final WakeupTrigger wakeupTrigger = new WakeupTrigger();
+    private final ConsumerRebalanceListenerInvoker rebalanceListenerInvoker;
 
     // to keep from repeatedly scanning subscriptions in poll(), cache the result during metadata updates
     private boolean cachedSubscriptionHasAllFetchPositions;
-    private final WakeupTrigger wakeupTrigger = new WakeupTrigger();
 
     public PrototypeAsyncConsumer(final Properties properties,
                                   final Deserializer<K> keyDeserializer,
@@ -232,9 +236,10 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
                     fetchMetricsManager,
                     networkClientDelegateSupplier);
             final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(logContext,
+                    requestManagersSupplier,
                     metadata,
                     applicationEventQueue,
-                    requestManagersSupplier);
+                    Optional.empty());
             this.applicationEventHandler = new ApplicationEventHandler(logContext,
                     time,
                     applicationEventQueue,
@@ -263,6 +268,18 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
                     time);
 
             this.kafkaConsumerMetrics = new KafkaConsumerMetrics(metrics, CONSUMER_METRIC_GROUP_PREFIX);
+
+            ConsumerCoordinatorMetrics sensors = new ConsumerCoordinatorMetrics(
+                    subscriptions,
+                    metrics,
+                    CONSUMER_METRIC_GROUP_PREFIX
+            );
+            this.rebalanceListenerInvoker = new ConsumerRebalanceListenerInvoker(
+                    logContext,
+                    subscriptions,
+                    time,
+                    sensors
+            );
 
             config.logUnused();
             AppInfoParser.registerAppInfo(CONSUMER_JMX_PREFIX, clientId, metrics, time.milliseconds());
@@ -312,6 +329,17 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         this.applicationEventHandler = applicationEventHandler;
         this.assignors = assignors;
         this.kafkaConsumerMetrics = new KafkaConsumerMetrics(metrics, "consumer");
+        ConsumerCoordinatorMetrics sensors = new ConsumerCoordinatorMetrics(
+                subscriptions,
+                metrics,
+                CONSUMER_METRIC_GROUP_PREFIX
+        );
+        this.rebalanceListenerInvoker = new ConsumerRebalanceListenerInvoker(
+                logContext,
+                subscriptions,
+                time,
+                sensors
+        );
     }
 
     /**
@@ -336,6 +364,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
             }
 
             do {
+                backgroundEventProcessor.process();
                 updateAssignmentMetadataIfNeeded(timer);
                 final Fetch<K, V> fetch = pollForFetches(timer);
 
@@ -363,6 +392,22 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     @Override
     public void commitSync() {
         commitSync(Duration.ofMillis(defaultApiTimeoutMs));
+    }
+
+    private void processEvent(final BackgroundEvent backgroundEvent, final Duration timeout) {
+        if (backgroundEvent instanceof PartitionReconciliationStartedEvent) {
+            processRebalanceCallback(
+                    applicationEventHandler,
+                    rebalanceListenerInvoker,
+                    (PartitionReconciliationStartedEvent) backgroundEvent
+            );
+        } else if (backgroundEvent instanceof PartitionLostStartedEvent) {
+            processRebalanceCallback(
+                    applicationEventHandler,
+                    rebalanceListenerInvoker,
+                    (PartitionLostStartedEvent) backgroundEvent
+            );
+        }
     }
 
     /**

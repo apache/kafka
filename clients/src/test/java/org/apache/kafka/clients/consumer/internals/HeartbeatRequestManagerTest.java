@@ -68,8 +68,12 @@ public class HeartbeatRequestManagerTest {
     private HeartbeatRequestManager heartbeatRequestManager;
     private MembershipManager membershipManager;
     private HeartbeatRequestManager.HeartbeatRequestState heartbeatRequestState;
+
     private final String memberId = "member-id";
     private final int memberEpoch = 1;
+    private ConsumerMetadata metadata;
+    private AssignmentReconciler assignmentReconciler;
+
     private BackgroundEventHandler backgroundEventHandler;
 
     @BeforeEach

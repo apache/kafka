@@ -16,9 +16,14 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 
+import java.util.Collection;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * A stateful object tracking the state of a single member in relationship to a consumer group:
@@ -99,4 +104,57 @@ public interface MembershipManager {
      * @return True if the member should send heartbeat to the coordinator.
      */
     boolean shouldSendHeartbeat();
+
+    /**
+     * This method should be invoked to signal the completion of a successful {@link TopicPartition partition}
+     * assignment reconciliation. Specifically, it is to be executed on background thread <em>after</em> the
+     * {@link ConsumerRebalanceListener#onPartitionsRevoked(Collection)} and
+     * {@link ConsumerRebalanceListener#onPartitionsAssigned(Collection)} callbacks have completed execution on
+     * the application thread. It should perform two tasks:
+     *
+     * <ol>
+     *     <li>
+     *        Update the set of {@link SubscriptionState#assignedPartitions() assigned partitions} based on the
+     *        given partitions
+     *     </li>
+     *     <li>
+     *        Update the necessary internal state to signal to the {@link HeartbeatRequestManager} that it
+     *        should send an acknowledgement heartbeat request to the group coordinator
+     *     </li>
+     * </ol>
+     *
+     * Note: the partition assignment reconciliation process is started based on the receipt of a new
+     * {@link ConsumerGroupHeartbeatResponseData.Assignment target assignment}.
+     *
+     * @param revokedPartitions Set of {@link TopicPartition partitions} that were revoked
+     * @param assignedPartitions Set of {@link TopicPartition partitions} that were assigned
+     * @param callbackError Optional {@link KafkaException error} if an exception was thrown during callbacks
+     * @see AssignmentReconciler
+     */
+    void completeReconcile(Set<TopicPartition> revokedPartitions,
+                           Set<TopicPartition> assignedPartitions,
+                           Optional<KafkaException> callbackError);
+
+    /**
+     * This method should be invoked to signal the completion of the "{@link TopicPartition lost partition}"
+     * process. Specifically, it is to be executed on background thread <em>after</em> the
+     * {@link ConsumerRebalanceListener#onPartitionsLost(Collection)} callback was executed on the application
+     * thread. It should perform two tasks:
+     *
+     * <ol>
+     *     <li>
+     *        Clear the set of {@link SubscriptionState#assignedPartitions() assigned partitions}, regardless of
+     *        the set of "lost partitions"
+     *     </li>
+     *     <li>
+     *        Update the necessary internal state to signal to the {@link HeartbeatRequestManager} that it
+     *        should send an acknowledgement heartbeat request to the group coordinator
+     *     </li>
+     * </ol>
+     *
+     * @param lostPartitions Set of {@link TopicPartition partitions} that were lost
+     * @param callbackError Optional {@link KafkaException error} if an exception was thrown during callback
+     * @see AssignmentReconciler
+     */
+    void completeLost(Set<TopicPartition> lostPartitions, Optional<KafkaException> callbackError);
 }

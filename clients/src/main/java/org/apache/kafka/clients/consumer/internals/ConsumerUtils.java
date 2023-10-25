@@ -26,6 +26,12 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerInterceptor;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.ApplicationEventHandler;
+import org.apache.kafka.clients.consumer.internals.events.PartitionLostCompleteEvent;
+import org.apache.kafka.clients.consumer.internals.events.PartitionLostStartedEvent;
+import org.apache.kafka.clients.consumer.internals.events.PartitionReconciliationCompleteEvent;
+import org.apache.kafka.clients.consumer.internals.events.PartitionReconciliationStartedEvent;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.KafkaException;
@@ -50,9 +56,11 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.SortedSet;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 public final class ConsumerUtils {
 
@@ -210,5 +218,73 @@ public final class ConsumerUtils {
         } catch (java.util.concurrent.TimeoutException e) {
             throw new TimeoutException(e);
         }
+    }
+
+    static void processRebalanceCallback(final ApplicationEventHandler eventHandler,
+                                         final ConsumerRebalanceListenerInvoker invoker,
+                                         final PartitionReconciliationStartedEvent startedEvent) {
+        final AtomicReference<Exception> firstException = new AtomicReference<>(null);
+        SortedSet<TopicPartition> revokedPartitions = startedEvent.revokedPartitions();
+
+        if (!revokedPartitions.isEmpty()) {
+            // Revoke partitions that were previously owned but no longer assigned;
+            // note that we should only change the assignment (or update the assignor's state)
+            // AFTER we've triggered the revoke callback
+            firstException.compareAndSet(null, invoker.invokePartitionsRevoked(revokedPartitions));
+        }
+
+        SortedSet<TopicPartition> assignedPartitions = startedEvent.assignedPartitions();
+
+        if (!assignedPartitions.isEmpty()) {
+            // Add partitions that were not previously owned but are now assigned
+            firstException.compareAndSet(null, invoker.invokePartitionsAssigned(assignedPartitions));
+        }
+
+        Optional<KafkaException> error = Optional.empty();
+
+        if (firstException.get() != null) {
+            if (firstException.get() instanceof KafkaException) {
+                error = Optional.of((KafkaException) firstException.get());
+            } else {
+                error = Optional.of(new KafkaException("User rebalance callback throws an error", firstException.get()));
+            }
+        }
+
+        ApplicationEvent invokedEvent = new PartitionReconciliationCompleteEvent(
+                revokedPartitions,
+                assignedPartitions,
+                error
+        );
+        eventHandler.add(invokedEvent);
+
+        if (error.isPresent())
+            throw error.get();
+    }
+
+    static void processRebalanceCallback(final ApplicationEventHandler eventHandler,
+                                         final ConsumerRebalanceListenerInvoker invoker,
+                                         final PartitionLostStartedEvent startedEvent) {
+        Optional<KafkaException> error = Optional.empty();
+        SortedSet<TopicPartition> lostPartitions = startedEvent.lostPartitions();
+
+        if (!lostPartitions.isEmpty()) {
+            log.info("Giving away all assigned partitions as lost since generation/memberID has been reset," +
+                    "indicating that consumer is in old state or no longer part of the group");
+            Exception e = invoker.invokePartitionsLost(lostPartitions);
+
+            if (e != null) {
+                if (e instanceof KafkaException) {
+                    error = Optional.of((KafkaException) e);
+                } else {
+                    error = Optional.of(new KafkaException("User rebalance callback throws an error", e));
+                }
+            }
+        }
+
+        ApplicationEvent invokedEvent = new PartitionLostCompleteEvent(lostPartitions, error);
+        eventHandler.add(invokedEvent);
+
+        if (error.isPresent())
+            throw error.get();
     }
 }
