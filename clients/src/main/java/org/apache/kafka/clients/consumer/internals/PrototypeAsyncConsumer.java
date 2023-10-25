@@ -117,7 +117,6 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
 public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
 
     private final ApplicationEventHandler applicationEventHandler;
-    private final ConsumerNetworkThread consumerNetworkThread;
     private final Time time;
     private final Optional<String> groupId;
     private final KafkaConsumerMetrics kafkaConsumerMetrics;
@@ -237,11 +236,6 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
                     metadata,
                     applicationEventQueue,
                     Optional.empty());
-            this.consumerNetworkThread = new ConsumerNetworkThread(logContext,
-                    time,
-                    applicationEventProcessorSupplier,
-                    networkClientDelegateSupplier,
-                    requestManagersSupplier);
             ConsumerCoordinatorMetrics sensors = new ConsumerCoordinatorMetrics(
                     subscriptions,
                     metrics,
@@ -253,13 +247,14 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
                     time,
                     sensors
             );
-            this.applicationEventHandler = new ApplicationEventHandler(logContext, applicationEventQueue) {
-                @Override
-                public void add(ApplicationEvent event) {
-                    super.add(event);
-                    consumerNetworkThread.wakeup();
-                }
-            };
+            this.applicationEventHandler = new ApplicationEventHandler(
+                    logContext,
+                    time,
+                    applicationEventQueue,
+                    applicationEventProcessorSupplier,
+                    networkClientDelegateSupplier,
+                    requestManagersSupplier
+            );
 
             this.backgroundEventProcessor = new BackgroundEventProcessor(
                     logContext,
@@ -288,7 +283,6 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
                     time);
 
             this.kafkaConsumerMetrics = new KafkaConsumerMetrics(metrics, CONSUMER_METRIC_GROUP_PREFIX);
-            this.consumerNetworkThread.start();
 
             config.logUnused();
             AppInfoParser.registerAppInfo(CONSUMER_JMX_PREFIX, clientId, metrics, time.milliseconds());
@@ -312,8 +306,6 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
                                   ConsumerInterceptors<K, V> interceptors,
                                   Time time,
                                   ApplicationEventHandler applicationEventHandler,
-                                  ConsumerNetworkThread consumerNetworkThread,
-                                  BlockingQueue<BackgroundEvent> backgroundEventQueue,
                                   BackgroundEventProcessor backgroundEventProcessor,
                                   Metrics metrics,
                                   SubscriptionState subscriptions,
@@ -338,11 +330,8 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         this.defaultApiTimeoutMs = defaultApiTimeoutMs;
         this.deserializers = deserializers;
         this.applicationEventHandler = applicationEventHandler;
-        this.consumerNetworkThread = consumerNetworkThread;
         this.assignors = assignors;
         this.kafkaConsumerMetrics = new KafkaConsumerMetrics(metrics, "consumer");
-
-        this.consumerNetworkThread.start();
     }
 
     /**
@@ -741,8 +730,8 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         log.trace("Closing the Kafka consumer");
         AtomicReference<Throwable> firstException = new AtomicReference<>();
 
-        if (consumerNetworkThread != null)
-            closeQuietly(() -> consumerNetworkThread.close(timeout), "Failed to close consumer network thread with a timeout(ms)=" + timeout, firstException);
+        if (applicationEventHandler != null)
+            closeQuietly(() -> applicationEventHandler.close(timeout), "Failed to close consumer network thread with a timeout(ms)=" + timeout, firstException);
 
         closeQuietly(fetchBuffer, "Failed to close the fetch buffer", firstException);
         closeQuietly(interceptors, "consumer interceptors", firstException);
@@ -995,7 +984,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         final Fetch<K, V> fetch = fetchCollector.collectFetch(fetchBuffer);
 
         // Notify the network thread to wake up and start the next round of fetching.
-        consumerNetworkThread.wakeup();
+        applicationEventHandler.wakeupNetworkThread();
 
         return fetch;
     }

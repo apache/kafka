@@ -97,8 +97,6 @@ public class ConsumerTestBuilder implements Closeable {
     final FetchRequestManager fetchRequestManager;
     final RequestManagers requestManagers;
     public final ApplicationEventProcessor applicationEventProcessor;
-    public final BackgroundEventProcessor backgroundEventProcessor;
-    public final ApplicationEventHandler applicationEventHandler;
     public final BackgroundEventHandler backgroundEventHandler;
     public final ConsumerRebalanceListenerInvoker rebalanceListenerInvoker;
     final MockClient client;
@@ -112,7 +110,6 @@ public class ConsumerTestBuilder implements Closeable {
         this.groupInfo = groupInfo;
         this.applicationEventQueue = new LinkedBlockingQueue<>();
         this.backgroundEventQueue = new LinkedBlockingQueue<>();
-        this.applicationEventHandler = spy(new ApplicationEventHandler(logContext, applicationEventQueue));
         this.backgroundEventHandler = spy(new BackgroundEventHandler(logContext, backgroundEventQueue));
         GroupRebalanceConfig groupRebalanceConfig = new GroupRebalanceConfig(
                 100,
@@ -274,21 +271,12 @@ public class ConsumerTestBuilder implements Closeable {
                 time,
                 sensors
         );
-        this.backgroundEventProcessor = spy(
-                new BackgroundEventProcessor(
-                        logContext,
-                        backgroundEventQueue,
-                        applicationEventHandler,
-                        rebalanceListenerInvoker
-                )
-        );
     }
 
     @Override
     public void close() {
         closeQuietly(requestManagers, RequestManagers.class.getSimpleName());
         closeQuietly(applicationEventProcessor, ApplicationEventProcessor.class.getSimpleName());
-        closeQuietly(backgroundEventProcessor, BackgroundEventProcessor.class.getSimpleName());
     }
 
     public static class ConsumerNetworkThreadTestBuilder extends ConsumerTestBuilder {
@@ -316,7 +304,42 @@ public class ConsumerTestBuilder implements Closeable {
         }
     }
 
-    public static class PrototypeAsyncConsumerTestBuilder extends ConsumerNetworkThreadTestBuilder {
+    public static class ApplicationEventHandlerTestBuilder extends ConsumerTestBuilder {
+
+        public final ApplicationEventHandler applicationEventHandler;
+        public final BackgroundEventProcessor backgroundEventProcessor;
+
+        public ApplicationEventHandlerTestBuilder() {
+            this(createDefaultGroupInformation());
+        }
+
+        public ApplicationEventHandlerTestBuilder(Optional<GroupInformation> groupInfo) {
+            super(groupInfo);
+            this.applicationEventHandler = spy(new ApplicationEventHandler(
+                    logContext,
+                    time,
+                    applicationEventQueue,
+                    () -> applicationEventProcessor,
+                    () -> networkClientDelegate,
+                    () -> requestManagers));
+            this.backgroundEventProcessor = spy(
+                    new BackgroundEventProcessor(
+                            logContext,
+                            backgroundEventQueue,
+                            applicationEventHandler,
+                            rebalanceListenerInvoker
+                    )
+            );
+        }
+
+        @Override
+        public void close() {
+            closeQuietly(applicationEventHandler, ApplicationEventHandler.class.getSimpleName());
+            closeQuietly(backgroundEventProcessor, BackgroundEventProcessor.class.getSimpleName());
+        }
+    }
+
+    public static class PrototypeAsyncConsumerTestBuilder extends ApplicationEventHandlerTestBuilder {
 
         final PrototypeAsyncConsumer<String, String> consumer;
 
@@ -344,8 +367,6 @@ public class ConsumerTestBuilder implements Closeable {
                     new ConsumerInterceptors<>(Collections.emptyList()),
                     time,
                     applicationEventHandler,
-                    consumerNetworkThread,
-                    backgroundEventQueue,
                     backgroundEventProcessor,
                     metrics,
                     subscriptions,

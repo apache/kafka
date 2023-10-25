@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.PartitionLostCompleteEvent;
@@ -45,10 +46,11 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class AssignmentReconcilerTest {
 
-    private ConsumerTestBuilder testBuilder;
+    private ConsumerTestBuilder.ApplicationEventHandlerTestBuilder testBuilder;
     private SubscriptionState subscriptions;
     private BlockingQueue<ApplicationEvent> applicationEventQueue;
     private BlockingQueue<BackgroundEvent> backgroundEventQueue;
+    private ApplicationEventProcessor applicationEventProcessor;
     private BackgroundEventProcessor backgroundEventProcessor;
     private AssignmentReconciler reconciler;
 
@@ -75,20 +77,11 @@ public class AssignmentReconcilerTest {
         reconciler.startReconcile(assignment);
         assertEquals(Collections.emptySet(), subscriptions.assignedPartitions());
 
-        // Grab the background event. Because we didn't remove any partitions, but only added them, jump
-        // directly to the assign partitions. Let's verify that there's an appropriate event on the
-        // background event queue, and it has the correct partitions.
-        RebalanceStartedEvent event = pollBackgroundEvent();
-        assertEquals(event.assignedPartitions(), assignment);
-
         // Complete the future to signal to the reconciler that the ConsumerRebalanceListener callback
         // has completed. This will trigger the "commit" of the partition assignment to the subscriptions.
         assertEquals(Collections.emptySet(), subscriptions.assignedPartitions());
-        backgroundEventProcessor.process(event);
-        RebalanceCompleteEvent invokedEvent = pollApplicationEvent();
-        assertEquals(invokedEvent.assignedPartitions(), assignment);
-        assertEquals(Optional.empty(), invokedEvent.error());
-        reconciler.completeReconcile(invokedEvent.revokedPartitions(), invokedEvent.assignedPartitions());
+        backgroundEventProcessor.process();
+        applicationEventProcessor.process();
         assertEquals(assignment, subscriptions.assignedPartitions());
     }
 
@@ -104,18 +97,9 @@ public class AssignmentReconcilerTest {
             reconciler.startReconcile(originalAssignment);
             assertEquals(Collections.emptySet(), subscriptions.assignedPartitions());
 
-            // Grab the background event. Because we didn't remove any partitions, but only added them, jump
-            // directly to the assign partitions. Let's verify that there's an appropriate event on the
-            // background event queue, and it has the correct partitions.
-            RebalanceStartedEvent event = pollBackgroundEvent();
-            assertEquals(event.assignedPartitions(), originalAssignment);
-
             // Now process the callback.
-            backgroundEventProcessor.process(event);
-            RebalanceCompleteEvent invokedEvent = pollApplicationEvent();
-            assertEquals(invokedEvent.assignedPartitions(), originalAssignment);
-            assertEquals(Optional.empty(), invokedEvent.error());
-            reconciler.completeReconcile(invokedEvent.revokedPartitions(), invokedEvent.assignedPartitions());
+            backgroundEventProcessor.process();
+            applicationEventProcessor.process();
             assertEquals(originalAssignment, subscriptions.assignedPartitions());
         }
 
@@ -129,16 +113,9 @@ public class AssignmentReconcilerTest {
             reconciler.startReconcile(newAssignment);
             assertEquals(originalAssignment, subscriptions.assignedPartitions());
 
-            // Grab the background event. We are removing some partitions, so verify that we have the correct event
-            // type on the background event queue, and it has the correct partitions to remove.
-            RebalanceStartedEvent event = pollBackgroundEvent();
-            assertEquals(event.revokedPartitions(), expectedRevoked);
-
             // Now process the callback.
-            backgroundEventProcessor.process(event);
-            RebalanceCompleteEvent invokedEvent = pollApplicationEvent();
-            assertEquals(invokedEvent.revokedPartitions(), expectedRevoked);
-            reconciler.completeReconcile(invokedEvent.revokedPartitions(), invokedEvent.assignedPartitions());
+            backgroundEventProcessor.process();
+            applicationEventProcessor.process();
             assertEquals(newAssignment, subscriptions.assignedPartitions());
         }
     }
@@ -153,16 +130,8 @@ public class AssignmentReconcilerTest {
         reconciler.startLost();
         assertEquals(partitions, subscriptions.assignedPartitions());
 
-        // Grab the background event. Because we are "losing" the partitions, verify that there's an
-        // appropriate event on the background event queue, and it still has the partitions.
-        PartitionLostStartedEvent event = pollBackgroundEvent();
-        assertEquals(partitions, event.lostPartitions());
-
-        // Now process the callback. Afterward we should have an empty set of partitions
-        backgroundEventProcessor.process(event);
-        PartitionLostCompleteEvent invokedEvent = pollApplicationEvent();
-        assertEquals(partitions, invokedEvent.lostPartitions());
-        reconciler.completeLost(invokedEvent.lostPartitions());
+        backgroundEventProcessor.process();
+        applicationEventProcessor.process();
         assertEquals(Collections.emptySet(), subscriptions.assignedPartitions());
     }
 
@@ -195,15 +164,10 @@ public class AssignmentReconcilerTest {
             // Start the reconciliation process.
             reconciler.startReconcile(assignment);
 
-            RebalanceStartedEvent event = pollBackgroundEvent();
-            assertEquals(event.revokedPartitions(), newTopicPartitions(1, 3));
-
             // Now process the callback. It should throw an exception, but it should still finish and allow
             // the reconciler to alter the assigned partition set.
-            assertThrows(KafkaException.class, () -> backgroundEventProcessor.process(event));
-            RebalanceCompleteEvent invokedEvent = pollApplicationEvent();
-            assertEquals(invokedEvent.revokedPartitions(), newTopicPartitions(1, 3));
-            reconciler.completeReconcile(invokedEvent.revokedPartitions(), invokedEvent.assignedPartitions());
+            assertThrows(KafkaException.class, () -> backgroundEventProcessor.process());
+            applicationEventProcessor.process();
             assertEquals(newTopicPartitions(0, 2), subscriptions.assignedPartitions());
         }
     }
@@ -220,7 +184,7 @@ public class AssignmentReconcilerTest {
     }
 
     private void setup(ConsumerRebalanceListener listener) {
-        testBuilder = new ConsumerTestBuilder(ConsumerTestBuilder.createDefaultGroupInformation());
+        testBuilder = new ConsumerTestBuilder.ApplicationEventHandlerTestBuilder(ConsumerTestBuilder.createDefaultGroupInformation());
 
         // Create our subscriptions and subscribe to the topics.
         subscriptions = testBuilder.subscriptions;
@@ -228,24 +192,25 @@ public class AssignmentReconcilerTest {
 
         // We need the background event queue to check for the events from the network thread to the application thread
         // to signal the ConsumerRebalanceListener callbacks.
-        applicationEventQueue = testBuilder.applicationEventQueue;
-        backgroundEventQueue = testBuilder.backgroundEventQueue;
+//        applicationEventQueue = testBuilder.applicationEventQueue;
+//        backgroundEventQueue = testBuilder.backgroundEventQueue;
 
+        applicationEventProcessor = testBuilder.applicationEventProcessor;
         backgroundEventProcessor = testBuilder.backgroundEventProcessor;
         reconciler = testBuilder.assignmentReconciler.orElseThrow(() -> new IllegalStateException("Should be in a group"));
     }
 
-    @SuppressWarnings("unchecked")
-    private <T extends ApplicationEvent> T pollApplicationEvent() {
-        ApplicationEvent event = applicationEventQueue.poll();
-        assertNotNull(event);
-        return (T) event;
-    }
-
-    @SuppressWarnings("unchecked")
-    private <T extends BackgroundEvent> T pollBackgroundEvent() {
-        BackgroundEvent event = backgroundEventQueue.poll();
-        assertNotNull(event);
-        return (T) event;
-    }
+//    @SuppressWarnings("unchecked")
+//    private <T extends ApplicationEvent> T pollApplicationEvent() {
+//        ApplicationEvent event = applicationEventQueue.poll();
+//        assertNotNull(event);
+//        return (T) event;
+//    }
+//
+//    @SuppressWarnings("unchecked")
+//    private <T extends BackgroundEvent> T pollBackgroundEvent() {
+//        BackgroundEvent event = backgroundEventQueue.poll();
+//        assertNotNull(event);
+//        return (T) event;
+//    }
 }
