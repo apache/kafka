@@ -232,9 +232,9 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
                     fetchMetricsManager,
                     networkClientDelegateSupplier);
             final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(logContext,
-                    requestManagersSupplier,
                     metadata,
                     applicationEventQueue,
+                    requestManagersSupplier,
                     Optional.empty());
             ConsumerCoordinatorMetrics sensors = new ConsumerCoordinatorMetrics(
                     subscriptions,

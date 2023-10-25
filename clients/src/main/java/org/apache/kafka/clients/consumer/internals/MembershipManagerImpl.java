@@ -318,7 +318,8 @@ public class MembershipManagerImpl implements MembershipManager {
      * @return Assignment that the member received from the server but hasn't completely processed
      * yet. Visible for testing.
      */
-    Optional<ConsumerGroupHeartbeatResponseData.Assignment> targetAssignment() {
+    @Override
+    public Optional<ConsumerGroupHeartbeatResponseData.Assignment> targetAssignment() {
         return targetAssignment;
     }
 

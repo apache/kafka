@@ -40,7 +40,7 @@ public class MembershipManagerImplTest {
 
     private static final int MEMBER_EPOCH = 1;
     private ConsumerTestBuilder testBuilder;
-    private MembershipManagerImpl membershipManager;
+    private MembershipManager membershipManager;
 
     @BeforeEach
     public void setup() {

@@ -81,6 +81,11 @@ public interface MembershipManager {
     ConsumerGroupHeartbeatResponseData.Assignment currentAssignment();
 
     /**
+     * @return Target assignment for the member.
+     */
+    Optional<ConsumerGroupHeartbeatResponseData.Assignment> targetAssignment();
+
+    /**
      * Update the assignment for the member, indicating that the provided assignment is the new
      * current assignment.
      */

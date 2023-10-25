@@ -90,7 +90,7 @@ public class ConsumerTestBuilder implements Closeable {
     final Optional<CoordinatorRequestManager> coordinatorRequestManager;
     final Optional<CommitRequestManager> commitRequestManager;
     final Optional<HeartbeatRequestManager> heartbeatRequestManager;
-    final Optional<MembershipManagerImpl> membershipManager;
+    final Optional<MembershipManager> membershipManager;
     final Optional<HeartbeatRequestManager.HeartbeatRequestState> heartbeatRequestState;
     final Optional<AssignmentReconciler> assignmentReconciler;
     final TopicMetadataRequestManager topicMetadataRequestManager;

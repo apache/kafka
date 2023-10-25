@@ -197,9 +197,9 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
      * {@link ConsumerNetworkThread}.
      */
     public static Supplier<ApplicationEventProcessor> supplier(final LogContext logContext,
-                                                               final Supplier<RequestManagers> requestManagersSupplier,
                                                                final ConsumerMetadata metadata,
                                                                final BlockingQueue<ApplicationEvent> applicationEventQueue,
+                                                               final Supplier<RequestManagers> requestManagersSupplier,
                                                                final Optional<MembershipManager> membershipManager) {
         return new CachedSupplier<ApplicationEventProcessor>() {
             @Override
