@@ -950,8 +950,7 @@ public class OffsetMetadataManagerTest {
             .setMemberEpoch(10)
             .setTargetMemberEpoch(10)
             .setPreviousMemberEpoch(10)
-            .build()
-        );
+            .build(), context.groupMetadataManager.image().topics());
 
         OffsetCommitRequestData request = new OffsetCommitRequestData()
             .setGroupId("foo")
@@ -996,8 +995,7 @@ public class OffsetMetadataManagerTest {
             .setMemberEpoch(10)
             .setTargetMemberEpoch(10)
             .setPreviousMemberEpoch(10)
-            .build()
-        );
+            .build(), context.groupMetadataManager.image().topics());
 
         // Verify that the request is rejected with the correct exception.
         assertThrows(UnsupportedVersionException.class, () -> context.commitOffset(
@@ -1090,8 +1088,7 @@ public class OffsetMetadataManagerTest {
             .setMemberEpoch(10)
             .setTargetMemberEpoch(10)
             .setPreviousMemberEpoch(10)
-            .build()
-        );
+            .build(), context.groupMetadataManager.image().topics());
 
         CoordinatorResult<OffsetCommitResponseData, Record> result = context.commitOffset(
             new OffsetCommitRequestData()
@@ -1161,8 +1158,7 @@ public class OffsetMetadataManagerTest {
             .setMemberEpoch(10)
             .setTargetMemberEpoch(10)
             .setPreviousMemberEpoch(10)
-            .build()
-        );
+            .build(), context.groupMetadataManager.image().topics());
 
         CoordinatorResult<OffsetCommitResponseData, Record> result = context.commitOffset(
             new OffsetCommitRequestData()
@@ -1716,7 +1712,7 @@ public class OffsetMetadataManagerTest {
             image.topics(),
             image.cluster()
         );
-        group.updateMember(member1);
+        group.updateMember(member1, image.topics());
         context.commitOffset("foo", "bar", 0, 100L, 0);
         assertTrue(group.isSubscribedToTopic("bar"));
 

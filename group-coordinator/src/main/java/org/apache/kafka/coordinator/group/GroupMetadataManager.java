@@ -1213,7 +1213,7 @@ public class GroupMetadataManager {
             ConsumerGroupMember oldMember = consumerGroup.getOrMaybeCreateMember(memberId, true);
             consumerGroup.updateMember(new ConsumerGroupMember.Builder(oldMember)
                 .updateWith(value)
-                .build());
+                .build(), metadataImage.topics());
         } else {
             ConsumerGroupMember oldMember = consumerGroup.getOrMaybeCreateMember(memberId, false);
             if (oldMember.memberEpoch() != LEAVE_GROUP_MEMBER_EPOCH) {
@@ -1224,7 +1224,7 @@ public class GroupMetadataManager {
                 throw new IllegalStateException("Received a tombstone record to delete member " + memberId
                     + " but did not receive ConsumerGroupTargetAssignmentMetadataValue tombstone.");
             }
-            consumerGroup.removeMember(memberId);
+            consumerGroup.removeMember(memberId, metadataImage.topics());
         }
 
         updateGroupsByTopics(groupId, oldSubscribedTopicNames, consumerGroup.subscribedTopicNames());
@@ -1434,7 +1434,7 @@ public class GroupMetadataManager {
             ConsumerGroupMember newMember = new ConsumerGroupMember.Builder(oldMember)
                 .updateWith(value)
                 .build();
-            consumerGroup.updateMember(newMember);
+            consumerGroup.updateMember(newMember, metadataImage.topics());
         } else {
             ConsumerGroupMember newMember = new ConsumerGroupMember.Builder(oldMember)
                 .setMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH)
@@ -1444,7 +1444,7 @@ public class GroupMetadataManager {
                 .setPartitionsPendingRevocation(Collections.emptyMap())
                 .setPartitionsPendingAssignment(Collections.emptyMap())
                 .build();
-            consumerGroup.updateMember(newMember);
+            consumerGroup.updateMember(newMember, metadataImage.topics());
         }
     }
 

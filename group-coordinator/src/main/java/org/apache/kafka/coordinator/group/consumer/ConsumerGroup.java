@@ -42,6 +42,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.BiFunction;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -290,14 +291,15 @@ public class ConsumerGroup implements Group {
     /**
      * Updates the member.
      *
+     * @param topicsImage The current metadata for all available topics.
      * @param newMember The new member state.
      */
-    public void updateMember(ConsumerGroupMember newMember) {
+    public void updateMember(ConsumerGroupMember newMember, TopicsImage topicsImage) {
         if (newMember == null) {
             throw new IllegalArgumentException("newMember cannot be null.");
         }
         ConsumerGroupMember oldMember = members.put(newMember.memberId(), newMember);
-        maybeUpdateSubscribedTopicNames(oldMember, newMember);
+        maybeUpdateSubscribedTopicNames(topicsImage, oldMember, newMember);
         maybeUpdateServerAssignors(oldMember, newMember);
         maybeUpdatePartitionEpoch(oldMember, newMember);
         maybeUpdateGroupState();
@@ -306,11 +308,12 @@ public class ConsumerGroup implements Group {
     /**
      * Remove the member from the group.
      *
+     * @param topicsImage The current metadata for all available topics.
      * @param memberId The member id to remove.
      */
-    public void removeMember(String memberId) {
+    public void removeMember(String memberId, TopicsImage topicsImage) {
         ConsumerGroupMember oldMember = members.remove(memberId);
-        maybeUpdateSubscribedTopicNames(oldMember, null);
+        maybeUpdateSubscribedTopicNames(topicsImage, oldMember, null);
         maybeUpdateServerAssignors(oldMember, null);
         maybeRemovePartitionEpoch(oldMember);
         maybeUpdateGroupState();
@@ -710,58 +713,53 @@ public class ConsumerGroup implements Group {
     /**
      * Updates the subscribed topic names count.
      *
+     * @param topicsImage The current metadata for all available topics.
      * @param oldMember The old member.
      * @param newMember The new member.
      */
     private void maybeUpdateSubscribedTopicNames(
-        ConsumerGroupMember oldMember,
-        ConsumerGroupMember newMember
+            TopicsImage topicsImage,
+            ConsumerGroupMember oldMember,
+            ConsumerGroupMember newMember
     ) {
-        maybeUpdateSubscribedTopicNames(null, subscribedTopicNames, oldMember, newMember);
-    }
-
-    private void maybeUpdateSubscribedTopicNames(
-        TopicsImage topics,
-        ConsumerGroupMember oldMember,
-        ConsumerGroupMember newMember
-    ) {
-        maybeUpdateSubscribedTopicNames(topics, subscribedTopicNames, oldMember, newMember);
+        maybeUpdateSubscribedTopicNames(topicsImage, subscribedTopicNames, oldMember, newMember);
     }
 
     /**
      * Updates the subscription count.
      *
+     * @param topicsImage            The current metadata for all available topics.
      * @param subscribedTopicCount  The map to update.
      * @param oldMember             The old member.
      * @param newMember             The new member.
      */
     private static void maybeUpdateSubscribedTopicNames(
-        TopicsImage topics,
+        TopicsImage topicsImage,
         Map<String, Integer> subscribedTopicCount,
         ConsumerGroupMember oldMember,
         ConsumerGroupMember newMember
     ) {
         if (oldMember != null) {
-            oldMember.subscribedTopicNames().forEach(topicName ->
-                    subscribedTopicCount.compute(topicName, ConsumerGroup::decValue)
-            );
+            processMemberSubscribedTopics(oldMember, ConsumerGroup::decValue);
         }
-
         if (newMember != null) {
-            String newMemberRegex = newMember.subscribedTopicRegex();
-            if (newMemberRegex == null || newMemberRegex.isEmpty()) {
-                newMember.subscribedTopicNames().forEach(topicName ->
-                        subscribedTopicCount.compute(topicName, ConsumerGroup::incValue)
-                );
+            processMemberSubscribedTopics(newMember, ConsumerGroup::incValue);
+        }
+    }
 
-            } else if (topics != null) {
-                // During replay, when the topic image is empty, we should not update the RegexSubscribedTopics.
-                // Therefore, we skip updating the subscribedTopicCount in this case.
-                getRegexSubscribedTopics(topics, newMember.subscribedTopicRegex()).forEach(topicName -> {
-                    newMember.subscribedTopicNames().add(topicName);
-                    subscribedTopicCount.compute(topicName, ConsumerGroup::incValue);
-                });
-            }
+    private static void processMemberSubscribedTopics(TopicsImage topicsImage,
+                                                      Map<String, Integer> subscribedTopicCount,
+                                                      ConsumerGroupMember member,
+                                                      BiFunction<String, Integer, Integer> valueUpdater
+    ) {
+        String memberRegex = member.subscribedTopicRegex();
+        List<String> topicNames = member.subscribedTopicNames();
+
+        if (memberRegex == null || memberRegex.isEmpty()) {
+            topicNames.forEach(topicName -> subscribedTopicCount.compute(topicName, valueUpdater));
+        } else {
+            getRegexSubscribedTopics(topicsImage, memberRegex)
+                    .forEach(topicName -> subscribedTopicCount.compute(topicName, valueUpdater));
         }
     }
 
