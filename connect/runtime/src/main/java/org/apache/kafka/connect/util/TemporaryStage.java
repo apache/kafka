@@ -16,18 +16,22 @@
  */
 package org.apache.kafka.connect.util;
 
+import org.apache.kafka.common.utils.Time;
+
 public class TemporaryStage implements AutoCloseable {
 
-    private final Callback<?> callback;
+    private final Stage stage;
+    private final Time time;
 
-    public TemporaryStage(String description, long started, Callback<?> callback) {
-        this.callback = callback;
-        callback.recordStage(new Stage(description, started));
+    public TemporaryStage(String description, Callback<?> callback, Time time) {
+        this.stage = new Stage(description, time.milliseconds());
+        this.time = time;
+        callback.recordStage(stage);
     }
 
     @Override
     public void close() {
-        callback.recordStage(null);
+        stage.complete(time.milliseconds());
     }
 
 }

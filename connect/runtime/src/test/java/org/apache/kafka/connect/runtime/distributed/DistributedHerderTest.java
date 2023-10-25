@@ -4053,7 +4053,7 @@ public class DistributedHerderTest {
         doAnswer(invocation -> {
             Stage stage = invocation.getArgument(0);
             if (stage != null)
-                result.add(stage.description);
+                result.add(stage.description());
             return null;
         }).when(callback).recordStage(any());
 
@@ -4109,7 +4109,7 @@ public class DistributedHerderTest {
 
         @Override
         public void recordStage(Stage stage) {
-            stageDescriptions.add(stage.description);
+            stageDescriptions.add(stage.description());
             super.recordStage(stage);
         }
 

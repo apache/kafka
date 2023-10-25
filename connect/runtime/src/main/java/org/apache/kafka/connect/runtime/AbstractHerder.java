@@ -407,7 +407,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             callback.recordStage(null);
             try {
                 Function<String, TemporaryStage> reportStage = description ->
-                        new TemporaryStage(description, time.milliseconds(), callback);
+                        new TemporaryStage(description, callback, time);
                 ConfigInfos result = validateConnectorConfig(connectorProps, reportStage, doLog);
                 callback.onCompletion(null, result);
             } catch (Throwable t) {

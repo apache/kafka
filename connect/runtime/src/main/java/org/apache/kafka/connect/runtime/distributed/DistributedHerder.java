@@ -1262,7 +1262,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                     forwardRequestExecutor.execute(() -> {
                         try {
                             String stageDescription = "Forwarding zombie fencing request to the leader at " + workerUrl;
-                            try (TemporaryStage stage = new TemporaryStage(stageDescription, time.milliseconds(), callback)) {
+                            try (TemporaryStage stage = new TemporaryStage(stageDescription, callback, time)) {
                                 restClient.httpRequest(fenceUrl, "PUT", null, null, null, sessionKey, requestSignatureAlgorithm);
                             }
                             callback.onCompletion(null, null);
@@ -2198,7 +2198,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                             .toString();
                     log.trace("Forwarding task configurations for connector {} to leader", connName);
                     String stageDescription = "Forwarding task configurations to the leader at " + leaderUrl;
-                    try (TemporaryStage stage = new TemporaryStage(stageDescription, time.milliseconds(), cb)) {
+                    try (TemporaryStage stage = new TemporaryStage(stageDescription, cb, time)) {
                         restClient.httpRequest(reconfigUrl, "POST", null, rawTaskProps, null, sessionKey, requestSignatureAlgorithm);
                     }
                     cb.onCompletion(null, null);
@@ -2731,23 +2731,23 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
     private synchronized void recordTickThreadStage(String description) {
         log.trace("Recording new tick thread stage: {}", description);
-        // Preserve the current stage to report to requests submitted after this method is invoked
-        setTickThreadStage(new Stage(description, time.milliseconds()));
-    }
 
-    private synchronized void wipeTickThreadStage() {
-        log.trace("Wiping current tick thread stage; was {}", tickThreadStage);
-        setTickThreadStage(null);
-    }
-
-    private synchronized void setTickThreadStage(Stage stage) {
         // Preserve the current stage to report to requests submitted after this method is invoked
-        this.tickThreadStage = stage;
+        this.tickThreadStage = new Stage(description, time.milliseconds());
         // Report the current stage to all pending requests
         requests.forEach(request -> request.callback().recordStage(tickThreadStage));
         // And, if there is an in-progress request, report the stage to it as well
         Optional.ofNullable(currentRequest).map(DistributedHerderRequest::callback)
                 .ifPresent(callback -> callback.recordStage(tickThreadStage));
+    }
+
+    private synchronized void completeTickThreadStage() {
+        log.trace("Completing current tick thread stage; was {}", tickThreadStage);
+
+        if (tickThreadStage != null) {
+            tickThreadStage.complete(time.milliseconds());
+            tickThreadStage = null;
+        }
     }
 
     private class TickThreadStage implements AutoCloseable {
@@ -2758,7 +2758,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
         @Override
         public void close() {
-            wipeTickThreadStage();
+            completeTickThreadStage();
         }
     }
 

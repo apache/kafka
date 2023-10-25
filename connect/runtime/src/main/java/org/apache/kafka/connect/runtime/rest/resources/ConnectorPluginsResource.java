@@ -27,6 +27,7 @@ import org.apache.kafka.connect.runtime.rest.entities.ConfigKeyInfo;
 import org.apache.kafka.connect.runtime.rest.entities.PluginInfo;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
 import org.apache.kafka.connect.util.FutureCallback;
+import org.apache.kafka.connect.util.Stage;
 import org.apache.kafka.connect.util.StagedTimeoutException;
 
 import javax.ws.rs.BadRequestException;
@@ -110,9 +111,18 @@ public class ConnectorPluginsResource implements ConnectResource {
         try {
             return validationCallback.get(requestTimeoutMs, TimeUnit.MILLISECONDS);
         } catch (StagedTimeoutException e) {
-            String message = "Request timed out. The worker is currently " +
-                    e.stage().description + ", which began at " +
-                    Instant.ofEpochMilli(e.stage().started);
+            Stage stage = e.stage();
+            String message;
+            if (stage.completed() != null) {
+                message = "Request timed out. The last operation the worker completed was "
+                        + stage.description() + ", which began at "
+                        + Instant.ofEpochMilli(stage.started()) + " and completed at "
+                        + Instant.ofEpochMilli(stage.completed());
+            } else {
+                message = "Request timed out. The worker is currently "
+                        + stage.description() + ", which began at "
+                        + Instant.ofEpochMilli(stage.started());
+            }
             // This timeout is for the operation itself. None of the timeout error codes are relevant, so internal server
             // error is the best option
             throw new ConnectRestException(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), message);
