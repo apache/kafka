@@ -52,6 +52,7 @@ object ConsoleConsumer extends Logging {
     val conf = new ConsumerConfig(args)
     try {
       run(conf)
+      Exit.exit(0)
     } catch {
       case e: AuthenticationException =>
         error("Authentication failed: terminating consumer process", e)

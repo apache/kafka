@@ -92,6 +92,7 @@ object DumpLogSegments {
         System.err.println(s"  $first is followed by $second")
       }
     }
+    Exit.exit(0)
   }
 
   private def dumpTxnIndex(file: File): Unit = {

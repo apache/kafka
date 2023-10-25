@@ -57,6 +57,7 @@ object ConsumerGroupCommand extends Logging {
         CommandLineUtils.printUsageAndExit(opts.parser, "Command must include exactly one action: --list, --describe, --delete, --reset-offsets, --delete-offsets")
 
       run(opts)
+      Exit.exit(0)
     } catch {
       case e: OptionException =>
         CommandLineUtils.printUsageAndExit(opts.parser, e.getMessage)

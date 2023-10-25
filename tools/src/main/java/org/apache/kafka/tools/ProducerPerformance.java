@@ -55,6 +55,7 @@ public class ProducerPerformance {
     void start(String[] args) throws IOException {
         ArgumentParser parser = argParser();
 
+        int exitCode = 0;
         try {
             Namespace res = parser.parseArgs(args);
 
@@ -152,11 +153,12 @@ public class ProducerPerformance {
         } catch (ArgumentParserException e) {
             if (args.length == 0) {
                 parser.printHelp();
-                Exit.exit(0);
             } else {
                 parser.handleError(e);
-                Exit.exit(1);
+                exitCode = 1;
             }
+        } finally {
+            Exit.exit(exitCode);
         }
 
     }

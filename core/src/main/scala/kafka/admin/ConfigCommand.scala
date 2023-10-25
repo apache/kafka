@@ -95,6 +95,7 @@ object ConfigCommand extends Logging {
       } else {
         processCommand(opts)
       }
+      Exit.exit(0)
     } catch {
       case e @ (_: IllegalArgumentException | _: InvalidConfigurationException | _: OptionException) =>
         logger.debug(s"Failed config command with args '${args.mkString(" ")}'", e)

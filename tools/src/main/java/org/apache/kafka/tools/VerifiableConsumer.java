@@ -666,6 +666,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
             // Can't use `Exit.exit` here because it didn't exist until 0.11.0.0.
             System.exit(0);
         }
+        int exitCode = 0;
         try {
             final VerifiableConsumer consumer = createFromArgs(parser, args);
             // Can't use `Exit.addShutdownHook` here because it didn't exist until 2.5.0.
@@ -674,8 +675,10 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
             consumer.run();
         } catch (ArgumentParserException e) {
             parser.handleError(e);
+            exitCode = 1;
+        } finally {
             // Can't use `Exit.exit` here because it didn't exist until 0.11.0.0.
-            System.exit(1);
+            System.exit(exitCode);
         }
     }
 

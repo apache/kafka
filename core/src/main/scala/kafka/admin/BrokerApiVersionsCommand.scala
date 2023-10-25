@@ -23,7 +23,7 @@ import java.util.Properties
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.{ConcurrentLinkedQueue, TimeUnit}
 import kafka.utils.Implicits._
-import kafka.utils.Logging
+import kafka.utils.{Exit, Logging}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.clients.{ApiVersions, ClientDnsLookup, ClientResponse, ClientUtils, CommonClientConfigs, Metadata, NetworkClient, NodeApiVersions}
 import org.apache.kafka.clients.consumer.internals.{ConsumerNetworkClient, RequestFuture}
@@ -52,6 +52,7 @@ object BrokerApiVersionsCommand {
 
   def main(args: Array[String]): Unit = {
     execute(args, System.out)
+    Exit.exit(0)
   }
 
   def execute(args: Array[String], out: PrintStream): Unit = {

@@ -115,6 +115,7 @@ object ZkSecurityMigrator extends Logging {
   def main(args: Array[String]): Unit = {
     try {
       run(args)
+      Exit.exit(0)
     } catch {
         case e: Exception => {
           e.printStackTrace()

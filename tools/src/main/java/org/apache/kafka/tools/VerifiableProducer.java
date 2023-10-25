@@ -533,6 +533,7 @@ public class VerifiableProducer implements AutoCloseable {
             System.exit(0);
         }
 
+        int exitCode = 0;
         try {
             final VerifiableProducer producer = createFromArgs(parser, args);
 
@@ -557,8 +558,10 @@ public class VerifiableProducer implements AutoCloseable {
             producer.run(throttler);
         } catch (ArgumentParserException e) {
             parser.handleError(e);
+            exitCode = 1;
+        } finally {
             // Can't use `Exit.exit` here because it didn't exist until 0.11.0.0.
-            System.exit(1);
+            System.exit(exitCode);
         }
     }
 

@@ -102,6 +102,8 @@ public class ConsumerPerformance {
 
             if (metrics != null)
                 ToolsUtils.printMetrics(metrics);
+
+            Exit.exit(0);
         } catch (Throwable e) {
             System.err.println(e.getMessage());
             System.err.println(Utils.stackTrace(e));

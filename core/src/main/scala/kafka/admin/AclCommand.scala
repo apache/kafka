@@ -75,6 +75,7 @@ object AclCommand extends Logging {
         aclCommandService.removeAcls()
       else if (opts.options.has(opts.listOpt))
         aclCommandService.listAcls()
+      Exit.exit(0)
     } catch {
       case e: Throwable =>
         println(s"Error while executing ACL command: ${e.getMessage}")

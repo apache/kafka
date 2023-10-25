@@ -221,6 +221,8 @@ object ReassignPartitionsCommand extends Logging {
     // If the command failed, exit with a non-zero exit code.
     if (failed) {
       Exit.exit(1)
+    } else {
+      Exit.exit(0)
     }
   }
 

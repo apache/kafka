@@ -108,6 +108,7 @@ public class ReplicaVerificationTool {
     private static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss,SSS");
 
     public static void main(String[] args) {
+        int exitCode = 0;
         try {
             ReplicaVerificationToolOptions options = new ReplicaVerificationToolOptions(args);
             // getting topic metadata
@@ -210,7 +211,9 @@ public class ReplicaVerificationTool {
         } catch (Throwable e) {
             System.err.println(e.getMessage());
             System.err.println(Utils.stackTrace(e));
-            Exit.exit(1);
+            exitCode = 1;
+        } finally {
+            Exit.exit(exitCode);
         }
     }
 
