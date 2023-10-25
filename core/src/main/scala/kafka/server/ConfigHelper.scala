@@ -140,7 +140,7 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
               val configEntries = new  ListBuffer[DescribeConfigsResponseData.DescribeConfigsResourceResult]()
               entityProps.forEach((name, value) => {
                 configEntries += new DescribeConfigsResponseData.DescribeConfigsResourceResult().setName(name.toString)
-                  .setValue(value.toString).setConfigSource(ConfigSource.DYNAMIC_CLIENT_METRICS_CONFIG.id())
+                  .setValue(value.toString).setConfigSource(ConfigSource.CLIENT_METRICS_CONFIG.id())
                   .setIsSensitive(false).setReadOnly(false).setSynonyms(List.empty.asJava)
               })
 

@@ -21,7 +21,7 @@ import ClientMetricsConfig.ClientMatchingParams.{CLIENT_SOFTWARE_NAME, CLIENT_SO
 import java.util.Properties
 
 object ClientMetricsTestUtils {
-  val defaultPushInterval = 30 * 1000 // 30 seconds
+  val defaultPushIntervalMs: Int = 30 * 1000 // 30 seconds
 
   val defaultMetrics =
     "org.apache.kafka.client.producer.partition.queue.,org.apache.kafka.client.producer.partition.latency"
@@ -29,11 +29,11 @@ object ClientMetricsTestUtils {
   val defaultClientMatchPatters =
     List(s"${CLIENT_SOFTWARE_NAME}=Java", s"${CLIENT_SOFTWARE_VERSION}=11.1.*")
 
-  def getDefaultProperties() :Properties = {
+  def getDefaultProperties: Properties = {
     val props = new Properties()
     props.put(ClientMetricsConfig.ClientMetrics.SubscriptionMetrics, defaultMetrics)
     props.put(ClientMetricsConfig.ClientMetrics.ClientMatchPattern, defaultClientMatchPatters.mkString(","))
-    props.put(ClientMetricsConfig.ClientMetrics.PushIntervalMs, defaultPushInterval.toString)
+    props.put(ClientMetricsConfig.ClientMetrics.PushIntervalMs, defaultPushIntervalMs.toString)
     props
   }
 }

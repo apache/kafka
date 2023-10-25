@@ -16,7 +16,6 @@
  */
 package kafka.metrics
 
-import kafka.Kafka.info
 import kafka.metrics.ClientMetricsConfig.ClientMatchingParams._
 import kafka.network.RequestChannel
 import org.apache.kafka.common.errors.InvalidConfigurationException
@@ -31,17 +30,17 @@ object ClientMetricsMetadata {
   def apply(request: RequestChannel.Request, clientInstanceId: String): ClientMetricsMetadata = {
     val instance = new ClientMetricsMetadata
     val ctx = request.context
-    val softwareName = if (ctx.clientInformation != null) ctx.clientInformation.softwareName() else ""
-    val softwareVersion = if (ctx.clientInformation != null) ctx.clientInformation.softwareVersion() else ""
-    instance.init(clientInstanceId, ctx.clientId(), softwareName, softwareVersion,
-                  ctx.clientAddress.getHostAddress, ctx.clientAddress.getHostAddress)
+    val clientSoftwareName = if (ctx.clientInformation != null) ctx.clientInformation.softwareName() else ""
+    val clientSoftwareVersion = if (ctx.clientInformation != null) ctx.clientInformation.softwareVersion() else ""
+    instance.init(clientInstanceId, ctx.clientId(), clientSoftwareName, clientSoftwareVersion,
+                  ctx.clientAddress.getHostAddress, ctx.clientAddress.getHostAddress) // TODO: Fix Port
     instance
   }
 
-  def apply(clientInstanceId: String, clientId: String, softwareName: String,
-            softwareVersion: String, clientHostAddress: String, clientPort: String): ClientMetricsMetadata = {
+  def apply(clientInstanceId: String, clientId: String, clientSoftwareName: String,
+            clientSoftwareVersion: String, clientSourceAddress: String, clientSourcePort: String): ClientMetricsMetadata = {
     val instance = new ClientMetricsMetadata
-    instance.init(clientInstanceId, clientId, softwareName, softwareVersion, clientHostAddress, clientPort)
+    instance.init(clientInstanceId, clientId, clientSoftwareName, clientSoftwareVersion, clientSourceAddress, clientSourcePort)
     instance
   }
 
@@ -77,7 +76,7 @@ object ClientMetricsMetadata {
       Pattern.compile(inputPattern)
       true
     } catch {
-      case e: PatternSyntaxException =>
+      case _: PatternSyntaxException =>
         false
     }
   }
@@ -89,42 +88,32 @@ class ClientMetricsMetadata {
 
   private def init(clientInstanceId: String,
                    clientId: String,
-                   softwareName: String,
-                   softwareVersion: String,
-                   clientHostAddress: String,
-                   clientPort: String): Unit = {
+                   clientSoftwareName: String,
+                   clientSoftwareVersion: String,
+                   clientSourceAddress: String,
+                   clientSourcePort: String): Unit = {
     attributesMap(CLIENT_INSTANCE_ID) = clientInstanceId
     attributesMap(CLIENT_ID) = clientId
-    attributesMap(CLIENT_SOFTWARE_NAME) = softwareName
-    attributesMap(CLIENT_SOFTWARE_VERSION) = softwareVersion
-    attributesMap(CLIENT_SOURCE_ADDRESS) = clientHostAddress
-    attributesMap(CLIENT_SOURCE_PORT) = clientPort
+    attributesMap(CLIENT_SOFTWARE_NAME) = clientSoftwareName
+    attributesMap(CLIENT_SOFTWARE_VERSION) = clientSoftwareVersion
+    attributesMap(CLIENT_SOURCE_ADDRESS) = clientSourceAddress
+    attributesMap(CLIENT_SOURCE_PORT) = clientSourcePort
   }
   def getClientId: Option[String] = attributesMap.get(CLIENT_ID)
 
-  def isMatched(patterns: Map[String, String]) : Boolean = {
+  def isMatched(patterns: Option[Map[String, String]]) : Boolean = {
     // Empty pattern or missing pattern still considered as a match
-    if (patterns == null || patterns.isEmpty) {
-      true
-    } else {
-      matchPatterns(patterns)
+    patterns match {
+      case Some(patterns) if patterns.nonEmpty => matchPatterns(patterns)
+      case _ => true
     }
   }
 
   private def matchPatterns(matchingPatterns: Map[String, String]) : Boolean = {
-    try {
-      matchingPatterns.foreach {
+    matchingPatterns.forall {
       case (k, v) =>
         val attribute = attributesMap.getOrElse(k, null)
-        if (attribute == null || v.r.anchored.findAllMatchIn(attribute).isEmpty) {
-          throw new InvalidConfigurationException(k)
-        }
-      }
-      true
-    } catch {
-      case e: InvalidConfigurationException =>
-        info(s"Unable to find the matching client subscription for the client ${e.getMessage}")
-        false
+        attribute != null && v.r.anchored.findAllMatchIn(attribute).nonEmpty
     }
   }
 }

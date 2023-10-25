@@ -2619,7 +2619,7 @@ public class KafkaAdminClient extends AdminClient {
             case DYNAMIC_BROKER_LOGGER_CONFIG:
                 configSource = ConfigEntry.ConfigSource.DYNAMIC_BROKER_LOGGER_CONFIG;
                 break;
-            case DYNAMIC_CLIENT_METRICS_CONFIG:
+            case CLIENT_METRICS_CONFIG:
                 configSource = ConfigEntry.ConfigSource.DYNAMIC_CLIENT_METRICS_CONFIG;
                 break;
             case DEFAULT_CONFIG:

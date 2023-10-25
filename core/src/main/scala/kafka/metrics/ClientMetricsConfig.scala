@@ -45,14 +45,19 @@ import java.util.Properties
  * At present, CLI can pass the following parameters in request to add/delete/update the client metrics
  * subscription:
  * <ul>
- * <li> "metrics" value should be comma separated metrics list. An empty list means no metrics subscribed.
- * A list containing just an empty string means all metrics subscribed.
- * Ex: "org.apache.kafka.producer.partition.queue.,org.apache.kafka.producer.partition.latency"
+ * <li> "metrics" value should be comma separated metrics list. A prefix match on the requested metrics
+ *      is performed in clients to determine subscribed metrics. An empty list means no metrics subscribed.
+ *      A list containing just an empty string means all metrics subscribed.
+ *      Ex: "org.apache.kafka.producer.partition.queue.,org.apache.kafka.producer.partition.latency"
+ *
  * <li> "interval.ms" should be between 100 and 3600000 (1 hour). This is the interval at which the client
- * should push the metrics to the broker.
+ *      should push the metrics to the broker.
+ *
  * <li> "match" is a comma separated list of client match patterns, in case if there is no matching
- * pattern specified then broker considers that as all match which means the associated metrics
- * applies to all the clients. Ex: "client_software_name = Java, client_software_version = 11.1.*"
+ *      pattern specified then broker considers that as all match which means the associated metrics
+ *      applies to all the clients. Ex: "client_software_name = Java, client_software_version = 11.1.*"
+ *      which means all Java clients with any sub versions of 11.1 will be matched i.e. 11.1.1, 11.1.2 etc.
+ *
  * </ul>
  * For more information please look at kip-714:
  * https://cwiki.apache.org/confluence/display/KAFKA/KIP-714%3A+Client+metrics+and+observability#KIP714:Clientmetricsandobservability-Clientmetricsconfiguration
