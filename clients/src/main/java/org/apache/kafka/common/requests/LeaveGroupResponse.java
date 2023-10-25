@@ -62,7 +62,7 @@ public class LeaveGroupResponse extends AbstractResponse {
         if (version >= 3) {
             this.data = data;
         } else {
-            if (data.members().size() != 1) {
+            if (data.members().size() > 1) {
                 throw new UnsupportedVersionException("LeaveGroup response version " + version +
                     " can only contain one member, got " + data.members().size() + " members.");
             }
