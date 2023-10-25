@@ -22,6 +22,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.DisconnectException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -70,9 +71,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class CommitRequestManagerTest {
-    private long retryBackoffMaxMs = 1000;
-    private long retryBackoffMs = 100;
-    private double jitter = 0;
     private SubscriptionState subscriptionState;
     private GroupState groupState;
     private LogContext logContext;
@@ -279,6 +277,25 @@ public class CommitRequestManagerTest {
 
         assertExceptionHandling(commitRequestManger, requestState, error);
         assertCoordinatorDisconnect(error);
+    }
+
+    @Test
+    public void testEnsureBackoffRetryOnOffsetCommitRequestTimeout() {
+        CommitRequestManager commitRequestManger = create(true, 100);
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
+
+        Map<TopicPartition, OffsetAndMetadata> offsets = Collections.singletonMap(new TopicPartition("topic", 1),
+            new OffsetAndMetadata(0));
+
+        commitRequestManger.addOffsetCommitRequest(offsets);
+        NetworkClientDelegate.PollResult res = commitRequestManger.poll(time.milliseconds());
+        assertEquals(1, res.unsentRequests.size());
+        res.unsentRequests.get(0).handler().onFailure(time.milliseconds(), new TimeoutException());
+
+        assertTrue(commitRequestManger.pendingRequests.hasUnsentRequests());
+        assertEquals(1, commitRequestManger.unsentOffsetCommitRequests().size());
+        long retryBackoffMs = commitRequestManger.unsentOffsetCommitRequests().peek().remainingBackoffMs(time.milliseconds());
+        assertRetryBackOff(commitRequestManger, retryBackoffMs);
     }
 
     private void assertCoordinatorDisconnect(final Errors error) {
