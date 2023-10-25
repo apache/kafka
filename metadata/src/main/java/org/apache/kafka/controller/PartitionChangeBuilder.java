@@ -95,9 +95,9 @@ public class PartitionChangeBuilder {
     private boolean eligibleLeaderReplicasEnabled;
     private int minISR;
 
-    // Whether allow electing last known leader when ELR is enabled. Note, the last known leader will be stored in the
-    // lastKnownElr field.
-    private boolean lastKnownLeaderEnabled = true;
+    // Whether allow electing last known leader in a Balanced recovery. Note, the last known leader will be stored in the
+    // lastKnownElr field if enabled.
+    private boolean useLastKnownLeaderInBalancedRecovery = true;
 
     public PartitionChangeBuilder(
         PartitionRegistration partition,
@@ -179,8 +179,8 @@ public class PartitionChangeBuilder {
         return this;
     }
 
-    public PartitionChangeBuilder setLastKnownLeaderEnabled(boolean lastKnownLeaderEnabled) {
-        this.lastKnownLeaderEnabled = lastKnownLeaderEnabled;
+    public PartitionChangeBuilder setUseLastKnownLeaderInBalancedRecovery(boolean useLastKnownLeaderInBalancedRecovery) {
+        this.useLastKnownLeaderInBalancedRecovery = useLastKnownLeaderInBalancedRecovery;
         return this;
     }
 
@@ -272,8 +272,8 @@ public class PartitionChangeBuilder {
     }
 
     private boolean canElectLastKnownLeader() {
-        if (!eligibleLeaderReplicasEnabled || !lastKnownLeaderEnabled) {
-            log.debug("Try to elect last known leader for " + topicId + "-" + partitionId + " but elrEnabled=" + eligibleLeaderReplicasEnabled + ", lastKnownLeaderEnabled=" + lastKnownLeaderEnabled);
+        if (!eligibleLeaderReplicasEnabled || !useLastKnownLeaderInBalancedRecovery) {
+            log.debug("Try to elect last known leader for " + topicId + "-" + partitionId + " but elrEnabled=" + eligibleLeaderReplicasEnabled + ", useLastKnownLeaderInBalancedRecovery=" + useLastKnownLeaderInBalancedRecovery);
             return false;
         }
         if (!targetElr.isEmpty() || !targetIsr.isEmpty()) {
@@ -284,9 +284,9 @@ public class PartitionChangeBuilder {
         // When the last known leader is enabled:
         // 1. The targetLastKnownElr will only be used to store the last known leader, and it is updated after the
         //    leader election. So we can only refer to the lastKnownElr in the existing partition registration.
-        // 2. When lastKnownLeaderEnabled=false, it intends to use other type of unclean leader election and the
+        // 2. When useLastKnownLeaderInBalancedRecovery=false, it intends to use other type of unclean leader election and the
         //    lastKnownElr is populated with the real last known ELR members. Then it may have multiple members in the
-        //    field even if lastKnownLeaderEnabled is set to true again. In this case, we can't refer to the
+        //    field even if useLastKnownLeaderInBalancedRecovery is set to true again. In this case, we can't refer to the
         //    lastKnownElr.
         if (partition.lastKnownElr.length != 1) {
             log.debug("Try to elect last known leader for " + topicId + "-" + partitionId + " but lastKnownElr does not only have 1 member. lastKnownElr=" + Arrays.toString(partition.lastKnownElr));
@@ -412,8 +412,12 @@ public class PartitionChangeBuilder {
 
         maybeUpdateRecordElr(record);
 
+        // If ELR is enabled, the ISR is allowed to be empty.
         if (record.isr() == null && (!targetIsr.isEmpty() || eligibleLeaderReplicasEnabled) && !targetIsr.equals(Replicas.toList(partition.isr))) {
             // Set the new ISR if it is different from the current ISR and unclean leader election didn't already set it.
+            if (targetIsr.isEmpty()) {
+                log.info("A partition will have an empty ISR. " + this);
+            }
             record.setIsr(targetIsr);
         }
 
@@ -448,7 +452,7 @@ public class PartitionChangeBuilder {
     }
 
     private void maybeUpdateLastKnownLeader(PartitionChangeRecord record) {
-        if (!lastKnownLeaderEnabled || !eligibleLeaderReplicasEnabled) return;
+        if (!useLastKnownLeaderInBalancedRecovery || !eligibleLeaderReplicasEnabled) return;
         if (record.isr() != null && record.isr().isEmpty() && (partition.lastKnownElr.length != 1 || partition.lastKnownElr[0] != partition.leader)) {
             // Only update the last known leader when the first time the partition becomes leaderless.
             record.setLastKnownELR(Arrays.asList(partition.leader));
