@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import java.util.List;
 import java.util.stream.Collectors;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientResponse;
@@ -214,7 +215,7 @@ public abstract class AbstractFetch implements Closeable {
                 fetchBuffer.add(completedFetch);
             }
 
-            if (requestVersion >= 16 && !partitionsWithUpdatedLeaderInfo.isEmpty()) {
+            if (!partitionsWithUpdatedLeaderInfo.isEmpty()) {
                 List<Node> leaderNodes = response.data().nodeEndpoints().stream()
                     .map(e -> new Node(e.nodeId(), e.host(), e.port(), e.rack()))
                     .filter(e -> !e.equals(Node.noNode()))

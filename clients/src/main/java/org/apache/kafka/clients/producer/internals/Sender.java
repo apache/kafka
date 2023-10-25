@@ -713,7 +713,8 @@ public class Sender implements Runnable {
                 }
                 if (error.exception() instanceof NotLeaderOrFollowerException || error.exception() instanceof FencedLeaderEpochException) {
                     log.debug("For {}, received error {}, with leaderIdAndEpoch {}", batch.topicPartition, error, response.currentLeader);
-                    if (partitionsWithUpdatedLeaderInfo != null && response.currentLeader.leaderId() != -1 && response.currentLeader.leaderEpoch() != -1) {
+                    if (partitionsWithUpdatedLeaderInfo != null
+                        && (response.currentLeader.leaderId() != -1 && response.currentLeader.leaderEpoch() != -1)) {
                         partitionsWithUpdatedLeaderInfo.put(batch.topicPartition, new Metadata.LeaderIdAndEpoch(
                             Optional.of(response.currentLeader.leaderId()), Optional.of(response.currentLeader.leaderEpoch())));
                     }

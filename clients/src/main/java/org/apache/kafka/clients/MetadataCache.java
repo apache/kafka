@@ -129,7 +129,7 @@ public class MetadataCache {
      * @param addUnauthorizedTopics unauthorized topics to add
      * @param addInternalTopics internal topics to add
      * @param newController the new controller node
-     * @param topicIds the mapping from topic name to topic ID from the MetadataResponse
+     * @param addTopicIds the mapping from topic name to topic ID, for topics in addPartitions
      * @param retainTopic returns whether a pre-existing topic's metadata should be retained
      * @return the merged metadata cache
      */
@@ -140,7 +140,7 @@ public class MetadataCache {
                             Set<String> addInvalidTopics,
                             Set<String> addInternalTopics,
                             Node newController,
-                            Map<String, Uuid> topicIds,
+                            Map<String, Uuid> addTopicIds,
                             BiPredicate<String, Boolean> retainTopic) {
 
         Predicate<String> shouldRetainTopic = topic -> retainTopic.test(topic, internalTopics.contains(topic));
@@ -156,7 +156,7 @@ public class MetadataCache {
 
         for (PartitionMetadata partition : addPartitions) {
             newMetadataByPartition.put(partition.topicPartition, partition);
-            Uuid id = topicIds.get(partition.topic());
+            Uuid id = addTopicIds.get(partition.topic());
             if (id != null)
                 newTopicIds.put(partition.topic(), id);
             else

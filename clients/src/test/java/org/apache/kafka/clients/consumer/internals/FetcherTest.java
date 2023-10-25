@@ -3435,7 +3435,7 @@ public class FetcherTest {
         consumerClient.poll(time.timer(0));
         assertTrue(fetcher.hasCompletedFetches());
 
-        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords = fetchedRecords();
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords = fetchRecords();
         assertTrue(partitionRecords.containsKey(tp0));
         assertTrue(partitionRecords.containsKey(tp1));
 
@@ -3467,7 +3467,7 @@ public class FetcherTest {
                     .setRecords(nextRecords));
         client.prepareResponseFrom(FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, partitions), nodeId0);
         consumerClient.poll(time.timer(0));
-        partitionRecords = fetchedRecords();
+        partitionRecords = fetchRecords();
         assertFalse(partitionRecords.containsKey(tp0));
         assertTrue(partitionRecords.containsKey(tp1));
 
@@ -3529,7 +3529,7 @@ public class FetcherTest {
         consumerClient.poll(time.timer(0));
         assertTrue(fetcher.hasCompletedFetches());
 
-        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords = fetchedRecords();
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords = fetchRecords();
         assertTrue(partitionRecords.containsKey(tp0));
         assertTrue(partitionRecords.containsKey(tp1));
 
@@ -3565,7 +3565,7 @@ public class FetcherTest {
                 .setRecords(nextRecords));
         client.prepareResponseFrom(FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, partitions, singletonList(newNode)), nodeId0);
         consumerClient.poll(time.timer(0));
-        partitionRecords = fetchedRecords();
+        partitionRecords = fetchRecords();
         assertFalse(partitionRecords.containsKey(tp0));
         assertTrue(partitionRecords.containsKey(tp1));
 
