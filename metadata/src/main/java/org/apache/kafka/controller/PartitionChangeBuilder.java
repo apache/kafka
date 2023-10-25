@@ -273,11 +273,14 @@ public class PartitionChangeBuilder {
 
     private boolean canElectLastKnownLeader() {
         if (!eligibleLeaderReplicasEnabled || !useLastKnownLeaderInBalancedRecovery) {
-            log.debug("Try to elect last known leader for " + topicId + "-" + partitionId + " but elrEnabled=" + eligibleLeaderReplicasEnabled + ", useLastKnownLeaderInBalancedRecovery=" + useLastKnownLeaderInBalancedRecovery);
+            log.trace("Try to elect last known leader for " + topicId + "-" + partitionId +
+                " but elrEnabled=" + eligibleLeaderReplicasEnabled + ", useLastKnownLeaderInBalancedRecovery=" +
+                useLastKnownLeaderInBalancedRecovery);
             return false;
         }
         if (!targetElr.isEmpty() || !targetIsr.isEmpty()) {
-            log.debug("Try to elect last known leader for " + topicId + "-" + partitionId + " but ELR/ISR is not empty. ISR=" + targetIsr + ", ELR=" + targetElr);
+            log.trace("Try to elect last known leader for " + topicId + "-" + partitionId +
+                " but ELR/ISR is not empty. ISR=" + targetIsr + ", ELR=" + targetElr);
             return false;
         }
 
@@ -289,11 +292,13 @@ public class PartitionChangeBuilder {
         //    field even if useLastKnownLeaderInBalancedRecovery is set to true again. In this case, we can't refer to the
         //    lastKnownElr.
         if (partition.lastKnownElr.length != 1) {
-            log.debug("Try to elect last known leader for " + topicId + "-" + partitionId + " but lastKnownElr does not only have 1 member. lastKnownElr=" + Arrays.toString(partition.lastKnownElr));
+            log.trace("Try to elect last known leader for " + topicId + "-" + partitionId +
+                " but lastKnownElr does not only have 1 member. lastKnownElr=" + Arrays.toString(partition.lastKnownElr));
             return false;
         }
         if (isAcceptableLeader.test(partition.lastKnownElr[0])) {
-            log.debug("Try to elect last known leader for " + topicId + "-" + partitionId + " but last known leader is not alive. last known leader=" + partition.lastKnownElr[0]);
+            log.trace("Try to elect last known leader for " + topicId + "-" + partitionId +
+                " but last known leader is not alive. last known leader=" + partition.lastKnownElr[0]);
         }
         return true;
     }
@@ -416,7 +421,7 @@ public class PartitionChangeBuilder {
         if (record.isr() == null && (!targetIsr.isEmpty() || eligibleLeaderReplicasEnabled) && !targetIsr.equals(Replicas.toList(partition.isr))) {
             // Set the new ISR if it is different from the current ISR and unclean leader election didn't already set it.
             if (targetIsr.isEmpty()) {
-                log.info("A partition will have an empty ISR. " + this);
+                log.debug("A partition will have an empty ISR. " + this);
             }
             record.setIsr(targetIsr);
         }
