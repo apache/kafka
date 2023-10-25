@@ -105,16 +105,15 @@ public class CommitRequestManager implements RequestManager {
     @Override
     public NetworkClientDelegate.PollResult poll(final long currentTimeMs) {
         // poll only when the coordinator node is known.
-        if (!coordinatorRequestManager.coordinator().isPresent()) {
-            System.out.println("empty coordinator node");
+        if (!coordinatorRequestManager.coordinator().isPresent())
             return EMPTY;
-        }
 
         maybeAutoCommit(this.subscriptions.allConsumed());
         if (!pendingRequests.hasUnsentRequests())
             return EMPTY;
 
         List<NetworkClientDelegate.UnsentRequest> requests = pendingRequests.drain(currentTimeMs);
+        // min of the remainingBackoffMs of all the request that are still backing off
         final long timeUntilNextPoll = Math.min(
             findMinTime(unsentOffsetCommitRequests(), currentTimeMs),
             findMinTime(unsentOffsetFetchRequests(), currentTimeMs));
@@ -329,6 +328,8 @@ public class CommitRequestManager implements RequestManager {
                     return true;
                 case OFFSET_METADATA_TOO_LARGE:
                 case INVALID_COMMIT_OFFSET_SIZE:
+                    future.completeExceptionally(error.exception());
+                    return false;
                 case COORDINATOR_LOAD_IN_PROGRESS:
                 case UNKNOWN_TOPIC_OR_PARTITION:
                     // retry
@@ -584,7 +585,6 @@ public class CommitRequestManager implements RequestManager {
         List<NetworkClientDelegate.UnsentRequest> drain(final long currentTimeMs) {
             List<NetworkClientDelegate.UnsentRequest> unsentRequests = new ArrayList<>();
 
-            unsentOffsetCommits.forEach(request -> System.out.println(request));
             // not ready to sent request
             List<OffsetCommitRequestState> notReady = unsentOffsetCommits.stream()
                 .filter(request -> !request.canSendRequest(currentTimeMs))

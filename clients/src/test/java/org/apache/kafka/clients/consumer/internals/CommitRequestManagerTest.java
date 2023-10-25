@@ -21,6 +21,7 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -239,7 +240,7 @@ public class CommitRequestManagerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("exceptionSupplier")
+    @MethodSource("offsetFetchExceptionSupplier")
     public void testOffsetFetchRequest_ErroredRequests(final Errors error, final boolean isRetriable) {
         CommitRequestManager commitRequestManger = create(true, 100);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
@@ -258,10 +259,12 @@ public class CommitRequestManagerTest {
             testNonRetriable(futures);
             assertEmptyPendingRequests(commitRequestManger);
         }
+
+        assertCoordinatorDisconnect(error);
     }
 
     @ParameterizedTest
-    @MethodSource("exceptionSupplier")
+    @MethodSource("offsetCommitExceptionSupplier")
     public void testOffsetCommitRequest_ErroredRequests(final Errors error, final boolean isRetriable) {
         CommitRequestManager commitRequestManger = create(true, 100);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
@@ -275,6 +278,13 @@ public class CommitRequestManagerTest {
             error);
 
         assertExceptionHandling(commitRequestManger, requestState, error);
+        assertCoordinatorDisconnect(error);
+    }
+
+    private void assertCoordinatorDisconnect(final Errors error) {
+        if (error.exception() instanceof DisconnectException) {
+            verify(coordinatorRequestManager).markCoordinatorUnknown(any(), any());
+        }
     }
 
     private void assertExceptionHandling(CommitRequestManager commitRequestManger, CommitRequestManager.OffsetCommitRequestState requestState, Errors errors) {
@@ -336,13 +346,38 @@ public class CommitRequestManagerTest {
     }
 
     // Supplies (error, isRetriable)
-    private static Stream<Arguments> exceptionSupplier() {
+    private static Stream<Arguments> offsetCommitExceptionSupplier() {
         return Stream.of(
-                Arguments.of(Errors.NOT_COORDINATOR, true),
-                Arguments.of(Errors.COORDINATOR_LOAD_IN_PROGRESS, true),
-                Arguments.of(Errors.UNKNOWN_SERVER_ERROR, false),
-                Arguments.of(Errors.GROUP_AUTHORIZATION_FAILED, false),
-                Arguments.of(Errors.TOPIC_AUTHORIZATION_FAILED, false));
+            Arguments.of(Errors.NOT_COORDINATOR, true),
+            Arguments.of(Errors.COORDINATOR_LOAD_IN_PROGRESS, true),
+            Arguments.of(Errors.UNKNOWN_SERVER_ERROR, false),
+            Arguments.of(Errors.GROUP_AUTHORIZATION_FAILED, false),
+            Arguments.of(Errors.OFFSET_METADATA_TOO_LARGE, false),
+            Arguments.of(Errors.INVALID_COMMIT_OFFSET_SIZE, false),
+            Arguments.of(Errors.UNKNOWN_TOPIC_OR_PARTITION, true),
+            Arguments.of(Errors.COORDINATOR_NOT_AVAILABLE, true),
+            Arguments.of(Errors.NOT_COORDINATOR, true),
+            Arguments.of(Errors.REQUEST_TIMED_OUT, true),
+            Arguments.of(Errors.FENCED_INSTANCE_ID, false),
+            Arguments.of(Errors.TOPIC_AUTHORIZATION_FAILED, false));
+    }
+
+    // Supplies (error, isRetriable)
+    private static Stream<Arguments> offsetFetchExceptionSupplier() {
+        // fetchCommit is only retrying on a subset of RetriableErrors
+        return Stream.of(
+            Arguments.of(Errors.NOT_COORDINATOR, true),
+            Arguments.of(Errors.COORDINATOR_LOAD_IN_PROGRESS, true),
+            Arguments.of(Errors.UNKNOWN_SERVER_ERROR, false),
+            Arguments.of(Errors.GROUP_AUTHORIZATION_FAILED, false),
+            Arguments.of(Errors.OFFSET_METADATA_TOO_LARGE, false),
+            Arguments.of(Errors.INVALID_COMMIT_OFFSET_SIZE, false),
+            Arguments.of(Errors.UNKNOWN_TOPIC_OR_PARTITION, false),
+            Arguments.of(Errors.COORDINATOR_NOT_AVAILABLE, false),
+            Arguments.of(Errors.NOT_COORDINATOR, true),
+            Arguments.of(Errors.REQUEST_TIMED_OUT, false),
+            Arguments.of(Errors.FENCED_INSTANCE_ID, false),
+            Arguments.of(Errors.TOPIC_AUTHORIZATION_FAILED, false));
     }
 
     @ParameterizedTest
@@ -385,10 +420,10 @@ public class CommitRequestManagerTest {
     // Supplies (error, isRetriable)
     private static Stream<Arguments> partitionDataErrorSupplier() {
         return Stream.of(
-                Arguments.of(Errors.UNSTABLE_OFFSET_COMMIT, true),
-                Arguments.of(Errors.UNKNOWN_TOPIC_OR_PARTITION, false),
-                Arguments.of(Errors.TOPIC_AUTHORIZATION_FAILED, false),
-                Arguments.of(Errors.UNKNOWN_SERVER_ERROR, false));
+            Arguments.of(Errors.UNSTABLE_OFFSET_COMMIT, true),
+            Arguments.of(Errors.UNKNOWN_TOPIC_OR_PARTITION, false),
+            Arguments.of(Errors.TOPIC_AUTHORIZATION_FAILED, false),
+            Arguments.of(Errors.UNKNOWN_SERVER_ERROR, false));
     }
 
     private List<CompletableFuture<Map<TopicPartition, OffsetAndMetadata>>> sendAndVerifyDuplicatedOffsetFetchRequests(
