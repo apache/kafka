@@ -31,13 +31,19 @@ import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.coordinator.group.OffsetAndMetadata;
+import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
+import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Optional;
+import java.util.OptionalInt;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
@@ -1083,6 +1089,151 @@ public class GenericGroupTest {
         assertDoesNotThrow(group::validateDeleteGroup);
         group.transitionTo(DEAD);
         assertThrows(GroupIdNotFoundException.class, group::validateDeleteGroup);
+    }
+
+    @Test
+    public void testOffsetExpirationCondition() {
+        long currentTimestamp = 30000L;
+        long commitTimestamp = 20000L;
+        long offsetsRetentionMs = 10000L;
+        OffsetAndMetadata offsetAndMetadata = new OffsetAndMetadata(15000L, OptionalInt.empty(), "", commitTimestamp, OptionalLong.empty());
+        MockTime time = new MockTime();
+        long currentStateTimestamp = time.milliseconds();
+        GenericGroup group = new GenericGroup(new LogContext(), "groupId", EMPTY, time);
+
+        // 1. Test no protocol type. Simple consumer case, Base timestamp based off of last commit timestamp.
+        Optional<OffsetExpirationCondition> offsetExpirationCondition = group.offsetExpirationCondition();
+        assertTrue(offsetExpirationCondition.isPresent());
+
+        OffsetExpirationConditionImpl condition = (OffsetExpirationConditionImpl) offsetExpirationCondition.get();
+        assertEquals(commitTimestamp, condition.baseTimestamp().apply(offsetAndMetadata));
+        assertTrue(condition.isOffsetExpired(offsetAndMetadata, currentTimestamp, offsetsRetentionMs));
+
+        // 2. Test non-consumer protocol type + Empty state. Base timestamp based off of current state timestamp.
+        JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestProtocolCollection();
+        protocols.add(new JoinGroupRequestProtocol()
+            .setName("range")
+            .setMetadata(ConsumerProtocol.serializeSubscription(
+                new ConsumerPartitionAssignor.Subscription(Collections.singletonList("topic"))).array()));
+
+        GenericGroupMember memberWithNonConsumerProtocol = new GenericGroupMember(
+            "memberWithNonConsumerProtocol",
+            Optional.empty(),
+            clientId,
+            clientHost,
+            rebalanceTimeoutMs,
+            sessionTimeoutMs,
+            "My Protocol",
+            protocols
+        );
+
+        group.add(memberWithNonConsumerProtocol);
+        assertEquals("My Protocol", group.protocolType().get());
+
+        offsetExpirationCondition = group.offsetExpirationCondition();
+        assertTrue(offsetExpirationCondition.isPresent());
+
+        condition = (OffsetExpirationConditionImpl) offsetExpirationCondition.get();
+        assertEquals(currentStateTimestamp, condition.baseTimestamp().apply(offsetAndMetadata));
+        assertTrue(condition.isOffsetExpired(offsetAndMetadata, currentStateTimestamp + offsetsRetentionMs, offsetsRetentionMs));
+
+        // 3. Test non-consumer protocol type + non-Empty state. Do not expire any offsets.
+        group.transitionTo(PREPARING_REBALANCE);
+        offsetExpirationCondition = group.offsetExpirationCondition();
+        assertFalse(offsetExpirationCondition.isPresent());
+
+        // 4. Test consumer protocol type + subscribed topics + Stable state. Base timestamp based off of last commit timestamp.
+        group.remove("memberWithNonConsumerProtocol");
+        GenericGroupMember memberWithConsumerProtocol = new GenericGroupMember(
+            "memberWithConsumerProtocol",
+            Optional.empty(),
+            clientId,
+            clientHost,
+            rebalanceTimeoutMs,
+            sessionTimeoutMs,
+            "consumer",
+            protocols
+        );
+        group.add(memberWithConsumerProtocol);
+        group.initNextGeneration();
+        group.transitionTo(STABLE);
+        assertTrue(group.subscribedTopics().get().contains("topic"));
+
+        offsetExpirationCondition = group.offsetExpirationCondition();
+        assertTrue(offsetExpirationCondition.isPresent());
+
+        condition = (OffsetExpirationConditionImpl) offsetExpirationCondition.get();
+        assertEquals(commitTimestamp, condition.baseTimestamp().apply(offsetAndMetadata));
+        assertTrue(condition.isOffsetExpired(offsetAndMetadata, currentTimestamp, offsetsRetentionMs));
+
+        // 5. Test consumer protocol type + subscribed topics + non-Stable state. Do not expire any offsets.
+        group.transitionTo(PREPARING_REBALANCE);
+        offsetExpirationCondition = group.offsetExpirationCondition();
+        assertFalse(offsetExpirationCondition.isPresent());
+    }
+
+    @Test
+    public void testIsSubscribedToTopic() {
+        GenericGroup group = new GenericGroup(new LogContext(), "groupId", EMPTY, Time.SYSTEM);
+
+        // 1. group has no protocol type => not subscribed
+        assertFalse(group.isSubscribedToTopic("topic"));
+
+        // 2. group does not use consumer group protocol type => not subscribed
+        JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestProtocolCollection();
+        protocols.add(new JoinGroupRequestProtocol()
+            .setName("range")
+            .setMetadata(ConsumerProtocol.serializeSubscription(
+                new ConsumerPartitionAssignor.Subscription(Collections.singletonList("topic"))).array()));
+
+        GenericGroupMember memberWithNonConsumerProtocol = new GenericGroupMember(
+            "memberWithNonConsumerProtocol",
+            Optional.empty(),
+            clientId,
+            clientHost,
+            rebalanceTimeoutMs,
+            sessionTimeoutMs,
+            "My Protocol",
+            protocols
+        );
+
+        group.add(memberWithNonConsumerProtocol);
+        group.transitionTo(PREPARING_REBALANCE);
+        group.initNextGeneration();
+        assertTrue(group.isInState(COMPLETING_REBALANCE));
+        assertEquals(Optional.empty(), group.computeSubscribedTopics());
+        assertFalse(group.isSubscribedToTopic("topic"));
+
+        // 3. group uses consumer group protocol type but empty members => not subscribed
+        group.remove("memberWithNonConsumerProtocol");
+        GenericGroupMember memberWithConsumerProtocol = new GenericGroupMember(
+            "memberWithConsumerProtocol",
+            Optional.empty(),
+            clientId,
+            clientHost,
+            rebalanceTimeoutMs,
+            sessionTimeoutMs,
+            "consumer",
+            protocols
+        );
+
+        group.add(memberWithConsumerProtocol);
+        group.remove("memberWithConsumerProtocol");
+        group.transitionTo(PREPARING_REBALANCE);
+        group.initNextGeneration();
+        assertTrue(group.isInState(EMPTY));
+        assertEquals(Optional.of(Collections.emptySet()), group.computeSubscribedTopics());
+        assertTrue(group.usesConsumerGroupProtocol());
+        assertFalse(group.isSubscribedToTopic("topic"));
+
+        // 4. group uses consumer group protocol type with member subscription => subscribed
+        group.add(memberWithConsumerProtocol);
+        group.transitionTo(PREPARING_REBALANCE);
+        group.initNextGeneration();
+        assertTrue(group.isInState(COMPLETING_REBALANCE));
+        assertEquals(Optional.of(Collections.singleton("topic")), group.computeSubscribedTopics());
+        assertTrue(group.usesConsumerGroupProtocol());
+        assertTrue(group.isSubscribedToTopic("topic"));
     }
 
     private void assertState(GenericGroup group, GenericGroupState targetState) {

@@ -51,12 +51,14 @@ public interface TopologyDescription {
          * Internally assigned unique ID.
          * @return the ID of the sub-topology
          */
+        @SuppressWarnings("unused")
         int id();
 
         /**
          * All nodes of this sub-topology.
          * @return set of all nodes within the sub-topology
          */
+        @SuppressWarnings("unused")
         Set<Node> nodes();
     }
 
@@ -75,14 +77,17 @@ public interface TopologyDescription {
          * The source node reading from a "global" topic.
          * @return the "global" source node
          */
+        @SuppressWarnings("unused")
         Source source();
 
         /**
          * The processor node maintaining the global store.
          * @return the "global" processor node
          */
+        @SuppressWarnings("unused")
         Processor processor();
 
+        @SuppressWarnings("unused")
         int id();
     }
 
@@ -94,6 +99,7 @@ public interface TopologyDescription {
          * The name of the node. Will never be {@code null}.
          * @return the name of the node
          */
+        @SuppressWarnings("unused")
         String name();
         /**
          * The predecessors of this node within a sub-topology.
@@ -101,6 +107,7 @@ public interface TopologyDescription {
          * Will never be {@code null}.
          * @return set of all predecessors
          */
+        @SuppressWarnings("unused")
         Set<Node> predecessors();
         /**
          * The successor of this node within a sub-topology.
@@ -108,6 +115,7 @@ public interface TopologyDescription {
          * Will never be {@code null}.
          * @return set of all successor
          */
+        @SuppressWarnings("unused")
         Set<Node> successors();
     }
 
@@ -121,12 +129,14 @@ public interface TopologyDescription {
          * The topic names this source node is reading from.
          * @return a set of topic names
          */
+        @SuppressWarnings("unused")
         Set<String> topicSet();
 
         /**
          * The pattern used to match topic names that is reading from.
          * @return the pattern used to match topic names
          */
+        @SuppressWarnings("unused")
         Pattern topicPattern();
     }
 
@@ -138,6 +148,7 @@ public interface TopologyDescription {
          * The names of all connected stores.
          * @return set of store names
          */
+        @SuppressWarnings("unused")
         Set<String> stores();
     }
 
@@ -150,6 +161,7 @@ public interface TopologyDescription {
          * Could be {@code null} if the topic name can only be dynamically determined based on {@link TopicNameExtractor}
          * @return a topic name
          */
+        @SuppressWarnings("unused")
         String topic();
 
         /**
@@ -157,19 +169,22 @@ public interface TopologyDescription {
          * Could be {@code null} if the topic name is not dynamically determined.
          * @return the {@link TopicNameExtractor} class used get the topic name
          */
-        TopicNameExtractor topicNameExtractor();
+        @SuppressWarnings("unused")
+        TopicNameExtractor<?, ?> topicNameExtractor();
     }
 
     /**
      * All sub-topologies of the represented topology.
      * @return set of all sub-topologies
      */
+    @SuppressWarnings("unused")
     Set<Subtopology> subtopologies();
 
     /**
      * All global stores of the represented topology.
      * @return set of all global stores
      */
+    @SuppressWarnings("unused")
     Set<GlobalStore> globalStores();
 
 }

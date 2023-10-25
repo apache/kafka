@@ -45,7 +45,7 @@ import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{IsolationLevel, TopicPartition, Uuid}
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.server.common.MetadataVersion
-import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, FetchIsolation, FetchParams, LeaderHwChange, LogAppendInfo, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogReadInfo, LogStartOffsetIncrementReason}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, FetchIsolation, FetchParams, LeaderHwChange, LogAppendInfo, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogReadInfo, LogStartOffsetIncrementReason, VerificationGuard}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 
 import scala.collection.{Map, Seq}
@@ -581,8 +581,9 @@ class Partition(val topicPartition: TopicPartition,
     }
   }
 
-  // Returns a verification guard object if we need to verify. This starts or continues the verification process. Otherwise return null.
-  def maybeStartTransactionVerification(producerId: Long, sequence: Int, epoch: Short): Object = {
+  // Returns a VerificationGuard if we need to verify. This starts or continues the verification process. Otherwise return the
+  // sentinel VerificationGuard.
+  def maybeStartTransactionVerification(producerId: Long, sequence: Int, epoch: Short): VerificationGuard = {
     leaderLogIfLocal match {
       case Some(log) => log.maybeStartTransactionVerification(producerId, sequence, epoch)
       case None => throw new NotLeaderOrFollowerException();
@@ -849,7 +850,7 @@ class Partition(val topicPartition: TopicPartition,
 
   /**
    * Update the follower's state in the leader based on the last fetch request. See
-   * [[Replica.updateFetchState()]] for details.
+   * [[Replica.updateFetchStateOrThrow()]] for details.
    *
    * This method is visible for performance testing (see `UpdateFollowerFetchStateBenchmark`)
    */
@@ -864,13 +865,18 @@ class Partition(val topicPartition: TopicPartition,
     // No need to calculate low watermark if there is no delayed DeleteRecordsRequest
     val oldLeaderLW = if (delayedOperations.numDelayedDelete > 0) lowWatermarkIfLeader else -1L
     val prevFollowerEndOffset = replica.stateSnapshot.logEndOffset
-    replica.updateFetchState(
-      followerFetchOffsetMetadata,
-      followerStartOffset,
-      followerFetchTimeMs,
-      leaderEndOffset,
-      brokerEpoch
-    )
+
+    // Apply read lock here to avoid the race between ISR updates and the fetch requests from rebooted follower. It
+    // could break the broker epoch checks in the ISR expansion.
+    inReadLock(leaderIsrUpdateLock) {
+      replica.updateFetchStateOrThrow(
+        followerFetchOffsetMetadata,
+        followerStartOffset,
+        followerFetchTimeMs,
+        leaderEndOffset,
+        brokerEpoch
+      )
+    }
 
     val newLeaderLW = if (delayedOperations.numDelayedDelete > 0) lowWatermarkIfLeader else -1L
     // check if the LW of the partition has incremented
@@ -929,8 +935,8 @@ class Partition(val topicPartition: TopicPartition,
       val removedReplicas = remoteReplicasMap.keys.filterNot(followers.contains(_))
 
       // Due to code paths accessing remoteReplicasMap without a lock,
-      // first add the new replicas and then remove the old ones
-      followers.foreach(id => remoteReplicasMap.getAndMaybePut(id, new Replica(id, topicPartition)))
+      // first add the new replicas and then remove the old ones.
+      followers.foreach(id => remoteReplicasMap.getAndMaybePut(id, new Replica(id, topicPartition, metadataCache)))
       remoteReplicasMap.removeAll(removedReplicas)
     } else {
       remoteReplicasMap.clear()
@@ -1296,7 +1302,7 @@ class Partition(val topicPartition: TopicPartition,
   }
 
   def appendRecordsToLeader(records: MemoryRecords, origin: AppendOrigin, requiredAcks: Int,
-                            requestLocal: RequestLocal, verificationGuard: Object = null): LogAppendInfo = {
+                            requestLocal: RequestLocal, verificationGuard: VerificationGuard = VerificationGuard.SENTINEL): LogAppendInfo = {
     val (info, leaderHWIncremented) = inReadLock(leaderIsrUpdateLock) {
       leaderLogIfLocal match {
         case Some(leaderLog) =>

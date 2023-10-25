@@ -105,7 +105,7 @@ public class TopologyConfig extends AbstractConfig {
                 Importance.LOW,
                 DEFAULT_DSL_STORE_DOC);
     }
-    private final Logger log = LoggerFactory.getLogger(TopologyConfig.class);
+    private final static Logger log = LoggerFactory.getLogger(TopologyConfig.class);
 
     public final String topologyName;
     public final boolean eosEnabled;

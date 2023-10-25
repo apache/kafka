@@ -437,7 +437,8 @@ class KafkaServer(
             brokerToQuorumChannelManager,
             kraftMetaProps.clusterId,
             networkListeners,
-            ibpAsFeature
+            ibpAsFeature,
+            -1
           )
           logger.debug("Start RaftManager")
         }
