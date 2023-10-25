@@ -17,6 +17,8 @@
 
 package kafka.server
 
+import kafka.metrics.ClientMetricsConfig
+
 import java.net.{InetAddress, UnknownHostException}
 import java.util.Properties
 import org.apache.kafka.common.config.ConfigDef
@@ -25,6 +27,7 @@ import org.apache.kafka.common.config.ConfigDef.Range._
 import org.apache.kafka.common.config.ConfigDef.Type._
 import org.apache.kafka.storage.internals.log.LogConfig
 
+import java.util
 import scala.jdk.CollectionConverters._
 
 /**
@@ -109,6 +112,16 @@ object DynamicConfig {
       }
       true
     }
+  }
+
+  object ClientMetrics {
+    private val clientConfigs = ClientMetricsConfig.ClientMetrics.configDef
+
+    def configKeys: util.Map[String, ConfigDef.ConfigKey] = clientConfigs.configKeys
+
+    def names: util.Set[String] = clientConfigs.names
+
+    def validate(props: Properties) = DynamicConfig.validate(clientConfigs, props, customPropsAllowed = false)
   }
 
   private def validate(configDef: ConfigDef, props: Properties, customPropsAllowed: Boolean) = {
