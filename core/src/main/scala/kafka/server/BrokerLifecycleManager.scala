@@ -190,7 +190,7 @@ class BrokerLifecycleManager(
   private var _channelManager: NodeToControllerChannelManager = _
 
   /**
-   * The broker epoch from the previous run, or -1 if the epoch is not able to be found.
+   * The broker epoch from the previous run, or empty if the epoch is not found.
    */
   @volatile private var previousBrokerEpoch: OptionalLong = OptionalLong.empty()
 

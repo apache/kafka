@@ -18,9 +18,9 @@
 package org.apache.kafka.storage.internals.checkpoint;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.server.util.Json;
 import org.slf4j.Logger;
 
 import java.io.File;
@@ -45,10 +45,9 @@ import java.util.OptionalLong;
 public class CleanShutdownFileHandler {
     public static final String CLEAN_SHUTDOWN_FILE_NAME = ".kafka_cleanshutdown";
     // Visible for testing
-    public final File cleanShutdownFile;
+    final File cleanShutdownFile;
     private static final int CURRENT_VERSION = 0;
     private final Logger logger;
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     private static class Content {
@@ -78,7 +77,7 @@ public class CleanShutdownFileHandler {
         BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(os, StandardCharsets.UTF_8));
         try {
             Content content = new Content(version, brokerEpoch);
-            bw.write(OBJECT_MAPPER.writeValueAsString(content));
+            bw.write(Json.encodeAsString(content));
             bw.flush();
             os.getFD().sync();
         } finally {
@@ -91,7 +90,7 @@ public class CleanShutdownFileHandler {
     public OptionalLong read() {
         try {
             String text = Utils.readFileAsString(cleanShutdownFile.toPath().toString());
-            Content content = OBJECT_MAPPER.readValue(text, Content.class);
+            Content content = Json.parseStringAs(text, Content.class);
             return OptionalLong.of(content.brokerEpoch);
         } catch (Exception e) {
             logger.warn("Fail to read the clean shutdown file in " + cleanShutdownFile.toPath() + ":" + e);
