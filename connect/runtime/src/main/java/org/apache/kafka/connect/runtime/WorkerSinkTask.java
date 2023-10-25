@@ -184,6 +184,14 @@ class WorkerSinkTask extends WorkerTask {
         Utils.closeQuietly(transformationChain, "transformation chain");
         Utils.closeQuietly(retryWithToleranceOperator, "retry operator");
         Utils.closeQuietly(headerConverter, "header converter");
+        /*
+            Setting partition count explicitly to 0 to handle the case,
+            when the task fails, which would cause its consumer to leave the group.
+            This would cause onPartitionsRevoked to be invoked in the rebalance listener, but not onPartitionsAssigned,
+            so the metrics for the task (which are still available for failed tasks until they are explicitly revoked
+            from the worker) would become inaccurate.
+        */
+        sinkTaskMetricsGroup.recordPartitionCount(0);
     }
 
     @Override
@@ -646,7 +654,6 @@ class WorkerSinkTask extends WorkerTask {
     }
 
     private void openPartitions(Collection<TopicPartition> partitions) {
-        updatePartitionCount();
         task.open(partitions);
     }
 
@@ -668,7 +675,6 @@ class WorkerSinkTask extends WorkerTask {
             origOffsets.keySet().removeAll(topicPartitions);
             currentOffsets.keySet().removeAll(topicPartitions);
         }
-        updatePartitionCount();
         lastCommittedOffsets.keySet().removeAll(topicPartitions);
     }
 
@@ -729,7 +735,8 @@ class WorkerSinkTask extends WorkerTask {
                 else if (!context.pausedPartitions().isEmpty())
                     consumer.pause(context.pausedPartitions());
             }
-
+            
+            updatePartitionCount();
             if (partitions.isEmpty()) {
                 return;
             }
