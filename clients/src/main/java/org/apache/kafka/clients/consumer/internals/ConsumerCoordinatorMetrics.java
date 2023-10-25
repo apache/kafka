@@ -21,8 +21,8 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Max;
-
-import static org.apache.kafka.clients.consumer.internals.AbstractCoordinator.createMeter;
+import org.apache.kafka.common.metrics.stats.Meter;
+import org.apache.kafka.common.metrics.stats.WindowedCount;
 
 class ConsumerCoordinatorMetrics {
 
@@ -44,7 +44,11 @@ class ConsumerCoordinatorMetrics {
         this.commitSensor.add(metrics.metricName("commit-latency-max",
                 this.metricGrpName,
                 "The max time taken for a commit request"), new Max());
-        this.commitSensor.add(createMeter(metrics, metricGrpName, "commit", "commit calls"));
+        this.commitSensor.add(new Meter(new WindowedCount(),
+                metrics.metricName("commit-rate", metricGrpName,
+                        "The number of commit calls per second"),
+                metrics.metricName("commit-total", metricGrpName,
+                        "The total number of commit calls")));
 
         this.revokeCallbackSensor = metrics.sensor("partition-revoked-latency");
         this.revokeCallbackSensor.add(metrics.metricName("partition-revoked-latency-avg",
