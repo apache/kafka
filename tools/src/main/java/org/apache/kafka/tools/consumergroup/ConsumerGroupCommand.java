@@ -21,9 +21,12 @@ import joptsimple.OptionException;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.AbstractOptions;
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AlterConsumerGroupOffsetsOptions;
 import org.apache.kafka.clients.admin.ConsumerGroupDescription;
 import org.apache.kafka.clients.admin.ConsumerGroupListing;
+import org.apache.kafka.clients.admin.DescribeConsumerGroupsOptions;
 import org.apache.kafka.clients.admin.DescribeTopicsOptions;
+import org.apache.kafka.clients.admin.DescribeTopicsResult;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsOptions;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsSpec;
 import org.apache.kafka.clients.admin.ListConsumerGroupsOptions;
@@ -32,6 +35,7 @@ import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.ConsumerGroupState;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.Errors;
@@ -47,6 +51,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -427,10 +432,69 @@ public class ConsumerGroupCommand {
         }
 
         Map<String, Map<TopicPartition, OffsetAndMetadata>> resetOffsets() {
-            return null;
+            List<String> groupIds = opts.options.has(opts.allGroupsOpt)
+                ? listConsumerGroups()
+                : opts.options.valuesOf(opts.groupOpt);
+
+            Map<String, KafkaFuture<ConsumerGroupDescription>> consumerGroups = adminClient.describeConsumerGroups(
+                groupIds,
+                withTimeoutMs(new DescribeConsumerGroupsOptions())
+            ).describedGroups();
+
+            Map<String, Map<TopicPartition, OffsetAndMetadata>> result = new HashMap<>();
+
+            consumerGroups.forEach((groupId, groupDescription) -> {
+                try {
+                    String state = groupDescription.get().state().toString();
+                    switch (state) {
+                        case "Empty":
+                        case "Dead":
+                            Collection<TopicPartition> partitionsToReset = getPartitionsToReset(groupId);
+                            Map<TopicPartition, OffsetAndMetadata> preparedOffsets = prepareOffsetsToReset(groupId, partitionsToReset);
+
+                            // Dry-run is the default behavior if --execute is not specified
+                            boolean dryRun = opts.options.has(opts.dryRunOpt) || !opts.options.has(opts.executeOpt);
+                            if (!dryRun) {
+                                adminClient.alterConsumerGroupOffsets(
+                                    groupId,
+                                    preparedOffsets,
+                                    withTimeoutMs(new AlterConsumerGroupOffsetsOptions())
+                                ).all().get();
+                            }
+
+                            result.put(groupId, preparedOffsets);
+                        default:
+                            printError("Assignments can only be reset if the group '" + groupId + "' is inactive, but the current state is " + state + ".", Optional.empty());
+                            result.put(groupId, Collections.emptyMap());
+                    }
+                } catch (InterruptedException | ExecutionException e) {
+                    throw new RuntimeException(e);
+                }
+            });
+
+            return result;
         }
 
         Tuple2<Errors, Map<TopicPartition, Throwable>> deleteOffsets(String groupId, List<String> topics) {
+            Map<TopicPartition, Throwable> partitionLevelResult = new HashMap<>();
+            Set<String> topicWithPartitions = new HashSet<>();
+            Set<String> topicWithoutPartitions = new HashSet<>();
+
+            for (String topic : topics) {
+                if (topic.contains(":"))
+                    topicWithPartitions.add(topic);
+                else
+                    topicWithoutPartitions.add(topic);
+            }
+
+            List<TopicPartition> knownPartitions = topicWithPartitions.stream().flatMap(this::parseTopicsWithPartitions).collect(Collectors.toList());
+
+            // Get the partitions of topics that the user did not explicitly specify the partitions
+            DescribeTopicsResult describeTopicsResult = adminClient.describeTopics(
+                topicWithoutPartitions,
+                withTimeoutMs(new DescribeTopicsOptions()));
+            //TODO: continue here.
+
             return null;
         }
 
