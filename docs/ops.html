@@ -3822,6 +3822,9 @@ zookeeper.connect=localhost:2181
 # The inter broker listener in brokers to allow KRaft controller send RPCs to brokers
 inter.broker.listener.name=PLAINTEXT
 
+# Maps listener names to security protocols. Please add the inter broker listener protocol mapping
+listener.security.protocol.map=PLAINTEXT:PLAINTEXT
+
 # Other configs ...</pre>
 
   <p><em>Note: The KRaft cluster <code>node.id</code> values must be different from any existing ZK broker <code>broker.id</code>.
@@ -3903,6 +3906,9 @@ listener.security.protocol.map=PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
 
 # Remove the inter broker listener in brokers to allow KRaft controller send RPCs to brokers
 # inter.broker.listener.name=PLAINTEXT
+
+# Maps listener names to security protocols. Please add the inter broker listener protocol mapping
+# listener.security.protocol.map=PLAINTEXT:PLAINTEXT
 
 # Keep the KRaft controller quorum configuration
 controller.quorum.voters=3000@localhost:9093
