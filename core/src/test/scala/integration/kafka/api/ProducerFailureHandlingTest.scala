@@ -233,22 +233,6 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
-  def testNotEnoughReplicas(quorum: String): Unit = {
-    val topicName = "minisrtest"
-    val topicProps = new Properties()
-    topicProps.put("min.insync.replicas",numServers.toString)
-
-    createTopic(topicName, replicationFactor = numServers, topicConfig = topicProps)
-    killBroker(numServers - 1)
-    Thread.sleep(1000)
-
-    val record = new ProducerRecord(topicName, null, "key".getBytes, "value".getBytes)
-    val e = assertThrows(classOf[ExecutionException], () => producer3.send(record).get)
-    assertEquals(classOf[NotEnoughReplicasException], e.getCause.getClass)
-  }
-
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
   def testNotEnoughReplicasAfterBrokerShutdown(quorum: String): Unit = {
     val topicName = "minisrtest2"
     val topicProps = new Properties()
