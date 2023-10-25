@@ -31,7 +31,7 @@ import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
 import org.apache.kafka.storage.internals.log.EpochEntry
-import org.apache.kafka.storage.internals.log.CleanShutdownFileHandler
+import org.apache.kafka.storage.internals.checkpoint.CleanShutdownFileHandler
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 

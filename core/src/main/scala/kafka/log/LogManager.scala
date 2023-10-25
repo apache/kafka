@@ -36,13 +36,13 @@ import scala.util.{Failure, Success, Try}
 import kafka.utils.Implicits._
 import org.apache.kafka.common.config.TopicConfig
 
-import java.util.Properties
+import java.util.{OptionalLong, Properties}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.storage.internals.log.LogConfig.MessageFormatVersion
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.Scheduler
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig, RemoteIndexCache}
-import org.apache.kafka.storage.internals.log.CleanShutdownFileHandler
+import org.apache.kafka.storage.internals.checkpoint.CleanShutdownFileHandler
 
 import scala.annotation.nowarn
 
@@ -1431,11 +1431,11 @@ class LogManager(logDirs: Seq[File],
     }
   }
 
-  def readBrokerEpochFromCleanShutdownFiles(): Long = {
+  def readBrokerEpochFromCleanShutdownFiles(): OptionalLong = {
     // Verify whether all the log dirs have the same broker epoch in their clean shutdown files. If there is any dir not
     // live, fail the broker epoch check.
     if (liveLogDirs.size < logDirs.size) {
-      return -1L
+      return OptionalLong.empty()
     }
     var brokerEpoch = -1L
     for (dir <- liveLogDirs) {
@@ -1443,15 +1443,15 @@ class LogManager(logDirs: Seq[File],
       val currentBrokerEpoch = cleanShutdownFileHandler.read
       if (!currentBrokerEpoch.isPresent) {
         info(s"Unable to read the broker epoch in ${dir.toString}.")
-        return -1L
+        return OptionalLong.empty()
       }
       if (brokerEpoch != -1 && currentBrokerEpoch.getAsLong != brokerEpoch) {
         info(s"Found different broker epochs in ${dir.toString}. Other=$brokerEpoch vs current=$currentBrokerEpoch.")
-        return -1L
+        return OptionalLong.empty()
       }
       brokerEpoch = currentBrokerEpoch.getAsLong
     }
-    brokerEpoch
+    OptionalLong.of(brokerEpoch)
   }
 }
 

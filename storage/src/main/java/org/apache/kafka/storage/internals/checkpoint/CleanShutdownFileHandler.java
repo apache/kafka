@@ -15,8 +15,9 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.storage.internals.log;
+package org.apache.kafka.storage.internals.checkpoint;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
@@ -43,10 +44,13 @@ import java.util.OptionalLong;
 
 public class CleanShutdownFileHandler {
     public static final String CLEAN_SHUTDOWN_FILE_NAME = ".kafka_cleanshutdown";
-    private final File cleanShutdownFile;
+    // Visible for testing
+    public final File cleanShutdownFile;
     private static final int CURRENT_VERSION = 0;
     private final Logger logger;
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
+    @JsonIgnoreProperties(ignoreUnknown = true)
     private static class Content {
         public int version;
         public Long brokerEpoch;
@@ -74,7 +78,7 @@ public class CleanShutdownFileHandler {
         BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(os, StandardCharsets.UTF_8));
         try {
             Content content = new Content(version, brokerEpoch);
-            bw.write(new ObjectMapper().writeValueAsString(content));
+            bw.write(OBJECT_MAPPER.writeValueAsString(content));
             bw.flush();
             os.getFD().sync();
         } finally {
@@ -87,7 +91,7 @@ public class CleanShutdownFileHandler {
     public OptionalLong read() {
         try {
             String text = Utils.readFileAsString(cleanShutdownFile.toPath().toString());
-            Content content = new ObjectMapper().readValue(text, Content.class);
+            Content content = OBJECT_MAPPER.readValue(text, Content.class);
             return OptionalLong.of(content.brokerEpoch);
         } catch (Exception e) {
             logger.warn("Fail to read the clean shutdown file in " + cleanShutdownFile.toPath() + ":" + e);
