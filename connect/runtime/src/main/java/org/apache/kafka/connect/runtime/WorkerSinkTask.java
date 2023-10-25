@@ -735,7 +735,6 @@ class WorkerSinkTask extends WorkerTask {
                 else if (!context.pausedPartitions().isEmpty())
                     consumer.pause(context.pausedPartitions());
             }
-            
             updatePartitionCount();
             if (partitions.isEmpty()) {
                 return;
