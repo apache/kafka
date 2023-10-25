@@ -68,7 +68,7 @@ public final class TopicImage {
         for (Entry<Integer, PartitionRegistration> entry : partitions.entrySet()) {
             int partitionId = entry.getKey();
             PartitionRegistration partition = entry.getValue();
-            writer.write(partition.toRecord(id, partitionId));
+            writer.write(partition.toRecord(id, partitionId, options.metadataVersion().partitionRecordVersion()));
         }
     }
 

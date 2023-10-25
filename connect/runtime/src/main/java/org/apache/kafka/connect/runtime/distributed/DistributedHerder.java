@@ -279,7 +279,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                       ExecutorService forwardRequestExecutor,
                       // https://github.com/mockito/mockito/issues/2601 explains why we can't use varargs here
                       AutoCloseable[] uponShutdown) {
-        super(worker, workerId, kafkaClusterId, statusBackingStore, configBackingStore, connectorClientConfigOverridePolicy);
+        super(worker, workerId, kafkaClusterId, statusBackingStore, configBackingStore, connectorClientConfigOverridePolicy, time);
 
         this.time = time;
         this.herderMetrics = new HerderMetrics(metrics);
@@ -1612,6 +1612,11 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         return true;
     }
 
+    @Override
+    public void setClusterLoggerLevel(String namespace, String level) {
+        configBackingStore.putLoggerLevel(namespace, level);
+    }
+
     // Should only be called from work thread, so synchronization should not be needed
     private boolean isLeader() {
         return assignment != null && member.memberId().equals(assignment.leader());
@@ -2375,6 +2380,11 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 });
             }
             member.wakeup();
+        }
+
+        @Override
+        public void onLoggingLevelUpdate(String namespace, String level) {
+            setWorkerLoggerLevel(namespace, level);
         }
     }
 

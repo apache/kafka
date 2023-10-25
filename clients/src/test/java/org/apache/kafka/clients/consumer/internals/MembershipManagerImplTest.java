@@ -30,6 +30,7 @@ import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.junit.jupiter.api.BeforeEach;
+import org.apache.kafka.common.utils.LogContext;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -39,6 +40,7 @@ import java.util.Properties;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.stream.Collectors;
+import java.util.Optional;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
@@ -54,6 +56,7 @@ public class MembershipManagerImplTest {
     private static final String GROUP_ID = "test-group";
     private static final String MEMBER_ID = "test-member-1";
     private static final int MEMBER_EPOCH = 1;
+
     private ConsumerMetadata metadata;
     private AssignmentReconciler assignmentReconciler;
 
@@ -119,6 +122,15 @@ public class MembershipManagerImplTest {
     }
 
     @Test
+    public void testMembershipManagerServerAssignor() {
+        MembershipManagerImpl membershipManager = new MembershipManagerImpl(GROUP_ID, logContext);
+        assertEquals(Optional.empty(), membershipManager.serverAssignor());
+
+        membershipManager = new MembershipManagerImpl(GROUP_ID, "instance1", "Uniform", logContext);
+        assertEquals(Optional.of("Uniform"), membershipManager.serverAssignor());
+    }
+
+    @Test
     public void testMembershipManagerInitSupportsEmptyGroupInstanceId() {
         createMembershipManager(GROUP_ID);
         createMembershipManager(GROUP_ID, null, AssignorSelection.defaultAssignor());
@@ -170,62 +182,144 @@ public class MembershipManagerImplTest {
     }
 
     @Test
-    public void testUpdateAssignment() {
+    public void testFencingWhenStateIsStable() {
         MembershipManagerImpl membershipManager = createMembershipManager(GROUP_ID);
+        ConsumerGroupHeartbeatResponse heartbeatResponse = createConsumerGroupHeartbeatResponse(null);
+        membershipManager.updateState(heartbeatResponse.data());
+        assertEquals(MemberState.STABLE, membershipManager.state());
+
+        testStateUpdateOnFenceError(membershipManager);
+    }
+
+    @Test
+    public void testFencingWhenStateIsReconciling() {
+        MembershipManagerImpl membershipManager = new MembershipManagerImpl(GROUP_ID, logContext);
+        ConsumerGroupHeartbeatResponse heartbeatResponse = createConsumerGroupHeartbeatResponse(createAssignment());
+        membershipManager.updateState(heartbeatResponse.data());
+        assertEquals(MemberState.RECONCILING, membershipManager.state());
+
+        testStateUpdateOnFenceError(membershipManager);
+    }
+
+    @Test
+    public void testFatalFailureWhenStateIsUnjoined() {
+        MembershipManagerImpl membershipManager = new MembershipManagerImpl(GROUP_ID, logContext);
+        assertEquals(MemberState.UNJOINED, membershipManager.state());
+
+        testStateUpdateOnFatalFailure(membershipManager);
+    }
+
+    @Test
+    public void testFatalFailureWhenStateIsStable() {
+        MembershipManagerImpl membershipManager = new MembershipManagerImpl(GROUP_ID, logContext);
+        ConsumerGroupHeartbeatResponse heartbeatResponse = createConsumerGroupHeartbeatResponse(null);
+        membershipManager.updateState(heartbeatResponse.data());
+        assertEquals(MemberState.STABLE, membershipManager.state());
+
+        testStateUpdateOnFatalFailure(membershipManager);
+    }
+
+    @Test
+    public void testFencingShouldNotHappenWhenStateIsUnjoined() {
+        MembershipManagerImpl membershipManager = new MembershipManagerImpl(GROUP_ID, logContext);
+        assertEquals(MemberState.UNJOINED, membershipManager.state());
+
+        // Getting fenced when the member is not part of the group is not expected and should
+        // fail with invalid transition.
+        assertThrows(IllegalStateException.class, membershipManager::transitionToFenced);
+    }
+
+    @Test
+    public void testUpdateStateFailsOnResponsesWithErrors() {
+        MembershipManagerImpl membershipManager = new MembershipManagerImpl(GROUP_ID, logContext);
+        // Updating state with a heartbeat response containing errors cannot be performed and
+        // should fail.
+        ConsumerGroupHeartbeatResponse unknownMemberResponse =
+                createConsumerGroupHeartbeatResponseWithError(Errors.UNKNOWN_MEMBER_ID);
+        assertThrows(IllegalArgumentException.class,
+                () -> membershipManager.updateState(unknownMemberResponse.data()));
+    }
+
+    @Test
+    public void testAssignmentUpdatedAsReceivedAndProcessed() {
+        MembershipManagerImpl membershipManager = new MembershipManagerImpl(GROUP_ID, logContext);
         ConsumerGroupHeartbeatResponseData.Assignment newAssignment = createAssignment();
         ConsumerGroupHeartbeatResponse heartbeatResponse =
                 createConsumerGroupHeartbeatResponse(newAssignment);
         membershipManager.updateState(heartbeatResponse.data());
 
         // Target assignment should be in the process of being reconciled
-        checkAssignments(membershipManager, null, newAssignment, null);
+        checkAssignments(membershipManager, null, newAssignment);
+        // Mark assignment processing completed
+        membershipManager.onTargetAssignmentProcessComplete(newAssignment);
+        // Target assignment should now be the current assignment
+        checkAssignments(membershipManager, newAssignment, null);
     }
 
     @Test
-    public void testUpdateAssignmentReceivingAssignmentWhileAnotherInProcess() {
-        MembershipManagerImpl membershipManager = createMembershipManager(GROUP_ID);
+    public void testMemberFailsIfAssignmentReceivedWhileAnotherOnBeingReconciled() {
+        MembershipManagerImpl membershipManager = new MembershipManagerImpl(GROUP_ID, logContext);
         ConsumerGroupHeartbeatResponseData.Assignment newAssignment1 = createAssignment();
         membershipManager.updateState(createConsumerGroupHeartbeatResponse(newAssignment1).data());
 
         // First target assignment received should be in the process of being reconciled
-        checkAssignments(membershipManager, null, newAssignment1, null);
+        checkAssignments(membershipManager, null, newAssignment1);
 
         // Second target assignment received while there is another one being reconciled
         ConsumerGroupHeartbeatResponseData.Assignment newAssignment2 = createAssignment();
-        membershipManager.updateState(createConsumerGroupHeartbeatResponse(newAssignment2).data());
-        checkAssignments(membershipManager, null, newAssignment1, newAssignment2);
+        assertThrows(IllegalStateException.class,
+                () -> membershipManager.updateState(createConsumerGroupHeartbeatResponse(newAssignment2).data()));
+        assertEquals(MemberState.FAILED, membershipManager.state());
     }
 
     @Test
-    public void testNextTargetAssignmentHoldsLatestAssignmentReceivedWhileAnotherInProcess() {
-        MembershipManagerImpl membershipManager = createMembershipManager(GROUP_ID);
-        ConsumerGroupHeartbeatResponseData.Assignment newAssignment1 = createAssignment();
-        membershipManager.updateState(createConsumerGroupHeartbeatResponse(newAssignment1).data());
+    public void testAssignmentUpdatedFailsIfAssignmentReconciledDoesNotMatchTargetAssignment() {
+        MembershipManagerImpl membershipManager = new MembershipManagerImpl(GROUP_ID, logContext);
+        ConsumerGroupHeartbeatResponseData.Assignment targetAssignment = new ConsumerGroupHeartbeatResponseData.Assignment()
+                .setTopicPartitions(Collections.singletonList(
+                        new ConsumerGroupHeartbeatResponseData.TopicPartitions()
+                                .setTopicId(Uuid.randomUuid())
+                                .setPartitions(Arrays.asList(0, 1, 2))));
+        ConsumerGroupHeartbeatResponse heartbeatResponse =
+                createConsumerGroupHeartbeatResponse(targetAssignment);
+        membershipManager.updateState(heartbeatResponse.data());
 
-        // First target assignment received, remains in the process of being reconciled
-        checkAssignments(membershipManager, null, newAssignment1, null);
-
-        // Second target assignment received while there is another one being reconciled
-        ConsumerGroupHeartbeatResponseData.Assignment newAssignment2 = createAssignment();
-        membershipManager.updateState(createConsumerGroupHeartbeatResponse(newAssignment2).data());
-        checkAssignments(membershipManager, null, newAssignment1, newAssignment2);
-
-        // If more assignments are received while there is one being reconciled, the most recent
-        // assignment received is kept as nextTargetAssignment
-        ConsumerGroupHeartbeatResponseData.Assignment newAssignment3 = createAssignment();
-        membershipManager.updateState(createConsumerGroupHeartbeatResponse(newAssignment3).data());
-        checkAssignments(membershipManager, null, newAssignment1, newAssignment3);
+        // Target assignment should be in the process of being reconciled
+        checkAssignments(membershipManager, null, targetAssignment);
+        // Mark assignment processing completed
+        ConsumerGroupHeartbeatResponseData.Assignment reconciled =
+                new ConsumerGroupHeartbeatResponseData.Assignment()
+                        .setTopicPartitions(Collections.singletonList(
+                                new ConsumerGroupHeartbeatResponseData.TopicPartitions()
+                                        .setTopicId(Uuid.randomUuid())
+                                        .setPartitions(Collections.singletonList(0))));
+        assertThrows(IllegalStateException.class, () -> membershipManager.onTargetAssignmentProcessComplete(reconciled));
     }
 
     private void checkAssignments(
             MembershipManagerImpl membershipManager,
             ConsumerGroupHeartbeatResponseData.Assignment expectedCurrentAssignment,
-            ConsumerGroupHeartbeatResponseData.Assignment expectedTargetAssignment,
-            ConsumerGroupHeartbeatResponseData.Assignment expectedNextTargetAssignment) {
-        assertEquals(expectedCurrentAssignment, membershipManager.assignment());
+            ConsumerGroupHeartbeatResponseData.Assignment expectedTargetAssignment) {
+        assertEquals(expectedCurrentAssignment, membershipManager.currentAssignment());
         assertEquals(expectedTargetAssignment, membershipManager.targetAssignment().orElse(null));
-        assertEquals(expectedNextTargetAssignment, membershipManager.nextTargetAssignment().orElse(null));
+    }
 
+    private void testStateUpdateOnFenceError(MembershipManager membershipManager) {
+        membershipManager.transitionToFenced();
+        assertEquals(MemberState.FENCED, membershipManager.state());
+        // Should reset member epoch and keep member id
+        assertFalse(membershipManager.memberId().isEmpty());
+        assertEquals(0, membershipManager.memberEpoch());
+    }
+
+    private void testStateUpdateOnFatalFailure(MembershipManager membershipManager) {
+        String initialMemberId = membershipManager.memberId();
+        int initialMemberEpoch = membershipManager.memberEpoch();
+        membershipManager.transitionToFailed();
+        assertEquals(MemberState.FAILED, membershipManager.state());
+        // Should not reset member id or epoch
+        assertEquals(initialMemberId, membershipManager.memberId());
+        assertEquals(initialMemberEpoch, membershipManager.memberEpoch());
     }
 
     private ConsumerGroupHeartbeatResponse createConsumerGroupHeartbeatResponse(ConsumerGroupHeartbeatResponseData.Assignment assignment) {

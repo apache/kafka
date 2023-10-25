@@ -370,7 +370,7 @@ class WorkerSinkTask extends WorkerTask {
     /**
      * Starts an offset commit by flushing outstanding messages from the task and then starting
      * the write commit.
-     **/
+     */
     private void doCommit(Map<TopicPartition, OffsetAndMetadata> offsets, boolean closing, int seqno) {
         if (isCancelled()) {
             log.debug("Skipping final offset commit as task has been cancelled");

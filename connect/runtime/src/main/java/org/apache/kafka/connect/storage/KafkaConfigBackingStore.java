@@ -271,6 +271,14 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
             .field(ONLY_FAILED_FIELD_NAME, Schema.BOOLEAN_SCHEMA)
             .build();
 
+    public static final String LOGGER_CLUSTER_PREFIX = "logger-cluster-";
+    public static String LOGGER_CLUSTER_KEY(String namespace) {
+        return LOGGER_CLUSTER_PREFIX + namespace;
+    }
+    public static final Schema LOGGER_LEVEL_V0 = SchemaBuilder.struct()
+            .field("level", Schema.STRING_SCHEMA)
+            .build();
+
     // Visible for testing
     static final long READ_WRITE_TOTAL_TIMEOUT_MS = 30000;
 
@@ -732,6 +740,20 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
         }
     }
 
+    @Override
+    public void putLoggerLevel(String namespace, String level) {
+        log.debug("Writing level {} for logging namespace {} to Kafka", level, namespace);
+        Struct value = new Struct(LOGGER_LEVEL_V0);
+        value.put("level", level);
+        byte[] serializedValue = converter.fromConnectData(topic, value.schema(), value);
+        try {
+            configLog.sendWithReceipt(LOGGER_CLUSTER_KEY(namespace), serializedValue).get(READ_WRITE_TOTAL_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException | ExecutionException | TimeoutException e) {
+            log.error("Failed to write logger level to Kafka", e);
+            throw new ConnectException("Error writing logger level to Kafka", e);
+        }
+    }
+
     // package private for testing
     KafkaBasedLog<String, byte[]> setupAndCreateKafkaBasedLog(String topic, final WorkerConfig config) {
         String clusterId = config.kafkaClusterId();
@@ -901,6 +923,9 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
                 processTaskCountRecord(connectorName, value);
             } else if (record.key().equals(SESSION_KEY_KEY)) {
                 processSessionKeyRecord(value);
+            } else if (record.key().startsWith(LOGGER_CLUSTER_PREFIX)) {
+                String loggingNamespace = record.key().substring(LOGGER_CLUSTER_PREFIX.length());
+                processLoggerLevelRecord(loggingNamespace, value);
             } else {
                 log.error("Discarding config update record with invalid key: {}", record.key());
             }
@@ -1183,6 +1208,37 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
 
         if (started)
             updateListener.onSessionKeyUpdate(KafkaConfigBackingStore.this.sessionKey);
+    }
+
+    private void processLoggerLevelRecord(String namespace, SchemaAndValue value) {
+        if (value.value() == null) {
+            log.error("Ignoring logging level for namespace {} because it is unexpectedly null", namespace);
+            return;
+        }
+        if (!(value.value() instanceof Map)) {
+            log.error("Ignoring logging level for namespace {} because the value is not a Map but is {}", namespace, className(value.value()));
+            return;
+        }
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> valueAsMap = (Map<String, Object>) value.value();
+
+        Object level = valueAsMap.get("level");
+        if (!(level instanceof String)) {
+            log.error("Invalid data for logging level key 'level' field with namespace {}; should be a String but it is {}", namespace, className(level));
+            return;
+        }
+
+        if (started) {
+            updateListener.onLoggingLevelUpdate(namespace, (String) level);
+        } else {
+            // TRACE level since there may be many of these records in the config topic
+            log.trace(
+                    "Ignoring old logging level {} for namespace {} that was writen to the config topic before this worker completed startup",
+                    level,
+                    namespace
+            );
+        }
     }
 
     private ConnectorTaskId parseTaskId(String key) {
