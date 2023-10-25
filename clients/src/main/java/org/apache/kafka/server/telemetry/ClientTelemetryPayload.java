@@ -15,30 +15,39 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.telemetry;
+package org.apache.kafka.server.telemetry;
 
-import org.apache.kafka.common.metrics.MetricsContext;
-import org.apache.kafka.common.metrics.MetricsReporter;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
-/**
- * A {@link MetricsReporter} may implement this interface to indicate support for collecting client
- * telemetry on the server side.
- */
+import java.nio.ByteBuffer;
+
 @InterfaceStability.Evolving
-public interface ClientTelemetry {
+public interface ClientTelemetryPayload {
 
     /**
-     * Implemented by the broker {@link MetricsReporter} to provide a {@link ClientTelemetryReceiver}
-     * instance.
-     * <p>
-     * This instance may be cached by the broker.
-     * <p>
-     * This method must always be called after the initial call to
-     * {@link MetricsReporter#contextChange(MetricsContext)} on the {@link MetricsReporter}
-     * implementing this interface.
-     *
-     * @return broker side instance of {@link ClientTelemetryReceiver}.
+     * @return Client's instance id.
      */
-    ClientTelemetryReceiver clientReceiver();
+    Uuid clientInstanceId();
+
+    /**
+     * Indicates whether client is terminating, e.g., the last metrics push from this client instance.
+     * <p>
+     *To avoid the receiving broker’s metrics rate-limiter discarding this out-of-profile push, the
+     * PushTelemetryRequest.Terminating field must be set to true. A broker must only allow one such
+     * unthrottled metrics push for each combination of client instance ID and SubscriptionId.
+     *
+     * @return {@code true} if client is terminating, else false
+     */
+    boolean isTerminating();
+
+    /**
+     * @return Metrics data content-type/serialization format.
+     */
+    String contentType();
+
+    /**
+     * @return Serialized metrics data.
+     */
+    ByteBuffer data();
 }

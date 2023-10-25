@@ -199,7 +199,6 @@
 
     <subpackage name="telemetry">
       <allow pkg="org.apache.kafka.common" />
-      <allow class="org.apache.kafka.server.authorizer.AuthorizableRequestContext" />
     </subpackage>
 
   </subpackage>
@@ -257,6 +256,11 @@
 
     <!-- This is required to make AlterConfigPolicyTest work. -->
     <allow pkg="org.apache.kafka.server.policy" />
+
+    <subpackage name="telemetry">
+      <allow class="org.apache.kafka.server.authorizer.AuthorizableRequestContext" />
+    </subpackage>
+
   </subpackage>
 
   <subpackage name="shell">

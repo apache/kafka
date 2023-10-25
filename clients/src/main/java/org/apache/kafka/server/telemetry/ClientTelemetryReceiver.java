@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.telemetry;
+package org.apache.kafka.server.telemetry;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
