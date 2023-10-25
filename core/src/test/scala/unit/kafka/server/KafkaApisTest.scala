@@ -487,7 +487,7 @@ class KafkaApisTest {
     authorizeResource(authorizer, AclOperation.ALTER_CONFIGS, ResourceType.CLUSTER,
       Resource.CLUSTER_NAME, AuthorizationResult.ALLOWED)
 
-    val props = ClientMetricsTestUtils.getDefaultProperties()
+    val props = ClientMetricsTestUtils.getDefaultProperties
     val configEntries = new util.ArrayList[AlterConfigsRequest.ConfigEntry]()
     props.forEach((x, y) =>
       configEntries.add(new AlterConfigsRequest.ConfigEntry(x.asInstanceOf[String], y.asInstanceOf[String])))
@@ -568,7 +568,7 @@ class KafkaApisTest {
 
     val resource = new ConfigResource(ConfigResource.Type.CLIENT_METRICS, subscriptionName)
     val configRepository: ConfigRepository = mock(classOf[ConfigRepository])
-    val cmConfigs = ClientMetricsTestUtils.getDefaultProperties()
+    val cmConfigs = ClientMetricsTestUtils.getDefaultProperties
     when(configRepository.config(resource)).thenReturn(cmConfigs)
 
     metadataCache = mock(classOf[ZkMetadataCache])
