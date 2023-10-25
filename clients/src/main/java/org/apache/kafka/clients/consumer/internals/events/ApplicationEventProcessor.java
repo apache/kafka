@@ -192,6 +192,14 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         event.chain(future);
     }
 
+    private void process(final RebalanceCompleteEvent event) {
+        membershipManager.ifPresent(mm -> mm.completeReconcile(event.revokedPartitions(), event.assignedPartitions(), event.error()));
+    }
+
+    private void process(final PartitionLostCompleteEvent event) {
+        membershipManager.ifPresent(mm -> mm.completeLost(event.lostPartitions(), event.error()));
+    }
+
     /**
      * Creates a {@link Supplier} for deferred creation during invocation by
      * {@link ConsumerNetworkThread}.
@@ -214,13 +222,5 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
                 );
             }
         };
-    }
-
-    private void process(final RebalanceCompleteEvent event) {
-        membershipManager.ifPresent(mm -> mm.completeReconcile(event.revokedPartitions(), event.assignedPartitions(), event.error()));
-    }
-
-    private void process(final PartitionLostCompleteEvent event) {
-        membershipManager.ifPresent(mm -> mm.completeLost(event.lostPartitions(), event.error()));
     }
 }
