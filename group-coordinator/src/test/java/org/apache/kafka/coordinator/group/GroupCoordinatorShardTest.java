@@ -96,8 +96,8 @@ public class GroupCoordinatorShardTest {
         );
 
         when(groupMetadataManager.consumerGroupHeartbeat(
-                context,
-                request
+            context,
+            request
         )).thenReturn(result);
 
         assertEquals(result, coordinator.consumerGroupHeartbeat(context, request));
