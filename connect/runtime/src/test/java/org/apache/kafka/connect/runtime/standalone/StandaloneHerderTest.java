@@ -19,6 +19,7 @@ package org.apache.kafka.connect.runtime.standalone;
 import org.apache.kafka.common.config.Config;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigValue;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.errors.AlreadyExistsException;
@@ -130,7 +131,7 @@ public class StandaloneHerderTest {
         worker = PowerMock.createMock(Worker.class);
         String[] methodNames = new String[]{"connectorType", "buildRestartPlan", "recordRestarting"};
         herder = PowerMock.createPartialMock(StandaloneHerder.class, methodNames,
-                worker, WORKER_ID, KAFKA_CLUSTER_ID, statusBackingStore, new MemoryConfigBackingStore(transformer), noneConnectorClientConfigOverridePolicy);
+                worker, WORKER_ID, KAFKA_CLUSTER_ID, statusBackingStore, new MemoryConfigBackingStore(transformer), noneConnectorClientConfigOverridePolicy, new MockTime());
         createCallback = new FutureCallback<>();
         plugins = PowerMock.createMock(Plugins.class);
         pluginLoader = PowerMock.createMock(PluginClassLoader.class);

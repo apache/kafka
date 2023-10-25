@@ -14,21 +14,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
-import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
+package org.apache.kafka.common.requests;
 
-import java.util.Queue;
+import org.apache.kafka.common.message.PushTelemetryRequestData;
+import org.apache.kafka.common.protocol.Errors;
+import org.junit.jupiter.api.Test;
 
-public class ErrorEventHandler {
-    private final Queue<BackgroundEvent> backgroundEventQueue;
+import java.util.Collections;
 
-    public ErrorEventHandler(Queue<BackgroundEvent> backgroundEventQueue) {
-        this.backgroundEventQueue = backgroundEventQueue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+public class PushTelemetryRequestTest {
+
+    @Test
+    public void testGetErrorResponse() {
+        PushTelemetryRequest req = new PushTelemetryRequest(new PushTelemetryRequestData(), (short) 0);
+        PushTelemetryResponse response = req.getErrorResponse(0, Errors.CLUSTER_AUTHORIZATION_FAILED.exception());
+        assertEquals(Collections.singletonMap(Errors.CLUSTER_AUTHORIZATION_FAILED, 1), response.errorCounts());
     }
 
-    public void handle(Throwable e) {
-        backgroundEventQueue.add(new ErrorBackgroundEvent(e));
-    }
 }

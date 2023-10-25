@@ -181,25 +181,25 @@ class LogLoaderTest {
       (logManager, runLoadLogs)
     }
 
-    val cleanShutdownFile = new File(logDir, LogLoader.CleanShutdownFile)
+    val cleanShutdownFileHandler = new CleanShutdownFileHandler(logDir.getPath)
     locally {
       val (logManager, _) = initializeLogManagerForSimulatingErrorTest()
 
       // Load logs after a clean shutdown
-      Files.createFile(cleanShutdownFile.toPath)
+      cleanShutdownFileHandler.write(0L)
       cleanShutdownInterceptedValue = false
       var defaultConfig = logManager.currentDefaultConfig
       logManager.loadLogs(defaultConfig, logManager.fetchTopicConfigOverrides(defaultConfig, Set.empty))
       assertTrue(cleanShutdownInterceptedValue, "Unexpected value intercepted for clean shutdown flag")
-      assertFalse(cleanShutdownFile.exists(), "Clean shutdown file must not exist after loadLogs has completed")
+      assertFalse(cleanShutdownFileHandler.exists(), "Clean shutdown file must not exist after loadLogs has completed")
       // Load logs without clean shutdown file
       cleanShutdownInterceptedValue = true
       defaultConfig = logManager.currentDefaultConfig
       logManager.loadLogs(defaultConfig, logManager.fetchTopicConfigOverrides(defaultConfig, Set.empty))
       assertFalse(cleanShutdownInterceptedValue, "Unexpected value intercepted for clean shutdown flag")
-      assertFalse(cleanShutdownFile.exists(), "Clean shutdown file must not exist after loadLogs has completed")
+      assertFalse(cleanShutdownFileHandler.exists(), "Clean shutdown file must not exist after loadLogs has completed")
       // Create clean shutdown file and then simulate error while loading logs such that log loading does not complete.
-      Files.createFile(cleanShutdownFile.toPath)
+      cleanShutdownFileHandler.write(0L)
       logManager.shutdown()
     }
 
@@ -210,7 +210,7 @@ class LogLoaderTest {
       simulateError.hasError = true
       simulateError.errorType = ErrorTypes.RuntimeException
       assertThrows(classOf[RuntimeException], runLoadLogs)
-      assertFalse(cleanShutdownFile.exists(), "Clean shutdown file must not have existed")
+      assertFalse(cleanShutdownFileHandler.exists(), "Clean shutdown file must not have existed")
       assertFalse(logDirFailureChannel.hasOfflineLogDir(logDir.getAbsolutePath), "log dir should not turn offline when Runtime Exception thrown")
 
       // Simulate Kafka storage error with IOException cause

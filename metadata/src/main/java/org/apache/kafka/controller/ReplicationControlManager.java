@@ -119,6 +119,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET;
 import static org.apache.kafka.common.config.ConfigResource.Type.TOPIC;
+import static org.apache.kafka.common.config.TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG;
 import static org.apache.kafka.common.protocol.Errors.FENCED_LEADER_EPOCH;
 import static org.apache.kafka.common.protocol.Errors.INELIGIBLE_REPLICA;
 import static org.apache.kafka.common.protocol.Errors.INVALID_REQUEST;
@@ -150,11 +151,14 @@ public class ReplicationControlManager {
         private LogContext logContext = null;
         private short defaultReplicationFactor = (short) 3;
         private int defaultNumPartitions = 1;
+
+        private int defaultMinIsr = 1;
         private int maxElectionsPerImbalance = MAX_ELECTIONS_PER_IMBALANCE;
         private ConfigurationControlManager configurationControl = null;
         private ClusterControlManager clusterControl = null;
         private Optional<CreateTopicPolicy> createTopicPolicy = Optional.empty();
         private FeatureControlManager featureControl = null;
+        private boolean eligibleLeaderReplicasEnabled = false;
 
         Builder setSnapshotRegistry(SnapshotRegistry snapshotRegistry) {
             this.snapshotRegistry = snapshotRegistry;
@@ -173,6 +177,16 @@ public class ReplicationControlManager {
 
         Builder setDefaultNumPartitions(int defaultNumPartitions) {
             this.defaultNumPartitions = defaultNumPartitions;
+            return this;
+        }
+
+        Builder setDefaultMinIsr(int defaultMinIsr) {
+            this.defaultMinIsr = defaultMinIsr;
+            return this;
+        }
+
+        Builder setEligibleLeaderReplicasEnabled(boolean eligibleLeaderReplicasEnabled) {
+            this.eligibleLeaderReplicasEnabled = eligibleLeaderReplicasEnabled;
             return this;
         }
 
@@ -216,7 +230,9 @@ public class ReplicationControlManager {
                 logContext,
                 defaultReplicationFactor,
                 defaultNumPartitions,
+                defaultMinIsr,
                 maxElectionsPerImbalance,
+                eligibleLeaderReplicasEnabled,
                 configurationControl,
                 clusterControl,
                 createTopicPolicy,
@@ -278,6 +294,16 @@ public class ReplicationControlManager {
      * not specify a number of partitions.
      */
     private final int defaultNumPartitions;
+
+    /**
+     * The default min ISR that is used if a CreateTopics request does not specify one.
+     */
+    private final int defaultMinIsr;
+
+    /**
+     * True if eligible leader replicas is enabled.
+     */
+    private final boolean eligibleLeaderReplicasEnabled;
 
     /**
      * Maximum number of leader elections to perform during one partition leader balancing operation.
@@ -356,7 +382,9 @@ public class ReplicationControlManager {
         LogContext logContext,
         short defaultReplicationFactor,
         int defaultNumPartitions,
+        int defaultMinIsr,
         int maxElectionsPerImbalance,
+        boolean eligibleLeaderReplicasEnabled,
         ConfigurationControlManager configurationControl,
         ClusterControlManager clusterControl,
         Optional<CreateTopicPolicy> createTopicPolicy,
@@ -366,7 +394,9 @@ public class ReplicationControlManager {
         this.log = logContext.logger(ReplicationControlManager.class);
         this.defaultReplicationFactor = defaultReplicationFactor;
         this.defaultNumPartitions = defaultNumPartitions;
+        this.defaultMinIsr = defaultMinIsr;
         this.maxElectionsPerImbalance = maxElectionsPerImbalance;
+        this.eligibleLeaderReplicasEnabled = eligibleLeaderReplicasEnabled;
         this.configurationControl = configurationControl;
         this.createTopicPolicy = createTopicPolicy;
         this.featureControl = featureControl;
@@ -761,7 +791,7 @@ public class ReplicationControlManager {
         for (Entry<Integer, PartitionRegistration> partEntry : newParts.entrySet()) {
             int partitionIndex = partEntry.getKey();
             PartitionRegistration info = partEntry.getValue();
-            records.add(info.toRecord(topicId, partitionIndex));
+            records.add(info.toRecord(topicId, partitionIndex, featureControl.metadataVersion().partitionRecordVersion()));
         }
         return ApiError.NONE;
     }
@@ -947,6 +977,10 @@ public class ReplicationControlManager {
         return new HashSet<>(imbalancedPartitions);
     }
 
+    boolean isElrEnabled() {
+        return eligibleLeaderReplicasEnabled && featureControl.metadataVersion().isElrSupported();
+    }
+
     ControllerResult<AlterPartitionResponseData> alterPartition(
         ControllerRequestContext context,
         AlterPartitionRequestData request
@@ -1009,9 +1043,11 @@ public class ReplicationControlManager {
                     topic.id,
                     partitionId,
                     clusterControl::isActive,
-                    featureControl.metadataVersion()
+                    featureControl.metadataVersion(),
+                    getTopicEffectiveMinIsr(topic.name)
                 );
                 builder.setZkMigrationEnabled(clusterControl.zkRegistrationAllowed());
+                builder.setEligibleLeaderReplicasEnabled(isElrEnabled());
                 if (configurationControl.uncleanLeaderElectionEnabledForTopic(topic.name())) {
                     builder.setElection(PartitionChangeBuilder.Election.UNCLEAN);
                 }
@@ -1397,9 +1433,12 @@ public class ReplicationControlManager {
             topicId,
             partitionId,
             clusterControl::isActive,
-            featureControl.metadataVersion()
+            featureControl.metadataVersion(),
+            getTopicEffectiveMinIsr(topic)
         );
-        builder.setElection(election).setZkMigrationEnabled(clusterControl.zkRegistrationAllowed());
+        builder.setElection(election)
+            .setZkMigrationEnabled(clusterControl.zkRegistrationAllowed());
+        builder.setEligibleLeaderReplicasEnabled(isElrEnabled());
         Optional<ApiMessageAndVersion> record = builder.build();
         if (!record.isPresent()) {
             if (electionType == ElectionType.PREFERRED) {
@@ -1532,10 +1571,12 @@ public class ReplicationControlManager {
                 topicPartition.topicId(),
                 topicPartition.partitionId(),
                 clusterControl::isActive,
-                featureControl.metadataVersion()
+                featureControl.metadataVersion(),
+                getTopicEffectiveMinIsr(topic.name)
             );
             builder.setElection(PartitionChangeBuilder.Election.PREFERRED)
                 .setZkMigrationEnabled(clusterControl.zkRegistrationAllowed());
+            builder.setEligibleLeaderReplicasEnabled(isElrEnabled());
             builder.build().ifPresent(records::add);
         }
 
@@ -1655,17 +1696,8 @@ public class ReplicationControlManager {
                     "Unable to replicate the partition " + replicationFactor +
                         " time(s): All brokers are currently fenced or in controlled shutdown.");
             }
-            records.add(new ApiMessageAndVersion(new PartitionRecord().
-                setPartitionId(partitionId).
-                setTopicId(topicId).
-                setReplicas(replicas).
-                setIsr(isr).
-                setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value()).
-                setRemovingReplicas(Collections.emptyList()).
-                setAddingReplicas(Collections.emptyList()).
-                setLeader(isr.get(0)).
-                setLeaderEpoch(0).
-                setPartitionEpoch(0), (short) 0));
+            records.add(buildPartitionRegistration(replicas, isr)
+                .toRecord(topicId, partitionId, featureControl.metadataVersion().partitionRecordVersion()));
             partitionId++;
         }
     }
@@ -1754,9 +1786,11 @@ public class ReplicationControlManager {
                 topicIdPart.topicId(),
                 topicIdPart.partitionId(),
                 isAcceptableLeader,
-                featureControl.metadataVersion()
+                featureControl.metadataVersion(),
+                getTopicEffectiveMinIsr(topic.name)
             );
             builder.setZkMigrationEnabled(clusterControl.zkRegistrationAllowed());
+            builder.setEligibleLeaderReplicasEnabled(isElrEnabled());
             if (configurationControl.uncleanLeaderElectionEnabledForTopic(topic.name)) {
                 builder.setElection(PartitionChangeBuilder.Election.UNCLEAN);
             }
@@ -1867,9 +1901,11 @@ public class ReplicationControlManager {
             tp.topicId(),
             tp.partitionId(),
             clusterControl::isActive,
-            featureControl.metadataVersion()
+            featureControl.metadataVersion(),
+            getTopicEffectiveMinIsr(topicName)
         );
         builder.setZkMigrationEnabled(clusterControl.zkRegistrationAllowed());
+        builder.setEligibleLeaderReplicasEnabled(isElrEnabled());
         if (configurationControl.uncleanLeaderElectionEnabledForTopic(topicName)) {
             builder.setElection(PartitionChangeBuilder.Election.UNCLEAN);
         }
@@ -1925,9 +1961,11 @@ public class ReplicationControlManager {
             tp.topicId(),
             tp.partitionId(),
             clusterControl::isActive,
-            featureControl.metadataVersion()
+            featureControl.metadataVersion(),
+            getTopicEffectiveMinIsr(topics.get(tp.topicId()).name.toString())
         );
         builder.setZkMigrationEnabled(clusterControl.zkRegistrationAllowed());
+        builder.setEligibleLeaderReplicasEnabled(isElrEnabled());
         if (!reassignment.replicas().equals(currentReplicas)) {
             builder.setTargetReplicas(reassignment.replicas());
         }
@@ -1993,6 +2031,26 @@ public class ReplicationControlManager {
             setRemovingReplicas(Replicas.toList(partition.removingReplicas)).
             setPartitionIndex(partitionId).
             setReplicas(Replicas.toList(partition.replicas)));
+    }
+
+    // Visible to test.
+    int getTopicEffectiveMinIsr(String topicName) {
+        int currentMinIsr = defaultMinIsr;
+        String minIsrConfig = configurationControl.getTopicConfig(topicName, MIN_IN_SYNC_REPLICAS_CONFIG);
+        if (minIsrConfig != null) {
+            currentMinIsr = Integer.parseInt(minIsrConfig);
+        } else {
+            log.warn("Can't find the min isr config for topic: " + topicName + " using default value " + defaultMinIsr);
+        }
+
+        int replicationFactor = defaultReplicationFactor;
+        try {
+            Uuid topicId = topicsByName.get(topicName);
+            replicationFactor = topics.get(topicId).parts.get(0).replicas.length;
+        } catch (Exception e) {
+            log.warn("Can't find the replication factor for topic: " + topicName + " using default value " + replicationFactor + ". Error=" + e);
+        }
+        return Math.min(currentMinIsr, replicationFactor);
     }
 
     private static final class IneligibleReplica {

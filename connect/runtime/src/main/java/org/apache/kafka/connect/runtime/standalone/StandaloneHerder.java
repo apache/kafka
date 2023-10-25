@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.runtime.standalone;
 
 import org.apache.kafka.common.utils.ThreadUtils;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.errors.AlreadyExistsException;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -82,7 +83,9 @@ public class StandaloneHerder extends AbstractHerder {
                 kafkaClusterId,
                 new MemoryStatusBackingStore(),
                 new MemoryConfigBackingStore(worker.configTransformer()),
-             connectorClientConfigOverridePolicy);
+                connectorClientConfigOverridePolicy,
+                Time.SYSTEM
+        );
     }
 
     // visible for testing
@@ -91,8 +94,9 @@ public class StandaloneHerder extends AbstractHerder {
                      String kafkaClusterId,
                      StatusBackingStore statusBackingStore,
                      MemoryConfigBackingStore configBackingStore,
-                     ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy) {
-        super(worker, workerId, kafkaClusterId, statusBackingStore, configBackingStore, connectorClientConfigOverridePolicy);
+                     ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy,
+                     Time time) {
+        super(worker, workerId, kafkaClusterId, statusBackingStore, configBackingStore, connectorClientConfigOverridePolicy, time);
         this.configState = ClusterConfigState.EMPTY;
         this.requestExecutorService = Executors.newSingleThreadScheduledExecutor();
         configBackingStore.setUpdateListener(new ConfigUpdateListener());
@@ -404,6 +408,12 @@ public class StandaloneHerder extends AbstractHerder {
         return true;
     }
 
+    @Override
+    public void setClusterLoggerLevel(String namespace, String level) {
+        // In standalone mode, this single worker is the entire cluster
+        setWorkerLoggerLevel(namespace, level);
+    }
+
     private void startConnector(String connName, Callback<TargetState> onStart) {
         Map<String, String> connConfigs = configState.connectorConfig(connName);
         TargetState targetState = configState.targetState(connName);
@@ -542,6 +552,11 @@ public class StandaloneHerder extends AbstractHerder {
 
         @Override
         public void onRestartRequest(RestartRequest restartRequest) {
+            // no-op
+        }
+
+        @Override
+        public void onLoggingLevelUpdate(String namespace, String level) {
             // no-op
         }
     }
