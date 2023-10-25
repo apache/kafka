@@ -210,7 +210,7 @@ public class HeartbeatRequestManagerTest {
         resetWithZeroHeartbeatInterval(Optional.of(DEFAULT_GROUP_INSTANCE_ID));
 
         List<String> subscribedTopics = Collections.singletonList("topic");
-        subscriptions.subscribe(new HashSet<>(subscribedTopics), new NoOpConsumerRebalanceListener());
+        subscriptions.subscribe(new HashSet<>(subscribedTopics), Optional.empty());
 
         // Update membershipManager's memberId and memberEpoch
         ConsumerGroupHeartbeatResponse result =
