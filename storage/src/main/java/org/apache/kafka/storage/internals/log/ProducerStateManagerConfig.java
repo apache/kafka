@@ -16,15 +16,17 @@
  */
 package org.apache.kafka.storage.internals.log;
 
-import java.util.Collections;
+import org.apache.kafka.common.utils.Utils;
+
 import java.util.Set;
 
 public class ProducerStateManagerConfig {
     public static final String PRODUCER_ID_EXPIRATION_MS = "producer.id.expiration.ms";
-    public static final Set<String> RECONFIGURABLE_CONFIGS = Collections.singleton(PRODUCER_ID_EXPIRATION_MS);
+    public static final String TRANSACTION_VERIFICATION_ENABLED = "transaction.partition.verification.enable";
+    public static final Set<String> RECONFIGURABLE_CONFIGS = Utils.mkSet(PRODUCER_ID_EXPIRATION_MS, TRANSACTION_VERIFICATION_ENABLED);
 
     private volatile int producerIdExpirationMs;
-    private boolean transactionVerificationEnabled;
+    private volatile boolean transactionVerificationEnabled;
 
     public ProducerStateManagerConfig(int producerIdExpirationMs, boolean transactionVerificationEnabled) {
         this.producerIdExpirationMs = producerIdExpirationMs;
@@ -33,6 +35,10 @@ public class ProducerStateManagerConfig {
 
     public void setProducerIdExpirationMs(int producerIdExpirationMs) {
         this.producerIdExpirationMs = producerIdExpirationMs;
+    }
+
+    public void setTransactionVerificationEnabled(boolean transactionVerificationEnabled) {
+        this.transactionVerificationEnabled = transactionVerificationEnabled;
     }
 
     public int producerIdExpirationMs() {

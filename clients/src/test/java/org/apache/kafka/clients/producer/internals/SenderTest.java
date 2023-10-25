@@ -146,7 +146,7 @@ public class SenderTest {
     private TopicPartition tp1 = new TopicPartition("test", 1);
     private MockTime time = new MockTime();
     private int batchSize = 16 * 1024;
-    private ProducerMetadata metadata = new ProducerMetadata(0, Long.MAX_VALUE, TOPIC_IDLE_MS,
+    private ProducerMetadata metadata = new ProducerMetadata(0, 0, Long.MAX_VALUE, TOPIC_IDLE_MS,
             new LogContext(), new ClusterResourceListeners(), time);
     private MockClient client = new MockClient(time, metadata);
     private ApiVersions apiVersions = new ApiVersions();
@@ -497,7 +497,7 @@ public class SenderTest {
 
         Node clusterNode = metadata.fetch().nodes().get(0);
         Map<Integer, List<ProducerBatch>> drainedBatches =
-            accumulator.drain(metadata.fetch(), Collections.singleton(clusterNode), Integer.MAX_VALUE, time.milliseconds());
+            accumulator.drain(metadata, Collections.singleton(clusterNode), Integer.MAX_VALUE, time.milliseconds());
         sender.addToInflightBatches(drainedBatches);
 
         // Disconnect the target node for the pending produce request. This will ensure that sender will try to
@@ -561,7 +561,7 @@ public class SenderTest {
             // otherwise it wouldn't update the stats.
             RecordAccumulator.PartitionerConfig config = new RecordAccumulator.PartitionerConfig(false, 42);
             long totalSize = 1024 * 1024;
-            accumulator = new RecordAccumulator(logContext, batchSize, CompressionType.NONE, 0, 0L,
+            accumulator = new RecordAccumulator(logContext, batchSize, CompressionType.NONE, 0, 0L, 0L,
                 DELIVERY_TIMEOUT_MS, config, m, "producer-metrics", time, apiVersions, null,
                 new BufferPool(totalSize, batchSize, m, time, "producer-internal-metrics"));
 
@@ -2414,7 +2414,7 @@ public class SenderTest {
         CompressionRatioEstimator.setEstimation(topic, CompressionType.GZIP, 0.2f);
         try (Metrics m = new Metrics()) {
             accumulator = new RecordAccumulator(logContext, batchSize, CompressionType.GZIP,
-                0, 0L, deliveryTimeoutMs, m, metricGrpName, time, new ApiVersions(), txnManager,
+                0, 0L, 0L, deliveryTimeoutMs, m, metricGrpName, time, new ApiVersions(), txnManager,
                 new BufferPool(totalSize, batchSize, metrics, time, "producer-internal-metrics"));
             SenderMetricsRegistry senderMetrics = new SenderMetricsRegistry(m);
             Sender sender = new Sender(logContext, client, metadata, this.accumulator, true, MAX_REQUEST_SIZE, ACKS_ALL, maxRetries,
@@ -3146,6 +3146,93 @@ public class SenderTest {
 
         txnManager.beginTransaction();
     }
+    @Test
+    public void testProducerBatchRetriesWhenPartitionLeaderChanges() throws Exception {
+        Metrics m = new Metrics();
+        SenderMetricsRegistry senderMetrics = new SenderMetricsRegistry(m);
+        try {
+            // SETUP
+            String metricGrpName = "producer-metrics-test-stats-1";
+            long totalSize = 1024 * 1024;
+            BufferPool pool = new BufferPool(totalSize, batchSize, metrics, time,
+                metricGrpName);
+            long retryBackoffMaxMs = 100L;
+            // lingerMs is 0 to send batch as soon as any records are available on it.
+            this.accumulator = new RecordAccumulator(logContext, batchSize,
+                CompressionType.NONE, 0, 10L, retryBackoffMaxMs,
+                DELIVERY_TIMEOUT_MS, metrics, metricGrpName, time, apiVersions, null, pool);
+            Sender sender = new Sender(logContext, client, metadata, this.accumulator, false,
+                MAX_REQUEST_SIZE, ACKS_ALL,
+                10, senderMetrics, time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, null,
+                apiVersions);
+            // Update metadata with leader-epochs.
+            int tp0LeaderEpoch = 100;
+            int epoch = tp0LeaderEpoch;
+            this.client.updateMetadata(
+                RequestTestUtils.metadataUpdateWith(1, Collections.singletonMap("test", 2),
+                    tp -> {
+                        if (tp0.equals(tp)) {
+                            return epoch;
+                        }  else if (tp1.equals(tp)) {
+                            return 0;
+                        } else {
+                            throw new RuntimeException("unexpected tp " + tp);
+                        }
+                    }));
+
+            // Produce batch, it returns with a retry-able error like NOT_LEADER_OR_FOLLOWER, scheduled for retry.
+            Future<RecordMetadata> futureIsProduced = appendToAccumulator(tp0, 0L, "key", "value");
+            sender.runOnce(); // connect
+            sender.runOnce(); // send produce request
+            assertEquals(1, client.inFlightRequestCount(),
+                "We should have a single produce request in flight.");
+            assertEquals(1, sender.inFlightBatches(tp0).size());
+            assertTrue(client.hasInFlightRequests());
+            client.respond(produceResponse(tp0, -1, Errors.NOT_LEADER_OR_FOLLOWER, 0));
+            sender.runOnce(); // receive produce response, batch scheduled for retry
+            assertTrue(!futureIsProduced.isDone(), "Produce request is yet not done.");
+
+            // TEST that as new-leader(with epochA) is discovered, the batch is retried immediately i.e. skips any backoff period.
+            // Update leader epoch for tp0
+            int newEpoch = ++tp0LeaderEpoch;
+            this.client.updateMetadata(
+                RequestTestUtils.metadataUpdateWith(1, Collections.singletonMap("test", 2),
+                    tp -> {
+                        if (tp0.equals(tp)) {
+                            return newEpoch;
+                        } else if (tp1.equals(tp)) {
+                            return 0;
+                        } else {
+                            throw new RuntimeException("unexpected tp " + tp);
+                        }
+                    }));
+            sender.runOnce(); // send produce request, immediately.
+            assertEquals(1, sender.inFlightBatches(tp0).size());
+            assertTrue(client.hasInFlightRequests());
+            client.respond(produceResponse(tp0, -1, Errors.NOT_LEADER_OR_FOLLOWER, 0));
+            sender.runOnce(); // receive produce response, schedule batch for retry.
+            assertTrue(!futureIsProduced.isDone(), "Produce request is yet not done.");
+
+            // TEST that a subsequent retry to the same leader(epochA) waits the backoff period.
+            sender.runOnce(); //send produce request
+            // No batches in-flight
+            assertEquals(0, sender.inFlightBatches(tp0).size());
+            assertTrue(!client.hasInFlightRequests());
+
+            // TEST that after waiting for longer than backoff period, batch is retried again.
+            time.sleep(2 * retryBackoffMaxMs);
+            sender.runOnce(); // send produce request
+            assertEquals(1, sender.inFlightBatches(tp0).size());
+            assertTrue(client.hasInFlightRequests());
+            long offset = 999;
+            client.respond(produceResponse(tp0, offset, Errors.NONE, 0));
+            sender.runOnce(); // receive response.
+            assertTrue(futureIsProduced.isDone(), "Request to tp0 successfully done");
+            assertEquals(offset, futureIsProduced.get().offset());
+        } finally {
+            m.close();
+        }
+    }
 
     private void verifyErrorMessage(ProduceResponse response, String expectedMessage) throws Exception {
         Future<RecordMetadata> future = appendToAccumulator(tp0, 0L, "key", "value");
@@ -3341,7 +3428,7 @@ public class SenderTest {
         this.metrics = new Metrics(metricConfig, time);
         BufferPool pool = (customPool == null) ? new BufferPool(totalSize, batchSize, metrics, time, metricGrpName) : customPool;
 
-        this.accumulator = new RecordAccumulator(logContext, batchSize, CompressionType.NONE, lingerMs, 0L,
+        this.accumulator = new RecordAccumulator(logContext, batchSize, CompressionType.NONE, lingerMs, 0L, 0L,
             DELIVERY_TIMEOUT_MS, metrics, metricGrpName, time, apiVersions, transactionManager, pool);
         this.senderMetricsRegistry = new SenderMetricsRegistry(this.metrics);
         this.sender = new Sender(logContext, this.client, this.metadata, this.accumulator, guaranteeOrder, MAX_REQUEST_SIZE, ACKS_ALL,

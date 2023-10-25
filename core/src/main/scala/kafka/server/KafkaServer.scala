@@ -69,6 +69,8 @@ import scala.jdk.CollectionConverters._
 
 object KafkaServer {
 
+  val brokerMetaPropsFile = "meta.properties"
+
   def zkClientConfigFromKafkaConfig(config: KafkaConfig, forceZkSslClientEnable: Boolean = false): ZKClientConfig = {
     val clientConfig = new ZKClientConfig
     if (config.zkSslClientEnable || forceZkSslClientEnable) {
@@ -150,7 +152,7 @@ class KafkaServer(
 
   var autoTopicCreationManager: AutoTopicCreationManager = _
 
-  var clientToControllerChannelManager: BrokerToControllerChannelManager = _
+  var clientToControllerChannelManager: NodeToControllerChannelManager = _
 
   var alterPartitionManager: AlterPartitionManager = _
 
@@ -165,9 +167,8 @@ class KafkaServer(
   private var configRepository: ZkConfigRepository = _
 
   val correlationId: AtomicInteger = new AtomicInteger(0)
-  val brokerMetaPropsFile = "meta.properties"
   val brokerMetadataCheckpoints = config.logDirs.map { logDir =>
-    (logDir, new BrokerMetadataCheckpoint(new File(logDir + File.separator + brokerMetaPropsFile)))
+    (logDir, new BrokerMetadataCheckpoint(new File(logDir + File.separator + KafkaServer.brokerMetaPropsFile)))
   }.toMap
 
   private var _clusterId: String = _
@@ -281,6 +282,8 @@ class KafkaServer(
         _brokerState = BrokerState.RECOVERY
         logManager.startup(zkClient.getAllTopicsInCluster())
 
+        remoteLogManagerOpt = createRemoteLogManager()
+
         if (config.migrationEnabled) {
           kraftControllerNodes = RaftConfig.voterConnectionsToNodes(
             RaftConfig.parseVoterConnections(config.quorumVoters)).asScala
@@ -292,9 +295,6 @@ class KafkaServer(
           config.interBrokerProtocolVersion,
           brokerFeatures,
           kraftControllerNodes)
-
-        remoteLogManagerOpt = createRemoteLogManager()
-
         val controllerNodeProvider = new MetadataCacheControllerNodeProvider(metadataCache, config)
 
         /* initialize feature change listener */
@@ -308,7 +308,7 @@ class KafkaServer(
         tokenCache = new DelegationTokenCache(ScramMechanism.mechanismNames)
         credentialProvider = new CredentialProvider(ScramMechanism.mechanismNames, tokenCache)
 
-        clientToControllerChannelManager = BrokerToControllerChannelManager(
+        clientToControllerChannelManager = NodeToControllerChannelManager(
           controllerNodeProvider = controllerNodeProvider,
           time = time,
           metrics = metrics,
@@ -320,7 +320,7 @@ class KafkaServer(
         clientToControllerChannelManager.start()
 
         /* start forwarding manager */
-        var autoTopicCreationChannel = Option.empty[BrokerToControllerChannelManager]
+        var autoTopicCreationChannel = Option.empty[NodeToControllerChannelManager]
         if (enableForwarding) {
           this.forwardingManager = Some(ForwardingManager(clientToControllerChannelManager))
           autoTopicCreationChannel = Some(clientToControllerChannelManager)
@@ -371,7 +371,7 @@ class KafkaServer(
         checkpointBrokerMetadata(zkMetaProperties)
 
         /* start token manager */
-        tokenManager = new DelegationTokenManager(config, tokenCache, time , zkClient)
+        tokenManager = new DelegationTokenManagerZk(config, tokenCache, time , zkClient)
         tokenManager.startup()
 
         /* start kafka controller */
@@ -403,7 +403,7 @@ class KafkaServer(
           )
           val controllerNodes = RaftConfig.voterConnectionsToNodes(controllerQuorumVotersFuture.get()).asScala
           val quorumControllerNodeProvider = RaftControllerNodeProvider(raftManager, config, controllerNodes)
-          val brokerToQuorumChannelManager = BrokerToControllerChannelManager(
+          val brokerToQuorumChannelManager = NodeToControllerChannelManager(
             controllerNodeProvider = quorumControllerNodeProvider,
             time = time,
             metrics = metrics,
@@ -437,7 +437,8 @@ class KafkaServer(
             brokerToQuorumChannelManager,
             kraftMetaProps.clusterId,
             networkListeners,
-            ibpAsFeature
+            ibpAsFeature,
+            -1
           )
           logger.debug("Start RaftManager")
         }
@@ -507,17 +508,18 @@ class KafkaServer(
             KafkaServer.MIN_INCREMENTAL_FETCH_SESSION_EVICTION_MS))
 
         // Start RemoteLogManager before broker start serving the requests.
-        remoteLogManagerOpt.foreach(rlm => {
+        remoteLogManagerOpt.foreach { rlm =>
           val listenerName = config.remoteLogManagerConfig.remoteLogMetadataManagerListenerName()
           if (listenerName != null) {
             brokerInfo.broker.endPoints
               .find(e => e.listenerName.equals(ListenerName.normalised(listenerName)))
-              .orElse(throw new ConfigException(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP +
-                " should be set as a listener name within valid broker listener name list."))
+              .orElse(throw new ConfigException(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP,
+                listenerName, "Should be set as a listener name within valid broker listener name list: "
+                  + brokerInfo.broker.endPoints.map(_.listenerName).mkString(",")))
               .foreach(e => rlm.onEndPointCreated(e))
           }
           rlm.startup()
-        })
+        }
 
         /* start processing requests */
         val zkSupport = ZkSupport(adminManager, kafkaController, zkClient, forwardingManager, metadataCache, brokerEpochManager)
@@ -561,7 +563,7 @@ class KafkaServer(
         Option(logManager.cleaner).foreach(config.dynamicConfig.addBrokerReconfigurable)
 
         /* start dynamic config manager */
-        dynamicConfigHandlers = Map[String, ConfigHandler](ConfigType.Topic -> new TopicConfigHandler(logManager, config, quotaManagers, Some(kafkaController)),
+        dynamicConfigHandlers = Map[String, ConfigHandler](ConfigType.Topic -> new TopicConfigHandler(replicaManager, config, quotaManagers, Some(kafkaController)),
                                                            ConfigType.Client -> new ClientIdConfigHandler(quotaManagers),
                                                            ConfigType.User -> new UserConfigHandler(quotaManagers, credentialProvider),
                                                            ConfigType.Broker -> new BrokerConfigHandler(config, quotaManagers),
@@ -615,7 +617,13 @@ class KafkaServer(
       }
 
       Some(new RemoteLogManager(config.remoteLogManagerConfig, config.brokerId, config.logDirs.head, clusterId, time,
-        (tp: TopicPartition) => logManager.getLog(tp).asJava, brokerTopicStats, metadataCache));
+        (tp: TopicPartition) => logManager.getLog(tp).asJava,
+        (tp: TopicPartition, remoteLogStartOffset: java.lang.Long) => {
+          logManager.getLog(tp).foreach { log =>
+            log.updateLogStartOffsetFromRemoteTier(remoteLogStartOffset)
+          }
+      },
+        brokerTopicStats));
     } else {
       None
     }
@@ -623,8 +631,16 @@ class KafkaServer(
 
   protected def createReplicaManager(isShuttingDown: AtomicBoolean): ReplicaManager = {
     val addPartitionsLogContext = new LogContext(s"[AddPartitionsToTxnManager broker=${config.brokerId}]")
-    val addPartitionsToTxnNetworkClient: NetworkClient = NetworkUtils.buildNetworkClient("AddPartitionsManager", config, metrics, time, addPartitionsLogContext)
-    val addPartitionsToTxnManager: AddPartitionsToTxnManager = new AddPartitionsToTxnManager(config, addPartitionsToTxnNetworkClient, time)
+    val addPartitionsToTxnNetworkClient = NetworkUtils.buildNetworkClient("AddPartitionsManager", config, metrics, time, addPartitionsLogContext)
+    val addPartitionsToTxnManager = new AddPartitionsToTxnManager(
+      config,
+      addPartitionsToTxnNetworkClient,
+      metadataCache,
+      // The transaction coordinator is not created at this point so we must
+      // use a lambda here.
+      transactionalId => transactionCoordinator.partitionFor(transactionalId),
+      time
+    )
 
     new ReplicaManager(
       metrics = metrics,

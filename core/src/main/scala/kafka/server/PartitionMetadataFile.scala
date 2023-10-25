@@ -117,7 +117,7 @@ class PartitionMetadataFile(val file: File,
             try {
               writer.write(PartitionMetadataFileFormatter.toFile(new PartitionMetadata(CurrentVersion, topicId)))
               writer.flush()
-              fileOutputStream.getFD().sync()
+              fileOutputStream.getFD.sync()
             } finally {
               writer.close()
             }
@@ -138,7 +138,7 @@ class PartitionMetadataFile(val file: File,
   def read(): PartitionMetadata = {
     lock synchronized {
       try {
-        val reader = Files.newBufferedReader(path)
+        val reader = Files.newBufferedReader(path, StandardCharsets.UTF_8)
         try {
           val partitionBuffer = new PartitionMetadataReadBuffer(file.getAbsolutePath, reader)
           partitionBuffer.read()

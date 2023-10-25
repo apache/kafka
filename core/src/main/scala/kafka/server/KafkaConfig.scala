@@ -83,7 +83,7 @@ object Defaults {
   val BrokerHeartbeatIntervalMs = 2000
   val BrokerSessionTimeoutMs = 9000
   val MetadataSnapshotMaxNewRecordBytes = 20 * 1024 * 1024
-  val MetadataSnapshotMaxIntervalMs = TimeUnit.HOURS.toMillis(1);
+  val MetadataSnapshotMaxIntervalMs = TimeUnit.HOURS.toMillis(1)
   val MetadataMaxIdleIntervalMs = 500
   val MetadataMaxRetentionBytes = 100 * 1024 * 1024
   val DeleteTopicEnable = true
@@ -224,7 +224,7 @@ object Defaults {
   val MetricNumSamples = 2
   val MetricSampleWindowMs = 30000
   val MetricReporterClasses = ""
-  val MetricRecordingLevel = Sensor.RecordingLevel.INFO.toString()
+  val MetricRecordingLevel = Sensor.RecordingLevel.INFO.toString
   val AutoIncludeJmxReporter = true
 
 
@@ -241,7 +241,7 @@ object Defaults {
   val SslTrustManagerAlgorithm = SslConfigs.DEFAULT_SSL_TRUSTMANAGER_ALGORITHM
   val SslEndpointIdentificationAlgorithm = SslConfigs.DEFAULT_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM
   val SslClientAuthentication = SslClientAuth.NONE.name().toLowerCase(Locale.ROOT)
-  val SslClientAuthenticationValidValues = SslClientAuth.VALUES.asScala.map(v => v.toString().toLowerCase(Locale.ROOT)).asJava.toArray(new Array[String](0))
+  val SslClientAuthenticationValidValues = SslClientAuth.VALUES.asScala.map(v => v.toString.toLowerCase(Locale.ROOT)).asJava.toArray(new Array[String](0))
   val SslPrincipalMappingRules = BrokerSecurityConfigs.DEFAULT_SSL_PRINCIPAL_MAPPING_RULES
 
     /** ********* General Security configuration ***********/
@@ -399,6 +399,9 @@ object KafkaConfig {
   /** ZK to KRaft Migration configs */
   val MigrationEnabledProp = "zookeeper.metadata.migration.enable"
 
+  /** Enable eligible leader replicas configs */
+  val ElrEnabledProp = "eligible.leader.replicas.enable"
+
   /************* Authorizer Configuration ***********/
   val AuthorizerClassNameProp = "authorizer.class.name"
   val EarlyStartListenersProp = "early.start.listeners"
@@ -465,7 +468,14 @@ object KafkaConfig {
   val LogMessageFormatVersionProp = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG)
 
   val LogMessageTimestampTypeProp = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG)
+
+  /* See `TopicConfig.MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG` for details */
+  @deprecated("3.6")
   val LogMessageTimestampDifferenceMaxMsProp = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG)
+
+  val LogMessageTimestampBeforeMaxMsProp = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG)
+  val LogMessageTimestampAfterMaxMsProp = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG)
+
   val NumRecoveryThreadsPerDataDirProp = "num.recovery.threads.per.data.dir"
   val AutoCreateTopicsEnableProp = "auto.create.topics.enable"
   val MinInSyncReplicasProp = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG)
@@ -747,7 +757,7 @@ object KafkaConfig {
     "maximum bytes limit is reached."
   val MetadataMaxIdleIntervalMsDoc = "This configuration controls how often the active " +
     "controller should write no-op records to the metadata partition. If the value is 0, no-op records " +
-    s"are not appended to the metadata partition. The default value is ${Defaults.MetadataMaxIdleIntervalMs}";
+    s"are not appended to the metadata partition. The default value is ${Defaults.MetadataMaxIdleIntervalMs}"
   val ControllerListenerNamesDoc = "A comma-separated list of the names of the listeners used by the controller. This is required " +
     "if running in KRaft mode. When communicating with the controller quorum, the broker will always use the first listener in this list.\n " +
     "Note: The ZooKeeper-based controller should not set this configuration."
@@ -879,7 +889,7 @@ object KafkaConfig {
   val LogCleanerEnableDoc = "Enable the log cleaner process to run on the server. Should be enabled if using any topics with a cleanup.policy=compact including the internal offsets topic. If disabled those topics will not be compacted and continually grow in size."
   val LogCleanerDeleteRetentionMsDoc = "The amount of time to retain tombstone message markers for log compacted topics. This setting also gives a bound " +
     "on the time in which a consumer must complete a read if they begin from offset 0 to ensure that they get a valid snapshot of the final stage (otherwise  " +
-    "tombstones messages may be collected before a consumer completes their scan).";
+    "tombstones messages may be collected before a consumer completes their scan)."
   val LogCleanerMinCompactionLagMsDoc = "The minimum time a message will remain uncompacted in the log. Only applicable for logs that are being compacted."
   val LogCleanerMaxCompactionLagMsDoc = "The maximum time a message will remain ineligible for compaction in the log. Only applicable for logs that are being compacted."
   val LogIndexSizeMaxBytesDoc = "The maximum size in bytes of the offset index"
@@ -899,10 +909,23 @@ object KafkaConfig {
   val LogMessageTimestampTypeDoc = "Define whether the timestamp in the message is message create time or log append time. The value should be either " +
     "`CreateTime` or `LogAppendTime`."
 
-  val LogMessageTimestampDifferenceMaxMsDoc = "The maximum difference allowed between the timestamp when a broker receives " +
+  val LogMessageTimestampDifferenceMaxMsDoc = "[DEPRECATED] The maximum difference allowed between the timestamp when a broker receives " +
     "a message and the timestamp specified in the message. If log.message.timestamp.type=CreateTime, a message will be rejected " +
     "if the difference in timestamp exceeds this threshold. This configuration is ignored if log.message.timestamp.type=LogAppendTime." +
     "The maximum timestamp difference allowed should be no greater than log.retention.ms to avoid unnecessarily frequent log rolling."
+
+  val LogMessageTimestampBeforeMaxMsDoc = "This configuration sets the allowable timestamp difference between the " +
+    "broker's timestamp and the message timestamp. The message timestamp can be earlier than or equal to the broker's " +
+    "timestamp, with the maximum allowable difference determined by the value set in this configuration. " +
+    "If log.message.timestamp.type=CreateTime, the message will be rejected if the difference in timestamps exceeds " +
+    "this specified threshold. This configuration is ignored if log.message.timestamp.type=LogAppendTime."
+
+  val LogMessageTimestampAfterMaxMsDoc = "This configuration sets the allowable timestamp difference between the " +
+    "message timestamp and the broker's timestamp. The message timestamp can be later than or equal to the broker's " +
+    "timestamp, with the maximum allowable difference determined by the value set in this configuration. " +
+    "If log.message.timestamp.type=CreateTime, the message will be rejected if the difference in timestamps exceeds " +
+    "this specified threshold. This configuration is ignored if log.message.timestamp.type=LogAppendTime."
+
   val NumRecoveryThreadsPerDataDirDoc = "The number of threads per data directory to be used for log recovery at startup and flushing at shutdown"
   val AutoCreateTopicsEnableDoc = "Enable auto creation of topic on the server."
   val MinInSyncReplicasDoc = "When a producer sets acks to \"all\" (or \"-1\"), " +
@@ -919,7 +942,7 @@ object KafkaConfig {
     "implement the <code>org.apache.kafka.server.policy.CreateTopicPolicy</code> interface."
   val AlterConfigPolicyClassNameDoc = "The alter configs policy class that should be used for validation. The class should " +
     "implement the <code>org.apache.kafka.server.policy.AlterConfigPolicy</code> interface."
-  val LogMessageDownConversionEnableDoc = TopicConfig.MESSAGE_DOWNCONVERSION_ENABLE_DOC;
+  val LogMessageDownConversionEnableDoc = TopicConfig.MESSAGE_DOWNCONVERSION_ENABLE_DOC
 
   /** ********* Replication configuration ***********/
   val ControllerSocketTimeoutMsDoc = "The socket timeout for controller-to-broker channels."
@@ -1133,6 +1156,7 @@ object KafkaConfig {
   /** ********* Delegation Token Configuration ****************/
   val DelegationTokenSecretKeyAliasDoc = s"DEPRECATED: An alias for $DelegationTokenSecretKeyProp, which should be used instead of this config."
   val DelegationTokenSecretKeyDoc = "Secret key to generate and verify delegation tokens. The same key must be configured across all the brokers. " +
+    " If using Kafka with KRaft, the key must also be set across all controllers. " +
     " If the key is not set or set to empty string, brokers will disable the delegation token support."
   val DelegationTokenMaxLifeTimeDoc = "The token has a maximum lifetime beyond which it cannot be renewed anymore. Default value 7 days."
   val DelegationTokenExpiryTimeMsDoc = "The token validity time in milliseconds before the token needs to be renewed. Default value 1 day."
@@ -1215,6 +1239,7 @@ object KafkaConfig {
       .define(MetadataMaxIdleIntervalMsProp, INT, Defaults.MetadataMaxIdleIntervalMs, atLeast(0), LOW, MetadataMaxIdleIntervalMsDoc)
       .defineInternal(ServerMaxStartupTimeMsProp, LONG, Defaults.ServerMaxStartupTimeMs, atLeast(0), MEDIUM, ServerMaxStartupTimeMsDoc)
       .define(MigrationEnabledProp, BOOLEAN, false, HIGH, "Enable ZK to KRaft migration")
+      .define(ElrEnabledProp, BOOLEAN, false, HIGH, "Enable the Eligible leader replicas")
 
       /************* Authorizer Configuration ***********/
       .define(AuthorizerClassNameProp, STRING, Defaults.AuthorizerClassName, new ConfigDef.NonNullValidator(), LOW, AuthorizerClassNameDoc)
@@ -1284,6 +1309,8 @@ object KafkaConfig {
       .define(LogMessageFormatVersionProp, STRING, LogConfig.DEFAULT_MESSAGE_FORMAT_VERSION, new MetadataVersionValidator(), MEDIUM, LogMessageFormatVersionDoc)
       .define(LogMessageTimestampTypeProp, STRING, LogConfig.DEFAULT_MESSAGE_TIMESTAMP_TYPE, in("CreateTime", "LogAppendTime"), MEDIUM, LogMessageTimestampTypeDoc)
       .define(LogMessageTimestampDifferenceMaxMsProp, LONG, LogConfig.DEFAULT_MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS, atLeast(0), MEDIUM, LogMessageTimestampDifferenceMaxMsDoc)
+      .define(LogMessageTimestampBeforeMaxMsProp, LONG, LogConfig.DEFAULT_MESSAGE_TIMESTAMP_BEFORE_MAX_MS, atLeast(0), MEDIUM, LogMessageTimestampBeforeMaxMsDoc)
+      .define(LogMessageTimestampAfterMaxMsProp, LONG, LogConfig.DEFAULT_MESSAGE_TIMESTAMP_AFTER_MAX_MS, atLeast(0), MEDIUM, LogMessageTimestampAfterMaxMsDoc)
       .define(CreateTopicPolicyClassNameProp, CLASS, null, LOW, CreateTopicPolicyClassNameDoc)
       .define(AlterConfigPolicyClassNameProp, CLASS, null, LOW, AlterConfigPolicyClassNameDoc)
       .define(LogMessageDownConversionEnableProp, BOOLEAN, LogConfig.DEFAULT_MESSAGE_DOWNCONVERSION_ENABLE, LOW, LogMessageDownConversionEnableDoc)
@@ -1713,6 +1740,8 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
 
   val migrationEnabled: Boolean = getBoolean(KafkaConfig.MigrationEnabledProp)
 
+  val elrEnabled: Boolean = getBoolean(KafkaConfig.ElrEnabledProp)
+
   private def parseProcessRoles(): Set[ProcessRole] = {
     val roles = getList(KafkaConfig.ProcessRolesProp).asScala.map {
       case "broker" => BrokerRole
@@ -1862,7 +1891,37 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
     else MetadataVersion.fromVersionString(logMessageFormatVersionString)
 
   def logMessageTimestampType = TimestampType.forName(getString(KafkaConfig.LogMessageTimestampTypeProp))
+
+  /* See `TopicConfig.MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG` for details */
+  @deprecated("3.6")
   def logMessageTimestampDifferenceMaxMs: Long = getLong(KafkaConfig.LogMessageTimestampDifferenceMaxMsProp)
+
+  // In the transition period before logMessageTimestampDifferenceMaxMs is removed, to maintain backward compatibility,
+  // we are using its value if logMessageTimestampBeforeMaxMs default value hasn't changed.
+  // See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for deprecation details
+  @nowarn("cat=deprecation")
+  def logMessageTimestampBeforeMaxMs: Long = {
+    val messageTimestampBeforeMaxMs: Long = getLong(KafkaConfig.LogMessageTimestampBeforeMaxMsProp)
+    if (messageTimestampBeforeMaxMs != LogConfig.DEFAULT_MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS) {
+      messageTimestampBeforeMaxMs
+    } else {
+      logMessageTimestampDifferenceMaxMs
+    }
+  }
+
+  // In the transition period before logMessageTimestampDifferenceMaxMs is removed, to maintain backward compatibility,
+  // we are using its value if logMessageTimestampAfterMaxMs default value hasn't changed.
+  // See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for deprecation details
+  @nowarn("cat=deprecation")
+  def logMessageTimestampAfterMaxMs: Long = {
+    val messageTimestampAfterMaxMs: Long = getLong(KafkaConfig.LogMessageTimestampAfterMaxMsProp)
+    if (messageTimestampAfterMaxMs != Long.MaxValue) {
+      messageTimestampAfterMaxMs
+    } else {
+      logMessageTimestampDifferenceMaxMs
+    }
+  }
+
   def logMessageDownConversionEnable: Boolean = getBoolean(KafkaConfig.LogMessageDownConversionEnableProp)
 
   /** ********* Replication configuration ***********/
@@ -1896,7 +1955,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
       // A user-supplied IBP was given
       val configuredVersion = MetadataVersion.fromVersionString(interBrokerProtocolVersionString)
       if (!configuredVersion.isKRaftSupported) {
-        throw new ConfigException(s"A non-KRaft version ${interBrokerProtocolVersionString} given for ${KafkaConfig.InterBrokerProtocolVersionProp}. " +
+        throw new ConfigException(s"A non-KRaft version $interBrokerProtocolVersionString given for ${KafkaConfig.InterBrokerProtocolVersionProp}. " +
           s"The minimum version is ${MetadataVersion.MINIMUM_KRAFT_VERSION}")
       } else {
         warn(s"${KafkaConfig.InterBrokerProtocolVersionProp} is deprecated in KRaft mode as of 3.3 and will only " +
@@ -1915,7 +1974,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   val controlledShutdownEnable = getBoolean(KafkaConfig.ControlledShutdownEnableProp)
 
   /** ********* Feature configuration ***********/
-  def isFeatureVersioningSupported = interBrokerProtocolVersion.isFeatureVersioningSupported()
+  def isFeatureVersioningSupported = interBrokerProtocolVersion.isFeatureVersioningSupported
 
   /** ********* Group coordinator configuration ***********/
   val groupMinSessionTimeoutMs = getInt(KafkaConfig.GroupMinSessionTimeoutMsProp)
@@ -1958,7 +2017,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   val transactionAbortTimedOutTransactionCleanupIntervalMs = getInt(KafkaConfig.TransactionsAbortTimedOutTransactionCleanupIntervalMsProp)
   val transactionRemoveExpiredTransactionalIdCleanupIntervalMs = getInt(KafkaConfig.TransactionsRemoveExpiredTransactionalIdCleanupIntervalMsProp)
 
-  val transactionPartitionVerificationEnable = getBoolean(KafkaConfig.TransactionPartitionVerificationEnableProp)
+  def transactionPartitionVerificationEnable = getBoolean(KafkaConfig.TransactionPartitionVerificationEnableProp)
 
   def producerIdExpirationMs = getInt(KafkaConfig.ProducerIdExpirationMsProp)
   val producerIdExpirationCheckIntervalMs = getInt(KafkaConfig.ProducerIdExpirationCheckIntervalMsProp)
@@ -1985,12 +2044,12 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   def controlPlaneListenerName = getControlPlaneListenerNameAndSecurityProtocol.map { case (listenerName, _) => listenerName }
   def controlPlaneSecurityProtocol = getControlPlaneListenerNameAndSecurityProtocol.map { case (_, securityProtocol) => securityProtocol }
   def saslMechanismInterBrokerProtocol = getString(KafkaConfig.SaslMechanismInterBrokerProtocolProp)
-  val saslInterBrokerHandshakeRequestEnable = interBrokerProtocolVersion.isSaslInterBrokerHandshakeRequestEnabled()
+  val saslInterBrokerHandshakeRequestEnable = interBrokerProtocolVersion.isSaslInterBrokerHandshakeRequestEnabled
 
   /** ********* DelegationToken Configuration **************/
   val delegationTokenSecretKey = Option(getPassword(KafkaConfig.DelegationTokenSecretKeyProp))
     .getOrElse(getPassword(KafkaConfig.DelegationTokenSecretKeyAliasProp))
-  val tokenAuthEnabled = (delegationTokenSecretKey != null && !delegationTokenSecretKey.value.isEmpty)
+  val tokenAuthEnabled = delegationTokenSecretKey != null && delegationTokenSecretKey.value.nonEmpty
   val delegationTokenMaxLifeMs = getLong(KafkaConfig.DelegationTokenMaxLifeTimeProp)
   val delegationTokenExpiryTimeMs = getLong(KafkaConfig.DelegationTokenExpiryTimeMsProp)
   val delegationTokenExpiryCheckIntervalMs = getLong(KafkaConfig.DelegationTokenExpiryCheckIntervalMsProp)
@@ -2169,7 +2228,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
 
   // Topic IDs are used with all self-managed quorum clusters and ZK cluster with IBP greater than or equal to 2.8
   def usesTopicId: Boolean =
-    usesSelfManagedQuorum || interBrokerProtocolVersion.isTopicIdsSupported()
+    usesSelfManagedQuorum || interBrokerProtocolVersion.isTopicIdsSupported
 
 
   val isRemoteLogStorageSystemEnabled: lang.Boolean = getBoolean(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP)
@@ -2257,7 +2316,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
     def validateAdvertisedListenersNonEmptyForBroker(): Unit = {
       require(advertisedListenerNames.nonEmpty,
         "There must be at least one advertised listener." + (
-          if (processRoles.contains(BrokerRole)) s" Perhaps all listeners appear in ${ControllerListenerNamesProp}?" else ""))
+          if (processRoles.contains(BrokerRole)) s" Perhaps all listeners appear in $ControllerListenerNamesProp?" else ""))
     }
     if (processRoles == Set(BrokerRole)) {
       // KRaft broker-only
@@ -2320,6 +2379,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
           s"${KafkaConfig.ControllerListenerNamesProp} must not be empty when running in ZooKeeper migration mode: ${controllerListenerNames.asJava}")
         require(interBrokerProtocolVersion.isMigrationSupported, s"Cannot enable ZooKeeper migration without setting " +
           s"'${KafkaConfig.InterBrokerProtocolVersionProp}' to 3.4 or higher")
+        require(logDirs.size == 1, "Cannot enable ZooKeeper migration when multiple log directories (aka JBOD) are in use.")
       } else {
         // controller listener names must be empty when not in KRaft mode
         require(controllerListenerNames.isEmpty,
@@ -2380,11 +2440,11 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
       s"${KafkaConfig.QueuedMaxBytesProp} must be larger or equal to ${KafkaConfig.SocketRequestMaxBytesProp}")
 
     if (maxConnectionsPerIp == 0)
-      require(!maxConnectionsPerIpOverrides.isEmpty, s"${KafkaConfig.MaxConnectionsPerIpProp} can be set to zero only if" +
+      require(maxConnectionsPerIpOverrides.nonEmpty, s"${KafkaConfig.MaxConnectionsPerIpProp} can be set to zero only if" +
         s" ${KafkaConfig.MaxConnectionsPerIpOverridesProp} property is set.")
 
     val invalidAddresses = maxConnectionsPerIpOverrides.keys.filterNot(address => Utils.validHostPattern(address))
-    if (!invalidAddresses.isEmpty)
+    if (invalidAddresses.nonEmpty)
       throw new IllegalArgumentException(s"${KafkaConfig.MaxConnectionsPerIpOverridesProp} contains invalid addresses : ${invalidAddresses.mkString(",")}")
 
     if (connectionsMaxIdleMs >= 0)
@@ -2450,6 +2510,8 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
     logProps.put(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG, logMessageFormatVersion.version)
     logProps.put(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, logMessageTimestampType.name)
     logProps.put(TopicConfig.MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG, logMessageTimestampDifferenceMaxMs: java.lang.Long)
+    logProps.put(TopicConfig.MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG, logMessageTimestampBeforeMaxMs: java.lang.Long)
+    logProps.put(TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG, logMessageTimestampAfterMaxMs: java.lang.Long)
     logProps.put(TopicConfig.MESSAGE_DOWNCONVERSION_ENABLE_CONFIG, logMessageDownConversionEnable: java.lang.Boolean)
     logProps.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, logLocalRetentionMs)
     logProps.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, logLocalRetentionBytes)

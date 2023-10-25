@@ -34,16 +34,16 @@ public final class ServerTopicConfigSynonyms {
 
     /**
      * Maps topic configurations to their equivalent broker configurations.
-     *
+     * <br>
      * Topics can be configured either by setting their dynamic topic configurations, or by
      * setting equivalent broker configurations. For historical reasons, the equivalent broker
      * configurations have different names. This table maps each topic configuration to its
      * equivalent broker configurations.
-     *
+     * <br>
      * In some cases, the equivalent broker configurations must be transformed before they
      * can be used. For example, log.roll.hours must be converted to milliseconds before it
      * can be used as the value of segment.ms.
-     *
+     * <br>
      * The broker configurations will be used in the order specified here. In other words, if
      * both the first and the second synonyms are configured, we will use only the value of
      * the first synonym and ignore the second.
@@ -83,6 +83,8 @@ public final class ServerTopicConfigSynonyms {
         sameNameWithLogPrefix(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG),
         sameNameWithLogPrefix(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG),
         sameNameWithLogPrefix(TopicConfig.MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG),
+        sameNameWithLogPrefix(TopicConfig.MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG),
+        sameNameWithLogPrefix(TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG),
         sameNameWithLogPrefix(TopicConfig.MESSAGE_DOWNCONVERSION_ENABLE_CONFIG),
         sameNameWithLogPrefix(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG),
         sameNameWithLogPrefix(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG)

@@ -1065,8 +1065,8 @@ public class StreamsConfigTest {
     public void shouldLogWarningWhenEosAlphaIsUsed() {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
 
-        LogCaptureAppender.setClassLoggerToDebug(StreamsConfig.class);
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
+            appender.setClassLoggerToDebug(StreamsConfig.class);
             new StreamsConfig(props);
 
             assertThat(
@@ -1085,8 +1085,8 @@ public class StreamsConfigTest {
     public void shouldLogWarningWhenEosBetaIsUsed() {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
 
-        LogCaptureAppender.setClassLoggerToDebug(StreamsConfig.class);
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
+            appender.setClassLoggerToDebug(StreamsConfig.class);
             new StreamsConfig(props);
 
             assertThat(
@@ -1103,8 +1103,8 @@ public class StreamsConfigTest {
     public void shouldLogWarningWhenRetriesIsUsed() {
         props.put(StreamsConfig.RETRIES_CONFIG, 0);
 
-        LogCaptureAppender.setClassLoggerToDebug(StreamsConfig.class);
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
+            appender.setClassLoggerToDebug(StreamsConfig.class);
             new StreamsConfig(props);
 
             assertThat(

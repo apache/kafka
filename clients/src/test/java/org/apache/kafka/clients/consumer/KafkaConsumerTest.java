@@ -29,6 +29,7 @@ import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetrics;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
+import org.apache.kafka.clients.consumer.internals.Deserializers;
 import org.apache.kafka.clients.consumer.internals.FetchConfig;
 import org.apache.kafka.clients.consumer.internals.FetchMetricsManager;
 import org.apache.kafka.clients.consumer.internals.Fetcher;
@@ -2399,7 +2400,7 @@ public class KafkaConsumerTest {
     }
 
     private ConsumerMetadata createMetadata(SubscriptionState subscription) {
-        return new ConsumerMetadata(0, Long.MAX_VALUE, false, false,
+        return new ConsumerMetadata(0, 0, Long.MAX_VALUE, false, false,
                                     subscription, new LogContext(), new ClusterResourceListeners());
     }
 
@@ -2624,6 +2625,7 @@ public class KafkaConsumerTest {
         String clientId = "mock-consumer";
         String metricGroupPrefix = "consumer";
         long retryBackoffMs = 100;
+        long retryBackoffMaxMs = 1000;
         int minBytes = 1;
         int maxBytes = Integer.MAX_VALUE;
         int maxWaitMs = 500;
@@ -2653,6 +2655,7 @@ public class KafkaConsumerTest {
                 groupId,
                 groupInstanceId,
                 retryBackoffMs,
+                retryBackoffMaxMs,
                 true);
             consumerCoordinator = new ConsumerCoordinator(rebalanceConfig,
                 loggerFactory,
@@ -2671,7 +2674,7 @@ public class KafkaConsumerTest {
         }
         IsolationLevel isolationLevel = IsolationLevel.READ_UNCOMMITTED;
         FetchMetricsManager metricsManager = new FetchMetricsManager(metrics, metricsRegistry.fetcherMetrics);
-        FetchConfig<String, String> fetchConfig = new FetchConfig<>(
+        FetchConfig fetchConfig = new FetchConfig(
                 minBytes,
                 maxBytes,
                 maxWaitMs,
@@ -2679,8 +2682,6 @@ public class KafkaConsumerTest {
                 maxPollRecords,
                 checkCrcs,
                 CommonClientConfigs.DEFAULT_CLIENT_RACK,
-                keyDeserializer,
-                deserializer,
                 isolationLevel);
         Fetcher<String, String> fetcher = new Fetcher<>(
                 loggerFactory,
@@ -2688,6 +2689,7 @@ public class KafkaConsumerTest {
                 metadata,
                 subscription,
                 fetchConfig,
+                new Deserializers<>(keyDeserializer, deserializer),
                 metricsManager,
                 time);
         OffsetFetcher offsetFetcher = new OffsetFetcher(loggerFactory,
@@ -2699,7 +2701,10 @@ public class KafkaConsumerTest {
                 requestTimeoutMs,
                 isolationLevel,
                 new ApiVersions());
-        TopicMetadataFetcher topicMetadataFetcher = new TopicMetadataFetcher(loggerFactory, consumerClient, requestTimeoutMs);
+        TopicMetadataFetcher topicMetadataFetcher = new TopicMetadataFetcher(loggerFactory,
+                consumerClient,
+                retryBackoffMs,
+                retryBackoffMaxMs);
 
         return new KafkaConsumer<>(
                 loggerFactory,
@@ -2717,6 +2722,7 @@ public class KafkaConsumerTest {
                 subscription,
                 metadata,
                 retryBackoffMs,
+                retryBackoffMaxMs,
                 requestTimeoutMs,
                 defaultApiTimeoutMs,
                 assignors,

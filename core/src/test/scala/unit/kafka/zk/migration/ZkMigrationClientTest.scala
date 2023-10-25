@@ -18,7 +18,7 @@ package kafka.zk.migration
 
 import kafka.api.LeaderAndIsr
 import kafka.controller.{LeaderIsrAndControllerEpoch, ReplicaAssignment}
-import kafka.coordinator.transaction.ProducerIdManager
+import kafka.coordinator.transaction.{ProducerIdManager, ZkProducerIdManager}
 import kafka.server.{ConfigType, KafkaConfig}
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
 import org.apache.kafka.common.errors.ControllerMovedException
@@ -34,6 +34,7 @@ import org.junit.jupiter.api.Test
 import java.util.Properties
 import scala.collection.Map
 import scala.jdk.CollectionConverters._
+import scala.util.{Failure, Success}
 
 /**
  * ZooKeeper integration tests that verify the interoperability of KafkaZkClient and ZkMigrationClient.
@@ -211,30 +212,33 @@ class ZkMigrationClientTest extends ZkMigrationTestHarness {
   }
 
   @Test
-  def testReadAndWriteProducerId(): Unit = {
-    def generateNextProducerIdWithZkAndRead(): Long = {
-      // Generate a producer ID in ZK
-      val manager = ProducerIdManager.zk(1, zkClient)
-      manager.generateProducerId()
+  def testReadMigrateAndWriteProducerId(): Unit = {
+    // allocate some producer id blocks
+    ZkProducerIdManager.getNewProducerIdBlock(1, zkClient, this)
+    ZkProducerIdManager.getNewProducerIdBlock(2, zkClient, this)
+    val block = ZkProducerIdManager.getNewProducerIdBlock(3, zkClient, this)
 
-      val records = new java.util.ArrayList[java.util.List[ApiMessageAndVersion]]()
-      migrationClient.migrateProducerId(batch => records.add(batch))
-      assertEquals(1, records.size())
-      assertEquals(1, records.get(0).size())
+    // Migrate the producer ID state to KRaft as a record
+    val records = new java.util.ArrayList[java.util.List[ApiMessageAndVersion]]()
+    migrationClient.migrateProducerId(batch => records.add(batch))
+    assertEquals(1, records.size())
+    assertEquals(1, records.get(0).size())
+    val record = records.get(0).get(0).message().asInstanceOf[ProducerIdsRecord]
 
-      val record = records.get(0).get(0).message().asInstanceOf[ProducerIdsRecord]
-      record.nextProducerId()
-    }
-
-    // Initialize with ZK ProducerIdManager
-    assertEquals(0, generateNextProducerIdWithZkAndRead())
+    // Ensure the block stored in KRaft is the _next_ block since that is what will be served
+    // to the next ALLOCATE_PRODUCER_IDS caller
+    assertEquals(block.nextBlockFirstId(), record.nextProducerId())
 
     // Update next producer ID via migration client
     migrationState = migrationClient.writeProducerId(6000, migrationState)
     assertEquals(1, migrationState.migrationZkVersion())
 
-    // Switch back to ZK, it should provision the next block
-    assertEquals(7000, generateNextProducerIdWithZkAndRead())
+    val manager = ProducerIdManager.zk(1, zkClient)
+    val producerId = manager.generateProducerId() match {
+      case Failure(e) => fail("Encountered error when generating producer id", e)
+      case Success(value) => value
+    }
+    assertEquals(7000, producerId)
   }
 
   @Test

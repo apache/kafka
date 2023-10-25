@@ -185,7 +185,12 @@ class BrokerLifecycleManager(
    * The channel manager, or null if this manager has not been started yet.  This variable
    * can only be read or written from the event queue thread.
    */
-  private var _channelManager: BrokerToControllerChannelManager = _
+  private var _channelManager: NodeToControllerChannelManager = _
+
+  /**
+   * The broker epoch from the previous run, or -1 if the epoch is not able to be found.
+   */
+  @volatile private var previousBrokerEpoch: Long = -1L
 
   /**
    * The event queue.
@@ -199,14 +204,20 @@ class BrokerLifecycleManager(
    * Start the BrokerLifecycleManager.
    *
    * @param highestMetadataOffsetProvider Provides the current highest metadata offset.
-   * @param channelManager                The brokerToControllerChannelManager to use.
+   * @param channelManager                The NodeToControllerChannelManager to use.
    * @param clusterId                     The cluster ID.
+   * @param advertisedListeners           The advertised listeners for this broker.
+   * @param supportedFeatures             The features for this broker.
+   * @param previousBrokerEpoch           The broker epoch before the reboot.
+   *
    */
   def start(highestMetadataOffsetProvider: () => Long,
-            channelManager: BrokerToControllerChannelManager,
+            channelManager: NodeToControllerChannelManager,
             clusterId: String,
             advertisedListeners: ListenerCollection,
-            supportedFeatures: util.Map[String, VersionRange]): Unit = {
+            supportedFeatures: util.Map[String, VersionRange],
+            previousBrokerEpoch: Long): Unit = {
+    this.previousBrokerEpoch = previousBrokerEpoch
     eventQueue.append(new StartupEvent(highestMetadataOffsetProvider,
       channelManager, clusterId, advertisedListeners, supportedFeatures))
   }
@@ -252,7 +263,7 @@ class BrokerLifecycleManager(
    * Start shutting down the BrokerLifecycleManager, but do not block.
    */
   def beginShutdown(): Unit = {
-    eventQueue.beginShutdown("beginShutdown");
+    eventQueue.beginShutdown("beginShutdown")
   }
 
   /**
@@ -271,7 +282,7 @@ class BrokerLifecycleManager(
   }
 
   private class StartupEvent(highestMetadataOffsetProvider: () => Long,
-                     channelManager: BrokerToControllerChannelManager,
+                     channelManager: NodeToControllerChannelManager,
                      clusterId: String,
                      advertisedListeners: ListenerCollection,
                      supportedFeatures: util.Map[String, VersionRange]) extends EventQueue.Event {
@@ -310,7 +321,8 @@ class BrokerLifecycleManager(
         setFeatures(features).
         setIncarnationId(incarnationId).
         setListeners(_advertisedListeners).
-        setRack(rack.orNull)
+        setRack(rack.orNull).
+        setPreviousBrokerEpoch(previousBrokerEpoch)
     if (isDebugEnabled) {
       debug(s"Sending broker registration $data")
     }
@@ -483,7 +495,7 @@ class BrokerLifecycleManager(
     override def run(): Unit = {
       if (!initialRegistrationSucceeded) {
         error("Shutting down because we were unable to register with the controller quorum.")
-        eventQueue.beginShutdown("registrationTimeout");
+        eventQueue.beginShutdown("registrationTimeout")
       }
     }
   }

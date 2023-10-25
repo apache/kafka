@@ -26,6 +26,7 @@ import org.apache.kafka.common.config.ConfigDef.ConfigKey;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigTransformer;
 import org.apache.kafka.common.config.ConfigValue;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
@@ -43,6 +44,7 @@ import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorType;
+import org.apache.kafka.connect.runtime.rest.entities.LoggerLevel;
 import org.apache.kafka.connect.runtime.rest.entities.Message;
 import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
 import org.apache.kafka.connect.sink.SinkConnector;
@@ -56,6 +58,7 @@ import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.predicates.Predicate;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
+import org.apache.log4j.Level;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -72,6 +75,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -120,6 +124,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     private final ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy;
     protected volatile boolean running = false;
     private final ExecutorService connectorExecutor;
+    protected final Loggers loggers;
 
     private final ConcurrentMap<String, Connector> tempConnectors = new ConcurrentHashMap<>();
 
@@ -128,7 +133,8 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                           String kafkaClusterId,
                           StatusBackingStore statusBackingStore,
                           ConfigBackingStore configBackingStore,
-                          ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy) {
+                          ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy,
+                          Time time) {
         this.worker = worker;
         this.worker.herder = this;
         this.workerId = workerId;
@@ -137,6 +143,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         this.configBackingStore = configBackingStore;
         this.connectorClientConfigOverridePolicy = connectorClientConfigOverridePolicy;
         this.connectorExecutor = Executors.newCachedThreadPool();
+        this.loggers = new Loggers(time);
     }
 
     @Override
@@ -311,7 +318,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
 
         Map<ConnectorTaskId, Map<String, String>> configs = new HashMap<>();
         for (ConnectorTaskId cti : configState.tasks(connector)) {
-            configs.put(cti, configState.taskConfig(cti));
+            configs.put(cti, configState.rawTaskConfig(cti));
         }
 
         return configs;
@@ -371,7 +378,9 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     }
 
     protected Map<String, ConfigValue> validateSinkConnectorConfig(SinkConnector connector, ConfigDef configDef, Map<String, String> config) {
-        return configDef.validateAll(config);
+        Map<String, ConfigValue> result = configDef.validateAll(config);
+        SinkConnectorConfig.validate(config, result);
+        return result;
     }
 
     protected Map<String, ConfigValue> validateSourceConnectorConfig(SourceConnector connector, ConfigDef configDef, Map<String, String> config) {
@@ -478,7 +487,6 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                 enrichedConfigDef = ConnectorConfig.enrich(plugins(), SourceConnectorConfig.configDef(), connectorProps, false);
                 validatedConnectorConfig = validateSourceConnectorConfig((SourceConnector) connector, enrichedConfigDef, connectorProps);
             } else {
-                SinkConnectorConfig.validate(connectorProps);
                 connectorType = org.apache.kafka.connect.health.ConnectorType.SINK;
                 enrichedConfigDef = ConnectorConfig.enrich(plugins(), SinkConnectorConfig.configDef(), connectorProps, false);
                 validatedConnectorConfig = validateSinkConnectorConfig((SinkConnector) connector, enrichedConfigDef, connectorProps);
@@ -916,4 +924,27 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
      * @param cb callback to invoke upon completion
      */
     protected abstract void modifyConnectorOffsets(String connName, Map<Map<String, ?>, Map<String, ?>> offsets, Callback<Message> cb);
+
+    @Override
+    public LoggerLevel loggerLevel(String logger) {
+        return loggers.level(logger);
+    }
+
+    @Override
+    public Map<String, LoggerLevel> allLoggerLevels() {
+        return loggers.allLevels();
+    }
+
+    @Override
+    public List<String> setWorkerLoggerLevel(String namespace, String desiredLevelStr) {
+        Level level = Level.toLevel(desiredLevelStr.toUpperCase(Locale.ROOT), null);
+
+        if (level == null) {
+            log.warn("Ignoring request to set invalid level '{}' for namespace {}", desiredLevelStr, namespace);
+            return Collections.emptyList();
+        }
+
+        return loggers.setLevel(namespace, level);
+    }
+
 }

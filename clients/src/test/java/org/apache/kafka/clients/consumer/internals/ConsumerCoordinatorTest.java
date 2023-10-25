@@ -144,6 +144,7 @@ public abstract class ConsumerCoordinatorTest {
     private final int sessionTimeoutMs = 10000;
     private final int heartbeatIntervalMs = 5000;
     private final long retryBackoffMs = 100;
+    private final long retryBackoffMaxMs = 1000;
     private final int autoCommitIntervalMs = 2000;
     private final int requestTimeoutMs = 30000;
     private final int throttleMs = 10;
@@ -195,7 +196,7 @@ public abstract class ConsumerCoordinatorTest {
     public void setup() {
         LogContext logContext = new LogContext();
         this.subscriptions = new SubscriptionState(logContext, OffsetResetStrategy.EARLIEST);
-        this.metadata = new ConsumerMetadata(0, Long.MAX_VALUE, false,
+        this.metadata = new ConsumerMetadata(0, 0, Long.MAX_VALUE, false,
                 false, subscriptions, logContext, new ClusterResourceListeners());
         this.client = new MockClient(time, metadata);
         this.client.updateMetadata(metadataResponse);
@@ -220,6 +221,7 @@ public abstract class ConsumerCoordinatorTest {
                                         groupId,
                                         groupInstanceId,
                                         retryBackoffMs,
+                                        retryBackoffMaxMs,
                                         !groupInstanceId.isPresent());
     }
 
@@ -1282,7 +1284,7 @@ public abstract class ConsumerCoordinatorTest {
 
         // Refresh the metadata again. Since there have been no changes since the last refresh, it won't trigger
         // rebalance again.
-        metadata.requestUpdate();
+        metadata.requestUpdate(true);
         consumerClient.poll(time.timer(Long.MAX_VALUE));
         assertFalse(coordinator.rejoinNeededOrPending());
     }
@@ -1329,7 +1331,7 @@ public abstract class ConsumerCoordinatorTest {
 
             // Refresh the metadata again. Since there have been no changes since the last refresh, it won't trigger
             // rebalance again.
-            metadata.requestUpdate();
+            metadata.requestUpdate(true);
             consumerClient.poll(time.timer(Long.MAX_VALUE));
             assertFalse(coordinator.rejoinNeededOrPending());
         }
@@ -2226,7 +2228,7 @@ public abstract class ConsumerCoordinatorTest {
     }
 
     private void testInternalTopicInclusion(boolean includeInternalTopics) {
-        metadata = new ConsumerMetadata(0, Long.MAX_VALUE, includeInternalTopics,
+        metadata = new ConsumerMetadata(0, 0, Long.MAX_VALUE, includeInternalTopics,
                 false, subscriptions, new LogContext(), new ClusterResourceListeners());
         client = new MockClient(time, metadata);
         try (ConsumerCoordinator coordinator = buildCoordinator(rebalanceConfig, new Metrics(), assignors, false, subscriptions)) {
@@ -3080,7 +3082,7 @@ public abstract class ConsumerCoordinatorTest {
 
         subscriptions.assignFromUser(singleton(t1p));
         client.prepareResponse(offsetFetchResponse(t1p, Errors.NONE, "", 100L));
-        coordinator.refreshCommittedOffsetsIfNeeded(time.timer(Long.MAX_VALUE));
+        coordinator.initWithCommittedOffsetsIfNeeded(time.timer(Long.MAX_VALUE));
 
         assertEquals(Collections.emptySet(), subscriptions.initializingPartitions());
         assertTrue(subscriptions.hasAllFetchPositions());
@@ -3101,7 +3103,7 @@ public abstract class ConsumerCoordinatorTest {
 
         // Load offsets from previous epoch
         client.prepareResponse(offsetFetchResponse(t1p, Errors.NONE, "", 100L, Optional.of(3)));
-        coordinator.refreshCommittedOffsetsIfNeeded(time.timer(Long.MAX_VALUE));
+        coordinator.initWithCommittedOffsetsIfNeeded(time.timer(Long.MAX_VALUE));
 
         // Offset gets loaded, but requires validation
         assertEquals(Collections.emptySet(), subscriptions.initializingPartitions());
@@ -3153,7 +3155,7 @@ public abstract class ConsumerCoordinatorTest {
         subscriptions.assignFromUser(singleton(t1p));
         client.prepareResponse(offsetFetchResponse(Errors.COORDINATOR_LOAD_IN_PROGRESS, Collections.emptyMap()));
         client.prepareResponse(offsetFetchResponse(t1p, Errors.NONE, "", 100L));
-        coordinator.refreshCommittedOffsetsIfNeeded(time.timer(Long.MAX_VALUE));
+        coordinator.initWithCommittedOffsetsIfNeeded(time.timer(Long.MAX_VALUE));
 
         assertEquals(Collections.emptySet(), subscriptions.initializingPartitions());
         assertTrue(subscriptions.hasAllFetchPositions());
@@ -3168,7 +3170,7 @@ public abstract class ConsumerCoordinatorTest {
         subscriptions.assignFromUser(singleton(t1p));
         client.prepareResponse(offsetFetchResponse(Errors.GROUP_AUTHORIZATION_FAILED, Collections.emptyMap()));
         try {
-            coordinator.refreshCommittedOffsetsIfNeeded(time.timer(Long.MAX_VALUE));
+            coordinator.initWithCommittedOffsetsIfNeeded(time.timer(Long.MAX_VALUE));
             fail("Expected group authorization error");
         } catch (GroupAuthorizationException e) {
             assertEquals(groupId, e.groupId());
@@ -3184,9 +3186,9 @@ public abstract class ConsumerCoordinatorTest {
         client.prepareResponse(offsetFetchResponse(t1p, Errors.UNSTABLE_OFFSET_COMMIT, "", -1L));
         client.prepareResponse(offsetFetchResponse(t1p, Errors.NONE, "", 100L));
         assertEquals(Collections.singleton(t1p), subscriptions.initializingPartitions());
-        coordinator.refreshCommittedOffsetsIfNeeded(time.timer(0L));
+        coordinator.initWithCommittedOffsetsIfNeeded(time.timer(0L));
         assertEquals(Collections.singleton(t1p), subscriptions.initializingPartitions());
-        coordinator.refreshCommittedOffsetsIfNeeded(time.timer(0L));
+        coordinator.initWithCommittedOffsetsIfNeeded(time.timer(0L));
 
         assertEquals(Collections.emptySet(), subscriptions.initializingPartitions());
         assertTrue(subscriptions.hasAllFetchPositions());
@@ -3200,7 +3202,7 @@ public abstract class ConsumerCoordinatorTest {
 
         subscriptions.assignFromUser(singleton(t1p));
         client.prepareResponse(offsetFetchResponse(t1p, Errors.UNKNOWN_TOPIC_OR_PARTITION, "", 100L));
-        assertThrows(KafkaException.class, () -> coordinator.refreshCommittedOffsetsIfNeeded(time.timer(Long.MAX_VALUE)));
+        assertThrows(KafkaException.class, () -> coordinator.initWithCommittedOffsetsIfNeeded(time.timer(Long.MAX_VALUE)));
     }
 
     @Test
@@ -3212,7 +3214,7 @@ public abstract class ConsumerCoordinatorTest {
         client.prepareResponse(offsetFetchResponse(Errors.NOT_COORDINATOR, Collections.emptyMap()));
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         client.prepareResponse(offsetFetchResponse(t1p, Errors.NONE, "", 100L));
-        coordinator.refreshCommittedOffsetsIfNeeded(time.timer(Long.MAX_VALUE));
+        coordinator.initWithCommittedOffsetsIfNeeded(time.timer(Long.MAX_VALUE));
 
         assertEquals(Collections.emptySet(), subscriptions.initializingPartitions());
         assertTrue(subscriptions.hasAllFetchPositions());
@@ -3226,7 +3228,7 @@ public abstract class ConsumerCoordinatorTest {
 
         subscriptions.assignFromUser(singleton(t1p));
         client.prepareResponse(offsetFetchResponse(t1p, Errors.NONE, "", -1L));
-        coordinator.refreshCommittedOffsetsIfNeeded(time.timer(Long.MAX_VALUE));
+        coordinator.initWithCommittedOffsetsIfNeeded(time.timer(Long.MAX_VALUE));
 
         assertEquals(Collections.singleton(t1p), subscriptions.initializingPartitions());
         assertEquals(Collections.emptySet(), subscriptions.partitionsNeedingReset(time.milliseconds()));
@@ -3240,7 +3242,7 @@ public abstract class ConsumerCoordinatorTest {
 
         subscriptions.assignFromUser(singleton(t1p));
         subscriptions.seek(t1p, 500L);
-        coordinator.refreshCommittedOffsetsIfNeeded(time.timer(Long.MAX_VALUE));
+        coordinator.initWithCommittedOffsetsIfNeeded(time.timer(Long.MAX_VALUE));
 
         assertEquals(Collections.emptySet(), subscriptions.initializingPartitions());
         assertTrue(subscriptions.hasAllFetchPositions());
@@ -3254,7 +3256,7 @@ public abstract class ConsumerCoordinatorTest {
 
         subscriptions.assignFromUser(singleton(t1p));
         subscriptions.requestOffsetReset(t1p, OffsetResetStrategy.EARLIEST);
-        coordinator.refreshCommittedOffsetsIfNeeded(time.timer(Long.MAX_VALUE));
+        coordinator.initWithCommittedOffsetsIfNeeded(time.timer(Long.MAX_VALUE));
 
         assertEquals(Collections.emptySet(), subscriptions.initializingPartitions());
         assertFalse(subscriptions.hasAllFetchPositions());

@@ -111,7 +111,11 @@ public enum ApiKeys {
     DESCRIBE_TRANSACTIONS(ApiMessageType.DESCRIBE_TRANSACTIONS),
     LIST_TRANSACTIONS(ApiMessageType.LIST_TRANSACTIONS),
     ALLOCATE_PRODUCER_IDS(ApiMessageType.ALLOCATE_PRODUCER_IDS, true, true),
-    CONSUMER_GROUP_HEARTBEAT(ApiMessageType.CONSUMER_GROUP_HEARTBEAT);
+    CONSUMER_GROUP_HEARTBEAT(ApiMessageType.CONSUMER_GROUP_HEARTBEAT),
+    CONSUMER_GROUP_DESCRIBE(ApiMessageType.CONSUMER_GROUP_DESCRIBE),
+    CONTROLLER_REGISTRATION(ApiMessageType.CONTROLLER_REGISTRATION),
+    GET_TELEMETRY_SUBSCRIPTIONS(ApiMessageType.GET_TELEMETRY_SUBSCRIPTIONS),
+    PUSH_TELEMETRY(ApiMessageType.PUSH_TELEMETRY);
 
     private static final Map<ApiMessageType.ListenerType, EnumSet<ApiKeys>> APIS_BY_LISTENER =
         new EnumMap<>(ApiMessageType.ListenerType.class);
@@ -138,7 +142,7 @@ public enum ApiKeys {
     /** indicates the minimum required inter broker magic required to support the API */
     public final byte minRequiredInterBrokerMagic;
 
-    /** indicates whether the API is enabled for forwarding **/
+    /** indicates whether the API is enabled for forwarding */
     public final boolean forwardable;
 
     public final boolean requiresDelayedAllocation;

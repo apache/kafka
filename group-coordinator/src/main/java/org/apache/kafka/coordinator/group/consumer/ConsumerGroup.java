@@ -16,11 +16,18 @@
  */
 package org.apache.kafka.coordinator.group.consumer;
 
+import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.StaleMemberEpochException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
+import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.coordinator.group.Group;
+import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
+import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
+import org.apache.kafka.coordinator.group.Record;
+import org.apache.kafka.coordinator.group.RecordHelpers;
 import org.apache.kafka.image.ClusterImage;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsImage;
@@ -32,6 +39,7 @@ import org.apache.kafka.timeline.TimelineObject;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -181,6 +189,23 @@ public class ConsumerGroup implements Group {
     }
 
     /**
+     * @return The current state as a String with given committedOffset.
+     */
+    public String stateAsString(long committedOffset) {
+        return state.get(committedOffset).toString();
+    }
+
+    /**
+     * @return the group formatted as a list group response based on the committed offset.
+     */
+    public ListGroupsResponseData.ListedGroup asListedGroup(long committedOffset) {
+        return new ListGroupsResponseData.ListedGroup()
+            .setGroupId(groupId)
+            .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
+            .setGroupState(state.get(committedOffset).toString());
+    }
+
+    /**
      * @return The group id.
      */
     @Override
@@ -193,6 +218,13 @@ public class ConsumerGroup implements Group {
      */
     public ConsumerGroupState state() {
         return state.get();
+    }
+
+    /**
+     * @return The current state based on committed offset.
+     */
+    public ConsumerGroupState state(long committedOffset) {
+        return state.get(committedOffset);
     }
 
     /**
@@ -314,6 +346,18 @@ public class ConsumerGroup implements Group {
      */
     public Set<String> subscribedTopicNames() {
         return Collections.unmodifiableSet(subscribedTopicNames.keySet());
+    }
+
+    /**
+     * Returns true if the consumer group is actively subscribed to the topic.
+     *
+     * @param topic  The topic name.
+     *
+     * @return Whether the group is subscribed to the topic.
+     */
+    @Override
+    public boolean isSubscribedToTopic(String topic) {
+        return subscribedTopicNames.containsKey(topic);
     }
 
     /**
@@ -538,8 +582,89 @@ public class ConsumerGroup implements Group {
         if (memberEpoch < 0 && members().isEmpty()) return;
 
         final ConsumerGroupMember member = getOrMaybeCreateMember(memberId, false);
-        if (memberEpoch != member.memberEpoch()) {
-            throw Errors.STALE_MEMBER_EPOCH.exception();
+        validateMemberEpoch(memberEpoch, member.memberEpoch());
+    }
+
+    /**
+     * Validates the OffsetFetch request.
+     *
+     * @param memberId              The member id for consumer groups.
+     * @param memberEpoch           The member epoch for consumer groups.
+     * @param lastCommittedOffset   The last committed offsets in the timeline.
+     */
+    @Override
+    public void validateOffsetFetch(
+        String memberId,
+        int memberEpoch,
+        long lastCommittedOffset
+    ) throws UnknownMemberIdException, StaleMemberEpochException {
+        // When the member id is null and the member epoch is -1, the request either comes
+        // from the admin client or from a client which does not provide them. In this case,
+        // the fetch request is accepted.
+        if (memberId == null && memberEpoch < 0) return;
+
+        final ConsumerGroupMember member = members.get(memberId, lastCommittedOffset);
+        if (member == null) {
+            throw new UnknownMemberIdException(String.format("Member %s is not a member of group %s.",
+                memberId, groupId));
+        }
+        validateMemberEpoch(memberEpoch, member.memberEpoch());
+    }
+
+    /**
+     * Validates the OffsetDelete request.
+     */
+    @Override
+    public void validateOffsetDelete() {}
+
+    /**
+     * Validates the DeleteGroups request.
+     */
+    @Override
+    public void validateDeleteGroup() throws ApiException {
+        if (state() != ConsumerGroupState.EMPTY) {
+            throw Errors.NON_EMPTY_GROUP.exception();
+        }
+    }
+
+    /**
+     * Populates the list of records with tombstone(s) for deleting the group.
+     *
+     * @param records The list of records.
+     */
+    @Override
+    public void createGroupTombstoneRecords(List<Record> records) {
+        records.add(RecordHelpers.newTargetAssignmentEpochTombstoneRecord(groupId()));
+        records.add(RecordHelpers.newGroupSubscriptionMetadataTombstoneRecord(groupId()));
+        records.add(RecordHelpers.newGroupEpochTombstoneRecord(groupId()));
+    }
+
+    @Override
+    public boolean isEmpty() {
+        return state() == ConsumerGroupState.EMPTY;
+    }
+
+    /**
+     * See {@link org.apache.kafka.coordinator.group.OffsetExpirationCondition}
+     *
+     * @return The offset expiration condition for the group or Empty if no such condition exists.
+     */
+    @Override
+    public Optional<OffsetExpirationCondition> offsetExpirationCondition() {
+        return Optional.of(new OffsetExpirationConditionImpl(offsetAndMetadata -> offsetAndMetadata.commitTimestampMs));
+    }
+
+    /**
+     * Throws a StaleMemberEpochException if the received member epoch does not match
+     * the expected member epoch.
+     */
+    private void validateMemberEpoch(
+        int receivedMemberEpoch,
+        int expectedMemberEpoch
+    ) throws StaleMemberEpochException {
+        if (receivedMemberEpoch != expectedMemberEpoch) {
+            throw new StaleMemberEpochException(String.format("The received member epoch %d does not match "
+                + "the expected member epoch %d.", receivedMemberEpoch, expectedMemberEpoch));
         }
     }
 

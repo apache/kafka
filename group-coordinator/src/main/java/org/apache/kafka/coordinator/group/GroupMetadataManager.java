@@ -25,18 +25,23 @@ import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.GroupMaxSizeReachedException;
 import org.apache.kafka.common.errors.IllegalGenerationException;
 import org.apache.kafka.common.errors.InvalidRequestException;
-import org.apache.kafka.common.errors.NotCoordinatorException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnsupportedAssignorException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.HeartbeatRequestData;
 import org.apache.kafka.common.message.HeartbeatResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol;
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
+import org.apache.kafka.common.message.LeaveGroupRequestData;
+import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
+import org.apache.kafka.common.message.LeaveGroupResponseData;
+import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse;
+import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.protocol.Errors;
@@ -91,11 +96,13 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.kafka.common.protocol.Errors.COORDINATOR_NOT_AVAILABLE;
 import static org.apache.kafka.common.protocol.Errors.ILLEGAL_GENERATION;
 import static org.apache.kafka.common.protocol.Errors.NOT_COORDINATOR;
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_SERVER_ERROR;
+import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
 import static org.apache.kafka.common.requests.JoinGroupRequest.UNKNOWN_MEMBER_ID;
 import static org.apache.kafka.coordinator.group.Group.GroupType.CONSUMER;
 import static org.apache.kafka.coordinator.group.Group.GroupType.GENERIC;
@@ -401,11 +408,94 @@ public class GroupMetadataManager {
      * @return The group corresponding to the group id or throw GroupIdNotFoundException.
      */
     public Group group(String groupId) throws GroupIdNotFoundException {
-        Group group = groups.get(groupId);
+        Group group = groups.get(groupId, Long.MAX_VALUE);
         if (group == null) {
             throw new GroupIdNotFoundException(String.format("Group %s not found.", groupId));
         }
         return group;
+    }
+
+    /**
+     * @return The group corresponding to the group id at the given committed offset
+     *         or throw GroupIdNotFoundException.
+     */
+    public Group group(String groupId, long committedOffset) throws GroupIdNotFoundException {
+        Group group = groups.get(groupId, committedOffset);
+        if (group == null) {
+            throw new GroupIdNotFoundException(String.format("Group %s not found.", groupId));
+        }
+        return group;
+    }
+
+    /**
+     * Get the Group List.
+     *
+     * @param statesFilter The states of the groups we want to list.
+     *                     If empty all groups are returned with their state.
+     * @param committedOffset A specified committed offset corresponding to this shard
+     *
+     * @return A list containing the ListGroupsResponseData.ListedGroup
+     */
+
+    public List<ListGroupsResponseData.ListedGroup> listGroups(List<String> statesFilter, long committedOffset) {
+        Stream<Group> groupStream = groups.values(committedOffset).stream();
+        if (!statesFilter.isEmpty()) {
+            groupStream = groupStream.filter(group -> statesFilter.contains(group.stateAsString(committedOffset)));
+        }
+        return groupStream.map(group -> group.asListedGroup(committedOffset)).collect(Collectors.toList());
+    }
+
+    /**
+     * Handles a DescribeGroup request.
+     *
+     * @param groupIds          The IDs of the groups to describe.
+     * @param committedOffset   A specified committed offset corresponding to this shard.
+     *
+     * @return A list containing the DescribeGroupsResponseData.DescribedGroup.
+     */
+    public List<DescribeGroupsResponseData.DescribedGroup> describeGroups(
+        List<String> groupIds,
+        long committedOffset
+    ) {
+        final List<DescribeGroupsResponseData.DescribedGroup> describedGroups = new ArrayList<>();
+        groupIds.forEach(groupId -> {
+            try {
+                GenericGroup group = genericGroup(groupId, committedOffset);
+
+                if (group.isInState(STABLE)) {
+                    if (!group.protocolName().isPresent()) {
+                        throw new IllegalStateException("Invalid null group protocol for stable group");
+                    }
+
+                    describedGroups.add(new DescribeGroupsResponseData.DescribedGroup()
+                        .setGroupId(groupId)
+                        .setGroupState(group.stateAsString())
+                        .setProtocolType(group.protocolType().orElse(""))
+                        .setProtocolData(group.protocolName().get())
+                        .setMembers(group.allMembers().stream()
+                            .map(member -> member.describe(group.protocolName().get()))
+                            .collect(Collectors.toList())
+                        )
+                    );
+                } else {
+                    describedGroups.add(new DescribeGroupsResponseData.DescribedGroup()
+                        .setGroupId(groupId)
+                        .setGroupState(group.stateAsString())
+                        .setProtocolType(group.protocolType().orElse(""))
+                        .setMembers(group.allMembers().stream()
+                            .map(member -> member.describeNoMetadata())
+                            .collect(Collectors.toList())
+                        )
+                    );
+                }
+            } catch (GroupIdNotFoundException exception) {
+                describedGroups.add(new DescribeGroupsResponseData.DescribedGroup()
+                    .setGroupId(groupId)
+                    .setGroupState(DEAD.toString())
+                );
+            }
+        });
+        return describedGroups;
     }
 
     /**
@@ -486,6 +576,31 @@ public class GroupMetadataManager {
     }
 
     /**
+     * Gets a generic group by committed offset.
+     *
+     * @param groupId           The group id.
+     * @param committedOffset   A specified committed offset corresponding to this shard.
+     *
+     * @return A GenericGroup.
+     * @throws GroupIdNotFoundException if the group does not exist or is not a generic group.
+     */
+    public GenericGroup genericGroup(
+        String groupId,
+        long committedOffset
+    ) throws GroupIdNotFoundException {
+        Group group = group(groupId, committedOffset);
+
+        if (group.type() == GENERIC) {
+            return (GenericGroup) group;
+        } else {
+            // We don't support upgrading/downgrading between protocols at the moment so
+            // we throw an exception if a group exists with the wrong type.
+            throw new GroupIdNotFoundException(String.format("Group %s is not a generic group.",
+                groupId));
+        }
+    }
+
+    /**
      * Removes the group.
      *
      * @param groupId The group id.
@@ -543,9 +658,8 @@ public class GroupMetadataManager {
         throwIfEmptyString(request.instanceId(), "InstanceId can't be empty.");
         throwIfEmptyString(request.rackId(), "RackId can't be empty.");
         throwIfNotNull(request.subscribedTopicRegex(), "SubscribedTopicRegex is not supported yet.");
-        throwIfNotNull(request.clientAssignors(), "Client side assignors are not supported yet.");
 
-        if (request.memberEpoch() > 0 || request.memberEpoch() == -1) {
+        if (request.memberEpoch() > 0 || request.memberEpoch() == LEAVE_GROUP_MEMBER_EPOCH) {
             throwIfEmptyString(request.memberId(), "MemberId can't be empty.");
         } else if (request.memberEpoch() == 0) {
             if (request.rebalanceTimeoutMs() == -1) {
@@ -624,10 +738,7 @@ public class GroupMetadataManager {
      * @param receivedMemberEpoch   The member epoch.
      * @param ownedTopicPartitions  The owned partitions.
      *
-     * @throws NotCoordinatorException if the provided epoch is ahead of the epoch known
-     *                                 by this coordinator. This suggests that the member
-     *                                 got a higher epoch from another coordinator.
-     * @throws FencedMemberEpochException if the provided epoch is behind the epoch known
+     * @throws FencedMemberEpochException if the provided epoch is ahead or behind the epoch known
      *                                    by this coordinator.
      */
     private void throwIfMemberEpochIsInvalid(
@@ -653,14 +764,8 @@ public class GroupMetadataManager {
     private ConsumerGroupHeartbeatResponseData.Assignment createResponseAssignment(
         ConsumerGroupMember member
     ) {
-        ConsumerGroupHeartbeatResponseData.Assignment assignment = new ConsumerGroupHeartbeatResponseData.Assignment()
-            .setAssignedTopicPartitions(fromAssignmentMap(member.assignedPartitions()));
-
-        if (member.state() == ConsumerGroupMember.MemberState.ASSIGNING) {
-            assignment.setPendingTopicPartitions(fromAssignmentMap(member.partitionsPendingAssignment()));
-        }
-
-        return assignment;
+        return new ConsumerGroupHeartbeatResponseData.Assignment()
+            .setTopicPartitions(fromAssignmentMap(member.assignedPartitions()));
     }
 
     private List<ConsumerGroupHeartbeatResponseData.TopicPartitions> fromAssignmentMap(
@@ -898,7 +1003,7 @@ public class GroupMetadataManager {
         List<Record> records = consumerGroupFenceMember(group, member);
         return new CoordinatorResult<>(records, new ConsumerGroupHeartbeatResponseData()
             .setMemberId(memberId)
-            .setMemberEpoch(-1));
+            .setMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH));
     }
 
     /**
@@ -1058,8 +1163,7 @@ public class GroupMetadataManager {
     ) throws ApiException {
         throwIfConsumerGroupHeartbeatRequestIsInvalid(request);
 
-        if (request.memberEpoch() == -1) {
-            // -1 means that the member wants to leave the group.
+        if (request.memberEpoch() == LEAVE_GROUP_MEMBER_EPOCH) {
             return consumerGroupLeave(
                 request.groupId(),
                 request.memberId()
@@ -1108,7 +1212,7 @@ public class GroupMetadataManager {
                 .build());
         } else {
             ConsumerGroupMember oldMember = consumerGroup.getOrMaybeCreateMember(memberId, false);
-            if (oldMember.memberEpoch() != -1) {
+            if (oldMember.memberEpoch() != LEAVE_GROUP_MEMBER_EPOCH) {
                 throw new IllegalStateException("Received a tombstone record to delete member " + memberId
                     + " but did not receive ConsumerGroupCurrentMemberAssignmentValue tombstone.");
             }
@@ -1329,9 +1433,9 @@ public class GroupMetadataManager {
             consumerGroup.updateMember(newMember);
         } else {
             ConsumerGroupMember newMember = new ConsumerGroupMember.Builder(oldMember)
-                .setMemberEpoch(-1)
-                .setPreviousMemberEpoch(-1)
-                .setTargetMemberEpoch(-1)
+                .setMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH)
+                .setPreviousMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH)
+                .setTargetMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH)
                 .setAssignedPartitions(Collections.emptyMap())
                 .setPartitionsPendingRevocation(Collections.emptyMap())
                 .setPartitionsPendingAssignment(Collections.emptyMap())
@@ -2893,6 +2997,189 @@ public class GroupMetadataManager {
     }
 
     /**
+     * Handle a generic LeaveGroupRequest.
+     *
+     * @param context        The request context.
+     * @param request        The actual LeaveGroup request.
+     *
+     * @return The LeaveGroup response and the GroupMetadata record to append if the group
+     *         no longer has any members.
+     */
+    public CoordinatorResult<LeaveGroupResponseData, Record> genericGroupLeave(
+        RequestContext context,
+        LeaveGroupRequestData request
+    ) throws UnknownMemberIdException, GroupIdNotFoundException {
+        GenericGroup group = getOrMaybeCreateGenericGroup(request.groupId(), false);
+        if (group.isInState(DEAD)) {
+            return new CoordinatorResult<>(
+                Collections.emptyList(),
+                new LeaveGroupResponseData()
+                    .setErrorCode(COORDINATOR_NOT_AVAILABLE.code())
+            );
+        }
+
+        List<MemberResponse> memberResponses = new ArrayList<>();
+
+        for (MemberIdentity member: request.members()) {
+            String reason = member.reason() != null ? member.reason() : "not provided";
+            // The LeaveGroup API allows administrative removal of members by GroupInstanceId
+            // in which case we expect the MemberId to be undefined.
+            if (UNKNOWN_MEMBER_ID.equals(member.memberId())) {
+                if (member.groupInstanceId() != null && group.hasStaticMember(member.groupInstanceId())) {
+                    removeCurrentMemberFromGenericGroup(
+                        group,
+                        group.staticMemberId(member.groupInstanceId()),
+                        reason
+                    );
+                    memberResponses.add(
+                        new MemberResponse()
+                            .setMemberId(member.memberId())
+                            .setGroupInstanceId(member.groupInstanceId())
+                    );
+                } else {
+                    memberResponses.add(
+                        new MemberResponse()
+                            .setMemberId(member.memberId())
+                            .setGroupInstanceId(member.groupInstanceId())
+                            .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code())
+                    );
+                }
+            } else if (group.isPendingMember(member.memberId())) {
+                group.remove(member.memberId());
+                timer.cancel(genericGroupHeartbeatKey(group.groupId(), member.memberId()));
+                log.info("[Group {}] Pending member {} has left group through explicit `LeaveGroup` request; client reason: {}",
+                    group.groupId(), member.memberId(), reason);
+
+                memberResponses.add(
+                    new MemberResponse()
+                        .setMemberId(member.memberId())
+                        .setGroupInstanceId(member.groupInstanceId())
+                );
+            } else {
+                try {
+                    group.validateMember(member.memberId(), member.groupInstanceId(), "leave-group");
+                    removeCurrentMemberFromGenericGroup(
+                        group,
+                        member.memberId(),
+                        reason
+                    );
+                    memberResponses.add(
+                        new MemberResponse()
+                            .setMemberId(member.memberId())
+                            .setGroupInstanceId(member.groupInstanceId())
+                    );
+                } catch (KafkaException e) {
+                    memberResponses.add(
+                        new MemberResponse()
+                            .setMemberId(member.memberId())
+                            .setGroupInstanceId(member.groupInstanceId())
+                            .setErrorCode(Errors.forException(e).code())
+                    );
+                }
+            }
+        }
+
+        List<String> validLeaveGroupMembers = memberResponses.stream()
+            .filter(response -> response.errorCode() == Errors.NONE.code())
+            .map(MemberResponse::memberId)
+            .collect(Collectors.toList());
+
+        String reason = "explicit `LeaveGroup` request for (" + String.join(", ", validLeaveGroupMembers) + ") members.";
+        CoordinatorResult<Void, Record> coordinatorResult = EMPTY_RESULT;
+
+        if (!validLeaveGroupMembers.isEmpty()) {
+            switch (group.currentState()) {
+                case STABLE:
+                case COMPLETING_REBALANCE:
+                    coordinatorResult = maybePrepareRebalanceOrCompleteJoin(group, reason);
+                    break;
+                case PREPARING_REBALANCE:
+                    coordinatorResult = maybeCompleteJoinPhase(group);
+                    break;
+                default:
+            }
+        }
+
+        return new CoordinatorResult<>(
+            coordinatorResult.records(),
+            new LeaveGroupResponseData()
+                .setMembers(memberResponses),
+            coordinatorResult.appendFuture()
+        );
+    }
+
+    /**
+     * Remove a member from the group. Cancel member's heartbeat, and prepare rebalance
+     * or complete the join phase if necessary.
+     * 
+     * @param group     The generic group.
+     * @param memberId  The member id.
+     * @param reason    The reason for the LeaveGroup request.
+     *
+     */
+    private void removeCurrentMemberFromGenericGroup(
+        GenericGroup group,
+        String memberId,
+        String reason
+    ) {
+        GenericGroupMember member = group.member(memberId);
+        timer.cancel(genericGroupHeartbeatKey(group.groupId(), memberId));
+        log.info("[Group {}] Member {} has left group through explicit `LeaveGroup` request; client reason: {}",
+            group.groupId(), memberId, reason);
+
+        // New members may timeout with a pending JoinGroup while the group is still rebalancing, so we have
+        // to invoke the callback before removing the member. We return UNKNOWN_MEMBER_ID so that the consumer
+        // will retry the JoinGroup request if is still active.
+        group.completeJoinFuture(
+            member,
+            new JoinGroupResponseData()
+                .setMemberId(UNKNOWN_MEMBER_ID)
+                .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code())
+        );
+        group.remove(member.memberId());
+    }
+
+    /**
+     * Handles a DeleteGroups request.
+     * Populates the record list passed in with record to update the state machine.
+     * Validations are done in {@link GroupCoordinatorShard#deleteGroups(RequestContext, List)} by
+     * calling {@link GroupMetadataManager#validateDeleteGroup(String)}.
+     *
+     * @param groupId The id of the group to be deleted. It has been checked in {@link GroupMetadataManager#validateDeleteGroup}.
+     * @param records The record list to populate.
+     */
+    public void deleteGroup(
+        String groupId,
+        List<Record> records
+    ) {
+        // At this point, we have already validated the group id, so we know that the group exists and that no exception will be thrown.
+        group(groupId).createGroupTombstoneRecords(records);
+    }
+
+    /**
+     * Validates the DeleteGroups request.
+     *
+     * @param groupId The id of the group to be deleted.
+     */
+    void validateDeleteGroup(String groupId) throws ApiException {
+        Group group = group(groupId);
+        group.validateDeleteGroup();
+    }
+
+    /**
+     * Delete the group if it exists and is in Empty state.
+     *
+     * @param groupId The group id.
+     * @param records The list of records to append the group metadata tombstone records.
+     */
+    public void maybeDeleteGroup(String groupId, List<Record> records) {
+        Group group = groups.get(groupId);
+        if (group != null && group.isEmpty()) {
+            deleteGroup(groupId, records);
+        }
+    }
+
+    /**
      * Checks whether the given protocol type or name in the request is inconsistent with the group's.
      *
      * @param protocolTypeOrName       The request's protocol type or name.
@@ -2907,6 +3194,13 @@ public class GroupMetadataManager {
         return protocolTypeOrName != null
             && groupProtocolTypeOrName != null
             && !groupProtocolTypeOrName.equals(protocolTypeOrName);
+    }
+
+    /**
+     * @return The set of all groups' ids.
+     */
+    public Set<String> groupIds() {
+        return Collections.unmodifiableSet(this.groups.keySet());
     }
 
     /**
