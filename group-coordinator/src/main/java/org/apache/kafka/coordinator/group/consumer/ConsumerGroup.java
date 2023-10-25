@@ -720,6 +720,14 @@ public class ConsumerGroup implements Group {
         maybeUpdateSubscribedTopicNames(null, subscribedTopicNames, oldMember, newMember);
     }
 
+    private void maybeUpdateSubscribedTopicNames(
+        TopicsImage topics,
+        ConsumerGroupMember oldMember,
+        ConsumerGroupMember newMember
+    ) {
+        maybeUpdateSubscribedTopicNames(topics, subscribedTopicNames, oldMember, newMember);
+    }
+
     /**
      * Updates the subscription count.
      *
@@ -734,20 +742,9 @@ public class ConsumerGroup implements Group {
         ConsumerGroupMember newMember
     ) {
         if (oldMember != null) {
-            String oldMemberRegex = oldMember.subscribedTopicRegex();
-            if (oldMemberRegex == null || oldMemberRegex.isEmpty()) {
-                oldMember.subscribedTopicNames().forEach(topicName ->
-                        subscribedTopicCount.compute(topicName, ConsumerGroup::decValue)
-                );
-            } else {
-                Pattern pattern = Pattern.compile(oldMemberRegex);
-                oldMember.subscribedTopicNames()
-                        .stream()
-                        .filter(topicName -> pattern.matcher(topicName).matches())
-                        .forEach(topicName -> {
-                            subscribedTopicCount.compute(topicName, ConsumerGroup::decValue);
-                        });
-            }
+            oldMember.subscribedTopicNames().forEach(topicName ->
+                    subscribedTopicCount.compute(topicName, ConsumerGroup::decValue)
+            );
         }
 
         if (newMember != null) {
@@ -761,6 +758,7 @@ public class ConsumerGroup implements Group {
                 // During replay, when the topic image is empty, we should not update the RegexSubscribedTopics.
                 // Therefore, we skip updating the subscribedTopicCount in this case.
                 getRegexSubscribedTopics(topics, newMember.subscribedTopicRegex()).forEach(topicName -> {
+                    newMember.subscribedTopicNames().add(topicName);
                     subscribedTopicCount.compute(topicName, ConsumerGroup::incValue);
                 });
             }

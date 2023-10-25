@@ -597,23 +597,62 @@ public class ConsumerGroupTest {
                         image.cluster()
                 )
         );
+    }
 
-        // Updating group with member5.
-        consumerGroup.updateMember(member5);
+    @Test
+    public void testUpdateSubscriptionTopicRegex() {
+        Uuid fooTopicId = Uuid.randomUuid();
+        Uuid barTopicId = Uuid.randomUuid();
+        Uuid zarTopicId = Uuid.randomUuid();
+        Uuid foodTopicId = Uuid.randomUuid();
 
-        // It should return bar and zar.
+        MetadataImage image = new GroupMetadataManagerTest.MetadataImageBuilder()
+                .addTopic(fooTopicId, "foo", 1)
+                .addTopic(barTopicId, "bar", 2)
+                .addTopic(zarTopicId, "zar", 3)
+                .addTopic(foodTopicId, "food", 4)
+                .addRacks()
+                .build();
+
+        ConsumerGroupMember member1 = new ConsumerGroupMember.Builder("member1")
+                .setSubscribedTopicRegex("^f.*")
+                .build();
+        ConsumerGroupMember member2 = new ConsumerGroupMember.Builder("member2")
+                .setSubscribedTopicRegex("^z.*")
+                .build();
+
+        ConsumerGroup consumerGroup = createConsumerGroup("group-foo");
+
+        // Compute while taking into account member 1.
         assertEquals(
                 mkMap(
-                        mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2, mkMapOfPartitionRacks(2))),
-                        mkEntry("zar", new TopicMetadata(zarTopicId, "zar", 3, mkMapOfPartitionRacks(3)))
+                        mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1, mkMapOfPartitionRacks(1))),
+                        mkEntry("food", new TopicMetadata(foodTopicId, "food", 4, mkMapOfPartitionRacks(4)))
                 ),
                 consumerGroup.computeSubscriptionMetadata(
                         null,
-                        null,
+                        member1,
                         image.topics(),
                         image.cluster()
                 )
         );
+
+        consumerGroup.updateMember(member1);
+
+        // Compute while taking into account member 2.
+        assertEquals(
+                mkMap(
+                        mkEntry("zar", new TopicMetadata(zarTopicId, "zar", 3, mkMapOfPartitionRacks(3)))
+                ),
+                consumerGroup.computeSubscriptionMetadata(
+                        null,
+                        member2,
+                        image.topics(),
+                        image.cluster()
+                )
+        );
+
+
     }
 
     @Test
