@@ -41,6 +41,7 @@ import org.apache.kafka.common.utils.Timer;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -104,13 +105,27 @@ public class CommitRequestManager implements RequestManager {
     @Override
     public NetworkClientDelegate.PollResult poll(final long currentTimeMs) {
         // poll only when the coordinator node is known.
-        if (!coordinatorRequestManager.coordinator().isPresent())
+        if (!coordinatorRequestManager.coordinator().isPresent()) {
+            System.out.println("empty coordinator node");
             return EMPTY;
+        }
 
         maybeAutoCommit(this.subscriptions.allConsumed());
         if (!pendingRequests.hasUnsentRequests())
             return EMPTY;
-        return new NetworkClientDelegate.PollResult(pendingRequests.drain(currentTimeMs));
+
+        List<NetworkClientDelegate.UnsentRequest> requests = pendingRequests.drain(currentTimeMs);
+        final long timeUntilNextPoll = Math.min(
+            findMinTime(unsentOffsetCommitRequests(), currentTimeMs),
+            findMinTime(unsentOffsetFetchRequests(), currentTimeMs));
+        return new NetworkClientDelegate.PollResult(timeUntilNextPoll, requests);
+    }
+
+    private static long findMinTime(final Collection<? extends RequestState> requests, final long currentTimeMs) {
+        return requests.stream()
+            .mapToLong(request -> request.remainingBackoffMs(currentTimeMs))
+            .min()
+            .orElse(Long.MAX_VALUE);
     }
 
     public void maybeAutoCommit(final Map<TopicPartition, OffsetAndMetadata> offsets) {
@@ -151,6 +166,10 @@ public class CommitRequestManager implements RequestManager {
     // Visible for testing
     Queue<OffsetCommitRequestState> unsentOffsetCommitRequests() {
         return pendingRequests.unsentOffsetCommits;
+    }
+
+    List<OffsetFetchRequestState> unsentOffsetFetchRequests() {
+        return pendingRequests.unsentOffsetFetches;
     }
 
     // Visible for testing
@@ -312,15 +331,15 @@ public class CommitRequestManager implements RequestManager {
                 case INVALID_COMMIT_OFFSET_SIZE:
                 case COORDINATOR_LOAD_IN_PROGRESS:
                 case UNKNOWN_TOPIC_OR_PARTITION:
-                    System.out.println("d-----");
                     // retry
                     retry(responseTime);
                     return false;
                 case COORDINATOR_NOT_AVAILABLE:
                 case NOT_COORDINATOR:
                 case REQUEST_TIMED_OUT:
-                    retry(responseTime);
+                    // Backoff and re-poll the request manager, because the coordinator can become available again.
                     coordinatorRequestManager.markCoordinatorUnknown(error.message(), responseTime);
+                    retry(responseTime);
                     return false;
                 case FENCED_INSTANCE_ID:
                     log.info("OffsetCommit failed due to group instance id {} fenced: {}", groupInstanceId, error.message());
@@ -565,6 +584,7 @@ public class CommitRequestManager implements RequestManager {
         List<NetworkClientDelegate.UnsentRequest> drain(final long currentTimeMs) {
             List<NetworkClientDelegate.UnsentRequest> unsentRequests = new ArrayList<>();
 
+            unsentOffsetCommits.forEach(request -> System.out.println(request));
             // not ready to sent request
             List<OffsetCommitRequestState> notReady = unsentOffsetCommits.stream()
                 .filter(request -> !request.canSendRequest(currentTimeMs))
@@ -574,6 +594,7 @@ public class CommitRequestManager implements RequestManager {
             unsentRequests.addAll(
                     unsentOffsetCommits.stream()
                         .filter(request -> request.canSendRequest(currentTimeMs))
+                        .peek(request -> request.onSendAttempt(currentTimeMs))
                         .map(OffsetCommitRequestState::toUnsentRequest)
                         .collect(Collectors.toList()));
 
