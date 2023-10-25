@@ -18,23 +18,23 @@
 package kafka.server
 
 import java.net.{InetAddress, UnknownHostException}
-import java.util.Properties
+import java.util.{Collections, Properties}
 import DynamicConfig.Broker._
 import kafka.controller.KafkaController
-import kafka.log.LogConfig.MessageFormatVersion
-import kafka.log.{LogConfig, LogManager}
+import kafka.log.UnifiedLog
 import kafka.network.ConnectionQuotas
 import kafka.security.CredentialProvider
 import kafka.server.Constants._
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.Implicits._
 import kafka.utils.Logging
-import org.apache.kafka.common.config.ConfigDef.Validator
-import org.apache.kafka.common.config.ConfigException
+import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.common.metrics.Quota._
 import org.apache.kafka.common.utils.Sanitizer
+import org.apache.kafka.storage.internals.log.{LogConfig, ThrottledReplicaListValidator}
+import org.apache.kafka.storage.internals.log.LogConfig.MessageFormatVersion
 
 import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
@@ -52,17 +52,46 @@ trait ConfigHandler {
   * The TopicConfigHandler will process topic config changes from ZooKeeper or the metadata log.
   * The callback provides the topic name and the full properties set.
   */
-class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaConfig,
-                         val quotas: QuotaManagers, kafkaController: Option[KafkaController]) extends ConfigHandler with Logging  {
+class TopicConfigHandler(private val replicaManager: ReplicaManager,
+                         kafkaConfig: KafkaConfig,
+                         val quotas: QuotaManagers,
+                         kafkaController: Option[KafkaController]) extends ConfigHandler with Logging  {
 
-  def processConfigChanges(topic: String, topicConfig: Properties): Unit = {
+  private def updateLogConfig(topic: String,
+                              topicConfig: Properties): Unit = {
+    val logManager = replicaManager.logManager
     // Validate the configurations.
     val configNamesToExclude = excludedConfigs(topic, topicConfig)
     val props = new Properties()
     topicConfig.asScala.forKeyValue { (key, value) =>
       if (!configNamesToExclude.contains(key)) props.put(key, value)
     }
-    logManager.updateTopicConfig(topic, props)
+
+    val logs = logManager.logsByTopic(topic)
+    val wasRemoteLogEnabledBeforeUpdate = logs.exists(_.remoteLogEnabled())
+
+    logManager.updateTopicConfig(topic, props, kafkaConfig.isRemoteLogStorageSystemEnabled)
+    maybeBootstrapRemoteLogComponents(topic, logs, wasRemoteLogEnabledBeforeUpdate)
+  }
+
+  private[server] def maybeBootstrapRemoteLogComponents(topic: String,
+                                                        logs: Seq[UnifiedLog],
+                                                        wasRemoteLogEnabledBeforeUpdate: Boolean): Unit = {
+    val isRemoteLogEnabled = logs.exists(_.remoteLogEnabled())
+    // Topic configs gets updated incrementally. This check is added to prevent redundant updates.
+    if (!wasRemoteLogEnabledBeforeUpdate && isRemoteLogEnabled) {
+      val (leaderPartitions, followerPartitions) =
+        logs.flatMap(log => replicaManager.onlinePartition(log.topicPartition)).partition(_.isLeader)
+      val topicIds = Collections.singletonMap(topic, replicaManager.metadataCache.getTopicId(topic))
+      replicaManager.remoteLogManager.foreach(rlm =>
+        rlm.onLeadershipChange(leaderPartitions.toSet.asJava, followerPartitions.toSet.asJava, topicIds))
+    } else if (wasRemoteLogEnabledBeforeUpdate && !isRemoteLogEnabled) {
+      warn(s"Disabling remote log on the topic: $topic is not supported.")
+    }
+  }
+
+  def processConfigChanges(topic: String, topicConfig: Properties): Unit = {
+    updateLogConfig(topic, topicConfig)
 
     def updateThrottledList(prop: String, quotaManager: ReplicationQuotaManager): Unit = {
       if (topicConfig.containsKey(prop) && topicConfig.getProperty(prop).nonEmpty) {
@@ -74,8 +103,8 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
         debug(s"Removing $prop from broker ${kafkaConfig.brokerId} for topic $topic")
       }
     }
-    updateThrottledList(LogConfig.LeaderReplicationThrottledReplicasProp, quotas.leader)
-    updateThrottledList(LogConfig.FollowerReplicationThrottledReplicasProp, quotas.follower)
+    updateThrottledList(LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, quotas.leader)
+    updateThrottledList(LogConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, quotas.follower)
 
     if (Try(topicConfig.getProperty(KafkaConfig.UncleanLeaderElectionEnableProp).toBoolean).getOrElse(false)) {
       kafkaController.foreach(_.enableTopicUncleanLeaderElection(topic))
@@ -99,16 +128,16 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
   @nowarn("cat=deprecation")
   def excludedConfigs(topic: String, topicConfig: Properties): Set[String] = {
     // Verify message format version
-    Option(topicConfig.getProperty(LogConfig.MessageFormatVersionProp)).flatMap { versionString =>
+    Option(topicConfig.getProperty(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG)).flatMap { versionString =>
       val messageFormatVersion = new MessageFormatVersion(versionString, kafkaConfig.interBrokerProtocolVersion.version)
       if (messageFormatVersion.shouldIgnore) {
         if (messageFormatVersion.shouldWarn)
           warn(messageFormatVersion.topicWarningMessage(topic))
-        Some(LogConfig.MessageFormatVersionProp)
+        Some(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG)
       } else if (kafkaConfig.interBrokerProtocolVersion.isLessThan(messageFormatVersion.messageFormatVersion)) {
-        warn(s"Topic configuration ${LogConfig.MessageFormatVersionProp} is ignored for `$topic` because `$versionString` " +
+        warn(s"Topic configuration ${TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG} is ignored for `$topic` because `$versionString` " +
           s"is higher than what is allowed by the inter-broker protocol version `${kafkaConfig.interBrokerProtocolVersionString}`")
-        Some(LogConfig.MessageFormatVersionProp)
+        Some(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG)
       } else
         None
     }.toSet
@@ -224,26 +253,4 @@ class BrokerConfigHandler(private val brokerConfig: KafkaConfig,
       quotaManagers.alterLogDirs.updateQuota(upperBound(getOrDefault(ReplicaAlterLogDirsIoMaxBytesPerSecondProp).toDouble))
     }
   }
-}
-
-object ThrottledReplicaListValidator extends Validator {
-  def ensureValidString(name: String, value: String): Unit =
-    ensureValid(name, value.split(",").map(_.trim).toSeq)
-
-  override def ensureValid(name: String, value: Any): Unit = {
-    def check(proposed: Seq[Any]): Unit = {
-      if (!(proposed.forall(_.toString.trim.matches("([0-9]+:[0-9]+)?"))
-        || proposed.mkString.trim.equals("*")))
-        throw new ConfigException(name, value,
-          s"$name must be the literal '*' or a list of replicas in the following format: [partitionId]:[brokerId],[partitionId]:[brokerId],...")
-    }
-    value match {
-      case scalaSeq: Seq[_] => check(scalaSeq)
-      case javaList: java.util.List[_] => check(javaList.asScala)
-      case _ => throw new ConfigException(name, value, s"$name must be a List but was ${value.getClass.getName}")
-    }
-  }
-
-  override def toString: String = "[partitionId]:[brokerId],[partitionId]:[brokerId],..."
-
 }

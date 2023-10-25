@@ -131,9 +131,14 @@ class BrokerEpochIntegrationTest extends QuorumTestHarness {
     val controllerContext = new ControllerContext
     controllerContext.setLiveBrokers(brokerAndEpochs)
     val metrics = new Metrics
-    val controllerChannelManager = new ControllerChannelManager(controllerContext, controllerConfig, Time.SYSTEM,
-      metrics, new StateChangeLogger(controllerId, inControllerContext = true, None))
-    controllerChannelManager.startup()
+    val controllerChannelManager = new ControllerChannelManager(
+      () => controllerContext.epoch,
+      controllerConfig,
+      Time.SYSTEM,
+      metrics,
+      new StateChangeLogger(controllerId, inControllerContext = true, None)
+    )
+    controllerChannelManager.startup(controllerContext.liveOrShuttingDownBrokers)
 
     val broker2 = servers(brokerId2)
     val epochInRequest = broker2.kafkaController.brokerEpoch + epochInRequestDiffFromCurrentEpoch

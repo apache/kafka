@@ -16,7 +16,7 @@
  */
 package kafka.admin
 
-import java.io.{File, PrintWriter}
+import java.io.File
 import java.util.Properties
 import javax.management.InstanceAlreadyExistsException
 import kafka.admin.AclCommand.AclCommandOptions
@@ -175,7 +175,7 @@ class AclCommandTest extends QuorumTestHarness with Logging {
   private def assertOutputContains(prefix: String, resources: Set[ResourcePattern], resourceCmd: Array[String], output: String): Unit = {
     resources.foreach { resource =>
       val resourceType = resource.resourceType.toString
-      (if (resource == ClusterResource) Array("kafka-cluster") else resourceCmd.filter(!_.startsWith("--"))).foreach { name =>
+      (if (resource == ClusterResource) Array("kafka-cluster") else resourceCmd.filterNot(_.startsWith("--"))).foreach { name =>
         val expected = s"$prefix for resource `ResourcePattern(resourceType=$resourceType, name=$name, patternType=LITERAL)`:"
         assertTrue(output.contains(expected), s"Substring $expected not in output:\n$output")
       }
@@ -195,10 +195,7 @@ class AclCommandTest extends QuorumTestHarness with Logging {
 
   @Test
   def testAclCliWithClientId(): Unit = {
-    val adminClientConfig = TestUtils.tempFile()
-    val pw = new PrintWriter(adminClientConfig)
-    pw.println("client.id=my-client")
-    pw.close()
+    val adminClientConfig = TestUtils.tempFile("client.id=my-client")
 
     createServer(Some(adminClientConfig))
 

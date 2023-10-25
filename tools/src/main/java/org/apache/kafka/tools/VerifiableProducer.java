@@ -34,6 +34,7 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.server.util.ThroughputThrottler;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -289,7 +290,7 @@ public class VerifiableProducer implements AutoCloseable {
         }
     }
 
-    /** Returns a string to publish: ether 'valuePrefix'.'val' or 'val' **/
+    /** Returns a string to publish: ether 'valuePrefix'.'val' or 'val' */
     public String getValue(long val) {
         if (this.valuePrefix != null) {
             return String.format("%d.%d", this.valuePrefix, val);

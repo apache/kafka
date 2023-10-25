@@ -35,14 +35,6 @@ public final class ProcessorContextUtils {
     private ProcessorContextUtils() {}
 
     /**
-     * Note that KIP-622 would move currentSystemTimeMs to ProcessorContext,
-     * removing the need for this method.
-     */
-    public static long currentSystemTime(final ProcessorContext context) {
-        return context.currentSystemTimeMs();
-    }
-
-    /**
      * Should be removed as part of KAFKA-10217
      */
     public static StreamsMetricsImpl getMetricsImpl(final ProcessorContext context) {

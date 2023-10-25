@@ -21,7 +21,6 @@ import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.ConnectorContext;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
-import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.sink.SinkConnectorContext;
 import org.apache.kafka.connect.source.SourceConnectorContext;
 import org.apache.kafka.connect.storage.CloseableOffsetStorageReader;
@@ -49,7 +48,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * failures, whether in initialization or after startup, are treated as fatal, which means that we will not attempt
  * to restart this connector instance after failure. What this means from a user perspective is that you must
  * use the /restart REST API to restart a failed task. This behavior is consistent with task failures.
- *
+ * <p>
  * Note that this class is NOT thread-safe.
  */
 public class WorkerConnector implements Runnable {
@@ -58,7 +57,8 @@ public class WorkerConnector implements Runnable {
 
     private enum State {
         INIT,    // initial state before startup
-        STOPPED, // the connector has been stopped/paused.
+        PAUSED,  // The connector has been paused.
+        STOPPED, // the connector has been stopped.
         STARTED, // the connector has been started/resumed.
         FAILED,  // the connector has failed (no further transitions are possible after this state)
     }
@@ -116,14 +116,12 @@ public class WorkerConnector implements Runnable {
         LoggingContext.clear();
 
         try (LoggingContext loggingContext = LoggingContext.forConnector(connName)) {
-            ClassLoader savedLoader = Plugins.compareAndSwapLoaders(loader);
             String savedName = Thread.currentThread().getName();
             try {
                 Thread.currentThread().setName(THREAD_NAME_PREFIX + connName);
                 doRun();
             } finally {
                 Thread.currentThread().setName(savedName);
-                Plugins.compareAndSwapLoaders(savedLoader);
             }
         } finally {
             // In the rare case of an exception being thrown outside the doRun() method, or an
@@ -189,6 +187,7 @@ public class WorkerConnector implements Runnable {
                     return false;
 
                 case INIT:
+                case PAUSED:
                 case STOPPED:
                     connector.start(config);
                     this.state = State.STARTED;
@@ -223,29 +222,40 @@ public class WorkerConnector implements Runnable {
         return state == State.STARTED;
     }
 
-    @SuppressWarnings("fallthrough")
-    private void pause() {
+    private void suspend(boolean paused) {
+        State newState = paused ? State.PAUSED : State.STOPPED;
         try {
-            switch (state) {
-                case STOPPED:
-                    return;
-
-                case STARTED:
-                    connector.stop();
-                    // fall through
-
-                case INIT:
-                    statusListener.onPause(connName);
-                    this.state = State.STOPPED;
-                    break;
-
-                default:
-                    throw new IllegalArgumentException("Cannot pause connector in state " + state);
+            if (state == newState) {
+                // Already in the desired state
+                return;
             }
+
+            if (state == State.STARTED) {
+                connector.stop();
+            }
+
+            if (state == State.FAILED && newState != State.STOPPED) {
+                throw new IllegalArgumentException("Cannot transition to non-stopped state when connector has already failed");
+            }
+
+            if (paused) {
+                statusListener.onPause(connName);
+            } else {
+                statusListener.onStop(connName);
+            }
+
+            this.state = newState;
         } catch (Throwable t) {
-            log.error("{} Error while shutting down connector", this, t);
-            statusListener.onFailure(connName, t);
-            this.state = State.FAILED;
+            log.error("{} Error while {} connector", this, paused ? "pausing" : "stopping", t);
+            if (paused) {
+                statusListener.onFailure(connName, t);
+                this.state = State.FAILED;
+            } else {
+                // We say the connector is STOPPED even if it fails at this point
+                this.state = State.STOPPED;
+                // One more try to make sure the status is updated correctly
+                statusListener.onStop(connName);
+            }
         }
     }
 
@@ -335,7 +345,8 @@ public class WorkerConnector implements Runnable {
     }
 
     void doTransitionTo(TargetState targetState, Callback<TargetState> stateChangeCallback) {
-        if (state == State.FAILED) {
+        // Edge case: we don't do transitions most of the time if we've already failed, but for the STOPPED state, it's fine
+        if (state == State.FAILED && targetState != TargetState.STOPPED) {
             stateChangeCallback.onCompletion(
                     new ConnectException(this + " Cannot transition connector to " + targetState + " since it has failed"),
                     null);
@@ -357,7 +368,9 @@ public class WorkerConnector implements Runnable {
     private void doTransitionTo(TargetState targetState) throws Throwable {
         log.debug("{} Transition connector to {}", this, targetState);
         if (targetState == TargetState.PAUSED) {
-            pause();
+            suspend(true);
+        } else if (targetState == TargetState.STOPPED) {
+            suspend(false);
         } else if (targetState == TargetState.STARTED) {
             if (state == State.INIT)
                 start();
@@ -368,15 +381,15 @@ public class WorkerConnector implements Runnable {
         }
     }
 
-    public boolean isSinkConnector() {
+    public final boolean isSinkConnector() {
         return ConnectUtils.isSinkConnector(connector);
     }
 
-    public boolean isSourceConnector() {
+    public final boolean isSourceConnector() {
         return ConnectUtils.isSourceConnector(connector);
     }
 
-    protected String connectorType() {
+    protected final String connectorType() {
         if (isSinkConnector())
             return "sink";
         if (isSourceConnector())
@@ -452,6 +465,16 @@ public class WorkerConnector implements Runnable {
         }
 
         @Override
+        public void onStop(String connector) {
+            state = AbstractStatus.State.STOPPED;
+            synchronized (this) {
+                if (!cancelled) {
+                    delegate.onStop(connector);
+                }
+            }
+        }
+
+        @Override
         public void onPause(String connector) {
             state = AbstractStatus.State.PAUSED;
             synchronized (this) {
@@ -503,6 +526,10 @@ public class WorkerConnector implements Runnable {
 
         boolean isPaused() {
             return state == AbstractStatus.State.PAUSED;
+        }
+
+        boolean isStopped() {
+            return state == AbstractStatus.State.STOPPED;
         }
 
         boolean isFailed() {

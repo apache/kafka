@@ -185,7 +185,7 @@ public class CompositeReadOnlySessionStore<K, V> implements ReadOnlySessionStore
                 throw new InvalidStateStoreException("State store  [" + storeName + "] is not available anymore" +
                                                              " and may have been migrated to another instance; " +
                                                              "please re-discover its location from the state metadata. " +
-                                                             "Original error message: " + ise.toString());
+                                                             "Original error message: " + ise);
             }
         }
         return KeyValueIterators.emptyIterator();

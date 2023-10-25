@@ -26,8 +26,8 @@ import java.util.Map;
  */
 public interface SourceTaskContext {
     /**
-     * Get the Task configuration.  This is the latest configuration and may differ from that passed on startup.
-     *
+     * Get the Task configuration. This is the latest configuration and may differ from that passed on startup.
+     * <p>
      * For example, this method can be used to obtain the latest configuration if an external secret has changed,
      * and the configuration is using variable references such as those compatible with
      * {@link org.apache.kafka.common.config.ConfigTransformer}.
@@ -46,7 +46,7 @@ public interface SourceTaskContext {
      * <p>This method was added in Apache Kafka 3.2. Source tasks that use this method but want to
      * maintain backward compatibility so they can also be deployed to older Connect runtimes
      * should guard the call to this method with a try-catch block, since calling this method will result in a
-     * {@link NoSuchMethodException} or {@link NoClassDefFoundError} when the source connector is deployed to
+     * {@link NoSuchMethodError} or {@link NoClassDefFoundError} when the source connector is deployed to
      * Connect runtimes older than Kafka 3.2. For example:
      * <pre>
      *     TransactionContext transactionContext;

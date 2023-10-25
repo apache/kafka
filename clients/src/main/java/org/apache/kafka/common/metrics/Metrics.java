@@ -154,6 +154,7 @@ public class Metrics implements Closeable {
      * @param enableExpiration true if the metrics instance can garbage collect inactive sensors, false otherwise
      * @param metricsContext The metricsContext to initialize metrics reporter with
      */
+    @SuppressWarnings("this-escape")
     public Metrics(MetricConfig defaultConfig, List<MetricsReporter> reporters, Time time, boolean enableExpiration,
                    MetricsContext metricsContext) {
         this.config = defaultConfig;
@@ -670,7 +671,7 @@ public class Metrics implements Closeable {
         
         if (!runtimeTagKeys.equals(templateTagKeys)) {
             throw new IllegalArgumentException("For '" + template.name() + "', runtime-defined metric tags do not match the tags in the template. "
-                    + "Runtime = " + runtimeTagKeys.toString() + " Template = " + templateTagKeys.toString());
+                    + "Runtime = " + runtimeTagKeys + " Template = " + templateTagKeys.toString());
         }
                 
         return this.metricName(template.name(), template.group(), template.description(), tags);

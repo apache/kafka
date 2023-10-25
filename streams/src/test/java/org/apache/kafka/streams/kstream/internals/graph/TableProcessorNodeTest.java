@@ -18,7 +18,6 @@
 package org.apache.kafka.streams.kstream.internals.graph;
 
 import org.apache.kafka.streams.processor.api.Processor;
-import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.junit.Test;
 
@@ -26,17 +25,11 @@ import static org.junit.Assert.assertTrue;
 
 public class TableProcessorNodeTest {
     private static class TestProcessor implements Processor<String, String, String, String> {
-        @Override
-        public void init(final ProcessorContext<String, String> context) {
-        }
 
         @Override
         public void process(final Record<String, String> record) {
         }
 
-        @Override
-        public void close() {
-        }
     }
 
     @Test

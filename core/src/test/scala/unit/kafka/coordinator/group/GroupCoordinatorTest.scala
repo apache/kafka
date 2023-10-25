@@ -17,12 +17,11 @@
 
 package kafka.coordinator.group
 
-import java.util.Optional
+import java.util.{Optional, OptionalInt}
 import kafka.common.OffsetAndMetadata
 import kafka.server.{DelayedOperationPurgatory, HostedPartition, KafkaConfig, ReplicaManager, RequestLocal}
 import kafka.utils._
-import kafka.utils.timer.MockTimer
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{MemoryRecords, RecordBatch}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
@@ -31,13 +30,15 @@ import org.apache.kafka.common.requests.{JoinGroupRequest, OffsetCommitRequest, 
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantLock
 import kafka.cluster.Partition
-import kafka.log.AppendOrigin
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
+import org.apache.kafka.server.util.timer.MockTimer
+import org.apache.kafka.server.util.{KafkaScheduler, MockTime}
+import org.apache.kafka.storage.internals.log.AppendOrigin
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
@@ -59,8 +60,8 @@ class GroupCoordinatorTest {
   type SyncGroupCallback = SyncGroupResult => Unit
   type HeartbeatCallbackParams = Errors
   type HeartbeatCallback = Errors => Unit
-  type CommitOffsetCallbackParams = Map[TopicPartition, Errors]
-  type CommitOffsetCallback = Map[TopicPartition, Errors] => Unit
+  type CommitOffsetCallbackParams = Map[TopicIdPartition, Errors]
+  type CommitOffsetCallback = Map[TopicIdPartition, Errors] => Unit
   type LeaveGroupCallback = LeaveGroupResult => Unit
 
   val ClientId = "consumer-test"
@@ -159,11 +160,11 @@ class GroupCoordinatorTest {
     assertEquals(Some(Errors.REBALANCE_IN_PROGRESS), syncGroupResponse)
 
     // OffsetCommit
-    val topicPartition = new TopicPartition("foo", 0)
-    var offsetCommitErrors = Map.empty[TopicPartition, Errors]
+    val topicIdPartition = new TopicIdPartition(Uuid.randomUuid(), 0 , "foo")
+    var offsetCommitErrors = Map.empty[TopicIdPartition, Errors]
     groupCoordinator.handleCommitOffsets(otherGroupId, memberId, None, 1,
-      Map(topicPartition -> offsetAndMetadata(15L)), result => { offsetCommitErrors = result })
-    assertEquals(Some(Errors.COORDINATOR_LOAD_IN_PROGRESS), offsetCommitErrors.get(topicPartition))
+      Map(topicIdPartition -> offsetAndMetadata(15L)), result => { offsetCommitErrors = result })
+    assertEquals(Map(topicIdPartition -> Errors.COORDINATOR_LOAD_IN_PROGRESS), offsetCommitErrors)
 
     // Heartbeat
     var heartbeatError: Option[Errors] = None
@@ -189,7 +190,7 @@ class GroupCoordinatorTest {
     val otherGroupMetadataTopicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, otherGroupPartitionId)
     when(replicaManager.getLog(otherGroupMetadataTopicPartition)).thenReturn(None)
     // Call removeGroupsAndOffsets so that partition removed from loadingPartitions
-    groupCoordinator.groupManager.removeGroupsAndOffsets(otherGroupMetadataTopicPartition, Some(1), group => {})
+    groupCoordinator.groupManager.removeGroupsAndOffsets(otherGroupMetadataTopicPartition, OptionalInt.of(1), group => {})
     groupCoordinator.groupManager.loadGroupsAndOffsets(otherGroupMetadataTopicPartition, 1, group => {}, 0L)
     assertEquals(Errors.NONE, groupCoordinator.handleDescribeGroup(otherGroupId)._1)
   }
@@ -1036,6 +1037,52 @@ class GroupCoordinatorTest {
     assertEquals(Errors.NONE, syncGroupWithOldMemberIdResult.error)
   }
 
+ @Test
+ def staticMemberRejoinWithUpdatedSessionAndRebalanceTimeoutsButCannotPersistChange(): Unit = {
+   val rebalanceResult = staticMembersJoinAndRebalance(leaderInstanceId, followerInstanceId)
+   val joinGroupResult = staticJoinGroupWithPersistence(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, followerInstanceId, protocolType, protocolSuperset, clockAdvance = 1, 2 * DefaultSessionTimeout, 2 * DefaultRebalanceTimeout, appendRecordError = Errors.MESSAGE_TOO_LARGE)
+   checkJoinGroupResult(joinGroupResult,
+     Errors.UNKNOWN_SERVER_ERROR,
+     rebalanceResult.generation,
+     Set.empty,
+     Stable,
+     Some(protocolType))
+   assertTrue(groupCoordinator.groupManager.getGroup(groupId).isDefined)
+   val group = groupCoordinator.groupManager.getGroup(groupId).get
+   group.allMemberMetadata.foreach { member =>
+     assertEquals(member.sessionTimeoutMs, DefaultSessionTimeout)
+     assertEquals(member.rebalanceTimeoutMs, DefaultRebalanceTimeout)
+   }
+ }
+
+
+  @Test
+  def staticMemberRejoinWithUpdatedSessionAndRebalanceTimeoutsAndPersistChange(): Unit = {
+    val rebalanceResult = staticMembersJoinAndRebalance(leaderInstanceId, followerInstanceId)
+    val followerJoinGroupResult = staticJoinGroupWithPersistence(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, followerInstanceId, protocolType, protocolSuperset, clockAdvance = 1, 2 * DefaultSessionTimeout, 2 * DefaultRebalanceTimeout)
+    checkJoinGroupResult(followerJoinGroupResult,
+      Errors.NONE,
+      rebalanceResult.generation,
+      Set.empty,
+      Stable,
+      Some(protocolType))
+    val leaderJoinGroupResult = staticJoinGroupWithPersistence(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, leaderInstanceId, protocolType, protocolSuperset, clockAdvance = 1, 2 * DefaultSessionTimeout, 2 * DefaultRebalanceTimeout)
+    checkJoinGroupResult(leaderJoinGroupResult,
+      Errors.NONE,
+      rebalanceResult.generation,
+      Set(leaderInstanceId, followerInstanceId),
+      Stable,
+      Some(protocolType),
+      leaderJoinGroupResult.leaderId,
+      leaderJoinGroupResult.memberId,
+      true)
+    assertTrue(groupCoordinator.groupManager.getGroup(groupId).isDefined)
+    val group = groupCoordinator.groupManager.getGroup(groupId).get
+    group.allMemberMetadata.foreach { member =>
+      assertEquals(member.sessionTimeoutMs, 2 * DefaultSessionTimeout)
+      assertEquals(member.rebalanceTimeoutMs, 2 * DefaultRebalanceTimeout)
+    }
+  }
   @Test
   def staticMemberRejoinWithUnknownMemberIdAndChangeOfProtocolWhileSelectProtocolUnchanged(): Unit = {
     val rebalanceResult = staticMembersJoinAndRebalance(leaderInstanceId, followerInstanceId)
@@ -1221,12 +1268,12 @@ class GroupCoordinatorTest {
     val memberId = "memberId"
 
     val deadGroupId = "deadGroupId"
-    val tp = new TopicPartition("topic", 0)
+    val tip = new TopicIdPartition(Uuid.randomUuid(), 0, "topic")
     val offset = offsetAndMetadata(0)
 
     groupCoordinator.groupManager.addGroup(new GroupMetadata(deadGroupId, Dead, new MockTime()))
-    val offsetCommitResult = commitOffsets(deadGroupId, memberId, 1, Map(tp -> offset))
-    assertEquals(Errors.COORDINATOR_NOT_AVAILABLE, offsetCommitResult(tp))
+    val offsetCommitResult = commitOffsets(deadGroupId, memberId, 1, Map(tip -> offset))
+    assertEquals(Map(tip -> Errors.COORDINATOR_NOT_AVAILABLE), offsetCommitResult)
   }
 
   @Test
@@ -1236,14 +1283,14 @@ class GroupCoordinatorTest {
     val syncGroupResult = syncGroupLeader(groupId, rebalanceResult.generation, rebalanceResult.leaderId, Map.empty)
     assertEquals(Errors.NONE, syncGroupResult.error)
 
-    val tp = new TopicPartition("topic", 0)
+    val tip = new TopicIdPartition(Uuid.randomUuid(), 0, "topic")
     val offset = offsetAndMetadata(0)
-    val validOffsetCommitResult = commitOffsets(groupId, rebalanceResult.leaderId, rebalanceResult.generation, Map(tp -> offset))
-    assertEquals(Errors.NONE, validOffsetCommitResult(tp))
+    val validOffsetCommitResult = commitOffsets(groupId, rebalanceResult.leaderId, rebalanceResult.generation, Map(tip -> offset))
+    assertEquals(Map(tip -> Errors.NONE), validOffsetCommitResult)
 
     val invalidOffsetCommitResult = commitOffsets(groupId, invalidMemberId, rebalanceResult.generation,
-      Map(tp -> offset), Some(leaderInstanceId))
-    assertEquals(Errors.FENCED_INSTANCE_ID, invalidOffsetCommitResult(tp))
+      Map(tip -> offset), Some(leaderInstanceId))
+    assertEquals(Map(tip -> Errors.FENCED_INSTANCE_ID), invalidOffsetCommitResult)
   }
 
   @Test
@@ -1519,12 +1566,13 @@ class GroupCoordinatorTest {
     */
   private def staticMembersJoinAndRebalance(leaderInstanceId: String,
                                             followerInstanceId: String,
-                                            sessionTimeout: Int = DefaultSessionTimeout): RebalanceResult = {
+                                            sessionTimeout: Int = DefaultSessionTimeout,
+                                            rebalanceTimeout: Int = DefaultRebalanceTimeout): RebalanceResult = {
     val leaderResponseFuture = sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType,
-      protocolSuperset, Some(leaderInstanceId), sessionTimeout)
+      protocolSuperset, Some(leaderInstanceId), sessionTimeout, rebalanceTimeout)
 
     val followerResponseFuture = sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType,
-      protocolSuperset, Some(followerInstanceId), sessionTimeout)
+      protocolSuperset, Some(followerInstanceId), sessionTimeout, rebalanceTimeout)
     // The goal for two timer advance is to let first group initial join complete and set newMemberAdded flag to false. Next advance is
     // to trigger the rebalance as needed for follower delayed join. One large time advance won't help because we could only populate one
     // delayed join from purgatory and the new delayed op is created at that time and never be triggered.
@@ -1737,7 +1785,7 @@ class GroupCoordinatorTest {
   def testCommitMaintainsSession(): Unit = {
     val sessionTimeout = 1000
     val memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID
-    val tp = new TopicPartition("topic", 0)
+    val tip = new TopicIdPartition(Uuid.randomUuid(), 0, "topic")
     val offset = offsetAndMetadata(0)
 
     val joinGroupResult = dynamicJoinGroup(groupId, memberId, protocolType, protocols,
@@ -1752,8 +1800,8 @@ class GroupCoordinatorTest {
 
     timer.advanceClock(sessionTimeout / 2)
 
-    val commitOffsetResult = commitOffsets(groupId, assignedMemberId, generationId, Map(tp -> offset))
-    assertEquals(Errors.NONE, commitOffsetResult(tp))
+    val commitOffsetResult = commitOffsets(groupId, assignedMemberId, generationId, Map(tip -> offset))
+    assertEquals(Map(tip -> Errors.NONE), commitOffsetResult)
 
     timer.advanceClock(sessionTimeout / 2 + 100)
 
@@ -2215,13 +2263,13 @@ class GroupCoordinatorTest {
 
     assertEquals(Errors.NONE, await(leaderResult, 1).error)
 
-    // Leader should be able to heartbeart
+    // Leader should be able to heartbeat
     verifyHeartbeat(results.head, Errors.NONE)
 
     // Advance part the rebalance timeout to trigger the delayed operation.
     timer.advanceClock(DefaultRebalanceTimeout / 2 + 1)
 
-    // Leader should be able to heartbeart
+    // Leader should be able to heartbeat
     verifyHeartbeat(results.head, Errors.REBALANCE_IN_PROGRESS)
 
     // Followers should have been removed.
@@ -2299,7 +2347,7 @@ class GroupCoordinatorTest {
     val followerErrors = followerResults.map(await(_, 1).error)
     assertEquals(Set(Errors.NONE), followerErrors.toSet)
 
-    // Advance past the rebalance timeout to expire the Sync timout. All
+    // Advance past the rebalance timeout to expire the Sync timeout. All
     // members should remain and the group should not rebalance.
     timer.advanceClock(DefaultRebalanceTimeout / 2 + 1)
 
@@ -2476,21 +2524,21 @@ class GroupCoordinatorTest {
   @Test
   def testCommitOffsetFromUnknownGroup(): Unit = {
     val generationId = 1
-    val tp = new TopicPartition("topic", 0)
+    val tip = new TopicIdPartition(Uuid.randomUuid(), 0, "topic")
     val offset = offsetAndMetadata(0)
 
-    val commitOffsetResult = commitOffsets(groupId, memberId, generationId, Map(tp -> offset))
-    assertEquals(Errors.ILLEGAL_GENERATION, commitOffsetResult(tp))
+    val commitOffsetResult = commitOffsets(groupId, memberId, generationId, Map(tip -> offset))
+    assertEquals(Map(tip -> Errors.ILLEGAL_GENERATION), commitOffsetResult)
   }
 
   @Test
   def testCommitOffsetWithDefaultGeneration(): Unit = {
-    val tp = new TopicPartition("topic", 0)
+    val tip = new TopicIdPartition(Uuid.randomUuid(), 0, "topic")
     val offset = offsetAndMetadata(0)
 
     val commitOffsetResult = commitOffsets(groupId, OffsetCommitRequest.DEFAULT_MEMBER_ID,
-      OffsetCommitRequest.DEFAULT_GENERATION_ID, Map(tp -> offset))
-    assertEquals(Errors.NONE, commitOffsetResult(tp))
+      OffsetCommitRequest.DEFAULT_GENERATION_ID, Map(tip -> offset))
+    assertEquals(Map(tip -> Errors.NONE), commitOffsetResult)
   }
 
   @Test
@@ -2510,33 +2558,33 @@ class GroupCoordinatorTest {
     verifyLeaveGroupResult(leaveGroupResults)
 
     // The simple offset commit should now fail
-    val tp = new TopicPartition("topic", 0)
+    val tip = new TopicIdPartition(Uuid.randomUuid(), 0, "topic")
     val offset = offsetAndMetadata(0)
     val commitOffsetResult = commitOffsets(groupId, OffsetCommitRequest.DEFAULT_MEMBER_ID,
-      OffsetCommitRequest.DEFAULT_GENERATION_ID, Map(tp -> offset))
-    assertEquals(Errors.NONE, commitOffsetResult(tp))
+      OffsetCommitRequest.DEFAULT_GENERATION_ID, Map(tip -> offset))
+    assertEquals(Map(tip -> Errors.NONE), commitOffsetResult)
 
-    val (error, partitionData) = groupCoordinator.handleFetchOffsets(groupId, requireStable, Some(Seq(tp)))
+    val (error, partitionData) = groupCoordinator.handleFetchOffsets(groupId, requireStable, Some(Seq(tip.topicPartition)))
     assertEquals(Errors.NONE, error)
-    assertEquals(Some(0), partitionData.get(tp).map(_.offset))
+    assertEquals(Some(0), partitionData.get(tip.topicPartition).map(_.offset))
   }
 
   @Test
   def testFetchOffsets(): Unit = {
-    val tp = new TopicPartition("topic", 0)
+    val tip = new TopicIdPartition(Uuid.randomUuid(), 0, "topic")
     val offset = 97L
     val metadata = "some metadata"
     val leaderEpoch = Optional.of[Integer](15)
     val offsetAndMetadata = OffsetAndMetadata(offset, leaderEpoch, metadata, timer.time.milliseconds(), None)
 
     val commitOffsetResult = commitOffsets(groupId, OffsetCommitRequest.DEFAULT_MEMBER_ID,
-      OffsetCommitRequest.DEFAULT_GENERATION_ID, Map(tp -> offsetAndMetadata))
-    assertEquals(Errors.NONE, commitOffsetResult(tp))
+      OffsetCommitRequest.DEFAULT_GENERATION_ID, Map(tip -> offsetAndMetadata))
+    assertEquals(Map(tip -> Errors.NONE), commitOffsetResult)
 
-    val (error, partitionData) = groupCoordinator.handleFetchOffsets(groupId, requireStable, Some(Seq(tp)))
+    val (error, partitionData) = groupCoordinator.handleFetchOffsets(groupId, requireStable, Some(Seq(tip.topicPartition)))
     assertEquals(Errors.NONE, error)
 
-    val maybePartitionData = partitionData.get(tp)
+    val maybePartitionData = partitionData.get(tip.topicPartition)
     assertTrue(maybePartitionData.isDefined)
     assertEquals(offset, maybePartitionData.get.offset)
     assertEquals(metadata, maybePartitionData.get.metadata)
@@ -2548,17 +2596,17 @@ class GroupCoordinatorTest {
     // For backwards compatibility, the coordinator supports committing/fetching offsets with an empty groupId.
     // To allow inspection and removal of the empty group, we must also support DescribeGroups and DeleteGroups
 
-    val tp = new TopicPartition("topic", 0)
+    val tip = new TopicIdPartition(Uuid.randomUuid(), 0, "topic")
     val offset = offsetAndMetadata(0)
     val groupId = ""
 
     val commitOffsetResult = commitOffsets(groupId, OffsetCommitRequest.DEFAULT_MEMBER_ID,
-      OffsetCommitRequest.DEFAULT_GENERATION_ID, Map(tp -> offset))
-    assertEquals(Errors.NONE, commitOffsetResult(tp))
+      OffsetCommitRequest.DEFAULT_GENERATION_ID, Map(tip -> offset))
+    assertEquals(Map(tip -> Errors.NONE), commitOffsetResult)
 
-    val (fetchError, partitionData) = groupCoordinator.handleFetchOffsets(groupId, requireStable, Some(Seq(tp)))
+    val (fetchError, partitionData) = groupCoordinator.handleFetchOffsets(groupId, requireStable, Some(Seq(tip.topicPartition)))
     assertEquals(Errors.NONE, fetchError)
-    assertEquals(Some(0), partitionData.get(tp).map(_.offset))
+    assertEquals(Some(0), partitionData.get(tip.topicPartition).map(_.offset))
 
     val (describeError, summary) = groupCoordinator.handleDescribeGroup(groupId)
     assertEquals(Errors.NONE, describeError)
@@ -2574,26 +2622,26 @@ class GroupCoordinatorTest {
     val deleteErrors = groupCoordinator.handleDeleteGroups(Set(groupId))
     assertEquals(Errors.NONE, deleteErrors(groupId))
 
-    val (err, data) = groupCoordinator.handleFetchOffsets(groupId, requireStable, Some(Seq(tp)))
+    val (err, data) = groupCoordinator.handleFetchOffsets(groupId, requireStable, Some(Seq(tip.topicPartition)))
     assertEquals(Errors.NONE, err)
-    assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), data.get(tp).map(_.offset))
+    assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), data.get(tip.topicPartition).map(_.offset))
   }
 
   @Test
   def testBasicFetchTxnOffsets(): Unit = {
-    val tp = new TopicPartition("topic", 0)
+    val tip = new TopicIdPartition(Uuid.randomUuid(), 0, "topic")
     val offset = offsetAndMetadata(0)
     val producerId = 1000L
     val producerEpoch : Short = 2
 
-    val commitOffsetResult = commitTransactionalOffsets(groupId, producerId, producerEpoch, Map(tp -> offset))
-    assertEquals(Errors.NONE, commitOffsetResult(tp))
+    val commitOffsetResult = commitTransactionalOffsets(groupId, producerId, producerEpoch, Map(tip -> offset))
+    assertEquals(Map(tip -> Errors.NONE), commitOffsetResult)
 
-    val (error, partitionData) = groupCoordinator.handleFetchOffsets(groupId, requireStable, Some(Seq(tp)))
+    val (error, partitionData) = groupCoordinator.handleFetchOffsets(groupId, requireStable, Some(Seq(tip.topicPartition)))
 
     // Validate that the offset isn't materialjzed yet.
     assertEquals(Errors.NONE, error)
-    assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), partitionData.get(tp).map(_.offset))
+    assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), partitionData.get(tip.topicPartition).map(_.offset))
 
     val offsetsTopic = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId)
 
@@ -2601,50 +2649,50 @@ class GroupCoordinatorTest {
     handleTxnCompletion(producerId, List(offsetsTopic), TransactionResult.COMMIT)
 
     // Validate that committed offset is materialized.
-    val (secondReqError, secondReqPartitionData) = groupCoordinator.handleFetchOffsets(groupId, requireStable, Some(Seq(tp)))
+    val (secondReqError, secondReqPartitionData) = groupCoordinator.handleFetchOffsets(groupId, requireStable, Some(Seq(tip.topicPartition)))
     assertEquals(Errors.NONE, secondReqError)
-    assertEquals(Some(0), secondReqPartitionData.get(tp).map(_.offset))
+    assertEquals(Some(0), secondReqPartitionData.get(tip.topicPartition).map(_.offset))
   }
 
   @Test
   def testFetchTxnOffsetsWithAbort(): Unit = {
-    val tp = new TopicPartition("topic", 0)
+    val tip = new TopicIdPartition(Uuid.randomUuid(), 0, "topic")
     val offset = offsetAndMetadata(0)
     val producerId = 1000L
     val producerEpoch : Short = 2
 
-    val commitOffsetResult = commitTransactionalOffsets(groupId, producerId, producerEpoch, Map(tp -> offset))
-    assertEquals(Errors.NONE, commitOffsetResult(tp))
+    val commitOffsetResult = commitTransactionalOffsets(groupId, producerId, producerEpoch, Map(tip -> offset))
+    assertEquals(Map(tip -> Errors.NONE), commitOffsetResult)
 
-    val (error, partitionData) = groupCoordinator.handleFetchOffsets(groupId, requireStable, Some(Seq(tp)))
+    val (error, partitionData) = groupCoordinator.handleFetchOffsets(groupId, requireStable, Some(Seq(tip.topicPartition)))
     assertEquals(Errors.NONE, error)
-    assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), partitionData.get(tp).map(_.offset))
+    assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), partitionData.get(tip.topicPartition).map(_.offset))
 
     val offsetsTopic = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId)
 
     // Validate that the pending commit is discarded.
     handleTxnCompletion(producerId, List(offsetsTopic), TransactionResult.ABORT)
 
-    val (secondReqError, secondReqPartitionData) = groupCoordinator.handleFetchOffsets(groupId, requireStable, Some(Seq(tp)))
+    val (secondReqError, secondReqPartitionData) = groupCoordinator.handleFetchOffsets(groupId, requireStable, Some(Seq(tip.topicPartition)))
     assertEquals(Errors.NONE, secondReqError)
-    assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), secondReqPartitionData.get(tp).map(_.offset))
+    assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), secondReqPartitionData.get(tip.topicPartition).map(_.offset))
   }
 
   @Test
   def testFetchPendingTxnOffsetsWithAbort(): Unit = {
-    val tp = new TopicPartition("topic", 0)
+    val tip = new TopicIdPartition(Uuid.randomUuid(), 0, "topic")
     val offset = offsetAndMetadata(0)
     val producerId = 1000L
     val producerEpoch : Short = 2
 
-    val commitOffsetResult = commitTransactionalOffsets(groupId, producerId, producerEpoch, Map(tp -> offset))
-    assertEquals(Errors.NONE, commitOffsetResult(tp))
+    val commitOffsetResult = commitTransactionalOffsets(groupId, producerId, producerEpoch, Map(tip -> offset))
+    assertEquals(Map(tip -> Errors.NONE), commitOffsetResult)
 
     val nonExistTp = new TopicPartition("non-exist-topic", 0)
-    val (error, partitionData) = groupCoordinator.handleFetchOffsets(groupId, requireStable, Some(Seq(tp, nonExistTp)))
+    val (error, partitionData) = groupCoordinator.handleFetchOffsets(groupId, requireStable, Some(Seq(tip.topicPartition, nonExistTp)))
     assertEquals(Errors.NONE, error)
-    assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), partitionData.get(tp).map(_.offset))
-    assertEquals(Some(Errors.UNSTABLE_OFFSET_COMMIT), partitionData.get(tp).map(_.error))
+    assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), partitionData.get(tip.topicPartition).map(_.offset))
+    assertEquals(Some(Errors.UNSTABLE_OFFSET_COMMIT), partitionData.get(tip.topicPartition).map(_.error))
     assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), partitionData.get(nonExistTp).map(_.offset))
     assertEquals(Some(Errors.NONE), partitionData.get(nonExistTp).map(_.error))
 
@@ -2653,65 +2701,65 @@ class GroupCoordinatorTest {
     // Validate that the pending commit is discarded.
     handleTxnCompletion(producerId, List(offsetsTopic), TransactionResult.ABORT)
 
-    val (secondReqError, secondReqPartitionData) = groupCoordinator.handleFetchOffsets(groupId, requireStable, Some(Seq(tp)))
+    val (secondReqError, secondReqPartitionData) = groupCoordinator.handleFetchOffsets(groupId, requireStable, Some(Seq(tip.topicPartition)))
     assertEquals(Errors.NONE, secondReqError)
-    assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), secondReqPartitionData.get(tp).map(_.offset))
-    assertEquals(Some(Errors.NONE), secondReqPartitionData.get(tp).map(_.error))
+    assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), secondReqPartitionData.get(tip.topicPartition).map(_.offset))
+    assertEquals(Some(Errors.NONE), secondReqPartitionData.get(tip.topicPartition).map(_.error))
   }
 
   @Test
   def testFetchPendingTxnOffsetsWithCommit(): Unit = {
-    val tp = new TopicPartition("topic", 0)
+    val tip = new TopicIdPartition(Uuid.randomUuid(), 0, "offset")
     val offset = offsetAndMetadata(25)
     val producerId = 1000L
     val producerEpoch : Short = 2
 
-    val commitOffsetResult = commitTransactionalOffsets(groupId, producerId, producerEpoch, Map(tp -> offset))
-    assertEquals(Errors.NONE, commitOffsetResult(tp))
+    val commitOffsetResult = commitTransactionalOffsets(groupId, producerId, producerEpoch, Map(tip -> offset))
+    assertEquals(Map(tip -> Errors.NONE), commitOffsetResult)
 
-    val (error, partitionData) = groupCoordinator.handleFetchOffsets(groupId, requireStable, Some(Seq(tp)))
+    val (error, partitionData) = groupCoordinator.handleFetchOffsets(groupId, requireStable, Some(Seq(tip.topicPartition)))
     assertEquals(Errors.NONE, error)
-    assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), partitionData.get(tp).map(_.offset))
-    assertEquals(Some(Errors.UNSTABLE_OFFSET_COMMIT), partitionData.get(tp).map(_.error))
+    assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), partitionData.get(tip.topicPartition).map(_.offset))
+    assertEquals(Some(Errors.UNSTABLE_OFFSET_COMMIT), partitionData.get(tip.topicPartition).map(_.error))
 
     val offsetsTopic = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId)
 
     // Validate that the pending commit is committed
     handleTxnCompletion(producerId, List(offsetsTopic), TransactionResult.COMMIT)
 
-    val (secondReqError, secondReqPartitionData) = groupCoordinator.handleFetchOffsets(groupId, requireStable, Some(Seq(tp)))
+    val (secondReqError, secondReqPartitionData) = groupCoordinator.handleFetchOffsets(groupId, requireStable, Some(Seq(tip.topicPartition)))
     assertEquals(Errors.NONE, secondReqError)
-    assertEquals(Some(25), secondReqPartitionData.get(tp).map(_.offset))
-    assertEquals(Some(Errors.NONE), secondReqPartitionData.get(tp).map(_.error))
+    assertEquals(Some(25), secondReqPartitionData.get(tip.topicPartition).map(_.offset))
+    assertEquals(Some(Errors.NONE), secondReqPartitionData.get(tip.topicPartition).map(_.error))
   }
 
   @Test
   def testFetchTxnOffsetsIgnoreSpuriousCommit(): Unit = {
-    val tp = new TopicPartition("topic", 0)
+    val tip = new TopicIdPartition(Uuid.randomUuid(), 0, "topic")
     val offset = offsetAndMetadata(0)
     val producerId = 1000L
     val producerEpoch : Short = 2
 
-    val commitOffsetResult = commitTransactionalOffsets(groupId, producerId, producerEpoch, Map(tp -> offset))
-    assertEquals(Errors.NONE, commitOffsetResult(tp))
+    val commitOffsetResult = commitTransactionalOffsets(groupId, producerId, producerEpoch, Map(tip -> offset))
+    assertEquals(Map(tip -> Errors.NONE), commitOffsetResult)
 
-    val (error, partitionData) = groupCoordinator.handleFetchOffsets(groupId, requireStable, Some(Seq(tp)))
+    val (error, partitionData) = groupCoordinator.handleFetchOffsets(groupId, requireStable, Some(Seq(tip.topicPartition)))
     assertEquals(Errors.NONE, error)
-    assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), partitionData.get(tp).map(_.offset))
+    assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), partitionData.get(tip.topicPartition).map(_.offset))
 
     val offsetsTopic = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId)
     handleTxnCompletion(producerId, List(offsetsTopic), TransactionResult.ABORT)
 
-    val (secondReqError, secondReqPartitionData) = groupCoordinator.handleFetchOffsets(groupId, requireStable, Some(Seq(tp)))
+    val (secondReqError, secondReqPartitionData) = groupCoordinator.handleFetchOffsets(groupId, requireStable, Some(Seq(tip.topicPartition)))
     assertEquals(Errors.NONE, secondReqError)
-    assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), secondReqPartitionData.get(tp).map(_.offset))
+    assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), secondReqPartitionData.get(tip.topicPartition).map(_.offset))
 
     // Ignore spurious commit.
     handleTxnCompletion(producerId, List(offsetsTopic), TransactionResult.COMMIT)
 
-    val (thirdReqError, thirdReqPartitionData) = groupCoordinator.handleFetchOffsets(groupId, requireStable, Some(Seq(tp)))
+    val (thirdReqError, thirdReqPartitionData) = groupCoordinator.handleFetchOffsets(groupId, requireStable, Some(Seq(tip.topicPartition)))
     assertEquals(Errors.NONE, thirdReqError)
-    assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), thirdReqPartitionData.get(tp).map(_.offset))
+    assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), thirdReqPartitionData.get(tip.topicPartition).map(_.offset))
   }
 
   @Test
@@ -2720,7 +2768,10 @@ class GroupCoordinatorTest {
     // Both group have pending offset commits.
     // Marker for only one partition is received. That commit should be materialized while the other should not.
 
-    val partitions = List(new TopicPartition("topic1", 0), new TopicPartition("topic2", 0))
+    val topicIdPartitions = List(
+      new TopicIdPartition(Uuid.randomUuid(), 0, "topic1"),
+      new TopicIdPartition(Uuid.randomUuid(), 0, "topic2")
+    )
     val offsets = List(offsetAndMetadata(10), offsetAndMetadata(15))
     val producerId = 1000L
     val producerEpoch: Short = 3
@@ -2738,21 +2789,22 @@ class GroupCoordinatorTest {
     // Ensure that the two groups map to different partitions.
     assertNotEquals(offsetTopicPartitions(0), offsetTopicPartitions(1))
 
-    commitOffsetResults.append(commitTransactionalOffsets(groupId, producerId, producerEpoch, Map(partitions(0) -> offsets(0))))
-    assertEquals(Errors.NONE, commitOffsetResults(0)(partitions(0)))
-    commitOffsetResults.append(commitTransactionalOffsets(otherGroupId, producerId, producerEpoch, Map(partitions(1) -> offsets(1))))
-    assertEquals(Errors.NONE, commitOffsetResults(1)(partitions(1)))
+    commitOffsetResults.append(commitTransactionalOffsets(groupId, producerId, producerEpoch, Map(topicIdPartitions(0) -> offsets(0))))
+    assertEquals(Errors.NONE, commitOffsetResults(0)(topicIdPartitions(0)))
+    commitOffsetResults.append(commitTransactionalOffsets(otherGroupId, producerId, producerEpoch, Map(topicIdPartitions(1) -> offsets(1))))
+    assertEquals(Errors.NONE, commitOffsetResults(1)(topicIdPartitions(1)))
 
     // We got a commit for only one __consumer_offsets partition. We should only materialize it's group offsets.
+    val topicPartitions = topicIdPartitions.map(_.topicPartition)
     handleTxnCompletion(producerId, List(offsetTopicPartitions(0)), TransactionResult.COMMIT)
-    groupCoordinator.handleFetchOffsets(groupIds(0), requireStable, Some(partitions)) match {
+    groupCoordinator.handleFetchOffsets(groupIds(0), requireStable, Some(topicPartitions)) match {
       case (error, partData) =>
         errors.append(error)
         partitionData.append(partData)
       case _ =>
     }
 
-    groupCoordinator.handleFetchOffsets(groupIds(1), requireStable, Some(partitions)) match {
+    groupCoordinator.handleFetchOffsets(groupIds(1), requireStable, Some(topicPartitions)) match {
       case (error, partData) =>
         errors.append(error)
         partitionData.append(partData)
@@ -2764,33 +2816,33 @@ class GroupCoordinatorTest {
     assertEquals(Errors.NONE, errors(1))
 
     // Exactly one offset commit should have been materialized.
-    assertEquals(Some(offsets(0).offset), partitionData(0).get(partitions(0)).map(_.offset))
-    assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), partitionData(0).get(partitions(1)).map(_.offset))
-    assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), partitionData(1).get(partitions(0)).map(_.offset))
-    assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), partitionData(1).get(partitions(1)).map(_.offset))
+    assertEquals(Some(offsets(0).offset), partitionData(0).get(topicPartitions(0)).map(_.offset))
+    assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), partitionData(0).get(topicPartitions(1)).map(_.offset))
+    assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), partitionData(1).get(topicPartitions(0)).map(_.offset))
+    assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), partitionData(1).get(topicPartitions(1)).map(_.offset))
 
     // Now we receive the other marker.
     handleTxnCompletion(producerId, List(offsetTopicPartitions(1)), TransactionResult.COMMIT)
     errors.clear()
     partitionData.clear()
-    groupCoordinator.handleFetchOffsets(groupIds(0), requireStable, Some(partitions)) match {
+    groupCoordinator.handleFetchOffsets(groupIds(0), requireStable, Some(topicPartitions)) match {
       case (error, partData) =>
         errors.append(error)
         partitionData.append(partData)
       case _ =>
     }
 
-     groupCoordinator.handleFetchOffsets(groupIds(1), requireStable, Some(partitions)) match {
+     groupCoordinator.handleFetchOffsets(groupIds(1), requireStable, Some(topicPartitions)) match {
       case (error, partData) =>
         errors.append(error)
         partitionData.append(partData)
       case _ =>
     }
     // Two offsets should have been materialized
-    assertEquals(Some(offsets(0).offset), partitionData(0).get(partitions(0)).map(_.offset))
-    assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), partitionData(0).get(partitions(1)).map(_.offset))
-    assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), partitionData(1).get(partitions(0)).map(_.offset))
-    assertEquals(Some(offsets(1).offset), partitionData(1).get(partitions(1)).map(_.offset))
+    assertEquals(Some(offsets(0).offset), partitionData(0).get(topicPartitions(0)).map(_.offset))
+    assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), partitionData(0).get(topicPartitions(1)).map(_.offset))
+    assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), partitionData(1).get(topicPartitions(0)).map(_.offset))
+    assertEquals(Some(offsets(1).offset), partitionData(1).get(topicPartitions(1)).map(_.offset))
   }
 
   @Test
@@ -2799,7 +2851,10 @@ class GroupCoordinatorTest {
     // Different producers will commit offsets for different partitions.
     // Each partition's offsets should be materialized when the corresponding producer's marker is received.
 
-    val partitions = List(new TopicPartition("topic1", 0), new TopicPartition("topic2", 0))
+    val topicIdPartitions = List(
+      new TopicIdPartition(Uuid.randomUuid(), 0, "topic1"),
+      new TopicIdPartition(Uuid.randomUuid(), 0, "topic2")
+    )
     val offsets = List(offsetAndMetadata(10), offsetAndMetadata(15))
     val producerIds = List(1000L, 1005L)
     val producerEpochs: Seq[Short] = List(3, 4)
@@ -2812,16 +2867,17 @@ class GroupCoordinatorTest {
     val commitOffsetResults = mutable.ArrayBuffer[CommitOffsetCallbackParams]()
 
     // producer0 commits the offsets for partition0
-    commitOffsetResults.append(commitTransactionalOffsets(groupId, producerIds(0), producerEpochs(0), Map(partitions(0) -> offsets(0))))
-    assertEquals(Errors.NONE, commitOffsetResults(0)(partitions(0)))
+    commitOffsetResults.append(commitTransactionalOffsets(groupId, producerIds(0), producerEpochs(0), Map(topicIdPartitions(0) -> offsets(0))))
+    assertEquals(Errors.NONE, commitOffsetResults(0)(topicIdPartitions(0)))
 
     // producer1 commits the offsets for partition1
-    commitOffsetResults.append(commitTransactionalOffsets(groupId, producerIds(1), producerEpochs(1), Map(partitions(1) -> offsets(1))))
-    assertEquals(Errors.NONE, commitOffsetResults(1)(partitions(1)))
+    commitOffsetResults.append(commitTransactionalOffsets(groupId, producerIds(1), producerEpochs(1), Map(topicIdPartitions(1) -> offsets(1))))
+    assertEquals(Errors.NONE, commitOffsetResults(1)(topicIdPartitions(1)))
 
     // producer0 commits its transaction.
+    val topicPartitions = topicIdPartitions.map(_.topicPartition)
     handleTxnCompletion(producerIds(0), List(offsetTopicPartition), TransactionResult.COMMIT)
-    groupCoordinator.handleFetchOffsets(groupId, requireStable, Some(partitions)) match {
+    groupCoordinator.handleFetchOffsets(groupId, requireStable, Some(topicPartitions)) match {
       case (error, partData) =>
         errors.append(error)
         partitionData.append(partData)
@@ -2831,13 +2887,13 @@ class GroupCoordinatorTest {
     assertEquals(Errors.NONE, errors(0))
 
     // We should only see the offset commit for producer0
-    assertEquals(Some(offsets(0).offset), partitionData(0).get(partitions(0)).map(_.offset))
-    assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), partitionData(0).get(partitions(1)).map(_.offset))
+    assertEquals(Some(offsets(0).offset), partitionData(0).get(topicPartitions(0)).map(_.offset))
+    assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), partitionData(0).get(topicPartitions(1)).map(_.offset))
 
     // producer1 now commits its transaction.
     handleTxnCompletion(producerIds(1), List(offsetTopicPartition), TransactionResult.COMMIT)
 
-    groupCoordinator.handleFetchOffsets(groupId, requireStable, Some(partitions)) match {
+    groupCoordinator.handleFetchOffsets(groupId, requireStable, Some(topicPartitions)) match {
       case (error, partData) =>
         errors.append(error)
         partitionData.append(partData)
@@ -2847,8 +2903,8 @@ class GroupCoordinatorTest {
     assertEquals(Errors.NONE, errors(1))
 
     // We should now see the offset commits for both producers.
-    assertEquals(Some(offsets(0).offset), partitionData(1).get(partitions(0)).map(_.offset))
-    assertEquals(Some(offsets(1).offset), partitionData(1).get(partitions(1)).map(_.offset))
+    assertEquals(Some(offsets(0).offset), partitionData(1).get(topicPartitions(0)).map(_.offset))
+    assertEquals(Some(offsets(1).offset), partitionData(1).get(topicPartitions(1)).map(_.offset))
   }
 
   @Test
@@ -2869,9 +2925,9 @@ class GroupCoordinatorTest {
 
   @Test
   def testFetchAllOffsets(): Unit = {
-    val tp1 = new TopicPartition("topic", 0)
-    val tp2 = new TopicPartition("topic", 1)
-    val tp3 = new TopicPartition("other-topic", 0)
+    val tip1 = new TopicIdPartition(Uuid.randomUuid(), 0, "topic")
+    val tip2 = new TopicIdPartition(tip1.topicId, 1, "topic")
+    val tip3 = new TopicIdPartition(Uuid.randomUuid(), 0, "other-topic")
     val offset1 = offsetAndMetadata(15)
     val offset2 = offsetAndMetadata(16)
     val offset3 = offsetAndMetadata(17)
@@ -2879,24 +2935,22 @@ class GroupCoordinatorTest {
     assertEquals((Errors.NONE, Map.empty), groupCoordinator.handleFetchOffsets(groupId, requireStable))
 
     val commitOffsetResult = commitOffsets(groupId, OffsetCommitRequest.DEFAULT_MEMBER_ID,
-      OffsetCommitRequest.DEFAULT_GENERATION_ID, Map(tp1 -> offset1, tp2 -> offset2, tp3 -> offset3))
-    assertEquals(Errors.NONE, commitOffsetResult(tp1))
-    assertEquals(Errors.NONE, commitOffsetResult(tp2))
-    assertEquals(Errors.NONE, commitOffsetResult(tp3))
+      OffsetCommitRequest.DEFAULT_GENERATION_ID, Map(tip1 -> offset1, tip2 -> offset2, tip3 -> offset3))
+    assertEquals(Map(tip1 -> Errors.NONE, tip2 -> Errors.NONE, tip3 -> Errors.NONE), commitOffsetResult)
 
     val (error, partitionData) = groupCoordinator.handleFetchOffsets(groupId, requireStable)
     assertEquals(Errors.NONE, error)
     assertEquals(3, partitionData.size)
     assertTrue(partitionData.forall(_._2.error == Errors.NONE))
-    assertEquals(Some(offset1.offset), partitionData.get(tp1).map(_.offset))
-    assertEquals(Some(offset2.offset), partitionData.get(tp2).map(_.offset))
-    assertEquals(Some(offset3.offset), partitionData.get(tp3).map(_.offset))
+    assertEquals(Some(offset1.offset), partitionData.get(tip1.topicPartition).map(_.offset))
+    assertEquals(Some(offset2.offset), partitionData.get(tip2.topicPartition).map(_.offset))
+    assertEquals(Some(offset3.offset), partitionData.get(tip3.topicPartition).map(_.offset))
   }
 
   @Test
   def testCommitOffsetInCompletingRebalance(): Unit = {
     val memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID
-    val tp = new TopicPartition("topic", 0)
+    val tip = new TopicIdPartition(Uuid.randomUuid(), 0, "topic")
     val offset = offsetAndMetadata(0)
 
     val joinGroupResult = dynamicJoinGroup(groupId, memberId, protocolType, protocols)
@@ -2905,14 +2959,14 @@ class GroupCoordinatorTest {
     val joinGroupError = joinGroupResult.error
     assertEquals(Errors.NONE, joinGroupError)
 
-    val commitOffsetResult = commitOffsets(groupId, assignedMemberId, generationId, Map(tp -> offset))
-    assertEquals(Errors.REBALANCE_IN_PROGRESS, commitOffsetResult(tp))
+    val commitOffsetResult = commitOffsets(groupId, assignedMemberId, generationId, Map(tip -> offset))
+    assertEquals(Map(tip -> Errors.REBALANCE_IN_PROGRESS), commitOffsetResult)
   }
 
   @Test
   def testCommitOffsetInCompletingRebalanceFromUnknownMemberId(): Unit = {
     val memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID
-    val tp = new TopicPartition("topic", 0)
+    val tip = new TopicIdPartition(Uuid.randomUuid(), 0 , "topic")
     val offset = offsetAndMetadata(0)
 
     val joinGroupResult = dynamicJoinGroup(groupId, memberId, protocolType, protocols)
@@ -2920,14 +2974,14 @@ class GroupCoordinatorTest {
     val joinGroupError = joinGroupResult.error
     assertEquals(Errors.NONE, joinGroupError)
 
-    val commitOffsetResult = commitOffsets(groupId, memberId, generationId, Map(tp -> offset))
-    assertEquals(Errors.UNKNOWN_MEMBER_ID, commitOffsetResult(tp))
+    val commitOffsetResult = commitOffsets(groupId, memberId, generationId, Map(tip -> offset))
+    assertEquals(Map(tip -> Errors.UNKNOWN_MEMBER_ID), commitOffsetResult)
   }
 
   @Test
   def testCommitOffsetInCompletingRebalanceFromIllegalGeneration(): Unit = {
     val memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID
-    val tp = new TopicPartition("topic", 0)
+    val tip = new TopicIdPartition(Uuid.randomUuid(), 0, "topic")
     val offset = offsetAndMetadata(0)
 
     val joinGroupResult = dynamicJoinGroup(groupId, memberId, protocolType, protocols)
@@ -2936,36 +2990,36 @@ class GroupCoordinatorTest {
     val joinGroupError = joinGroupResult.error
     assertEquals(Errors.NONE, joinGroupError)
 
-    val commitOffsetResult = commitOffsets(groupId, assignedMemberId, generationId + 1, Map(tp -> offset))
-    assertEquals(Errors.ILLEGAL_GENERATION, commitOffsetResult(tp))
+    val commitOffsetResult = commitOffsets(groupId, assignedMemberId, generationId + 1, Map(tip -> offset))
+    assertEquals(Map(tip -> Errors.ILLEGAL_GENERATION), commitOffsetResult)
   }
 
   @Test
   def testManualCommitOffsetShouldNotValidateMemberIdAndInstanceId(): Unit = {
-    val tp = new TopicPartition("topic", 0)
+    val tip = new TopicIdPartition(Uuid.randomUuid(), 0, "topic")
 
     var commitOffsetResult = commitOffsets(
       groupId,
       JoinGroupRequest.UNKNOWN_MEMBER_ID,
       -1,
-      Map(tp -> offsetAndMetadata(0)),
+      Map(tip -> offsetAndMetadata(0)),
       Some("instance-id")
     )
-    assertEquals(Errors.NONE, commitOffsetResult(tp))
+    assertEquals(Map(tip -> Errors.NONE), commitOffsetResult)
 
     commitOffsetResult = commitOffsets(
       groupId,
       "unknown",
       -1,
-      Map(tp -> offsetAndMetadata(0)),
+      Map(tip -> offsetAndMetadata(0)),
       None
     )
-    assertEquals(Errors.NONE, commitOffsetResult(tp))
+    assertEquals(Map(tip -> Errors.NONE), commitOffsetResult)
   }
 
   @Test
   def testTxnCommitOffsetWithFencedInstanceId(): Unit = {
-    val tp = new TopicPartition("topic", 0)
+    val tip = new TopicIdPartition(Uuid.randomUuid(), 0, "topic")
     val offset = offsetAndMetadata(0)
     val producerId = 1000L
     val producerEpoch : Short = 2
@@ -2973,21 +3027,21 @@ class GroupCoordinatorTest {
     val rebalanceResult = staticMembersJoinAndRebalance(leaderInstanceId, followerInstanceId)
 
     val leaderNoMemberIdCommitOffsetResult = commitTransactionalOffsets(groupId, producerId, producerEpoch,
-      Map(tp -> offset), memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID, groupInstanceId = Some(leaderInstanceId))
-    assertEquals(Errors.FENCED_INSTANCE_ID, leaderNoMemberIdCommitOffsetResult(tp))
+      Map(tip -> offset), memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID, groupInstanceId = Some(leaderInstanceId))
+    assertEquals(Map(tip -> Errors.FENCED_INSTANCE_ID), leaderNoMemberIdCommitOffsetResult)
 
     val leaderInvalidMemberIdCommitOffsetResult = commitTransactionalOffsets(groupId, producerId, producerEpoch,
-      Map(tp -> offset), memberId = "invalid-member", groupInstanceId = Some(leaderInstanceId))
-    assertEquals(Errors.FENCED_INSTANCE_ID, leaderInvalidMemberIdCommitOffsetResult (tp))
+      Map(tip -> offset), memberId = "invalid-member", groupInstanceId = Some(leaderInstanceId))
+    assertEquals(Map(tip -> Errors.FENCED_INSTANCE_ID), leaderInvalidMemberIdCommitOffsetResult)
 
     val leaderCommitOffsetResult = commitTransactionalOffsets(groupId, producerId, producerEpoch,
-      Map(tp -> offset), rebalanceResult.leaderId, Some(leaderInstanceId), rebalanceResult.generation)
-    assertEquals(Errors.NONE, leaderCommitOffsetResult (tp))
+      Map(tip -> offset), rebalanceResult.leaderId, Some(leaderInstanceId), rebalanceResult.generation)
+    assertEquals(Map(tip -> Errors.NONE), leaderCommitOffsetResult)
   }
 
   @Test
   def testTxnCommitOffsetWithInvalidMemberId(): Unit = {
-    val tp = new TopicPartition("topic", 0)
+    val tip = new TopicIdPartition(Uuid.randomUuid(), 0, "topic")
     val offset = offsetAndMetadata(0)
     val producerId = 1000L
     val producerEpoch : Short = 2
@@ -2997,13 +3051,13 @@ class GroupCoordinatorTest {
     assertEquals(Errors.NONE, joinGroupError)
 
     val invalidIdCommitOffsetResult = commitTransactionalOffsets(groupId, producerId, producerEpoch,
-      Map(tp -> offset), "invalid-member")
-    assertEquals(Errors.UNKNOWN_MEMBER_ID, invalidIdCommitOffsetResult (tp))
+      Map(tip -> offset), "invalid-member")
+    assertEquals(Map(tip -> Errors.UNKNOWN_MEMBER_ID), invalidIdCommitOffsetResult)
   }
 
   @Test
   def testTxnCommitOffsetWithKnownMemberId(): Unit = {
-    val tp = new TopicPartition("topic", 0)
+    val tip = new TopicIdPartition(Uuid.randomUuid(), 0, "topic")
     val offset = offsetAndMetadata(0)
     val producerId = 1000L
     val producerEpoch : Short = 2
@@ -3015,13 +3069,13 @@ class GroupCoordinatorTest {
 
     val assignedConsumerId = joinGroupResult.memberId
     val leaderCommitOffsetResult = commitTransactionalOffsets(groupId, producerId, producerEpoch,
-      Map(tp -> offset), assignedConsumerId, generationId = joinGroupResult.generationId)
-    assertEquals(Errors.NONE, leaderCommitOffsetResult (tp))
+      Map(tip -> offset), assignedConsumerId, generationId = joinGroupResult.generationId)
+    assertEquals(Map(tip -> Errors.NONE), leaderCommitOffsetResult)
   }
 
   @Test
   def testTxnCommitOffsetWithIllegalGeneration(): Unit = {
-    val tp = new TopicPartition("topic", 0)
+    val tip = new TopicIdPartition(Uuid.randomUuid(), 0, "topic")
     val offset = offsetAndMetadata(0)
     val producerId = 1000L
     val producerEpoch : Short = 2
@@ -3034,13 +3088,13 @@ class GroupCoordinatorTest {
     val assignedConsumerId = joinGroupResult.memberId
     val initialGenerationId = joinGroupResult.generationId
     val illegalGenerationCommitOffsetResult = commitTransactionalOffsets(groupId, producerId, producerEpoch,
-      Map(tp -> offset), memberId = assignedConsumerId, generationId = initialGenerationId + 5)
-    assertEquals(Errors.ILLEGAL_GENERATION, illegalGenerationCommitOffsetResult(tp))
+      Map(tip -> offset), memberId = assignedConsumerId, generationId = initialGenerationId + 5)
+    assertEquals(Map(tip -> Errors.ILLEGAL_GENERATION), illegalGenerationCommitOffsetResult)
   }
 
   @Test
   def testTxnCommitOffsetWithLegalGeneration(): Unit = {
-    val tp = new TopicPartition("topic", 0)
+    val tip = new TopicIdPartition(Uuid.randomUuid(), 0, "topic")
     val offset = offsetAndMetadata(0)
     val producerId = 1000L
     val producerEpoch : Short = 2
@@ -3053,8 +3107,8 @@ class GroupCoordinatorTest {
     val assignedConsumerId = joinGroupResult.memberId
     val initialGenerationId = joinGroupResult.generationId
     val leaderCommitOffsetResult = commitTransactionalOffsets(groupId, producerId, producerEpoch,
-      Map(tp -> offset), memberId = assignedConsumerId, generationId = initialGenerationId)
-    assertEquals(Errors.NONE, leaderCommitOffsetResult (tp))
+      Map(tip -> offset), memberId = assignedConsumerId, generationId = initialGenerationId)
+    assertEquals(Map(tip -> Errors.NONE), leaderCommitOffsetResult)
   }
 
   @Test
@@ -3428,10 +3482,10 @@ class GroupCoordinatorTest {
     val syncGroupResult = syncGroupLeader(groupId, joinGroupResult.generationId, assignedMemberId, Map(assignedMemberId -> Array[Byte]()))
     assertEquals(Errors.NONE, syncGroupResult.error)
 
-    val tp = new TopicPartition("topic", 0)
+    val tip = new TopicIdPartition(Uuid.randomUuid(), 0, "topic")
     val offset = offsetAndMetadata(0)
-    val commitOffsetResult = commitOffsets(groupId, assignedMemberId, joinGroupResult.generationId, Map(tp -> offset))
-    assertEquals(Errors.NONE, commitOffsetResult(tp))
+    val commitOffsetResult = commitOffsets(groupId, assignedMemberId, joinGroupResult.generationId, Map(tip -> offset))
+    assertEquals(Map(tip -> Errors.NONE), commitOffsetResult)
 
     val describeGroupResult = groupCoordinator.handleDescribeGroup(groupId)
     assertEquals(Stable.toString, describeGroupResult._2.state)
@@ -3486,14 +3540,13 @@ class GroupCoordinatorTest {
     val syncGroupResult = syncGroupLeader(groupId, joinGroupResult.generationId, joinGroupResult.leaderId, Map.empty)
     assertEquals(Errors.NONE, syncGroupResult.error)
 
-    val t1p0 = new TopicPartition("foo", 0)
-    val t2p0 = new TopicPartition("bar", 0)
+    val ti1p0 = new TopicIdPartition(Uuid.randomUuid(), 0, "foo")
+    val ti2p0 = new TopicIdPartition(Uuid.randomUuid(), 0, "bar")
     val offset = offsetAndMetadata(37)
 
     val validOffsetCommitResult = commitOffsets(groupId, joinGroupResult.memberId, joinGroupResult.generationId,
-      Map(t1p0 -> offset, t2p0 -> offset))
-    assertEquals(Errors.NONE, validOffsetCommitResult(t1p0))
-    assertEquals(Errors.NONE, validOffsetCommitResult(t2p0))
+      Map(ti1p0 -> offset, ti2p0 -> offset))
+    assertEquals(Map(ti1p0 -> Errors.NONE, ti2p0 -> Errors.NONE), validOffsetCommitResult)
 
     // and leaves.
     val leaveGroupResults = singleLeaveGroup(groupId, joinGroupResult.memberId)
@@ -3508,17 +3561,17 @@ class GroupCoordinatorTest {
     when(replicaManager.getPartition(groupTopicPartition)).thenReturn(HostedPartition.Online(partition))
     when(replicaManager.onlinePartition(groupTopicPartition)).thenReturn(Some(partition))
 
-    val (groupError, topics) = groupCoordinator.handleDeleteOffsets(groupId, Seq(t1p0),
+    val (groupError, topics) = groupCoordinator.handleDeleteOffsets(groupId, Seq(ti1p0.topicPartition),
       RequestLocal.NoCaching)
 
     assertEquals(Errors.NONE, groupError)
     assertEquals(1, topics.size)
-    assertEquals(Some(Errors.NONE), topics.get(t1p0))
+    assertEquals(Some(Errors.NONE), topics.get(ti1p0.topicPartition))
 
-    val cachedOffsets = groupCoordinator.groupManager.getOffsets(groupId, requireStable, Some(Seq(t1p0, t2p0)))
+    val cachedOffsets = groupCoordinator.groupManager.getOffsets(groupId, requireStable, Some(Seq(ti1p0.topicPartition, ti2p0.topicPartition)))
 
-    assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), cachedOffsets.get(t1p0).map(_.offset))
-    assertEquals(Some(offset.offset), cachedOffsets.get(t2p0).map(_.offset))
+    assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), cachedOffsets.get(ti1p0.topicPartition).map(_.offset))
+    assertEquals(Some(offset.offset), cachedOffsets.get(ti2p0.topicPartition).map(_.offset))
   }
 
   @Test
@@ -3529,19 +3582,19 @@ class GroupCoordinatorTest {
     val syncGroupResult = syncGroupLeader(groupId, joinGroupResult.generationId, joinGroupResult.leaderId, Map.empty)
     assertEquals(Errors.NONE, syncGroupResult.error)
 
-    val tp = new TopicPartition("foo", 0)
+    val tip = new TopicIdPartition(Uuid.randomUuid(), 0, "foo")
     val offset = offsetAndMetadata(37)
 
     val validOffsetCommitResult = commitOffsets(groupId, joinGroupResult.memberId, joinGroupResult.generationId,
-      Map(tp -> offset))
-    assertEquals(Errors.NONE, validOffsetCommitResult(tp))
+      Map(tip -> offset))
+    assertEquals(Map(tip -> Errors.NONE), validOffsetCommitResult)
 
-    val (groupError, topics) = groupCoordinator.handleDeleteOffsets(groupId, Seq(tp),
+    val (groupError, topics) = groupCoordinator.handleDeleteOffsets(groupId, Seq(tip.topicPartition),
       RequestLocal.NoCaching)
 
     assertEquals(Errors.NONE, groupError)
     assertEquals(1, topics.size)
-    assertEquals(Some(Errors.GROUP_SUBSCRIBED_TO_TOPIC), topics.get(tp))
+    assertEquals(Some(Errors.GROUP_SUBSCRIBED_TO_TOPIC), topics.get(tip.topicPartition))
   }
 
   @Test
@@ -3568,14 +3621,13 @@ class GroupCoordinatorTest {
     val syncGroupResult = syncGroupLeader(groupId, joinGroupResult.generationId, joinGroupResult.leaderId, Map.empty)
     assertEquals(Errors.NONE, syncGroupResult.error)
 
-    val t1p0 = new TopicPartition("foo", 0)
-    val t2p0 = new TopicPartition("bar", 0)
+    val ti1p0 = new TopicIdPartition(Uuid.randomUuid(), 0, "foo")
+    val ti2p0 = new TopicIdPartition(Uuid.randomUuid(), 0, "bar")
     val offset = offsetAndMetadata(37)
 
     val validOffsetCommitResult = commitOffsets(groupId, joinGroupResult.memberId, joinGroupResult.generationId,
-      Map(t1p0 -> offset, t2p0 -> offset))
-    assertEquals(Errors.NONE, validOffsetCommitResult(t1p0))
-    assertEquals(Errors.NONE, validOffsetCommitResult(t2p0))
+      Map(ti1p0 -> offset, ti2p0 -> offset))
+    assertEquals(Map(ti1p0 -> Errors.NONE, ti2p0 -> Errors.NONE), validOffsetCommitResult)
 
     // and leaves.
     val leaveGroupResults = singleLeaveGroup(groupId, joinGroupResult.memberId)
@@ -3590,17 +3642,17 @@ class GroupCoordinatorTest {
     when(replicaManager.getPartition(groupTopicPartition)).thenReturn(HostedPartition.Online(partition))
     when(replicaManager.onlinePartition(groupTopicPartition)).thenReturn(Some(partition))
 
-    val (groupError, topics) = groupCoordinator.handleDeleteOffsets(groupId, Seq(t1p0),
+    val (groupError, topics) = groupCoordinator.handleDeleteOffsets(groupId, Seq(ti1p0.topicPartition),
       RequestLocal.NoCaching)
 
     assertEquals(Errors.NONE, groupError)
     assertEquals(1, topics.size)
-    assertEquals(Some(Errors.NONE), topics.get(t1p0))
+    assertEquals(Some(Errors.NONE), topics.get(ti1p0.topicPartition))
 
-    val cachedOffsets = groupCoordinator.groupManager.getOffsets(groupId, requireStable, Some(Seq(t1p0, t2p0)))
+    val cachedOffsets = groupCoordinator.groupManager.getOffsets(groupId, requireStable, Some(Seq(ti1p0.topicPartition, ti2p0.topicPartition)))
 
-    assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), cachedOffsets.get(t1p0).map(_.offset))
-    assertEquals(Some(offset.offset), cachedOffsets.get(t2p0).map(_.offset))
+    assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), cachedOffsets.get(ti1p0.topicPartition).map(_.offset))
+    assertEquals(Some(offset.offset), cachedOffsets.get(ti2p0.topicPartition).map(_.offset))
   }
 
   @Test
@@ -3616,14 +3668,13 @@ class GroupCoordinatorTest {
     val syncGroupResult = syncGroupLeader(groupId, joinGroupResult.generationId, joinGroupResult.leaderId, Map.empty)
     assertEquals(Errors.NONE, syncGroupResult.error)
 
-    val t1p0 = new TopicPartition("foo", 0)
-    val t2p0 = new TopicPartition("bar", 0)
+    val ti1p0 = new TopicIdPartition(Uuid.randomUuid(), 0, "foo")
+    val ti2p0 = new TopicIdPartition(Uuid.randomUuid(), 0, "bar")
     val offset = offsetAndMetadata(37)
 
     val validOffsetCommitResult = commitOffsets(groupId, joinGroupResult.memberId, joinGroupResult.generationId,
-      Map(t1p0 -> offset, t2p0 -> offset))
-    assertEquals(Errors.NONE, validOffsetCommitResult(t1p0))
-    assertEquals(Errors.NONE, validOffsetCommitResult(t2p0))
+      Map(ti1p0 -> offset, ti2p0 -> offset))
+    assertEquals(Map(ti1p0 -> Errors.NONE, ti2p0 -> Errors.NONE), validOffsetCommitResult)
 
     assertTrue(groupCoordinator.groupManager.getGroup(groupId).exists(_.is(Stable)))
 
@@ -3634,18 +3685,18 @@ class GroupCoordinatorTest {
     when(replicaManager.getPartition(groupTopicPartition)).thenReturn(HostedPartition.Online(partition))
     when(replicaManager.onlinePartition(groupTopicPartition)).thenReturn(Some(partition))
 
-    val (groupError, topics) = groupCoordinator.handleDeleteOffsets(groupId, Seq(t1p0, t2p0),
+    val (groupError, topics) = groupCoordinator.handleDeleteOffsets(groupId, Seq(ti1p0.topicPartition, ti2p0.topicPartition),
       RequestLocal.NoCaching)
 
     assertEquals(Errors.NONE, groupError)
     assertEquals(2, topics.size)
-    assertEquals(Some(Errors.NONE), topics.get(t1p0))
-    assertEquals(Some(Errors.GROUP_SUBSCRIBED_TO_TOPIC), topics.get(t2p0))
+    assertEquals(Some(Errors.NONE), topics.get(ti1p0.topicPartition))
+    assertEquals(Some(Errors.GROUP_SUBSCRIBED_TO_TOPIC), topics.get(ti2p0.topicPartition))
 
-    val cachedOffsets = groupCoordinator.groupManager.getOffsets(groupId, requireStable, Some(Seq(t1p0, t2p0)))
+    val cachedOffsets = groupCoordinator.groupManager.getOffsets(groupId, requireStable, Some(Seq(ti1p0.topicPartition, ti2p0.topicPartition)))
 
-    assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), cachedOffsets.get(t1p0).map(_.offset))
-    assertEquals(Some(offset.offset), cachedOffsets.get(t2p0).map(_.offset))
+    assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), cachedOffsets.get(ti1p0.topicPartition).map(_.offset))
+    assertEquals(Some(offset.offset), cachedOffsets.get(ti2p0.topicPartition).map(_.offset))
   }
 
   @Test
@@ -3807,10 +3858,12 @@ class GroupCoordinatorTest {
     when(replicaManager.appendRecords(anyLong,
       anyShort(),
       internalTopicsAllowed = ArgumentMatchers.eq(true),
-      origin = ArgumentMatchers.eq(AppendOrigin.Coordinator),
+      origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       any[Map[TopicPartition, MemoryRecords]],
       capturedArgument.capture(),
       any[Option[ReentrantLock]],
+      any(),
+      any(),
       any(),
       any()
     )).thenAnswer(_ => {
@@ -3841,10 +3894,12 @@ class GroupCoordinatorTest {
     when(replicaManager.appendRecords(anyLong,
       anyShort(),
       internalTopicsAllowed = ArgumentMatchers.eq(true),
-      origin = ArgumentMatchers.eq(AppendOrigin.Coordinator),
+      origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       any[Map[TopicPartition, MemoryRecords]],
       capturedArgument.capture(),
       any[Option[ReentrantLock]],
+      any(),
+      any(), 
       any(),
       any())).thenAnswer(_ => {
         capturedArgument.getValue.apply(
@@ -3976,7 +4031,7 @@ class GroupCoordinatorTest {
   private def commitOffsets(groupId: String,
                             memberId: String,
                             generationId: Int,
-                            offsets: Map[TopicPartition, OffsetAndMetadata],
+                            offsets: Map[TopicIdPartition, OffsetAndMetadata],
                             groupInstanceId: Option[String] = None): CommitOffsetCallbackParams = {
     val (responseFuture, responseCallback) = setupCommitOffsetsCallback
 
@@ -3985,13 +4040,15 @@ class GroupCoordinatorTest {
     when(replicaManager.appendRecords(anyLong,
       anyShort(),
       internalTopicsAllowed = ArgumentMatchers.eq(true),
-      origin = ArgumentMatchers.eq(AppendOrigin.Coordinator),
+      origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       any[Map[TopicPartition, MemoryRecords]],
       capturedArgument.capture(),
       any[Option[ReentrantLock]],
       any(),
-      any())
-    ).thenAnswer(_ => {
+      any(),
+      any(),
+      any()
+    )).thenAnswer(_ => {
       capturedArgument.getValue.apply(
         Map(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId) ->
           new PartitionResponse(Errors.NONE, 0L, RecordBatch.NO_TIMESTAMP, 0L)
@@ -4007,24 +4064,28 @@ class GroupCoordinatorTest {
   private def commitTransactionalOffsets(groupId: String,
                                          producerId: Long,
                                          producerEpoch: Short,
-                                         offsets: Map[TopicPartition, OffsetAndMetadata],
+                                         offsets: Map[TopicIdPartition, OffsetAndMetadata],
                                          memberId: String = JoinGroupRequest.UNKNOWN_MEMBER_ID,
                                          groupInstanceId: Option[String] = Option.empty,
-                                         generationId: Int = JoinGroupRequest.UNKNOWN_GENERATION_ID) = {
+                                         generationId: Int = JoinGroupRequest.UNKNOWN_GENERATION_ID) : CommitOffsetCallbackParams = {
     val (responseFuture, responseCallback) = setupCommitOffsetsCallback
 
     val capturedArgument: ArgumentCaptor[scala.collection.Map[TopicPartition, PartitionResponse] => Unit] = ArgumentCaptor.forClass(classOf[scala.collection.Map[TopicPartition, PartitionResponse] => Unit])
 
+    // Since transactional ID is only used in appendRecords, we can use a dummy value. Ensure it passes through.
+    val transactionalId = "dummy-txn-id"
     when(replicaManager.appendRecords(anyLong,
       anyShort(),
       internalTopicsAllowed = ArgumentMatchers.eq(true),
-      origin = ArgumentMatchers.eq(AppendOrigin.Coordinator),
+      origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       any[Map[TopicPartition, MemoryRecords]],
       capturedArgument.capture(),
       any[Option[ReentrantLock]],
       any(),
-      any())
-    ).thenAnswer(_ => {
+      any(),
+      ArgumentMatchers.eq(transactionalId),
+      any()
+    )).thenAnswer(_ => {
       capturedArgument.getValue.apply(
         Map(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupCoordinator.partitionFor(groupId)) ->
           new PartitionResponse(Errors.NONE, 0L, RecordBatch.NO_TIMESTAMP, 0L)
@@ -4033,7 +4094,7 @@ class GroupCoordinatorTest {
     })
     when(replicaManager.getMagic(any[TopicPartition])).thenReturn(Some(RecordBatch.MAGIC_VALUE_V2))
 
-    groupCoordinator.handleTxnCommitOffsets(groupId, producerId, producerEpoch,
+    groupCoordinator.handleTxnCommitOffsets(groupId, transactionalId, producerId, producerEpoch,
       memberId, groupInstanceId, generationId, offsets, responseCallback)
     val result = Await.result(responseFuture, Duration(40, TimeUnit.MILLISECONDS))
     result

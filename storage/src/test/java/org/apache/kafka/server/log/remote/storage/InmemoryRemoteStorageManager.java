@@ -26,7 +26,10 @@ import java.nio.file.Files;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+
+import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata.CustomMetadata;
 
 /**
  * This class is an implementation of {@link RemoteStorageManager} backed by in-memory store.
@@ -52,8 +55,8 @@ public class InmemoryRemoteStorageManager implements RemoteStorageManager {
     }
 
     @Override
-    public void copyLogSegmentData(RemoteLogSegmentMetadata remoteLogSegmentMetadata,
-                                   LogSegmentData logSegmentData)
+    public Optional<CustomMetadata> copyLogSegmentData(RemoteLogSegmentMetadata remoteLogSegmentMetadata,
+                                                       LogSegmentData logSegmentData)
             throws RemoteStorageException {
         log.debug("copying log segment and indexes for : {}", remoteLogSegmentMetadata);
         Objects.requireNonNull(remoteLogSegmentMetadata, "remoteLogSegmentMetadata can not be null");
@@ -83,6 +86,7 @@ public class InmemoryRemoteStorageManager implements RemoteStorageManager {
             throw new RemoteStorageException(e);
         }
         log.debug("copied log segment and indexes for : {} successfully.", remoteLogSegmentMetadata);
+        return Optional.empty();
     }
 
     @Override
@@ -153,7 +157,7 @@ public class InmemoryRemoteStorageManager implements RemoteStorageManager {
     }
 
     @Override
-    public void deleteLogSegmentData(RemoteLogSegmentMetadata remoteLogSegmentMetadata) throws RemoteStorageException {
+    public void deleteLogSegmentData(RemoteLogSegmentMetadata remoteLogSegmentMetadata) {
         log.info("Deleting log segment for: [{}]", remoteLogSegmentMetadata);
         Objects.requireNonNull(remoteLogSegmentMetadata, "remoteLogSegmentMetadata can not be null");
         String segmentKey = generateKeyForSegment(remoteLogSegmentMetadata);

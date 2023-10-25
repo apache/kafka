@@ -35,7 +35,7 @@ public class OAuthBearerClientInitialResponseTest {
      */
     @Test
     public void testBuildClientResponseToBytes() throws Exception {
-        String expectedMesssage = "n,,\u0001auth=Bearer 123.345.567\u0001nineteen=42\u0001\u0001";
+        String expectedMessage = "n,,\u0001auth=Bearer 123.345.567\u0001nineteen=42\u0001\u0001";
 
         Map<String, String> extensions = new HashMap<>();
         extensions.put("nineteen", "42");
@@ -43,7 +43,7 @@ public class OAuthBearerClientInitialResponseTest {
 
         String message = new String(response.toBytes(), StandardCharsets.UTF_8);
 
-        assertEquals(expectedMesssage, message);
+        assertEquals(expectedMessage, message);
     }
 
     @Test
@@ -57,7 +57,7 @@ public class OAuthBearerClientInitialResponseTest {
     }
 
     @Test
-    public void testThrowsSaslExceptionOnInvalidExtensionKey() throws Exception {
+    public void testThrowsSaslExceptionOnInvalidExtensionKey() {
         Map<String, String> extensions = new HashMap<>();
         extensions.put("19", "42"); // keys can only be a-z
         assertThrows(SaslException.class, () -> new OAuthBearerClientInitialResponse("123.345.567", new SaslExtensions(extensions)));

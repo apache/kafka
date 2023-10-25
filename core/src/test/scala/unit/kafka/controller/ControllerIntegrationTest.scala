@@ -30,6 +30,7 @@ import org.apache.kafka.common.message.{AlterPartitionRequestData, AlterPartitio
 import org.apache.kafka.common.metrics.KafkaMetric
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.requests.AlterPartitionRequest
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource
 import org.apache.kafka.common.{ElectionType, TopicPartition, Uuid}
 import org.apache.kafka.metadata.LeaderRecoveryState
@@ -969,7 +970,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     // on IBP >= 2.8 and 2) the AlterPartition version 2 and above is used.
     val canCallerUseTopicIds = metadataVersion.isTopicIdsSupported && alterPartitionVersion > 1
 
-    val alterPartitionRequest = new AlterPartitionRequestData()
+    val alterPartitionRequest = new AlterPartitionRequest.Builder(new AlterPartitionRequestData()
       .setBrokerId(brokerId)
       .setBrokerEpoch(brokerEpoch)
       .setTopics(Seq(new AlterPartitionRequestData.TopicData()
@@ -979,10 +980,10 @@ class ControllerIntegrationTest extends QuorumTestHarness {
           .setPartitionIndex(tp.partition)
           .setLeaderEpoch(newLeaderAndIsr.leaderEpoch)
           .setPartitionEpoch(newLeaderAndIsr.partitionEpoch)
-          .setNewIsr(newLeaderAndIsr.isr.map(Int.box).asJava)
+          .setNewIsrWithEpochs(AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(newLeaderAndIsr.isr.map(Int.box).asJava))
           .setLeaderRecoveryState(newLeaderAndIsr.leaderRecoveryState.value)
         ).asJava)
-      ).asJava)
+      ).asJava), alterPartitionVersion > 1).build(alterPartitionVersion).data()
 
     val future = alterPartitionFuture(alterPartitionRequest, alterPartitionVersion)
 
@@ -1038,7 +1039,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
           .setPartitionIndex(tp.partition)
           .setLeaderEpoch(newLeaderAndIsr.leaderEpoch)
           .setPartitionEpoch(newLeaderAndIsr.partitionEpoch)
-          .setNewIsr(newLeaderAndIsr.isr.map(Int.box).asJava)
+          .setNewIsrWithEpochs(AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(newLeaderAndIsr.isr.map(Int.box).asJava))
           .setLeaderRecoveryState(newLeaderAndIsr.leaderRecoveryState.value)
         ).asJava)
       ).asJava)
@@ -1089,7 +1090,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
             .setPartitionIndex(tp.partition)
             .setLeaderEpoch(oldLeaderAndIsr.leaderEpoch)
             .setPartitionEpoch(requestPartitionEpoch)
-            .setNewIsr(newIsr.map(Int.box).asJava)
+            .setNewIsrWithEpochs(AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(newIsr.map(Int.box).asJava))
             .setLeaderRecoveryState(oldLeaderAndIsr.leaderRecoveryState.value)
           ).asJava)
         ).asJava)
@@ -1151,15 +1152,15 @@ class ControllerIntegrationTest extends QuorumTestHarness {
         .setPartitionIndex(tp.partition)
         .setLeaderEpoch(leaderAndIsr.leaderEpoch)
         .setPartitionEpoch(leaderAndIsr.partitionEpoch)
-        .setNewIsr(fullIsr.map(Int.box).asJava)
+        .setNewIsrWithEpochs(AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(fullIsr.map(Int.box).asJava))
         .setLeaderRecoveryState(leaderAndIsr.leaderRecoveryState.value)).asJava)
     if (alterPartitionVersion > 1) requestTopic.setTopicId(topicId) else requestTopic.setTopicName(tp.topic)
 
     // Try to update ISR to contain the offline broker.
-    val alterPartitionRequest = new AlterPartitionRequestData()
+    val alterPartitionRequest = new AlterPartitionRequest.Builder(new AlterPartitionRequestData()
       .setBrokerId(controllerId)
       .setBrokerEpoch(controllerEpoch)
-      .setTopics(Seq(requestTopic).asJava)
+      .setTopics(Seq(requestTopic).asJava), alterPartitionVersion > 1).build(alterPartitionVersion).data()
 
     val future = alterPartitionFuture(alterPartitionRequest, alterPartitionVersion)
 
@@ -1484,7 +1485,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
           .setPartitionIndex(topicPartition.partition)
           .setLeaderEpoch(leaderEpoch)
           .setPartitionEpoch(partitionEpoch)
-          .setNewIsr(isr.toList.map(Int.box).asJava)
+          .setNewIsrWithEpochs(AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(isr.toList.map(Int.box).asJava))
           .setLeaderRecoveryState(leaderRecoveryState)).asJava)).asJava)
 
     val future = alterPartitionFuture(alterPartitionRequest, if (topicIdOpt.isDefined) AlterPartitionRequestData.HIGHEST_SUPPORTED_VERSION else 1)

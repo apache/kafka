@@ -69,7 +69,7 @@ public class ListConsumerGroupOffsetsResult {
     }
 
     /**
-     * Return a future which yields all Map<String, Map<TopicPartition, OffsetAndMetadata> objects,
+     * Return a future which yields all {@code Map<String, Map<TopicPartition, OffsetAndMetadata>} objects,
      * if requests for all the groups succeed.
      */
     public KafkaFuture<Map<String, Map<TopicPartition, OffsetAndMetadata>>> all() {

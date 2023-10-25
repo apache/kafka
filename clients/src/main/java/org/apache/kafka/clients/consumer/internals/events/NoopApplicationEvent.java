@@ -16,31 +16,47 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-import org.apache.kafka.clients.consumer.internals.NoopBackgroundEvent;
-
-import java.util.concurrent.BlockingQueue;
+import java.util.Objects;
 
 /**
- * The event is NoOp. This is intentionally left here for demonstration purpose.
+ * The event is a no-op, but is intentionally left here for demonstration and test purposes.
  */
 public class NoopApplicationEvent extends ApplicationEvent {
-    public final String message;
-    private final BlockingQueue<BackgroundEvent> backgroundEventQueue;
 
-    public NoopApplicationEvent(final BlockingQueue<BackgroundEvent> backgroundEventQueue,
-                                final String message) {
+    private final String message;
 
-        this.message = message;
-        this.backgroundEventQueue = backgroundEventQueue;
+    public NoopApplicationEvent(final String message) {
+        super(Type.NOOP);
+        this.message = Objects.requireNonNull(message);
+    }
+
+    public String message() {
+        return message;
     }
 
     @Override
-    public boolean process() {
-        return backgroundEventQueue.add(new NoopBackgroundEvent(message));
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        if (!super.equals(o)) return false;
+
+        NoopApplicationEvent that = (NoopApplicationEvent) o;
+
+        return message.equals(that.message);
+    }
+
+    @Override
+    public int hashCode() {
+        int result = super.hashCode();
+        result = 31 * result + message.hashCode();
+        return result;
     }
 
     @Override
     public String toString() {
-        return getClass() + "_" + this.message;
+        return "NoopApplicationEvent{" +
+                toStringBase() +
+                ",message='" + message + '\'' +
+                '}';
     }
 }

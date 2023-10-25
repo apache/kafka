@@ -39,8 +39,8 @@ class Scheduler implements AutoCloseable {
         this.timeout = timeout;
     }
 
-    Scheduler(Class<?> clazz, Duration timeout) {
-        this("Scheduler for " + clazz.getSimpleName(), timeout);
+    Scheduler(Class<?> clazz, String role, Duration timeout) {
+        this("Scheduler for " + clazz.getSimpleName() + ": " + role, timeout);
     }
 
     void scheduleRepeating(Task task, Duration interval, String description) {

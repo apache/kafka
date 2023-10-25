@@ -32,7 +32,7 @@ import java.util.List;
  * topic partition from offset 0 up to but not including the end offset in the snapshot
  * id.
  *
- * @see org.apache.kafka.raft.KafkaRaftClient#createSnapshot(long, int, long)
+ * @see org.apache.kafka.raft.RaftClient#createSnapshot(OffsetAndEpoch, long)
  */
 public interface SnapshotWriter<T> extends AutoCloseable {
     /**
@@ -71,8 +71,10 @@ public interface SnapshotWriter<T> extends AutoCloseable {
      * Freezes the snapshot by flushing all pending writes and marking it as immutable.
      *
      * Also adds a {@link SnapshotFooterRecord} to the end of the snapshot
+     *
+     * @return  The size of the snapshot in bytes.
      */
-    void freeze();
+    long freeze();
 
     /**
      * Closes the snapshot writer.

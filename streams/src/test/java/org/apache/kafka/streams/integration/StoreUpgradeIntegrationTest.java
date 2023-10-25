@@ -976,8 +976,6 @@ public class StoreUpgradeIntegrationTest {
             store.put(record.key(), newCount);
         }
 
-        @Override
-        public void close() {}
     }
 
     private static class TimestampedKeyValueProcessor implements Processor<Integer, Integer, Void, Void> {
@@ -1006,8 +1004,6 @@ public class StoreUpgradeIntegrationTest {
             store.put(record.key(), ValueAndTimestamp.make(newCount, newTimestamp));
         }
 
-        @Override
-        public void close() {}
     }
 
     private static class WindowedProcessor implements Processor<Integer, Integer, Void, Void> {
@@ -1032,8 +1028,6 @@ public class StoreUpgradeIntegrationTest {
             store.put(record.key(), newCount, record.key() < 10 ? 0L : 100000L);
         }
 
-        @Override
-        public void close() {}
     }
 
     private static class TimestampedWindowedProcessor implements Processor<Integer, Integer, Void, Void> {
@@ -1062,7 +1056,5 @@ public class StoreUpgradeIntegrationTest {
             store.put(record.key(), ValueAndTimestamp.make(newCount, newTimestamp), record.key() < 10 ? 0L : 100000L);
         }
 
-        @Override
-        public void close() {}
     }
 }

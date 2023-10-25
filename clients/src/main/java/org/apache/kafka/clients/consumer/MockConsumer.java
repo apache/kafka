@@ -24,6 +24,7 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.utils.LogContext;
 
@@ -92,11 +93,27 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         return this.subscriptions.assignedPartitions();
     }
 
-    /** Simulate a rebalance event. */
+    /**
+     * Simulate a rebalance event.
+     */
     public synchronized void rebalance(Collection<TopicPartition> newAssignment) {
-        // TODO: Rebalance callbacks
+        // compute added and removed partitions for rebalance callback
+        Set<TopicPartition> oldAssignmentSet = this.subscriptions.assignedPartitions();
+        Set<TopicPartition> newAssignmentSet = new HashSet<>(newAssignment);
+        List<TopicPartition> added = newAssignment.stream().filter(x -> !oldAssignmentSet.contains(x)).collect(Collectors.toList());
+        List<TopicPartition> removed = oldAssignmentSet.stream().filter(x -> !newAssignmentSet.contains(x)).collect(Collectors.toList());
+
+        // rebalance
         this.records.clear();
         this.subscriptions.assignFromSubscribed(newAssignment);
+
+        // rebalance callbacks
+        if (!added.isEmpty()) {
+            this.subscriptions.rebalanceListener().onPartitionsAssigned(added);
+        }
+        if (!removed.isEmpty()) {
+            this.subscriptions.rebalanceListener().onPartitionsRevoked(removed);
+        }
     }
 
     @Override
@@ -366,6 +383,11 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
 
     public synchronized void updateEndOffsets(final Map<TopicPartition, Long> newOffsets) {
         endOffsets.putAll(newOffsets);
+    }
+
+    @Override
+    public Uuid clientInstanceId(Duration timeout) {
+        throw new UnsupportedOperationException("Not implemented yet.");
     }
 
     @Override

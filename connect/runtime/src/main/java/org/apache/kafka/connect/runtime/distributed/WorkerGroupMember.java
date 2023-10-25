@@ -92,7 +92,8 @@ public class WorkerGroupMember {
 
             this.metrics = new Metrics(metricConfig, reporters, time, metricsContext);
             long retryBackoffMs = config.getLong(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG);
-            Metadata metadata = new Metadata(retryBackoffMs, config.getLong(CommonClientConfigs.METADATA_MAX_AGE_CONFIG),
+            long retryBackoffMaxMs = config.getLong(CommonClientConfigs.RETRY_BACKOFF_MAX_MS_CONFIG);
+            Metadata metadata = new Metadata(retryBackoffMs, retryBackoffMaxMs, config.getLong(CommonClientConfigs.METADATA_MAX_AGE_CONFIG),
                     logContext, new ClusterResourceListeners());
             List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(
                     config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG),
@@ -176,7 +177,7 @@ public class WorkerGroupMember {
 
     /**
      * Get the member ID of this worker in the group of workers.
-     *
+     * <p>
      * This ID is the unique member ID automatically generated.
      *
      * @return the member ID

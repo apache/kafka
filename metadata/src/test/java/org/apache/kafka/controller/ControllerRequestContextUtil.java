@@ -18,6 +18,9 @@
 package org.apache.kafka.controller;
 
 import java.util.OptionalLong;
+import java.util.function.Consumer;
+
+import org.apache.kafka.common.errors.ThrottlingQuotaExceededException;
 import org.apache.kafka.common.message.RequestHeaderData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
@@ -28,21 +31,37 @@ public class ControllerRequestContextUtil {
             new RequestHeaderData(),
             KafkaPrincipal.ANONYMOUS,
             OptionalLong.empty());
+    public static final String QUOTA_EXCEEDED_IN_TEST_MSG = "Quota exceeded in test";
 
     public static ControllerRequestContext anonymousContextFor(ApiKeys apiKeys) {
-        return anonymousContextFor(apiKeys, apiKeys.latestVersion());
+        return anonymousContextFor(apiKeys, apiKeys.latestVersion(), __ -> { });
+    }
+
+    public static ControllerRequestContext anonymousContextWithMutationQuotaExceededFor(ApiKeys apiKeys) {
+        return anonymousContextFor(apiKeys, apiKeys.latestVersion(), x -> {
+            throw new ThrottlingQuotaExceededException(QUOTA_EXCEEDED_IN_TEST_MSG);
+        });
     }
 
     public static ControllerRequestContext anonymousContextFor(
         ApiKeys apiKeys,
         short version
     ) {
+        return anonymousContextFor(apiKeys, version, __ -> { });
+    }
+
+    public static ControllerRequestContext anonymousContextFor(
+        ApiKeys apiKeys,
+        short version,
+        Consumer<Integer> partitionChangeQuotaApplier
+    ) {
         return new ControllerRequestContext(
             new RequestHeaderData()
                 .setRequestApiKey(apiKeys.id)
                 .setRequestApiVersion(version),
             KafkaPrincipal.ANONYMOUS,
-            OptionalLong.empty()
+            OptionalLong.empty(),
+            partitionChangeQuotaApplier
         );
     }
 }

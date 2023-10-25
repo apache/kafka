@@ -56,7 +56,7 @@ import static org.apache.kafka.streams.internals.StreamsConfigUtils.getTotalCach
  * Streams configs that apply at the topology level. The values in the {@link StreamsConfig} parameter of the
  * {@link org.apache.kafka.streams.KafkaStreams} or {@link KafkaStreamsNamedTopologyWrapper} constructors will
  * determine the defaults, which can then be overridden for specific topologies by passing them in when creating the
- * topology builders via the {@link org.apache.kafka.streams.StreamsBuilder()} method.
+ * topology builders via the {@link org.apache.kafka.streams.StreamsBuilder#StreamsBuilder(TopologyConfig)} StreamsBuilder(TopologyConfig)} method.
  */
 @SuppressWarnings("deprecation")
 public class TopologyConfig extends AbstractConfig {
@@ -105,7 +105,7 @@ public class TopologyConfig extends AbstractConfig {
                 Importance.LOW,
                 DEFAULT_DSL_STORE_DOC);
     }
-    private final Logger log = LoggerFactory.getLogger(TopologyConfig.class);
+    private final static Logger log = LoggerFactory.getLogger(TopologyConfig.class);
 
     public final String topologyName;
     public final boolean eosEnabled;
@@ -125,6 +125,7 @@ public class TopologyConfig extends AbstractConfig {
         this(null, globalAppConfigs, new Properties());
     }
 
+    @SuppressWarnings("this-escape")
     public TopologyConfig(final String topologyName, final StreamsConfig globalAppConfigs, final Properties topologyOverrides) {
         super(CONFIG, topologyOverrides, false);
 

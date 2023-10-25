@@ -17,7 +17,7 @@
 
 package kafka.server
 
-import kafka.log.{ClientRecordDeletion, LogSegment, UnifiedLog}
+import kafka.log.UnifiedLog
 import kafka.utils.TestUtils
 import org.apache.kafka.common.message.ListOffsetsRequestData.{ListOffsetsPartition, ListOffsetsTopic}
 import org.apache.kafka.common.message.ListOffsetsResponseData.{ListOffsetsPartitionResponse, ListOffsetsTopicResponse}
@@ -25,6 +25,7 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, ListOffsetsRequest, ListOffsetsResponse}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{IsolationLevel, TopicPartition}
+import org.apache.kafka.storage.internals.log.{LogSegment, LogStartOffsetIncrementReason}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.params.ParameterizedTest
@@ -34,6 +35,8 @@ import org.mockito.invocation.InvocationOnMock
 import org.mockito.stubbing.Answer
 
 import java.io.File
+import java.util
+import java.util.Arrays.asList
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.{Optional, Properties, Random}
 import scala.collection.mutable.Buffer
@@ -76,7 +79,7 @@ class LogOffsetTest extends BaseRequestTest {
     log.flush(false)
 
     log.updateHighWatermark(log.logEndOffset)
-    log.maybeIncrementLogStartOffset(3, ClientRecordDeletion)
+    log.maybeIncrementLogStartOffset(3, LogStartOffsetIncrementReason.ClientRecordDeletion)
     log.deleteOldSegments()
 
     val offsets = log.legacyFetchOffsetsBefore(ListOffsetsRequest.LATEST_TIMESTAMP, 15)
@@ -251,16 +254,17 @@ class LogOffsetTest extends BaseRequestTest {
       log.appendAsLeader(TestUtils.singletonRecords(value = Integer.toString(42).getBytes()), leaderEpoch = 0)
     log.flush(false)
 
-    val offsets = log.legacyFetchOffsetsBefore(ListOffsetsRequest.EARLIEST_TIMESTAMP, 10)
+    for (timestamp <- Seq(ListOffsetsRequest.EARLIEST_TIMESTAMP, ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP)) {
+      val offsets = log.legacyFetchOffsetsBefore(timestamp, 10)
+      assertEquals(Seq(0L), offsets)
 
-    assertEquals(Seq(0L), offsets)
-
-    TestUtils.waitUntilTrue(() => TestUtils.isLeaderLocalOnBroker(topic, topicPartition.partition, broker),
-      "Leader should be elected")
-    val request = ListOffsetsRequest.Builder.forReplica(0, 0)
-      .setTargetTimes(buildTargetTimes(topicPartition, ListOffsetsRequest.EARLIEST_TIMESTAMP, 10).asJava).build()
-    val consumerOffsets = findPartition(sendListOffsetsRequest(request).topics.asScala, topicPartition).oldStyleOffsets.asScala
-    assertEquals(Seq(0L), consumerOffsets)
+      TestUtils.waitUntilTrue(() => TestUtils.isLeaderLocalOnBroker(topic, topicPartition.partition, broker),
+        "Leader should be elected")
+      val request = ListOffsetsRequest.Builder.forReplica(0, 0)
+        .setTargetTimes(buildTargetTimes(topicPartition, timestamp, 10).asJava).build()
+      val consumerOffsets = findPartition(sendListOffsetsRequest(request).topics.asScala, topicPartition).oldStyleOffsets.asScala
+      assertEquals(Seq(0L), consumerOffsets)
+    }
   }
 
   /* We test that `fetchOffsetsBefore` works correctly if `LogSegment.size` changes after each invocation (simulating
@@ -274,7 +278,7 @@ class LogOffsetTest extends BaseRequestTest {
       private[this] val value = new AtomicInteger(0)
       override def answer(invocation: InvocationOnMock): Int = value.getAndIncrement()
     })
-    val logSegments = Seq(logSegment)
+    val logSegments = Seq(logSegment).asJava
     when(log.logSegments).thenReturn(logSegments)
     log.legacyFetchOffsetsBefore(System.currentTimeMillis, 100)
   }
@@ -287,9 +291,9 @@ class LogOffsetTest extends BaseRequestTest {
     val log: UnifiedLog = mock(classOf[UnifiedLog])
     val logSegment: LogSegment = mock(classOf[LogSegment])
     when(log.logSegments).thenReturn(
-      new Iterable[LogSegment] {
+      new util.AbstractCollection[LogSegment] {
         override def size = 2
-        override def iterator = Seq(logSegment).iterator
+        override def iterator = asList(logSegment).iterator
       }
     )
     log.legacyFetchOffsetsBefore(System.currentTimeMillis, 100)

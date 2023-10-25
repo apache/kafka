@@ -230,7 +230,7 @@ public class ProduceRequest extends AbstractRequest {
                 Iterator<? extends RecordBatch> iterator = records.batches().iterator();
                 if (!iterator.hasNext())
                     throw new InvalidRecordException("Produce requests with version " + version + " must have at least " +
-                            "one record batch");
+                            "one record batch per partition");
 
                 RecordBatch entry = iterator.next();
                 if (entry.magic() != RecordBatch.MAGIC_VALUE_V2)
@@ -243,7 +243,7 @@ public class ProduceRequest extends AbstractRequest {
 
                 if (iterator.hasNext())
                     throw new InvalidRecordException("Produce requests with version " + version + " are only allowed to " +
-                            "contain exactly one record batch");
+                            "contain exactly one record batch per partition");
             }
         }
 

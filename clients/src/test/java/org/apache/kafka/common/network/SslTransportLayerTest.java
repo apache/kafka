@@ -867,7 +867,7 @@ public class SslTransportLayerTest {
             channelBuilder.flushFailureAction = flushFailureAction;
             channelBuilder.failureIndex = i;
             channelBuilder.configure(args.sslClientConfigs);
-            this.selector = new Selector(5000, new Metrics(), time, "MetricGroup", channelBuilder, new LogContext());
+            this.selector = new Selector(10000, new Metrics(), time, "MetricGroup", channelBuilder, new LogContext());
 
             InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
             selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
@@ -1326,7 +1326,7 @@ public class SslTransportLayerTest {
     }
 
     private Supplier<ApiVersionsResponse> defaultApiVersionsSupplier() {
-        return () -> ApiVersionsResponse.defaultApiVersionsResponse(ApiMessageType.ListenerType.ZK_BROKER);
+        return () -> TestUtils.defaultApiVersionsResponse(ApiMessageType.ListenerType.ZK_BROKER);
     }
 
     static class TestSslChannelBuilder extends SslChannelBuilder {

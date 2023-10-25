@@ -42,6 +42,7 @@ public class MockScheduler implements Scheduler, MockTime.Listener {
      */
     private final TreeMap<Long, List<KafkaFutureImpl<Long>>> waiters = new TreeMap<>();
 
+    @SuppressWarnings("this-escape")
     public MockScheduler(MockTime time) {
         this.time = time;
         time.addListener(this);
@@ -87,32 +88,26 @@ public class MockScheduler implements Scheduler, MockTime.Listener {
                                   final Callable<T> callable, long delayMs) {
         final KafkaFutureImpl<T> future = new KafkaFutureImpl<>();
         KafkaFutureImpl<Long> waiter = new KafkaFutureImpl<>();
-        waiter.thenApply(new KafkaFuture.BaseFunction<Long, Void>() {
-            @Override
-            public Void apply(final Long now) {
-                executor.submit(new Callable<Void>() {
-                    @Override
-                    public Void call() {
-                        // Note: it is possible that we'll execute Callable#call right after
-                        // the future is cancelled.  This is a valid sequence of events
-                        // that the author of the Callable needs to be able to handle.
-                        //
-                        // Note 2: If the future is cancelled, we will not remove the waiter
-                        // from this MockTime object.  This small bit of inefficiency is acceptable
-                        // in testing code (at least we aren't polling!)
-                        if (!future.isCancelled()) {
-                            try {
-                                log.trace("Invoking {} at {}", callable, now);
-                                future.complete(callable.call());
-                            } catch (Throwable throwable) {
-                                future.completeExceptionally(throwable);
-                            }
-                        }
-                        return null;
+        waiter.thenApply((KafkaFuture.BaseFunction<Long, Void>) now -> {
+            executor.submit((Callable<Void>) () -> {
+                // Note: it is possible that we'll execute Callable#call right after
+                // the future is cancelled.  This is a valid sequence of events
+                // that the author of the Callable needs to be able to handle.
+                //
+                // Note 2: If the future is cancelled, we will not remove the waiter
+                // from this MockTime object.  This small bit of inefficiency is acceptable
+                // in testing code (at least we aren't polling!)
+                if (!future.isCancelled()) {
+                    try {
+                        log.trace("Invoking {} at {}", callable, now);
+                        future.complete(callable.call());
+                    } catch (Throwable throwable) {
+                        future.completeExceptionally(throwable);
                     }
-                });
+                }
                 return null;
-            }
+            });
+            return null;
         });
         log.trace("Scheduling {} for {} ms from now.", callable, delayMs);
         addWaiter(delayMs, waiter);

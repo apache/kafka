@@ -32,8 +32,21 @@
   // Version 7 adds pending offset commit as new error response on partition level.
   //
   // Version 8 is adding support for fetching offsets for multiple groups
-  "validVersions": "0-8",
+  //
+  // Version 9 is the first version that can be used with the new consumer group protocol (KIP-848). The response is
+  // the same as version 8 but can return STALE_MEMBER_EPOCH and UNKNOWN_MEMBER_ID errors when the new consumer group
+  // protocol is used.
+  "validVersions": "0-9",
   "flexibleVersions": "6+",
+  // Supported errors:
+  // - GROUP_AUTHORIZATION_FAILED (version 0+)
+  // - NOT_COORDINATOR (version 0+)
+  // - COORDINATOR_NOT_AVAILABLE (version 0+)
+  // - COORDINATOR_LOAD_IN_PROGRESS (version 0+)
+  // - GROUP_ID_NOT_FOUND (version 0+)
+  // - UNSTABLE_OFFSET_COMMIT (version 7+)
+  // - UNKNOWN_MEMBER_ID (version 9+)
+  // - STALE_MEMBER_EPOCH (version 9+)
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "3+", "ignorable": true,
       "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
@@ -57,9 +70,9 @@
     ]},
     { "name": "ErrorCode", "type": "int16", "versions": "2-7", "default": "0", "ignorable": true,
       "about": "The top-level error code, or 0 if there was no error." },
-    {"name": "Groups", "type": "[]OffsetFetchResponseGroup", "versions": "8+",
+    { "name": "Groups", "type": "[]OffsetFetchResponseGroup", "versions": "8+",
       "about": "The responses per group id.", "fields": [
-      { "name": "groupId", "type": "string", "versions": "8+", "entityType": "groupId",
+      { "name": "GroupId", "type": "string", "versions": "8+", "entityType": "groupId",
         "about": "The group ID." },
       { "name": "Topics", "type": "[]OffsetFetchResponseTopics", "versions": "8+",
         "about": "The responses per topic.", "fields": [

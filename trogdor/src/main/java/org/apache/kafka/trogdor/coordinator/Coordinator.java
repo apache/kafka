@@ -182,4 +182,4 @@ public final class Coordinator {
         });
         coordinator.waitForShutdown();
     }
-};
+}

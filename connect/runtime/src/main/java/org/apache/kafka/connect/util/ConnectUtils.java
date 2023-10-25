@@ -37,6 +37,8 @@ import java.util.function.Function;
 import java.util.stream.Collector;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.clients.CommonClientConfigs.CLIENT_ID_CONFIG;
+
 public final class ConnectUtils {
     private static final Logger log = LoggerFactory.getLogger(ConnectUtils.class);
 
@@ -116,6 +118,14 @@ public final class ConnectUtils {
         ));
     }
 
+    /**
+     * Adds Connect metrics context properties.
+     * @param prop the properties map to which the metrics context properties are to be added
+     * @param config the worker config
+     * @param clusterId the Connect cluster's backing Kafka cluster ID
+     *
+     * @see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-606%3A+Add+Metadata+Context+to+MetricsReporter">KIP-606</a>
+     */
     public static void addMetricsContextProperties(Map<String, Object> prop, WorkerConfig config, String clusterId) {
         //add all properties predefined with "metrics.context."
         prop.putAll(config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX, false));
@@ -135,6 +145,15 @@ public final class ConnectUtils {
         return SourceConnector.class.isAssignableFrom(connector.getClass());
     }
 
+    /**
+     * Apply a specified transformation {@link Function} to every value in a Map.
+     * @param map the Map to be transformed
+     * @param transformation the transformation function
+     * @return the transformed Map
+     * @param <K> the key type
+     * @param <I> the pre-transform value type
+     * @param <O> the post-transform value type
+     */
     public static <K, I, O> Map<K, O> transformValues(Map<K, I> map, Function<I, O> transformation) {
         return map.entrySet().stream().collect(Collectors.toMap(
                 Map.Entry::getKey,
@@ -171,4 +190,32 @@ public final class ConnectUtils {
         return new ConnectException(message, t);
     }
 
+    /**
+     * Create the base of a {@link CommonClientConfigs#CLIENT_ID_DOC client ID} that can be
+     * used for Kafka clients instantiated by this worker. Workers should append an extra identifier
+     * to the end of this base ID to include extra information on what they are using it for; for example,
+     * {@code clientIdBase(config) + "configs"} could be used as the client ID for a consumer, producer,
+     * or admin client used to interact with a worker's config topic.
+     * @param config the worker config; may not be null
+     * @return the base client ID for this worker; never null, never empty, and will always end in a
+     * hyphen ('-')
+     */
+    public static String clientIdBase(WorkerConfig config) {
+        String result = Optional.ofNullable(config.groupId())
+                .orElse("connect");
+        String userSpecifiedClientId = config.getString(CLIENT_ID_CONFIG);
+        if (userSpecifiedClientId != null && !userSpecifiedClientId.trim().isEmpty()) {
+            result += "-" + userSpecifiedClientId;
+        }
+        return result + "-";
+    }
+
+    /**
+     * Get the class name for an object in a null-safe manner.
+     * @param o the object whose class name is to be returned
+     * @return "null" if the object is null; or else the object's class name
+     */
+    public static String className(Object o) {
+        return o != null ? o.getClass().getName() : "null";
+    }
 }

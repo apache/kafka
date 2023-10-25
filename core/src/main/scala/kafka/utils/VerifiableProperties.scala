@@ -20,7 +20,6 @@ package kafka.utils
 import java.util.Properties
 import java.util.Collections
 import scala.collection._
-import kafka.message.{CompressionCodec, NoCompressionCodec}
 import scala.jdk.CollectionConverters._
 import kafka.utils.Implicits._
 
@@ -52,11 +51,6 @@ class VerifiableProperties(val props: Properties) extends Logging {
    */
   def getInt(name: String): Int = getString(name).toInt
 
-  def getIntInRange(name: String, range: (Int, Int)): Int = {
-    require(containsKey(name), "Missing required property '" + name + "'")
-    getIntInRange(name, -1, range)
-  }
-
   /**
    * Read an integer from the properties instance
    * @param name The property name
@@ -78,7 +72,7 @@ class VerifiableProperties(val props: Properties) extends Logging {
    * @throws IllegalArgumentException If the value is not in the given range
    * @return the integer value
    */
-  def getIntInRange(name: String, default: Int, range: (Int, Int)): Int = {
+  private def getIntInRange(name: String, default: Int, range: (Int, Int)): Int = {
     val v =
       if(containsKey(name))
         getProperty(name).toInt
@@ -88,7 +82,7 @@ class VerifiableProperties(val props: Properties) extends Logging {
     v
   }
 
- def getShortInRange(name: String, default: Short, range: (Short, Short)): Short = {
+ private def getShortInRange(name: String, default: Short, range: (Short, Short)): Short = {
     val v =
       if(containsKey(name))
         getProperty(name).toShort
@@ -121,7 +115,7 @@ class VerifiableProperties(val props: Properties) extends Logging {
    * @throws IllegalArgumentException If the value is not in the given range
    * @return the long value
    */
-  def getLongInRange(name: String, default: Long, range: (Long, Long)): Long = {
+  private def getLongInRange(name: String, default: Long, range: (Long, Long)): Long = {
     val v =
       if(containsKey(name))
         getProperty(name).toLong
@@ -167,7 +161,7 @@ class VerifiableProperties(val props: Properties) extends Logging {
     }
   }
 
-  def getBoolean(name: String) = getString(name).toBoolean
+  def getBoolean(name: String): Boolean = getString(name).toBoolean
 
   /**
    * Get a string property, or, if no such property is defined, return the given default value
@@ -201,24 +195,6 @@ class VerifiableProperties(val props: Properties) extends Logging {
       m
     } catch {
       case e: Exception => throw new IllegalArgumentException("Error parsing configuration property '%s': %s".format(name, e.getMessage))
-    }
-  }
-
-  /**
-   * Parse compression codec from a property list in either. Codecs may be specified as integers, or as strings.
-   * See [[kafka.message.CompressionCodec]] for more details.
-   * @param name The property name
-   * @param default Default compression codec
-   * @return compression codec
-   */
-  def getCompressionCodec(name: String, default: CompressionCodec) = {
-    val prop = getString(name, NoCompressionCodec.name)
-    try {
-      CompressionCodec.getCompressionCodec(prop.toInt)
-    }
-    catch {
-      case _: NumberFormatException =>
-        CompressionCodec.getCompressionCodec(prop)
     }
   }
 

@@ -34,7 +34,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * Implementation of OffsetStorageReader. Unlike OffsetStorageWriter which is implemented
+ * Implementation of OffsetStorageReader. Unlike {@link OffsetStorageWriter} which is implemented
  * directly, the interface is only separate from this implementation because it needs to be
  * included in the public API package.
  */

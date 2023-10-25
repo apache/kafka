@@ -39,7 +39,6 @@ public class KafkaRaftMetrics implements AutoCloseable {
     private volatile int numUnknownVoterConnections;
     private volatile OptionalLong electionStartMs;
     private volatile OptionalLong pollStartMs;
-    private volatile OptionalLong pollEndMs;
 
     private final MetricName currentLeaderIdMetricName;
     private final MetricName currentVotedIdMetricName;
@@ -53,19 +52,18 @@ public class KafkaRaftMetrics implements AutoCloseable {
     private final Sensor electionTimeSensor;
     private final Sensor fetchRecordsSensor;
     private final Sensor appendRecordsSensor;
-    private final Sensor pollIdleSensor;
+    private final Sensor pollDurationSensor;
 
     public KafkaRaftMetrics(Metrics metrics, String metricGrpPrefix, QuorumState state) {
         this.metrics = metrics;
         String metricGroupName = metricGrpPrefix + "-metrics";
 
         this.pollStartMs = OptionalLong.empty();
-        this.pollEndMs = OptionalLong.empty();
         this.electionStartMs = OptionalLong.empty();
         this.numUnknownVoterConnections = 0;
         this.logEndOffset = new OffsetAndEpoch(0L, 0);
 
-        this.currentStateMetricName = metrics.metricName("current-state", metricGroupName, "The current state of this member; possible values are leader, candidate, voted, follower, unattached");
+        this.currentStateMetricName = metrics.metricName("current-state", metricGroupName, "The current state of this member; possible values are leader, candidate, voted, follower, unattached, observer");
         Gauge<String> stateProvider = (mConfig, currentTimeMs) -> {
             if (state.isLeader()) {
                 return "leader";
@@ -74,7 +72,12 @@ public class KafkaRaftMetrics implements AutoCloseable {
             } else if (state.isVoted()) {
                 return "voted";
             } else if (state.isFollower()) {
-                return "follower";
+                // a broker is special kind of follower, as not being a voter, it's an observer
+                if (state.isObserver()) {
+                    return "observer";
+                } else {
+                    return "follower";
+                }
             } else {
                 return "unattached";
             }
@@ -133,26 +136,28 @@ public class KafkaRaftMetrics implements AutoCloseable {
                 "The average number of records appended per sec as the leader of the raft quorum."),
                 new Rate(TimeUnit.SECONDS, new WindowedSum()));
 
-        this.pollIdleSensor = metrics.sensor("poll-idle-ratio");
-        this.pollIdleSensor.add(metrics.metricName("poll-idle-ratio-avg",
+        this.pollDurationSensor = metrics.sensor("poll-idle-ratio");
+        this.pollDurationSensor.add(
+            metrics.metricName(
+                "poll-idle-ratio-avg",
                 metricGroupName,
-                "The average fraction of time the client's poll() is idle as opposed to waiting for the user code to process records."),
-                new Avg());
+                "The ratio of time the Raft IO thread is idle as opposed to " +
+                    "doing work (e.g. handling requests or replicating from the leader)"
+            ),
+            new TimeRatio(1.0)
+        );
     }
 
     public void updatePollStart(long currentTimeMs) {
-        if (pollEndMs.isPresent() && pollStartMs.isPresent()) {
-            long pollTimeMs = Math.max(pollEndMs.getAsLong() - pollStartMs.getAsLong(), 0L);
-            long totalTimeMs = Math.max(currentTimeMs - pollStartMs.getAsLong(), 1L);
-            this.pollIdleSensor.record(pollTimeMs / (double) totalTimeMs, currentTimeMs);
-        }
-
         this.pollStartMs = OptionalLong.of(currentTimeMs);
-        this.pollEndMs = OptionalLong.empty();
     }
 
     public void updatePollEnd(long currentTimeMs) {
-        this.pollEndMs = OptionalLong.of(currentTimeMs);
+        if (pollStartMs.isPresent()) {
+            long pollDurationMs = Math.max(currentTimeMs - pollStartMs.getAsLong(), 0L);
+            this.pollDurationSensor.record(pollDurationMs);
+            this.pollStartMs = OptionalLong.empty();
+        }
     }
 
     public void updateLogEnd(OffsetAndEpoch logEndOffset) {
@@ -204,7 +209,7 @@ public class KafkaRaftMetrics implements AutoCloseable {
             electionTimeSensor.name(),
             fetchRecordsSensor.name(),
             appendRecordsSensor.name(),
-            pollIdleSensor.name()
+            pollDurationSensor.name()
         ).forEach(metrics::removeSensor);
     }
 }

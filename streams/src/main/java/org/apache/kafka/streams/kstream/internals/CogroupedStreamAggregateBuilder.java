@@ -55,7 +55,8 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
                                 final StoreBuilder<?> storeBuilder,
                                 final Serde<KR> keySerde,
                                 final Serde<VOut> valueSerde,
-                                final String queryableName) {
+                                final String queryableName,
+                                final boolean isOutputVersioned) {
         processRepartitions(groupPatterns, storeBuilder);
         final Collection<GraphNode> processors = new ArrayList<>();
         final Collection<KStreamAggProcessorSupplier> parentProcessors = new ArrayList<>();
@@ -73,6 +74,7 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
                 stateCreated,
                 storeBuilder,
                 parentProcessor);
+            statefulProcessorNode.setOutputVersioned(isOutputVersioned);
             stateCreated = true;
             processors.add(statefulProcessorNode);
             builder.addGraphNode(parentNodes.get(kGroupedStream.getKey()), statefulProcessorNode);

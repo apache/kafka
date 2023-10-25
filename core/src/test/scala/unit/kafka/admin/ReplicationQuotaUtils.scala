@@ -12,10 +12,10 @@
   */
 package kafka.admin
 
-import kafka.log.LogConfig
 import kafka.server.{ConfigType, DynamicConfig, KafkaServer}
 import kafka.utils.TestUtils
 import kafka.zk.AdminZkClient
+import org.apache.kafka.storage.internals.log.LogConfig
 
 import scala.collection.Seq
 
@@ -29,8 +29,8 @@ object ReplicationQuotaUtils {
           brokerConfig.contains(DynamicConfig.Broker.FollowerReplicationThrottledRateProp)
       }
       val topicConfig = adminZkClient.fetchEntityConfig(ConfigType.Topic, topic)
-      val hasReplicasProp = topicConfig.contains(LogConfig.LeaderReplicationThrottledReplicasProp) ||
-        topicConfig.contains(LogConfig.FollowerReplicationThrottledReplicasProp)
+      val hasReplicasProp = topicConfig.contains(LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG) ||
+        topicConfig.contains(LogConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG)
       !hasRateProp && !hasReplicasProp
     }, "Throttle limit/replicas was not unset")
   }
@@ -47,8 +47,8 @@ object ReplicationQuotaUtils {
       }
       //Check replicas assigned
       val topicConfig = adminZkClient.fetchEntityConfig(ConfigType.Topic, topic)
-      val leader = topicConfig.getProperty(LogConfig.LeaderReplicationThrottledReplicasProp).split(",").toSet
-      val follower = topicConfig.getProperty(LogConfig.FollowerReplicationThrottledReplicasProp).split(",").toSet
+      val leader = topicConfig.getProperty(LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG).split(",").toSet
+      val follower = topicConfig.getProperty(LogConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG).split(",").toSet
       val topicConfigAvailable = leader == throttledLeaders && follower == throttledFollowers
       brokerConfigAvailable && topicConfigAvailable
     }, "throttle limit/replicas was not set")

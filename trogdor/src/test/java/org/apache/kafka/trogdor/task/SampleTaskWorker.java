@@ -65,4 +65,4 @@ public class SampleTaskWorker implements TaskWorker {
         this.executor.awaitTermination(1, TimeUnit.DAYS);
         this.status.update(new TextNode("halted"));
     }
-};
+}

@@ -69,7 +69,7 @@ public class KTableSuppressProcessorSupplier<K, V> implements
             public KTableValueGetter<K, V> get() {
                 final KTableValueGetter<K, V> parentGetter = parentValueGetterSupplier.get();
                 return new KTableValueGetter<K, V>() {
-                    private TimeOrderedKeyValueBuffer<K, V> buffer;
+                    private TimeOrderedKeyValueBuffer<K, V, Change<V>> buffer;
 
                     @Override
                     public void init(final ProcessorContext<?, ?> context) {
@@ -87,6 +87,11 @@ public class KTableSuppressProcessorSupplier<K, V> implements
                             // not buffered, so the suppressed view is equal to the parent view
                             return parentGetter.get(key);
                         }
+                    }
+
+                    @Override
+                    public boolean isVersioned() {
+                        return false;
                     }
 
                     @Override
@@ -122,7 +127,7 @@ public class KTableSuppressProcessorSupplier<K, V> implements
         private final boolean safeToDropTombstones;
         private final String storeName;
 
-        private TimeOrderedKeyValueBuffer<K, V> buffer;
+        private TimeOrderedKeyValueBuffer<K, V, Change<V>> buffer;
         private InternalProcessorContext<K, Change<V>> internalProcessorContext;
         private Sensor suppressionEmitSensor;
         private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
@@ -197,7 +202,7 @@ public class KTableSuppressProcessorSupplier<K, V> implements
             return buffer.numRecords() > maxRecords || buffer.bufferSize() > maxBytes;
         }
 
-        private void emit(final TimeOrderedKeyValueBuffer.Eviction<K, V> toEmit) {
+        private void emit(final TimeOrderedKeyValueBuffer.Eviction<K, Change<V>> toEmit) {
             if (shouldForward(toEmit.value())) {
                 final ProcessorRecordContext prevRecordContext = internalProcessorContext.recordContext();
                 internalProcessorContext.setRecordContext(toEmit.recordContext());

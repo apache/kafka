@@ -31,6 +31,10 @@ public class NetworkSend implements Send {
         return destinationId;
     }
 
+    public Send send() {
+        return send;
+    }
+
     @Override
     public boolean completed() {
         return send.completed();

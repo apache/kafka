@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -53,6 +54,23 @@ public class LeaveGroupResponse extends AbstractResponse {
     public LeaveGroupResponse(LeaveGroupResponseData data) {
         super(ApiKeys.LEAVE_GROUP);
         this.data = data;
+    }
+
+    public LeaveGroupResponse(LeaveGroupResponseData data, short version) {
+        super(ApiKeys.LEAVE_GROUP);
+
+        if (version >= 3) {
+            this.data = data;
+        } else {
+            if (data.members().size() != 1) {
+                throw new UnsupportedVersionException("LeaveGroup response version " + version +
+                    " can only contain one member, got " + data.members().size() + " members.");
+            }
+
+            Errors topLevelError = Errors.forCode(data.errorCode());
+            short errorCode = getError(topLevelError, data.members()).code();
+            this.data = new LeaveGroupResponseData().setErrorCode(errorCode);
+        }
     }
 
     public LeaveGroupResponse(List<MemberResponse> memberResponses,

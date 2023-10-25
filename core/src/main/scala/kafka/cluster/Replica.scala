@@ -18,9 +18,12 @@
 package kafka.cluster
 
 import kafka.log.UnifiedLog
-import kafka.server.LogOffsetMetadata
+import kafka.server.MetadataCache
+import kafka.server.metadata.KRaftMetadataCache
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.errors.NotLeaderOrFollowerException
+import org.apache.kafka.storage.internals.log.LogOffsetMetadata
 
 import java.util.concurrent.atomic.AtomicReference
 
@@ -45,7 +48,10 @@ case class ReplicaState(
 
   // lastCaughtUpTimeMs is the largest time t such that the offset of most recent FetchRequest from this follower >=
   // the LEO of leader at time t. This is used to determine the lag of this follower and ISR of this partition.
-  lastCaughtUpTimeMs: Long
+  lastCaughtUpTimeMs: Long,
+
+  // The brokerEpoch is the epoch from the Fetch request.
+  brokerEpoch: Option[Long]
 ) {
   /**
    * Returns the current log end offset of the replica.
@@ -69,20 +75,25 @@ case class ReplicaState(
 
 object ReplicaState {
   val Empty: ReplicaState = ReplicaState(
-    logEndOffsetMetadata = LogOffsetMetadata.UnknownOffsetMetadata,
+    logEndOffsetMetadata = LogOffsetMetadata.UNKNOWN_OFFSET_METADATA,
     logStartOffset = UnifiedLog.UnknownOffset,
     lastFetchLeaderLogEndOffset = 0L,
     lastFetchTimeMs = 0L,
-    lastCaughtUpTimeMs = 0L
+    lastCaughtUpTimeMs = 0L,
+    brokerEpoch = None : Option[Long],
   )
 }
 
-class Replica(val brokerId: Int, val topicPartition: TopicPartition) extends Logging {
+class Replica(val brokerId: Int, val topicPartition: TopicPartition, val metadataCache: MetadataCache) extends Logging {
   private val replicaState = new AtomicReference[ReplicaState](ReplicaState.Empty)
 
   def stateSnapshot: ReplicaState = replicaState.get
 
   /**
+   * Update the replica's fetch state only if the broker epoch is -1 or it is larger or equal to the current broker
+   * epoch. Otherwise, NOT_LEADER_OR_FOLLOWER exception will be thrown. This can fence fetch state update from a
+   * stale request.
+   *
    * If the FetchRequest reads up to the log end offset of the leader when the current fetch request is received,
    * set `lastCaughtUpTimeMs` to the time when the current fetch request was received.
    *
@@ -94,13 +105,25 @@ class Replica(val brokerId: Int, val topicPartition: TopicPartition) extends Log
    * fetch request is always smaller than the leader's LEO, which can happen if small produce requests are received at
    * high frequency.
    */
-  def updateFetchState(
+  def updateFetchStateOrThrow(
     followerFetchOffsetMetadata: LogOffsetMetadata,
     followerStartOffset: Long,
     followerFetchTimeMs: Long,
-    leaderEndOffset: Long
+    leaderEndOffset: Long,
+    brokerEpoch: Long
   ): Unit = {
     replicaState.updateAndGet { currentReplicaState =>
+      metadataCache match {
+        case kRaftMetadataCache: KRaftMetadataCache =>
+          val cachedBrokerEpoch = kRaftMetadataCache.getAliveBrokerEpoch(brokerId)
+          // Fence the update if it provides a stale broker epoch.
+          if (brokerEpoch != -1 && cachedBrokerEpoch.exists(_ > brokerEpoch)) {
+            throw new NotLeaderOrFollowerException(s"Received stale fetch state update. broker epoch=$brokerEpoch " +
+              s"vs expected=${cachedBrokerEpoch.get}")
+          }
+        case _ =>
+      }
+
       val lastCaughtUpTime = if (followerFetchOffsetMetadata.messageOffset >= leaderEndOffset) {
         math.max(currentReplicaState.lastCaughtUpTimeMs, followerFetchTimeMs)
       } else if (followerFetchOffsetMetadata.messageOffset >= currentReplicaState.lastFetchLeaderLogEndOffset) {
@@ -114,7 +137,8 @@ class Replica(val brokerId: Int, val topicPartition: TopicPartition) extends Log
         logEndOffsetMetadata = followerFetchOffsetMetadata,
         lastFetchLeaderLogEndOffset = math.max(leaderEndOffset, currentReplicaState.lastFetchLeaderLogEndOffset),
         lastFetchTimeMs = followerFetchTimeMs,
-        lastCaughtUpTimeMs = lastCaughtUpTime
+        lastCaughtUpTimeMs = lastCaughtUpTime,
+        brokerEpoch = Option(brokerEpoch)
       )
     }
   }
@@ -139,10 +163,11 @@ class Replica(val brokerId: Int, val topicPartition: TopicPartition) extends Log
       if (isNewLeader) {
         ReplicaState(
           logStartOffset = UnifiedLog.UnknownOffset,
-          logEndOffsetMetadata = LogOffsetMetadata.UnknownOffsetMetadata,
+          logEndOffsetMetadata = LogOffsetMetadata.UNKNOWN_OFFSET_METADATA,
           lastFetchLeaderLogEndOffset = UnifiedLog.UnknownOffset,
           lastFetchTimeMs = 0L,
-          lastCaughtUpTimeMs = lastCaughtUpTimeMs
+          lastCaughtUpTimeMs = lastCaughtUpTimeMs,
+          brokerEpoch = Option.empty
         )
       } else {
         ReplicaState(
@@ -154,7 +179,8 @@ class Replica(val brokerId: Int, val topicPartition: TopicPartition) extends Log
           // The latter is done to ensure that the follower is not brought back
           // into the ISR before a fetch is received.
           lastFetchTimeMs = if (isFollowerInSync) currentTimeMs else 0L,
-          lastCaughtUpTimeMs = lastCaughtUpTimeMs
+          lastCaughtUpTimeMs = lastCaughtUpTimeMs,
+          brokerEpoch = currentReplicaState.brokerEpoch
         )
       }
     }
@@ -172,6 +198,7 @@ class Replica(val brokerId: Int, val topicPartition: TopicPartition) extends Log
     replicaString.append(s", logEndOffset=${replicaState.logEndOffsetMetadata.messageOffset}")
     replicaString.append(s", logEndOffsetMetadata=${replicaState.logEndOffsetMetadata}")
     replicaString.append(s", lastFetchLeaderLogEndOffset=${replicaState.lastFetchLeaderLogEndOffset}")
+    replicaString.append(s", brokerEpoch=${replicaState.brokerEpoch.getOrElse(-2L)}")
     replicaString.append(s", lastFetchTimeMs=${replicaState.lastFetchTimeMs}")
     replicaString.append(")")
     replicaString.toString

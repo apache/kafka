@@ -67,7 +67,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 
 @RunWith(Parameterized.class)
 public class SessionStoreFetchTest {
-    private enum StoreType { InMemory, RocksDB };
+    private enum StoreType { InMemory, RocksDB }
     private static final String STORE_NAME = "store";
     private static final int DATA_SIZE = 5;
     private static final long WINDOW_SIZE = 500L;

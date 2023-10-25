@@ -34,6 +34,7 @@ object RawMetaProperties {
   val ClusterIdKey = "cluster.id"
   val BrokerIdKey = "broker.id"
   val NodeIdKey = "node.id"
+  val DirectoryIdKey = "directory.id"
   val VersionKey = "version"
 }
 
@@ -63,19 +64,20 @@ class RawMetaProperties(val props: Properties = new Properties()) {
     props.setProperty(NodeIdKey, id.toString)
   }
 
+  def directoryId: Option[String] = {
+    Option(props.getProperty(DirectoryIdKey))
+  }
+
+  def directoryId_=(id: String): Unit = {
+    props.setProperty(DirectoryIdKey, id)
+  }
+
   def version: Int = {
     intValue(VersionKey).getOrElse(0)
   }
 
   def version_=(ver: Int): Unit = {
     props.setProperty(VersionKey, ver.toString)
-  }
-
-  def requireVersion(expectedVersion: Int): Unit = {
-    if (version != expectedVersion) {
-      throw new RuntimeException(s"Expected version $expectedVersion, but got "+
-        s"version $version")
-    }
   }
 
   private def intValue(key: String): Option[Int] = {
@@ -103,10 +105,16 @@ class RawMetaProperties(val props: Properties = new Properties()) {
 
 object MetaProperties {
   def parse(properties: RawMetaProperties): MetaProperties = {
-    properties.requireVersion(expectedVersion = 1)
     val clusterId = require(ClusterIdKey, properties.clusterId)
-    val nodeId = require(NodeIdKey, properties.nodeId)
-    new MetaProperties(clusterId, nodeId)
+    if (properties.version == 1) {
+      val nodeId = require(NodeIdKey, properties.nodeId)
+      new MetaProperties(clusterId, nodeId)
+    } else if (properties.version == 0) {
+      val brokerId = require(BrokerIdKey, properties.brokerId)
+      new MetaProperties(clusterId, brokerId)
+    } else {
+      throw new RuntimeException(s"Expected version 0 or 1, but got version ${properties.version}")
+    }
   }
 
   def require[T](key: String, value: Option[T]): T = {
@@ -135,11 +143,21 @@ case class MetaProperties(
   clusterId: String,
   nodeId: Int,
 ) {
-  def toProperties: Properties = {
+  private def toRawMetaProperties: RawMetaProperties = {
     val properties = new RawMetaProperties()
     properties.version = 1
     properties.clusterId = clusterId
     properties.nodeId = nodeId
+    properties
+  }
+
+  def toProperties: Properties = {
+    toRawMetaProperties.props
+  }
+
+  def toPropertiesWithDirectoryId(directoryId: String): Properties = {
+    val properties = toRawMetaProperties
+    properties.directoryId = directoryId
     properties.props
   }
 
@@ -151,7 +169,8 @@ case class MetaProperties(
 object BrokerMetadataCheckpoint extends Logging {
   def getBrokerMetadataAndOfflineDirs(
     logDirs: collection.Seq[String],
-    ignoreMissing: Boolean
+    ignoreMissing: Boolean,
+    kraftMode: Boolean
   ): (RawMetaProperties, collection.Seq[String]) = {
     require(logDirs.nonEmpty, "Must have at least one log dir to read meta.properties")
 
@@ -159,7 +178,7 @@ object BrokerMetadataCheckpoint extends Logging {
     val offlineDirs = mutable.ArrayBuffer.empty[String]
 
     for (logDir <- logDirs) {
-      val brokerCheckpointFile = new File(logDir, "meta.properties")
+      val brokerCheckpointFile = new File(logDir, KafkaServer.brokerMetaPropsFile)
       val brokerCheckpoint = new BrokerMetadataCheckpoint(brokerCheckpointFile)
 
       try {
@@ -182,7 +201,13 @@ object BrokerMetadataCheckpoint extends Logging {
     if (brokerMetadataMap.isEmpty) {
       (new RawMetaProperties(), offlineDirs)
     } else {
-      val numDistinctMetaProperties = brokerMetadataMap.values.toSet.size
+      // KRaft mode has to support handling both meta.properties versions 0 and 1 and has to
+      // reconcile have multiple versions in different directories.
+      val numDistinctMetaProperties = if (kraftMode) {
+        brokerMetadataMap.values.map(props => MetaProperties.parse(new RawMetaProperties(props))).toSet.size
+      } else {
+        brokerMetadataMap.values.toSet.size
+      }
       if (numDistinctMetaProperties > 1) {
         val builder = new StringBuilder
 

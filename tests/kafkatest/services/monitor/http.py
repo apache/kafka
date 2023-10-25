@@ -94,13 +94,14 @@ class HttpMetricsCollector(object):
         super(HttpMetricsCollector, self).start_node(node)
 
     def stop(self):
-        super(HttpMetricsCollector, self).stop()
-
-        if self._http_metrics_thread:
-            self.logger.debug("Shutting down metrics httpd")
-            self._httpd.shutdown()
-            self._http_metrics_thread.join()
-            self.logger.debug("Finished shutting down metrics httpd")
+        try:
+            super(HttpMetricsCollector, self).stop()
+        finally:
+            if self._http_metrics_thread:
+                self.logger.debug("Shutting down metrics httpd")
+                self._httpd.shutdown()
+                self._http_metrics_thread.join()
+                self.logger.debug("Finished shutting down metrics httpd")
 
     def stop_node(self, node):
         super(HttpMetricsCollector, self).stop_node(node)
@@ -215,12 +216,12 @@ class _ReverseForwarder(object):
             r, w, x = select([sock, chan], [], [])
             if sock in r:
                 data = sock.recv(1024)
-                if len(data) == 0:
+                if not data:
                     break
                 chan.send(data)
             if chan in r:
                 data = chan.recv(1024)
-                if len(data) == 0:
+                if not data:
                     break
                 sock.send(data)
         chan.close()

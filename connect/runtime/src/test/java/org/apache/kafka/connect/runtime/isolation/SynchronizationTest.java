@@ -28,7 +28,6 @@ import java.security.AccessController;
 import java.security.PrivilegedAction;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.BrokenBarrierException;
@@ -45,13 +44,13 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
-import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TestName;
+import org.mockito.Mockito;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -70,24 +69,15 @@ public class SynchronizationTest {
 
     @Before
     public void setup() {
-        TestPlugins.assertAvailable();
         Map<String, String> pluginProps = Collections.singletonMap(
             WorkerConfig.PLUGIN_PATH_CONFIG,
-            String.join(",", TestPlugins.pluginPath())
+            TestPlugins.pluginPathJoined()
         );
         threadPrefix = SynchronizationTest.class.getSimpleName()
             + "." + testName.getMethodName() + "-";
         dclBreakpoint = new Breakpoint<>();
         pclBreakpoint = new Breakpoint<>();
-        plugins = new Plugins(pluginProps) {
-            @Override
-            protected DelegatingClassLoader newDelegatingClassLoader(List<String> paths) {
-                return AccessController.doPrivileged(
-                    (PrivilegedAction<DelegatingClassLoader>) () ->
-                        new SynchronizedDelegatingClassLoader(paths)
-                );
-            }
-        };
+        plugins = new Plugins(pluginProps, Plugins.class.getClassLoader(), new SynchronizedClassLoaderFactory());
         exec = new ThreadPoolExecutor(
             2,
             2,
@@ -167,25 +157,38 @@ public class SynchronizationTest {
         }
     }
 
-    private class SynchronizedDelegatingClassLoader extends DelegatingClassLoader {
-        {
-            ClassLoader.registerAsParallelCapable();
-        }
-
-        public SynchronizedDelegatingClassLoader(List<String> pluginPaths) {
-            super(pluginPaths);
+    private class SynchronizedClassLoaderFactory extends ClassLoaderFactory {
+        @Override
+        public DelegatingClassLoader newDelegatingClassLoader(ClassLoader parent) {
+            return AccessController.doPrivileged(
+                    (PrivilegedAction<DelegatingClassLoader>) () ->
+                            new SynchronizedDelegatingClassLoader(parent, dclBreakpoint)
+            );
         }
 
         @Override
-        protected PluginClassLoader newPluginClassLoader(
-            URL pluginLocation,
-            URL[] urls,
-            ClassLoader parent
+        public PluginClassLoader newPluginClassLoader(
+                URL pluginLocation,
+                URL[] urls,
+                ClassLoader parent
         ) {
             return AccessController.doPrivileged(
-                (PrivilegedAction<PluginClassLoader>) () ->
-                    new SynchronizedPluginClassLoader(pluginLocation, urls, parent)
+                    (PrivilegedAction<PluginClassLoader>) () ->
+                            new SynchronizedPluginClassLoader(pluginLocation, urls, parent, pclBreakpoint)
             );
+        }
+    }
+
+    private static class SynchronizedDelegatingClassLoader extends DelegatingClassLoader {
+        static {
+            ClassLoader.registerAsParallelCapable();
+        }
+
+        private final Breakpoint<String> dclBreakpoint;
+
+        public SynchronizedDelegatingClassLoader(ClassLoader parent, Breakpoint<String> dclBreakpoint) {
+            super(parent);
+            this.dclBreakpoint = dclBreakpoint;
         }
 
         @Override
@@ -196,14 +199,19 @@ public class SynchronizationTest {
         }
     }
 
-    private class SynchronizedPluginClassLoader extends PluginClassLoader {
-        {
+    private static class SynchronizedPluginClassLoader extends PluginClassLoader {
+        static {
             ClassLoader.registerAsParallelCapable();
         }
 
+        private final Breakpoint<String> pclBreakpoint;
 
-        public SynchronizedPluginClassLoader(URL pluginLocation, URL[] urls, ClassLoader parent) {
+
+        public SynchronizedPluginClassLoader(
+                URL pluginLocation, URL[] urls, ClassLoader parent, Breakpoint<String> pclBreakpoint
+        ) {
             super(pluginLocation, urls, parent);
+            this.pclBreakpoint = pclBreakpoint;
         }
 
         @Override
@@ -216,43 +224,44 @@ public class SynchronizationTest {
     // If the test times out, then there's a deadlock in the test but not necessarily the code
     @Test(timeout = 15000L)
     public void testSimultaneousUpwardAndDownwardDelegating() throws Exception {
-        String t1Class = TestPlugins.SAMPLING_CONVERTER;
+        String t1Class = TestPlugins.TestPlugin.SAMPLING_CONVERTER.className();
         // Grab a reference to the target PluginClassLoader before activating breakpoints
-        ClassLoader connectorLoader = plugins.delegatingLoader().connectorLoader(t1Class);
+        ClassLoader connectorLoader = plugins.connectorLoader(t1Class);
 
         // THREAD 1: loads a class by delegating downward starting from the DelegatingClassLoader
         // DelegatingClassLoader breakpoint will only trigger on this thread
         dclBreakpoint.set(t1Class::equals);
         Runnable thread1 = () -> {
             // Use the DelegatingClassLoader as the current context loader
-            ClassLoader savedLoader = Plugins.compareAndSwapLoaders(plugins.delegatingLoader());
+            try (LoaderSwap loaderSwap = plugins.withClassLoader(plugins.delegatingLoader())) {
 
-            // Load an isolated plugin from the delegating classloader, which will
-            // 1. Enter the DelegatingClassLoader
-            // 2. Wait on dclBreakpoint for test to continue
-            // 3. Enter the PluginClassLoader
-            // 4. Load the isolated plugin class and return
-            new AbstractConfig(
-                new ConfigDef().define("a.class", Type.CLASS, Importance.HIGH, ""),
-                Collections.singletonMap("a.class", t1Class));
-            Plugins.compareAndSwapLoaders(savedLoader);
+                // Load an isolated plugin from the delegating classloader, which will
+                // 1. Enter the DelegatingClassLoader
+                // 2. Wait on dclBreakpoint for test to continue
+                // 3. Enter the PluginClassLoader
+                // 4. Load the isolated plugin class and return
+                new AbstractConfig(
+                        new ConfigDef().define("a.class", Type.CLASS, Importance.HIGH, ""),
+                        Collections.singletonMap("a.class", t1Class));
+            }
         };
 
         // THREAD 2: loads a class by delegating upward starting from the PluginClassLoader
-        String t2Class = JsonConverter.class.getName();
+        // Use any non-plugin class that no plugins depend on, so that the class isn't loaded during plugin discovery
+        String t2Class = Mockito.class.getName();
         // PluginClassLoader breakpoint will only trigger on this thread
         pclBreakpoint.set(t2Class::equals);
         Runnable thread2 = () -> {
             // Use the PluginClassLoader as the current context loader
-            ClassLoader savedLoader = Plugins.compareAndSwapLoaders(connectorLoader);
-            // Load a non-isolated class from the plugin classloader, which will
-            // 1. Enter the PluginClassLoader
-            // 2. Wait for the test to continue
-            // 3. Enter the DelegatingClassLoader
-            // 4. Load the non-isolated class and return
-            new AbstractConfig(new ConfigDef().define("a.class", Type.CLASS, Importance.HIGH, ""),
-                Collections.singletonMap("a.class", t2Class));
-            Plugins.compareAndSwapLoaders(savedLoader);
+            try (LoaderSwap loaderSwap = plugins.withClassLoader(connectorLoader)) {
+                // Load a non-isolated class from the plugin classloader, which will
+                // 1. Enter the PluginClassLoader
+                // 2. Wait for the test to continue
+                // 3. Enter the DelegatingClassLoader
+                // 4. Load the non-isolated class and return
+                new AbstractConfig(new ConfigDef().define("a.class", Type.CLASS, Importance.HIGH, ""),
+                        Collections.singletonMap("a.class", t2Class));
+            }
         };
 
         // STEP 1: Have T1 enter the DelegatingClassLoader and pause
@@ -295,8 +304,8 @@ public class SynchronizationTest {
     // Ensure the PluginClassLoader is parallel capable and not synchronized on its monitor lock
     public void testPluginClassLoaderDoesntHoldMonitorLock()
         throws InterruptedException, TimeoutException, BrokenBarrierException {
-        String t1Class = TestPlugins.SAMPLING_CONVERTER;
-        ClassLoader connectorLoader = plugins.delegatingLoader().connectorLoader(t1Class);
+        String t1Class = TestPlugins.TestPlugin.SAMPLING_CONVERTER.className();
+        ClassLoader connectorLoader = plugins.connectorLoader(t1Class);
 
         Object externalTestLock = new Object();
         Breakpoint<Object> testBreakpoint = new Breakpoint<>();
@@ -319,7 +328,7 @@ public class SynchronizationTest {
             synchronized (externalTestLock) {
                 try {
                     progress.await(null);
-                    Class.forName(TestPlugins.SAMPLING_CONVERTER, true, connectorLoader);
+                    Class.forName(TestPlugins.TestPlugin.SAMPLING_CONVERTER.className(), true, connectorLoader);
                 } catch (ClassNotFoundException e) {
                     throw new RuntimeException("Failed to load test plugin", e);
                 }

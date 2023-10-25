@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.integration.utils;
 
-import kafka.api.Request;
 import kafka.server.KafkaServer;
 import kafka.server.MetadataCache;
 import org.apache.kafka.clients.admin.Admin;
@@ -35,6 +34,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState;
+import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaStreams;
@@ -72,7 +72,6 @@ import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -103,6 +102,7 @@ import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.fail;
+import static java.util.Collections.singletonList;
 
 /**
  * Utility functions to make integration testing more convenient.
@@ -291,10 +291,17 @@ public class IntegrationTestUtils {
     public static void cleanStateBeforeTest(final EmbeddedKafkaCluster cluster,
                                             final int partitionCount,
                                             final String... topics) {
+        cleanStateBeforeTest(cluster, partitionCount, 1, topics);
+    }
+
+    public static void cleanStateBeforeTest(final EmbeddedKafkaCluster cluster,
+                                            final int partitionCount,
+                                            final int replicationCount,
+                                            final String... topics) {
         try {
             cluster.deleteAllTopicsAndWait(DEFAULT_TIMEOUT);
             for (final String topic : topics) {
-                cluster.createTopic(topic, partitionCount, 1);
+                cluster.createTopic(topic, partitionCount, replicationCount);
             }
         } catch (final InterruptedException e) {
             throw new RuntimeException(e);
@@ -768,6 +775,7 @@ public class IntegrationTestUtils {
 
     /**
      * Wait until final key-value mappings have been consumed.
+     * Duplicate records are not considered in the comparison.
      *
      * @param consumerConfig     Kafka Consumer configuration
      * @param topic              Kafka topic to consume from
@@ -784,6 +792,7 @@ public class IntegrationTestUtils {
 
     /**
      * Wait until final key-value mappings have been consumed.
+     * Duplicate records are not considered in the comparison.
      *
      * @param consumerConfig     Kafka Consumer configuration
      * @param topic              Kafka topic to consume from
@@ -800,6 +809,7 @@ public class IntegrationTestUtils {
 
     /**
      * Wait until final key-value mappings have been consumed.
+     * Duplicate records are not considered in the comparison.
      *
      * @param consumerConfig     Kafka Consumer configuration
      * @param topic              Kafka topic to consume from
@@ -843,15 +853,19 @@ public class IntegrationTestUtils {
                 // still need to check that for each key, the ordering is expected
                 final Map<K, List<T>> finalAccumData = new HashMap<>();
                 for (final T kv : accumulatedActual) {
-                    finalAccumData.computeIfAbsent(
-                        withTimestamp ? ((KeyValueTimestamp<K, V>) kv).key() : ((KeyValue<K, V>) kv).key,
-                        key -> new ArrayList<>()).add(kv);
+                    final K key = withTimestamp ? ((KeyValueTimestamp<K, V>) kv).key() : ((KeyValue<K, V>) kv).key;
+                    final List<T> records = finalAccumData.computeIfAbsent(key, k -> new ArrayList<>());
+                    if (!records.contains(kv)) {
+                        records.add(kv);
+                    }
                 }
                 final Map<K, List<T>> finalExpected = new HashMap<>();
                 for (final T kv : expectedRecords) {
-                    finalExpected.computeIfAbsent(
-                        withTimestamp ? ((KeyValueTimestamp<K, V>) kv).key() : ((KeyValue<K, V>) kv).key,
-                        key -> new ArrayList<>()).add(kv);
+                    final K key = withTimestamp ? ((KeyValueTimestamp<K, V>) kv).key() : ((KeyValue<K, V>) kv).key;
+                    final List<T> records = finalExpected.computeIfAbsent(key, k -> new ArrayList<>());
+                    if (!records.contains(kv)) {
+                        records.add(kv);
+                    }
                 }
 
                 // returns true only if the remaining records in both lists are the same and in the same order
@@ -949,7 +963,7 @@ public class IntegrationTestUtils {
                 }
 
                 final UpdateMetadataPartitionState metadataPartitionState = partitionInfo.get();
-                if (!Request.isValidBrokerId(metadataPartitionState.leader())) {
+                if (!FetchRequest.isValidBrokerId(metadataPartitionState.leader())) {
                     invalidBrokerIds.add(server);
                 }
             }
@@ -958,6 +972,14 @@ public class IntegrationTestUtils {
                 ". Brokers with invalid broker id for partition leader: " + invalidBrokerIds;
             assertThat(reason, emptyPartitionInfos.isEmpty() && invalidBrokerIds.isEmpty());
         });
+    }
+
+    public static void startApplicationAndWaitUntilRunning(final KafkaStreams streams) throws Exception {
+        startApplicationAndWaitUntilRunning(singletonList(streams));
+    }
+
+    public static void startApplicationAndWaitUntilRunning(final List<KafkaStreams> streamsList) throws Exception {
+        startApplicationAndWaitUntilRunning(streamsList, Duration.ofSeconds(DEFAULT_TIMEOUT));
     }
 
     /**
@@ -1022,8 +1044,8 @@ public class IntegrationTestUtils {
                 final long millisRemaining = expectedEnd - System.currentTimeMillis();
                 if (millisRemaining <= 0) {
                     fail(
-                        "Application did not reach a RUNNING state for all streams instances. " +
-                            "Non-running instances: " + nonRunningStreams
+                        nonRunningStreams.size() + " out of " + streamsList.size() + " Streams clients did not reach the RUNNING state. " +
+                            "Non-running Streams clients: " + nonRunningStreams
                     );
                 }
 
@@ -1099,7 +1121,7 @@ public class IntegrationTestUtils {
                                                final String applicationId) {
         try {
             final ConsumerGroupDescription groupDescription =
-                    adminClient.describeConsumerGroups(Collections.singletonList(applicationId))
+                    adminClient.describeConsumerGroups(singletonList(applicationId))
                             .describedGroups()
                             .get(applicationId)
                             .get();
@@ -1282,7 +1304,8 @@ public class IntegrationTestUtils {
                                                                  final long waitTime,
                                                                  final int maxMessages) {
         final List<ConsumerRecord<K, V>> consumerRecords;
-        consumer.subscribe(Collections.singletonList(topic));
+        consumer.subscribe(singletonList(topic));
+        System.out.println("Got assignment:" + consumer.assignment());
         final int pollIntervalMs = 100;
         consumerRecords = new ArrayList<>();
         int totalPollTimeMs = 0;
@@ -1436,7 +1459,7 @@ public class IntegrationTestUtils {
     public static void waitUntilStreamsHasPolled(final KafkaStreams kafkaStreams, final int pollNumber)
         throws InterruptedException {
         final Double initialCount = getStreamsPollNumber(kafkaStreams);
-        retryOnExceptionWithTimeout(1000, () -> {
+        retryOnExceptionWithTimeout(10000, () -> {
             assertThat(getStreamsPollNumber(kafkaStreams), is(greaterThanOrEqualTo(initialCount + pollNumber)));
         });
     }

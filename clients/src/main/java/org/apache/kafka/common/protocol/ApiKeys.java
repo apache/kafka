@@ -17,6 +17,7 @@
 package org.apache.kafka.common.protocol;
 
 import org.apache.kafka.common.message.ApiMessageType;
+import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Type;
 import org.apache.kafka.common.record.RecordBatch;
@@ -27,6 +28,7 @@ import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -108,7 +110,12 @@ public enum ApiKeys {
     UNREGISTER_BROKER(ApiMessageType.UNREGISTER_BROKER, false, RecordBatch.MAGIC_VALUE_V0, true),
     DESCRIBE_TRANSACTIONS(ApiMessageType.DESCRIBE_TRANSACTIONS),
     LIST_TRANSACTIONS(ApiMessageType.LIST_TRANSACTIONS),
-    ALLOCATE_PRODUCER_IDS(ApiMessageType.ALLOCATE_PRODUCER_IDS, true, true);
+    ALLOCATE_PRODUCER_IDS(ApiMessageType.ALLOCATE_PRODUCER_IDS, true, true),
+    CONSUMER_GROUP_HEARTBEAT(ApiMessageType.CONSUMER_GROUP_HEARTBEAT),
+    CONSUMER_GROUP_DESCRIBE(ApiMessageType.CONSUMER_GROUP_DESCRIBE),
+    CONTROLLER_REGISTRATION(ApiMessageType.CONTROLLER_REGISTRATION),
+    GET_TELEMETRY_SUBSCRIPTIONS(ApiMessageType.GET_TELEMETRY_SUBSCRIPTIONS),
+    PUSH_TELEMETRY(ApiMessageType.PUSH_TELEMETRY);
 
     private static final Map<ApiMessageType.ListenerType, EnumSet<ApiKeys>> APIS_BY_LISTENER =
         new EnumMap<>(ApiMessageType.ListenerType.class);
@@ -135,7 +142,7 @@ public enum ApiKeys {
     /** indicates the minimum required inter broker magic required to support the API */
     public final byte minRequiredInterBrokerMagic;
 
-    /** indicates whether the API is enabled for forwarding **/
+    /** indicates whether the API is enabled for forwarding */
     public final boolean forwardable;
 
     public final boolean requiresDelayedAllocation;
@@ -193,7 +200,11 @@ public enum ApiKeys {
     }
 
     public short latestVersion() {
-        return messageType.highestSupportedVersion();
+        return messageType.highestSupportedVersion(true);
+    }
+
+    public short latestVersion(boolean enableUnstableLastVersion) {
+        return messageType.highestSupportedVersion(enableUnstableLastVersion);
     }
 
     public short oldestVersion() {
@@ -210,6 +221,30 @@ public enum ApiKeys {
 
     public boolean isVersionSupported(short apiVersion) {
         return apiVersion >= oldestVersion() && apiVersion <= latestVersion();
+    }
+
+    public boolean isVersionEnabled(short apiVersion, boolean enableUnstableLastVersion) {
+        // ApiVersions API is a particular case. The client always send the highest version
+        // that it supports and the server fails back to version 0 if it does not know it.
+        // Hence, we have to accept any versions here, even unsupported ones.
+        if (this == ApiKeys.API_VERSIONS) return true;
+
+        return apiVersion >= oldestVersion() && apiVersion <= latestVersion(enableUnstableLastVersion);
+    }
+
+    public Optional<ApiVersionsResponseData.ApiVersion> toApiVersion(boolean enableUnstableLastVersion) {
+        short oldestVersion = oldestVersion();
+        short latestVersion = latestVersion(enableUnstableLastVersion);
+
+        // API is entirely disabled if latestStableVersion is smaller than oldestVersion.
+        if (latestVersion >= oldestVersion) {
+            return Optional.of(new ApiVersionsResponseData.ApiVersion()
+               .setApiKey(messageType.apiKey())
+               .setMinVersion(oldestVersion)
+               .setMaxVersion(latestVersion));
+        } else {
+            return Optional.empty();
+        }
     }
 
     public short requestHeaderVersion(short apiVersion) {
@@ -267,6 +302,10 @@ public enum ApiKeys {
         return apisForListener(ApiMessageType.ListenerType.ZK_BROKER);
     }
 
+    public static EnumSet<ApiKeys> kraftBrokerApis() {
+        return apisForListener(ApiMessageType.ListenerType.BROKER);
+    }
+
     public static EnumSet<ApiKeys> controllerApis() {
         return apisForListener(ApiMessageType.ListenerType.CONTROLLER);
     }
@@ -288,5 +327,4 @@ public enum ApiKeys {
             .collect(Collectors.toList());
         return EnumSet.copyOf(apis);
     }
-
 }

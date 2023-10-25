@@ -200,22 +200,23 @@ public abstract class AbstractKStreamTimeWindowAggregateProcessor<KIn, VIn, VAgg
                               final long emitRangeUpperBound) {
         final long startMs = time.milliseconds();
 
-        final KeyValueIterator<Windowed<KIn>, ValueAndTimestamp<VAgg>> windowToEmit = windowStore
-            .fetchAll(emitRangeLowerBound, emitRangeUpperBound);
+        try (final KeyValueIterator<Windowed<KIn>, ValueAndTimestamp<VAgg>> windowToEmit
+                 = windowStore.fetchAll(emitRangeLowerBound, emitRangeUpperBound)) {
 
-        int emittedCount = 0;
-        while (windowToEmit.hasNext()) {
-            emittedCount++;
-            final KeyValue<Windowed<KIn>, ValueAndTimestamp<VAgg>> kv = windowToEmit.next();
+            int emittedCount = 0;
+            while (windowToEmit.hasNext()) {
+                emittedCount++;
+                final KeyValue<Windowed<KIn>, ValueAndTimestamp<VAgg>> kv = windowToEmit.next();
 
-            tupleForwarder.maybeForward(
-                record.withKey(kv.key)
-                    .withValue(new Change<>(kv.value.value(), null))
-                    .withTimestamp(kv.value.timestamp())
-                    .withHeaders(record.headers()));
+                tupleForwarder.maybeForward(
+                    record.withKey(kv.key)
+                        .withValue(new Change<>(kv.value.value(), null))
+                        .withTimestamp(kv.value.timestamp())
+                        .withHeaders(record.headers()));
+            }
+            emittedRecordsSensor.record(emittedCount);
+            emitFinalLatencySensor.record(time.milliseconds() - startMs);
         }
-        emittedRecordsSensor.record(emittedCount);
-        emitFinalLatencySensor.record(time.milliseconds() - startMs);
 
         lastEmitWindowCloseTime = windowCloseTime;
         internalProcessorContext.addProcessorMetadataKeyValue(storeName, windowCloseTime);

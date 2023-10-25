@@ -28,7 +28,7 @@ import kafka.common.{NotificationHandler, ZkNodeChangeNotificationListener}
 import kafka.controller.{IsrChangeNotificationHandler, LeaderIsrAndControllerEpoch, ReplicaAssignment}
 import kafka.security.authorizer.AclAuthorizer.VersionedAcls
 import kafka.security.authorizer.AclEntry
-import kafka.server.{ConfigType, DelegationTokenManager}
+import kafka.server.{ConfigType, DelegationTokenManagerZk}
 import kafka.utils.Json
 import kafka.utils.json.JsonObject
 import org.apache.kafka.common.errors.UnsupportedVersionException
@@ -37,10 +37,11 @@ import org.apache.kafka.common.feature.{Features, SupportedVersionRange}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceType}
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
+import org.apache.kafka.common.security.token.delegation.TokenInformation
 import org.apache.kafka.common.utils.{SecurityUtils, Time}
 import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.metadata.LeaderRecoveryState
+import org.apache.kafka.metadata.migration.ZkMigrationLeadershipState
 import org.apache.kafka.server.common.{MetadataVersion, ProducerIdsBlock}
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_0_IV1, IBP_2_7_IV0}
 import org.apache.zookeeper.ZooDefs
@@ -56,13 +57,29 @@ import scala.util.{Failure, Success, Try}
 
 object ControllerZNode {
   def path = "/controller"
-  def encode(brokerId: Int, timestamp: Long): Array[Byte] = {
-    Json.encodeAsBytes(Map("version" -> 1, "brokerid" -> brokerId, "timestamp" -> timestamp.toString).asJava)
+  def encode(brokerId: Int, timestamp: Long, kraftControllerEpoch: Int = -1): Array[Byte] = {
+    Json.encodeAsBytes(Map(
+      "version" -> 2,
+      "brokerid" -> brokerId,
+      "timestamp" -> timestamp.toString,
+      "kraftControllerEpoch" -> kraftControllerEpoch).asJava)
   }
   def decode(bytes: Array[Byte]): Option[Int] = Json.parseBytes(bytes).map { js =>
     js.asJsonObject("brokerid").to[Int]
   }
+  def decodeController(bytes: Array[Byte], zkVersion: Int): ZKControllerRegistration = Json.tryParseBytes(bytes) match {
+    case Right(json) =>
+      val controller = json.asJsonObject
+      val brokerId = controller("brokerid").to[Int]
+      val kraftControllerEpoch = controller.get("kraftControllerEpoch").map(j => j.to[Int])
+      ZKControllerRegistration(brokerId, kraftControllerEpoch, zkVersion)
+
+    case Left(err) =>
+      throw new KafkaException(s"Failed to parse ZooKeeper registration for controller: ${new String(bytes, UTF_8)}", err)
+  }
 }
+
+case class ZKControllerRegistration(broker: Int, kraftEpoch: Option[Int], zkVersion: Int)
 
 object ControllerEpochZNode {
   def path = "/controller_epoch"
@@ -838,8 +855,9 @@ object DelegationTokensZNode {
 
 object DelegationTokenInfoZNode {
   def path(tokenId: String) =  s"${DelegationTokensZNode.path}/$tokenId"
-  def encode(token: DelegationToken): Array[Byte] =  Json.encodeAsBytes(DelegationTokenManager.toJsonCompatibleMap(token).asJava)
-  def decode(bytes: Array[Byte]): Option[TokenInformation] = DelegationTokenManager.fromBytes(bytes)
+  def encode(tokenInfo: TokenInformation): Array[Byte] =
+    Json.encodeAsBytes(DelegationTokenManagerZk.toJsonCompatibleMap(tokenInfo).asJava)
+  def decode(bytes: Array[Byte]): Option[TokenInformation] = DelegationTokenManagerZk.fromBytes(bytes)
 }
 
 /**
@@ -1019,6 +1037,44 @@ object FeatureZNode {
   }
 }
 
+object MigrationZNode {
+  val path = "/migration"
+
+  def encode(migration: ZkMigrationLeadershipState): Array[Byte] = {
+    val jsonMap = Map(
+      "version" -> 0,
+      "kraft_controller_id" -> migration.kraftControllerId(),
+      "kraft_controller_epoch" -> migration.kraftControllerEpoch(),
+      "kraft_metadata_offset" -> migration.kraftMetadataOffset(),
+      "kraft_metadata_epoch" -> migration.kraftMetadataEpoch()
+    )
+    Json.encodeAsBytes(jsonMap.asJava)
+  }
+
+  def decode(bytes: Array[Byte], zkVersion: Int, modifyTimeMs: Long): ZkMigrationLeadershipState = {
+    val jsonDataAsString = bytes.map(_.toChar).mkString
+    Json.parseBytes(bytes).map(_.asJsonObject).flatMap { js =>
+      val version = js("version").to[Int]
+      if (version != 0) {
+        throw new KafkaException(s"Encountered unknown version $version when parsing migration json $jsonDataAsString")
+      }
+      val controllerId = js("kraft_controller_id").to[Int]
+      val controllerEpoch = js("kraft_controller_epoch").to[Int]
+      val metadataOffset = js("kraft_metadata_offset").to[Long]
+      val metadataEpoch = js("kraft_metadata_epoch").to[Int]
+      Some(new ZkMigrationLeadershipState(
+        controllerId,
+        controllerEpoch,
+        metadataOffset,
+        metadataEpoch,
+        modifyTimeMs,
+        zkVersion,
+        ZkMigrationLeadershipState.EMPTY.zkControllerEpoch(),
+        ZkMigrationLeadershipState.EMPTY.zkControllerEpochZkVersion()))
+    }.getOrElse(throw new KafkaException(s"Failed to parse the migration json $jsonDataAsString"))
+  }
+}
+
 object ZkData {
 
   // Important: it is necessary to add any new top level Zookeeper path to the Seq
@@ -1032,7 +1088,9 @@ object ZkData {
     ProducerIdBlockZNode.path,
     LogDirEventNotificationZNode.path,
     DelegationTokenAuthZNode.path,
-    ExtendedAclZNode.path) ++ ZkAclStore.securePaths
+    ExtendedAclZNode.path,
+    MigrationZNode.path,
+    FeatureZNode.path) ++ ZkAclStore.securePaths
 
   // These are persistent ZK paths that should exist on kafka broker startup.
   val PersistentZkPaths = Seq(

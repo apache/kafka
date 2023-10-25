@@ -34,11 +34,13 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
+import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
 import org.junit.rules.Timeout;
 import org.junit.runner.RunWith;
@@ -61,10 +63,11 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 
 @RunWith(Parameterized.class)
+@Category({IntegrationTest.class})
 public class KTableEfficientRangeQueryTest {
     @Rule
     public Timeout globalTimeout = Timeout.seconds(600);
-    private enum StoreType { InMemory, RocksDB, Timed };
+    private enum StoreType { InMemory, RocksDB, Timed }
     private static final String TABLE_NAME = "mytable";
     private static final int DATA_SIZE = 5;
 

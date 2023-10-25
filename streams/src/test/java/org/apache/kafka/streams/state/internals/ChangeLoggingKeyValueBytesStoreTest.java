@@ -41,10 +41,11 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.TestUtils;
-import org.easymock.EasyMock;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.junit.MockitoJUnitRunner;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -54,17 +55,18 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.easymock.EasyMock.expect;
-import static org.easymock.EasyMock.mock;
-import static org.easymock.EasyMock.replay;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.hasEntry;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @SuppressWarnings("rawtypes")
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class ChangeLoggingKeyValueBytesStoreTest {
 
     private final MockRecordCollector collector = new MockRecordCollector();
@@ -110,25 +112,19 @@ public class ChangeLoggingKeyValueBytesStoreTest {
     @Test
     public void shouldDelegateDeprecatedInit() {
         final InternalMockProcessorContext context = mockContext();
-        final KeyValueStore<Bytes, byte[]> innerMock = EasyMock.mock(InMemoryKeyValueStore.class);
+        final KeyValueStore<Bytes, byte[]> innerMock = mock(InMemoryKeyValueStore.class);
         final StateStore outer = new ChangeLoggingKeyValueBytesStore(innerMock);
-        innerMock.init((ProcessorContext) context, outer);
-        EasyMock.expectLastCall();
-        EasyMock.replay(innerMock);
         outer.init((ProcessorContext) context, outer);
-        EasyMock.verify(innerMock);
+        verify(innerMock).init((ProcessorContext) context, outer);
     }
 
     @Test
     public void shouldDelegateInit() {
         final InternalMockProcessorContext context = mockContext();
-        final KeyValueStore<Bytes, byte[]> innerMock = EasyMock.mock(InMemoryKeyValueStore.class);
+        final KeyValueStore<Bytes, byte[]> innerMock = mock(InMemoryKeyValueStore.class);
         final StateStore outer = new ChangeLoggingKeyValueBytesStore(innerMock);
-        innerMock.init((StateStoreContext) context, outer);
-        EasyMock.expectLastCall();
-        EasyMock.replay(innerMock);
         outer.init((StateStoreContext) context, outer);
-        EasyMock.verify(innerMock);
+        verify(innerMock).init((StateStoreContext) context, outer);
     }
 
     @Test
@@ -280,12 +276,9 @@ public class ChangeLoggingKeyValueBytesStoreTest {
 
         final Map<String, Object> myValues = new HashMap<>();
         myValues.put(InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED, true);
-        expect(streamsConfig.originals()).andStubReturn(myValues);
-        expect(streamsConfig.values()).andStubReturn(Collections.emptyMap());
-        expect(streamsConfig.getString(StreamsConfig.APPLICATION_ID_CONFIG)).andStubReturn("add-id");
-        expect(streamsConfig.defaultValueSerde()).andStubReturn(Serdes.ByteArray());
-        expect(streamsConfig.defaultKeySerde()).andStubReturn(Serdes.ByteArray());
-        replay(streamsConfig);
+        when(streamsConfig.originals()).thenReturn(myValues);
+        when(streamsConfig.values()).thenReturn(Collections.emptyMap());
+        when(streamsConfig.getString(StreamsConfig.APPLICATION_ID_CONFIG)).thenReturn("add-id");
         return streamsConfig;
     }
 }

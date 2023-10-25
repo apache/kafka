@@ -20,16 +20,18 @@ import kafka.cluster.BrokerEndPoint
 import kafka.server.BlockingSend
 import org.apache.kafka.clients.{ClientRequest, ClientResponse, MockClient, NetworkClientUtils}
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.{EpochEndOffset, OffsetForLeaderTopicResult}
-import org.apache.kafka.common.message.{FetchResponseData, OffsetForLeaderEpochResponseData}
+import org.apache.kafka.common.message.{FetchResponseData, ListOffsetsResponseData, OffsetForLeaderEpochResponseData}
+import org.apache.kafka.common.message.ListOffsetsResponseData.{ListOffsetsPartitionResponse, ListOffsetsTopicResponse}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.AbstractRequest.Builder
-import org.apache.kafka.common.requests.{AbstractRequest, FetchResponse, OffsetsForLeaderEpochResponse, FetchMetadata => JFetchMetadata}
+import org.apache.kafka.common.requests.{AbstractRequest, FetchResponse, ListOffsetsResponse, OffsetsForLeaderEpochResponse, FetchMetadata => JFetchMetadata}
 import org.apache.kafka.common.utils.{SystemTime, Time}
 import org.apache.kafka.common.{Node, TopicIdPartition, TopicPartition, Uuid}
 
 import java.net.SocketTimeoutException
 import java.util
 import scala.collection.Map
+import scala.jdk.CollectionConverters._
 
 /**
   * Stub network client used for testing the ReplicaFetcher, wraps the MockClient used for consumer testing
@@ -47,10 +49,12 @@ class MockBlockingSender(offsets: java.util.Map[TopicPartition, EpochEndOffset],
   private val client = new MockClient(new SystemTime)
   var fetchCount = 0
   var epochFetchCount = 0
+  var listOffsetsCount = 0
   var lastUsedOffsetForLeaderEpochVersion = -1
   var callback: Option[() => Unit] = None
   var currentOffsets: util.Map[TopicPartition, EpochEndOffset] = offsets
   var fetchPartitionData: Map[TopicPartition, FetchResponseData.PartitionData] = Map.empty
+  var listOffsets: Map[TopicPartition, ListOffsetsPartitionResponse] = Map.empty
   var topicIds: Map[String, Uuid] = Map.empty
   private val sourceNode = new Node(sourceBroker.id, sourceBroker.host, sourceBroker.port)
 
@@ -68,6 +72,10 @@ class MockBlockingSender(offsets: java.util.Map[TopicPartition, EpochEndOffset],
 
   def setIdsForNextResponse(topicIds: Map[String, Uuid]): Unit = {
     this.topicIds = topicIds
+  }
+
+  def setListOffsetsDataForNextResponse(listOffsets: Map[TopicPartition, ListOffsetsPartitionResponse]): Unit = {
+    this.listOffsets = listOffsets
   }
 
   override def brokerEndPoint(): BrokerEndPoint = sourceBroker
@@ -109,6 +117,21 @@ class MockBlockingSender(offsets: java.util.Map[TopicPartition, EpochEndOffset],
         FetchResponse.of(Errors.NONE, 0,
           if (partitionData.isEmpty) JFetchMetadata.INVALID_SESSION_ID else 1,
           partitionData)
+
+      case ApiKeys.LIST_OFFSETS =>
+        listOffsetsCount += 1
+        val data = new ListOffsetsResponseData()
+        listOffsets.foreach {
+          case (tp, partitionResponse) =>
+            val topicResponse = data.topics().asScala.find(x => x.name().equals(tp.topic()))
+              .getOrElse {
+                val topicResponse = new ListOffsetsTopicResponse().setName(tp.topic())
+                data.topics().add(topicResponse)
+                topicResponse
+              }
+            topicResponse.partitions.add(partitionResponse)
+        }
+        new ListOffsetsResponse(data)
 
       case _ =>
         throw new UnsupportedOperationException

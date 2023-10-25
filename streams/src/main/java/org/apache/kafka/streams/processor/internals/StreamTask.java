@@ -60,6 +60,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static java.util.Collections.singleton;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeRecordSensor;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
 
 /**
@@ -83,6 +84,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     private final Map<TopicPartition, Long> committedOffsets;
     private final Map<TopicPartition, Long> highWatermark;
     private final Set<TopicPartition> resetOffsetsForPartitions;
+    private final Set<TopicPartition> partitionsToResume;
     private final PunctuationQueue streamTimePunctuationQueue;
     private final PunctuationQueue systemTimePunctuationQueue;
     private final StreamsMetricsImpl streamsMetrics;
@@ -92,6 +94,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     private final Sensor closeTaskSensor;
     private final Sensor processRatioSensor;
     private final Sensor processLatencySensor;
+    private final Sensor restoreSensor;
+    private final Sensor restoreRemainingSensor;
     private final Sensor punctuateLatencySensor;
     private final Sensor bufferedRecordsSensor;
     private final Map<String, Sensor> e2eLatencySensors = new HashMap<>();
@@ -107,7 +111,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     private boolean hasPendingTxCommit = false;
     private Optional<Long> timeCurrentIdlingStarted;
 
-    @SuppressWarnings("rawtypes")
+    @SuppressWarnings({"rawtypes", "this-escape"})
     public StreamTask(final TaskId id,
                       final Set<TopicPartition> inputPartitions,
                       final ProcessorTopology topology,
@@ -144,6 +148,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         this.streamsMetrics = streamsMetrics;
         closeTaskSensor = ThreadMetrics.closeTaskSensor(threadId, streamsMetrics);
         final String taskId = id.toString();
+        restoreSensor = TaskMetrics.restoreSensor(threadId, taskId, streamsMetrics);
+        restoreRemainingSensor = TaskMetrics.restoreRemainingRecordsSensor(threadId, taskId, streamsMetrics);
         processRatioSensor = TaskMetrics.activeProcessRatioSensor(threadId, taskId, streamsMetrics);
         processLatencySensor = TaskMetrics.processLatencySensor(threadId, taskId, streamsMetrics);
         punctuateLatencySensor = TaskMetrics.punctuateSensor(threadId, taskId, streamsMetrics);
@@ -171,6 +177,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         // initialize the consumed and committed offset cache
         consumedOffsets = new HashMap<>();
         resetOffsetsForPartitions = new HashSet<>();
+        partitionsToResume = new HashSet<>();
 
         recordQueueCreator = new RecordQueueCreator(this.logContext, config.timestampExtractor, config.deserializationExceptionHandler);
 
@@ -213,7 +220,18 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         return true;
     }
 
+    @Override
+    public void recordRestoration(final Time time, final long numRecords, final boolean initRemaining) {
+        if (initRemaining) {
+            maybeRecordSensor(numRecords, time, restoreRemainingSensor);
+        } else {
+            maybeRecordSensor(numRecords, time, restoreSensor);
+            maybeRecordSensor(-1 * numRecords, time, restoreRemainingSensor);
+        }
+    }
+
     /**
+     * @throws TaskCorruptedException if the state cannot be reused (with EOS) and needs to be reset
      * @throws LockException    could happen when multi-threads within the single instance, could retry
      * @throws TimeoutException if initializing record collector timed out
      * @throws StreamsException fatal error, should close the thread
@@ -254,6 +272,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 resetOffsetsIfNeededAndInitializeMetadata(offsetResetter);
                 initializeTopology();
                 processorContext.initialize();
+                if (!eosEnabled) {
+                    maybeCheckpoint(true);
+                }
 
                 transitionTo(State.RUNNING);
 
@@ -373,6 +394,12 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         timeCurrentIdlingStarted = Optional.empty();
     }
 
+
+    public void flush() {
+        stateMgr.flushCache();
+        recordCollector.flush();
+    }
+
     /**
      * @throws StreamsException fatal error that should cause the thread to die
      * @throws TaskMigratedException recoverable error that would cause the task to be removed
@@ -393,8 +420,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                     // cached records to be processed and hence generate more records to be sent out
                     //
                     // TODO: this should be removed after we decouple caching with emitting
-                    stateMgr.flushCache();
-                    recordCollector.flush();
+                    flush();
                     hasPendingTxCommit = eosEnabled;
 
                     log.debug("Prepared {} task for committing", state());
@@ -571,6 +597,21 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         log.info("Closed and recycled state");
     }
 
+    @Override
+    public void resumePollingForPartitionsWithAvailableSpace() {
+        if (!partitionsToResume.isEmpty()) {
+            mainConsumer.resume(partitionsToResume);
+            partitionsToResume.clear();
+        }
+    }
+
+    @Override
+    public void updateLags() {
+        if (state() == State.RUNNING) {
+            partitionGroup.updateLags();
+        }
+    }
+
     /**
      * The following exceptions maybe thrown from the state manager flushing call
      *
@@ -659,6 +700,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
         record = null;
         closeTaskSensor.record();
+        partitionsToResume.clear();
 
         transitionTo(State.CLOSED);
     }
@@ -729,7 +771,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             // after processing this record, if its partition queue's buffered size has been
             // decreased to the threshold, we can then resume the consumption on this partition
             if (recordInfo.queue().size() == maxBufferedSize) {
-                mainConsumer.resume(singleton(partition));
+                partitionsToResume.add(partition);
             }
 
             record = null;
@@ -1056,7 +1098,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         if (streamTime == RecordQueue.UNKNOWN) {
             return false;
         } else {
-            final boolean punctuated = streamTimePunctuationQueue.mayPunctuate(streamTime, PunctuationType.STREAM_TIME, this);
+            final boolean punctuated = streamTimePunctuationQueue.maybePunctuate(streamTime, PunctuationType.STREAM_TIME, this);
 
             if (punctuated) {
                 commitNeeded = true;
@@ -1064,6 +1106,11 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
             return punctuated;
         }
+    }
+
+    public boolean canPunctuateStreamTime() {
+        final long streamTime = partitionGroup.streamTime();
+        return streamTimePunctuationQueue.canPunctuate(streamTime);
     }
 
     /**
@@ -1076,13 +1123,18 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     public boolean maybePunctuateSystemTime() {
         final long systemTime = time.milliseconds();
 
-        final boolean punctuated = systemTimePunctuationQueue.mayPunctuate(systemTime, PunctuationType.WALL_CLOCK_TIME, this);
+        final boolean punctuated = systemTimePunctuationQueue.maybePunctuate(systemTime, PunctuationType.WALL_CLOCK_TIME, this);
 
         if (punctuated) {
             commitNeeded = true;
         }
 
         return punctuated;
+    }
+
+    public boolean canPunctuateSystemTime() {
+        final long systemTime = time.milliseconds();
+        return systemTimePunctuationQueue.canPunctuate(systemTime);
     }
 
     void maybeRecordE2ELatency(final long recordTimestamp, final long now, final String nodeName) {
@@ -1176,13 +1228,11 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                         commitNeeded = true;
                         entry.setValue(offset - 1);
                     }
-                } catch (final TimeoutException error) {
-                    // the `consumer.position()` call should never block, because we know that we did process data
-                    // for the requested partition and thus the consumer should have a valid local position
-                    // that it can return immediately
-
-                    // hence, a `TimeoutException` indicates a bug and thus we rethrow it as fatal `IllegalStateException`
-                    throw new IllegalStateException(error);
+                } catch (final TimeoutException swallow) {
+                    log.debug(
+                        String.format("Could not get consumer position for partition %s", partition),
+                        swallow
+                    );
                 } catch (final KafkaException fatal) {
                     throw new StreamsException(fatal);
                 }

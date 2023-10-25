@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.producer.internals;
 
 import org.apache.kafka.clients.ApiVersions;
+import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.consumer.CommitFailedException;
@@ -30,6 +31,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
+import org.apache.kafka.common.errors.InvalidTxnStateException;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -40,6 +42,8 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.message.AddOffsetsToTxnResponseData;
+import org.apache.kafka.common.message.AddPartitionsToTxnResponseData;
+import org.apache.kafka.common.message.AddPartitionsToTxnResponseData.AddPartitionsToTxnResult;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
 import org.apache.kafka.common.message.EndTxnResponseData;
 import org.apache.kafka.common.message.InitProducerIdResponseData;
@@ -77,6 +81,8 @@ import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -94,6 +100,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
+import org.mockito.Mockito;
 
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
@@ -131,7 +138,7 @@ public class TransactionManagerTest {
 
     private final LogContext logContext = new LogContext();
     private final MockTime time = new MockTime();
-    private final ProducerMetadata metadata = new ProducerMetadata(0, Long.MAX_VALUE, Long.MAX_VALUE,
+    private final ProducerMetadata metadata = new ProducerMetadata(0, 0, Long.MAX_VALUE, Long.MAX_VALUE,
             logContext, new ClusterResourceListeners(), time);
     private final MockClient client = new MockClient(time, metadata);
     private final ApiVersions apiVersions = new ApiVersions();
@@ -171,7 +178,7 @@ public class TransactionManagerTest {
         String metricGrpName = "producer-metrics";
 
         this.brokerNode = new Node(0, "localhost", 2211);
-        this.accumulator = new RecordAccumulator(logContext, batchSize, CompressionType.NONE, 0, 0L,
+        this.accumulator = new RecordAccumulator(logContext, batchSize, CompressionType.NONE, 0, 0L, 0L,
                 deliveryTimeoutMs, metrics, metricGrpName, time, apiVersions, transactionManager,
                 new BufferPool(totalSize, batchSize, metrics, time, metricGrpName));
 
@@ -683,7 +690,7 @@ public class TransactionManagerTest {
         final int requestTimeout = 10000;
         final int deliveryTimeout = 15000;
 
-        RecordAccumulator accumulator = new RecordAccumulator(logContext, 16 * 1024, CompressionType.NONE, 0, 0L,
+        RecordAccumulator accumulator = new RecordAccumulator(logContext, 16 * 1024, CompressionType.NONE, 0, 0L, 0L,
                 deliveryTimeout, metrics, "", time, apiVersions, transactionManager,
                 new BufferPool(1024 * 1024, 16 * 1024, metrics, time, ""));
 
@@ -1137,7 +1144,7 @@ public class TransactionManagerTest {
         assertTrue(initPidResult.isCompleted());
         assertFalse(initPidResult.isSuccessful());
         assertThrows(TransactionalIdAuthorizationException.class, initPidResult::await);
-        assertFatalError(TransactionalIdAuthorizationException.class);
+        assertAbortableError(TransactionalIdAuthorizationException.class);
     }
 
     @Test
@@ -1212,6 +1219,26 @@ public class TransactionManagerTest {
         assertTrue(sendOffsetsResult.error() instanceof TransactionalIdAuthorizationException);
 
         assertFatalError(TransactionalIdAuthorizationException.class);
+    }
+
+    @Test
+    public void testInvalidTxnStateFailureInAddOffsetsToTxn() {
+        final TopicPartition tp = new TopicPartition("foo", 0);
+
+        doInitTransactions();
+
+        transactionManager.beginTransaction();
+        TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
+            singletonMap(tp, new OffsetAndMetadata(39L)), new ConsumerGroupMetadata(consumerGroupId));
+
+        prepareAddOffsetsToTxnResponse(Errors.INVALID_TXN_STATE, consumerGroupId, producerId, epoch);
+        runUntil(transactionManager::hasError);
+        assertTrue(transactionManager.lastError() instanceof InvalidTxnStateException);
+        assertTrue(sendOffsetsResult.isCompleted());
+        assertFalse(sendOffsetsResult.isSuccessful());
+        assertTrue(sendOffsetsResult.error() instanceof InvalidTxnStateException);
+
+        assertFatalError(InvalidTxnStateException.class);
     }
 
     @Test
@@ -1301,11 +1328,13 @@ public class TransactionManagerTest {
         Map<TopicPartition, Errors> errors = new HashMap<>();
         errors.put(tp0, Errors.TOPIC_AUTHORIZATION_FAILED);
         errors.put(tp1, Errors.OPERATION_NOT_ATTEMPTED);
+        AddPartitionsToTxnResult result = AddPartitionsToTxnResponse.resultForTransaction(AddPartitionsToTxnResponse.V3_AND_BELOW_TXN_ID, errors);
+        AddPartitionsToTxnResponseData data = new AddPartitionsToTxnResponseData().setResultsByTopicV3AndBelow(result.topicResults()).setThrottleTimeMs(0);
         client.respond(body -> {
             AddPartitionsToTxnRequest request = (AddPartitionsToTxnRequest) body;
-            assertEquals(new HashSet<>(request.partitions()), new HashSet<>(errors.keySet()));
+            assertEquals(new HashSet<>(getPartitionsFromV3Request(request)), new HashSet<>(errors.keySet()));
             return true;
-        }, new AddPartitionsToTxnResponse(0, errors));
+        }, new AddPartitionsToTxnResponse(data));
 
         sender.runOnce();
         assertTrue(transactionManager.hasError());
@@ -1601,6 +1630,22 @@ public class TransactionManagerTest {
     }
 
     @Test
+    public void testInvalidTxnStateInAddPartitions() {
+        final TopicPartition tp = new TopicPartition("foo", 0);
+
+        doInitTransactions();
+
+        transactionManager.beginTransaction();
+        transactionManager.maybeAddPartition(tp);
+
+        prepareAddPartitionsToTxn(tp, Errors.INVALID_TXN_STATE);
+        runUntil(transactionManager::hasError);
+        assertTrue(transactionManager.lastError() instanceof InvalidTxnStateException);
+
+        assertFatalError(InvalidTxnStateException.class);
+    }
+
+    @Test
     public void testFlushPendingPartitionsOnCommit() throws InterruptedException {
         doInitTransactions();
 
@@ -1676,6 +1721,61 @@ public class TransactionManagerTest {
         // Finally we get to the produce.
         runUntil(responseFuture::isDone);
         assertTrue(secondResponseFuture.isDone());
+    }
+
+    @ParameterizedTest
+    @EnumSource(names = {
+            "UNKNOWN_TOPIC_OR_PARTITION",
+            "REQUEST_TIMED_OUT",
+            "COORDINATOR_LOAD_IN_PROGRESS",
+            "CONCURRENT_TRANSACTIONS"
+    })
+    public void testRetriableErrors2(Errors error) {
+        // Ensure FindCoordinator retries.
+        TransactionalRequestResult result = transactionManager.initializeTransactions();
+        prepareFindCoordinatorResponse(error, false, CoordinatorType.TRANSACTION, transactionalId);
+        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
+        runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) != null);
+        assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION));
+
+        // Ensure InitPid retries.
+        prepareInitPidResponse(error, false, producerId, epoch);
+        prepareInitPidResponse(Errors.NONE, false, producerId, epoch);
+        runUntil(transactionManager::hasProducerId);
+
+        result.await();
+        transactionManager.beginTransaction();
+
+        // Ensure AddPartitionsToTxn retries. Since CONCURRENT_TRANSACTIONS is handled differently here, we substitute.
+        Errors addPartitionsToTxnError = error.equals(Errors.CONCURRENT_TRANSACTIONS) ? Errors.COORDINATOR_LOAD_IN_PROGRESS : error;
+        transactionManager.maybeAddPartition(tp0);
+        prepareAddPartitionsToTxnResponse(addPartitionsToTxnError, tp0, epoch, producerId);
+        prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, producerId);
+        runUntil(() -> transactionManager.transactionContainsPartition(tp0));
+
+        // Ensure txnOffsetCommit retries is tested in testRetriableErrorInTxnOffsetCommit.
+
+        // Ensure EndTxn retries.
+        TransactionalRequestResult abortResult = transactionManager.beginCommit();
+        prepareEndTxnResponse(error, TransactionResult.COMMIT, producerId, epoch);
+        prepareEndTxnResponse(Errors.NONE, TransactionResult.COMMIT, producerId, epoch);
+        runUntil(abortResult::isCompleted);
+        assertTrue(abortResult.isSuccessful());
+    }
+
+    @Test
+    public void testCoordinatorNotAvailable() {
+        // Ensure FindCoordinator with COORDINATOR_NOT_AVAILABLE error retries.
+        TransactionalRequestResult result = transactionManager.initializeTransactions();
+        prepareFindCoordinatorResponse(Errors.COORDINATOR_NOT_AVAILABLE, false, CoordinatorType.TRANSACTION, transactionalId);
+        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
+        runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) != null);
+        assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION));
+
+        prepareInitPidResponse(Errors.NONE, false, producerId, epoch);
+        runUntil(transactionManager::hasProducerId);
+
+        result.await();
     }
 
     @Test
@@ -2180,7 +2280,7 @@ public class TransactionManagerTest {
 
     @Test
     public void testHandlingOfInvalidProducerEpochErrorOnTxnOffsetCommit() {
-        testFatalErrorInTxnOffsetCommit(Errors.INVALID_PRODUCER_EPOCH);
+        testFatalErrorInTxnOffsetCommit(Errors.INVALID_PRODUCER_EPOCH, Errors.PRODUCER_FENCED);
     }
 
     @Test
@@ -2189,6 +2289,10 @@ public class TransactionManagerTest {
     }
 
     private void testFatalErrorInTxnOffsetCommit(final Errors error) {
+        testFatalErrorInTxnOffsetCommit(error, error);
+    }
+
+    private void testFatalErrorInTxnOffsetCommit(final Errors triggeredError, final Errors resultingError) {
         doInitTransactions();
 
         transactionManager.beginTransaction();
@@ -2205,14 +2309,14 @@ public class TransactionManagerTest {
 
         Map<TopicPartition, Errors> txnOffsetCommitResponse = new HashMap<>();
         txnOffsetCommitResponse.put(tp0, Errors.NONE);
-        txnOffsetCommitResponse.put(tp1, error);
+        txnOffsetCommitResponse.put(tp1, triggeredError);
 
         prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.GROUP, consumerGroupId);
         prepareTxnOffsetCommitResponse(consumerGroupId, producerId, epoch, txnOffsetCommitResponse);
 
         runUntil(addOffsetsResult::isCompleted);
         assertFalse(addOffsetsResult.isSuccessful());
-        assertEquals(error.exception().getClass(), addOffsetsResult.error().getClass());
+        assertEquals(resultingError.exception().getClass(), addOffsetsResult.error().getClass());
     }
 
     @Test
@@ -2372,10 +2476,11 @@ public class TransactionManagerTest {
 
         Cluster cluster = new Cluster(null, Arrays.asList(node1, node2), Arrays.asList(part1, part2),
                 Collections.emptySet(), Collections.emptySet());
+        Metadata metadataMock = setupMetadata(cluster);
         Set<Node> nodes = new HashSet<>();
         nodes.add(node1);
         nodes.add(node2);
-        Map<Integer, List<ProducerBatch>> drainedBatches = accumulator.drain(cluster, nodes, Integer.MAX_VALUE,
+        Map<Integer, List<ProducerBatch>> drainedBatches = accumulator.drain(metadataMock, nodes, Integer.MAX_VALUE,
                 time.milliseconds());
 
         // We shouldn't drain batches which haven't been added to the transaction yet.
@@ -2404,8 +2509,9 @@ public class TransactionManagerTest {
         PartitionInfo part1 = new PartitionInfo(topic, 1, node1, null, null);
         Cluster cluster = new Cluster(null, Collections.singletonList(node1), Collections.singletonList(part1),
                 Collections.emptySet(), Collections.emptySet());
+        Metadata metadataMock = setupMetadata(cluster);
         appendToAccumulator(tp1);
-        Map<Integer, List<ProducerBatch>> drainedBatches = accumulator.drain(cluster, Collections.singleton(node1),
+        Map<Integer, List<ProducerBatch>> drainedBatches = accumulator.drain(metadataMock, Collections.singleton(node1),
                 Integer.MAX_VALUE,
                 time.milliseconds());
 
@@ -2427,9 +2533,11 @@ public class TransactionManagerTest {
 
         Cluster cluster = new Cluster(null, Collections.singletonList(node1), Collections.singletonList(part1),
                 Collections.emptySet(), Collections.emptySet());
+        Metadata metadataMock = setupMetadata(cluster);
+
         Set<Node> nodes = new HashSet<>();
         nodes.add(node1);
-        Map<Integer, List<ProducerBatch>> drainedBatches = accumulator.drain(cluster, nodes, Integer.MAX_VALUE,
+        Map<Integer, List<ProducerBatch>> drainedBatches = accumulator.drain(metadataMock, nodes, Integer.MAX_VALUE,
                 time.milliseconds());
 
         // We shouldn't drain batches which haven't been added to the transaction yet.
@@ -3344,6 +3452,59 @@ public class TransactionManagerTest {
         assertEquals(1, transactionManager.sequenceNumber(tp1).intValue());
     }
 
+    @Test
+    public void testBackgroundInvalidStateTransitionIsFatal() {
+        doInitTransactions();
+        assertTrue(transactionManager.isTransactional());
+
+        transactionManager.setPoisonStateOnInvalidTransition(true);
+
+        // Intentionally perform an operation that will cause an invalid state transition. The detection of this
+        // will result in a poisoning of the transaction manager for all subsequent transactional operations since
+        // it was performed in the background.
+        assertThrows(IllegalStateException.class, () -> transactionManager.handleFailedBatch(batchWithValue(tp0, "test"), new KafkaException(), false));
+        assertTrue(transactionManager.hasFatalError());
+
+        // Validate that all of these operations will fail after the invalid state transition attempt above.
+        assertThrows(IllegalStateException.class, () -> transactionManager.beginTransaction());
+        assertThrows(IllegalStateException.class, () -> transactionManager.beginAbort());
+        assertThrows(IllegalStateException.class, () -> transactionManager.beginCommit());
+        assertThrows(IllegalStateException.class, () -> transactionManager.maybeAddPartition(tp0));
+        assertThrows(IllegalStateException.class, () -> transactionManager.initializeTransactions());
+        assertThrows(IllegalStateException.class, () -> transactionManager.sendOffsetsToTransaction(Collections.emptyMap(), new ConsumerGroupMetadata("fake-group-id")));
+    }
+
+    @Test
+    public void testForegroundInvalidStateTransitionIsRecoverable() {
+        // Intentionally perform an operation that will cause an invalid state transition. The detection of this
+        // will not poison the transaction manager since it was performed in the foreground.
+        assertThrows(IllegalStateException.class, () -> transactionManager.beginAbort());
+        assertFalse(transactionManager.hasFatalError());
+
+        // Validate that the transactions can still run after the invalid state transition attempt above.
+        doInitTransactions();
+        assertTrue(transactionManager.isTransactional());
+
+        transactionManager.beginTransaction();
+        assertFalse(transactionManager.hasFatalError());
+
+        transactionManager.maybeAddPartition(tp1);
+        assertTrue(transactionManager.hasOngoingTransaction());
+
+        prepareAddPartitionsToTxn(tp1, Errors.NONE);
+        runUntil(() -> transactionManager.isPartitionAdded(tp1));
+
+        TransactionalRequestResult retryResult = transactionManager.beginCommit();
+        assertTrue(transactionManager.hasOngoingTransaction());
+
+        prepareEndTxnResponse(Errors.NONE, TransactionResult.COMMIT, producerId, epoch);
+        runUntil(() -> !transactionManager.hasOngoingTransaction());
+        runUntil(retryResult::isCompleted);
+        retryResult.await();
+        runUntil(retryResult::isAcked);
+        assertFalse(transactionManager.hasOngoingTransaction());
+    }
+
     private FutureRecordMetadata appendToAccumulator(TopicPartition tp) throws InterruptedException {
         final long nowMs = time.milliseconds();
         return accumulator.append(tp.topic(), tp.partition(), nowMs, "key".getBytes(), "value".getBytes(), Record.EMPTY_HEADERS,
@@ -3382,11 +3543,13 @@ public class TransactionManagerTest {
     }
 
     private void prepareAddPartitionsToTxn(final Map<TopicPartition, Errors> errors) {
+        AddPartitionsToTxnResult result = AddPartitionsToTxnResponse.resultForTransaction(AddPartitionsToTxnResponse.V3_AND_BELOW_TXN_ID, errors);
+        AddPartitionsToTxnResponseData data = new AddPartitionsToTxnResponseData().setResultsByTopicV3AndBelow(result.topicResults()).setThrottleTimeMs(0);
         client.prepareResponse(body -> {
             AddPartitionsToTxnRequest request = (AddPartitionsToTxnRequest) body;
-            assertEquals(new HashSet<>(request.partitions()), new HashSet<>(errors.keySet()));
+            assertEquals(new HashSet<>(getPartitionsFromV3Request(request)), new HashSet<>(errors.keySet()));
             return true;
-        }, new AddPartitionsToTxnResponse(0, errors));
+        }, new AddPartitionsToTxnResponse(data));
     }
 
     private void prepareAddPartitionsToTxn(final TopicPartition tp, final Errors error) {
@@ -3465,26 +3628,38 @@ public class TransactionManagerTest {
 
     private void prepareAddPartitionsToTxnResponse(Errors error, final TopicPartition topicPartition,
                                                    final short epoch, final long producerId) {
+        AddPartitionsToTxnResult result = AddPartitionsToTxnResponse.resultForTransaction(
+                AddPartitionsToTxnResponse.V3_AND_BELOW_TXN_ID, singletonMap(topicPartition, error));
         client.prepareResponse(addPartitionsRequestMatcher(topicPartition, epoch, producerId),
-                new AddPartitionsToTxnResponse(0, singletonMap(topicPartition, error)));
+                new AddPartitionsToTxnResponse(new AddPartitionsToTxnResponseData()
+                        .setThrottleTimeMs(0)
+                        .setResultsByTopicV3AndBelow(result.topicResults())));
     }
 
     private void sendAddPartitionsToTxnResponse(Errors error, final TopicPartition topicPartition,
                                                 final short epoch, final long producerId) {
+        AddPartitionsToTxnResult result = AddPartitionsToTxnResponse.resultForTransaction(
+                AddPartitionsToTxnResponse.V3_AND_BELOW_TXN_ID, singletonMap(topicPartition, error));
         client.respond(addPartitionsRequestMatcher(topicPartition, epoch, producerId),
-                new AddPartitionsToTxnResponse(0, singletonMap(topicPartition, error)));
+                new AddPartitionsToTxnResponse(new AddPartitionsToTxnResponseData()
+                        .setThrottleTimeMs(0)
+                        .setResultsByTopicV3AndBelow(result.topicResults())));
     }
 
     private MockClient.RequestMatcher addPartitionsRequestMatcher(final TopicPartition topicPartition,
                                                                   final short epoch, final long producerId) {
         return body -> {
             AddPartitionsToTxnRequest addPartitionsToTxnRequest = (AddPartitionsToTxnRequest) body;
-            assertEquals(producerId, addPartitionsToTxnRequest.data().producerId());
-            assertEquals(epoch, addPartitionsToTxnRequest.data().producerEpoch());
-            assertEquals(singletonList(topicPartition), addPartitionsToTxnRequest.partitions());
-            assertEquals(transactionalId, addPartitionsToTxnRequest.data().transactionalId());
+            assertEquals(producerId, addPartitionsToTxnRequest.data().v3AndBelowProducerId());
+            assertEquals(epoch, addPartitionsToTxnRequest.data().v3AndBelowProducerEpoch());
+            assertEquals(singletonList(topicPartition), getPartitionsFromV3Request(addPartitionsToTxnRequest));
+            assertEquals(transactionalId, addPartitionsToTxnRequest.data().v3AndBelowTransactionalId());
             return true;
         };
+    }
+    
+    private List<TopicPartition> getPartitionsFromV3Request(AddPartitionsToTxnRequest request) {
+        return AddPartitionsToTxnRequest.getPartitions(request.data().v3AndBelowTopics());
     }
 
     private void prepareEndTxnResponse(Errors error, final TransactionResult result, final long producerId, final short epoch) {
@@ -3662,6 +3837,18 @@ public class TransactionManagerTest {
 
     private void runUntil(Supplier<Boolean> condition) {
         ProducerTestUtils.runUntil(sender, condition);
+    }
+
+    private Metadata setupMetadata(Cluster cluster) {
+        Metadata metadataMock = Mockito.mock(Metadata.class);
+        Mockito.when(metadataMock.fetch()).thenReturn(cluster);
+        for (String topic: cluster.topics()) {
+            for (PartitionInfo partInfo: cluster.partitionsForTopic(topic)) {
+                TopicPartition tp = new TopicPartition(partInfo.topic(), partInfo.partition());
+                Mockito.when(metadataMock.currentLeader(tp)).thenReturn(new Metadata.LeaderAndEpoch(Optional.of(partInfo.leader()), Optional.of(999 /* dummy value */)));
+            }
+        }
+        return metadataMock;
     }
 
 }

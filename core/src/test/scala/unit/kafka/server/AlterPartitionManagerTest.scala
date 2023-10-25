@@ -20,13 +20,13 @@ package kafka.server
 import java.util.Collections
 import java.util.stream.{Stream => JStream}
 import kafka.api.LeaderAndIsr
-import kafka.utils.{MockScheduler, MockTime}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.common.TopicIdPartition
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.errors.{AuthenticationException, InvalidUpdateVersionException, OperationNotAttemptedException, UnknownServerException, UnsupportedVersionException}
-import org.apache.kafka.common.message.AlterPartitionResponseData
+import org.apache.kafka.common.message.AlterPartitionRequestData.BrokerState
+import org.apache.kafka.common.message.{AlterPartitionRequestData, AlterPartitionResponseData}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.MessageUtil
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
@@ -34,7 +34,8 @@ import org.apache.kafka.common.requests.RequestHeader
 import org.apache.kafka.common.requests.{AbstractRequest, AlterPartitionRequest, AlterPartitionResponse}
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.server.common.MetadataVersion
-import org.apache.kafka.server.common.MetadataVersion.{IBP_2_7_IV2, IBP_3_2_IV0}
+import org.apache.kafka.server.common.MetadataVersion.{IBP_2_7_IV2, IBP_3_2_IV0, IBP_3_5_IV1}
+import org.apache.kafka.server.util.{MockScheduler, MockTime}
 import org.apache.kafka.test.TestUtils.assertFutureThrows
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.BeforeEach
@@ -48,6 +49,7 @@ import org.mockito.Mockito.{mock, reset, times, verify}
 import org.mockito.{ArgumentCaptor, ArgumentMatchers, Mockito}
 
 import java.util.concurrent.{CompletableFuture, TimeUnit}
+import scala.collection.mutable.ListBuffer
 import scala.jdk.CollectionConverters._
 
 class AlterPartitionManagerTest {
@@ -58,7 +60,7 @@ class AlterPartitionManagerTest {
   val metrics = new Metrics
   val brokerId = 1
 
-  var brokerToController: BrokerToControllerChannelManager = _
+  var brokerToController: NodeToControllerChannelManager = _
 
   val tp0 = new TopicIdPartition(topicId, 0, topic)
   val tp1 = new TopicIdPartition(topicId, 1, topic)
@@ -66,7 +68,7 @@ class AlterPartitionManagerTest {
 
   @BeforeEach
   def setup(): Unit = {
-    brokerToController = mock(classOf[BrokerToControllerChannelManager])
+    brokerToController = mock(classOf[NodeToControllerChannelManager])
   }
 
   @ParameterizedTest
@@ -75,9 +77,54 @@ class AlterPartitionManagerTest {
     val scheduler = new MockScheduler(time)
     val alterPartitionManager = new DefaultAlterPartitionManager(brokerToController, scheduler, time, brokerId, () => 2, () => metadataVersion)
     alterPartitionManager.start()
-    alterPartitionManager.submit(tp0, new LeaderAndIsr(1, 1, List(1, 2, 3), LeaderRecoveryState.RECOVERED, 10), 0)
+    alterPartitionManager.submit(tp0, LeaderAndIsr(1, 1, List(1, 2, 3), LeaderRecoveryState.RECOVERED, 10), 0)
     verify(brokerToController).start()
     verify(brokerToController).sendRequest(any(), any())
+  }
+
+  @ParameterizedTest
+  @MethodSource(Array("provideMetadataVersions"))
+  def testBasicWithBrokerEpoch(metadataVersion: MetadataVersion): Unit = {
+    val scheduler = new MockScheduler(time)
+    val alterPartitionManager = new DefaultAlterPartitionManager(brokerToController, scheduler, time, brokerId, () => 101, () => metadataVersion)
+    alterPartitionManager.start()
+    val isrWithBrokerEpoch = ListBuffer[BrokerState]()
+    for (ii <- 1 to 3) {
+      isrWithBrokerEpoch += new BrokerState().setBrokerId(ii).setBrokerEpoch(100 + ii)
+    }
+    alterPartitionManager.submit(tp0, LeaderAndIsr(1, 1, LeaderRecoveryState.RECOVERED, isrWithBrokerEpoch.toList, 10), 0)
+
+    val expectedAlterPartitionData = new AlterPartitionRequestData()
+      .setBrokerId(brokerId)
+      .setBrokerEpoch(101)
+    val topicData = new AlterPartitionRequestData.TopicData()
+      .setTopicName(topic)
+      .setTopicId(topicId)
+
+    if (metadataVersion.isTopicIdsSupported()) {
+      val newIsrWithBrokerEpoch = new ListBuffer[BrokerState]()
+      newIsrWithBrokerEpoch.append(new BrokerState().setBrokerId(1).setBrokerEpoch(101))
+      newIsrWithBrokerEpoch.append(new BrokerState().setBrokerId(2).setBrokerEpoch(102))
+      newIsrWithBrokerEpoch.append(new BrokerState().setBrokerId(3).setBrokerEpoch(103))
+      topicData.partitions.add(new AlterPartitionRequestData.PartitionData()
+        .setPartitionIndex(0)
+        .setLeaderEpoch(1)
+        .setPartitionEpoch(10)
+        .setNewIsrWithEpochs(newIsrWithBrokerEpoch.toList.asJava))
+    } else {
+      topicData.partitions.add(new AlterPartitionRequestData.PartitionData()
+        .setPartitionIndex(0)
+        .setLeaderEpoch(1)
+        .setPartitionEpoch(10)
+        .setNewIsr(List(1, 2, 3).map(Integer.valueOf).asJava))
+    }
+
+    expectedAlterPartitionData.topics.add(topicData)
+
+    verify(brokerToController).start()
+    val captor = ArgumentCaptor.forClass(classOf[AbstractRequest.Builder[_ <: AbstractRequest]])
+    verify(brokerToController).sendRequest(captor.capture(), any())
+    assertEquals(expectedAlterPartitionData, captor.getValue.asInstanceOf[AlterPartitionRequest.Builder].build().data())
   }
 
   @ParameterizedTest
@@ -91,7 +138,7 @@ class AlterPartitionManagerTest {
     val scheduler = new MockScheduler(time)
     val alterPartitionManager = new DefaultAlterPartitionManager(brokerToController, scheduler, time, brokerId, () => 2, () => metadataVersion)
     alterPartitionManager.start()
-    alterPartitionManager.submit(tp0, new LeaderAndIsr(1, 1, List(1), leaderRecoveryState, 10), 0)
+    alterPartitionManager.submit(tp0, LeaderAndIsr(1, 1, List(1), leaderRecoveryState, 10), 0)
     verify(brokerToController).start()
     verify(brokerToController).sendRequest(requestCapture.capture(), any())
 
@@ -138,7 +185,11 @@ class AlterPartitionManagerTest {
     // Make sure we sent the right request ISR={1}
     val request = capture.getValue.build()
     assertEquals(request.data().topics().size(), 1)
-    assertEquals(request.data().topics().get(0).partitions().get(0).newIsr().size(), 1)
+    if (request.version() < 3) {
+      assertEquals(request.data.topics.get(0).partitions.get(0).newIsr.size, 1)
+    } else {
+      assertEquals(request.data.topics.get(0).partitions.get(0).newIsrWithEpochs.size, 1)
+    }
   }
 
   @ParameterizedTest
@@ -189,7 +240,7 @@ class AlterPartitionManagerTest {
     val leaderEpoch = 1
     val partitionEpoch = 10
     val isr = List(1, 2, 3)
-    val leaderAndIsr = new LeaderAndIsr(leaderId, leaderEpoch, isr, LeaderRecoveryState.RECOVERED, partitionEpoch)
+    val leaderAndIsr = LeaderAndIsr(leaderId, leaderEpoch, isr, LeaderRecoveryState.RECOVERED, partitionEpoch)
     val callbackCapture = ArgumentCaptor.forClass(classOf[ControllerRequestCompletionHandler])
 
     val scheduler = new MockScheduler(time)
@@ -263,7 +314,7 @@ class AlterPartitionManagerTest {
   }
 
   private def testRetryOnErrorResponse(response: ClientResponse): Unit = {
-    val leaderAndIsr = new LeaderAndIsr(1, 1, List(1, 2, 3), LeaderRecoveryState.RECOVERED, 10)
+    val leaderAndIsr = LeaderAndIsr(1, 1, List(1, 2, 3), LeaderRecoveryState.RECOVERED, 10)
     val callbackCapture: ArgumentCaptor[ControllerRequestCompletionHandler] = ArgumentCaptor.forClass(classOf[ControllerRequestCompletionHandler])
 
     val scheduler = new MockScheduler(time)
@@ -382,7 +433,7 @@ class AlterPartitionManagerTest {
     val controlledEpoch = 0
     val brokerEpoch = 2
     val scheduler = new MockScheduler(time)
-    val brokerToController = Mockito.mock(classOf[BrokerToControllerChannelManager])
+    val brokerToController = Mockito.mock(classOf[NodeToControllerChannelManager])
     val alterPartitionManager = new DefaultAlterPartitionManager(
       brokerToController,
       scheduler,
@@ -449,7 +500,7 @@ class AlterPartitionManagerTest {
     val controlledEpoch = 0
     val brokerEpoch = 2
     val scheduler = new MockScheduler(time)
-    val brokerToController = Mockito.mock(classOf[BrokerToControllerChannelManager])
+    val brokerToController = Mockito.mock(classOf[NodeToControllerChannelManager])
     val alterPartitionManager = new DefaultAlterPartitionManager(
       brokerToController,
       scheduler,
@@ -506,7 +557,7 @@ class AlterPartitionManagerTest {
   }
 
   private def verifySendRequest(
-    brokerToController: BrokerToControllerChannelManager,
+    brokerToController: NodeToControllerChannelManager,
     expectedRequest: ArgumentMatcher[AbstractRequest.Builder[_ <: AbstractRequest]]
   ): ControllerRequestCompletionHandler = {
     val callbackCapture = ArgumentCaptor.forClass(classOf[ControllerRequestCompletionHandler])
@@ -633,6 +684,8 @@ class AlterPartitionManagerTest {
 object AlterPartitionManagerTest {
   def provideMetadataVersions(): JStream[MetadataVersion] = {
     JStream.of(
+      // Supports KIP-903: include broker epoch in AlterPartition request
+      IBP_3_5_IV1,
       // Supports KIP-704: unclean leader recovery
       IBP_3_2_IV0,
       // Supports KIP-497: alter partition

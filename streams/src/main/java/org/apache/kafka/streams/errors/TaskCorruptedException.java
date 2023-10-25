@@ -22,25 +22,25 @@ import org.apache.kafka.streams.processor.TaskId;
 import java.util.Set;
 
 /**
- * Indicates a specific task is corrupted and need to be re-initialized. It can be thrown when
+ * Indicates a specific task is corrupted and need to be re-initialized. It can be thrown when:
  *
- * 1) Under EOS, if the checkpoint file does not contain offsets for corresponding store's changelogs, meaning
- *    previously it was not close cleanly;
- * 2) Out-of-range exception thrown during restoration, meaning that the changelog has been modified and we re-bootstrap
- *    the store.
+ * <ol>
+ *   <li>Under EOS, if the checkpoint file does not contain offsets for corresponding store's changelogs, meaning previously it was not close cleanly.</li>
+ *   <li>Out-of-range exception thrown during restoration, meaning that the changelog has been modified and we re-bootstrap the store.</li>
+ * </ol>
  */
 public class TaskCorruptedException extends StreamsException {
 
     private final Set<TaskId> corruptedTasks;
 
     public TaskCorruptedException(final Set<TaskId> corruptedTasks) {
-        super("Tasks " + corruptedTasks + " are corrupted and hence needs to be re-initialized");
+        super("Tasks " + corruptedTasks + " are corrupted and hence need to be re-initialized");
         this.corruptedTasks = corruptedTasks;
     }
 
     public TaskCorruptedException(final Set<TaskId> corruptedTasks,
                                   final InvalidOffsetException e) {
-        super("Tasks " + corruptedTasks + " are corrupted and hence needs to be re-initialized", e);
+        super("Tasks " + corruptedTasks + " are corrupted and hence need to be re-initialized", e);
         this.corruptedTasks = corruptedTasks;
     }
 

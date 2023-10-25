@@ -20,6 +20,7 @@ import org.apache.kafka.common.utils.AbstractIterator;
 import org.apache.kafka.common.utils.Time;
 
 import java.util.Iterator;
+import java.util.Optional;
 
 
 /**
@@ -48,9 +49,9 @@ public interface Records extends TransferableRecords {
     int SIZE_LENGTH = 4;
     int LOG_OVERHEAD = SIZE_OFFSET + SIZE_LENGTH;
 
-    // the magic offset is at the same offset for all current message formats, but the 4 bytes
+    // The magic offset is at the same offset for all current message formats, but the 4 bytes
     // between the size and the magic is dependent on the version.
-    int MAGIC_OFFSET = 16;
+    int MAGIC_OFFSET = LOG_OVERHEAD + 4;
     int MAGIC_LENGTH = 1;
     int HEADER_SIZE_UP_TO_MAGIC = MAGIC_OFFSET + MAGIC_LENGTH;
 
@@ -69,6 +70,13 @@ public interface Records extends TransferableRecords {
      * @return An iterator over the record batches of the log
      */
     AbstractIterator<? extends RecordBatch> batchIterator();
+
+    /**
+     * Return the last record batch if non-empty or an empty `Optional` otherwise.
+     *
+     * Note that this requires iterating over all the record batches and hence it's expensive.
+     */
+    Optional<RecordBatch> lastBatch();
 
     /**
      * Check whether all batches in this buffer have a certain magic value.

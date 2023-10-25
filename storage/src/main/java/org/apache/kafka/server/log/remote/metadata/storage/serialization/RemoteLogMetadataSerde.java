@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.server.log.remote.metadata.storage.serialization;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.MessageFormatter;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.serialization.BytesApiMessageSerde;
@@ -30,6 +32,7 @@ import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadataUpdate;
 import org.apache.kafka.server.log.remote.storage.RemotePartitionDeleteMetadata;
 
+import java.io.PrintStream;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -62,7 +65,7 @@ public class RemoteLogMetadataSerde {
         return MetadataRecordType.fromId(apiKey).newMetadataRecord();
     }
 
-    protected Map<Short, RemoteLogMetadataTransform> createRemoteLogMetadataTransforms() {
+    protected final Map<Short, RemoteLogMetadataTransform> createRemoteLogMetadataTransforms() {
         Map<Short, RemoteLogMetadataTransform> map = new HashMap<>();
         map.put(REMOTE_LOG_SEGMENT_METADATA_API_KEY, new RemoteLogSegmentMetadataTransform());
         map.put(REMOTE_LOG_SEGMENT_METADATA_UPDATE_API_KEY, new RemoteLogSegmentMetadataUpdateTransform());
@@ -71,7 +74,7 @@ public class RemoteLogMetadataSerde {
         return map;
     }
 
-    protected Map<String, Short> createRemoteLogStorageClassToApiKeyMap() {
+    protected final Map<String, Short> createRemoteLogStorageClassToApiKeyMap() {
         Map<String, Short> map = new HashMap<>();
         map.put(RemoteLogSegmentMetadata.class.getName(), REMOTE_LOG_SEGMENT_METADATA_API_KEY);
         map.put(RemoteLogSegmentMetadataUpdate.class.getName(), REMOTE_LOG_SEGMENT_METADATA_UPDATE_API_KEY);
@@ -106,5 +109,18 @@ public class RemoteLogMetadataSerde {
         }
 
         return metadataTransform;
+    }
+
+    public static class RemoteLogMetadataFormatter implements MessageFormatter {
+        private final RemoteLogMetadataSerde remoteLogMetadataSerde = new RemoteLogMetadataSerde();
+
+        @Override
+        public void writeTo(ConsumerRecord<byte[], byte[]> consumerRecord, PrintStream output) {
+            // The key is expected to be null.
+            output.printf("partition: %d, offset: %d, value: %s%n",
+                    consumerRecord.partition(),
+                    consumerRecord.offset(),
+                    remoteLogMetadataSerde.deserialize(consumerRecord.value()).toString());
+        }
     }
 }

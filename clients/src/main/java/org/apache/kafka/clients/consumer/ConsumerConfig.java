@@ -88,6 +88,7 @@ public class ConsumerConfig extends AbstractConfig {
     private static final String MAX_POLL_RECORDS_DOC = "The maximum number of records returned in a single call to poll()."
         + " Note, that <code>" + MAX_POLL_RECORDS_CONFIG + "</code> does not impact the underlying fetching behavior."
         + " The consumer will cache the records from each fetch request and returns them incrementally from each poll.";
+    public static final int DEFAULT_MAX_POLL_RECORDS = 500;
 
     /** <code>max.poll.interval.ms</code> */
     public static final String MAX_POLL_INTERVAL_MS_CONFIG = CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG;
@@ -148,13 +149,21 @@ public class ConsumerConfig extends AbstractConfig {
      * <code>auto.offset.reset</code>
      */
     public static final String AUTO_OFFSET_RESET_CONFIG = "auto.offset.reset";
-    public static final String AUTO_OFFSET_RESET_DOC = "What to do when there is no initial offset in Kafka or if the current offset does not exist any more on the server (e.g. because that data has been deleted): <ul><li>earliest: automatically reset the offset to the earliest offset<li>latest: automatically reset the offset to the latest offset</li><li>none: throw exception to the consumer if no previous offset is found for the consumer's group</li><li>anything else: throw exception to the consumer.</li></ul>";
+    public static final String AUTO_OFFSET_RESET_DOC = "What to do when there is no initial offset in Kafka or if the current offset does not exist any more on the server " +
+            "(e.g. because that data has been deleted): " +
+            "<ul><li>earliest: automatically reset the offset to the earliest offset" +
+            "<li>latest: automatically reset the offset to the latest offset</li>" +
+            "<li>none: throw exception to the consumer if no previous offset is found for the consumer's group</li>" +
+            "<li>anything else: throw exception to the consumer.</li></ul>" +
+            "<p>Note that altering partition numbers while setting this config to latest may cause message delivery loss since " +
+            "producers could start to send messages to newly added partitions (i.e. no initial offsets exist yet) before consumers reset their offsets.";
 
     /**
      * <code>fetch.min.bytes</code>
      */
     public static final String FETCH_MIN_BYTES_CONFIG = "fetch.min.bytes";
-    private static final String FETCH_MIN_BYTES_DOC = "The minimum amount of data the server should return for a fetch request. If insufficient data is available the request will wait for that much data to accumulate before answering the request. The default setting of 1 byte means that fetch requests are answered as soon as a single byte of data is available or the fetch request times out waiting for data to arrive. Setting this to something greater than 1 will cause the server to wait for larger amounts of data to accumulate which can improve server throughput a bit at the cost of some additional latency.";
+    public static final int DEFAULT_FETCH_MIN_BYTES = 1;
+    private static final String FETCH_MIN_BYTES_DOC = "The minimum amount of data the server should return for a fetch request. If insufficient data is available the request will wait for that much data to accumulate before answering the request. The default setting of " + DEFAULT_FETCH_MIN_BYTES + " byte means that fetch requests are answered as soon as that many byte(s) of data is available or the fetch request times out waiting for data to arrive. Setting this to a larger value will cause the server to wait for larger amounts of data to accumulate which can improve server throughput a bit at the cost of some additional latency.";
 
     /**
      * <code>fetch.max.bytes</code>
@@ -172,6 +181,7 @@ public class ConsumerConfig extends AbstractConfig {
      */
     public static final String FETCH_MAX_WAIT_MS_CONFIG = "fetch.max.wait.ms";
     private static final String FETCH_MAX_WAIT_MS_DOC = "The maximum amount of time the server will block before answering the fetch request if there isn't sufficient data to immediately satisfy the requirement given by fetch.min.bytes.";
+    public static final int DEFAULT_FETCH_MAX_WAIT_MS = 500;
 
     /** <code>metadata.max.age.ms</code> */
     public static final String METADATA_MAX_AGE_CONFIG = CommonClientConfigs.METADATA_MAX_AGE_CONFIG;
@@ -203,6 +213,7 @@ public class ConsumerConfig extends AbstractConfig {
      * <code>client.rack</code>
      */
     public static final String CLIENT_RACK_CONFIG = CommonClientConfigs.CLIENT_RACK_CONFIG;
+    public static final String DEFAULT_CLIENT_RACK = CommonClientConfigs.DEFAULT_CLIENT_RACK;
 
     /**
      * <code>reconnect.backoff.ms</code>
@@ -218,6 +229,17 @@ public class ConsumerConfig extends AbstractConfig {
      * <code>retry.backoff.ms</code>
      */
     public static final String RETRY_BACKOFF_MS_CONFIG = CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG;
+
+    /**
+     * <code>enable.metrics.push</code>
+     */
+    public static final String ENABLE_METRICS_PUSH_CONFIG = CommonClientConfigs.ENABLE_METRICS_PUSH_CONFIG;
+    public static final String ENABLE_METRICS_PUSH_DOC = CommonClientConfigs.ENABLE_METRICS_PUSH_DOC;
+
+    /**
+     * <code>retry.backoff.max.ms</code>
+     */
+    public static final String RETRY_BACKOFF_MAX_MS_CONFIG = CommonClientConfigs.RETRY_BACKOFF_MAX_MS_CONFIG;
 
     /**
      * <code>metrics.sample.window.ms</code>
@@ -402,7 +424,7 @@ public class ConsumerConfig extends AbstractConfig {
                                         CommonClientConfigs.CLIENT_ID_DOC)
                                 .define(CLIENT_RACK_CONFIG,
                                         Type.STRING,
-                                        "",
+                                        DEFAULT_CLIENT_RACK,
                                         Importance.LOW,
                                         CommonClientConfigs.CLIENT_RACK_DOC)
                                 .define(MAX_PARTITION_FETCH_BYTES_CONFIG,
@@ -425,7 +447,7 @@ public class ConsumerConfig extends AbstractConfig {
                                         CommonClientConfigs.RECEIVE_BUFFER_DOC)
                                 .define(FETCH_MIN_BYTES_CONFIG,
                                         Type.INT,
-                                        1,
+                                        DEFAULT_FETCH_MIN_BYTES,
                                         atLeast(0),
                                         Importance.HIGH,
                                         FETCH_MIN_BYTES_DOC)
@@ -437,7 +459,7 @@ public class ConsumerConfig extends AbstractConfig {
                                         FETCH_MAX_BYTES_DOC)
                                 .define(FETCH_MAX_WAIT_MS_CONFIG,
                                         Type.INT,
-                                        500,
+                                        DEFAULT_FETCH_MAX_WAIT_MS,
                                         atLeast(0),
                                         Importance.LOW,
                                         FETCH_MAX_WAIT_MS_DOC)
@@ -455,10 +477,21 @@ public class ConsumerConfig extends AbstractConfig {
                                         CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_DOC)
                                 .define(RETRY_BACKOFF_MS_CONFIG,
                                         Type.LONG,
-                                        100L,
+                                        CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS,
                                         atLeast(0L),
                                         Importance.LOW,
                                         CommonClientConfigs.RETRY_BACKOFF_MS_DOC)
+                                .define(RETRY_BACKOFF_MAX_MS_CONFIG,
+                                        Type.LONG,
+                                        CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MAX_MS,
+                                        atLeast(0L),
+                                        Importance.LOW,
+                                        CommonClientConfigs.RETRY_BACKOFF_MAX_MS_DOC)
+                                .define(ENABLE_METRICS_PUSH_CONFIG,
+                                        Type.BOOLEAN,
+                                        true,
+                                        Importance.LOW,
+                                        ENABLE_METRICS_PUSH_DOC)
                                 .define(AUTO_OFFSET_RESET_CONFIG,
                                         Type.STRING,
                                         OffsetResetStrategy.LATEST.toString(),
@@ -543,7 +576,7 @@ public class ConsumerConfig extends AbstractConfig {
                                         INTERCEPTOR_CLASSES_DOC)
                                 .define(MAX_POLL_RECORDS_CONFIG,
                                         Type.INT,
-                                        500,
+                                        DEFAULT_MAX_POLL_RECORDS,
                                         atLeast(1),
                                         Importance.MEDIUM,
                                         MAX_POLL_RECORDS_DOC)
@@ -586,7 +619,8 @@ public class ConsumerConfig extends AbstractConfig {
                                 .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
                                         Type.STRING,
                                         CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
-                                        in(Utils.enumOptions(SecurityProtocol.class)),
+                                        ConfigDef.CaseInsensitiveValidString
+                                                .in(Utils.enumOptions(SecurityProtocol.class)),
                                         Importance.MEDIUM,
                                         CommonClientConfigs.SECURITY_PROTOCOL_DOC)
                                 .withClientSslSupport()
@@ -596,6 +630,7 @@ public class ConsumerConfig extends AbstractConfig {
     @Override
     protected Map<String, Object> postProcessParsedConfig(final Map<String, Object> parsedValues) {
         CommonClientConfigs.postValidateSaslMechanismConfig(this);
+        CommonClientConfigs.warnDisablingExponentialBackoff(this);
         Map<String, Object> refinedConfigs = CommonClientConfigs.postProcessReconnectBackoffConfigs(this, parsedValues);
         maybeOverrideClientId(refinedConfigs);
         return refinedConfigs;
@@ -615,9 +650,9 @@ public class ConsumerConfig extends AbstractConfig {
         }
     }
 
-    protected static Map<String, Object> appendDeserializerToConfig(Map<String, Object> configs,
-                                                                    Deserializer<?> keyDeserializer,
-                                                                    Deserializer<?> valueDeserializer) {
+    public static Map<String, Object> appendDeserializerToConfig(Map<String, Object> configs,
+                                                                 Deserializer<?> keyDeserializer,
+                                                                 Deserializer<?> valueDeserializer) {
         // validate deserializer configuration, if the passed deserializer instance is null, the user must explicitly set a valid deserializer configuration value
         Map<String, Object> newConfigs = new HashMap<>(configs);
         if (keyDeserializer != null)
