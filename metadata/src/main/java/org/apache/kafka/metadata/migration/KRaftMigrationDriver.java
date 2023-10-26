@@ -546,11 +546,12 @@ public class KRaftMigrationDriver implements MetadataPublisher {
 
             if (isSnapshot) {
                 // When we load a snapshot, need to send full metadata updates to the brokers
+                log.debug("Sending full metadata RPCs to brokers for snapshot.");
                 propagator.sendRPCsToBrokersFromMetadataImage(image, migrationLeadershipState.zkControllerEpoch());
             } else {
                 // delta
                 if (delta.topicsDelta() != null || delta.clusterDelta() != null) {
-                    log.trace("Sending RPCs to brokers for metadata {}.", metadataType);
+                    log.trace("Sending incremental metadata RPCs to brokers for delta.");
                     propagator.sendRPCsToBrokersFromMetadataDelta(delta, image, migrationLeadershipState.zkControllerEpoch());
                 } else {
                     log.trace("Not sending RPCs to brokers for metadata {} since no relevant metadata has changed", metadataType);
