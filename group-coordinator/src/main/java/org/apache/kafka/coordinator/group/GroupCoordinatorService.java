@@ -313,25 +313,21 @@ public class GroupCoordinatorService implements GroupCoordinator {
         JoinGroupRequestData request,
         BufferSupplier bufferSupplier
     ) {
-        CompletableFuture<JoinGroupResponseData> responseFuture = new CompletableFuture<>();
-
         if (!isActive.get()) {
-            responseFuture.complete(new JoinGroupResponseData()
+            return CompletableFuture.completedFuture(new JoinGroupResponseData()
                 .setMemberId(request.memberId())
                 .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
             );
-
-            return responseFuture;
         }
 
         if (!isGroupIdNotEmpty(request.groupId())) {
-            responseFuture.complete(new JoinGroupResponseData()
+            return CompletableFuture.completedFuture(new JoinGroupResponseData()
                 .setMemberId(request.memberId())
                 .setErrorCode(Errors.INVALID_GROUP_ID.code())
             );
-
-            return responseFuture;
         }
+
+        CompletableFuture<JoinGroupResponseData> responseFuture = new CompletableFuture<>();
 
         runtime.scheduleWriteOperation(
             "generic-group-join",

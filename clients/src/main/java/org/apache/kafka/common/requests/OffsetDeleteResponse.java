@@ -96,13 +96,10 @@ public class OffsetDeleteResponse extends AbstractResponse {
         public Builder merge(
             OffsetDeleteResponseData newData
         ) {
-            // Uses the new data if top level error exists.
             if (newData.errorCode() != Errors.NONE.code()) {
+                // If the top-level error exists, we can discard it and use the new data.
                 data = newData;
-                return this;
-            }
-
-            if (data.topics().isEmpty()) {
+            } else if (data.topics().isEmpty()) {
                 // If the current data is empty, we can discard it and use the new data.
                 data = newData;
             } else {

@@ -3274,14 +3274,21 @@ class KafkaApisTest {
     addTopicToMetadataCache(topic, numPartitions = 1)
 
     val offsetDeleteRequest = new OffsetDeleteRequest.Builder(
-      new OffsetDeleteRequestData().setGroupId(group)
+      new OffsetDeleteRequestData()
+        .setGroupId(group)
+        .setTopics(new OffsetDeleteRequestTopicCollection(Collections.singletonList(new OffsetDeleteRequestTopic()
+          .setName("topic-unknown")
+          .setPartitions(Collections.singletonList(new OffsetDeleteRequestPartition()
+            .setPartitionIndex(0)
+          ))
+        ).iterator()))
     ).build()
     val request = buildRequest(offsetDeleteRequest)
 
     val future = new CompletableFuture[OffsetDeleteResponseData]()
     when(groupCoordinator.deleteOffsets(
       request.context,
-      offsetDeleteRequest.data,
+      new OffsetDeleteRequestData().setGroupId(group), // Nonexistent topics won't be passed to groupCoordinator.
       RequestLocal.NoCaching.bufferSupplier
     )).thenReturn(future)
 
@@ -4331,6 +4338,10 @@ class KafkaApisTest {
         "group-2" -> null,
         "group-3" -> null,
         "group-4" -> null,
+        "group-5" -> List(
+          new TopicPartition("unknown", 0),
+          new TopicPartition("foo", 1)
+        ).asJava,
       ).asJava
       buildRequest(new OffsetFetchRequest.Builder(groups, false, false).build(version))
     }
@@ -4380,6 +4391,22 @@ class KafkaApisTest {
         false
       )).thenReturn(group4Future)
 
+      val group5Future = new CompletableFuture[OffsetFetchResponseData.OffsetFetchResponseGroup]()
+      when(groupCoordinator.fetchOffsets(
+        requestChannelRequest.context,
+        new OffsetFetchRequestData.OffsetFetchRequestGroup()
+          .setGroupId("group-5")
+          .setTopics(List(
+            new OffsetFetchRequestData.OffsetFetchRequestTopics()
+              .setName("foo")
+              .setPartitionIndexes(List[Integer](1).asJava),
+            new OffsetFetchRequestData.OffsetFetchRequestTopics()
+              .setName("unknown")
+              .setPartitionIndexes(List[Integer](0).asJava)
+          ).asJava),
+        false
+      )).thenReturn(group5Future)
+
       createKafkaApis().handleOffsetFetchRequest(requestChannelRequest)
 
       val group1Response = new OffsetFetchResponseData.OffsetFetchResponseGroup()
@@ -4428,16 +4455,35 @@ class KafkaApisTest {
         .setGroupId("group-4")
         .setErrorCode(Errors.INVALID_GROUP_ID.code)
 
-      val expectedOffsetFetchResponse = new OffsetFetchResponseData()
-        .setGroups(List(group1Response, group2Response, group3Response, group4Response).asJava)
+      val group5Response = new OffsetFetchResponseData.OffsetFetchResponseGroup()
+        .setGroupId("group-5")
+        .setTopics(List(
+          new OffsetFetchResponseData.OffsetFetchResponseTopics()
+            .setName("unknown")
+            .setPartitions(List(
+              new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                .setPartitionIndex(0)
+                .setCommittedOffset(-1)
+            ).asJava),
+          new OffsetFetchResponseData.OffsetFetchResponseTopics()
+            .setName("foo")
+            .setPartitions(List(
+              new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                .setPartitionIndex(1)
+                .setCommittedOffset(-1)
+            ).asJava)
+        ).asJava)
+
+      val expectedGroups = List(group1Response, group2Response, group3Response, group4Response, group5Response)
 
       group1Future.complete(group1Response)
       group2Future.complete(group2Response)
       group3Future.completeExceptionally(Errors.INVALID_GROUP_ID.exception)
       group4Future.complete(group4Response)
+      group5Future.complete(group5Response)
 
       val response = verifyNoThrottling[OffsetFetchResponse](requestChannelRequest)
-      assertEquals(expectedOffsetFetchResponse, response.data)
+      assertEquals(expectedGroups.toSet, response.data.groups().asScala.toSet)
     }
   }
 
