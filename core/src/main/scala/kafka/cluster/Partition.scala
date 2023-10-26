@@ -131,7 +131,6 @@ object Partition {
       replicaLagTimeMaxMs = replicaManager.config.replicaLagTimeMaxMs,
       interBrokerProtocolVersion = replicaManager.config.interBrokerProtocolVersion,
       localBrokerId = replicaManager.config.brokerId,
-      eligibleLeaderReplicasEnabled = replicaManager.config.elrEnabled,
       localBrokerEpochSupplier = replicaManager.brokerEpochSupplier,
       time = time,
       alterPartitionListener = isrChangeListener,
@@ -285,7 +284,6 @@ class Partition(val topicPartition: TopicPartition,
                 val replicaLagTimeMaxMs: Long,
                 interBrokerProtocolVersion: MetadataVersion,
                 localBrokerId: Int,
-                eligibleLeaderReplicasEnabled: Boolean,
                 localBrokerEpochSupplier: () => Long,
                 time: Time,
                 alterPartitionListener: AlterPartitionListener,
@@ -1102,8 +1100,7 @@ class Partition(val topicPartition: TopicPartition,
    * advancing the HW, the follower's log end offset may keep falling behind the HW (determined by the leader's log end
    * offset) and therefore will never be added to ISR.
    *
-   * Note, If KIP-966 is enabled, the HW can only advance if the ISR size is equal or large than the
-   * min ISR(min.insync.replicas).
+   * The HW can only advance if the ISR size is equal or large than the min ISR(min.insync.replicas).
    *
    * With the addition of AlterPartition, we also consider newly added replicas as part of the ISR when advancing
    * the HW. These replicas have not yet been committed to the ISR by the controller, so we could revert to the previously
@@ -1115,11 +1112,9 @@ class Partition(val topicPartition: TopicPartition,
    * @return true if the HW was incremented, and false otherwise.
    */
   private def maybeIncrementLeaderHW(leaderLog: UnifiedLog, currentTimeMs: Long = time.milliseconds): Boolean = {
-    if (metadataCache.isInstanceOf[KRaftMetadataCache] && interBrokerProtocolVersion.isElrSupported && eligibleLeaderReplicasEnabled) {
-      if (isUnderMinIsr) {
-        trace(s"Skip checking whether HWM can advance because partition is under min ISR(ISR=${partitionState.isr}")
-        return false
-      }
+    if (isUnderMinIsr) {
+      trace(s"Skip checking whether HWM can advance because partition is under min ISR(ISR=${partitionState.isr}")
+      return false
     }
     // maybeIncrementLeaderHW is in the hot path, the following code is written to
     // avoid unnecessary collection generation
