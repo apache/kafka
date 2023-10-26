@@ -223,7 +223,7 @@ public abstract class AbstractFetch implements Closeable {
                 Set<TopicPartition> updatedPartitions = metadata.updatePartitionLeadership(partitionsWithUpdatedLeaderInfo, leaderNodes);
                 updatedPartitions.forEach(
                     tp -> {
-                        log.debug("For {}, as the leader was updated, leader's position wil be updated.", tp);
+                        log.debug("For {}, as the leader was updated, position will be validated.", tp);
                         subscriptions.maybeValidatePositionForCurrentLeader(apiVersions, tp, metadata.currentLeader(tp));
                     }
                 );
