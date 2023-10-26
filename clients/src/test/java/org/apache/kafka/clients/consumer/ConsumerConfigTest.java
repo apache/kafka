@@ -27,7 +27,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -167,7 +166,6 @@ public class ConsumerConfigTest {
         configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClass);
         final ConsumerConfig consumerConfig = new ConsumerConfig(configs);
         assertEquals("generic", consumerConfig.getString(ConsumerConfig.GROUP_PROTOCOL_CONFIG));
-        assertEquals(Collections.EMPTY_LIST, consumerConfig.getList(ConsumerConfig.LOCAL_ASSIGNOR_CONFIG));
         assertEquals(null, consumerConfig.getString(ConsumerConfig.REMOTE_ASSIGNOR_CONFIG));
     }
 

@@ -124,14 +124,6 @@ public class ConsumerConfig extends AbstractConfig {
         "assignor is specified.";
 
     /**
-     * <code>group.local.assignor</code>
-     */
-    public static final String LOCAL_ASSIGNOR_CONFIG = "group.local.assignor";
-    public static final List<String> DEFAULT_LOCAL_ASSIGNOR = Collections.emptyList();
-    public static final String LOCAL_ASSIGNOR_DOC = "The list of client side assignors in full class names. It cannot" +
-        " be used in conjunction with <code>group.remote.assignor</code>.";
-
-    /**
      * <code>bootstrap.servers</code>
      */
     public static final String BOOTSTRAP_SERVERS_CONFIG = CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
@@ -643,12 +635,6 @@ public class ConsumerConfig extends AbstractConfig {
                                         .in(Utils.enumOptions(GroupProtocol.class)),
                                     Importance.HIGH,
                                     GROUP_PROTOCOL_DOC)
-                                .define(LOCAL_ASSIGNOR_CONFIG,
-                                    Type.LIST,
-                                    DEFAULT_LOCAL_ASSIGNOR,
-                                    new ConfigDef.NonNullValidator(),
-                                    Importance.MEDIUM,
-                                    LOCAL_ASSIGNOR_DOC)
                                 .define(REMOTE_ASSIGNOR_CONFIG,
                                     Type.STRING,
                                     DEFAULT_REMOTE_ASSIGNOR,
