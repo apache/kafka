@@ -68,6 +68,7 @@ import org.junit.jupiter.params.provider.{EnumSource, ValueSource}
 import com.yammer.metrics.core.Gauge
 import kafka.log.remote.RemoteLogManager
 import org.apache.kafka.common.config.AbstractConfig
+import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.server.log.remote.storage.{NoOpRemoteLogMetadataManager, NoOpRemoteStorageManager, RemoteLogManagerConfig}
 import org.apache.kafka.server.util.timer.MockTimer
 import org.mockito.invocation.InvocationOnMock
@@ -561,7 +562,9 @@ class ReplicaManagerTest {
             .setIsNew(true)).asJava,
           Collections.singletonMap(topic, Uuid.randomUuid()),
           Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava,
-          false).build()
+          false,
+          LeaderAndIsrRequest.Type.UNKNOWN
+        ).build()
         replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest, (_, _) => ())
         replicaManager.getPartitionOrException(new TopicPartition(topic, partition))
           .localLogOrException
@@ -2541,6 +2544,130 @@ class ReplicaManagerTest {
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testFullLeaderAndIsrStrayPartitions(zkMigrationEnabled: Boolean): Unit = {
+    val props = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect)
+    if (zkMigrationEnabled) {
+      props.put(KafkaConfig.MigrationEnabledProp, zkMigrationEnabled)
+      props.put(RaftConfig.QUORUM_VOTERS_CONFIG, "3000@localhost:9071")
+      props.put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
+      props.put(KafkaConfig.ListenerSecurityProtocolMapProp, "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
+      config = KafkaConfig.fromProps(props)
+    }
+
+    val logManager = TestUtils.createLogManager(config.logDirs.map(new File(_)), defaultConfig = new LogConfig(new Properties()), time = time)
+    val replicaManager = new ReplicaManager(
+      metrics = metrics,
+      config = config,
+      time = time,
+      scheduler = time.scheduler,
+      logManager = logManager,
+      quotaManagers = QuotaFactory.instantiate(config, metrics, time, ""),
+      metadataCache = MetadataCache.zkMetadataCache(config.brokerId, config.interBrokerProtocolVersion),
+      logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
+      alterPartitionManager = alterPartitionManager,
+      threadNamePrefix = Option(this.getClass.getName))
+
+    logManager.startup(Set.empty[String])
+
+    // Create a hosted topic, a hosted topic that will become stray
+    createHostedLogs("hosted-topic", numLogs = 2, replicaManager).toSet
+    createHostedLogs("hosted-stray", numLogs = 10, replicaManager).toSet
+
+    val lisr = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion,
+      3000, 0, brokerEpoch,
+      Seq(
+        new LeaderAndIsrPartitionState()
+          .setTopicName("hosted-topic")
+          .setPartitionIndex(0)
+          .setControllerEpoch(controllerEpoch)
+          .setLeader(0)
+          .setLeaderEpoch(10)
+          .setIsr(Seq[Integer](0, 1).asJava)
+          .setPartitionEpoch(0)
+          .setReplicas(Seq[Integer](0, 1).asJava)
+          .setIsNew(false),
+        new LeaderAndIsrPartitionState()
+          .setTopicName("hosted-topic")
+          .setPartitionIndex(1)
+          .setControllerEpoch(controllerEpoch)
+          .setLeader(1)
+          .setLeaderEpoch(10)
+          .setIsr(Seq[Integer](1, 0).asJava)
+          .setPartitionEpoch(0)
+          .setReplicas(Seq[Integer](1, 0).asJava)
+          .setIsNew(false)
+      ).asJava,
+      topicIds.asJava,
+      Set(new Node(0, "host0", 0), new Node(1, "host1", 1)).asJava,
+      true,
+      LeaderAndIsrRequest.Type.FULL
+    ).build()
+
+    replicaManager.becomeLeaderOrFollower(0, lisr, (_, _) => ())
+
+    val ht0 = replicaManager.getPartition(new TopicPartition("hosted-topic", 0))
+    assertTrue(ht0.isInstanceOf[HostedPartition.Online])
+
+    val stray0 = replicaManager.getPartition(new TopicPartition("hosted-stray", 0))
+
+    if (zkMigrationEnabled) {
+      assertEquals(HostedPartition.None, stray0)
+    } else {
+      assertTrue(stray0.isInstanceOf[HostedPartition.Online])
+    }
+  }
+
+  @Test
+  def testUpdateStrayLogs(): Unit = {
+    val logManager = TestUtils.createLogManager(config.logDirs.map(new File(_)), defaultConfig = new LogConfig(new Properties()), time = time)
+    val replicaManager = new ReplicaManager(
+      metrics = metrics,
+      config = config,
+      time = time,
+      scheduler = time.scheduler,
+      logManager = logManager,
+      quotaManagers = QuotaFactory.instantiate(config, metrics, time, ""),
+      metadataCache = MetadataCache.zkMetadataCache(config.brokerId, config.interBrokerProtocolVersion),
+      logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
+      alterPartitionManager = alterPartitionManager,
+      threadNamePrefix = Option(this.getClass.getName))
+
+    logManager.startup(Set.empty[String])
+
+    // Create a hosted topic, a hosted topic that will become stray, and a stray topic
+    val validLogs = createHostedLogs("hosted-topic", numLogs = 2, replicaManager).toSet
+    createHostedLogs("hosted-stray", numLogs = 10, replicaManager).toSet
+    createStrayLogs(10, logManager)
+
+    val allReplicasFromLISR = Set(new TopicPartition("hosted-topic", 0), new TopicPartition("hosted-topic", 1))
+
+    replicaManager.updateStrayLogs(replicaManager.findStrayPartitionsFromLeaderAndIsr(allReplicasFromLISR))
+
+    assertEquals(validLogs, logManager.allLogs.toSet)
+    assertEquals(validLogs.size, replicaManager.partitionCount.value)
+
+    replicaManager.shutdown()
+    logManager.shutdown()
+  }
+
+  private def createHostedLogs(name: String, numLogs: Int, replicaManager: ReplicaManager): Seq[UnifiedLog] = {
+    for (i <- 0 until numLogs) yield {
+      val topicPartition = new TopicPartition(name, i)
+      val partition = replicaManager.createPartition(topicPartition)
+      partition.createLogIfNotExists(isNew = true, isFutureReplica = false,
+        new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints), topicId = None)
+      partition.log.get
+    }
+  }
+
+  private def createStrayLogs(numLogs: Int, logManager: LogManager): Seq[UnifiedLog] = {
+    val name = "stray"
+    for (i <- 0 until numLogs)
+      yield logManager.getOrCreateLog(new TopicPartition(name, i), topicId = None)
   }
 
   private def sendProducerAppend(
