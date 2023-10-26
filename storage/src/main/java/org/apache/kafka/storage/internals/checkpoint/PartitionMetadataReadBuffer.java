@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.storage.internals.log;
+package org.apache.kafka.storage.internals.checkpoint;
 
 import org.apache.kafka.common.Uuid;
 
@@ -69,12 +69,16 @@ public class PartitionMetadataReadBuffer {
                 throw malformedLineException(line);
             }
 
-        } catch (IOException | NumberFormatException e) {
-            throw malformedLineException(line);
+        } catch (NumberFormatException e) {
+            throw malformedLineException(line, e);
         }
     }
 
-    private IOException malformedLineException(String line) throws IOException {
-        throw new IOException("Malformed line in checkpoint file " + location + ": " + line);
+    private IOException malformedLineException(String line) {
+        return new IOException(String.format("Malformed line in checkpoint file [%s]: %s", location, line));
+    }
+
+    private IOException malformedLineException(String line, Exception e) {
+        return new IOException(String.format("Malformed line in checkpoint file [%s]: %s", location, line), e);
     }
 }

@@ -15,10 +15,21 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.storage.internals.log;
+package org.apache.kafka.storage.internals.checkpoint;
 
-public class PartitionMetadataFileFormatter {
-    public static String toFile(PartitionMetadata data) {
-        return "version: " + data.version + "\ntopic_id: " + data.topicId;
+import org.apache.kafka.common.Uuid;
+
+public class PartitionMetadata {
+
+    public int version;
+    public Uuid topicId;
+
+    public PartitionMetadata(int version, Uuid topicId) {
+        this.version = version;
+        this.topicId = topicId;
+    }
+
+    public String toText() {
+        return "version: " + version + "\ntopic_id: " + topicId;
     }
 }

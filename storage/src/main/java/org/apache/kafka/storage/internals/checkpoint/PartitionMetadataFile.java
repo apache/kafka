@@ -15,12 +15,13 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.storage.internals.log;
+package org.apache.kafka.storage.internals.checkpoint;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InconsistentTopicIdException;
 import org.apache.kafka.common.errors.KafkaStorageException;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.storage.internals.log.LogDirFailureChannel;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -46,7 +47,7 @@ public class PartitionMetadataFile {
     private final LogDirFailureChannel logDirFailureChannel;
 
     private final Object lock = new Object();
-    private volatile Optional<Uuid> dirtyTopicIdOpt = null;
+    private volatile Optional<Uuid> dirtyTopicIdOpt = Optional.empty();
 
     public PartitionMetadataFile(
         final File file,
@@ -61,27 +62,25 @@ public class PartitionMetadataFile {
      */
     public void record(Uuid topicId) {
         // Topic IDs should not differ, but we defensively check here to fail earlier in the case that the IDs somehow differ.
-        if (dirtyTopicIdOpt != null && dirtyTopicIdOpt.isPresent()) {
-            dirtyTopicIdOpt.ifPresent(dirtyTopicId -> {
-                if (dirtyTopicId != topicId) {
-                    throw new InconsistentTopicIdException("Tried to record topic ID $topicId to file " +
-                        "but had already recorded $dirtyTopicId");
-                }
-            });
-        }
+        dirtyTopicIdOpt.ifPresent(dirtyTopicId -> {
+            if (dirtyTopicId != topicId) {
+                throw new InconsistentTopicIdException("Tried to record topic ID $topicId to file " +
+                    "but had already recorded $dirtyTopicId");
+            }
+        });
         dirtyTopicIdOpt = Optional.of(topicId);
     }
 
     public void maybeFlush() {
         // We check dirtyTopicId first to avoid having to take the lock unnecessarily in the frequently called log append path
-        if (dirtyTopicIdOpt != null && dirtyTopicIdOpt.isPresent()) {
+        if (dirtyTopicIdOpt.isPresent()) {
             // We synchronize on the actual write to disk
             synchronized (lock) {
                 dirtyTopicIdOpt.ifPresent(topicId -> {
                     try {
-                        FileOutputStream fileOutputStream = new FileOutputStream(tempPath().toFile());
-                        try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(fileOutputStream, StandardCharsets.UTF_8))) {
-                            writer.write(PartitionMetadataFileFormatter.toFile(new PartitionMetadata(CURRENT_VERSION, topicId)));
+                        try (FileOutputStream fileOutputStream = new FileOutputStream(tempPath().toFile());
+                             BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(fileOutputStream, StandardCharsets.UTF_8))) {
+                            writer.write(new PartitionMetadata(CURRENT_VERSION, topicId).toText());
                             writer.flush();
                             fileOutputStream.getFD().sync();
                         }
