@@ -24,6 +24,8 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AlterConsumerGroupOffsetsOptions;
 import org.apache.kafka.clients.admin.ConsumerGroupDescription;
 import org.apache.kafka.clients.admin.ConsumerGroupListing;
+import org.apache.kafka.clients.admin.DeleteConsumerGroupOffsetsOptions;
+import org.apache.kafka.clients.admin.DeleteConsumerGroupOffsetsResult;
 import org.apache.kafka.clients.admin.DescribeConsumerGroupsOptions;
 import org.apache.kafka.clients.admin.DescribeTopicsOptions;
 import org.apache.kafka.clients.admin.DescribeTopicsResult;
@@ -52,6 +54,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -493,24 +496,112 @@ public class ConsumerGroupCommand {
             DescribeTopicsResult describeTopicsResult = adminClient.describeTopics(
                 topicWithoutPartitions,
                 withTimeoutMs(new DescribeTopicsOptions()));
-            //TODO: continue here.
 
-            return null;
+            Iterator<TopicPartition> unknownPartitions = describeTopicsResult.topicNameValues().entrySet().stream().flatMap(e -> {
+                String topic = e.getKey();
+                try {
+                    return e.getValue().get().partitions().stream().map(partition ->
+                        new TopicPartition(topic, partition.partition()));
+                } catch (ExecutionException | InterruptedException err) {
+                    partitionLevelResult.put(new TopicPartition(topic, -1), err);
+                    return Stream.empty();
+                }
+            }).iterator();
+
+            Set<TopicPartition> partitions = new HashSet<>(knownPartitions);
+
+            unknownPartitions.forEachRemaining(partitions::add);
+
+            DeleteConsumerGroupOffsetsResult deleteResult = adminClient.deleteConsumerGroupOffsets(
+                groupId,
+                partitions,
+                withTimeoutMs(new DeleteConsumerGroupOffsetsOptions())
+            );
+
+            Errors topLevelException = Errors.NONE;
+
+            try {
+                deleteResult.all().get();
+            } catch (ExecutionException | InterruptedException e) {
+                topLevelException = Errors.forException(e.getCause());
+            }
+
+            partitions.forEach(partition -> {
+                try {
+                    deleteResult.partitionResult(partition).get();
+                    partitionLevelResult.remove(partition);
+                } catch (ExecutionException | InterruptedException e) {
+                    partitionLevelResult.put(partition, e);
+                }
+            });
+
+            return new Tuple2<>(topLevelException, partitionLevelResult);
         }
 
         void deleteOffsets() {
+            String groupId = opts.options.valueOf(opts.groupOpt);
+            List<String> topics = opts.options.valuesOf(opts.topicOpt);
 
+            Tuple2<Errors, Map<TopicPartition, Throwable>> res = deleteOffsets(groupId, topics);
+
+            Errors topLevelResult = res.v1;
+            Map<TopicPartition, Throwable> partitionLevelResult = res.v2;
+
+            switch (topLevelResult) {
+                case NONE:
+                    System.out.println("Request succeed for deleting offsets with topic " + Utils.mkString(topics.stream(), "", "", ", ") + " group " + groupId);
+                case INVALID_GROUP_ID:
+                    printError("'" + groupId + "' is not valid.", Optional.empty());
+                case GROUP_ID_NOT_FOUND:
+                    printError("'" + groupId + "' does not exist.", Optional.empty());
+                case GROUP_AUTHORIZATION_FAILED:
+                    printError("Access to '" + groupId + "' is not authorized.", Optional.empty());
+                case NON_EMPTY_GROUP:
+                    printError("Deleting offsets of a consumer group '" + groupId + "' is forbidden if the group is not empty.", Optional.empty());
+                case GROUP_SUBSCRIBED_TO_TOPIC:
+                case TOPIC_AUTHORIZATION_FAILED:
+                case UNKNOWN_TOPIC_OR_PARTITION:
+                    printError("Encounter some partition level error, see the follow-up details:", Optional.empty());
+                default:
+                    printError("Encounter some unknown error: " + topLevelResult, Optional.empty());
+            }
+
+            String format = "%-30s %-15s %-15s";
+
+            System.out.printf("\n" + format, "TOPIC", "PARTITION", "STATUS");
+            partitionLevelResult.entrySet().stream()
+                .sorted(Comparator.comparing(e -> e.getKey().topic() + e.getKey().partition()))
+                .forEach(e -> {
+                    TopicPartition tp = e.getKey();
+                    Throwable error = e.getValue();
+                    System.out.printf(format,
+                        tp.topic(),
+                        tp.partition() >= 0 ? tp.partition() : "Not Provided",
+                        error != null ? "Error: :" + error.getMessage() : "Successful"
+                    );
+                });
         }
 
         Map<String, ConsumerGroupDescription> describeConsumerGroups(Collection<String> groupIds) {
-            return null;
+            Map<String, ConsumerGroupDescription> res = new HashMap<>();
+            adminClient.describeConsumerGroups(
+                groupIds,
+                withTimeoutMs(new DescribeConsumerGroupsOptions())
+            ).describedGroups().forEach((groupId, groupDescriptionFuture) -> {
+                try {
+                    res.put(groupId, groupDescriptionFuture.get());
+                } catch (InterruptedException | ExecutionException e) {
+                    throw new RuntimeException(e);
+                }
+            });
+            return res;
         }
 
         /**
          * Returns the state of the specified consumer group and partition assignment states
          */
         Tuple2<Optional<String>, Optional<Collection<PartitionAssignmentState>>> collectGroupOffsets(String groupId) {
-            return null;
+            return collectGroupsOffsets(Collections.singletonList(groupId)).getOrDefault(groupId, new Tuple2<>(Optional.empty(), Optional.empty()));
         }
 
         /**
