@@ -47,7 +47,8 @@ public class PartitionMetadataReadBuffer {
 
             if (versionArr.length == 2) {
                 int version = Integer.parseInt(versionArr[1]);
-                if (version == PartitionMetadataFile.CURRENT_VERSION) {
+                // To ensure downgrade compatibility, check if version is at least 0
+                if (version >= PartitionMetadataFile.CURRENT_VERSION) {
                     line = reader.readLine();
                     String[] topicIdArr = WHITE_SPACES_PATTERN.split(line);
 

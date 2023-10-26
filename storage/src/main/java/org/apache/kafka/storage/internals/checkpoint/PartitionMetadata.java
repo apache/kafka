@@ -21,12 +21,20 @@ import org.apache.kafka.common.Uuid;
 
 public class PartitionMetadata {
 
-    public int version;
-    public Uuid topicId;
+    private final int version;
+    private final Uuid topicId;
 
     public PartitionMetadata(int version, Uuid topicId) {
         this.version = version;
         this.topicId = topicId;
+    }
+
+    public int version() {
+        return version;
+    }
+
+    public Uuid topicId() {
+        return topicId;
     }
 
     public String toText() {
