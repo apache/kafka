@@ -27,13 +27,14 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -157,5 +158,29 @@ public class ConsumerConfigTest {
         configs.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, saslSslLowerCase);
         final ConsumerConfig consumerConfig = new ConsumerConfig(configs);
         assertEquals(saslSslLowerCase, consumerConfig.originals().get(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG));
+    }
+
+    @Test
+    public void testDefaultConsumerGroupConfig() {
+        final Map<String, Object> configs = new HashMap<>();
+        configs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializerClass);
+        configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClass);
+        final ConsumerConfig consumerConfig = new ConsumerConfig(configs);
+        assertEquals("generic", consumerConfig.getString(ConsumerConfig.GROUP_PROTOCOL_CONFIG));
+        assertEquals(Collections.EMPTY_LIST, consumerConfig.getList(ConsumerConfig.LOCAL_ASSIGNOR_CONFIG));
+        assertEquals(null, consumerConfig.getString(ConsumerConfig.REMOTE_ASSIGNOR_CONFIG));
+    }
+
+    @Test
+    public void testValidConsumerGroupConfig() {
+        String remoteAssignorName = "org.apache.kafka.clients.group.someAssignor";
+        final Map<String, Object> configs = new HashMap<>();
+        configs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializerClass);
+        configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClass);
+        configs.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, "consumer");
+        configs.put(ConsumerConfig.REMOTE_ASSIGNOR_CONFIG, "org.apache.kafka.clients.group.someAssignor");
+        final ConsumerConfig consumerConfig = new ConsumerConfig(configs);
+        assertEquals("consumer", consumerConfig.getString(ConsumerConfig.GROUP_PROTOCOL_CONFIG));
+        assertEquals(remoteAssignorName, consumerConfig.getString(ConsumerConfig.REMOTE_ASSIGNOR_CONFIG));
     }
 }

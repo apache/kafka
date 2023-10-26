@@ -106,6 +106,32 @@ public class ConsumerConfig extends AbstractConfig {
     private static final String HEARTBEAT_INTERVAL_MS_DOC = CommonClientConfigs.HEARTBEAT_INTERVAL_MS_DOC;
 
     /**
+     * <code>group.protocol</code>
+     */
+    public static final String GROUP_PROTOCOL_CONFIG = "group.protocol";
+    public static final String DEFAULT_GROUP_PROTOCOL = "generic";
+    public static final String GROUP_PROTOCOL_DOC = "The rebalance protocol consumer shoudl use.  We currently " +
+        "support GENERIC or CONSUMER. If CONSUMER is specified, then the consumer group protocol will be used.  " +
+        "Otherwise, the generic group protocol will be used.";
+
+    /**
+    * <code>group.remote.assignor</code>
+    */
+    public static final String REMOTE_ASSIGNOR_CONFIG = "group.remote.assignor";
+    public static final String DEFAULT_REMOTE_ASSIGNOR = null;
+    public static final String REMOTE_ASSIGNOR_DOC = "The server side assignor to use. It cannot be used in " +
+        "conjunction with group.local.assignor. The group coordinator will choose the assignor if <code>null</code> " +
+        "is provided.";
+
+    /**
+     * <code>group.local.assignor</code>
+     */
+    public static final String LOCAL_ASSIGNOR_CONFIG = "group.local.assignor";
+    public static final List<String> DEFAULT_LOCAL_ASSIGNOR = Collections.emptyList();
+    public static final String LOCAL_ASSIGNOR_DOC = "The list of client side (local) assignors as a list of full " +
+        "class names. It cannot be used in conjunction with group.remote.assignor.";
+
+    /**
      * <code>bootstrap.servers</code>
      */
     public static final String BOOTSTRAP_SERVERS_CONFIG = CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
@@ -610,6 +636,24 @@ public class ConsumerConfig extends AbstractConfig {
                                         DEFAULT_ALLOW_AUTO_CREATE_TOPICS,
                                         Importance.MEDIUM,
                                         ALLOW_AUTO_CREATE_TOPICS_DOC)
+                                .define(GROUP_PROTOCOL_CONFIG,
+                                    Type.STRING,
+                                    DEFAULT_GROUP_PROTOCOL,
+                                    ConfigDef.CaseInsensitiveValidString
+                                        .in(Utils.enumOptions(GroupProtocol.class)),
+                                    Importance.HIGH,
+                                    GROUP_PROTOCOL_DOC)
+                                .define(LOCAL_ASSIGNOR_CONFIG,
+                                    Type.LIST,
+                                    DEFAULT_LOCAL_ASSIGNOR,
+                                    new ConfigDef.NonNullValidator(),
+                                    Importance.MEDIUM,
+                                    LOCAL_ASSIGNOR_DOC)
+                                .define(REMOTE_ASSIGNOR_CONFIG,
+                                    Type.STRING,
+                                    DEFAULT_REMOTE_ASSIGNOR,
+                                    Importance.MEDIUM,
+                                    REMOTE_ASSIGNOR_DOC)
                                 // security support
                                 .define(SECURITY_PROVIDERS_CONFIG,
                                         Type.STRING,
