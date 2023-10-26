@@ -37,7 +37,7 @@ public class PartitionMetadata {
         return topicId;
     }
 
-    public String toText() {
+    public String encode() {
         return "version: " + version + "\ntopic_id: " + topicId;
     }
 }
