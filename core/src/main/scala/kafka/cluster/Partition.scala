@@ -361,7 +361,7 @@ class Partition(val topicPartition: TopicPartition,
   // a false positive under min isr check, it has to check the leaderReplicaIdOpt again. Though it can still be affected
   // by ABA problems when leader->follower->leader, but it should be good enough for a metric.
   def isUnderMinIsr: Boolean = {
-    leaderLogIfLocal.exists{partitionState.isr.size < effectiveMinIsr(_) } && isLeader
+    leaderLogIfLocal.exists { partitionState.isr.size < effectiveMinIsr(_) } && isLeader
   }
 
   private def effectiveMinIsr(leaderLog: UnifiedLog): Int = {
@@ -1117,7 +1117,7 @@ class Partition(val topicPartition: TopicPartition,
   private def maybeIncrementLeaderHW(leaderLog: UnifiedLog, currentTimeMs: Long = time.milliseconds): Boolean = {
     if (metadataCache.isInstanceOf[KRaftMetadataCache] && interBrokerProtocolVersion.isElrSupported && eligibleLeaderReplicasEnabled) {
       if (isUnderMinIsr) {
-        debug(s"Skip checking whether HWM can advance because partition=$topicPartition is under min ISR(ISR=${partitionState.isr}")
+        trace(s"Skip checking whether HWM can advance because partition is under min ISR(ISR=${partitionState.isr}")
         return false
       }
     }
