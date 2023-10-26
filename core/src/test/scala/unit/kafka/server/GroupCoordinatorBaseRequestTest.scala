@@ -24,6 +24,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.DeleteGroupsResponseData.{DeletableGroupResult, DeletableGroupResultCollection}
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse
+import org.apache.kafka.common.message.SyncGroupRequestData.SyncGroupRequestAssignment
 import org.apache.kafka.common.message.{ConsumerGroupHeartbeatRequestData, ConsumerGroupHeartbeatResponseData, DeleteGroupsRequestData, DeleteGroupsResponseData, DescribeGroupsRequestData, DescribeGroupsResponseData, JoinGroupRequestData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetDeleteRequestData, OffsetDeleteResponseData, OffsetFetchResponseData, SyncGroupRequestData}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, ConsumerGroupHeartbeatRequest, ConsumerGroupHeartbeatResponse, DeleteGroupsRequest, DeleteGroupsResponse, DescribeGroupsRequest, DescribeGroupsResponse, JoinGroupRequest, JoinGroupResponse, LeaveGroupRequest, LeaveGroupResponse, ListGroupsRequest, ListGroupsResponse, OffsetCommitRequest, OffsetCommitResponse, OffsetDeleteRequest, OffsetDeleteResponse, OffsetFetchRequest, OffsetFetchResponse, SyncGroupRequest, SyncGroupResponse}
@@ -206,7 +207,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
               new OffsetDeleteRequestData.OffsetDeleteRequestPartition()
                 .setPartitionIndex(partition)
             ).asJava)
-        ).asJava.iterator()))
+        ).asJava.iterator))
     ).build(version)
 
     val expectedResponse = new OffsetDeleteResponseData()
@@ -218,12 +219,11 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
             .setPartitions(new OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection(List(
               new OffsetDeleteResponseData.OffsetDeleteResponsePartition()
                 .setPartitionIndex(partition)
-                .setErrorCode(expectedPartitionError.code())
-            ).asJava.iterator()))
-        ).asJava.iterator()))
+                .setErrorCode(expectedPartitionError.code)
+            ).asJava.iterator))
+        ).asJava.iterator))
     } else {
-      expectedResponse
-        .setErrorCode(expectedResponseError.code())
+      expectedResponse.setErrorCode(expectedResponseError.code)
     }
 
     val response = connectAndReceive[OffsetDeleteResponse](request)
@@ -243,6 +243,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     groupId: String,
     memberId: String,
     generationId: Int,
+    assignments: List[SyncGroupRequestData.SyncGroupRequestAssignment] = List.empty,
     expectedError: Errors = Errors.NONE
   ): Unit = {
     val syncGroupRequestData = new SyncGroupRequestData()
@@ -251,7 +252,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
       .setGenerationId(generationId)
       .setProtocolType("consumer")
       .setProtocolName("consumer-range")
-      .setAssignments(List.empty.asJava)
+      .setAssignments(assignments.asJava)
 
     val syncGroupRequest = new SyncGroupRequest.Builder(syncGroupRequestData).build()
     val syncGroupResponse = connectAndReceive[SyncGroupResponse](syncGroupRequest)
@@ -261,6 +262,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
   protected def joinConsumerGroupWithOldProtocol(
     groupId: String,
     metadata: Array[Byte] = Array.empty,
+    assignment: Array[Byte] = Array.empty,
     completeRebalance: Boolean = true
   ): (String, Int) = {
     val joinGroupRequestData = new JoinGroupRequestData()
@@ -297,7 +299,10 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
       syncGroupWithOldProtocol(
         groupId = groupId,
         memberId = joinGroupResponse.data.memberId(),
-        generationId = joinGroupResponse.data.generationId()
+        generationId = joinGroupResponse.data.generationId(),
+        assignments = List(new SyncGroupRequestAssignment()
+          .setMemberId(joinGroupResponse.data.memberId)
+          .setAssignment(assignment))
       )
     }
 
@@ -337,7 +342,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
 
     val response = connectAndReceive[ListGroupsResponse](request)
 
-    response.data().groups.asScala.toList
+    response.data.groups.asScala.toList
   }
 
   protected def describeGroups(
@@ -351,7 +356,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
 
     val describeGroupsResponse = connectAndReceive[DescribeGroupsResponse](describeGroupsRequest)
 
-    describeGroupsResponse.data().groups().asScala.toList
+    describeGroupsResponse.data.groups.asScala.toList
   }
 
   protected def consumerGroupHeartbeat(
@@ -389,7 +394,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
       consumerGroupHeartbeatResponse.data.errorCode == Errors.NONE.code
     }, msg = s"Could not heartbeat successfully. Last response $consumerGroupHeartbeatResponse.")
 
-    consumerGroupHeartbeatResponse.data()
+    consumerGroupHeartbeatResponse.data
   }
 
   protected def leaveGroupWithNewProtocol(
@@ -419,16 +424,16 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     ).build()
 
     val expectedResponseData = new LeaveGroupResponseData()
-      .setErrorCode(expectedLeaveGroupError.code())
+      .setErrorCode(expectedLeaveGroupError.code)
       .setMembers(List.tabulate(memberIds.length) { i =>
         new MemberResponse()
           .setMemberId(memberIds(i))
           .setGroupInstanceId(null)
-          .setErrorCode(expectedMemberErrors(i).code())
+          .setErrorCode(expectedMemberErrors(i).code)
       }.asJava)
 
     val leaveGroupResponse = connectAndReceive[LeaveGroupResponse](leaveGroupRequest)
-    assertEquals(expectedResponseData, leaveGroupResponse.data())
+    assertEquals(expectedResponseData, leaveGroupResponse.data)
   }
 
   protected def leaveGroup(
@@ -461,11 +466,11 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
       .setResults(new DeletableGroupResultCollection(List.tabulate(groupIds.length) { i =>
         new DeletableGroupResult()
           .setGroupId(groupIds(i))
-          .setErrorCode(expectedErrors(i).code())
-      }.asJava.iterator()))
+          .setErrorCode(expectedErrors(i).code)
+      }.asJava.iterator))
 
     val deleteGroupsResponse = connectAndReceive[DeleteGroupsResponse](deleteGroupsRequest)
-    assertEquals(expectedResponseData.results().asScala.toSet, deleteGroupsResponse.data().results().asScala.toSet)
+    assertEquals(expectedResponseData.results.asScala.toSet, deleteGroupsResponse.data.results.asScala.toSet)
   }
 
   protected def connectAndReceive[T <: AbstractResponse](

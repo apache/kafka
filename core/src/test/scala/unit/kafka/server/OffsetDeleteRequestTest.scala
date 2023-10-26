@@ -77,7 +77,6 @@ class OffsetDeleteRequestTest(cluster: ClusterInstance) extends GroupCoordinator
     )
 
     for (version <- ApiKeys.OFFSET_DELETE.oldestVersion() to ApiKeys.OFFSET_DELETE.latestVersion(isUnstableApiEnabled)) {
-
       // Join the consumer group. Note that we don't heartbeat here so we must use
       // a session long enough for the duration of the test.
       val (memberId, memberEpoch) = joinConsumerGroup(

@@ -34,7 +34,6 @@ import scala.jdk.CollectionConverters._
 @Tag("integration")
 class DescribeGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
   @ClusterTest(serverProperties = Array(
-    new ClusterConfigProperty(key = "unstable.api.versions.enable", value = "true"),
     new ClusterConfigProperty(key = "group.coordinator.new.enable", value = "true"),
     new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
     new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
@@ -44,7 +43,6 @@ class DescribeGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinat
   }
 
   @ClusterTest(clusterType = Type.ALL, serverProperties = Array(
-    new ClusterConfigProperty(key = "unstable.api.versions.enable", value = "false"),
     new ClusterConfigProperty(key = "group.coordinator.new.enable", value = "false"),
     new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
     new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
@@ -54,7 +52,6 @@ class DescribeGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinat
   }
 
   private def testDescribeGroups(): Unit = {
-
     // Creates the __consumer_offsets topics because it won't be created automatically
     // in this test because it does not use FindCoordinator API.
     createOffsetsTopic()
@@ -65,12 +62,13 @@ class DescribeGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinat
       numPartitions = 3
     )
 
-    // Join the consumer group. Note that we don't heartbeat here so we must use
-    // a session long enough for the duration of the test.
+    // Join the consumer group. Complete the rebalance so that grp-1 is in STABLE state.
     val (memberId1, _) = joinConsumerGroupWithOldProtocol(
       groupId = "grp-1",
-      metadata = Array(1, 2, 3)
+      metadata = Array(1, 2, 3),
+      assignment = Array(4, 5, 6)
     )
+    // Join the consumer group. Not complete the rebalance so that grp-2 is in COMPLETING_REBALANCE state.
     val (memberId2, _) = joinConsumerGroupWithOldProtocol(
       groupId = "grp-2",
       metadata = Array(1, 2, 3),
@@ -92,6 +90,7 @@ class DescribeGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinat
                 .setClientId("client-id")
                 .setClientHost("/127.0.0.1")
                 .setMemberMetadata(Array(1, 2, 3))
+                .setMemberAssignment(Array(4, 5, 6))
             ).asJava),
           new DescribedGroup()
             .setGroupId("grp-2")
@@ -103,10 +102,12 @@ class DescribeGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinat
                 .setGroupInstanceId(null)
                 .setClientId("client-id")
                 .setClientHost("/127.0.0.1")
+                .setMemberMetadata(Array.empty)
+                .setMemberAssignment(Array.empty)
             ).asJava),
           new DescribedGroup()
             .setGroupId("grp-unknown")
-            .setGroupState(GenericGroupState.DEAD.toString)
+            .setGroupState(GenericGroupState.DEAD.toString) // Return DEAD group when the group does not exist.
         ),
         describeGroups(
           groupIds = List("grp-1", "grp-2", "grp-unknown"),
