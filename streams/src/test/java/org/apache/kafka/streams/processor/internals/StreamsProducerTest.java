@@ -1132,6 +1132,10 @@ public class StreamsProducerTest {
         streamsProducer.initTransaction();
 
         verify(mockedProducer).close();
+
+        // streamsProducer.resetProducer() should reset 'transactionInitialized' field so that subsequent call of the
+        // streamsProducer.initTransactions() method can start new transaction.
+        // Therefore, mockedProducer.initTransactions() is expected to be called twice.
         verify(mockedProducer, times(2)).initTransactions();
     }
 
