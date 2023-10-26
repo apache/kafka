@@ -110,7 +110,7 @@ public class ConsumerConfig extends AbstractConfig {
      */
     public static final String GROUP_PROTOCOL_CONFIG = "group.protocol";
     public static final String DEFAULT_GROUP_PROTOCOL = "generic";
-    public static final String GROUP_PROTOCOL_DOC = "The rebalance protocol consumer shoudl use.  We currently " +
+    public static final String GROUP_PROTOCOL_DOC = "The rebalance protocol consumer should use.  We currently " +
         "support GENERIC or CONSUMER. If CONSUMER is specified, then the consumer group protocol will be used.  " +
         "Otherwise, the generic group protocol will be used.";
 
@@ -120,16 +120,16 @@ public class ConsumerConfig extends AbstractConfig {
     public static final String REMOTE_ASSIGNOR_CONFIG = "group.remote.assignor";
     public static final String DEFAULT_REMOTE_ASSIGNOR = null;
     public static final String REMOTE_ASSIGNOR_DOC = "The server side assignor to use. It cannot be used in " +
-        "conjunction with group.local.assignor. The group coordinator will choose the assignor if <code>null</code> " +
-        "is provided.";
+        "conjunction with <code>group.local.assignor</code>. The group coordinator will choose the assignor if no " +
+        "assignor is specified.";
 
     /**
      * <code>group.local.assignor</code>
      */
     public static final String LOCAL_ASSIGNOR_CONFIG = "group.local.assignor";
     public static final List<String> DEFAULT_LOCAL_ASSIGNOR = Collections.emptyList();
-    public static final String LOCAL_ASSIGNOR_DOC = "The list of client side (local) assignors as a list of full " +
-        "class names. It cannot be used in conjunction with group.remote.assignor.";
+    public static final String LOCAL_ASSIGNOR_DOC = "The list of client side assignors in full class names. It cannot" +
+        " be used in conjunction with <code>group.remote.assignor</code>.";
 
     /**
      * <code>bootstrap.servers</code>
