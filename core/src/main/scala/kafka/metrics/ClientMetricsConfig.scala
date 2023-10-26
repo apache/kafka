@@ -96,7 +96,7 @@ object ClientMetricsConfig {
 
     val MIN_INTERVAL_MS: Int = 100 // 100ms
     val MAX_INTERVAL_MS: Int = 3600000 // 1 hour
-    val DEFAULT_INTERVAL_MS: Int = 30 * 1000 // 5 minutes
+    val DEFAULT_INTERVAL_MS: Int = 5 * 60 * 1000 // 5 minutes
 
     // Definitions of accepted values
     val configDef: ConfigDef = new ConfigDef()
