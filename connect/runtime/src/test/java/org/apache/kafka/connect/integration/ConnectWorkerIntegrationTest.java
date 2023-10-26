@@ -784,6 +784,9 @@ public class ConnectWorkerIntegrationTest {
         workerProps.put(CONFIG_TOPIC_CONFIG, configTopic);
         // Workaround for KAFKA-15676, which can cause the scheduled rebalance delay to
         // be spuriously triggered after the group coordinator for a Connect cluster is bounced
+        // Set to 1 instead of 0 as another workaround for KAFKA-15693, which can cause
+        // connectors and tasks to be unassigned indefinitely if the scheduled rebalance delay
+        // is set to 0
         workerProps.put(SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG, "1");
         connect = connectBuilder
                 .numBrokers(1)
