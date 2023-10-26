@@ -247,15 +247,18 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
                     time,
                     sensors
             );
-            this.applicationEventHandler = new ApplicationEventHandler(
+            ConsumerNetworkThread networkThread = new ConsumerNetworkThread(
                     logContext,
                     time,
-                    applicationEventQueue,
                     applicationEventProcessorSupplier,
                     networkClientDelegateSupplier,
                     requestManagersSupplier
             );
-
+            this.applicationEventHandler = new InternalApplicationEventHandler(
+                    logContext,
+                    applicationEventQueue,
+                    networkThread
+            );
             this.backgroundEventProcessor = new BackgroundEventProcessor(
                     logContext,
                     backgroundEventQueue,
@@ -298,6 +301,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         }
     }
 
+    // visible for testing
     public PrototypeAsyncConsumer(LogContext logContext,
                                   String clientId,
                                   Deserializers<K, V> deserializers,
@@ -984,7 +988,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         final Fetch<K, V> fetch = fetchCollector.collectFetch(fetchBuffer);
 
         // Notify the network thread to wake up and start the next round of fetching.
-        applicationEventHandler.wakeupNetworkThread();
+        applicationEventHandler.notifyWatcher();
 
         return fetch;
     }

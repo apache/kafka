@@ -17,73 +17,34 @@
 package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkThread;
-import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate;
-import org.apache.kafka.clients.consumer.internals.RequestManagers;
-import org.apache.kafka.common.internals.IdempotentCloser;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
-import org.apache.kafka.common.utils.Utils;
-import org.slf4j.Logger;
 
-import java.io.Closeable;
-import java.time.Duration;
 import java.util.Objects;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Supplier;
 
 /**
  * An event handler that receives {@link ApplicationEvent application events} from the application thread which
  * are then readable from the {@link ApplicationEventProcessor} in the {@link ConsumerNetworkThread network thread}.
  */
-public class ApplicationEventHandler implements Closeable {
-
-    private final Logger log;
-    private final BlockingQueue<ApplicationEvent> applicationEventQueue;
-    private final ConsumerNetworkThread networkThread;
-    private final IdempotentCloser closer = new IdempotentCloser();
+public class ApplicationEventHandler extends EventHandler<ApplicationEvent> {
 
     public ApplicationEventHandler(final LogContext logContext,
-                                   final Time time,
-                                   final BlockingQueue<ApplicationEvent> applicationEventQueue,
-                                   final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier,
-                                   final Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
-                                   final Supplier<RequestManagers> requestManagersSupplier) {
-        this.log = logContext.logger(ApplicationEventHandler.class);
-        this.applicationEventQueue = applicationEventQueue;
-        this.networkThread = new ConsumerNetworkThread(logContext,
-                time,
-                applicationEventProcessorSupplier,
-                networkClientDelegateSupplier,
-                requestManagersSupplier);
-        this.networkThread.start();
+                                   final BlockingQueue<ApplicationEvent> queue) {
+        this(logContext, queue, () -> { });
+    }
+
+    public ApplicationEventHandler(final LogContext logContext,
+                                   final BlockingQueue<ApplicationEvent> queue,
+                                   final Watcher watcher) {
+        super(logContext, queue, watcher);
     }
 
     /**
-     * Add an {@link ApplicationEvent} to the handler and then internally invoke {@link #wakeupNetworkThread}
-     * to alert the network I/O thread that it has something to process.
-     *
-     * @param event An {@link ApplicationEvent} created by the application thread
-     */
-    public void add(final ApplicationEvent event) {
-        Objects.requireNonNull(event, "ApplicationEvent provided to add must be non-null");
-        log.trace("Enqueued event: {}", event);
-        applicationEventQueue.add(event);
-        wakeupNetworkThread();
-    }
-
-    /**
-     * Wakeup the {@link ConsumerNetworkThread network I/O thread} to pull the next event(s) from the queue.
-     */
-    public void wakeupNetworkThread() {
-        networkThread.wakeup();
-    }
-
-    /**
-     * Add a {@link CompletableApplicationEvent} to the handler. The method blocks waiting for the result, and will
-     * return the result value upon successful completion; otherwise throws an error.
+     * Add a {@link CompletableApplicationEvent} to the underlying queue. The method blocks waiting for the result,
+     * and will return the result value upon successful completion; otherwise throws an error.
      *
      * <p/>
      *
@@ -99,17 +60,5 @@ public class ApplicationEventHandler implements Closeable {
         Objects.requireNonNull(timer, "Timer provided to addAndGet must be non-null");
         add(event);
         return event.get(timer);
-    }
-
-    @Override
-    public void close() {
-        close(Duration.ZERO);
-    }
-
-    public void close(final Duration timeout) {
-        closer.close(
-                () -> Utils.closeQuietly(() -> networkThread.close(timeout), "consumer network thread"),
-                () -> log.warn("The application event handler was already closed")
-        );
     }
 }

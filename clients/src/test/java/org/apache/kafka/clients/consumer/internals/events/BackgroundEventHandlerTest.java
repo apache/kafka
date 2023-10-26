@@ -32,14 +32,14 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 public class BackgroundEventHandlerTest {
 
-    private ConsumerTestBuilder.ApplicationEventHandlerTestBuilder testBuilder;
+    private ConsumerTestBuilder testBuilder;
     private BlockingQueue<BackgroundEvent> backgroundEventQueue;
     private BackgroundEventHandler backgroundEventHandler;
     private BackgroundEventProcessor backgroundEventProcessor;
 
     @BeforeEach
     public void setup() {
-        testBuilder = new ConsumerTestBuilder.ApplicationEventHandlerTestBuilder();
+        testBuilder = new ConsumerTestBuilder();
         backgroundEventQueue = testBuilder.backgroundEventQueue;
         backgroundEventHandler = testBuilder.backgroundEventHandler;
         backgroundEventProcessor = testBuilder.backgroundEventProcessor;

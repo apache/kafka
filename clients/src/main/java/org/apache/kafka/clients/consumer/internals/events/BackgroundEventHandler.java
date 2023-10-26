@@ -18,10 +18,8 @@ package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkThread;
 import org.apache.kafka.common.utils.LogContext;
-import org.slf4j.Logger;
 
-import java.util.Objects;
-import java.util.Queue;
+import java.util.concurrent.BlockingQueue;
 
 /**
  * An event handler that receives {@link BackgroundEvent background events} from the
@@ -29,24 +27,15 @@ import java.util.Queue;
  * via the {@link BackgroundEventProcessor}.
  */
 
-public class BackgroundEventHandler {
+public class BackgroundEventHandler extends EventHandler<BackgroundEvent> {
 
-    private final Logger log;
-    private final Queue<BackgroundEvent> backgroundEventQueue;
-
-    public BackgroundEventHandler(final LogContext logContext, final Queue<BackgroundEvent> backgroundEventQueue) {
-        this.log = logContext.logger(BackgroundEventHandler.class);
-        this.backgroundEventQueue = backgroundEventQueue;
+    public BackgroundEventHandler(final LogContext logContext, final BlockingQueue<BackgroundEvent> queue) {
+        this(logContext, queue, () -> {});
     }
 
-    /**
-     * Add a {@link BackgroundEvent} to the handler.
-     *
-     * @param event A {@link BackgroundEvent} created by the {@link ConsumerNetworkThread network thread}
-     */
-    public void add(BackgroundEvent event) {
-        Objects.requireNonNull(event, "BackgroundEvent provided to add must be non-null");
-        log.trace("Enqueued event: {}", event);
-        backgroundEventQueue.add(event);
+    public BackgroundEventHandler(final LogContext logContext,
+                                  final BlockingQueue<BackgroundEvent> queue,
+                                  final Watcher watcher) {
+        super(logContext, queue, watcher);
     }
 }

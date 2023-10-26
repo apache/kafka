@@ -97,7 +97,10 @@ public class ConsumerTestBuilder implements Closeable {
     final FetchRequestManager fetchRequestManager;
     final RequestManagers requestManagers;
     public final ApplicationEventProcessor applicationEventProcessor;
+    public final BackgroundEventProcessor backgroundEventProcessor;
+    public ApplicationEventHandler applicationEventHandler;
     public final BackgroundEventHandler backgroundEventHandler;
+    public final ConsumerCoordinatorMetrics consumerCoordinatorMetrics;
     public final ConsumerRebalanceListenerInvoker rebalanceListenerInvoker;
     final MockClient client;
     final Optional<GroupInformation> groupInfo;
@@ -110,6 +113,10 @@ public class ConsumerTestBuilder implements Closeable {
         this.groupInfo = groupInfo;
         this.applicationEventQueue = new LinkedBlockingQueue<>();
         this.backgroundEventQueue = new LinkedBlockingQueue<>();
+        this.applicationEventHandler = spy(new ApplicationEventHandler(
+                logContext,
+                applicationEventQueue
+        ));
         this.backgroundEventHandler = spy(new BackgroundEventHandler(logContext, backgroundEventQueue));
         GroupRebalanceConfig groupRebalanceConfig = new GroupRebalanceConfig(
                 100,
@@ -260,7 +267,7 @@ public class ConsumerTestBuilder implements Closeable {
                 metadata,
                 Optional.ofNullable(membershipManager.orElse(null)))
         );
-        ConsumerCoordinatorMetrics sensors = new ConsumerCoordinatorMetrics(
+        this.consumerCoordinatorMetrics = new ConsumerCoordinatorMetrics(
                 subscriptions,
                 metrics,
                 CONSUMER_METRIC_GROUP_PREFIX
@@ -269,7 +276,15 @@ public class ConsumerTestBuilder implements Closeable {
                 logContext,
                 subscriptions,
                 time,
-                sensors
+                consumerCoordinatorMetrics
+        );
+        this.backgroundEventProcessor = spy(
+                new BackgroundEventProcessor(
+                        logContext,
+                        backgroundEventQueue,
+                        applicationEventHandler,
+                        rebalanceListenerInvoker
+                )
         );
     }
 
@@ -277,6 +292,7 @@ public class ConsumerTestBuilder implements Closeable {
     public void close() {
         closeQuietly(requestManagers, RequestManagers.class.getSimpleName());
         closeQuietly(applicationEventProcessor, ApplicationEventProcessor.class.getSimpleName());
+        closeQuietly(backgroundEventProcessor, BackgroundEventProcessor.class.getSimpleName());
     }
 
     public static class ConsumerNetworkThreadTestBuilder extends ConsumerTestBuilder {
@@ -304,42 +320,7 @@ public class ConsumerTestBuilder implements Closeable {
         }
     }
 
-    public static class ApplicationEventHandlerTestBuilder extends ConsumerTestBuilder {
-
-        public final ApplicationEventHandler applicationEventHandler;
-        public final BackgroundEventProcessor backgroundEventProcessor;
-
-        public ApplicationEventHandlerTestBuilder() {
-            this(createDefaultGroupInformation());
-        }
-
-        public ApplicationEventHandlerTestBuilder(Optional<GroupInformation> groupInfo) {
-            super(groupInfo);
-            this.applicationEventHandler = spy(new ApplicationEventHandler(
-                    logContext,
-                    time,
-                    applicationEventQueue,
-                    () -> applicationEventProcessor,
-                    () -> networkClientDelegate,
-                    () -> requestManagers));
-            this.backgroundEventProcessor = spy(
-                    new BackgroundEventProcessor(
-                            logContext,
-                            backgroundEventQueue,
-                            applicationEventHandler,
-                            rebalanceListenerInvoker
-                    )
-            );
-        }
-
-        @Override
-        public void close() {
-            closeQuietly(applicationEventHandler, ApplicationEventHandler.class.getSimpleName());
-            closeQuietly(backgroundEventProcessor, BackgroundEventProcessor.class.getSimpleName());
-        }
-    }
-
-    public static class PrototypeAsyncConsumerTestBuilder extends ApplicationEventHandlerTestBuilder {
+    public static class PrototypeAsyncConsumerTestBuilder extends ConsumerTestBuilder {
 
         final PrototypeAsyncConsumer<String, String> consumer;
 
@@ -358,6 +339,15 @@ public class ConsumerTestBuilder implements Closeable {
                     deserializers,
                     metricsManager,
                     time);
+            ConsumerNetworkThread networkThread = new ConsumerNetworkThread(logContext,
+                    time,
+                    () -> applicationEventProcessor,
+                    () -> networkClientDelegate,
+                    () -> requestManagers);
+            this.applicationEventHandler = spy(new InternalApplicationEventHandler(
+                    logContext,
+                    applicationEventQueue,
+                    networkThread));
             this.consumer = spy(new PrototypeAsyncConsumer<>(
                     logContext,
                     clientId,

@@ -17,47 +17,30 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
-import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
-import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventProcessor;
-import org.apache.kafka.clients.consumer.internals.events.PartitionLostCompleteEvent;
-import org.apache.kafka.clients.consumer.internals.events.PartitionLostStartedEvent;
-import org.apache.kafka.clients.consumer.internals.events.RebalanceCompleteEvent;
-import org.apache.kafka.clients.consumer.internals.events.RebalanceStartedEvent;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Optional;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
-import java.util.concurrent.BlockingQueue;
 
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_TOPIC_NAME;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class AssignmentReconcilerTest {
 
-    private ConsumerTestBuilder.ApplicationEventHandlerTestBuilder testBuilder;
+    private ConsumerTestBuilder testBuilder;
     private SubscriptionState subscriptions;
-    private BlockingQueue<ApplicationEvent> applicationEventQueue;
-    private BlockingQueue<BackgroundEvent> backgroundEventQueue;
     private ApplicationEventProcessor applicationEventProcessor;
     private BackgroundEventProcessor backgroundEventProcessor;
     private AssignmentReconciler reconciler;
-
-    @BeforeEach
-    public void setup() {
-        setup(new NoOpConsumerRebalanceListener());
-    }
 
     @AfterEach
     public void tearDown() {
@@ -66,8 +49,29 @@ public class AssignmentReconcilerTest {
         }
     }
 
+    private void setup() {
+        setup(new NoOpConsumerRebalanceListener());
+    }
+
+    private void setup(ConsumerRebalanceListener listener) {
+        testBuilder = new ConsumerTestBuilder(ConsumerTestBuilder.createDefaultGroupInformation());
+
+        // Create our subscriptions and subscribe to the topics.
+        subscriptions = testBuilder.subscriptions;
+        subscriptions.subscribe(Collections.singleton(DEFAULT_TOPIC_NAME), listener);
+
+        // We need the background event processor to process events from the background thread (to execute
+        // the ConsumerRebalanceListener callbacks) and the application event processor to forward the result
+        // of the callback execution back to the membership manager.
+        applicationEventProcessor = testBuilder.applicationEventProcessor;
+        backgroundEventProcessor = testBuilder.backgroundEventProcessor;
+        reconciler = testBuilder.assignmentReconciler.orElseThrow(() -> new IllegalStateException("Should be in a group"));
+    }
+
     @Test
     public void testAssignment() {
+        setup();
+
         // Create our initial assignment
         Set<TopicPartition> assignment = newTopicPartitions(0, 1, 2, 3);
 
@@ -87,6 +91,8 @@ public class AssignmentReconcilerTest {
 
     @Test
     public void testAssignmentAndRevocation() {
+        setup();
+
         Set<TopicPartition> originalAssignment = newTopicPartitions(0, 1, 2, 3);
 
         // Create our initial assignment that adds four partitions
@@ -106,7 +112,6 @@ public class AssignmentReconcilerTest {
         // Create our follow-up assignment that removes two partitions.
         {
             Set<TopicPartition> newAssignment = newTopicPartitions(0, 2);
-            Set<TopicPartition> expectedRevoked = newTopicPartitions(1, 3);
 
             // We get another assignment. Since we have partitions assigned, we will need to revoke some
             // old partitions that are no longer part of the new target assignment.
@@ -122,6 +127,8 @@ public class AssignmentReconcilerTest {
 
     @Test
     public void testLose() {
+        setup();
+
         // This mimics having set up an assignment already.
         SortedSet<TopicPartition> partitions = newTopicPartitions(0, 1, 2, 3);
         subscriptions.assignFromSubscribed(partitions);
@@ -149,8 +156,6 @@ public class AssignmentReconcilerTest {
             }
         };
 
-        // Perform a tear down and set up our new listener.
-        tearDown();
         setup(failingListener);
 
         // This mimics having set up an assignment of four partitions.
@@ -182,35 +187,4 @@ public class AssignmentReconcilerTest {
 
         return topicPartitions;
     }
-
-    private void setup(ConsumerRebalanceListener listener) {
-        testBuilder = new ConsumerTestBuilder.ApplicationEventHandlerTestBuilder(ConsumerTestBuilder.createDefaultGroupInformation());
-
-        // Create our subscriptions and subscribe to the topics.
-        subscriptions = testBuilder.subscriptions;
-        subscriptions.subscribe(Collections.singleton(DEFAULT_TOPIC_NAME), listener);
-
-        // We need the background event queue to check for the events from the network thread to the application thread
-        // to signal the ConsumerRebalanceListener callbacks.
-//        applicationEventQueue = testBuilder.applicationEventQueue;
-//        backgroundEventQueue = testBuilder.backgroundEventQueue;
-
-        applicationEventProcessor = testBuilder.applicationEventProcessor;
-        backgroundEventProcessor = testBuilder.backgroundEventProcessor;
-        reconciler = testBuilder.assignmentReconciler.orElseThrow(() -> new IllegalStateException("Should be in a group"));
-    }
-
-//    @SuppressWarnings("unchecked")
-//    private <T extends ApplicationEvent> T pollApplicationEvent() {
-//        ApplicationEvent event = applicationEventQueue.poll();
-//        assertNotNull(event);
-//        return (T) event;
-//    }
-//
-//    @SuppressWarnings("unchecked")
-//    private <T extends BackgroundEvent> T pollBackgroundEvent() {
-//        BackgroundEvent event = backgroundEventQueue.poll();
-//        assertNotNull(event);
-//        return (T) event;
-//    }
 }
