@@ -148,8 +148,7 @@ public class StreamsMetricsImplTest {
 
     private ArgumentCaptor<String> addSensorsOnAllLevels(final Metrics metrics, final StreamsMetricsImpl streamsMetrics) {
         final ArgumentCaptor<String> sensorKeys = ArgumentCaptor.forClass(String.class);
-        final Sensor[] parents = {};
-        when(metrics.sensor(sensorKeys.capture(), eq(INFO_RECORDING_LEVEL), eq(parents)))
+        when(metrics.sensor(sensorKeys.capture(), any(RecordingLevel.class), any()))
             .thenReturn(sensor);
         when(metrics.metricName(METRIC_NAME1, CLIENT_LEVEL_GROUP, DESCRIPTION1, clientLevelTags))
             .thenReturn(metricName1);
@@ -200,8 +199,7 @@ public class StreamsMetricsImplTest {
                                                   final RecordingLevel recordingLevel) {
         final ArgumentCaptor<String> sensorKey = ArgumentCaptor.forClass(String.class);
         when(metrics.getSensor(sensorKey.capture())).thenReturn(null);
-        final Sensor[] parents = {};
-        when(metrics.sensor(sensorKey.capture(), eq(recordingLevel), eq(parents))).thenReturn(sensor);
+        when(metrics.sensor(sensorKey.capture(), any(RecordingLevel.class), any())).thenReturn(sensor);
         return sensorKey;
     }
 
@@ -453,7 +451,7 @@ public class StreamsMetricsImplTest {
             new MetricName(METRIC_NAME1, STATE_STORE_LEVEL_GROUP, DESCRIPTION1, STORE_LEVEL_TAG_MAP);
         when(metrics.metricName(METRIC_NAME1, STATE_STORE_LEVEL_GROUP, DESCRIPTION1, STORE_LEVEL_TAG_MAP))
             .thenReturn(metricName);
-        when(metrics.metric(metricName)).thenReturn(mock(KafkaMetric.class));
+        when(metrics.metric(metricName)).thenReturn(null);
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, VERSION, time);
 
         streamsMetrics.addStoreLevelMutableMetric(
@@ -514,8 +512,8 @@ public class StreamsMetricsImplTest {
         final ArgumentCaptor<String> sensorKeys = addSensorsOnAllLevels(metrics, streamsMetrics);
         doNothing().when(metrics).removeSensor(sensorKeys.getAllValues().get(6));
         doNothing().when(metrics).removeSensor(sensorKeys.getAllValues().get(7));
-        when(metrics.removeMetric(metricName1)).thenReturn(mock(KafkaMetric.class));
-        when(metrics.removeMetric(metricName2)).thenReturn(mock(KafkaMetric.class));
+        when(metrics.removeMetric(metricName1)).thenReturn(null);
+        when(metrics.removeMetric(metricName2)).thenReturn(null);
 
         streamsMetrics.removeAllStoreLevelSensorsAndMetrics(TASK_ID1, STORE_NAME1);
     }
