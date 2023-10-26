@@ -4338,10 +4338,6 @@ class KafkaApisTest {
         "group-2" -> null,
         "group-3" -> null,
         "group-4" -> null,
-        "group-5" -> List(
-          new TopicPartition("unknown", 0),
-          new TopicPartition("foo", 1)
-        ).asJava,
       ).asJava
       buildRequest(new OffsetFetchRequest.Builder(groups, false, false).build(version))
     }
@@ -4391,22 +4387,6 @@ class KafkaApisTest {
         false
       )).thenReturn(group4Future)
 
-      val group5Future = new CompletableFuture[OffsetFetchResponseData.OffsetFetchResponseGroup]()
-      when(groupCoordinator.fetchOffsets(
-        requestChannelRequest.context,
-        new OffsetFetchRequestData.OffsetFetchRequestGroup()
-          .setGroupId("group-5")
-          .setTopics(List(
-            new OffsetFetchRequestData.OffsetFetchRequestTopics()
-              .setName("foo")
-              .setPartitionIndexes(List[Integer](1).asJava),
-            new OffsetFetchRequestData.OffsetFetchRequestTopics()
-              .setName("unknown")
-              .setPartitionIndexes(List[Integer](0).asJava)
-          ).asJava),
-        false
-      )).thenReturn(group5Future)
-
       createKafkaApis().handleOffsetFetchRequest(requestChannelRequest)
 
       val group1Response = new OffsetFetchResponseData.OffsetFetchResponseGroup()
@@ -4455,32 +4435,12 @@ class KafkaApisTest {
         .setGroupId("group-4")
         .setErrorCode(Errors.INVALID_GROUP_ID.code)
 
-      val group5Response = new OffsetFetchResponseData.OffsetFetchResponseGroup()
-        .setGroupId("group-5")
-        .setTopics(List(
-          new OffsetFetchResponseData.OffsetFetchResponseTopics()
-            .setName("unknown")
-            .setPartitions(List(
-              new OffsetFetchResponseData.OffsetFetchResponsePartitions()
-                .setPartitionIndex(0)
-                .setCommittedOffset(-1)
-            ).asJava),
-          new OffsetFetchResponseData.OffsetFetchResponseTopics()
-            .setName("foo")
-            .setPartitions(List(
-              new OffsetFetchResponseData.OffsetFetchResponsePartitions()
-                .setPartitionIndex(1)
-                .setCommittedOffset(-1)
-            ).asJava)
-        ).asJava)
-
-      val expectedGroups = List(group1Response, group2Response, group3Response, group4Response, group5Response)
+      val expectedGroups = List(group1Response, group2Response, group3Response, group4Response)
 
       group1Future.complete(group1Response)
       group2Future.complete(group2Response)
       group3Future.completeExceptionally(Errors.INVALID_GROUP_ID.exception)
       group4Future.complete(group4Response)
-      group5Future.complete(group5Response)
 
       val response = verifyNoThrottling[OffsetFetchResponse](requestChannelRequest)
       assertEquals(expectedGroups.toSet, response.data.groups().asScala.toSet)
@@ -4786,6 +4746,89 @@ class KafkaApisTest {
 
     group1Future.complete(group1ResponseFromCoordinator)
     group3Future.complete(group3ResponseFromCoordinator)
+
+    val response = verifyNoThrottling[OffsetFetchResponse](requestChannelRequest)
+    assertEquals(expectedOffsetFetchResponse, response.data)
+  }
+
+  @Test
+  def testHandleOffsetFetchWithUnauthorizedTopicAndTopLevelError(): Unit = {
+
+    def makeRequest(version: Short): RequestChannel.Request = {
+      val groups = Map(
+        "group-1" -> List(
+          new TopicPartition("foo", 0),
+          new TopicPartition("bar", 0)
+        ).asJava,
+        "group-2" -> List(
+          new TopicPartition("foo", 0),
+          new TopicPartition("bar", 0)
+        ).asJava
+      ).asJava
+      buildRequest(new OffsetFetchRequest.Builder(groups, false, false).build(version))
+    }
+
+    val requestChannelRequest = makeRequest(ApiKeys.OFFSET_FETCH.latestVersion)
+
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+
+    val acls = Map(
+      "group-1" -> AuthorizationResult.ALLOWED,
+      "group-2" -> AuthorizationResult.ALLOWED,
+      "foo" -> AuthorizationResult.DENIED,
+      "bar" -> AuthorizationResult.ALLOWED
+    )
+
+    when(authorizer.authorize(
+      any[RequestContext],
+      any[util.List[Action]]
+    )).thenAnswer { invocation =>
+      val actions = invocation.getArgument(1, classOf[util.List[Action]])
+      actions.asScala.map { action =>
+        acls.getOrElse(action.resourcePattern.name, AuthorizationResult.DENIED)
+      }.asJava
+    }
+
+    // group-1 and group-2 are allowed and bar is allowed.
+    val group1Future = new CompletableFuture[OffsetFetchResponseData.OffsetFetchResponseGroup]()
+    when(groupCoordinator.fetchOffsets(
+      requestChannelRequest.context,
+      new OffsetFetchRequestData.OffsetFetchRequestGroup()
+        .setGroupId("group-1")
+        .setTopics(List(new OffsetFetchRequestData.OffsetFetchRequestTopics()
+          .setName("bar")
+          .setPartitionIndexes(List[Integer](0).asJava)).asJava),
+      false
+    )).thenReturn(group1Future)
+
+    val group2Future = new CompletableFuture[OffsetFetchResponseData.OffsetFetchResponseGroup]()
+    when(groupCoordinator.fetchOffsets(
+      requestChannelRequest.context,
+      new OffsetFetchRequestData.OffsetFetchRequestGroup()
+        .setGroupId("group-2")
+        .setTopics(List(new OffsetFetchRequestData.OffsetFetchRequestTopics()
+          .setName("bar")
+          .setPartitionIndexes(List[Integer](0).asJava)).asJava),
+      false
+    )).thenReturn(group1Future)
+
+    createKafkaApis(authorizer = Some(authorizer)).handle(requestChannelRequest, RequestLocal.NoCaching)
+
+    // group-2 mocks using the new group coordinator, thus when the coordinator is not active, a response with error code is returned.
+    val group2ResponseFromCoordinator = new OffsetFetchResponseData.OffsetFetchResponseGroup()
+      .setGroupId("group-2")
+      .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code)
+
+    val expectedOffsetFetchResponse = new OffsetFetchResponseData()
+      .setGroups(List(
+        new OffsetFetchResponseData.OffsetFetchResponseGroup()
+          .setGroupId("group-1")
+          .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code),
+        group2ResponseFromCoordinator
+      ).asJava)
+
+    group1Future.completeExceptionally(Errors.COORDINATOR_NOT_AVAILABLE.exception)
+    group2Future.complete(group2ResponseFromCoordinator)
 
     val response = verifyNoThrottling[OffsetFetchResponse](requestChannelRequest)
     assertEquals(expectedOffsetFetchResponse, response.data)
