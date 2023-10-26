@@ -33,7 +33,7 @@
   //
   // Version 9 enables flexible versions.
   //
-  // Version 10 adds 'CurrentLeader' and 'NodeEndpoints' as tagged fields
+  // Version 10 adds 'CurrentLeader' and 'NodeEndpoints' as tagged fields (KIP-951)
   "validVersions": "0-10",
   "flexibleVersions": "9+",
   "fields": [

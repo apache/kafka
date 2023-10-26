@@ -34,7 +34,7 @@
   //
   // Version 9 enables flexible versions.
   //
-  // Version 10 is the same as version 9.
+  // Version 10 is the same as version 9 (KIP-951).
   "validVersions": "0-10",
   "flexibleVersions": "9+",
   "fields": [
