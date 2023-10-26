@@ -298,12 +298,12 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         }
     }
 
-    private boolean checkDriverState(MigrationDriverState expectedState) {
+    private boolean checkDriverState(MigrationDriverState expectedState, MigrationEvent migrationEvent) {
         if (migrationState.equals(expectedState)) {
             return true;
         } else {
             log.info("Expected driver state {} but found {}. Not running this event {}.",
-                expectedState, migrationState, this.getClass().getSimpleName());
+                expectedState, migrationState, migrationEvent.getClass().getSimpleName());
             return false;
         }
     }
@@ -572,7 +572,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
 
         @Override
         public void run() throws Exception {
-            if (checkDriverState(MigrationDriverState.WAIT_FOR_CONTROLLER_QUORUM)) {
+            if (checkDriverState(MigrationDriverState.WAIT_FOR_CONTROLLER_QUORUM, this)) {
                 if (!firstPublish) {
                     log.trace("Waiting until we have received metadata before proceeding with migration");
                     return;
@@ -618,7 +618,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
     class WaitForZkBrokersEvent extends MigrationEvent {
         @Override
         public void run() throws Exception {
-            if (checkDriverState(MigrationDriverState.WAIT_FOR_BROKERS)) {
+            if (checkDriverState(MigrationDriverState.WAIT_FOR_BROKERS, this)) {
                 if (areZkBrokersReadyForMigration()) {
                     log.info("Zk brokers are registered and ready for migration");
                     transitionTo(MigrationDriverState.BECOME_CONTROLLER);
@@ -630,7 +630,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
     class BecomeZkControllerEvent extends MigrationEvent {
         @Override
         public void run() throws Exception {
-            if (checkDriverState(MigrationDriverState.BECOME_CONTROLLER)) {
+            if (checkDriverState(MigrationDriverState.BECOME_CONTROLLER, this)) {
                 applyMigrationOperation("Claiming ZK controller leadership", zkMigrationClient::claimControllerLeadership);
                 if (migrationLeadershipState.zkControllerEpochZkVersion() == -1) {
                     log.info("Unable to claim leadership, will retry until we learn of a different KRaft leader");
@@ -648,7 +648,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
     class MigrateMetadataEvent extends MigrationEvent {
         @Override
         public void run() throws Exception {
-            if (!checkDriverState(MigrationDriverState.ZK_MIGRATION)) {
+            if (!checkDriverState(MigrationDriverState.ZK_MIGRATION, this)) {
                 return;
             }
             Set<Integer> brokersInMetadata = new HashSet<>();
@@ -715,7 +715,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
     class SyncKRaftMetadataEvent extends MigrationEvent {
         @Override
         public void run() throws Exception {
-            if (checkDriverState(MigrationDriverState.SYNC_KRAFT_TO_ZK)) {
+            if (checkDriverState(MigrationDriverState.SYNC_KRAFT_TO_ZK, this)) {
                 // The migration offset will be non-negative at this point, so we just need to check that the image
                 // we have actually includes the migration metadata.
                 if (image.highestOffsetAndEpoch().compareTo(migrationLeadershipState.offsetAndEpoch()) < 0) {
@@ -741,7 +741,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         @Override
         public void run() throws Exception {
             // Ignore sending RPCs to the brokers since we're no longer in the state.
-            if (checkDriverState(MigrationDriverState.KRAFT_CONTROLLER_TO_BROKER_COMM)) {
+            if (checkDriverState(MigrationDriverState.KRAFT_CONTROLLER_TO_BROKER_COMM, this)) {
                 if (image.highestOffsetAndEpoch().compareTo(migrationLeadershipState.offsetAndEpoch()) >= 0) {
                     log.info("Sending RPCs to broker before moving to dual-write mode using " +
                             "at offset and epoch {}", image.highestOffsetAndEpoch());
