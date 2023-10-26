@@ -53,6 +53,8 @@ object KafkaRequestHandler {
    * Wrap callback to schedule it on a request thread.
    * NOTE: this function must be called on a request thread.
    * @param fun Callback function to execute
+   * @param requestLocal The RequestLocal for the current request handler thread in case we need to call
+   *                     the callback function without queueing the callback request
    * @return Wrapped callback that would execute `fun` on a request thread
    */
   def wrap[T](fun: (RequestLocal, T) => Unit, requestLocal: RequestLocal): T => Unit = {
