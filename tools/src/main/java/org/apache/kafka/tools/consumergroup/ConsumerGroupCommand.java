@@ -26,6 +26,7 @@ import org.apache.kafka.clients.admin.ConsumerGroupDescription;
 import org.apache.kafka.clients.admin.ConsumerGroupListing;
 import org.apache.kafka.clients.admin.DeleteConsumerGroupOffsetsOptions;
 import org.apache.kafka.clients.admin.DeleteConsumerGroupOffsetsResult;
+import org.apache.kafka.clients.admin.DeleteConsumerGroupsOptions;
 import org.apache.kafka.clients.admin.DescribeConsumerGroupsOptions;
 import org.apache.kafka.clients.admin.DescribeTopicsOptions;
 import org.apache.kafka.clients.admin.DescribeTopicsResult;
@@ -881,7 +882,38 @@ public class ConsumerGroupCommand {
         }
 
         Map<String, Throwable> deleteGroups() {
-            return null;
+            List<String> groupIds = opts.options.has(opts.allGroupsOpt)
+                ? listConsumerGroups()
+                : opts.options.valuesOf(opts.groupOpt);
+
+            Map<String, KafkaFuture<Void>> groupsToDelete = adminClient.deleteConsumerGroups(
+                groupIds,
+                withTimeoutMs(new DeleteConsumerGroupsOptions())
+            ).deletedGroups();
+
+            Set<String> success = new HashSet<>();
+            Map<String, Throwable> failed = new HashMap<>();
+
+            groupsToDelete.forEach((g, f) -> {
+                try {
+                    f.get();
+                    success.add(g);
+                } catch (ExecutionException | InterruptedException e) {
+                    failed.put(g, e);
+                }
+            });
+
+            if (failed.isEmpty())
+                System.out.println("Deletion of requested consumer groups (" + Utils.mkString(success.stream(), "'", "', '", "'") + ") was successful.");
+            else {
+                printError("Deletion of some consumer groups failed:", Optional.empty());
+                failed.forEach((group, error) -> System.out.println("* Group '" + group + "' could not be deleted due to: " + error));
+
+                if (!success.isEmpty())
+                    System.out.println("\nThese consumer groups were deleted successfully: " + Utils.mkString(success.stream(), "'", "', '", "'"));
+            }
+
+            return failed;
         }
     }
 
