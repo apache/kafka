@@ -790,7 +790,6 @@ public class ConnectWorkerIntegrationTest {
                 .numWorkers(1)
                 .build();
         connect.start();
-
         connect.assertions().assertAtLeastNumWorkersAreUp(1,
                 "Worker did not start in time");
 
@@ -801,7 +800,6 @@ public class ConnectWorkerIntegrationTest {
         // Create a connector to ensure that the worker has completed startup
         log.info("Creating initial connector");
         connect.configureConnector(CONNECTOR_NAME, connectorConfig1);
-
         connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(
                 CONNECTOR_NAME, NUM_TASKS, "connector and tasks did not start in time"
         );
@@ -824,7 +822,7 @@ public class ConnectWorkerIntegrationTest {
         assertNotNull(e.getMessage());
         assertTrue(
                 "Message '" + e.getMessage() + "' does not match expected format",
-                e.getMessage().contains("Request timed out. The worker is currently polling the group coordinator")
+                e.getMessage().contains("Request timed out. The worker is currently flushing updates to the status topic")
         );
         log.info("Restarting Kafka cluster");
         connect.kafka().startOnlyKafkaOnSamePorts();

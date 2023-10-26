@@ -120,7 +120,7 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
         return super.ensureCoordinatorReady(timer);
     }
 
-    public void poll(long timeout) {
+    public void poll(long timeout, Runnable onPoll) {
         // poll for io until the timeout expires
         final long start = time.milliseconds();
         long now = start;
@@ -130,6 +130,7 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
             if (coordinatorUnknown()) {
                 log.debug("Broker coordinator is marked unknown. Attempting discovery with a timeout of {}ms",
                         coordinatorDiscoveryTimeoutMs);
+                onPoll.run();
                 if (ensureCoordinatorReady(time.timer(coordinatorDiscoveryTimeoutMs))) {
                     log.debug("Broker coordinator is ready");
                 } else {
@@ -146,6 +147,7 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
             }
 
             if (rejoinNeededOrPending()) {
+                onPoll.run();
                 ensureActiveGroup();
                 now = time.milliseconds();
             }
@@ -158,6 +160,7 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
             // Note that because the network client is shared with the background heartbeat thread,
             // we do not want to block in poll longer than the time to the next heartbeat.
             long pollTimeout = Math.min(Math.max(0, remaining), timeToNextHeartbeat(now));
+            onPoll.run();
             client.poll(time.timer(pollTimeout));
 
             now = time.milliseconds();

@@ -379,7 +379,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 tick();
             }
 
-            recordTickThreadStage("beginning shutdown");
+            recordTickThreadStage("shutting down");
             halt();
 
             log.info("Herder stopped");
@@ -411,9 +411,9 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             }
 
             log.debug("Ensuring group membership is still active");
-            try (TickThreadStage stage = new TickThreadStage("ensuring membership in the cluster")) {
-                member.ensureActive();
-            }
+            String stageDescription = "ensuring membership in the cluster";
+            member.ensureActive(() -> recordTickThreadStage(stageDescription));
+            completeTickThreadStage();
             // Ensure we're in a good state in our group. If not restart and everything should be setup to rejoin
             if (!handleRebalanceCompleted()) return;
         } catch (WakeupException e) {
@@ -552,9 +552,8 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                     nextRequestTimeoutMs);
             String pollDurationDescription = scheduledTick != null ? "for up to " + nextRequestTimeoutMs + "ms or " : "";
             String stageDescription = "polling the group coordinator " + pollDurationDescription + "until interrupted";
-            try (TickThreadStage stage = new TickThreadStage(stageDescription)) {
-                member.poll(nextRequestTimeoutMs);
-            }
+            member.poll(nextRequestTimeoutMs, () -> recordTickThreadStage(stageDescription));
+            completeTickThreadStage();
             // Ensure we're in a good state in our group. If not restart and everything should be setup to rejoin
             handleRebalanceCompleted();
         } catch (WakeupException e) { // FIXME should not be WakeupException
@@ -714,13 +713,16 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             boolean remains = configState.contains(connectorName);
             log.info("Handling connector-only config update by {} connector {}",
                     remains ? "restarting" : "stopping", connectorName);
-            worker.stopAndAwaitConnector(connectorName);
+            try (TickThreadStage stage = new TickThreadStage("stopping connector " + connectorName)) {
+                worker.stopAndAwaitConnector(connectorName);
+            }
             // The update may be a deletion, so verify we actually need to restart the connector
             if (remains) {
                 connectorsToStart.add(getConnectorStartingCallable(connectorName));
             }
         }
-        startAndStop(connectorsToStart);
+        String stageDescription = "restarting " + connectorsToStart.size() + " reconfigured connectors";
+        startAndStop(connectorsToStart, stageDescription);
     }
 
     private void processTargetStateChanges(Set<String> connectorTargetStateChanges) {
@@ -778,7 +780,9 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         }
 
         log.info("Handling task config update by stopping tasks {}, which will be restarted after rebalance if still assigned to this worker", tasksToStop);
-        worker.stopAndAwaitTasks(tasksToStop);
+        try (TickThreadStage stage = new TickThreadStage("stopping " + tasksToStop.size() + " reconfigured tasks")) {
+            worker.stopAndAwaitTasks(tasksToStop);
+        }
         tasksToRestart.addAll(tasksToStop);
     }
 
@@ -1528,12 +1532,18 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         final boolean restartConnector = plan.shouldRestartConnector() && currentAssignments.connectors().contains(connectorName);
         final boolean restartTasks = !assignedIdsToRestart.isEmpty();
         if (restartConnector) {
-            worker.stopAndAwaitConnector(connectorName);
+            String stageDescription = "stopping to-be-restarted connector " + connectorName;
+            try (TickThreadStage stage = new TickThreadStage(stageDescription)) {
+                worker.stopAndAwaitConnector(connectorName);
+            }
             onRestart(connectorName);
         }
         if (restartTasks) {
+            String stageDescription = "stopping " + assignedIdsToRestart.size() + " to-be-restarted tasks for connector " + connectorName;
             // Stop the tasks and mark as restarting
-            worker.stopAndAwaitTasks(assignedIdsToRestart);
+            try (TickThreadStage stage = new TickThreadStage(stageDescription)) {
+                worker.stopAndAwaitTasks(assignedIdsToRestart);
+            }
             assignedIdsToRestart.forEach(this::onRestart);
         }
 
@@ -1603,15 +1613,19 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                         // We need to ensure that we perform the necessary checks again before proceeding to actually altering / resetting the connector offsets since
                         // zombie fencing is done asynchronously and the conditions could have changed since the previous check
                         addRequest(() -> {
-                            if (modifyConnectorOffsetsChecks(connName, callback)) {
-                                worker.modifyConnectorOffsets(connName, configState.connectorConfig(connName), offsets, callback);
+                            try (TickThreadStage stage = new TickThreadStage("modifying offsets for connector " + connName)) {
+                                if (modifyConnectorOffsetsChecks(connName, callback)) {
+                                    worker.modifyConnectorOffsets(connName, configState.connectorConfig(connName), offsets, callback);
+                                }
                             }
                             return null;
                         }, forwardErrorAndTickThreadStages(callback));
                     }
                 });
             } else {
-                worker.modifyConnectorOffsets(connName, configState.connectorConfig(connName), offsets, callback);
+                try (TickThreadStage stage = new TickThreadStage("modifying offsets for connector " + connName)) {
+                    worker.modifyConnectorOffsets(connName, configState.connectorConfig(connName), offsets, callback);
+                }
             }
             return null;
         }, forwardErrorAndTickThreadStages(callback));
@@ -1867,8 +1881,11 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     // Visible for testing
-    void startAndStop(Collection<Callable<Void>> callables) {
-        try {
+    void startAndStop(Collection<Callable<Void>> callables, String stageDescription) {
+        if (callables.isEmpty())
+            return;
+
+        try (TickThreadStage stage = new TickThreadStage(stageDescription)) {
             startAndStopExecutor.invokeAll(callables);
         } catch (InterruptedException e) {
             // ignore
@@ -1911,12 +1928,8 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             }
         }
 
-        if (!callables.isEmpty()) {
-            String stageDescription = "starting " + callables.size() + " connectors and tasks after a rebalance";
-            try (TickThreadStage stage = new TickThreadStage(stageDescription)) {
-                startAndStop(callables);
-            }
-        }
+        String stageDescription = "starting " + callables.size() + " connector(s) and task(s) after a rebalance";
+        startAndStop(callables, stageDescription);
 
         synchronized (this) {
             runningAssignment = member.currentProtocolVersion() == CONNECT_PROTOCOL_V0
@@ -2154,8 +2167,10 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             } else {
                 connConfig = new SourceConnectorConfig(plugins(), configs, worker.isTopicCreationEnabled());
             }
-
-            final List<Map<String, String>> taskProps = worker.connectorTaskConfigs(connName, connConfig);
+            final List<Map<String, String>> taskProps;
+            try (TickThreadStage stage = new TickThreadStage("generating task configs for connector " + connName)) {
+                taskProps = worker.connectorTaskConfigs(connName, connConfig);
+            }
             publishConnectorTaskConfigs(connName, taskProps, cb);
         } catch (Throwable t) {
             cb.onCompletion(t, null);
@@ -2637,7 +2652,8 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
                 // The actual timeout for graceful task/connector stop is applied in worker's
                 // stopAndAwaitTask/stopAndAwaitConnector methods.
-                startAndStop(callables);
+                String stageDescription = "stopping " + connectors.size() + " and " + tasks.size() + " tasks";
+                startAndStop(callables, stageDescription);
                 log.info("Finished stopping tasks in preparation for rebalance");
 
                 synchronized (DistributedHerder.this) {
@@ -2656,7 +2672,9 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 // Ensure that all status updates have been pushed to the storage system before rebalancing.
                 // Otherwise, we may inadvertently overwrite the state with a stale value after the rebalance
                 // completes.
-                statusBackingStore.flush();
+                try (TickThreadStage stage = new TickThreadStage("flushing updates to the status topic")) {
+                    statusBackingStore.flush();
+                }
                 log.info("Finished flushing status backing store in preparation for rebalance");
             } else {
                 log.info("Wasn't able to resume work after last rebalance, can skip stopping connectors and tasks");
@@ -2664,14 +2682,17 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         }
 
         private void resetActiveTopics(Collection<String> connectors, Collection<ConnectorTaskId> tasks) {
-            connectors.stream()
-                    .filter(connectorName -> !configState.contains(connectorName))
-                    .forEach(DistributedHerder.this::resetConnectorActiveTopics);
-            tasks.stream()
-                    .map(ConnectorTaskId::connector)
-                    .distinct()
-                    .filter(connectorName -> !configState.contains(connectorName))
-                    .forEach(DistributedHerder.this::resetConnectorActiveTopics);
+            String stageDescription = "resetting the list of active topics for " + connectors.size() + " and " + tasks.size() + " tasks";
+            try (TickThreadStage stage = new TickThreadStage(stageDescription)) {
+                connectors.stream()
+                        .filter(connectorName -> !configState.contains(connectorName))
+                        .forEach(DistributedHerder.this::resetConnectorActiveTopics);
+                tasks.stream()
+                        .map(ConnectorTaskId::connector)
+                        .distinct()
+                        .filter(connectorName -> !configState.contains(connectorName))
+                        .forEach(DistributedHerder.this::resetConnectorActiveTopics);
+            }
         }
     }
 
@@ -2730,6 +2751,8 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     private synchronized void recordTickThreadStage(String description) {
+        assert description != null;
+
         log.trace("Recording new tick thread stage: {}", description);
 
         // Preserve the current stage to report to requests submitted after this method is invoked
@@ -2742,12 +2765,14 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     private synchronized void completeTickThreadStage() {
+        // This is expected behavior with nested stages; can just no-op
+        if (tickThreadStage == null)
+            return;
+
         log.trace("Completing current tick thread stage; was {}", tickThreadStage);
 
-        if (tickThreadStage != null) {
-            tickThreadStage.complete(time.milliseconds());
-            tickThreadStage = null;
-        }
+        tickThreadStage.complete(time.milliseconds());
+        tickThreadStage = null;
     }
 
     private class TickThreadStage implements AutoCloseable {

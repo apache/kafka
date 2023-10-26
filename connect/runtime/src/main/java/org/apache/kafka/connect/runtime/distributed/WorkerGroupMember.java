@@ -158,14 +158,14 @@ public class WorkerGroupMember {
      * Ensure that the connection to the broker coordinator is up and that the worker is an
      * active member of the group.
      */
-    public void ensureActive() {
-        coordinator.poll(0);
+    public void ensureActive(Runnable onPoll) {
+        coordinator.poll(0, onPoll);
     }
 
-    public void poll(long timeout) {
+    public void poll(long timeout, Runnable onPoll) {
         if (timeout < 0)
             throw new IllegalArgumentException("Timeout must not be negative");
-        coordinator.poll(timeout);
+        coordinator.poll(timeout, onPoll);
     }
 
     /**
