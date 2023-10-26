@@ -598,10 +598,6 @@ object ConsumerGroupCommand extends Logging {
       groupOffsets
     }
 
-    private[admin] def collectGroupMembers(groupId: String, verbose: Boolean): (Option[String], Option[Seq[MemberAssignmentState]]) = {
-      collectGroupsMembers(Seq(groupId), verbose)(groupId)
-    }
-
     private[admin] def collectGroupsMembers(groupIds: Seq[String], verbose: Boolean): TreeMap[String, (Option[String], Option[Seq[MemberAssignmentState]])] = {
       val consumerGroups = describeConsumerGroups(groupIds)
       TreeMap[String, (Option[String], Option[Seq[MemberAssignmentState]])]() ++ (for ((groupId, consumerGroup) <- consumerGroups) yield {
@@ -618,10 +614,6 @@ object ConsumerGroupCommand extends Logging {
           )).toList
         groupId -> (Some(state), Option(memberAssignmentStates))
       }).toMap
-    }
-
-    private[admin] def collectGroupState(groupId: String): GroupState = {
-      collectGroupsState(Seq(groupId))(groupId)
     }
 
     private[admin] def collectGroupsState(groupIds: Seq[String]): TreeMap[String, GroupState] = {
