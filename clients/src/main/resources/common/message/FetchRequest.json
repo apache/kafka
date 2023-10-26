@@ -55,6 +55,8 @@
   // deprecate the old ReplicaId field and set its default value to -1. (KIP-903)
   //
   // Version 16 is the same as version 15 (KIP-951).
+  // KIP-951 is still under development, hence version 16 is marked unstable.
+  "latestVersionUnstable": true,
   "validVersions": "0-16",
   "flexibleVersions": "12+",
   "fields": [
