@@ -226,7 +226,7 @@ class MigrationPropagator(
     requestBatch.sendRequestsToBrokers(zkControllerEpoch)
 
     requestBatch.newBatch()
-    requestBatch.setUpdateType(LeaderAndIsrRequest.Type.Full)
+    requestBatch.setUpdateType(LeaderAndIsrRequest.Type.FULL)
     // When we need to send RPCs from the image, we're sending 'full' requests meaning we let
     // every broker know about all the metadata and all the LISR requests it needs to handle.
     // Note that we cannot send StopReplica requests from the image. We don't have any state

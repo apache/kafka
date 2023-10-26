@@ -43,9 +43,9 @@ import java.util.stream.Collectors;
 public class LeaderAndIsrRequest extends AbstractControlRequest {
 
     public enum Type {
-        Unknown(0),
-        Incremental(1),
-        Full(2);
+        UNKNOWN(0),
+        INCREMENTAL(1),
+        FULL(2);
 
         private final byte type;
         private Type(int type) {
@@ -62,7 +62,7 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
                     return t;
                 }
             }
-            return Unknown;
+            return UNKNOWN;
         }
     }
 
@@ -77,7 +77,7 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
                        List<LeaderAndIsrPartitionState> partitionStates, Map<String, Uuid> topicIds,
                        Collection<Node> liveLeaders) {
             this(version, controllerId, controllerEpoch, brokerEpoch, partitionStates, topicIds,
-                liveLeaders, false, Type.Unknown);
+                liveLeaders, false, Type.UNKNOWN);
         }
 
         public Builder(short version, int controllerId, int controllerEpoch, long brokerEpoch,

@@ -377,7 +377,7 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
   val stopReplicaRequestMap = mutable.Map.empty[Int, mutable.Map[TopicPartition, StopReplicaPartitionState]]
   val updateMetadataRequestBrokerSet = mutable.Set.empty[Int]
   val updateMetadataRequestPartitionInfoMap = mutable.Map.empty[TopicPartition, UpdateMetadataPartitionState]
-  private var updateType: LeaderAndIsrRequest.Type = LeaderAndIsrRequest.Type.Unknown
+  private var updateType: LeaderAndIsrRequest.Type = LeaderAndIsrRequest.Type.UNKNOWN
   private var metadataInstance: ControllerChannelContext = _
 
   def sendRequest(brokerId: Int,
@@ -409,7 +409,7 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
     updateMetadataRequestBrokerSet.clear()
     updateMetadataRequestPartitionInfoMap.clear()
     metadataInstance = null
-    updateType = LeaderAndIsrRequest.Type.Unknown
+    updateType = LeaderAndIsrRequest.Type.UNKNOWN
   }
 
   def addLeaderAndIsrRequestForBrokers(brokerIds: Seq[Int],
@@ -567,7 +567,7 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
       }
     }
     leaderAndIsrRequestMap.clear()
-    updateType = LeaderAndIsrRequest.Type.Unknown
+    updateType = LeaderAndIsrRequest.Type.UNKNOWN
   }
 
   def handleLeaderAndIsrResponse(response: LeaderAndIsrResponse, broker: Int): Unit

@@ -1849,7 +1849,7 @@ class ReplicaManager(val config: KafkaConfig,
           if (
             config.migrationEnabled &&
             leaderAndIsrRequest.isKRaftController &&
-            leaderAndIsrRequest.requestType() == LeaderAndIsrRequest.Type.Full
+            leaderAndIsrRequest.requestType() == LeaderAndIsrRequest.Type.FULL
           ) {
             updateStrayLogs(findStrayPartitionsFromLeaderAndIsr(allTopicPartitionsInRequest))
           }
