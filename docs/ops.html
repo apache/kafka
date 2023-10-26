@@ -3823,7 +3823,7 @@ zookeeper.connect=localhost:2181
 inter.broker.listener.name=PLAINTEXT
 
 # Maps listener names to security protocols. Please add the inter broker listener protocol mapping
-listener.security.protocol.map=PLAINTEXT:PLAINTEXT
+listener.security.protocol.map=PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
 
 # Other configs ...</pre>
 
@@ -3908,7 +3908,7 @@ listener.security.protocol.map=PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
 # inter.broker.listener.name=PLAINTEXT
 
 # Maps listener names to security protocols. Please add the inter broker listener protocol mapping
-# listener.security.protocol.map=PLAINTEXT:PLAINTEXT
+# listener.security.protocol.map=PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
 
 # Keep the KRaft controller quorum configuration
 controller.quorum.voters=3000@localhost:9093
