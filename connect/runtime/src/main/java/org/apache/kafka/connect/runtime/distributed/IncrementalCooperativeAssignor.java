@@ -48,6 +48,7 @@ import java.util.stream.IntStream;
 
 import static org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.Assignment;
+import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.CONNECT_PROTOCOL_V2;
 import static org.apache.kafka.connect.runtime.distributed.WorkerCoordinator.LeaderState;
 import static org.apache.kafka.connect.util.ConnectUtils.combineCollections;
@@ -460,6 +461,14 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                     + "missing assignments that the leader is detecting are probably due to some "
                     + "workers failing to receive the new assignments in the previous rebalance. "
                     + "Will reassign missing tasks as new tasks");
+            lostAssignmentsToReassign.addConnectors(lostAssignments.connectors());
+            lostAssignmentsToReassign.addTasks(lostAssignments.tasks());
+            return;
+        } else if (maxDelay == 0) {
+            log.debug("Scheduled rebalance delays are disabled ({} = 0); "
+                    + "reassigning all lost connectors and tasks immediately",
+                    SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG
+            );
             lostAssignmentsToReassign.addConnectors(lostAssignments.connectors());
             lostAssignmentsToReassign.addTasks(lostAssignments.tasks());
             return;
