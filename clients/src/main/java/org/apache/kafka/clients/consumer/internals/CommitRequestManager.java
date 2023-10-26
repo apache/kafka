@@ -48,10 +48,12 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult.EMPTY;
+
 public class CommitRequestManager implements RequestManager {
+
     // TODO: current in ConsumerConfig but inaccessible in the internal package.
     private static final String THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED = "internal.throw.on.fetch.stable.offset.unsupported";
-    // TODO: We will need to refactor the subscriptionState
     private final SubscriptionState subscriptions;
     private final LogContext logContext;
     private final Logger log;
@@ -96,17 +98,14 @@ public class CommitRequestManager implements RequestManager {
     @Override
     public NetworkClientDelegate.PollResult poll(final long currentTimeMs) {
         // poll only when the coordinator node is known.
-        if (!coordinatorRequestManager.coordinator().isPresent()) {
-            return new NetworkClientDelegate.PollResult(Long.MAX_VALUE, Collections.emptyList());
-        }
+        if (!coordinatorRequestManager.coordinator().isPresent())
+            return EMPTY;
 
         maybeAutoCommit(this.subscriptions.allConsumed());
-        if (!pendingRequests.hasUnsentRequests()) {
-            return new NetworkClientDelegate.PollResult(Long.MAX_VALUE, Collections.emptyList());
-        }
+        if (!pendingRequests.hasUnsentRequests())
+            return EMPTY;
 
-        return new NetworkClientDelegate.PollResult(Long.MAX_VALUE,
-                Collections.unmodifiableList(pendingRequests.drain(currentTimeMs)));
+        return new NetworkClientDelegate.PollResult(pendingRequests.drain(currentTimeMs));
     }
 
     public void maybeAutoCommit(final Map<TopicPartition, OffsetAndMetadata> offsets) {

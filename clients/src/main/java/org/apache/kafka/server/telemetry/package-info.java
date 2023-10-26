@@ -14,21 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.consumer.internals;
-
-import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
-import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
-
-import java.util.Queue;
-
-public class ErrorEventHandler {
-    private final Queue<BackgroundEvent> backgroundEventQueue;
-
-    public ErrorEventHandler(Queue<BackgroundEvent> backgroundEventQueue) {
-        this.backgroundEventQueue = backgroundEventQueue;
-    }
-
-    public void handle(Throwable e) {
-        backgroundEventQueue.add(new ErrorBackgroundEvent(e));
-    }
-}
+/**
+ * Provides pluggable interface for capturing client telemetry metrics.
+ */
+package org.apache.kafka.server.telemetry;
