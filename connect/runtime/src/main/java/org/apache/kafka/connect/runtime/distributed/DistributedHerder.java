@@ -1389,10 +1389,11 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 }
 
                 if (assignment.connectors().contains(connName)) {
-                    try (TickThreadStage stage = new TickThreadStage("restarting connector " + connName)) {
-                        worker.stopAndAwaitConnector(connName);
+                    try {
+                        try (TickThreadStage stage = new TickThreadStage("stopping restarted connector " + connName)) {
+                            worker.stopAndAwaitConnector(connName);
+                        }
                         startConnector(connName, callback);
-                        currentRequest = null;
                     } catch (Throwable t) {
                         callback.onCompletion(t, null);
                     }
