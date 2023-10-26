@@ -30,7 +30,7 @@ import java.util.concurrent.BlockingQueue;
 public class BackgroundEventHandler extends EventHandler<BackgroundEvent> {
 
     public BackgroundEventHandler(final LogContext logContext, final BlockingQueue<BackgroundEvent> queue) {
-        this(logContext, queue, () -> {});
+        this(logContext, queue, () -> { });
     }
 
     public BackgroundEventHandler(final LogContext logContext,
