@@ -231,7 +231,6 @@ public class ReplicaFetcherTierStateMachine implements TierStateMachine {
 
                 // Build leader epoch cache.
                 unifiedLog.maybeIncrementLogStartOffset(leaderLogStartOffset, LeaderOffsetIncremented);
-                unifiedLog.updateHighWatermark(leaderLocalLogStartOffset);
                 List<EpochEntry> epochs = readLeaderEpochCheckpoint(rlm, remoteLogSegmentMetadata);
                 if (unifiedLog.leaderEpochCache().isDefined()) {
                     unifiedLog.leaderEpochCache().get().assign(epochs);
@@ -246,6 +245,10 @@ public class ReplicaFetcherTierStateMachine implements TierStateMachine {
                 // Reload producer snapshots.
                 unifiedLog.producerStateManager().truncateFullyAndReloadSnapshots();
                 unifiedLog.loadProducerState(nextOffset);
+                if (log.isTraceEnabled()) {
+                    log.trace("{} Update the follower high watermark to offset: {}", partition, leaderLocalLogStartOffset);
+                }
+                unifiedLog.updateHighWatermark(leaderLocalLogStartOffset);
                 log.debug("Built the leader epoch cache and producer snapshots from remote tier for {}, " +
                                 "with active producers size: {}, leaderLogStartOffset: {}, and logEndOffset: {}",
                         partition, unifiedLog.producerStateManager().activeProducers().size(), leaderLogStartOffset, nextOffset);
