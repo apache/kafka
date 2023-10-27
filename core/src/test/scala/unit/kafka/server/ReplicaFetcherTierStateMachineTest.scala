@@ -18,7 +18,7 @@
 package kafka.server
 
 import kafka.cluster.Partition
-import kafka.log.UnifiedLog
+import kafka.log.{LocalLog, LogLoader, UnifiedLog}
 import kafka.log.remote.RemoteLogManager
 import org.apache.kafka.common.errors.FencedLeaderEpochException
 import org.apache.kafka.common.message.FetchResponseData
@@ -28,20 +28,21 @@ import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import kafka.server.FetcherThreadTestUtils.{initialFetchState, mkBatch}
+import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.server.log.remote.storage.{RemoteLogSegmentId, RemoteLogSegmentMetadata, RemoteLogSegmentState, RemoteStorageManager}
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType
-import org.apache.kafka.server.util.MockTime
-import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, LogOffsetMetadata, ProducerStateManager, ProducerStateManagerConfig}
-import org.apache.kafka.storage.internals.log.RemoteIndexCache.remoteLeaderEpochIndexFileName
+import org.apache.kafka.server.util.{MockTime, Scheduler}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, LogDirFailureChannel, LogOffsetMetadata, LogSegments, ProducerStateManager, ProducerStateManagerConfig}
 import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.mockito.ArgumentMatchers
 import org.mockito.ArgumentMatchers.{any, anyBoolean, anyLong}
-import org.mockito.Mockito.{doNothing, doReturn, mock, when}
+import org.mockito.Mockito.{doReturn, mock, when}
 import unit.kafka.server.MockTierStateMachineWithRlm
 
 import java.io.{File, FileInputStream}
-import java.util.{Collections, Optional}
+import java.util.{Collections, Optional, Properties}
 import scala.collection.Map
+import scala.compat.java8.OptionConverters._
 
 class ReplicaFetcherTierStateMachineTest {
 
@@ -143,8 +144,8 @@ class ReplicaFetcherTierStateMachineTest {
     fetcher.doWork()
 
     assertEquals(1, stateManager.activeProducers().size())
-    assertEquals(7L, stateManager.latestSnapshotOffset().getAsLong)
-    assertEquals(7L, stateManager.mapEndOffset())
+    assertEquals(5L, stateManager.latestSnapshotOffset().getAsLong)
+    assertEquals(5L, stateManager.mapEndOffset())
   }
 
   @Test
@@ -185,47 +186,43 @@ class ReplicaFetcherTierStateMachineTest {
   }
 
   private def mockBuildRemoteLogAuxState(mockReplicaMgr: ReplicaManager, topicPartition: TopicPartition): Unit = {
-    val mockUnifiedLog = mock(classOf[UnifiedLog])
-    doReturn(mockUnifiedLog).when(mockReplicaMgr).localLogOrException(any(classOf[TopicPartition]))
-    doReturn(true).when(mockUnifiedLog).remoteStorageSystemEnable
-    val mockLogConfig = mock(classOf[LogConfig])
-    doReturn(mockLogConfig).when(mockUnifiedLog).config
-    doReturn(true).when(mockLogConfig).remoteStorageEnable()
+    val idPartition = new TopicIdPartition(Uuid.randomUuid(), topicPartition)
+    logDir = JTestUtils.tempDirectory(s"kafka-${this.getClass.getSimpleName}")
+    val tpDir = JTestUtils.tempDirectory(logDir.toPath, idPartition.toString)
+    stateManager = new ProducerStateManager(topicPartition, tpDir, 5 * 60 * 1000, producerStateManagerConfig, time)
+    val unifiedLog = buildUnifiedLog(topicPartition, stateManager, tpDir)
 
+    doReturn(unifiedLog).when(mockReplicaMgr).localLogOrException(any(classOf[TopicPartition]))
     val mockRemoteLogManager = mock(classOf[RemoteLogManager])
     doReturn(Option.apply(mockRemoteLogManager)).when(mockReplicaMgr).remoteLogManager
 
     val remoteLogSegmentMetadata = new RemoteLogSegmentMetadata(
       RemoteLogSegmentId.generateNew(new TopicIdPartition(Uuid.randomUuid(), topicPartition)),
-        5L, 6L, -1L, brokerId, -1L, 1024,
-      Optional.empty, RemoteLogSegmentState.COPY_SEGMENT_FINISHED, Collections.singletonMap(5, 5L))
-    doReturn(Optional.of(remoteLogSegmentMetadata)).when(mockRemoteLogManager).fetchRemoteLogSegmentMetadata(any(classOf[TopicPartition]), ArgumentMatchers.eq(5), ArgumentMatchers.eq(4L))
+      4L, 4L, -1L, brokerId, -1L, 1024,
+      Optional.empty, RemoteLogSegmentState.COPY_SEGMENT_FINISHED, Collections.singletonMap(4, 4L))
+    doReturn(Optional.of(remoteLogSegmentMetadata)).when(mockRemoteLogManager).fetchRemoteLogSegmentMetadata(any(classOf[TopicPartition]), ArgumentMatchers.eq(4), ArgumentMatchers.eq(4L))
 
     val mockPartition = mock(classOf[Partition])
     doReturn(mockPartition).when(mockReplicaMgr).getPartitionOrException(any(classOf[TopicPartition]))
-    doNothing().when(mockPartition).truncateFullyAndStartAt(anyLong(), anyBoolean(), any())
-    doReturn(true).when(mockUnifiedLog).maybeIncrementLogStartOffset(anyLong(), any())
+    when(mockPartition.truncateFullyAndStartAt(anyLong(), anyBoolean(), any(classOf[Option[Long]])))
+      .thenAnswer(ans => {
+        val newOffset = ans.getArgument[Long](0)
+        val logStartOffsetOpt = ans.getArgument[Option[Long]](2)
+        unifiedLog.truncateFullyAndStartAt(newOffset, logStartOffsetOpt)
+      })
 
     val mockRemoteStorageManager = mock(classOf[RemoteStorageManager])
     doReturn(mockRemoteStorageManager).when(mockRemoteLogManager).storageManager()
 
-    val idPartition = new TopicIdPartition(Uuid.randomUuid(), topicPartition)
-    logDir = JTestUtils.tempDirectory(s"kafka-${this.getClass.getSimpleName}")
-    val tpDir = JTestUtils.tempDirectory(logDir.toPath, idPartition.toString)
-    doReturn(Option.empty).when(mockUnifiedLog).leaderEpochCache
-    doReturn(tpDir).when(mockUnifiedLog).dir
-
-    stateManager = new ProducerStateManager(topicPartition, tpDir, 5 * 60 * 1000, producerStateManagerConfig, time)
     tpDirForRemoteSnapshotFile = JTestUtils.tempDirectory(JTestUtils.tempDirectory(s"remote-kafka-${this.getClass.getSimpleName}").toPath, idPartition.toString)
     val stateManagerForRemoteSnapshotFile = new ProducerStateManager(topicPartition, tpDirForRemoteSnapshotFile, 5 * 60 * 1000, producerStateManagerConfig, time)
-    doReturn(stateManager).when(mockUnifiedLog).producerStateManager
-    val remoteSnapshotFile = prepareLocalAndRemoteSnapshotFile(stateManager, stateManagerForRemoteSnapshotFile)
+    val remoteSnapshotFile = prepareRemoteSnapshotFile(stateManagerForRemoteSnapshotFile)
 
     when(mockRemoteStorageManager.fetchIndex(any(classOf[RemoteLogSegmentMetadata]), any(classOf[IndexType])))
       .thenAnswer(ans => {
         val indexType = ans.getArgument[IndexType](1)
         indexType match {
-          case IndexType.LEADER_EPOCH => new FileInputStream(new File(remoteLeaderEpochIndexFileName(remoteLogSegmentMetadata)))
+          case IndexType.LEADER_EPOCH => new FileInputStream(JTestUtils.tempFile())
           case IndexType.PRODUCER_SNAPSHOT => new FileInputStream(remoteSnapshotFile)
           case IndexType.OFFSET => // not access here
           case IndexType.TIMESTAMP => // not access here
@@ -234,11 +231,38 @@ class ReplicaFetcherTierStateMachineTest {
       })
   }
 
-  private def prepareLocalAndRemoteSnapshotFile(stateManager: ProducerStateManager, stateManagerForRemoteSnapshotFile: ProducerStateManager): File = {
+  private def buildUnifiedLog(topicPartition: TopicPartition, producerStateManager: ProducerStateManager, tpDir: File): UnifiedLog = {
+    val topicConfig = new Properties()
+    topicConfig.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
+    val logConfig = new LogConfig(topicConfig)
+    val mockScheduler = mock(classOf[Scheduler])
+    val producerIdExpirationCheckIntervalMs = kafka.server.Defaults.ProducerIdExpirationCheckIntervalMs
+    val logDirFailureChannel = new LogDirFailureChannel(10)
+    val segments = new LogSegments(topicPartition)
+    val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(tpDir, topicPartition, logDirFailureChannel, logConfig.recordVersion, "")
+
+    val offsets = new LogLoader(
+      tpDir,
+      topicPartition,
+      logConfig,
+      mockScheduler,
+      time,
+      logDirFailureChannel,
+      hadCleanShutdown = true,
+      segments,
+      0L,
+      0L,
+      leaderEpochCache.asJava,
+      producerStateManager
+    ).load()
+    val localLog = new LocalLog(tpDir, logConfig, segments, offsets.recoveryPoint,
+      offsets.nextOffsetMetadata, mockScheduler, time, topicPartition, logDirFailureChannel)
+    new UnifiedLog(logStartOffset = offsets.logStartOffset, localLog = localLog, mock(classOf[BrokerTopicStats]), producerIdExpirationCheckIntervalMs,
+      leaderEpochCache, producerStateManager, _topicId = None, keepPartitionMetadataFile = true, remoteStorageSystemEnable = true)
+  }
+
+  private def prepareRemoteSnapshotFile(stateManagerForRemoteSnapshotFile: ProducerStateManager): File = {
     val epoch = 0.toShort
-    append(stateManager, producerId, epoch, 3, 3L)
-    append(stateManager, producerId, epoch, 4, 4L)
-    stateManager.takeSnapshot()
     append(stateManagerForRemoteSnapshotFile, producerId, epoch, 3, 3L)
     append(stateManagerForRemoteSnapshotFile, producerId, epoch, 4, 4L)
     stateManagerForRemoteSnapshotFile.takeSnapshot()

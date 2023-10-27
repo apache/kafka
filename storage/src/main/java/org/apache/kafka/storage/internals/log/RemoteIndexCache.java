@@ -733,11 +733,6 @@ public class RemoteIndexCache implements Closeable {
     }
 
     // Visible for testing
-    public static String remoteLeaderEpochIndexFileName(RemoteLogSegmentMetadata remoteLogSegmentMetadata) {
-        return remoteLogSegmentMetadata.remoteLogSegmentId().id().toString() + LogFileUtils.LEADER_EPOCH_INDEX_FILE_SUFFIX;
-    }
-
-    // Visible for testing
     public static String remoteDeletedSuffixIndexFileName(RemoteLogSegmentMetadata remoteLogSegmentMetadata) {
         return generateFileNamePrefixForIndex(remoteLogSegmentMetadata) + LogFileUtils.DELETED_FILE_SUFFIX;
     }
