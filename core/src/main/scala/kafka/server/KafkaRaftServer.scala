@@ -120,10 +120,10 @@ object KafkaRaftServer {
 
   sealed trait ProcessRole
   case object BrokerRole extends ProcessRole {
-    override def toString(): String = "broker"
+    override def toString: String = "broker"
   }
   case object ControllerRole extends ProcessRole {
-    override def toString(): String = "controller"
+    override def toString: String = "controller"
   }
 
   /**

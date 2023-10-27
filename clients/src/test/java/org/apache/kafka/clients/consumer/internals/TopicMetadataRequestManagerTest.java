@@ -36,6 +36,7 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -135,7 +136,7 @@ public class TopicMetadataRequestManagerTest {
 
     @ParameterizedTest
     @MethodSource("hardFailureExceptionProvider")
-    void testHardFailures(Exception exception) {
+    public void testHardFailures(Exception exception) {
         Optional<String> topic = Optional.of("hello");
 
         this.topicMetadataRequestManager.requestTopicMetadata(topic);
@@ -149,6 +150,36 @@ public class TopicMetadataRequestManagerTest {
         } else {
             assertTrue(topicMetadataRequestManager.inflightRequests().isEmpty());
         }
+    }
+
+    @Test
+    public void testNetworkTimeout() {
+        Optional<String> topic = Optional.of("hello");
+
+        topicMetadataRequestManager.requestTopicMetadata(topic);
+        NetworkClientDelegate.PollResult res = this.topicMetadataRequestManager.poll(this.time.milliseconds());
+        assertEquals(1, res.unsentRequests.size());
+        NetworkClientDelegate.PollResult res2 = this.topicMetadataRequestManager.poll(this.time.milliseconds());
+        assertEquals(0, res2.unsentRequests.size());
+
+        // Mimic a network timeout
+        res.unsentRequests.get(0).handler().onFailure(time.milliseconds(), new TimeoutException());
+
+        long backoffMs = topicMetadataRequestManager.inflightRequests().get(0).remainingBackoffMs(time.milliseconds());
+        // Sleep for exponential backoff - 1ms
+        time.sleep(backoffMs - 1);
+        res2 = topicMetadataRequestManager.poll(this.time.milliseconds());
+        assertEquals(0, res2.unsentRequests.size());
+
+        time.sleep(1);
+        res2 = topicMetadataRequestManager.poll(this.time.milliseconds());
+        assertEquals(1, res2.unsentRequests.size());
+
+        res2.unsentRequests.get(0).future().complete(buildTopicMetadataClientResponse(
+            res2.unsentRequests.get(0),
+            topic,
+            Errors.NONE));
+        assertTrue(topicMetadataRequestManager.inflightRequests().isEmpty());
     }
 
     private ClientResponse buildTopicMetadataClientResponse(
@@ -176,7 +207,7 @@ public class TopicMetadataRequestManagerTest {
             topics);
         return new ClientResponse(
             new RequestHeader(ApiKeys.METADATA, metadataRequest.version(), "mockClientId", 1),
-            request.callback(),
+            request.handler(),
             "-1",
             time.milliseconds(),
             time.milliseconds(),

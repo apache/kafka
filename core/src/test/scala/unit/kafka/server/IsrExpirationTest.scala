@@ -97,7 +97,7 @@ class IsrExpirationTest {
 
     // let the follower catch up to the Leader logEndOffset - 1
     for (replica <- partition0.remoteReplicas)
-      replica.updateFetchState(
+      replica.updateFetchStateOrThrow(
         followerFetchOffsetMetadata = new LogOffsetMetadata(leaderLogEndOffset - 1),
         followerStartOffset = 0L,
         followerFetchTimeMs= time.milliseconds,
@@ -147,7 +147,7 @@ class IsrExpirationTest {
     assertEquals(configs.map(_.brokerId).toSet, partition0.inSyncReplicaIds, "All replicas should be in ISR")
     // Make the remote replica not read to the end of log. It should be not be out of sync for at least 100 ms
     for (replica <- partition0.remoteReplicas)
-      replica.updateFetchState(
+      replica.updateFetchStateOrThrow(
         followerFetchOffsetMetadata = new LogOffsetMetadata(leaderLogEndOffset - 2),
         followerStartOffset = 0L,
         followerFetchTimeMs= time.milliseconds,
@@ -162,7 +162,7 @@ class IsrExpirationTest {
     time.sleep(75)
 
     partition0.remoteReplicas.foreach { r =>
-      r.updateFetchState(
+      r.updateFetchStateOrThrow(
         followerFetchOffsetMetadata = new LogOffsetMetadata(leaderLogEndOffset - 1),
         followerStartOffset = 0L,
         followerFetchTimeMs= time.milliseconds,
@@ -180,7 +180,7 @@ class IsrExpirationTest {
 
     // Now actually make a fetch to the end of the log. The replicas should be back in ISR
     partition0.remoteReplicas.foreach { r =>
-      r.updateFetchState(
+      r.updateFetchStateOrThrow(
         followerFetchOffsetMetadata = new LogOffsetMetadata(leaderLogEndOffset),
         followerStartOffset = 0L,
         followerFetchTimeMs= time.milliseconds,
@@ -205,7 +205,7 @@ class IsrExpirationTest {
 
     // let the follower catch up to the Leader logEndOffset
     for (replica <- partition0.remoteReplicas)
-      replica.updateFetchState(
+      replica.updateFetchStateOrThrow(
         followerFetchOffsetMetadata = new LogOffsetMetadata(leaderLogEndOffset),
         followerStartOffset = 0L,
         followerFetchTimeMs= time.milliseconds,
@@ -242,7 +242,7 @@ class IsrExpirationTest {
 
     // set lastCaughtUpTime to current time
     for (replica <- partition.remoteReplicas)
-      replica.updateFetchState(
+      replica.updateFetchStateOrThrow(
         followerFetchOffsetMetadata = new LogOffsetMetadata(0L),
         followerStartOffset = 0L,
         followerFetchTimeMs= time.milliseconds,

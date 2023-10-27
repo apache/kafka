@@ -24,9 +24,9 @@ import java.util.Set;
 
 /**
  * This is a hash set which can be snapshotted.
- *
+ * <br>
  * See {@SnapshottableHashTable} for more details about the implementation.
- *
+ * <br>
  * This class requires external synchronization.  Null values are not supported.
  *
  * @param <T>   The value type of the set.
