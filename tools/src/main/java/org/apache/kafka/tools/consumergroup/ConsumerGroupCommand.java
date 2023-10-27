@@ -1181,5 +1181,5 @@ public class ConsumerGroupCommand {
 
     private static class Unknown implements LogOffsetResult { }
 
-    private class Ignore implements LogOffsetResult { }
+    private static class Ignore implements LogOffsetResult { }
 }
