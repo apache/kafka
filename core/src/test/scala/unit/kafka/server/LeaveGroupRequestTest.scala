@@ -61,7 +61,7 @@ class LeaveGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBa
       numPartitions = 3
     )
 
-    for (version <- 3 to ApiKeys.LEAVE_GROUP.latestVersion(isUnstableApiEnabled)) {
+    for (version <- ApiKeys.LEAVE_GROUP.oldestVersion() to ApiKeys.LEAVE_GROUP.latestVersion(isUnstableApiEnabled)) {
 
       // Join the consumer group. Note that we don't heartbeat here so we must use
       // a session long enough for the duration of the test.
