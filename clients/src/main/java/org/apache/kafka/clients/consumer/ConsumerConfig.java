@@ -110,7 +110,7 @@ public class ConsumerConfig extends AbstractConfig {
      */
     public static final String GROUP_PROTOCOL_CONFIG = "group.protocol";
     public static final String DEFAULT_GROUP_PROTOCOL = GroupProtocol.GENERIC.name().toLowerCase();
-    public static final String GROUP_PROTOCOL_DOC = "The rebalance protocol consumer should use.  We currently " +
+    public static final String GROUP_PROTOCOL_DOC = "The group protocol consumer should use.  We currently " +
         "support \"generic\" or \"consumer\". If \"consumer\" is specified, then the consumer group protocol will be " +
         "used.  Otherwise, the generic group protocol will be used.";
 
@@ -120,7 +120,8 @@ public class ConsumerConfig extends AbstractConfig {
     public static final String REMOTE_ASSIGNOR_CONFIG = "group.remote.assignor";
     public static final String DEFAULT_REMOTE_ASSIGNOR = null;
     public static final String REMOTE_ASSIGNOR_DOC = "The server-side assignor to use. If no assignor is specified, " +
-        "the group coordinator will pick one.";
+        "the group coordinator will pick one. This configuration is applied only if <code>group.protocol</code> is " +
+        "set to \"consumer\".";
 
     /**
      * <code>bootstrap.servers</code>
@@ -628,16 +629,16 @@ public class ConsumerConfig extends AbstractConfig {
                                         Importance.MEDIUM,
                                         ALLOW_AUTO_CREATE_TOPICS_DOC)
                                 .define(GROUP_PROTOCOL_CONFIG,
-                                    Type.STRING,
-                                    DEFAULT_GROUP_PROTOCOL,
-                                    ConfigDef.CaseInsensitiveValidString.in(Utils.enumOptions(GroupProtocol.class)),
-                                    Importance.HIGH,
-                                    GROUP_PROTOCOL_DOC)
+                                        Type.STRING,
+                                        DEFAULT_GROUP_PROTOCOL,
+                                        ConfigDef.CaseInsensitiveValidString.in(Utils.enumOptions(GroupProtocol.class)),
+                                        Importance.HIGH,
+                                        GROUP_PROTOCOL_DOC)
                                 .define(REMOTE_ASSIGNOR_CONFIG,
-                                    Type.STRING,
-                                    DEFAULT_REMOTE_ASSIGNOR,
-                                    Importance.MEDIUM,
-                                    REMOTE_ASSIGNOR_DOC)
+                                        Type.STRING,
+                                        DEFAULT_REMOTE_ASSIGNOR,
+                                        Importance.MEDIUM,
+                                        REMOTE_ASSIGNOR_DOC)
                                 // security support
                                 .define(SECURITY_PROVIDERS_CONFIG,
                                         Type.STRING,
