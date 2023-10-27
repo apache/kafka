@@ -1,12 +1,12 @@
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.tools.consumergroup;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -83,7 +82,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class ConsumerGroupCommand {
-    private static final Logger log = LoggerFactory.getLogger(ConsumerGroupCommand.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(ConsumerGroupCommand.class);
 
     public static final String MISSING_COLUMN_VALUE = "-";
 
@@ -119,8 +118,7 @@ public class ConsumerGroupCommand {
                     System.out.println(exported);
                 } else
                     printOffsetsToReset(offsetsToReset);
-            }
-            else if (opts.options.has(opts.deleteOffsetsOpt)) {
+            } else if (opts.options.has(opts.deleteOffsetsOpt)) {
                 consumerGroupService.deleteOffsets();
             }
         } catch (IllegalArgumentException e) {
@@ -145,12 +143,13 @@ public class ConsumerGroupCommand {
     }
 
     public static void printOffsetsToReset(Map<String, Map<TopicPartition, OffsetAndMetadata>> groupAssignmentsToReset) {
+        String format = "%-30s %-30s %-10s %-15s";
         if (!groupAssignmentsToReset.isEmpty())
-            System.out.printf("\n%-30s %-30s %-10s %-15s", "GROUP", "TOPIC", "PARTITION", "NEW-OFFSET");
+            System.out.printf("\n" + format, "GROUP", "TOPIC", "PARTITION", "NEW-OFFSET");
 
         groupAssignmentsToReset.forEach((groupId, assignment) -> {
             assignment.forEach((consumerAssignment, offsetAndMetadata) -> {
-                System.out.printf("%-30s %-30s %-10s %-15s",
+                System.out.printf(format,
                     groupId,
                     consumerAssignment.topic(),
                     consumerAssignment.partition(),
@@ -159,6 +158,7 @@ public class ConsumerGroupCommand {
         });
     }
 
+    @SuppressWarnings("ClassFanOutComplexity")
     static class ConsumerGroupService implements AutoCloseable {
         final ConsumerGroupCommandOptions opts;
         final Map<String, String> configOverrides;
@@ -258,7 +258,9 @@ public class ConsumerGroupCommand {
             return !state0.contains("Dead") && num > 0;
         }
 
-        private Optional<Integer> size(Optional<? extends Collection<?>> colOpt) { return colOpt.map(Collection::size); }
+        private Optional<Integer> size(Optional<? extends Collection<?>> colOpt) {
+            return colOpt.map(Collection::size);
+        }
 
         private void printOffsets(Map<String, Tuple2<Optional<String>, Optional<Collection<PartitionAssignmentState>>>> offsets) {
             offsets.forEach((groupId, tuple) -> {
@@ -486,6 +488,8 @@ public class ConsumerGroupCommand {
                             }
 
                             result.put(groupId, preparedOffsets);
+
+                            break;
                         default:
                             printError("Assignments can only be reset if the group '" + groupId + "' is inactive, but the current state is " + state + ".", Optional.empty());
                             result.put(groupId, Collections.emptyMap());
@@ -570,18 +574,24 @@ public class ConsumerGroupCommand {
             switch (topLevelResult) {
                 case NONE:
                     System.out.println("Request succeed for deleting offsets with topic " + Utils.mkString(topics.stream(), "", "", ", ") + " group " + groupId);
+                    break;
                 case INVALID_GROUP_ID:
                     printError("'" + groupId + "' is not valid.", Optional.empty());
+                    break;
                 case GROUP_ID_NOT_FOUND:
                     printError("'" + groupId + "' does not exist.", Optional.empty());
+                    break;
                 case GROUP_AUTHORIZATION_FAILED:
                     printError("Access to '" + groupId + "' is not authorized.", Optional.empty());
+                    break;
                 case NON_EMPTY_GROUP:
                     printError("Deleting offsets of a consumer group '" + groupId + "' is forbidden if the group is not empty.", Optional.empty());
+                    break;
                 case GROUP_SUBSCRIBED_TO_TOPIC:
                 case TOPIC_AUTHORIZATION_FAILED:
                 case UNKNOWN_TOPIC_OR_PARTITION:
                     printError("Encounter some partition level error, see the follow-up details:", Optional.empty());
+                    break;
                 default:
                     printError("Encounter some unknown error: " + topLevelResult, Optional.empty());
             }
@@ -928,6 +938,7 @@ public class ConsumerGroupCommand {
             return dataMap;
         }
 
+        @SuppressWarnings("CyclomaticComplexity")
         private Map<TopicPartition, OffsetAndMetadata> prepareOffsetsToReset(String groupId, Collection<TopicPartition> partitionsToReset) {
             if (opts.options.has(opts.resetToOffsetOpt)) {
                 long offset = opts.options.valueOf(opts.resetToOffsetOpt);
@@ -943,7 +954,7 @@ public class ConsumerGroupCommand {
                         return null;
                     }
 
-                    return new OffsetAndMetadata(((LogOffset)logOffsetResult).value);
+                    return new OffsetAndMetadata(((LogOffset) logOffsetResult).value);
                 }));
             } else if (opts.options.has(opts.resetToLatestOpt)) {
                 Map<TopicPartition, LogOffsetResult> logEndOffsets = getLogEndOffsets(partitionsToReset);
@@ -955,7 +966,7 @@ public class ConsumerGroupCommand {
                         return null;
                     }
 
-                    return new OffsetAndMetadata(((LogOffset)logOffsetResult).value);
+                    return new OffsetAndMetadata(((LogOffset) logOffsetResult).value);
                 }));
             } else if (opts.options.has(opts.resetShiftByOpt)) {
                 Map<TopicPartition, OffsetAndMetadata> currentCommittedOffsets = getCommittedOffsets(groupId);
@@ -978,12 +989,12 @@ public class ConsumerGroupCommand {
                     return partitionsToReset.stream().collect(Collectors.toMap(Function.identity(), topicPartition -> {
                         LogOffsetResult logTimestampOffset = logTimestampOffsets.get(topicPartition);
 
-                        if(!(logTimestampOffset instanceof LogOffset)) {
+                        if (!(logTimestampOffset instanceof LogOffset)) {
                             ToolsUtils.printUsageAndExit(opts.parser, "Error getting offset by timestamp of topic partition: " + topicPartition);
                             return null;
                         }
 
-                        return new OffsetAndMetadata(((LogOffset)logTimestampOffset).value);
+                        return new OffsetAndMetadata(((LogOffset) logTimestampOffset).value);
                     }));
                 } catch (ParseException e) {
                     throw new RuntimeException(e);
@@ -998,12 +1009,12 @@ public class ConsumerGroupCommand {
                 return partitionsToReset.stream().collect(Collectors.toMap(Function.identity(), topicPartition -> {
                     LogOffsetResult logTimestampOffset = logTimestampOffsets.get(topicPartition);
 
-                    if(!(logTimestampOffset instanceof LogOffset)) {
+                    if (!(logTimestampOffset instanceof LogOffset)) {
                         ToolsUtils.printUsageAndExit(opts.parser, "Error getting offset by timestamp of topic partition: " + topicPartition);
                         return null;
                     }
 
-                    return new OffsetAndMetadata(((LogOffset)logTimestampOffset).value);
+                    return new OffsetAndMetadata(((LogOffset) logTimestampOffset).value);
                 }));
             } else if (resetPlanFromFile().isPresent()) {
                 return resetPlanFromFile().map(resetPlan -> {
@@ -1073,16 +1084,16 @@ public class ConsumerGroupCommand {
                 LogOffsetResult logEndOffset = logEndOffsets.get(topicPartition);
 
                 if (logEndOffset != null) {
-                    if (logEndOffset instanceof LogOffset && offset > ((LogOffset)logEndOffset).value) {
-                        long endOffset = ((LogOffset)logEndOffset).value;
-                        log.warn("New offset (" + offset + ") is higher than latest offset for topic partition " + topicPartition + ". Value will be set to " + endOffset);
+                    if (logEndOffset instanceof LogOffset && offset > ((LogOffset) logEndOffset).value) {
+                        long endOffset = ((LogOffset) logEndOffset).value;
+                        LOGGER.warn("New offset (" + offset + ") is higher than latest offset for topic partition " + topicPartition + ". Value will be set to " + endOffset);
                         res.put(topicPartition, endOffset);
                     } else {
                         LogOffsetResult logStartOffset = logStartOffsets.get(topicPartition);
 
-                        if (logStartOffset instanceof LogOffset && offset < ((LogOffset)logStartOffset).value) {
-                            long startOffset = ((LogOffset)logEndOffset).value;
-                            log.warn("New offset (" + offset + ") is lower than earliest offset for topic partition " + topicPartition + ". Value will be set to " + startOffset);
+                        if (logStartOffset instanceof LogOffset && offset < ((LogOffset) logStartOffset).value) {
+                            long startOffset = ((LogOffset) logStartOffset).value;
+                            LOGGER.warn("New offset (" + offset + ") is lower than earliest offset for topic partition " + topicPartition + ". Value will be set to " + startOffset);
                             res.put(topicPartition, startOffset);
                         } else
                             res.put(topicPartition, offset);

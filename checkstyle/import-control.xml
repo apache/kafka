@@ -311,6 +311,10 @@
       <allow pkg="kafka.server" />
       <allow pkg="scala" />
     </subpackage>
+
+    <subpackage name="consumergroup">
+      <allow pkg="org.apache.kafka.tools"/>
+    </subpackage>
   </subpackage>
 
   <subpackage name="trogdor">

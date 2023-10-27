@@ -1,12 +1,12 @@
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.tools.consumergroup;
 
 import joptsimple.OptionSpec;
@@ -30,7 +29,7 @@ import java.util.List;
 import java.util.Set;
 
 public class ConsumerGroupCommandOptions extends CommandDefaultOptions {
-    public static final Logger logger = LoggerFactory.getLogger(ConsumerGroupCommandOptions.class);
+    public static final Logger LOGGER = LoggerFactory.getLogger(ConsumerGroupCommandOptions.class);
 
     public static final String BOOTSTRAP_SERVER_DOC = "REQUIRED: The server(s) to connect to.";
     public static final String GROUP_DOC = "The consumer group we wish to act on.";
@@ -41,18 +40,18 @@ public class ConsumerGroupCommandOptions extends CommandDefaultOptions {
     public static final String LIST_DOC = "List all consumer groups.";
     public static final String DESCRIBE_DOC = "Describe consumer group and list offset lag (number of messages not yet processed) related to given group.";
     public static final String ALL_GROUPS_DOC = "Apply to all consumer groups.";
-    public static final String nl = System.getProperty("line.separator");
+    public static final String NL = System.getProperty("line.separator");
     public static final String DELETE_DOC = "Pass in groups to delete topic partition offsets and ownership information " +
         "over the entire consumer group. For instance --group g1 --group g2";
     public static final String TIMEOUT_MS_DOC = "The timeout that can be set for some use cases. For example, it can be used when describing the group " +
         "to specify the maximum amount of time in milliseconds to wait before the group stabilizes (when the group is just created, " +
         "or is going through some changes).";
     public static final String COMMAND_CONFIG_DOC = "Property file containing configs to be passed to Admin Client and Consumer.";
-    public static final String RESET_OFFSETS_DOC = "Reset offsets of consumer group. Supports one consumer group at the time, and instances should be inactive" + nl +
+    public static final String RESET_OFFSETS_DOC = "Reset offsets of consumer group. Supports one consumer group at the time, and instances should be inactive" + NL +
         "Has 2 execution options: --dry-run (the default) to plan which offsets to reset, and --execute to update the offsets. " +
-        "Additionally, the --export option is used to export the results to a CSV format." + nl +
+        "Additionally, the --export option is used to export the results to a CSV format." + NL +
         "You must choose one of the following reset specifications: --to-datetime, --by-duration, --to-earliest, " +
-        "--to-latest, --shift-by, --from-file, --to-current, --to-offset." + nl +
+        "--to-latest, --shift-by, --from-file, --to-current, --to-offset." + NL +
         "To define the scope use --all-topics or --topic. One scope must be specified unless you use '--from-file'.";
     public static final String DRY_RUN_DOC = "Only show results without executing changes on Consumer Groups. Supported operations: reset-offsets.";
     public static final String EXECUTE_DOC = "Execute operation. Supported operations: reset-offsets.";
@@ -65,17 +64,17 @@ public class ConsumerGroupCommandOptions extends CommandDefaultOptions {
     public static final String RESET_TO_LATEST_DOC = "Reset offsets to latest offset.";
     public static final String RESET_TO_CURRENT_DOC = "Reset offsets to current offset.";
     public static final String RESET_SHIFT_BY_DOC = "Reset offsets shifting current offset by 'n', where 'n' can be positive or negative.";
-    public static final String MEMBERS_DOC = "Describe members of the group. This option may be used with '--describe' and '--bootstrap-server' options only." + nl +
+    public static final String MEMBERS_DOC = "Describe members of the group. This option may be used with '--describe' and '--bootstrap-server' options only." + NL +
         "Example: --bootstrap-server localhost:9092 --describe --group group1 --members";
     public static final String VERBOSE_DOC = "Provide additional information, if any, when describing the group. This option may be used " +
-        "with '--offsets'/'--members'/'--state' and '--bootstrap-server' options only." + nl + "Example: --bootstrap-server localhost:9092 --describe --group group1 --members --verbose";
+        "with '--offsets'/'--members'/'--state' and '--bootstrap-server' options only." + NL + "Example: --bootstrap-server localhost:9092 --describe --group group1 --members --verbose";
     public static final String OFFSETS_DOC = "Describe the group and list all topic partitions in the group along with their offset lag. " +
-        "This is the default sub-action of and may be used with '--describe' and '--bootstrap-server' options only." + nl +
+        "This is the default sub-action of and may be used with '--describe' and '--bootstrap-server' options only." + NL +
         "Example: --bootstrap-server localhost:9092 --describe --group group1 --offsets";
-    public static final String STATE_DOC = "When specified with '--describe', includes the state of the group." + nl +
-        "Example: --bootstrap-server localhost:9092 --describe --group group1 --state" + nl +
-        "When specified with '--list', it displays the state of all groups. It can also be used to list groups with specific states." + nl +
-        "Example: --bootstrap-server localhost:9092 --list --state stable,empty" + nl +
+    public static final String STATE_DOC = "When specified with '--describe', includes the state of the group." + NL +
+        "Example: --bootstrap-server localhost:9092 --describe --group group1 --state" + NL +
+        "When specified with '--list', it displays the state of all groups. It can also be used to list groups with specific states." + NL +
+        "Example: --bootstrap-server localhost:9092 --list --state stable,empty" + NL +
         "This option may be used with '--describe', '--list' and '--bootstrap-server' options only.";
     public static final String DELETE_OFFSETS_DOC = "Delete offsets of consumer group. Supports one consumer group at the time, and multiple topics.";
 
@@ -189,8 +188,8 @@ public class ConsumerGroupCommandOptions extends CommandDefaultOptions {
         options = parser.parse(args);
     }
 
+    @SuppressWarnings({"CyclomaticComplexity", "NPathComplexity"})
     public void checkArgs() {
-
         CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt);
 
         if (options.has(describeOpt)) {
@@ -207,7 +206,7 @@ public class ConsumerGroupCommandOptions extends CommandDefaultOptions {
                     "Option " + describeOpt + " does not take a value for " + stateOpt);
         } else {
             if (options.has(timeoutMsOpt))
-                logger.debug("Option " + timeoutMsOpt + " is applicable only when " + describeOpt + " is used.");
+                LOGGER.debug("Option " + timeoutMsOpt + " is applicable only when " + describeOpt + " is used.");
         }
 
         if (options.has(deleteOpt)) {
@@ -254,6 +253,7 @@ public class ConsumerGroupCommandOptions extends CommandDefaultOptions {
         CommandLineUtils.checkInvalidArgs(parser, options, topicOpt, minus(allConsumerGroupLevelOpts, deleteOpt, resetOffsetsOpt));
     }
 
+    @SuppressWarnings("unchecked")
     private static <T> Set<T> minus(Set<T> set, T...toRemove) {
         Set<T> res = new HashSet<>(set);
         for (T t : toRemove)
