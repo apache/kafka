@@ -98,26 +98,14 @@ class ZkAdminManager(val config: KafkaConfig,
   }
 
   private def validateTopicCreatePolicy(topic: CreatableTopic,
-                                        resolvedNumPartitions: Int,
-                                        resolvedReplicationFactor: Short,
                                         assignments: Map[Int, Seq[Int]]): Unit = {
     createTopicPolicy.foreach { policy =>
-      // Use `null` for unset fields in the public API
-      val numPartitions: java.lang.Integer =
-        if (topic.assignments().isEmpty) resolvedNumPartitions else null
-      val replicationFactor: java.lang.Short =
-        if (topic.assignments().isEmpty) resolvedReplicationFactor else null
-      val javaAssignments = if (topic.assignments().isEmpty) {
-        null
-      } else {
-        assignments.map { case (k, v) =>
+      val javaAssignments = assignments.map { case (k, v) =>
           (k: java.lang.Integer) -> v.map(i => i: java.lang.Integer).asJava
         }.asJava
-      }
       val javaConfigs = new java.util.HashMap[String, String]
       topic.configs.forEach(config => javaConfigs.put(config.name, config.value))
-      policy.validate(new RequestMetadata(topic.name, numPartitions, replicationFactor,
-        javaAssignments, javaConfigs))
+      policy.validate(new RequestMetadata(topic.name, javaAssignments, javaConfigs))
     }
   }
 
@@ -200,7 +188,7 @@ class ZkAdminManager(val config: KafkaConfig,
         val configs = new Properties()
         topic.configs.forEach(entry => configs.setProperty(entry.name, entry.value))
         adminZkClient.validateTopicCreate(topic.name, assignments, configs)
-        validateTopicCreatePolicy(topic, resolvedNumPartitions, resolvedReplicationFactor, assignments)
+        validateTopicCreatePolicy(topic, assignments)
 
         // For responses with DescribeConfigs permission, populate metadata and configs. It is
         // safe to populate it before creating the topic because the values are unset if the

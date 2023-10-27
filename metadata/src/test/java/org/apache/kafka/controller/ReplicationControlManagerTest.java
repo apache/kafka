@@ -771,15 +771,22 @@ public class ReplicationControlManagerTest {
 
     @Test
     public void testCreateTopicsWithPolicy() throws Exception {
+        Map<Integer, List<Integer>> fooTopicPartitionToReplicas = new HashMap<>();
+        fooTopicPartitionToReplicas.put(0, asList(1, 2));
+        fooTopicPartitionToReplicas.put(1, asList(2, 0));
+
+        Map<Integer, List<Integer>> barTopicPartitionToReplicas = new HashMap<>();
+        barTopicPartitionToReplicas.put(0, asList(0, 1, 2));
+        barTopicPartitionToReplicas.put(1, asList(2, 0, 1));
+        barTopicPartitionToReplicas.put(2, asList(0, 1, 2));
+
         MockCreateTopicPolicy createTopicPolicy = new MockCreateTopicPolicy(asList(
-            new CreateTopicPolicy.RequestMetadata("foo", 2, (short) 2,
-                null, Collections.emptyMap()),
-            new CreateTopicPolicy.RequestMetadata("bar", 3, (short) 2,
-                null, Collections.emptyMap()),
-            new CreateTopicPolicy.RequestMetadata("baz", null, null,
+            new CreateTopicPolicy.RequestMetadata("foo", fooTopicPartitionToReplicas, Collections.emptyMap()),
+            new CreateTopicPolicy.RequestMetadata("bar", barTopicPartitionToReplicas, Collections.emptyMap()),
+            new CreateTopicPolicy.RequestMetadata("baz",
                 Collections.singletonMap(0, asList(2, 1, 0)),
                 Collections.singletonMap(SEGMENT_BYTES_CONFIG, "12300000")),
-            new CreateTopicPolicy.RequestMetadata("quux", null, null,
+            new CreateTopicPolicy.RequestMetadata("quux",
                 Collections.singletonMap(0, asList(2, 1, 0)), Collections.emptyMap())));
         ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().
                 setCreateTopicPolicy(createTopicPolicy).

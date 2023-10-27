@@ -49,10 +49,10 @@ class CreateTopicsRequestWithPolicyTest extends AbstractCreateTopicsRequestTest 
   @ValueSource(strings = Array("zk", "kraft"))
   def testValidCreateTopicsRequests(quorum: String): Unit = {
     validateValidCreateTopicsRequests(topicsReq(Seq(topicReq("topic1",
-      numPartitions = 5))))
+      numPartitions = 5, replicationFactor = 2))))
 
     validateValidCreateTopicsRequests(topicsReq(Seq(topicReq("topic2",
-      numPartitions = 5, replicationFactor = 3)),
+      numPartitions = 5, replicationFactor = 2)),
       validateOnly = true))
 
     validateValidCreateTopicsRequests(topicsReq(Seq(topicReq("topic3",
@@ -61,14 +61,14 @@ class CreateTopicsRequestWithPolicyTest extends AbstractCreateTopicsRequestTest 
       validateOnly = true))
 
     validateValidCreateTopicsRequests(topicsReq(Seq(topicReq("topic4",
-      assignment = Map(0 -> List(1, 0), 1 -> List(0, 1))))))
+      assignment = Map(0 -> List(1, 0), 1 -> List(0, 1), 2 -> List(0, 1), 3 -> List(0, 1), 4 -> List(0, 1))))))
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testErrorCreateTopicsRequests(quorum: String): Unit = {
     val existingTopic = "existing-topic"
-    createTopic(existingTopic, 5, 1)
+    createTopic(existingTopic, 5, 2)
 
     // Policy violations
     validateErrorCreateTopicsRequests(topicsReq(Seq(topicReq("policy-topic1",
@@ -95,7 +95,7 @@ class CreateTopicsRequestWithPolicyTest extends AbstractCreateTopicsRequestTest 
       assignment = Map(0 -> List(1), 1 -> List(0)),
       config = Map(TopicConfig.RETENTION_MS_CONFIG -> 5001.toString))), validateOnly = true),
       Map("policy-topic5" -> error(Errors.POLICY_VIOLATION,
-        Some("Topic partitions should have at least 2 partitions, received 1 for partition 0"))))
+        Some("Topics should have at least 5 partitions, received 2"))))
 
     // Check that basic errors still work
     validateErrorCreateTopicsRequests(topicsReq(Seq(topicReq(existingTopic,
@@ -156,32 +156,19 @@ object CreateTopicsRequestWithPolicyTest {
       require(!configs.isEmpty, "configure should have been called with non empty configs")
 
       import requestMetadata._
-      if (numPartitions != null || replicationFactor != null) {
-        require(numPartitions != null, s"numPartitions should not be null, but it is $numPartitions")
-        require(replicationFactor != null, s"replicationFactor should not be null, but it is $replicationFactor")
-        require(replicasAssignments == null, s"replicaAssignments should be null, but it is $replicasAssignments")
 
-        if (numPartitions < 5)
-          throw new PolicyViolationException(s"Topics should have at least 5 partitions, received $numPartitions")
+      if (numPartitions < 5)
+        throw new PolicyViolationException(s"Topics should have at least 5 partitions, received $numPartitions")
 
-        if (numPartitions > 10) {
-          if (requestMetadata.configs.asScala.get(TopicConfig.RETENTION_MS_CONFIG).fold(true)(_.toInt > 5000))
-            throw new PolicyViolationException("RetentionMs should be less than 5000ms if replicationFactor > 5")
-        } else
-          require(requestMetadata.configs.isEmpty, s"Topic configs should be empty, but it is ${requestMetadata.configs}")
-
-      } else {
-        require(numPartitions == null, s"numPartitions should be null, but it is $numPartitions")
-        require(replicationFactor == null, s"replicationFactor should be null, but it is $replicationFactor")
-        require(replicasAssignments != null, s"replicaAssignments should not be null, but it is $replicasAssignments")
-
-        replicasAssignments.asScala.toSeq.sortBy { case (tp, _) => tp }.foreach { case (partitionId, assignment) =>
-          if (assignment.size < 2)
-            throw new PolicyViolationException("Topic partitions should have at least 2 partitions, received " +
-              s"${assignment.size} for partition $partitionId")
-        }
+      if (numPartitions > 10) {
+        if (requestMetadata.configs.asScala.get(TopicConfig.RETENTION_MS_CONFIG).fold(true)(_.toInt > 5000))
+          throw new PolicyViolationException("RetentionMs should be less than 5000ms if replicationFactor > 5")
       }
-
+      replicasAssignments.asScala.toSeq.sortBy { case (tp, _) => tp }.foreach { case (partitionId, assignment) =>
+        if (assignment.size < 2)
+          throw new PolicyViolationException("Topic partitions should have at least 2 partitions, received " +
+            s"${assignment.size} for partition $partitionId")
+      }
     }
 
     def close(): Unit = closed = true

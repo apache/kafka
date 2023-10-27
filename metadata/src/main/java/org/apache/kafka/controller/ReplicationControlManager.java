@@ -696,14 +696,6 @@ public class ReplicationControlManager {
                             "partitions should be a consecutive 0-based integer sequence");
                 }
             }
-            ApiError error = maybeCheckCreateTopicPolicy(() -> {
-                Map<Integer, List<Integer>> assignments = new HashMap<>();
-                newParts.entrySet().forEach(e -> assignments.put(e.getKey(),
-                    Replicas.toList(e.getValue().replicas)));
-                return new CreateTopicPolicy.RequestMetadata(
-                    topic.name(), null, null, assignments, creationConfigs);
-            });
-            if (error.isFailure()) return error;
         } else if (topic.replicationFactor() < -1 || topic.replicationFactor() == 0) {
             return new ApiError(Errors.INVALID_REPLICATION_FACTOR,
                 "Replication factor must be larger than 0, or -1 to use the default value.");
@@ -744,10 +736,14 @@ public class ReplicationControlManager {
                     "Unable to replicate the partition " + replicationFactor +
                         " time(s): " + e.getMessage());
             }
-            ApiError error = maybeCheckCreateTopicPolicy(() -> new CreateTopicPolicy.RequestMetadata(
-                topic.name(), numPartitions, replicationFactor, null, creationConfigs));
-            if (error.isFailure()) return error;
         }
+        ApiError error = maybeCheckCreateTopicPolicy(() -> {
+            Map<Integer, List<Integer>> assignments = new HashMap<>();
+            newParts.entrySet().forEach(e -> assignments.put(e.getKey(),
+                    Replicas.toList(e.getValue().replicas)));
+            return new CreateTopicPolicy.RequestMetadata(topic.name(), assignments, creationConfigs);
+        });
+        if (error.isFailure()) return error;
         int numPartitions = newParts.size();
         try {
             context.applyPartitionChangeQuota(numPartitions); // check controller mutation quota

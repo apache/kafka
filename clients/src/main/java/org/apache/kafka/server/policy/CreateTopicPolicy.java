@@ -41,8 +41,6 @@ public interface CreateTopicPolicy extends Configurable, AutoCloseable {
      */
     class RequestMetadata {
         private final String topic;
-        private final Integer numPartitions;
-        private final Short replicationFactor;
         private final Map<Integer, List<Integer>> replicasAssignments;
         private final Map<String, String> configs;
 
@@ -52,19 +50,17 @@ public interface CreateTopicPolicy extends Configurable, AutoCloseable {
          * This constructor is public to make testing of <code>CreateTopicPolicy</code> implementations easier.
          *
          * @param topic the name of the topic to create.
-         * @param numPartitions the number of partitions to create or null if replicasAssignments is set.
-         * @param replicationFactor the replication factor for the topic or null if replicaAssignments is set.
-         * @param replicasAssignments replica assignments or null if numPartitions and replicationFactor is set. The
-         *                            assignment is a map from partition id to replica (broker) ids.
+         * @param replicasAssignments The assignment is a map from partition id to replica (broker) ids. If replica
+         *                            assignments were provided in the topic request, this will be the same. Otherwise,
+         *                            it's the replica assignments determined within the broker.
          * @param configs topic configs for the topic to be created, not including broker defaults. Broker configs are
          *                passed via the {@code configure()} method of the policy implementation.
          */
-        public RequestMetadata(String topic, Integer numPartitions, Short replicationFactor,
-                        Map<Integer, List<Integer>> replicasAssignments, Map<String, String> configs) {
+        public RequestMetadata(String topic, Map<Integer, List<Integer>> replicasAssignments, Map<String, String> configs) {
+            assert !replicasAssignments.isEmpty();
+            assert replicasAssignments.values().iterator().next().size() > 0;
             this.topic = topic;
-            this.numPartitions = numPartitions;
-            this.replicationFactor = replicationFactor;
-            this.replicasAssignments = replicasAssignments == null ? null : Collections.unmodifiableMap(replicasAssignments);
+            this.replicasAssignments = Collections.unmodifiableMap(replicasAssignments);
             this.configs = Collections.unmodifiableMap(configs);
         }
 
@@ -76,22 +72,21 @@ public interface CreateTopicPolicy extends Configurable, AutoCloseable {
         }
 
         /**
-         * Return the number of partitions to create or null if replicaAssignments is not null.
+         * Return the number of partitions to create.
          */
         public Integer numPartitions() {
-            return numPartitions;
+            return replicasAssignments.size();
         }
 
         /**
-         * Return the number of replicas to create or null if replicaAssignments is not null.
+         * Return the number of replicas to create.
          */
         public Short replicationFactor() {
-            return replicationFactor;
+            return (short) replicasAssignments.values().iterator().next().size();
         }
 
         /**
-         * Return a map from partition id to replica (broker) ids or null if numPartitions and replicationFactor are
-         * set instead.
+         * Return a map from partition id to replica (broker) ids.
          */
         public Map<Integer, List<Integer>> replicasAssignments() {
             return replicasAssignments;
@@ -107,7 +102,7 @@ public interface CreateTopicPolicy extends Configurable, AutoCloseable {
 
         @Override
         public int hashCode() {
-            return Objects.hash(topic, numPartitions, replicationFactor,
+            return Objects.hash(topic, numPartitions(), replicationFactor(),
                 replicasAssignments, configs);
         }
 
@@ -117,8 +112,8 @@ public interface CreateTopicPolicy extends Configurable, AutoCloseable {
             if (o == null || getClass() != o.getClass()) return false;
             RequestMetadata other = (RequestMetadata) o;
             return topic.equals(other.topic) &&
-                Objects.equals(numPartitions, other.numPartitions) &&
-                Objects.equals(replicationFactor, other.replicationFactor) &&
+                Objects.equals(numPartitions(), other.numPartitions()) &&
+                Objects.equals(replicationFactor(), other.replicationFactor()) &&
                 Objects.equals(replicasAssignments, other.replicasAssignments) &&
                 configs.equals(other.configs);
         }
@@ -126,8 +121,8 @@ public interface CreateTopicPolicy extends Configurable, AutoCloseable {
         @Override
         public String toString() {
             return "CreateTopicPolicy.RequestMetadata(topic=" + topic +
-                    ", numPartitions=" + numPartitions +
-                    ", replicationFactor=" + replicationFactor +
+                    ", numPartitions=" + numPartitions() +
+                    ", replicationFactor=" + replicationFactor() +
                     ", replicasAssignments=" + replicasAssignments +
                     ", configs=" + configs + ")";
         }
