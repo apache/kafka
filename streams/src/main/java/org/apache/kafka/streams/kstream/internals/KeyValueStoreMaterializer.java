@@ -17,6 +17,8 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.processor.internals.StoreBuilderWrapper;
+import org.apache.kafka.streams.processor.internals.StoreFactory;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -43,7 +45,7 @@ public class KeyValueStoreMaterializer<K, V> {
     /**
      * @return  StoreBuilder
      */
-    public StoreBuilder<?> materialize() {
+    public StoreFactory<?> materialize() {
         KeyValueBytesStoreSupplier supplier = (KeyValueBytesStoreSupplier) materialized.storeSupplier();
         if (supplier == null) {
             switch (materialized.storeType()) {
@@ -84,6 +86,6 @@ public class KeyValueStoreMaterializer<K, V> {
                 LOG.info("Not enabling caching for store '{}' as versioned stores do not support caching.", supplier.name());
             }
         }
-        return builder;
+        return new StoreBuilderWrapper<>(builder);
     }
 }

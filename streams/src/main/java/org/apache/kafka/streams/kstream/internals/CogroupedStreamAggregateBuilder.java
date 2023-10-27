@@ -40,7 +40,7 @@ import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
 import org.apache.kafka.streams.kstream.internals.graph.StatefulProcessorNode;
 import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
-import org.apache.kafka.streams.state.StoreBuilder;
+import org.apache.kafka.streams.processor.internals.StoreFactory;
 
 class CogroupedStreamAggregateBuilder<K, VOut> {
     private final InternalStreamsBuilder builder;
@@ -52,7 +52,7 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
     <KR> KTable<KR, VOut> build(final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, VOut>> groupPatterns,
                                 final Initializer<VOut> initializer,
                                 final NamedInternal named,
-                                final StoreBuilder<?> storeBuilder,
+                                final StoreFactory<?> storeBuilder,
                                 final Serde<KR> keySerde,
                                 final Serde<VOut> valueSerde,
                                 final String queryableName,
@@ -86,7 +86,7 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
     <KR, W extends Window> KTable<KR, VOut> build(final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, VOut>> groupPatterns,
                                                   final Initializer<VOut> initializer,
                                                   final NamedInternal named,
-                                                  final StoreBuilder<?> storeBuilder,
+                                                  final StoreFactory<?> storeBuilder,
                                                   final Serde<KR> keySerde,
                                                   final Serde<VOut> valueSerde,
                                                   final String queryableName,
@@ -125,7 +125,7 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
     <KR> KTable<KR, VOut> build(final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, VOut>> groupPatterns,
                                 final Initializer<VOut> initializer,
                                 final NamedInternal named,
-                                final StoreBuilder<?> storeBuilder,
+                                final StoreFactory<?> storeBuilder,
                                 final Serde<KR> keySerde,
                                 final Serde<VOut> valueSerde,
                                 final String queryableName,
@@ -165,7 +165,7 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
     <KR> KTable<KR, VOut> build(final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, VOut>> groupPatterns,
                                 final Initializer<VOut> initializer,
                                 final NamedInternal named,
-                                final StoreBuilder<?> storeBuilder,
+                                final StoreFactory<?> storeBuilder,
                                 final Serde<KR> keySerde,
                                 final Serde<VOut> valueSerde,
                                 final String queryableName,
@@ -201,7 +201,7 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
     }
 
     private void processRepartitions(final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, VOut>> groupPatterns,
-                                     final StoreBuilder<?> storeBuilder) {
+                                     final StoreFactory<?> storeBuilder) {
         for (final KGroupedStreamImpl<K, ?> repartitionReqs : groupPatterns.keySet()) {
 
             if (repartitionReqs.repartitionRequired) {
@@ -263,7 +263,7 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
 
     private StatefulProcessorNode<K, ?> getStatefulProcessorNode(final String processorName,
                                                                  final boolean stateCreated,
-                                                                 final StoreBuilder<?> storeBuilder,
+                                                                 final StoreFactory<?> storeBuilder,
                                                                  final ProcessorSupplier<K, ?, K, ?> kStreamAggregate) {
         final StatefulProcessorNode<K, ?> statefulProcessorNode;
         if (!stateCreated) {

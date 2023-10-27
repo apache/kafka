@@ -17,28 +17,27 @@
 
 package org.apache.kafka.streams.kstream.internals.graph;
 
-import org.apache.kafka.streams.kstream.internals.KTableSource;
-import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
-import org.apache.kafka.streams.state.StoreBuilder;
-
 import java.util.Arrays;
 import java.util.Objects;
+import org.apache.kafka.streams.kstream.internals.KTableSource;
+import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
+import org.apache.kafka.streams.processor.internals.StoreFactory;
 
 public class TableProcessorNode<K, V> extends GraphNode {
 
     private final ProcessorParameters<K, V, ?, ?> processorParameters;
-    private final StoreBuilder<?> storeBuilder;
+    private final StoreFactory<?> storeBuilder;
     private final String[] storeNames;
 
     public TableProcessorNode(final String nodeName,
                               final ProcessorParameters<K, V, ?, ?> processorParameters,
-                              final StoreBuilder<?> storeBuilder) {
+                              final StoreFactory<?> storeBuilder) {
         this(nodeName, processorParameters, storeBuilder, null);
     }
 
     public TableProcessorNode(final String nodeName,
                               final ProcessorParameters<K, V, ?, ?> processorParameters,
-                              final StoreBuilder<?> storeBuilder,
+                              final StoreFactory<?> storeBuilder,
                               final String[] storeNames) {
         super(nodeName);
         this.processorParameters = processorParameters;

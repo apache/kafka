@@ -25,8 +25,8 @@ import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
 import org.apache.kafka.streams.kstream.internals.KeyValueStoreMaterializer;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
+import org.apache.kafka.streams.processor.internals.StoreFactory;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.StoreBuilder;
 
 import java.util.Collections;
 
@@ -93,7 +93,7 @@ public class TableSourceNode<K, V> extends SourceGraphNode<K, V> {
             throw new IllegalStateException("A table source node must have a single topic as input");
         }
 
-        final StoreBuilder<?> storeBuilder =
+        final StoreFactory<?> storeBuilder =
             new KeyValueStoreMaterializer<>((MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>>) materializedInternal).materialize();
 
         if (isGlobalKTable) {

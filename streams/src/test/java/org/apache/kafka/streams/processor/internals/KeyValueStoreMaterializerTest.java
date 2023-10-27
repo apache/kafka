@@ -231,7 +231,7 @@ public class KeyValueStoreMaterializerTest {
     private static TimestampedKeyValueStore<String, String> getTimestampedStore(
         final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materialized) {
         final KeyValueStoreMaterializer<String, String> materializer = new KeyValueStoreMaterializer<>(materialized);
-        final StoreBuilder<?> builder = materializer.materialize();
+        final StoreFactory<?> builder = materializer.materialize();
         return (TimestampedKeyValueStore<String, String>) builder.build();
     }
 
@@ -239,7 +239,7 @@ public class KeyValueStoreMaterializerTest {
     private static VersionedKeyValueStore<String, String> getVersionedStore(
         final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materialized) {
         final KeyValueStoreMaterializer<String, String> materializer = new KeyValueStoreMaterializer<>(materialized);
-        final StoreBuilder<?> builder = materializer.materialize();
+        final StoreFactory<?> builder = materializer.materialize();
         return (VersionedKeyValueStore<String, String>) builder.build();
     }
 }

@@ -90,7 +90,7 @@ public class MaterializedInternal<K, V, S extends StateStore> extends Materializ
         return loggingEnabled;
     }
 
-    Map<String, String> logConfig() {
+    public Map<String, String> logConfig() {
         return topicConfig;
     }
 

@@ -69,6 +69,8 @@ import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopicProperties;
 import org.apache.kafka.streams.processor.internals.StaticTopicNameExtractor;
+import org.apache.kafka.streams.processor.internals.StoreBuilderWrapper;
+import org.apache.kafka.streams.processor.internals.StoreFactory;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
@@ -182,7 +184,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final Serde<K> keySerde;
         final Serde<V> valueSerde;
         final String queryableStoreName;
-        final StoreBuilder<?> storeBuilder;
+        final StoreFactory<?> storeBuilder;
 
         if (materializedInternal != null) {
             // we actually do not need to generate store names at all since if it is not specified, we will not
@@ -298,7 +300,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final Serde<K> keySerde;
         final Serde<VR> valueSerde;
         final String queryableStoreName;
-        final StoreBuilder<?> storeBuilder;
+        final StoreFactory<?> storeBuilder;
 
         if (materializedInternal != null) {
             // we actually do not need to generate store names at all since if it is not specified, we will not
@@ -454,7 +456,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final Serde<K> keySerde;
         final Serde<VR> valueSerde;
         final String queryableStoreName;
-        final StoreBuilder<?> storeBuilder;
+        final StoreFactory<?> storeBuilder;
 
         if (materializedInternal != null) {
             // don't inherit parent value serde, since this operation may change the value type, more specifically:
@@ -590,7 +592,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final ProcessorGraphNode<K, Change<V>> node = new TableSuppressNode<>(
             name,
             new ProcessorParameters<>(suppressionSupplier, name),
-            storeBuilder
+            new StoreBuilderWrapper<>(storeBuilder)
         );
         node.setOutputVersioned(false);
 
@@ -769,7 +771,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final Serde<K> keySerde;
         final Serde<VR> valueSerde;
         final String queryableStoreName;
-        final StoreBuilder<?> storeBuilder;
+        final StoreFactory<?> storeBuilder;
 
         if (materializedInternal != null) {
             if (materializedInternal.keySerde() == null) {
@@ -1191,7 +1193,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
                 new Serdes.BytesSerde(),
                 subscriptionWrapperSerde
             );
-        builder.addStateStore(subscriptionStore);
+        builder.addStateStore(new StoreBuilderWrapper<>(subscriptionStore));
 
         final StatefulProcessorNode<KO, SubscriptionWrapper<K>> subscriptionReceiveNode =
             new StatefulProcessorNode<>(
@@ -1295,7 +1297,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             materializedInternal.queryableStoreName()
         );
 
-        final StoreBuilder<?> resultStore =
+        final StoreFactory<?> resultStore =
             new KeyValueStoreMaterializer<>(materializedInternal).materialize();
 
         final TableProcessorNode<K, VR> resultNode = new TableProcessorNode<>(
