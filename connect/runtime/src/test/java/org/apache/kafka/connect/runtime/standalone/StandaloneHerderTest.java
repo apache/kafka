@@ -167,7 +167,7 @@ public class StandaloneHerderTest {
     }
 
     @Test
-    public void testCreateConnectorFailedValidation() throws ExecutionException, InterruptedException {
+    public void testCreateConnectorFailedValidation() {
         // Basic validation should be performed and return an error, but should still evaluate the connector's config
         connector = mock(BogusSourceConnector.class);
 
