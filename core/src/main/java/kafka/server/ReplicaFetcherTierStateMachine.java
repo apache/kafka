@@ -231,6 +231,7 @@ public class ReplicaFetcherTierStateMachine implements TierStateMachine {
 
                 // Build leader epoch cache.
                 unifiedLog.maybeIncrementLogStartOffset(leaderLogStartOffset, LeaderOffsetIncremented);
+                unifiedLog.updateHighWatermark(leaderLocalLogStartOffset);
                 List<EpochEntry> epochs = readLeaderEpochCheckpoint(rlm, remoteLogSegmentMetadata);
                 if (unifiedLog.leaderEpochCache().isDefined()) {
                     unifiedLog.leaderEpochCache().get().assign(epochs);
