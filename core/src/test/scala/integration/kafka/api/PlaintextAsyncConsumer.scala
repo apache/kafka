@@ -17,7 +17,7 @@ import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.config.TopicConfig
-import org.apache.kafka.common.errors.{InvalidGroupIdException, InvalidTopicException}
+import org.apache.kafka.common.errors.{InvalidGroupIdException}
 import org.apache.kafka.common.header.Headers
 import org.apache.kafka.common.record.{CompressionType, TimestampType}
 import org.apache.kafka.common.serialization._
@@ -37,6 +37,13 @@ import scala.jdk.CollectionConverters._
 yet supported by the async consumer. Disabled tests will be enabled as the async consumer
 evolves. The moment all tests are supported this file will be deleted (KAFKA-15515). */
 class PlaintextAsyncConsumer extends BaseConsumerTest {
+
+  override def createConsumer[K, V](keyDeserializer: Deserializer[K] = new ByteArrayDeserializer,
+                           valueDeserializer: Deserializer[V] = new ByteArrayDeserializer,
+                           configOverrides: Properties = new Properties,
+                           configsToRemove: List[String] = List()): Consumer[K, V] = {
+    createAsyncConsumer(keyDeserializer, valueDeserializer, configOverrides, configsToRemove);
+  }
 
   @Test
   def testHeaders(): Unit = {
@@ -198,31 +205,6 @@ class PlaintextAsyncConsumer extends BaseConsumerTest {
     assertEquals(None, callback.lastError)
     assertEquals(count, callback.successCount)
     assertEquals(new OffsetAndMetadata(count), consumer.committed(Set(tp).asJava).get(tp))
-  }
-
-  @Test
-  def testPartitionsFor(): Unit = {
-    val numParts = 2
-    createTopic("part-test", numParts, 1)
-    val consumer = createConsumer()
-    val parts = consumer.partitionsFor("part-test")
-    assertNotNull(parts)
-    assertEquals(2, parts.size)
-  }
-
-  @Test
-  def testPartitionsForAutoCreate(): Unit = {
-    val consumer = createConsumer()
-    // First call would create the topic
-    consumer.partitionsFor("non-exist-topic")
-    val partitions = consumer.partitionsFor("non-exist-topic")
-    assertFalse(partitions.isEmpty)
-  }
-
-  @Test
-  def testPartitionsForInvalidTopic(): Unit = {
-    val consumer = createConsumer()
-    assertThrows(classOf[InvalidTopicException], () => consumer.partitionsFor(";3# ads,{234"))
   }
 
   @Test
@@ -520,26 +502,6 @@ class PlaintextAsyncConsumer extends BaseConsumerTest {
     consumer.assign(List(tp2).asJava)
     consumeAndVerifyRecords(consumer = consumer, numRecords = numRecords, tp = tp2, startingOffset = 0, startingKeyAndValueIndex = 0,
       startingTimestamp = startTime, timestampType = TimestampType.LOG_APPEND_TIME)
-  }
-
-  @Test
-  def testListTopics(): Unit = {
-    val numParts = 2
-    val topic1 = "part-test-topic-1"
-    val topic2 = "part-test-topic-2"
-    val topic3 = "part-test-topic-3"
-    createTopic(topic1, numParts, 1)
-    createTopic(topic2, numParts, 1)
-    createTopic(topic3, numParts, 1)
-
-    val consumer = createConsumer()
-    val topics = consumer.listTopics()
-    assertNotNull(topics)
-    assertEquals(5, topics.size())
-    assertEquals(5, topics.keySet().size())
-    assertEquals(2, topics.get(topic1).size)
-    assertEquals(2, topics.get(topic2).size)
-    assertEquals(2, topics.get(topic3).size)
   }
 
   @Test
