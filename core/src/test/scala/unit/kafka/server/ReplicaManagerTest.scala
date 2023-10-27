@@ -2551,7 +2551,7 @@ class ReplicaManagerTest {
   def testFullLeaderAndIsrStrayPartitions(zkMigrationEnabled: Boolean): Unit = {
     val props = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect)
     if (zkMigrationEnabled) {
-      props.put(KafkaConfig.MigrationEnabledProp, zkMigrationEnabled)
+      props.put(KafkaConfig.MigrationEnabledProp, "" + zkMigrationEnabled)
       props.put(RaftConfig.QUORUM_VOTERS_CONFIG, "3000@localhost:9071")
       props.put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
       props.put(KafkaConfig.ListenerSecurityProtocolMapProp, "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
