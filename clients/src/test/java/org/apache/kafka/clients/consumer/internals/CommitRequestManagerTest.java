@@ -71,13 +71,16 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class CommitRequestManagerTest {
+
+    private long retryBackoffMs = 100;
+    private long retryBackoffMaxMs = 1000;
+    private Node mockedNode = new Node(1, "host1", 9092);
     private SubscriptionState subscriptionState;
     private GroupState groupState;
     private LogContext logContext;
     private MockTime time;
     private CoordinatorRequestManager coordinatorRequestManager;
     private Properties props;
-    private Node mockedNode = new Node(1, "host1", 9092);
 
     @BeforeEach
     public void setup() {
@@ -145,9 +148,9 @@ public class CommitRequestManagerTest {
         // Add the requests to the CommitRequestManager and store their futures
         ArrayList<CompletableFuture<Void>> commitFutures = new ArrayList<>();
         ArrayList<CompletableFuture<Map<TopicPartition, OffsetAndMetadata>>> fetchFutures = new ArrayList<>();
-        commitFutures.add(commitManager.addOffsetCommitRequest(offsets1).future());
+        commitFutures.add(commitManager.addOffsetCommitRequest(offsets1));
         fetchFutures.add(commitManager.addOffsetFetchRequest(Collections.singleton(new TopicPartition("test", 0))));
-        commitFutures.add(commitManager.addOffsetCommitRequest(offsets2).future());
+        commitFutures.add(commitManager.addOffsetCommitRequest(offsets2));
         fetchFutures.add(commitManager.addOffsetFetchRequest(Collections.singleton(new TopicPartition("test", 1))));
 
         // Poll the CommitRequestManager and verify that the inflightOffsetFetches size is correct
@@ -270,12 +273,9 @@ public class CommitRequestManagerTest {
         Map<TopicPartition, OffsetAndMetadata> offsets = Collections.singletonMap(new TopicPartition("topic", 1),
             new OffsetAndMetadata(0));
 
-        CommitRequestManager.OffsetCommitRequestState requestState = sendAndVerifyOffsetCommitRequests(
-            commitRequestManger,
-            offsets,
-            error);
+        sendAndVerifyOffsetCommitRequests(commitRequestManger, offsets, error);
 
-        assertExceptionHandling(commitRequestManger, requestState, error);
+        assertExceptionHandling(commitRequestManger, error);
         assertCoordinatorDisconnect(error);
     }
 
@@ -294,7 +294,6 @@ public class CommitRequestManagerTest {
 
         assertTrue(commitRequestManger.pendingRequests.hasUnsentRequests());
         assertEquals(1, commitRequestManger.unsentOffsetCommitRequests().size());
-        long retryBackoffMs = commitRequestManger.unsentOffsetCommitRequests().peek().remainingBackoffMs(time.milliseconds());
         assertRetryBackOff(commitRequestManger, retryBackoffMs);
     }
 
@@ -304,8 +303,8 @@ public class CommitRequestManagerTest {
         }
     }
 
-    private void assertExceptionHandling(CommitRequestManager commitRequestManger, CommitRequestManager.OffsetCommitRequestState requestState, Errors errors) {
-        long remainBackoffMs = requestState.remainingBackoffMs(time.milliseconds());
+    private void assertExceptionHandling(CommitRequestManager commitRequestManger, Errors errors) {
+        long remainBackoffMs = retryBackoffMs;
         switch (errors) {
             case NOT_COORDINATOR:
             case COORDINATOR_NOT_AVAILABLE:
@@ -323,8 +322,6 @@ public class CommitRequestManagerTest {
             case TOPIC_AUTHORIZATION_FAILED:
             case OFFSET_METADATA_TOO_LARGE:
             case INVALID_COMMIT_OFFSET_SIZE:
-                // fail
-                // TODO: maybe we should retry
                 assertPollDoesNotReturn(commitRequestManger, Long.MAX_VALUE);
                 break;
             case FENCED_INSTANCE_ID:
@@ -464,17 +461,16 @@ public class CommitRequestManagerTest {
         return futures;
     }
 
-    private CommitRequestManager.OffsetCommitRequestState sendAndVerifyOffsetCommitRequests(
+    private void sendAndVerifyOffsetCommitRequests(
         final CommitRequestManager commitRequestManger,
         final Map<TopicPartition, OffsetAndMetadata> offsets,
         final Errors error) {
-        CommitRequestManager.OffsetCommitRequestState requestState = commitRequestManger.addOffsetCommitRequest(offsets);
+        commitRequestManger.addOffsetCommitRequest(offsets);
         NetworkClientDelegate.PollResult res = commitRequestManger.poll(time.milliseconds());
         assertEquals(1, res.unsentRequests.size());
         res.unsentRequests.get(0).future().complete(mockOffsetCommitResponse("topic", 1, (short) 1, error));
         res = commitRequestManger.poll(time.milliseconds());
         assertEquals(0, res.unsentRequests.size());
-        return requestState;
     }
 
     private List<CompletableFuture<ClientResponse>> assertPoll(
@@ -502,12 +498,15 @@ public class CommitRequestManagerTest {
         props.setProperty(AUTO_COMMIT_INTERVAL_MS_CONFIG, String.valueOf(autoCommitInterval));
         props.setProperty(ENABLE_AUTO_COMMIT_CONFIG, String.valueOf(autoCommitEnabled));
         return spy(new CommitRequestManager(
-                this.time,
-                this.logContext,
-                this.subscriptionState,
-                new ConsumerConfig(props),
-                this.coordinatorRequestManager,
-                this.groupState));
+            this.time,
+            this.logContext,
+            this.subscriptionState,
+            new ConsumerConfig(props),
+            this.coordinatorRequestManager,
+            this.groupState,
+            retryBackoffMs,
+            retryBackoffMaxMs,
+            0));
     }
 
     private ClientResponse buildOffsetFetchClientResponse(
@@ -550,6 +549,8 @@ public class CommitRequestManagerTest {
                         new OffsetCommitResponseData.OffsetCommitResponsePartition()
                             .setErrorCode(error.code())
                             .setPartitionIndex(partition)))));
+        OffsetCommitResponse response = mock(OffsetCommitResponse.class);
+        when(response.data()).thenReturn(responseData);
         return new ClientResponse(
             new RequestHeader(ApiKeys.OFFSET_COMMIT, apiKeyVersion, "", 1),
             null,
