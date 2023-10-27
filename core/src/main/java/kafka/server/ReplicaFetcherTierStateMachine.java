@@ -170,7 +170,7 @@ public class ReplicaFetcherTierStateMachine implements TierStateMachine {
      * fetching records from the leader. The return value is the next offset to fetch from the leader, which is the
      * next offset following the end offset of the remote log portion.
      */
-    private Long buildRemoteLogAuxState(TopicPartition topicPartition,
+    protected Long buildRemoteLogAuxState(TopicPartition topicPartition,
                                         Integer currentLeaderEpoch,
                                         Long leaderLocalLogStartOffset,
                                         Integer epochForLeaderLocalLogStartOffset,

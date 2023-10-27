@@ -51,6 +51,8 @@ public final class LogFileUtils {
      */
     public static final String TXN_INDEX_FILE_SUFFIX = ".txnindex";
 
+    public static final String LEADER_EPOCH_INDEX_FILE_SUFFIX = ".leaderepoch";
+
     private LogFileUtils() {
     }
 
