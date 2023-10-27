@@ -1815,7 +1815,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
         leaderEpochCache.foreach(_.clearAndFlush())
         producerStateManager.truncateFullyAndStartAt(newOffset)
         logStartOffset = logStartOffsetOpt.getOrElse(newOffset)
-        _localLogStartOffset = newOffset
+        maybeIncrementLocalLogStartOffset(newOffset, LogStartOffsetIncrementReason.SegmentDeletion)
         rebuildProducerState(newOffset, producerStateManager)
         updateHighWatermark(localLog.logEndOffsetMetadata)
       }
