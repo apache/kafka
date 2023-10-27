@@ -745,7 +745,6 @@ public class StandaloneHerderTest {
         newConnConfig.put("foo", "bar");
 
         Callback<Map<String, String>> connectorConfigCb = mock(Callback.class);
-        // Callback<Herder.Created<ConnectorInfo>> putConnectorConfigCb = mock(Callback.class);
 
         // Create
         connector = mock(BogusSourceConnector.class);
