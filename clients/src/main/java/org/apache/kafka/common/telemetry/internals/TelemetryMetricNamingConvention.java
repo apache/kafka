@@ -30,7 +30,7 @@ import java.util.stream.Collectors;
  * This class encapsulates naming and mapping conventions defined as part of
  * <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-714%3A+Client+metrics+and+observability#KIP714:Clientmetricsandobservability-Metricsnamingandformat">Metrics naming and format</a>
  */
-public class MetricNamingConvention {
+public class TelemetryMetricNamingConvention {
 
     private static final String NAME_JOINER = ".";
     private static final String TAG_JOINER = "_";
@@ -38,15 +38,15 @@ public class MetricNamingConvention {
     // remove metrics as it is redundant for telemetry metrics naming convention
     private final static Pattern GROUP_PATTERN = Pattern.compile("\\.(metrics)");
 
-    public static MetricNamingStrategy<MetricName> getClientTelemetryMetricNamingStrategy(String domain) {
+    public static MetricNamingStrategy<MetricName> getClientTelemetryMetricNamingStrategy(String prefix) {
+        Objects.requireNonNull(prefix, "prefix cannot be null");
+
         return new MetricNamingStrategy<MetricName>() {
             @Override
             public MetricKey metricKey(MetricName metricName) {
                 Objects.requireNonNull(metricName, "metric name cannot be null");
-                String group = metricName.group() == null ? "" : metricName.group();
-                String rawName = metricName.name() == null ? "" : metricName.name();
 
-                return new MetricKey(fullMetricName(domain, group, rawName),
+                return new MetricKey(fullMetricName(prefix, metricName.group(), metricName.name()),
                     Collections.unmodifiableMap(cleanTags(metricName.tags())));
             }
 
@@ -59,19 +59,19 @@ public class MetricNamingConvention {
     }
 
     /**
-     * Creates a metric name given the domain, group, and name. The new String follows the following
+     * Creates a metric name from the given prefix, group, and name. The new String follows the following
      * conventions and rules:
      *
      * <ul>
-     *   <li>domain is expected to be a host-name like value, e.g. {@code org.apache.kafka}</li>
+     *   <li>prefix is expected to be a host-name like value, e.g. {@code org.apache.kafka}</li>
      *   <li>group is cleaned of redundant words: "-metrics"</li>
      *   <li>the group and metric name is dot separated</li>
      *   <li>The name is created by joining the three components, e.g.:
      *     {@code org.apache.kafka.producer.connection.creation.rate}</li>
      * </ul>
      */
-    private static String fullMetricName(String domain, String group, String name) {
-        return domain
+    private static String fullMetricName(String prefix, String group, String name) {
+        return prefix
             + NAME_JOINER
             + cleanGroup(group)
             + NAME_JOINER
@@ -79,11 +79,11 @@ public class MetricNamingConvention {
     }
 
     /**
-     * This method maps a raw name to follow conventions and cleans up the result to be more legible:
+     * This method maps a group name to follow conventions and cleans up the result to be more legible:
      * <ul>
-     *  <li> converts names to lower hyphen case conventions
+     *  <li> converts names to lower case conventions
+     *  <li> normalizes artifacts of hyphen case in group name to dot separated conversion
      *  <li> strips redundant parts of the metric name, such as -metrics
-     *  <li> normalizes artifacts of hyphen case to dot separated conversion
      * </ul>
      */
     private static String cleanGroup(String group) {
@@ -91,12 +91,19 @@ public class MetricNamingConvention {
         return GROUP_PATTERN.matcher(group).replaceAll("");
     }
 
+    /**
+     * This method maps a metric name to follow conventions and cleans up the result to be more legible:
+     * <ul>
+     *  <li> converts names to lower case conventions
+     *  <li> normalizes artifacts of hyphen case in metric name to dot separated conversion
+     * </ul>
+     */
     private static String cleanMetric(String metric) {
         return clean(metric, NAME_JOINER);
     }
 
     /**
-     * Converts a tag name to match the telemetry naming conventions by converting snake_case.
+     * Converts a tag name to match the telemetry naming conventions by converting into snake_case.
      * <p>
      * Kafka metrics have tags name in lower case separated by hyphens. Eg: total-errors
      *
@@ -111,9 +118,7 @@ public class MetricNamingConvention {
 
     private static String clean(String raw, String joiner) {
         Objects.requireNonNull(raw, "metric data cannot be null");
-        // Convert to lower case.
         String lowerCase = raw.toLowerCase(Locale.ROOT);
-        // Replace hyphens with telemetry name joiner i.e. dot.
         return lowerCase.replaceAll("-", joiner);
     }
 }

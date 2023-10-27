@@ -27,13 +27,13 @@ import java.util.Collections;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-public class MetricNamingConventionTest {
+public class TelemetryMetricNamingConventionTest {
 
     private MetricNamingStrategy<MetricName> metricNamingStrategy;
 
     @BeforeEach
     public void setUp() {
-        metricNamingStrategy = MetricNamingConvention
+        metricNamingStrategy = TelemetryMetricNamingConvention
             .getClientTelemetryMetricNamingStrategy("org.apache.kafka");
     }
 
@@ -48,7 +48,7 @@ public class MetricNamingConventionTest {
     }
 
     @Test
-    public void testMetricKeyWithHyphenNameAndTags() {
+    public void testMetricKeyWithHyphenNameAndNonEmptyTags() {
         Map<String, String> tags = new HashMap<>();
         tags.put("tag1", "value1");
         tags.put("tag2", "value2");
@@ -192,5 +192,110 @@ public class MetricNamingConventionTest {
         // Ends with dot, though derived component should not be blank, omitting the check in the code.
         assertEquals("org.apache.kafka.group.name.", metricKey.getName());
         assertEquals(Collections.emptyMap(), metricKey.tags());
+    }
+
+    @Test
+    public void testNullPrefix() {
+        Exception e = assertThrows(NullPointerException.class, () -> TelemetryMetricNamingConvention
+            .getClientTelemetryMetricNamingStrategy(null));
+        assertEquals("prefix cannot be null", e.getMessage());
+    }
+
+    /**
+     * Standard producer metrics are the one's defined in KIP-714 under the section "Standard producer metrics":
+     * https://cwiki.apache.org/confluence/display/KAFKA/KIP-714%3A+Client+metrics+and+observability#KIP714:Clientmetricsandobservability-Standardproducermetrics
+     */
+    @Test
+    public void testStandardProducerMetrics() {
+        assertEquals("org.apache.kafka.producer.connection.creation.rate",
+            metricNamingStrategy.metricKey(new MetricName("connection-creation-rate",
+                "producer-metrics", "description", Collections.emptyMap())).getName());
+
+        assertEquals("org.apache.kafka.producer.connection.creation.total",
+            metricNamingStrategy.metricKey(new MetricName("connection-creation-total",
+                "producer-metrics", "description", Collections.emptyMap())).getName());
+
+        assertEquals("org.apache.kafka.producer.node.request.latency.avg",
+            metricNamingStrategy.metricKey(new MetricName("request-latency-avg",
+                "producer-node-metrics", "description", Collections.emptyMap())).getName());
+
+        assertEquals("org.apache.kafka.producer.node.request.latency.max",
+            metricNamingStrategy.metricKey(new MetricName("request-latency-max",
+                "producer-node-metrics", "description", Collections.emptyMap())).getName());
+
+        assertEquals("org.apache.kafka.producer.produce.throttle.time.avg",
+            metricNamingStrategy.metricKey(new MetricName("produce-throttle-time-avg",
+                "producer-metrics", "description", Collections.emptyMap())).getName());
+
+        assertEquals("org.apache.kafka.producer.produce.throttle.time.max",
+            metricNamingStrategy.metricKey(new MetricName("produce-throttle-time-max",
+                "producer-metrics", "description", Collections.emptyMap())).getName());
+
+        assertEquals("org.apache.kafka.producer.record.queue.time.avg",
+            metricNamingStrategy.metricKey(new MetricName("record-queue-time-avg",
+                "producer-metrics", "description", Collections.emptyMap())).getName());
+
+        assertEquals("org.apache.kafka.producer.record.queue.time.max",
+            metricNamingStrategy.metricKey(new MetricName("record-queue-time-max",
+                "producer-metrics", "description", Collections.emptyMap())).getName());
+    }
+
+    /**
+     * Standard consumer metrics are the one's defined in KIP-714 under the section "Standard consumer metrics":
+     * https://cwiki.apache.org/confluence/display/KAFKA/KIP-714%3A+Client+metrics+and+observability#KIP714:Clientmetricsandobservability-Standardconsumermetrics
+     */
+    @Test
+    public void testStandardConsumerMetrics() {
+        assertEquals("org.apache.kafka.consumer.connection.creation.rate",
+            metricNamingStrategy.metricKey(new MetricName("connection-creation-rate",
+                "consumer-metrics", "description", Collections.emptyMap())).getName());
+
+        assertEquals("org.apache.kafka.consumer.connection.creation.total",
+            metricNamingStrategy.metricKey(new MetricName("connection-creation-total",
+                "consumer-metrics", "description", Collections.emptyMap())).getName());
+
+        assertEquals("org.apache.kafka.consumer.node.request.latency.avg",
+            metricNamingStrategy.metricKey(new MetricName("request-latency-avg",
+                "consumer-node-metrics", "description", Collections.emptyMap())).getName());
+
+        assertEquals("org.apache.kafka.consumer.node.request.latency.max",
+            metricNamingStrategy.metricKey(new MetricName("request-latency-max",
+                "consumer-node-metrics", "description", Collections.emptyMap())).getName());
+
+        assertEquals("org.apache.kafka.consumer.poll.idle.ratio.avg",
+            metricNamingStrategy.metricKey(new MetricName("poll-idle-ratio-avg",
+                "consumer-metrics", "description", Collections.emptyMap())).getName());
+
+        assertEquals("org.apache.kafka.consumer.coordinator.commit.latency.avg",
+            metricNamingStrategy.metricKey(new MetricName("commit-latency-avg",
+                "consumer-coordinator-metrics", "description", Collections.emptyMap())).getName());
+
+        assertEquals("org.apache.kafka.consumer.coordinator.commit.latency.max",
+            metricNamingStrategy.metricKey(new MetricName("commit-latency-max",
+                "consumer-coordinator-metrics", "description", Collections.emptyMap())).getName());
+
+        assertEquals("org.apache.kafka.consumer.coordinator.assigned.partitions",
+            metricNamingStrategy.metricKey(new MetricName("assigned-partitions",
+                "consumer-coordinator-metrics", "description", Collections.emptyMap())).getName());
+
+        assertEquals("org.apache.kafka.consumer.coordinator.rebalance.latency.avg",
+            metricNamingStrategy.metricKey(new MetricName("rebalance-latency-avg",
+                "consumer-coordinator-metrics", "description", Collections.emptyMap())).getName());
+
+        assertEquals("org.apache.kafka.consumer.coordinator.rebalance.latency.max",
+            metricNamingStrategy.metricKey(new MetricName("rebalance-latency-max",
+                "consumer-coordinator-metrics", "description", Collections.emptyMap())).getName());
+
+        assertEquals("org.apache.kafka.consumer.coordinator.rebalance.latency.total",
+            metricNamingStrategy.metricKey(new MetricName("rebalance-latency-total",
+                "consumer-coordinator-metrics", "description", Collections.emptyMap())).getName());
+
+        assertEquals("org.apache.kafka.consumer.fetch.manager.fetch.latency.avg",
+            metricNamingStrategy.metricKey(new MetricName("fetch-latency-avg",
+                "consumer-fetch-manager-metrics", "description", Collections.emptyMap())).getName());
+
+        assertEquals("org.apache.kafka.consumer.fetch.manager.fetch.latency.max",
+            metricNamingStrategy.metricKey(new MetricName("fetch-latency-max",
+                "consumer-fetch-manager-metrics", "description", Collections.emptyMap())).getName());
     }
 }
