@@ -256,6 +256,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.LI_CONTROLLED_SHUTDOWN_SKIP_SAFETY_CHECK => handleLiControlledShutdownSkipSafetyCheck(request)
         case ApiKeys.LI_COMBINED_CONTROL => handleLiCombinedControlRequest(request, requestLocal)
         case ApiKeys.LI_MOVE_CONTROLLER => handleMoveControllerRequest(request)
+        case ApiKeys.LI_CREATE_FEDERATED_TOPIC_ZNODES => maybeForwardToController(request, handleMarkFederatedTopicRequest)
         case _ => throw new IllegalStateException(s"No handler for request api key ${request.header.apiKey}")
       }
     } catch {
@@ -3684,6 +3685,64 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     requestHelper.sendResponseExemptThrottle(request, moveControllerResponse)
+  }
+
+  def handleMarkFederatedTopicRequest(request: RequestChannel.Request): Unit = {
+    val markFederatedTopicRequest = request.body[LiCreateFederatedTopicZnodesRequest]
+    val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.shouldNeverReceive(request))
+
+    if (!zkSupport.controller.isActive) {
+      requestHelper.sendResponseExemptThrottle(request,
+        LiCreateFederatedTopicZnodesResponse.prepareResponse(Errors.NOT_CONTROLLER, 0, markFederatedTopicRequest.version())
+      )
+    } else {
+      val hasClusterAuthorization = authHelper.authorize(request.context, CREATE, CLUSTER, CLUSTER_NAME,
+        logIfDenied = false)
+      val allTopics = mutable.Set[String]()
+      markFederatedTopicRequest.data().topics().forEach(federatedTopic => {
+        allTopics += federatedTopic.name()
+      })
+      val results = new CreatableTopicResultCollection(allTopics.size)
+      allTopics.foreach(topic => {
+        results.add(new CreatableTopicResult().setName(topic))
+      })
+      val authorizedTopics =
+        if (hasClusterAuthorization) allTopics
+        else authHelper.filterByAuthorized(request.context, CREATE, TOPIC, allTopics)(identity)
+      val authorizedForDescribeConfigs = authHelper.filterByAuthorized(request.context, DESCRIBE_CONFIGS, TOPIC,
+        allTopics, logIfDenied = false)(identity).map(name => name -> results.find(name)).toMap
+
+      results.forEach { topic =>
+        if (results.findAll(topic.name).size > 1) {
+          topic.setErrorCode(Errors.INVALID_REQUEST.code)
+          topic.setErrorMessage("Found multiple entries for this topic.")
+        } else if (!authorizedTopics.contains(topic.name)) {
+          topic.setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
+          topic.setErrorMessage("Authorization failed.")
+        }
+        if (!authorizedForDescribeConfigs.contains(topic.name)) {
+          topic.setTopicConfigErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
+        }
+      }
+      val toCreate = mutable.Map[String, String]()
+      markFederatedTopicRequest.data.topics.forEach { topic =>
+        if (results.find(topic.name).errorCode == Errors.NONE.code) {
+          toCreate += topic.name -> topic.namespace
+        }
+      }
+
+      try {
+        toCreate.foreach( entry => {
+          zkSupport.zkClient.createFederatedTopicZNode(entry._1, entry._2)
+        })
+        requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
+          LiCreateFederatedTopicZnodesResponse.prepareResponse(Errors.NONE, requestThrottleMs, markFederatedTopicRequest.version())
+        )
+      } catch {
+        case throwable: Throwable =>
+          requestHelper.sendResponseExemptThrottle(request, markFederatedTopicRequest.getErrorResponse(throwable))
+      }
+    }
   }
 }
 

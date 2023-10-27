@@ -75,6 +75,10 @@ object BrokersZNode {
   def path = "/brokers"
 }
 
+object FederatedTopicsZNode {
+  def path = "/federatedTopics"
+}
+
 object PreferredControllersZNode {
   def path = s"${BrokersZNode.path}/preferred_controllers"
   def encode: Array[Byte] = null
@@ -333,6 +337,12 @@ object BrokerIdZNode {
           s"${new String(jsonBytes, UTF_8)}", e)
     }
   }
+}
+
+object FederatedTopicZnode {
+  def path(topic: String) = s"${FederatedTopicsZNode.path}/$topic"
+  def encode(namespace: String): Array[Byte] = namespace.getBytes(UTF_8)
+  def decode(bytes: Array[Byte]): String = if (bytes != null) new String(bytes, UTF_8) else ""
 }
 
 object TopicsZNode {

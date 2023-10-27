@@ -141,6 +141,7 @@ import org.apache.kafka.common.message.DescribeUserScramCredentialsResponseData;
 import org.apache.kafka.common.message.ExpireDelegationTokenRequestData;
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
 import org.apache.kafka.common.message.LiControlledShutdownSkipSafetyCheckRequestData;
+import org.apache.kafka.common.message.LiCreateFederatedTopicZnodesRequestData;
 import org.apache.kafka.common.message.LiMoveControllerRequestData;
 import org.apache.kafka.common.message.ListGroupsRequestData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
@@ -221,6 +222,8 @@ import org.apache.kafka.common.requests.LiControlledShutdownSkipSafetyCheckReque
 import org.apache.kafka.common.requests.LiControlledShutdownSkipSafetyCheckResponse;
 import org.apache.kafka.common.requests.LiMoveControllerRequest;
 import org.apache.kafka.common.requests.LiMoveControllerResponse;
+import org.apache.kafka.common.requests.LiCreateFederatedTopicZnodesRequest;
+import org.apache.kafka.common.requests.LiCreateFederatedTopicZnodesResponse;
 import org.apache.kafka.common.requests.ListGroupsRequest;
 import org.apache.kafka.common.requests.ListGroupsResponse;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
@@ -1594,6 +1597,45 @@ public class KafkaAdminClient extends AdminClient {
             runnable.call(call, now);
         }
         return new CreateTopicsResult(new HashMap<>(topicFutures));
+    }
+
+    @Override
+    public CreateOrDeleteFederatedTopicZnodesResult createFederatedTopicZnodes(final Map<String, String> federatedTopics,
+                                                                               final CreateFederatedTopicZnodesOptions options) {
+        final Map<String, KafkaFutureImpl<Void>> topicFutures = new HashMap<>(federatedTopics.size());
+        final long now = time.milliseconds();
+        List<LiCreateFederatedTopicZnodesRequestData.FederatedTopics> topics = new ArrayList<>();
+        federatedTopics.forEach((topic, namespace) -> {
+            topics.add(new LiCreateFederatedTopicZnodesRequestData.FederatedTopics().setName(topic).setNamespace(namespace));
+            topicFutures.put(topic, new KafkaFutureImpl<>());
+        });
+        runnable.call(new Call("createFederatedTopicZnodes", calcDeadlineMs(now, options.timeoutMs()),
+            new ControllerNodeProvider()) {
+            @Override
+            AbstractRequest.Builder<?> createRequest(int timeoutMs) {
+                return new LiCreateFederatedTopicZnodesRequest.Builder(new LiCreateFederatedTopicZnodesRequestData()
+                    .setTopics(topics)
+                    .setTimeoutMs(timeoutMs),  (short) 0);
+            }
+
+            @Override
+            void handleResponse(AbstractResponse abstractResponse) {
+                LiCreateFederatedTopicZnodesResponse response = (LiCreateFederatedTopicZnodesResponse) abstractResponse;
+                Errors errors = Errors.forCode(response.data().errorCode());
+                if (errors != Errors.NONE) {
+                    completeAllExceptionally(topicFutures.values(), errors.exception());
+                    return;
+                }
+                topicFutures.values().forEach(f -> f.complete(null));
+            }
+
+            @Override
+            void handleFailure(Throwable throwable) {
+                // Fail all the other remaining futures
+                completeAllExceptionally(topicFutures.values(), throwable);
+            }
+        }, now);
+        return new CreateOrDeleteFederatedTopicZnodesResult(new HashMap<>(topicFutures));
     }
 
     private Call getCreateTopicsCall(final CreateTopicsOptions options,

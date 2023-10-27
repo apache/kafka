@@ -133,6 +133,15 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @Test
+  def testFederatedTopicCreateDeleteAndGet(): Unit = {
+    client = Admin.create(createConfig)
+    val federatedTopic = Map("federated-test-topic" -> "tracking").asJava
+
+    // create the federated topic znode
+    client.createFederatedTopicZnodes(federatedTopic)
+  }
+
+  @Test
   def testDeleteTopicsWithIds(): Unit = {
     client = Admin.create(createConfig)
     val topics = Seq("mytopic", "mytopic2", "mytopic3")

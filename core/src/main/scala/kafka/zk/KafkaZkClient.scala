@@ -579,6 +579,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient,
    * Gets all topics in the cluster.
    * @param registerWatch indicates if a watch must be registered or not
    * @return sequence of topics in the cluster.
+   *
    */
   def getAllTopicsInCluster(registerWatch: Boolean = false): Set[String] = {
     val getChildrenResponse = retryRequestUntilConnected(
@@ -1860,6 +1861,11 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient,
 
   def deleteFeatureZNode(): Unit = {
     deletePath(FeatureZNode.path, ZkVersion.MatchAnyVersion, false)
+  }
+
+  def createFederatedTopicZNode(topic: String, namespace: String): Unit = {
+    val path = FederatedTopicZnode.path(topic)
+    createRecursive(path, FederatedTopicZnode.encode(namespace))
   }
 
   private def setConsumerOffset(group: String, topicPartition: TopicPartition, offset: Long): SetDataResponse = {

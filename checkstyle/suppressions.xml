@@ -162,6 +162,9 @@
     <suppress checks="MethodLength"
               files="KTableImpl.java"/>
 
+    <suppress checks="MethodLength"
+              files="(AbstractRequest|AbstractResponse).java"/>
+
     <suppress checks="ParameterNumber"
               files="StreamThread.java"/>
 
