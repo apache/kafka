@@ -1359,7 +1359,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         log.info("Scheduling unloading of metadata for {} with epoch {}", tp, partitionEpoch);
 
         scheduleInternalOperation("UnloadCoordinator(tp=" + tp + ", epoch=" + partitionEpoch + ")", tp, () -> {
-            withContextOrThrow(tp, context -> {
+            CoordinatorContext context = coordinators.get(tp);
+            if (context != null) {
                 if (context.epoch < partitionEpoch) {
                     log.info("Started unloading metadata for {} with epoch {}.", tp, partitionEpoch);
                     context.transitionTo(CoordinatorState.CLOSED);
@@ -1370,7 +1371,9 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                         tp, partitionEpoch, context.epoch
                     );
                 }
-            });
+            } else {
+                log.info("No unload required since broker was not a coordinator for the given partition " + tp);
+            }
         });
     }
 
