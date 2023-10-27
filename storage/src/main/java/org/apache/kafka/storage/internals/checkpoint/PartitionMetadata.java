@@ -20,7 +20,6 @@ package org.apache.kafka.storage.internals.checkpoint;
 import org.apache.kafka.common.Uuid;
 
 public class PartitionMetadata {
-
     private final int version;
     private final Uuid topicId;
 
