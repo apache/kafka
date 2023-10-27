@@ -1200,6 +1200,13 @@ public class StreamsConfig extends AbstractConfig {
         public static boolean getStateUpdaterEnabled(final Map<String, Object> configs) {
             return InternalConfig.getBoolean(configs, InternalConfig.STATE_UPDATER_ENABLED, true);
         }
+        
+        // Private API to enable processing threads (i.e. polling is decoupled from processing)
+        public static final String PROCESSING_THREADS_ENABLED = "__processing.threads.enabled__";
+
+        public static boolean getProcessingThreadsEnabled(final Map<String, Object> configs) {
+            return InternalConfig.getBoolean(configs, InternalConfig.PROCESSING_THREADS_ENABLED, false);
+        }
 
         public static boolean getBoolean(final Map<String, Object> configs, final String key, final boolean defaultValue) {
             final Object value = configs.getOrDefault(key, defaultValue);

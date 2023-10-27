@@ -30,6 +30,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
@@ -94,11 +95,12 @@ public class SmokeTestDriverIntegrationTest {
 
     }
 
-    private static Stream<Boolean> parameters() {
+    private static Stream<Arguments> parameters() {
         return Stream.of(
-            Boolean.TRUE,
-            Boolean.FALSE
-          );
+            Arguments.of(false, false),
+            Arguments.of(true, false),
+            Arguments.of(true, true)
+        );
     }
 
     // In this test, we try to keep creating new stream, and closing the old one, to maintain only 3 streams alive.
@@ -107,7 +109,7 @@ public class SmokeTestDriverIntegrationTest {
     // (1) 10 min timeout, (2) 30 tries of polling without getting any data
     @ParameterizedTest
     @MethodSource("parameters")
-    public void shouldWorkWithRebalance(final boolean stateUpdaterEnabled) throws InterruptedException {
+    public void shouldWorkWithRebalance(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) throws InterruptedException {
         Exit.setExitProcedure((statusCode, message) -> {
             throw new AssertionError("Test called exit(). code:" + statusCode + " message:" + message);
         });
@@ -128,6 +130,7 @@ public class SmokeTestDriverIntegrationTest {
         final Properties props = new Properties();
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         props.put(InternalConfig.STATE_UPDATER_ENABLED, stateUpdaterEnabled);
+        props.put(InternalConfig.PROCESSING_THREADS_ENABLED, processingThreadsEnabled);
         // decrease the session timeout so that we can trigger the rebalance soon after old client left closed
         props.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 10000);
 

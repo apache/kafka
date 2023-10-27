@@ -90,6 +90,9 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.ArgumentCaptor;
 
 import java.io.DataOutputStream;
@@ -116,6 +119,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static java.util.Collections.emptyList;
 import static java.util.Collections.emptyMap;
@@ -209,22 +213,22 @@ public class FetcherTest {
             tp -> validLeaderEpoch, topicIds), false, 0L);
     }
 
-    private void assignFromUserNoId(Set<TopicPartition> partitions) {
-        subscriptions.assignFromUser(partitions);
-        client.updateMetadata(RequestTestUtils.metadataUpdateWithIds(1, singletonMap("noId", 1), Collections.emptyMap()));
+    private void assignFromUser(TopicPartition partition) {
+        subscriptions.assignFromUser(singleton(partition));
+        client.updateMetadata(RequestTestUtils.metadataUpdateWithIds(1, singletonMap(partition.topic(), 1), Collections.emptyMap()));
 
         // A dummy metadata update to ensure valid leader epoch.
         metadata.update(9, RequestTestUtils.metadataUpdateWithIds("dummy", 1,
-            Collections.emptyMap(), singletonMap("noId", 1),
+            Collections.emptyMap(), singletonMap(partition.topic(), 1),
             tp -> validLeaderEpoch, topicIds), false, 0L);
     }
 
     @AfterEach
     public void teardown() throws Exception {
         if (metrics != null)
-            this.metrics.close();
+            metrics.close();
         if (fetcher != null)
-            this.fetcher.close();
+            fetcher.close();
         if (executorService != null) {
             executorService.shutdownNow();
             assertTrue(executorService.awaitTermination(5, TimeUnit.SECONDS));
@@ -247,11 +251,11 @@ public class FetcherTest {
         assertEquals(1, sendFetches());
         assertFalse(fetcher.hasCompletedFetches());
 
-        client.prepareResponse(fullFetchResponse(tidp0, this.records, Errors.NONE, 100L, 0));
+        client.prepareResponse(fullFetchResponse(tidp0, records, Errors.NONE, 100L, 0));
         consumerClient.poll(time.timer(0));
         assertTrue(fetcher.hasCompletedFetches());
 
-        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords = fetchedRecords();
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords = fetchRecords();
         assertTrue(partitionRecords.containsKey(tp0));
 
         List<ConsumerRecord<byte[], byte[]>> records = partitionRecords.get(tp0);
@@ -274,9 +278,9 @@ public class FetcherTest {
         assertEquals(1, sendFetches());
         subscriptions.markPendingRevocation(singleton(tp0));
 
-        client.prepareResponse(fullFetchResponse(tidp0, this.records, Errors.NONE, 100L, 0));
+        client.prepareResponse(fullFetchResponse(tidp0, records, Errors.NONE, 100L, 0));
         consumerClient.poll(time.timer(0));
-        assertNull(fetchedRecords().get(tp0));
+        assertNull(fetchRecords().get(tp0));
     }
 
     @Test
@@ -301,7 +305,7 @@ public class FetcherTest {
         assertEquals(1, sendFetches());
         assertFalse(fetcher.hasCompletedFetches());
 
-        final FetchResponse fetchResponse = fullFetchResponse(tidp0, this.records, Errors.NONE, 100L, 0);
+        final FetchResponse fetchResponse = fullFetchResponse(tidp0, records, Errors.NONE, 100L, 0);
         client.prepareResponse(fetchResponse);
         consumerClient.poll(time.timer(0));
         assertTrue(fetcher.hasCompletedFetches());
@@ -310,7 +314,7 @@ public class FetcherTest {
         final ArgumentCaptor<FetchRequest.Builder> argument = ArgumentCaptor.forClass(FetchRequest.Builder.class);
 
         // send request to close the fetcher
-        this.fetcher.close(time.timer(Duration.ofSeconds(10)));
+        fetcher.close(time.timer(Duration.ofSeconds(10)));
 
         // validate that Fetcher.close() has sent a request with final epoch. 2 requests are sent, one for the normal
         // fetch earlier and another for the finish fetch here.
@@ -332,10 +336,10 @@ public class FetcherTest {
 
         // normal fetch
         assertEquals(1, sendFetches());
-        client.prepareResponse(fullFetchResponse(tidp0, this.records, Errors.NONE, 100L, 0));
+        client.prepareResponse(fullFetchResponse(tidp0, records, Errors.NONE, 100L, 0));
         consumerClient.poll(time.timer(0));
         assertTrue(fetcher.hasCompletedFetches());
-        fetchedRecords();
+        fetchRecords();
         assertEquals(4L, subscriptions.position(tp0).offset); // this is the next fetching position
 
         // mark partition unfetchable
@@ -343,7 +347,7 @@ public class FetcherTest {
         assertEquals(0, sendFetches());
         consumerClient.poll(time.timer(0));
         assertFalse(fetcher.hasCompletedFetches());
-        fetchedRecords();
+        fetchRecords();
         assertEquals(4L, subscriptions.position(tp0).offset);
     }
 
@@ -353,21 +357,21 @@ public class FetcherTest {
         buildFetcher();
 
         TopicIdPartition noId = new TopicIdPartition(Uuid.ZERO_UUID, new TopicPartition("noId", 0));
-        assignFromUserNoId(singleton(noId.topicPartition()));
+        assignFromUser(noId.topicPartition());
         subscriptions.seek(noId.topicPartition(), 0);
 
-        // Fetch should use request version 12
         assertEquals(1, sendFetches());
         assertFalse(fetcher.hasCompletedFetches());
 
+        // Fetch should use request version 12
         client.prepareResponse(
             fetchRequestMatcher((short) 12, noId, 0, Optional.of(validLeaderEpoch)),
-            fullFetchResponse(noId, this.records, Errors.NONE, 100L, 0)
+            fullFetchResponse(noId, records, Errors.NONE, 100L, 0)
         );
         consumerClient.poll(time.timer(0));
         assertTrue(fetcher.hasCompletedFetches());
 
-        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords = fetchedRecords();
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords = fetchRecords();
         assertTrue(partitionRecords.containsKey(noId.topicPartition()));
 
         List<ConsumerRecord<byte[], byte[]>> records = partitionRecords.get(noId.topicPartition());
@@ -388,18 +392,18 @@ public class FetcherTest {
         assignFromUser(singleton(tp.topicPartition()));
         subscriptions.seek(tp.topicPartition(), 0);
 
-        // Fetch should use latest version
         assertEquals(1, sendFetches());
         assertFalse(fetcher.hasCompletedFetches());
 
+        // Fetch should use latest version
         client.prepareResponse(
             fetchRequestMatcher(ApiKeys.FETCH.latestVersion(), tp, 0, Optional.of(validLeaderEpoch)),
-            fullFetchResponse(tp, this.records, Errors.NONE, 100L, 0)
+            fullFetchResponse(tp, records, Errors.NONE, 100L, 0)
         );
         consumerClient.poll(time.timer(0));
         assertTrue(fetcher.hasCompletedFetches());
 
-        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords = fetchedRecords();
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords = fetchRecords();
         assertTrue(partitionRecords.containsKey(tp.topicPartition()));
 
         List<ConsumerRecord<byte[], byte[]>> records = partitionRecords.get(tp.topicPartition());
@@ -424,9 +428,9 @@ public class FetcherTest {
         client.updateMetadata(RequestTestUtils.metadataUpdateWithIds(1, singleton(foo), tp -> validLeaderEpoch));
         subscriptions.seek(foo.topicPartition(), 0);
 
-        // Fetch should use latest version.
         assertEquals(1, sendFetches());
 
+        // Fetch should use latest version.
         client.prepareResponse(
             fetchRequestMatcher(ApiKeys.FETCH.latestVersion(),
                 singletonMap(foo, new PartitionData(
@@ -438,13 +442,13 @@ public class FetcherTest {
                 ),
                 emptyList()
             ),
-            fullFetchResponse(1, foo, this.records, Errors.NONE, 100L, 0)
+            fullFetchResponse(1, foo, records, Errors.NONE, 100L, 0)
         );
         consumerClient.poll(time.timer(0));
         assertTrue(fetcher.hasCompletedFetches());
-        fetchedRecords();
+        fetchRecords();
 
-        // Assign bar and unassign foo.
+        // Assign bar and un-assign foo.
         subscriptions.assignFromUser(singleton(bar.topicPartition()));
         client.updateMetadata(RequestTestUtils.metadataUpdateWithIds(1, singleton(bar), tp -> validLeaderEpoch));
         subscriptions.seek(bar.topicPartition(), 0);
@@ -464,11 +468,11 @@ public class FetcherTest {
                 ),
                 singletonList(foo)
             ),
-            fullFetchResponse(1, bar, this.records, Errors.NONE, 100L, 0)
+            fullFetchResponse(1, bar, records, Errors.NONE, 100L, 0)
         );
         consumerClient.poll(time.timer(0));
         assertTrue(fetcher.hasCompletedFetches());
-        fetchedRecords();
+        fetchRecords();
     }
 
     @Test
@@ -497,11 +501,11 @@ public class FetcherTest {
                 ),
                 emptyList()
             ),
-            fullFetchResponse(1, fooWithOldTopicId, this.records, Errors.NONE, 100L, 0)
+            fullFetchResponse(1, fooWithOldTopicId, records, Errors.NONE, 100L, 0)
         );
         consumerClient.poll(time.timer(0));
         assertTrue(fetcher.hasCompletedFetches());
-        fetchedRecords();
+        fetchRecords();
 
         // Replace foo with old topic id with foo with new topic id.
         subscriptions.assignFromUser(singleton(fooWithNewTopicId.topicPartition()));
@@ -524,11 +528,11 @@ public class FetcherTest {
                 ),
                 singletonList(fooWithOldTopicId)
             ),
-            fullFetchResponse(1, fooWithNewTopicId, this.records, Errors.NONE, 100L, 0)
+            fullFetchResponse(1, fooWithNewTopicId, records, Errors.NONE, 100L, 0)
         );
         consumerClient.poll(time.timer(0));
         assertTrue(fetcher.hasCompletedFetches());
-        fetchedRecords();
+        fetchRecords();
     }
 
     @Test
@@ -536,7 +540,6 @@ public class FetcherTest {
         buildFetcher();
 
         TopicIdPartition fooWithoutId = new TopicIdPartition(Uuid.ZERO_UUID, new TopicPartition("foo", 0));
-        TopicIdPartition fooWithId = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
 
         // Assign foo without a topic id.
         subscriptions.assignFromUser(singleton(fooWithoutId.topicPartition()));
@@ -557,13 +560,14 @@ public class FetcherTest {
                 ),
                 emptyList()
             ),
-            fullFetchResponse(1, fooWithoutId, this.records, Errors.NONE, 100L, 0)
+            fullFetchResponse(1, fooWithoutId, records, Errors.NONE, 100L, 0)
         );
         consumerClient.poll(time.timer(0));
         assertTrue(fetcher.hasCompletedFetches());
-        fetchedRecords();
+        fetchRecords();
 
         // Upgrade.
+        TopicIdPartition fooWithId = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
         subscriptions.assignFromUser(singleton(fooWithId.topicPartition()));
         client.updateMetadata(RequestTestUtils.metadataUpdateWithIds(1, singleton(fooWithId), tp -> validLeaderEpoch));
         subscriptions.seek(fooWithId.topicPartition(), 0);
@@ -584,11 +588,11 @@ public class FetcherTest {
                 ),
                 emptyList()
             ),
-            fullFetchResponse(1, fooWithId, this.records, Errors.NONE, 100L, 0)
+            fullFetchResponse(1, fooWithId, records, Errors.NONE, 100L, 0)
         );
         consumerClient.poll(time.timer(0));
         assertTrue(fetcher.hasCompletedFetches());
-        fetchedRecords();
+        fetchRecords();
 
         // Downgrade.
         subscriptions.assignFromUser(singleton(fooWithoutId.topicPartition()));
@@ -611,11 +615,11 @@ public class FetcherTest {
                 ),
                 emptyList()
             ),
-            fullFetchResponse(1, fooWithoutId, this.records, Errors.NONE, 100L, 0)
+            fullFetchResponse(1, fooWithoutId, records, Errors.NONE, 100L, 0)
         );
         consumerClient.poll(time.timer(0));
         assertTrue(fetcher.hasCompletedFetches());
-        fetchedRecords();
+        fetchRecords();
     }
 
     private MockClient.RequestMatcher fetchRequestMatcher(
@@ -684,7 +688,7 @@ public class FetcherTest {
         consumerClient.poll(time.timer(0));
         assertTrue(fetcher.hasCompletedFetches());
 
-        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords = fetchedRecords();
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords = fetchRecords();
         assertTrue(partitionRecords.containsKey(tp0));
         assertEquals(2, partitionRecords.get(tp0).size());
 
@@ -735,7 +739,7 @@ public class FetcherTest {
         consumerClient.poll(time.timer(0));
         assertTrue(fetcher.hasCompletedFetches());
 
-        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords = fetchedRecords();
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords = fetchRecords();
         assertTrue(partitionRecords.containsKey(tp0));
         assertEquals(6, partitionRecords.get(tp0).size());
 
@@ -756,7 +760,7 @@ public class FetcherTest {
         assertEquals(1, sendFetches());
         assertFalse(fetcher.hasCompletedFetches());
 
-        client.prepareResponse(fullFetchResponse(tidp0, this.records, Errors.NONE, 100L, 0));
+        client.prepareResponse(fullFetchResponse(tidp0, records, Errors.NONE, 100L, 0));
         consumerClient.poll(time.timer(0));
         assertTrue(fetcher.hasCompletedFetches());
         Set<TopicPartition> newAssignedTopicPartitions = new HashSet<>();
@@ -812,7 +816,7 @@ public class FetcherTest {
         consumerClient.poll(time.timer(0));
         assertTrue(fetcher.hasCompletedFetches());
 
-        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords = fetchedRecords();
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords = fetchRecords();
         assertTrue(partitionRecords.containsKey(tp0));
 
         List<ConsumerRecord<byte[], byte[]>> records = partitionRecords.get(tp0);
@@ -833,11 +837,11 @@ public class FetcherTest {
         assertEquals(1, sendFetches());
         assertFalse(fetcher.hasCompletedFetches());
 
-        client.prepareResponse(fullFetchResponse(tidp0, this.records, Errors.NOT_LEADER_OR_FOLLOWER, 100L, 0));
+        client.prepareResponse(fullFetchResponse(tidp0, records, Errors.NOT_LEADER_OR_FOLLOWER, 100L, 0));
         consumerClient.poll(time.timer(0));
         assertTrue(fetcher.hasCompletedFetches());
 
-        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords = fetchedRecords();
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords = fetchRecords();
         assertFalse(partitionRecords.containsKey(tp0));
     }
 
@@ -872,19 +876,16 @@ public class FetcherTest {
         assignFromUser(singleton(tp0));
         subscriptions.seek(tp0, 1);
 
-        client.prepareResponse(matchesOffset(tidp0, 1), fullFetchResponse(tidp0, this.records, Errors.NONE, 100L, 0));
+        client.prepareResponse(matchesOffset(tidp0, 1), fullFetchResponse(tidp0, records, Errors.NONE, 100L, 0));
 
         assertEquals(1, sendFetches());
         consumerClient.poll(time.timer(0));
-        // The fetcher should block on Deserialization error
+
         for (int i = 0; i < 2; i++) {
-            try {
-                fetcher.collectFetch();
-                fail("fetchedRecords should have raised");
-            } catch (SerializationException e) {
-                // the position should not advance since no data has been returned
-                assertEquals(1, subscriptions.position(tp0).offset);
-            }
+            // The fetcher should throw a Deserialization error
+            assertThrows(SerializationException.class, this::collectFetch);
+            // the position should not advance since no data has been returned
+            assertEquals(1, subscriptions.position(tp0).offset);
         }
     }
 
@@ -939,8 +940,8 @@ public class FetcherTest {
         client.prepareResponse(fullFetchResponse(tidp0, MemoryRecords.readableRecords(buffer), Errors.NONE, 100L, 0));
         consumerClient.poll(time.timer(0));
 
-        // the first fetchedRecords() should return the first valid message
-        assertEquals(1, fetchedRecords().get(tp0).size());
+        // the first fetchRecords() should return the first valid message
+        assertEquals(1, fetchRecords().get(tp0).size());
         assertEquals(1, subscriptions.position(tp0).offset);
 
         ensureBlockOnRecord(1L);
@@ -957,14 +958,10 @@ public class FetcherTest {
     }
 
     private void ensureBlockOnRecord(long blockedOffset) {
-        // the fetchedRecords() should always throw exception due to the invalid message at the starting offset.
         for (int i = 0; i < 2; i++) {
-            try {
-                fetcher.collectFetch();
-                fail("fetchedRecords should have raised KafkaException");
-            } catch (KafkaException e) {
-                assertEquals(blockedOffset, subscriptions.position(tp0).offset);
-            }
+            // the fetchRecords() should always throw exception due to the invalid message at the starting offset.
+            assertThrows(KafkaException.class, this::fetchRecords);
+            assertEquals(blockedOffset, subscriptions.position(tp0).offset);
         }
     }
 
@@ -972,12 +969,12 @@ public class FetcherTest {
         // Seek to skip the bad record and fetch again.
         subscriptions.seekUnvalidated(tp0, new SubscriptionState.FetchPosition(toOffset, Optional.empty(), metadata.currentLeader(tp0)));
         // Should not throw exception after the seek.
-        fetcher.collectFetch();
+        collectFetch();
         assertEquals(1, sendFetches());
         client.prepareResponse(fullFetchResponse(tidp0, MemoryRecords.readableRecords(responseBuffer), Errors.NONE, 100L, 0));
         consumerClient.poll(time.timer(0));
 
-        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> recordsByPartition = fetchedRecords();
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> recordsByPartition = fetchRecords();
         List<ConsumerRecord<byte[], byte[]>> records = recordsByPartition.get(tp0);
         assertEquals(1, records.size());
         assertEquals(toOffset, records.get(0).offset());
@@ -1013,14 +1010,10 @@ public class FetcherTest {
         client.prepareResponse(fullFetchResponse(tidp0, MemoryRecords.readableRecords(buffer), Errors.NONE, 100L, 0));
         consumerClient.poll(time.timer(0));
 
-        // the fetchedRecords() should always throw exception due to the bad batch.
         for (int i = 0; i < 2; i++) {
-            try {
-                fetcher.collectFetch();
-                fail("fetchedRecords should have raised KafkaException");
-            } catch (KafkaException e) {
-                assertEquals(0, subscriptions.position(tp0).offset);
-            }
+            // collectFetch() should always throw exception due to the bad batch.
+            assertThrows(KafkaException.class, this::collectFetch);
+            assertEquals(0, subscriptions.position(tp0).offset);
         }
     }
 
@@ -1044,13 +1037,10 @@ public class FetcherTest {
         assertEquals(1, sendFetches());
         client.prepareResponse(fullFetchResponse(tidp0, MemoryRecords.readableRecords(buffer), Errors.NONE, 100L, 0));
         consumerClient.poll(time.timer(0));
-        try {
-            fetcher.collectFetch();
-            fail("fetchedRecords should have raised");
-        } catch (KafkaException e) {
-            // the position should not advance since no data has been returned
-            assertEquals(0, subscriptions.position(tp0).offset);
-        }
+
+        assertThrows(KafkaException.class, this::collectFetch);
+        // the position should not advance since no data has been returned
+        assertEquals(0, subscriptions.position(tp0).offset);
     }
 
     @Test
@@ -1079,7 +1069,7 @@ public class FetcherTest {
 
         assertEquals(1, sendFetches());
         consumerClient.poll(time.timer(0));
-        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> recordsByPartition = fetchedRecords();
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> recordsByPartition = fetchRecords();
         records = recordsByPartition.get(tp0);
 
         assertEquals(3, records.size());
@@ -1102,38 +1092,37 @@ public class FetcherTest {
     public void testFetchMaxPollRecords() {
         buildFetcher(2);
 
-        List<ConsumerRecord<byte[], byte[]>> records;
         assignFromUser(singleton(tp0));
         subscriptions.seek(tp0, 1);
 
-        client.prepareResponse(matchesOffset(tidp0, 1), fullFetchResponse(tidp0, this.records, Errors.NONE, 100L, 0));
-        client.prepareResponse(matchesOffset(tidp0, 4), fullFetchResponse(tidp0, this.nextRecords, Errors.NONE, 100L, 0));
+        client.prepareResponse(matchesOffset(tidp0, 1), fullFetchResponse(tidp0, records, Errors.NONE, 100L, 0));
+        client.prepareResponse(matchesOffset(tidp0, 4), fullFetchResponse(tidp0, nextRecords, Errors.NONE, 100L, 0));
 
         assertEquals(1, sendFetches());
         consumerClient.poll(time.timer(0));
-        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> recordsByPartition = fetchedRecords();
-        records = recordsByPartition.get(tp0);
-        assertEquals(2, records.size());
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> recordsByPartition = fetchRecords();
+        List<ConsumerRecord<byte[], byte[]>> recordsToTest = recordsByPartition.get(tp0);
+        assertEquals(2, recordsToTest.size());
         assertEquals(3L, subscriptions.position(tp0).offset);
-        assertEquals(1, records.get(0).offset());
-        assertEquals(2, records.get(1).offset());
+        assertEquals(1, recordsToTest.get(0).offset());
+        assertEquals(2, recordsToTest.get(1).offset());
 
         assertEquals(0, sendFetches());
         consumerClient.poll(time.timer(0));
-        recordsByPartition = fetchedRecords();
-        records = recordsByPartition.get(tp0);
-        assertEquals(1, records.size());
+        recordsByPartition = fetchRecords();
+        recordsToTest = recordsByPartition.get(tp0);
+        assertEquals(1, recordsToTest.size());
         assertEquals(4L, subscriptions.position(tp0).offset);
-        assertEquals(3, records.get(0).offset());
+        assertEquals(3, recordsToTest.get(0).offset());
 
         assertTrue(sendFetches() > 0);
         consumerClient.poll(time.timer(0));
-        recordsByPartition = fetchedRecords();
-        records = recordsByPartition.get(tp0);
-        assertEquals(2, records.size());
+        recordsByPartition = fetchRecords();
+        recordsToTest = recordsByPartition.get(tp0);
+        assertEquals(2, recordsToTest.size());
         assertEquals(6L, subscriptions.position(tp0).offset);
-        assertEquals(4, records.get(0).offset());
-        assertEquals(5, records.get(1).offset());
+        assertEquals(4, recordsToTest.get(0).offset());
+        assertEquals(5, recordsToTest.get(1).offset());
     }
 
     /**
@@ -1145,35 +1134,34 @@ public class FetcherTest {
     public void testFetchAfterPartitionWithFetchedRecordsIsUnassigned() {
         buildFetcher(2);
 
-        List<ConsumerRecord<byte[], byte[]>> records;
         assignFromUser(singleton(tp0));
         subscriptions.seek(tp0, 1);
 
         // Returns 3 records while `max.poll.records` is configured to 2
-        client.prepareResponse(matchesOffset(tidp0, 1), fullFetchResponse(tidp0, this.records, Errors.NONE, 100L, 0));
+        client.prepareResponse(matchesOffset(tidp0, 1), fullFetchResponse(tidp0, records, Errors.NONE, 100L, 0));
 
         assertEquals(1, sendFetches());
         consumerClient.poll(time.timer(0));
-        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> recordsByPartition = fetchedRecords();
-        records = recordsByPartition.get(tp0);
-        assertEquals(2, records.size());
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> recordsByPartition = fetchRecords();
+        List<ConsumerRecord<byte[], byte[]>> recordsToTest = recordsByPartition.get(tp0);
+        assertEquals(2, recordsToTest.size());
         assertEquals(3L, subscriptions.position(tp0).offset);
-        assertEquals(1, records.get(0).offset());
-        assertEquals(2, records.get(1).offset());
+        assertEquals(1, recordsToTest.get(0).offset());
+        assertEquals(2, recordsToTest.get(1).offset());
 
         assignFromUser(singleton(tp1));
-        client.prepareResponse(matchesOffset(tidp1, 4), fullFetchResponse(tidp1, this.nextRecords, Errors.NONE, 100L, 0));
+        client.prepareResponse(matchesOffset(tidp1, 4), fullFetchResponse(tidp1, nextRecords, Errors.NONE, 100L, 0));
         subscriptions.seek(tp1, 4);
 
         assertEquals(1, sendFetches());
         consumerClient.poll(time.timer(0));
-        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetchedRecords();
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetchRecords();
         assertNull(fetchedRecords.get(tp0));
-        records = fetchedRecords.get(tp1);
-        assertEquals(2, records.size());
+        recordsToTest = fetchedRecords.get(tp1);
+        assertEquals(2, recordsToTest.size());
         assertEquals(6L, subscriptions.position(tp1).offset);
-        assertEquals(4, records.get(0).offset());
-        assertEquals(5, records.get(1).offset());
+        assertEquals(4, recordsToTest.get(0).offset());
+        assertEquals(5, recordsToTest.get(1).offset());
     }
 
     @Test
@@ -1197,7 +1185,7 @@ public class FetcherTest {
         assertEquals(1, sendFetches());
         client.prepareResponse(fullFetchResponse(tidp0, records, Errors.NONE, 100L, 0));
         consumerClient.poll(time.timer(0));
-        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> recordsByPartition = fetchedRecords();
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> recordsByPartition = fetchRecords();
         consumerRecords = recordsByPartition.get(tp0);
         assertEquals(3, consumerRecords.size());
         assertEquals(31L, subscriptions.position(tp0).offset); // this is the next fetching position
@@ -1218,14 +1206,9 @@ public class FetcherTest {
 
             client.setNodeApiVersions(NodeApiVersions.create(ApiKeys.FETCH.id, (short) 2, (short) 2));
             makeFetchRequestWithIncompleteRecord();
-            try {
-                fetcher.collectFetch();
-                fail("RecordTooLargeException should have been raised");
-            } catch (RecordTooLargeException e) {
-                assertTrue(e.getMessage().startsWith("There are some messages at [Partition=Offset]: "));
-                // the position should not advance since no data has been returned
-                assertEquals(0, subscriptions.position(tp0).offset);
-            }
+            assertThrows(RecordTooLargeException.class, this::collectFetch);
+            // the position should not advance since no data has been returned
+            assertEquals(0, subscriptions.position(tp0).offset);
         } finally {
             client.setNodeApiVersions(NodeApiVersions.create());
         }
@@ -1242,8 +1225,8 @@ public class FetcherTest {
         buildFetcher();
         makeFetchRequestWithIncompleteRecord();
         try {
-            fetcher.collectFetch();
-            fail("RecordTooLargeException should have been raised");
+            collectFetch();
+            fail("collectFetch should have thrown a KafkaException");
         } catch (KafkaException e) {
             assertTrue(e.getMessage().startsWith("Failed to make progress reading messages"));
             // the position should not advance since no data has been returned
@@ -1270,13 +1253,12 @@ public class FetcherTest {
         assignFromUser(singleton(tp0));
         subscriptions.seek(tp0, 0);
 
-        // resize the limit of the buffer to pretend it is only fetch-size large
         assertEquals(1, sendFetches());
-        client.prepareResponse(fullFetchResponse(tidp0, this.records, Errors.TOPIC_AUTHORIZATION_FAILED, 100L, 0));
+        client.prepareResponse(fullFetchResponse(tidp0, records, Errors.TOPIC_AUTHORIZATION_FAILED, 100L, 0));
         consumerClient.poll(time.timer(0));
         try {
-            fetcher.collectFetch();
-            fail("fetchedRecords should have thrown");
+            collectFetch();
+            fail("collectFetch should have thrown a TopicAuthorizationException");
         } catch (TopicAuthorizationException e) {
             assertEquals(singleton(topicName), e.unauthorizedTopics());
         }
@@ -1299,11 +1281,11 @@ public class FetcherTest {
         subscriptions.assignFromSubscribed(Collections.emptyList());
 
         subscriptions.assignFromSubscribed(singleton(tp0));
-        client.prepareResponse(fullFetchResponse(tidp0, this.records, Errors.NONE, 100L, 0));
+        client.prepareResponse(fullFetchResponse(tidp0, records, Errors.NONE, 100L, 0));
         consumerClient.poll(time.timer(0));
 
         // The active fetch should be ignored since its position is no longer valid
-        assertTrue(fetchedRecords().isEmpty());
+        assertTrue(fetchRecords().isEmpty());
     }
 
     @Test
@@ -1322,10 +1304,10 @@ public class FetcherTest {
         // Now the cooperative rebalance happens and fetch positions are NOT cleared for unrevoked partitions
         subscriptions.assignFromSubscribed(singleton(tp0));
 
-        client.prepareResponse(fullFetchResponse(tidp0, this.records, Errors.NONE, 100L, 0));
+        client.prepareResponse(fullFetchResponse(tidp0, records, Errors.NONE, 100L, 0));
         consumerClient.poll(time.timer(0));
 
-        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetchedRecords();
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetchRecords();
 
         // The active fetch should NOT be ignored since the position for tp0 is still valid
         assertEquals(1, fetchedRecords.size());
@@ -1342,9 +1324,9 @@ public class FetcherTest {
         assertEquals(1, sendFetches());
         subscriptions.pause(tp0);
 
-        client.prepareResponse(fullFetchResponse(tidp0, this.records, Errors.NONE, 100L, 0));
+        client.prepareResponse(fullFetchResponse(tidp0, records, Errors.NONE, 100L, 0));
         consumerClient.poll(time.timer(0));
-        assertNull(fetchedRecords().get(tp0));
+        assertNull(fetchRecords().get(tp0));
     }
 
     @Test
@@ -1370,7 +1352,7 @@ public class FetcherTest {
 
         subscriptions.pause(tp0);
 
-        client.prepareResponse(fullFetchResponse(tidp0, this.records, Errors.NONE, 100L, 0));
+        client.prepareResponse(fullFetchResponse(tidp0, records, Errors.NONE, 100L, 0));
         consumerClient.poll(time.timer(0));
 
         assertEmptyFetch("Should not return any records or advance position when partition is paused");
@@ -1384,7 +1366,7 @@ public class FetcherTest {
         assertTrue(fetcher.hasAvailableFetches(), "Should have available (non-paused) completed fetches");
 
         consumerClient.poll(time.timer(0));
-        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetchedRecords();
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetchRecords();
         assertEquals(1, fetchedRecords.size(), "Should return records when partition is resumed");
         assertNotNull(fetchedRecords.get(tp0));
         assertEquals(3, fetchedRecords.get(tp0).size());
@@ -1407,18 +1389,18 @@ public class FetcherTest {
         // #1 seek, request, poll, response
         subscriptions.seekUnvalidated(tp0, new SubscriptionState.FetchPosition(1, Optional.empty(), metadata.currentLeader(tp0)));
         assertEquals(1, sendFetches());
-        client.prepareResponse(fullFetchResponse(tidp0, this.records, Errors.NONE, 100L, 0));
+        client.prepareResponse(fullFetchResponse(tidp0, records, Errors.NONE, 100L, 0));
         consumerClient.poll(time.timer(0));
 
         // #2 seek, request, poll, response
         subscriptions.seekUnvalidated(tp1, new SubscriptionState.FetchPosition(1, Optional.empty(), metadata.currentLeader(tp1)));
         assertEquals(1, sendFetches());
-        client.prepareResponse(fullFetchResponse(tidp1, this.nextRecords, Errors.NONE, 100L, 0));
+        client.prepareResponse(fullFetchResponse(tidp1, nextRecords, Errors.NONE, 100L, 0));
 
         subscriptions.pause(tp0);
         consumerClient.poll(time.timer(0));
 
-        fetchedRecords = fetchedRecords();
+        fetchedRecords = fetchRecords();
         assertEquals(1, fetchedRecords.size(), "Should return completed fetch for unpaused partitions");
         assertTrue(fetcher.hasCompletedFetches(), "Should still contain completed fetches");
         assertNotNull(fetchedRecords.get(tp1));
@@ -1439,13 +1421,13 @@ public class FetcherTest {
         // #1 seek, request, poll, response
         subscriptions.seekUnvalidated(tp0, new SubscriptionState.FetchPosition(1, Optional.empty(), metadata.currentLeader(tp0)));
         assertEquals(1, sendFetches());
-        client.prepareResponse(fullFetchResponse(tidp0, this.records, Errors.NONE, 100L, 0));
+        client.prepareResponse(fullFetchResponse(tidp0, records, Errors.NONE, 100L, 0));
         consumerClient.poll(time.timer(0));
 
         // #2 seek, request, poll, response
         subscriptions.seekUnvalidated(tp1, new SubscriptionState.FetchPosition(1, Optional.empty(), metadata.currentLeader(tp1)));
         assertEquals(1, sendFetches());
-        client.prepareResponse(fullFetchResponse(tidp1, this.nextRecords, Errors.NONE, 100L, 0));
+        client.prepareResponse(fullFetchResponse(tidp1, nextRecords, Errors.NONE, 100L, 0));
 
         subscriptions.pause(tp0);
         subscriptions.pause(tp1);
@@ -1461,7 +1443,7 @@ public class FetcherTest {
     public void testPartialFetchWithPausedPartitions() {
         // this test sends creates a completed fetch with 3 records and a max poll of 2 records to assert
         // that a fetch that must be returned over at least 2 polls can be cached successfully when its partition is
-        // paused, then returned successfully after its been resumed again later
+        // paused, then returned successfully after it has been resumed again later
         buildFetcher(2);
 
         Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords;
@@ -1470,18 +1452,16 @@ public class FetcherTest {
 
         subscriptions.seek(tp0, 1);
         assertEquals(1, sendFetches());
-        client.prepareResponse(fullFetchResponse(tidp0, this.records, Errors.NONE, 100L, 0));
+        client.prepareResponse(fullFetchResponse(tidp0, records, Errors.NONE, 100L, 0));
         consumerClient.poll(time.timer(0));
 
-        fetchedRecords = fetchedRecords();
+        fetchedRecords = fetchRecords();
 
         assertEquals(2, fetchedRecords.get(tp0).size(), "Should return 2 records from fetch with 3 records");
         assertFalse(fetcher.hasCompletedFetches(), "Should have no completed fetches");
 
         subscriptions.pause(tp0);
         consumerClient.poll(time.timer(0));
-
-        fetchedRecords = fetchedRecords();
 
         assertEmptyFetch("Should not return records or advance position for paused partitions");
         assertTrue(fetcher.hasCompletedFetches(), "Should have 1 entry in completed fetches");
@@ -1491,7 +1471,7 @@ public class FetcherTest {
 
         consumerClient.poll(time.timer(0));
 
-        fetchedRecords = fetchedRecords();
+        fetchedRecords = fetchRecords();
 
         assertEquals(1, fetchedRecords.get(tp0).size(), "Should return last remaining record");
         assertFalse(fetcher.hasCompletedFetches(), "Should have no completed fetches");
@@ -1505,7 +1485,7 @@ public class FetcherTest {
 
         assertEquals(1, sendFetches());
         subscriptions.pause(tp0);
-        client.prepareResponse(fullFetchResponse(tidp0, this.records, Errors.NONE, 100L, 0));
+        client.prepareResponse(fullFetchResponse(tidp0, records, Errors.NONE, 100L, 0));
 
         subscriptions.seek(tp0, 3);
         subscriptions.resume(tp0);
@@ -1518,97 +1498,51 @@ public class FetcherTest {
         assertFalse(fetcher.hasCompletedFetches(), "Should have no completed fetches");
     }
 
-    @Test
-    public void testFetchNotLeaderOrFollower() {
+    @ParameterizedTest
+    @MethodSource("handleFetchResponseErrorSupplier")
+    public void testHandleFetchResponseError(Errors error,
+                                             long highWatermark,
+                                             boolean hasTopLevelError,
+                                             boolean shouldRequestMetadataUpdate) {
         buildFetcher();
         assignFromUser(singleton(tp0));
         subscriptions.seek(tp0, 0);
 
         assertEquals(1, sendFetches());
-        client.prepareResponse(fullFetchResponse(tidp0, this.records, Errors.NOT_LEADER_OR_FOLLOWER, 100L, 0));
+
+        final FetchResponse fetchResponse;
+
+        if (hasTopLevelError)
+            fetchResponse = fetchResponseWithTopLevelError(tidp0, error, 0);
+        else
+            fetchResponse = fullFetchResponse(tidp0, records, error, highWatermark, 0);
+
+        client.prepareResponse(fetchResponse);
         consumerClient.poll(time.timer(0));
+
         assertEmptyFetch("Should not return records or advance position on fetch error");
-        assertEquals(0L, metadata.timeToNextUpdate(time.milliseconds()));
+
+        long timeToNextUpdate = metadata.timeToNextUpdate(time.milliseconds());
+
+        if (shouldRequestMetadataUpdate)
+            assertEquals(0L, timeToNextUpdate, "Should have requested metadata update");
+        else
+            assertNotEquals(0L, timeToNextUpdate, "Should not have requested metadata update");
     }
 
-    @Test
-    public void testFetchUnknownTopicOrPartition() {
-        buildFetcher();
-        assignFromUser(singleton(tp0));
-        subscriptions.seek(tp0, 0);
-
-        assertEquals(1, sendFetches());
-        client.prepareResponse(fullFetchResponse(tidp0, this.records, Errors.UNKNOWN_TOPIC_OR_PARTITION, 100L, 0));
-        consumerClient.poll(time.timer(0));
-        assertEmptyFetch("Should not return records or advance position on fetch error");
-        assertEquals(0L, metadata.timeToNextUpdate(time.milliseconds()));
-    }
-
-    @Test
-    public void testFetchUnknownTopicId() {
-        buildFetcher();
-        assignFromUser(singleton(tp0));
-        subscriptions.seek(tp0, 0);
-
-        assertEquals(1, sendFetches());
-        client.prepareResponse(fullFetchResponse(tidp0, this.records, Errors.UNKNOWN_TOPIC_ID, -1L, 0));
-        consumerClient.poll(time.timer(0));
-        assertEmptyFetch("Should not return records or advance position on fetch error");
-        assertEquals(0L, metadata.timeToNextUpdate(time.milliseconds()));
-    }
-
-    @Test
-    public void testFetchSessionIdError() {
-        buildFetcher();
-        assignFromUser(singleton(tp0));
-        subscriptions.seek(tp0, 0);
-
-        assertEquals(1, sendFetches());
-        client.prepareResponse(fetchResponseWithTopLevelError(tidp0, Errors.FETCH_SESSION_TOPIC_ID_ERROR, 0));
-        consumerClient.poll(time.timer(0));
-        assertEmptyFetch("Should not return records or advance position on fetch error");
-        assertEquals(0L, metadata.timeToNextUpdate(time.milliseconds()));
-    }
-
-    @Test
-    public void testFetchInconsistentTopicId() {
-        buildFetcher();
-        assignFromUser(singleton(tp0));
-        subscriptions.seek(tp0, 0);
-
-        assertEquals(1, sendFetches());
-        client.prepareResponse(fullFetchResponse(tidp0, this.records, Errors.INCONSISTENT_TOPIC_ID, -1L, 0));
-        consumerClient.poll(time.timer(0));
-        assertEmptyFetch("Should not return records or advance position on fetch error");
-        assertEquals(0L, metadata.timeToNextUpdate(time.milliseconds()));
-    }
-
-    @Test
-    public void testFetchFencedLeaderEpoch() {
-        buildFetcher();
-        assignFromUser(singleton(tp0));
-        subscriptions.seek(tp0, 0);
-
-        assertEquals(1, sendFetches());
-        client.prepareResponse(fullFetchResponse(tidp0, this.records, Errors.FENCED_LEADER_EPOCH, 100L, 0));
-        consumerClient.poll(time.timer(0));
-
-        assertEmptyFetch("Should not return records or advance position on fetch error");
-        assertEquals(0L, metadata.timeToNextUpdate(time.milliseconds()), "Should have requested metadata update");
-    }
-
-    @Test
-    public void testFetchUnknownLeaderEpoch() {
-        buildFetcher();
-        assignFromUser(singleton(tp0));
-        subscriptions.seek(tp0, 0);
-
-        assertEquals(1, sendFetches());
-        client.prepareResponse(fullFetchResponse(tidp0, this.records, Errors.UNKNOWN_LEADER_EPOCH, 100L, 0));
-        consumerClient.poll(time.timer(0));
-
-        assertEmptyFetch("Should not return records or advance position on fetch error");
-        assertNotEquals(0L, metadata.timeToNextUpdate(time.milliseconds()), "Should not have requested metadata update");
+    /**
+     * Supplies parameters to {@link #testHandleFetchResponseError(Errors, long, boolean, boolean)}.
+     */
+    private static Stream<Arguments> handleFetchResponseErrorSupplier() {
+        return Stream.of(
+                Arguments.of(Errors.NOT_LEADER_OR_FOLLOWER, 100L, false, true),
+                Arguments.of(Errors.UNKNOWN_TOPIC_OR_PARTITION, 100L, false, true),
+                Arguments.of(Errors.UNKNOWN_TOPIC_ID, -1L, false, true),
+                Arguments.of(Errors.FETCH_SESSION_TOPIC_ID_ERROR, -1L, true, true),
+                Arguments.of(Errors.INCONSISTENT_TOPIC_ID, -1L, false, true),
+                Arguments.of(Errors.FENCED_LEADER_EPOCH, 100L, false, true),
+                Arguments.of(Errors.UNKNOWN_LEADER_EPOCH, 100L, false, false)
+        );
     }
 
     @Test
@@ -1636,8 +1570,9 @@ public class FetcherTest {
                 return false;
             }
         };
-        client.prepareResponse(matcher, fullFetchResponse(tidp0, this.records, Errors.NONE, 100L, 0));
+        client.prepareResponse(matcher, fullFetchResponse(tidp0, records, Errors.NONE, 100L, 0));
         consumerClient.pollNoWakeup();
+        assertEquals(0, consumerClient.pendingRequestCount());
     }
 
     @Test
@@ -1647,7 +1582,7 @@ public class FetcherTest {
         subscriptions.seek(tp0, 0);
 
         assertEquals(1, sendFetches());
-        client.prepareResponse(fullFetchResponse(tidp0, this.records, Errors.OFFSET_OUT_OF_RANGE, 100L, 0));
+        client.prepareResponse(fullFetchResponse(tidp0, records, Errors.OFFSET_OUT_OF_RANGE, 100L, 0));
         consumerClient.poll(time.timer(0));
         assertEmptyFetch("Should not return records or advance position on fetch error");
         assertTrue(subscriptions.isOffsetResetNeeded(tp0));
@@ -1664,7 +1599,7 @@ public class FetcherTest {
         subscriptions.seek(tp0, 0);
 
         assertEquals(1, sendFetches());
-        client.prepareResponse(fullFetchResponse(tidp0, this.records, Errors.OFFSET_OUT_OF_RANGE, 100L, 0));
+        client.prepareResponse(fullFetchResponse(tidp0, records, Errors.OFFSET_OUT_OF_RANGE, 100L, 0));
         subscriptions.seek(tp0, 1);
         consumerClient.poll(time.timer(0));
         assertEmptyFetch("Should not return records or advance position on fetch error");
@@ -1681,8 +1616,13 @@ public class FetcherTest {
         subscriptions.seek(tp0, 0);
 
         assertTrue(sendFetches() > 0);
-        client.prepareResponse(fullFetchResponse(tidp0, this.records, Errors.OFFSET_OUT_OF_RANGE, 100L, 0));
+        client.prepareResponse(fullFetchResponse(tidp0, records, Errors.OFFSET_OUT_OF_RANGE, 100L, 0));
         consumerClient.poll(time.timer(0));
+
+        // The partition is not marked as needing its offset reset because that error handling logic is
+        // performed during the fetch collection. When we call seek() before we collect the fetch, the
+        // partition's position is updated (to offset 2) which is different from the offset from which
+        // we fetched the data (from offset 0).
         assertFalse(subscriptions.isOffsetResetNeeded(tp0));
         subscriptions.seek(tp0, 2);
         assertEmptyFetch("Should not return records or advance position after seeking to end of topic partition");
@@ -1697,13 +1637,13 @@ public class FetcherTest {
         subscriptions.seek(tp0, 0);
 
         sendFetches();
-        client.prepareResponse(fullFetchResponse(tidp0, this.records, Errors.OFFSET_OUT_OF_RANGE, 100L, 0));
+        client.prepareResponse(fullFetchResponse(tidp0, records, Errors.OFFSET_OUT_OF_RANGE, 100L, 0));
         consumerClient.poll(time.timer(0));
 
         assertFalse(subscriptions.isOffsetResetNeeded(tp0));
         for (int i = 0; i < 2; i++) {
             OffsetOutOfRangeException e = assertThrows(OffsetOutOfRangeException.class, () ->
-                    fetcher.collectFetch());
+                    collectFetch());
             assertEquals(singleton(tp0), e.offsetOutOfRangePartitions().keySet());
             assertEquals(0L, e.offsetOutOfRangePartitions().get(tp0).longValue());
         }
@@ -1752,7 +1692,7 @@ public class FetcherTest {
     }
 
     private void fetchRecordsInto(List<ConsumerRecord<byte[], byte[]>> allFetchedRecords) {
-        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetchedRecords();
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetchRecords();
         fetchedRecords.values().forEach(allFetchedRecords::addAll);
     }
 
@@ -1795,9 +1735,7 @@ public class FetcherTest {
         consumerClient.poll(time.timer(0));
 
         List<ConsumerRecord<byte[], byte[]>> fetchedRecords = new ArrayList<>();
-        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> recordsByPartition = fetchedRecords();
-        for (List<ConsumerRecord<byte[], byte[]>> records : recordsByPartition.values())
-            fetchedRecords.addAll(records);
+        fetchRecordsInto(fetchedRecords);
 
         assertEquals(fetchedRecords.size(), subscriptions.position(tp1).offset - 1);
         assertEquals(4, subscriptions.position(tp1).offset);
@@ -1805,9 +1743,7 @@ public class FetcherTest {
 
         List<OffsetOutOfRangeException> oorExceptions = new ArrayList<>();
         try {
-            recordsByPartition = fetchedRecords();
-            for (List<ConsumerRecord<byte[], byte[]>> records : recordsByPartition.values())
-                fetchedRecords.addAll(records);
+            fetchRecordsInto(fetchedRecords);
         } catch (OffsetOutOfRangeException oor) {
             oorExceptions.add(oor);
         }
@@ -1818,9 +1754,7 @@ public class FetcherTest {
         assertTrue(oor.offsetOutOfRangePartitions().containsKey(tp0));
         assertEquals(oor.offsetOutOfRangePartitions().size(), 1);
 
-        recordsByPartition = fetchedRecords();
-        for (List<ConsumerRecord<byte[], byte[]>> records : recordsByPartition.values())
-            fetchedRecords.addAll(records);
+        fetchRecordsInto(fetchedRecords);
 
         // Should not have received an Exception for tp2.
         assertEquals(6, subscriptions.position(tp2).offset);
@@ -1830,9 +1764,7 @@ public class FetcherTest {
         List<KafkaException> kafkaExceptions = new ArrayList<>();
         for (int i = 1; i <= numExceptionsExpected; i++) {
             try {
-                recordsByPartition = fetchedRecords();
-                for (List<ConsumerRecord<byte[], byte[]>> records : recordsByPartition.values())
-                    fetchedRecords.addAll(records);
+                fetchRecordsInto(fetchedRecords);
             } catch (KafkaException e) {
                 kafkaExceptions.add(e);
             }
@@ -1854,10 +1786,10 @@ public class FetcherTest {
                         .setPartitionIndex(tp0.partition())
                         .setHighWatermark(100)
                         .setRecords(records));
-        client.prepareResponse(fullFetchResponse(tidp0, this.records, Errors.NONE, 100L, 0));
+        client.prepareResponse(fullFetchResponse(tidp0, records, Errors.NONE, 100L, 0));
         consumerClient.poll(time.timer(0));
 
-        assertEquals(2, fetchedRecords().get(tp0).size());
+        assertEquals(2, fetchRecords().get(tp0).size());
 
         subscriptions.assignFromUser(mkSet(tp0, tp1));
         subscriptions.seekUnvalidated(tp1, new SubscriptionState.FetchPosition(1, Optional.empty(), metadata.currentLeader(tp1)));
@@ -1870,7 +1802,7 @@ public class FetcherTest {
                         .setHighWatermark(100));
         client.prepareResponse(FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, new LinkedHashMap<>(partitions)));
         consumerClient.poll(time.timer(0));
-        assertEquals(1, fetchedRecords().get(tp0).size());
+        assertEquals(1, fetchRecords().get(tp0).size());
 
         subscriptions.seek(tp1, 10);
         // Should not throw OffsetOutOfRangeException after the seek
@@ -1885,11 +1817,11 @@ public class FetcherTest {
         subscriptions.seek(tp0, 0);
 
         assertEquals(1, sendFetches());
-        client.prepareResponse(fullFetchResponse(tidp0, this.records, Errors.NONE, 100L, 0), true);
+        client.prepareResponse(fullFetchResponse(tidp0, records, Errors.NONE, 100L, 0), true);
         consumerClient.poll(time.timer(0));
         assertEmptyFetch("Should not return records or advance position on disconnect");
 
-        // disconnects should have no affect on subscription state
+        // disconnects should have no effect on subscription state
         assertFalse(subscriptions.isOffsetResetNeeded(tp0));
         assertTrue(subscriptions.isFetchable(tp0));
         assertEquals(0, subscriptions.position(tp0).offset);
@@ -2118,7 +2050,7 @@ public class FetcherTest {
         client.prepareResponse(FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, fetchPartitionData));
         consumerClient.poll(time.timer(0));
 
-        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetchedRecords();
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetchRecords();
         assertEquals(3, fetchedRecords.get(tp1).size());
         assertEquals(3, fetchedRecords.get(tp2).size());
 
@@ -2130,7 +2062,7 @@ public class FetcherTest {
     }
 
     @Test
-    public void testFetchResponseMetricsPartialResponse() {
+    public void testFetchResponseMetricsWithSkippedOffset() {
         buildFetcher();
 
         assignFromUser(singleton(tp0));
@@ -2189,7 +2121,7 @@ public class FetcherTest {
         assertEquals(1, sendFetches());
         client.prepareResponse(FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, new LinkedHashMap<>(partitions)));
         consumerClient.poll(time.timer(0));
-        fetcher.collectFetch();
+        collectFetch();
 
         int expectedBytes = 0;
         for (Record record : records.records())
@@ -2235,7 +2167,7 @@ public class FetcherTest {
 
         client.prepareResponse(FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, new LinkedHashMap<>(partitions)));
         consumerClient.poll(time.timer(0));
-        fetcher.collectFetch();
+        collectFetch();
 
         // we should have ignored the record at the wrong offset
         int expectedBytes = 0;
@@ -2256,10 +2188,10 @@ public class FetcherTest {
         assignFromUser(singleton(tp0));
         subscriptions.seek(tp0, 0);
         assertEquals(1, sendFetches());
-        client.prepareResponse(fullFetchResponse(tidp0, this.records, Errors.NONE, 100L, 0));
+        client.prepareResponse(fullFetchResponse(tidp0, records, Errors.NONE, 100L, 0));
         consumerClient.poll(time.timer(0));
         assertTrue(fetcher.hasCompletedFetches());
-        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords = fetchedRecords();
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords = fetchRecords();
         assertTrue(partitionRecords.containsKey(tp0));
 
         // Verify that all metrics except metrics-count have registered templates
@@ -2282,7 +2214,7 @@ public class FetcherTest {
         assertEquals(1, sendFetches());
         client.prepareResponse(fullFetchResponse(tp, records, error, hw, lastStableOffset, throttleTime));
         consumerClient.poll(time.timer(0));
-        return fetchedRecords();
+        return fetchRecords();
     }
 
     private Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchRecords(
@@ -2290,7 +2222,7 @@ public class FetcherTest {
         assertEquals(1, sendFetches());
         client.prepareResponse(fetchResponse(tp, records, error, hw, lastStableOffset, logStartOffset, throttleTime));
         consumerClient.poll(time.timer(0));
-        return fetchedRecords();
+        return fetchRecords();
     }
 
     @Test
@@ -2359,7 +2291,7 @@ public class FetcherTest {
         consumerClient.poll(time.timer(0));
         assertTrue(fetcher.hasCompletedFetches());
 
-        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetchedRecords();
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetchRecords();
         assertTrue(fetchedRecords.containsKey(tp0));
         assertEquals(fetchedRecords.get(tp0).size(), 2);
     }
@@ -2429,7 +2361,7 @@ public class FetcherTest {
         consumerClient.poll(time.timer(0));
         assertTrue(fetcher.hasCompletedFetches());
 
-        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetchedRecords();
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetchRecords();
         assertTrue(fetchedRecords.containsKey(tp0));
         // There are only 3 committed records
         List<ConsumerRecord<byte[], byte[]>> fetchedConsumerRecords = fetchedRecords.get(tp0);
@@ -2477,16 +2409,16 @@ public class FetcherTest {
         consumerClient.poll(time.timer(0));
         assertTrue(fetcher.hasCompletedFetches());
 
-        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetchedRecords();
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetchRecords();
         assertTrue(fetchedRecords.containsKey(tp0));
         assertEquals(fetchedRecords.get(tp0).size(), 2);
         List<ConsumerRecord<byte[], byte[]>> fetchedConsumerRecords = fetchedRecords.get(tp0);
-        Set<String> committedKeys = new HashSet<>(Arrays.asList("commit1-1", "commit1-2"));
+        Set<String> expectedCommittedKeys = new HashSet<>(Arrays.asList("commit1-1", "commit1-2"));
         Set<String> actuallyCommittedKeys = new HashSet<>();
         for (ConsumerRecord<byte[], byte[]> consumerRecord : fetchedConsumerRecords) {
             actuallyCommittedKeys.add(new String(consumerRecord.key(), StandardCharsets.UTF_8));
         }
-        assertEquals(actuallyCommittedKeys, committedKeys);
+        assertEquals(expectedCommittedKeys, actuallyCommittedKeys);
     }
 
     @Test
@@ -2522,7 +2454,7 @@ public class FetcherTest {
         consumerClient.poll(time.timer(0));
         assertTrue(fetcher.hasCompletedFetches());
 
-        Map<TopicPartition, List<ConsumerRecord<String, String>>> allFetchedRecords = fetchedRecords();
+        Map<TopicPartition, List<ConsumerRecord<String, String>>> allFetchedRecords = fetchRecords();
         assertTrue(allFetchedRecords.containsKey(tp0));
         List<ConsumerRecord<String, String>> fetchedRecords = allFetchedRecords.get(tp0);
         assertEquals(3, fetchedRecords.size());
@@ -2561,7 +2493,7 @@ public class FetcherTest {
         consumerClient.poll(time.timer(0));
         assertTrue(fetcher.hasCompletedFetches());
 
-        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> allFetchedRecords = fetchedRecords();
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> allFetchedRecords = fetchRecords();
         assertTrue(allFetchedRecords.containsKey(tp0));
         List<ConsumerRecord<byte[], byte[]>> fetchedRecords = allFetchedRecords.get(tp0);
         assertEquals(3, fetchedRecords.size());
@@ -2662,7 +2594,7 @@ public class FetcherTest {
         consumerClient.poll(time.timer(0));
         assertTrue(fetcher.hasCompletedFetches());
 
-        Map<TopicPartition, List<ConsumerRecord<String, String>>> allFetchedRecords = fetchedRecords();
+        Map<TopicPartition, List<ConsumerRecord<String, String>>> allFetchedRecords = fetchRecords();
         assertTrue(allFetchedRecords.containsKey(tp0));
         List<ConsumerRecord<String, String>> fetchedRecords = allFetchedRecords.get(tp0);
         assertEquals(5, fetchedRecords.size());
@@ -2670,7 +2602,7 @@ public class FetcherTest {
     }
 
     @Test
-    public void testReturnAbortedTransactionsinUncommittedMode() {
+    public void testReturnAbortedTransactionsInUncommittedMode() {
         buildFetcher(OffsetResetStrategy.EARLIEST, new ByteArrayDeserializer(),
                 new ByteArrayDeserializer(), Integer.MAX_VALUE, IsolationLevel.READ_UNCOMMITTED);
         ByteBuffer buffer = ByteBuffer.allocate(1024);
@@ -2699,7 +2631,7 @@ public class FetcherTest {
         consumerClient.poll(time.timer(0));
         assertTrue(fetcher.hasCompletedFetches());
 
-        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetchedRecords();
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetchRecords();
         assertTrue(fetchedRecords.containsKey(tp0));
     }
 
@@ -2732,7 +2664,7 @@ public class FetcherTest {
         consumerClient.poll(time.timer(0));
         assertTrue(fetcher.hasCompletedFetches());
 
-        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetchedRecords();
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetchRecords();
 
         // Ensure that we don't return any of the aborted records, but yet advance the consumer position.
         assertFalse(fetchedRecords.containsKey(tp0));
@@ -2743,7 +2675,6 @@ public class FetcherTest {
     public void testConsumingViaIncrementalFetchRequests() {
         buildFetcher(2);
 
-        List<ConsumerRecord<byte[], byte[]>> records;
         assignFromUser(new HashSet<>(Arrays.asList(tp0, tp1)));
         subscriptions.seekValidated(tp0, new SubscriptionState.FetchPosition(0, Optional.empty(), metadata.currentLeader(tp0)));
         subscriptions.seekValidated(tp1, new SubscriptionState.FetchPosition(1, Optional.empty(), metadata.currentLeader(tp1)));
@@ -2755,7 +2686,7 @@ public class FetcherTest {
                 .setHighWatermark(2)
                 .setLastStableOffset(2)
                 .setLogStartOffset(0)
-                .setRecords(this.records));
+                .setRecords(records));
         partitions1.put(tidp1, new FetchResponseData.PartitionData()
                 .setPartitionIndex(tp1.partition())
                 .setHighWatermark(100)
@@ -2767,9 +2698,9 @@ public class FetcherTest {
         assertFalse(fetcher.hasCompletedFetches());
         consumerClient.poll(time.timer(0));
         assertTrue(fetcher.hasCompletedFetches());
-        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetchedRecords();
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetchRecords();
         assertFalse(fetchedRecords.containsKey(tp1));
-        records = fetchedRecords.get(tp0);
+        List<ConsumerRecord<byte[], byte[]>> records = fetchedRecords.get(tp0);
         assertEquals(2, records.size());
         assertEquals(3L, subscriptions.position(tp0).offset);
         assertEquals(1L, subscriptions.position(tp1).offset);
@@ -2778,7 +2709,7 @@ public class FetcherTest {
 
         // There is still a buffered record.
         assertEquals(0, sendFetches());
-        fetchedRecords = fetchedRecords();
+        fetchedRecords = fetchRecords();
         assertFalse(fetchedRecords.containsKey(tp1));
         records = fetchedRecords.get(tp0);
         assertEquals(1, records.size());
@@ -2791,7 +2722,7 @@ public class FetcherTest {
         client.prepareResponse(resp2);
         assertEquals(1, sendFetches());
         consumerClient.poll(time.timer(0));
-        fetchedRecords = fetchedRecords();
+        fetchedRecords = fetchRecords();
         assertTrue(fetchedRecords.isEmpty());
         assertEquals(4L, subscriptions.position(tp0).offset);
         assertEquals(1L, subscriptions.position(tp1).offset);
@@ -2803,12 +2734,12 @@ public class FetcherTest {
                 .setHighWatermark(100)
                 .setLastStableOffset(4)
                 .setLogStartOffset(0)
-                .setRecords(this.nextRecords));
+                .setRecords(nextRecords));
         FetchResponse resp3 = FetchResponse.of(Errors.NONE, 0, 123, partitions3);
         client.prepareResponse(resp3);
         assertEquals(1, sendFetches());
         consumerClient.poll(time.timer(0));
-        fetchedRecords = fetchedRecords();
+        fetchedRecords = fetchRecords();
         assertFalse(fetchedRecords.containsKey(tp1));
         records = fetchedRecords.get(tp0);
         assertEquals(2, records.size());
@@ -2840,7 +2771,8 @@ public class FetcherTest {
                 isolationLevel,
                 apiVersions);
 
-        FetchConfig<byte[], byte[]> fetchConfig = new FetchConfig<>(
+        Deserializers<byte[], byte[]> deserializers = new Deserializers<>(new ByteArrayDeserializer(), new ByteArrayDeserializer());
+        FetchConfig fetchConfig = new FetchConfig(
                 minBytes,
                 maxBytes,
                 maxWaitMs,
@@ -2848,7 +2780,6 @@ public class FetcherTest {
                 2 * numPartitions,
                 true, // check crcs
                 CommonClientConfigs.DEFAULT_CLIENT_RACK,
-                new Deserializers<>(new ByteArrayDeserializer(), new ByteArrayDeserializer()),
                 isolationLevel);
         fetcher = new Fetcher<byte[], byte[]>(
                 logContext,
@@ -2856,6 +2787,7 @@ public class FetcherTest {
                 metadata,
                 subscriptions,
                 fetchConfig,
+                deserializers,
                 metricsManager,
                 time) {
             @Override
@@ -2947,7 +2879,7 @@ public class FetcherTest {
                 }
             }
             if (fetcher.hasCompletedFetches()) {
-                Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetchedRecords();
+                Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetchRecords();
                 if (!fetchedRecords.isEmpty()) {
                     fetchesRemaining.decrementAndGet();
                     fetchedRecords.forEach((tp, records) -> {
@@ -3009,7 +2941,7 @@ public class FetcherTest {
                 }
             }
             if (fetcher.hasCompletedFetches()) {
-                Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetchedRecords();
+                Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetchRecords();
                 if (!fetchedRecords.isEmpty()) {
                     fetchesRemaining.decrementAndGet();
                     List<ConsumerRecord<byte[], byte[]>> records = fetchedRecords.get(tp0);
@@ -3018,7 +2950,7 @@ public class FetcherTest {
                     assertEquals(nextFetchOffset + 1, records.get(1).offset());
                     nextFetchOffset += 2;
                 }
-                assertTrue(fetchedRecords().isEmpty());
+                assertTrue(fetchRecords().isEmpty());
             }
         }
         assertEquals(0, future.get());
@@ -3061,7 +2993,7 @@ public class FetcherTest {
         consumerClient.poll(time.timer(0));
         assertTrue(fetcher.hasCompletedFetches());
 
-        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetchedRecords();
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetchRecords();
         assertTrue(fetchedRecords.containsKey(tp0));
         assertEquals(fetchedRecords.get(tp0).size(), 2);
     }
@@ -3145,7 +3077,7 @@ public class FetcherTest {
         consumerClient.pollNoWakeup();
         assertTrue(fetcher.hasCompletedFetches());
 
-        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords = fetchedRecords();
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords = fetchRecords();
         assertTrue(partitionRecords.containsKey(tp0));
 
         assertEquals(subscriptions.position(tp0).offset, 3L);
@@ -3223,7 +3155,7 @@ public class FetcherTest {
         consumerClient.pollNoWakeup();
         assertTrue(fetcher.hasCompletedFetches());
 
-        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords = fetchedRecords();
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords = fetchRecords();
         assertTrue(partitionRecords.containsKey(tp0));
 
         assertEquals(subscriptions.position(tp0).offset, 3L);
@@ -3239,7 +3171,7 @@ public class FetcherTest {
         client.updateMetadata(RequestTestUtils.metadataUpdateWithIds(2, singletonMap(topicName, 4), tp -> validLeaderEpoch, topicIds, false));
         subscriptions.seek(tp0, 0);
 
-        // Node preferred replica before first fetch response
+        // Take note of the preferred replica before the first fetch response
         Node selected = fetcher.selectReadReplica(tp0, Node.noNode(), time.milliseconds());
         assertEquals(-1, selected.id());
 
@@ -3247,12 +3179,12 @@ public class FetcherTest {
         assertFalse(fetcher.hasCompletedFetches());
 
         // Set preferred read replica to node=1
-        client.prepareResponse(fullFetchResponse(tidp0, this.records, Errors.NONE, 100L,
+        client.prepareResponse(fullFetchResponse(tidp0, records, Errors.NONE, 100L,
                 FetchResponse.INVALID_LAST_STABLE_OFFSET, 0, Optional.of(1)));
         consumerClient.poll(time.timer(0));
         assertTrue(fetcher.hasCompletedFetches());
 
-        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords = fetchedRecords();
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords = fetchRecords();
         assertTrue(partitionRecords.containsKey(tp0));
 
         // Verify
@@ -3264,11 +3196,11 @@ public class FetcherTest {
         assertFalse(fetcher.hasCompletedFetches());
 
         // Set preferred read replica to node=2, which isn't in our metadata, should revert to leader
-        client.prepareResponse(fullFetchResponse(tidp0, this.records, Errors.NONE, 100L,
+        client.prepareResponse(fullFetchResponse(tidp0, records, Errors.NONE, 100L,
                 FetchResponse.INVALID_LAST_STABLE_OFFSET, 0, Optional.of(2)));
         consumerClient.poll(time.timer(0));
         assertTrue(fetcher.hasCompletedFetches());
-        fetchedRecords();
+        fetchRecords();
         selected = fetcher.selectReadReplica(tp0, Node.noNode(), time.milliseconds());
         assertEquals(-1, selected.id());
     }
@@ -3284,11 +3216,11 @@ public class FetcherTest {
         assertEquals(1, sendFetches());
 
         // Set preferred read replica to node=1
-        client.prepareResponse(fullFetchResponse(tidp0, this.records, Errors.NONE, 100L,
+        client.prepareResponse(fullFetchResponse(tidp0, records, Errors.NONE, 100L,
                 FetchResponse.INVALID_LAST_STABLE_OFFSET, 0, Optional.of(1)));
         consumerClient.poll(time.timer(0));
         assertTrue(fetcher.hasCompletedFetches());
-        fetchedRecords();
+        fetchRecords();
 
         // Verify
         Node selected = fetcher.selectReadReplica(tp0, Node.noNode(), time.milliseconds());
@@ -3297,11 +3229,11 @@ public class FetcherTest {
         assertFalse(fetcher.hasCompletedFetches());
 
         // Disconnect - preferred read replica should be cleared.
-        client.prepareResponse(fullFetchResponse(tidp0, this.records, Errors.NONE, 100L, 0), true);
+        client.prepareResponse(fullFetchResponse(tidp0, records, Errors.NONE, 100L, 0), true);
 
         consumerClient.poll(time.timer(0));
         assertFalse(fetcher.hasCompletedFetches());
-        fetchedRecords();
+        fetchRecords();
         selected = fetcher.selectReadReplica(tp0, Node.noNode(), time.milliseconds());
         assertEquals(-1, selected.id());
     }
@@ -3317,11 +3249,11 @@ public class FetcherTest {
         assertEquals(1, sendFetches());
 
         // Set preferred read replica to node=1
-        client.prepareResponse(fullFetchResponse(tidp0, this.records, Errors.NONE, 100L,
+        client.prepareResponse(fullFetchResponse(tidp0, records, Errors.NONE, 100L,
             FetchResponse.INVALID_LAST_STABLE_OFFSET, 0, Optional.of(1)));
         consumerClient.poll(time.timer(0));
         assertTrue(fetcher.hasCompletedFetches());
-        fetchedRecords();
+        fetchRecords();
 
         // Verify
         Node selected = fetcher.selectReadReplica(tp0, Node.noNode(), time.milliseconds());
@@ -3330,13 +3262,13 @@ public class FetcherTest {
         assertFalse(fetcher.hasCompletedFetches());
 
         // Disconnect and remove tp0 from assignment
-        client.prepareResponse(fullFetchResponse(tidp0, this.records, Errors.NONE, 100L, 0), true);
+        client.prepareResponse(fullFetchResponse(tidp0, records, Errors.NONE, 100L, 0), true);
         subscriptions.assignFromUser(emptySet());
 
         // Preferred read replica should not be cleared
         consumerClient.poll(time.timer(0));
         assertFalse(fetcher.hasCompletedFetches());
-        fetchedRecords();
+        fetchRecords();
         selected = fetcher.selectReadReplica(tp0, Node.noNode(), time.milliseconds());
         assertEquals(-1, selected.id());
     }
@@ -3352,11 +3284,11 @@ public class FetcherTest {
         assertEquals(1, sendFetches());
 
         // Set preferred read replica to node=1
-        client.prepareResponse(fullFetchResponse(tidp0, this.records, Errors.NONE, 100L,
+        client.prepareResponse(fullFetchResponse(tidp0, records, Errors.NONE, 100L,
                 FetchResponse.INVALID_LAST_STABLE_OFFSET, 0, Optional.of(1)));
         consumerClient.poll(time.timer(0));
         assertTrue(fetcher.hasCompletedFetches());
-        fetchedRecords();
+        fetchRecords();
 
         // Verify
         Node selected = fetcher.selectReadReplica(tp0, Node.noNode(), time.milliseconds());
@@ -3371,7 +3303,7 @@ public class FetcherTest {
 
         consumerClient.poll(time.timer(0));
         assertTrue(fetcher.hasCompletedFetches());
-        fetchedRecords();
+        fetchRecords();
         selected = fetcher.selectReadReplica(tp0, Node.noNode(), time.milliseconds());
         assertEquals(-1, selected.id());
     }
@@ -3389,26 +3321,26 @@ public class FetcherTest {
         assertEquals(1, sendFetches());
         assertFalse(fetcher.hasCompletedFetches());
 
-        client.prepareResponse(fullFetchResponse(tidp0, this.records, Errors.NONE, 100L,
+        client.prepareResponse(fullFetchResponse(tidp0, records, Errors.NONE, 100L,
                 FetchResponse.INVALID_LAST_STABLE_OFFSET, 0, Optional.of(1)));
         consumerClient.poll(time.timer(0));
         assertTrue(fetcher.hasCompletedFetches());
 
-        fetchedRecords();
+        fetchRecords();
 
         Node selected = fetcher.selectReadReplica(tp0, Node.noNode(), time.milliseconds());
         assertEquals(selected.id(), 1);
 
-        // Return an error, should unset the preferred read replica
         assertEquals(1, sendFetches());
         assertFalse(fetcher.hasCompletedFetches());
 
-        client.prepareResponse(fullFetchResponse(tidp0, this.records, Errors.OFFSET_OUT_OF_RANGE, 100L,
+        // Return an error, should unset the preferred read replica
+        client.prepareResponse(fullFetchResponse(tidp0, records, Errors.OFFSET_OUT_OF_RANGE, 100L,
                 FetchResponse.INVALID_LAST_STABLE_OFFSET, 0, Optional.empty()));
         consumerClient.poll(time.timer(0));
         assertTrue(fetcher.hasCompletedFetches());
 
-        fetchedRecords();
+        fetchRecords();
 
         selected = fetcher.selectReadReplica(tp0, Node.noNode(), time.milliseconds());
         assertEquals(selected.id(), -1);
@@ -3422,7 +3354,7 @@ public class FetcherTest {
         sendFetches();
         client.prepareResponse(fullFetchResponse(tidp0, buildRecords(1L, 1, 1), Errors.NONE, 100L, 0));
         consumerClient.poll(time.timer(0));
-        fetchedRecords();
+        fetchRecords();
 
         Metadata.LeaderAndEpoch leaderAndEpoch = subscriptions.position(tp0).currentLeader;
         assertTrue(leaderAndEpoch.leader.isPresent());
@@ -3463,7 +3395,7 @@ public class FetcherTest {
         assertTrue(fetcher.hasCompletedFetches());
 
         // Trigger the exception.
-        assertThrows(KafkaException.class, this::fetchedRecords);
+        assertThrows(KafkaException.class, this::fetchRecords);
     }
 
     private OffsetsForLeaderEpochResponse prepareOffsetsForLeaderEpochResponse(
@@ -3577,14 +3509,14 @@ public class FetcherTest {
         assertTrue(fetch.isEmpty(), reason);
     }
 
-    private <K, V> Map<TopicPartition, List<ConsumerRecord<K, V>>> fetchedRecords() {
+    private <K, V> Map<TopicPartition, List<ConsumerRecord<K, V>>> fetchRecords() {
         Fetch<K, V> fetch = collectFetch();
         return fetch.records();
     }
 
     @SuppressWarnings("unchecked")
     private <K, V> Fetch<K, V> collectFetch() {
-        return (Fetch) fetcher.collectFetch();
+        return (Fetch<K, V>) fetcher.collectFetch();
     }
 
     private void buildFetcher(int maxPollRecords) {
@@ -3642,7 +3574,7 @@ public class FetcherTest {
                                      SubscriptionState subscriptionState,
                                      LogContext logContext) {
         buildDependencies(metricConfig, metadataExpireMs, subscriptionState, logContext);
-        FetchConfig<K, V> fetchConfig = new FetchConfig<>(
+        FetchConfig fetchConfig = new FetchConfig(
                 minBytes,
                 maxBytes,
                 maxWaitMs,
@@ -3650,7 +3582,6 @@ public class FetcherTest {
                 maxPollRecords,
                 true, // check crc
                 CommonClientConfigs.DEFAULT_CLIENT_RACK,
-                new Deserializers<>(keyDeserializer, valueDeserializer),
                 isolationLevel);
         fetcher = spy(new Fetcher<>(
                 logContext,
@@ -3658,6 +3589,7 @@ public class FetcherTest {
                 metadata,
                 subscriptionState,
                 fetchConfig,
+                new Deserializers<>(keyDeserializer, valueDeserializer),
                 metricsManager,
                 time));
         offsetFetcher = new OffsetFetcher(logContext,
