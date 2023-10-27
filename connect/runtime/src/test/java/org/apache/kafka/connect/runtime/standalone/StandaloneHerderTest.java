@@ -522,9 +522,6 @@ public class StandaloneHerderTest {
         doReturn(Optional.of(restartPlan)).when(herder).buildRestartPlan(restartRequest);
 
         herder.onRestart(CONNECTOR_NAME);
-        verify(statusBackingStore).put(new ConnectorStatus(CONNECTOR_NAME, ConnectorStatus.State.RESTARTING, WORKER_ID, 0));
-
-        doNothing().when(herder).onRestart(CONNECTOR_NAME);
 
         connector = mock(BogusSinkConnector.class);
         expectAdd(SourceSink.SINK);
@@ -549,6 +546,8 @@ public class StandaloneHerderTest {
         FutureCallback<ConnectorStateInfo> restartCallback = new FutureCallback<>();
         herder.restartConnectorAndTasks(restartRequest, restartCallback);
         assertEquals(connectorStateInfo, restartCallback.get(1000L, TimeUnit.MILLISECONDS));
+
+        verifyConnectorStatusRestart();
     }
 
     @Test
@@ -617,8 +616,7 @@ public class StandaloneHerderTest {
         when(restartPlan.restartConnectorStateInfo()).thenReturn(connectorStateInfo);
         doReturn(Optional.of(restartPlan)).when(herder).buildRestartPlan(restartRequest);
 
-        doNothing().when(herder).onRestart(CONNECTOR_NAME);
-        doNothing().when(herder).onRestart(taskId);
+        ArgumentCaptor<TaskStatus> taskStatus = ArgumentCaptor.forClass(TaskStatus.class);
 
         connector = mock(BogusSinkConnector.class);
         expectAdd(SourceSink.SINK);
@@ -659,6 +657,9 @@ public class StandaloneHerderTest {
         FutureCallback<ConnectorStateInfo> restartCallback = new FutureCallback<>();
         herder.restartConnectorAndTasks(restartRequest, restartCallback);
         assertEquals(connectorStateInfo, restartCallback.get(1000L, TimeUnit.MILLISECONDS));
+
+        verifyConnectorStatusRestart();
+        verify(statusBackingStore).put(taskStatus.capture());
     }
 
     @Test
@@ -1118,6 +1119,13 @@ public class StandaloneHerderTest {
     }
 
     private abstract class BogusSinkTask extends SourceTask {
+    }
+
+    private void verifyConnectorStatusRestart() {
+        ArgumentCaptor<ConnectorStatus> connectorStatus = ArgumentCaptor.forClass(ConnectorStatus.class);
+        verify(statusBackingStore, atLeastOnce()).put(connectorStatus.capture());
+        assertEquals(CONNECTOR_NAME, connectorStatus.getValue().id());
+        assertEquals(AbstractStatus.State.RESTARTING, connectorStatus.getValue().state());
     }
 
 }
