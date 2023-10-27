@@ -17,6 +17,9 @@
 
 package org.apache.kafka.tools.consumergroup;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectReader;
+import com.fasterxml.jackson.databind.ObjectWriter;
 import joptsimple.OptionException;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.AbstractOptions;
@@ -35,7 +38,6 @@ import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsSpec;
 import org.apache.kafka.clients.admin.ListConsumerGroupsOptions;
 import org.apache.kafka.clients.admin.ListConsumerGroupsResult;
 import org.apache.kafka.clients.admin.ListOffsetsOptions;
-import org.apache.kafka.clients.admin.ListOffsetsResult;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.admin.MemberDescription;
 import org.apache.kafka.clients.admin.OffsetSpec;
@@ -50,9 +52,15 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ListOffsetsResponse;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.CommandLineUtils;
+import org.apache.kafka.tools.ToolsUtils;
 import org.apache.kafka.tools.Tuple2;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.text.ParseException;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -75,6 +83,8 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class ConsumerGroupCommand {
+    private static final Logger log = LoggerFactory.getLogger(ConsumerGroupCommand.class);
+
     public static final String MISSING_COLUMN_VALUE = "-";
 
     public static void main(String[] args) {
@@ -160,12 +170,16 @@ public class ConsumerGroupCommand {
             this.adminClient = createAdminClient(configOverrides);
         }
 
-        Optional<Map<String, Map<TopicPartition, OffsetAndMetadata>>> resetPlanFromFile() throws IOException {
+        Optional<Map<String, Map<TopicPartition, OffsetAndMetadata>>> resetPlanFromFile() {
             if (opts.options.has(opts.resetFromFileOpt)) {
-                String resetPlanPath = opts.options.valueOf(opts.resetFromFileOpt);
-                String resetPlanCsv = Utils.readFileAsString(resetPlanPath);
-                Map<String, Map<TopicPartition, OffsetAndMetadata>> resetPlan = parseResetPlan(resetPlanCsv);
-                return Optional.of(resetPlan);
+                try {
+                    String resetPlanPath = opts.options.valueOf(opts.resetFromFileOpt);
+                    String resetPlanCsv = Utils.readFileAsString(resetPlanPath);
+                    Map<String, Map<TopicPartition, OffsetAndMetadata>> resetPlan = parseResetPlan(resetPlanCsv);
+                    return Optional.of(resetPlan);
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
             } else return Optional.empty();
         }
 
@@ -865,20 +879,247 @@ public class ConsumerGroupCommand {
             }
         }
 
+        private Map<String, Map<TopicPartition, OffsetAndMetadata>> updateGroupMetadata(String group, String topic, int partition, long offset, Map<String, Map<TopicPartition, OffsetAndMetadata>> acc) {
+            TopicPartition topicPartition = new TopicPartition(topic, partition);
+            OffsetAndMetadata offsetAndMetadata = new OffsetAndMetadata(offset);
+            Map<TopicPartition, OffsetAndMetadata> dataMap = acc.getOrDefault(group, new HashMap<>());
+            dataMap.put(topicPartition, offsetAndMetadata);
+            acc.put(group, dataMap);
+            return acc;
+        }
+
         private Map<String, Map<TopicPartition, OffsetAndMetadata>> parseResetPlan(String resetPlanCsv) {
-            return null;
+            ObjectReader csvReader = new CsvUtils().readerFor(CsvUtils.CsvRecordNoGroup.class);
+            String[] lines = resetPlanCsv.split("\n");
+            boolean isSingleGroupQuery = opts.options.valuesOf(opts.groupOpt).size() == 1;
+            boolean isOldCsvFormat = false;
+            try {
+                if (lines.length > 0) {
+                    csvReader.readValue(lines[0], CsvUtils.CsvRecordNoGroup.class);
+                    isOldCsvFormat = true;
+                }
+            } catch (IOException e) {
+                // Ignore.
+            }
+
+            Map<String, Map<TopicPartition, OffsetAndMetadata>> dataMap = new HashMap<>();
+
+            try {
+                // Single group CSV format: "topic,partition,offset"
+                if (isSingleGroupQuery && isOldCsvFormat) {
+                    String group = opts.options.valueOf(opts.groupOpt);
+                    for (String line : lines) {
+                        CsvUtils.CsvRecordNoGroup rec = csvReader.readValue(line, CsvUtils.CsvRecordNoGroup.class);
+                        dataMap.computeIfAbsent(group, k -> new HashMap<>())
+                            .put(new TopicPartition(rec.topic, rec.partition), new OffsetAndMetadata(rec.offset));
+                    }
+                } else {
+                    csvReader = new CsvUtils().readerFor(CsvUtils.CsvRecordWithGroup.class);
+                    for (String line : lines) {
+                        CsvUtils.CsvRecordWithGroup rec = csvReader.readValue(line, CsvUtils.CsvRecordWithGroup.class);
+                        dataMap.computeIfAbsent(rec.group, k -> new HashMap<>())
+                            .put(new TopicPartition(rec.topic, rec.partition), new OffsetAndMetadata(rec.offset));
+                    }
+                }
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+
+            return dataMap;
         }
 
         private Map<TopicPartition, OffsetAndMetadata> prepareOffsetsToReset(String groupId, Collection<TopicPartition> partitionsToReset) {
+            if (opts.options.has(opts.resetToOffsetOpt)) {
+                long offset = opts.options.valueOf(opts.resetToOffsetOpt);
+                return checkOffsetsRange(partitionsToReset.stream().collect(Collectors.toMap(Function.identity(), tp -> offset)))
+                    .entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey, e -> new OffsetAndMetadata(e.getValue())));
+            } else if (opts.options.has(opts.resetToEarliestOpt)) {
+                Map<TopicPartition, LogOffsetResult> logStartOffsets = getLogStartOffsets(partitionsToReset);
+                return partitionsToReset.stream().collect(Collectors.toMap(Function.identity(), topicPartition -> {
+                    LogOffsetResult logOffsetResult = logStartOffsets.get(topicPartition);
+
+                    if (!(logOffsetResult instanceof LogOffset)) {
+                        ToolsUtils.printUsageAndExit(opts.parser, "Error getting starting offset of topic partition: " + topicPartition);
+                        return null;
+                    }
+
+                    return new OffsetAndMetadata(((LogOffset)logOffsetResult).value);
+                }));
+            } else if (opts.options.has(opts.resetToLatestOpt)) {
+                Map<TopicPartition, LogOffsetResult> logEndOffsets = getLogEndOffsets(partitionsToReset);
+                return partitionsToReset.stream().collect(Collectors.toMap(Function.identity(), topicPartition -> {
+                    LogOffsetResult logOffsetResult = logEndOffsets.get(topicPartition);
+
+                    if (!(logOffsetResult instanceof LogOffset)) {
+                        ToolsUtils.printUsageAndExit(opts.parser, "Error getting ending offset of topic partition: " + topicPartition);
+                        return null;
+                    }
+
+                    return new OffsetAndMetadata(((LogOffset)logOffsetResult).value);
+                }));
+            } else if (opts.options.has(opts.resetShiftByOpt)) {
+                Map<TopicPartition, OffsetAndMetadata> currentCommittedOffsets = getCommittedOffsets(groupId);
+                Map<TopicPartition, Long> requestedOffsets = partitionsToReset.stream().collect(Collectors.toMap(Function.identity(), topicPartition -> {
+                    long shiftBy = opts.options.valueOf(opts.resetShiftByOpt);
+                    OffsetAndMetadata currentOffset = currentCommittedOffsets.get(topicPartition);
+
+                    if (currentOffset == null) {
+                        throw new IllegalArgumentException("Cannot shift offset for partition " + topicPartition + " since there is no current committed offset");
+                    }
+
+                    return currentOffset.offset() + shiftBy;
+                }));
+                return checkOffsetsRange(requestedOffsets).entrySet().stream()
+                    .collect(Collectors.toMap(Map.Entry::getKey, e -> new OffsetAndMetadata(e.getValue())));
+            } else if (opts.options.has(opts.resetToDatetimeOpt)) {
+                try {
+                    long timestamp = Utils.getDateTime(opts.options.valueOf(opts.resetToDatetimeOpt));
+                    Map<TopicPartition, LogOffsetResult> logTimestampOffsets = getLogTimestampOffsets(partitionsToReset, timestamp);
+                    return partitionsToReset.stream().collect(Collectors.toMap(Function.identity(), topicPartition -> {
+                        LogOffsetResult logTimestampOffset = logTimestampOffsets.get(topicPartition);
+
+                        if(!(logTimestampOffset instanceof LogOffset)) {
+                            ToolsUtils.printUsageAndExit(opts.parser, "Error getting offset by timestamp of topic partition: " + topicPartition);
+                            return null;
+                        }
+
+                        return new OffsetAndMetadata(((LogOffset)logTimestampOffset).value);
+                    }));
+                } catch (ParseException e) {
+                    throw new RuntimeException(e);
+                }
+            } else if (opts.options.has(opts.resetByDurationOpt)) {
+                String duration = opts.options.valueOf(opts.resetByDurationOpt);
+                Duration durationParsed = Duration.parse(duration);
+                Instant now = Instant.now();
+                durationParsed.negated().addTo(now);
+                long timestamp = now.minus(durationParsed).toEpochMilli();
+                Map<TopicPartition, LogOffsetResult> logTimestampOffsets = getLogTimestampOffsets(partitionsToReset, timestamp);
+                return partitionsToReset.stream().collect(Collectors.toMap(Function.identity(), topicPartition -> {
+                    LogOffsetResult logTimestampOffset = logTimestampOffsets.get(topicPartition);
+
+                    if(!(logTimestampOffset instanceof LogOffset)) {
+                        ToolsUtils.printUsageAndExit(opts.parser, "Error getting offset by timestamp of topic partition: " + topicPartition);
+                        return null;
+                    }
+
+                    return new OffsetAndMetadata(((LogOffset)logTimestampOffset).value);
+                }));
+            } else if (resetPlanFromFile().isPresent()) {
+                return resetPlanFromFile().map(resetPlan -> {
+                    Map<TopicPartition, OffsetAndMetadata> resetPlanForGroup = resetPlan.get(groupId);
+
+                    if (resetPlanForGroup == null) {
+                        printError("No reset plan for group " + groupId + " found", Optional.empty());
+                        return Collections.<TopicPartition, OffsetAndMetadata>emptyMap();
+                    }
+
+                    Map<TopicPartition, Long> requestedOffsets = resetPlanForGroup.keySet().stream().collect(Collectors.toMap(
+                        Function.identity(),
+                        topicPartition -> resetPlanForGroup.get(topicPartition).offset()));
+
+                    return checkOffsetsRange(requestedOffsets).entrySet().stream()
+                        .collect(Collectors.toMap(Map.Entry::getKey, e -> new OffsetAndMetadata(e.getValue())));
+                }).orElseGet(Collections::emptyMap);
+            } else if (opts.options.has(opts.resetToCurrentOpt)) {
+                Map<TopicPartition, OffsetAndMetadata> currentCommittedOffsets = getCommittedOffsets(groupId);
+                Collection<TopicPartition> partitionsToResetWithCommittedOffset = new ArrayList<>();
+                Collection<TopicPartition> partitionsToResetWithoutCommittedOffset = new ArrayList<>();
+
+                for (TopicPartition topicPartition : partitionsToReset) {
+                    if (currentCommittedOffsets.containsKey(topicPartition))
+                        partitionsToResetWithCommittedOffset.add(topicPartition);
+                    else
+                        partitionsToResetWithoutCommittedOffset.add(topicPartition);
+                }
+
+                Map<TopicPartition, OffsetAndMetadata> preparedOffsetsForPartitionsWithCommittedOffset = partitionsToResetWithCommittedOffset.stream()
+                    .collect(Collectors.toMap(Function.identity(), topicPartition -> {
+                        OffsetAndMetadata committedOffset = currentCommittedOffsets.get(topicPartition);
+
+                        if (committedOffset == null) {
+                            throw new IllegalStateException("Expected a valid current offset for topic partition: " + topicPartition);
+                        }
+
+                        return new OffsetAndMetadata(committedOffset.offset());
+                    }));
+
+                Map<TopicPartition, OffsetAndMetadata> preparedOffsetsForPartitionsWithoutCommittedOffset = getLogEndOffsets(partitionsToResetWithoutCommittedOffset)
+                    .entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey, e -> {
+                        if (!(e.getValue() instanceof LogOffset)) {
+                            ToolsUtils.printUsageAndExit(opts.parser, "Error getting ending offset of topic partition: " + e.getKey());
+                            return null;
+                        }
+
+                        return new OffsetAndMetadata(((LogOffset) e.getValue()).value);
+                    }));
+
+                preparedOffsetsForPartitionsWithCommittedOffset.putAll(preparedOffsetsForPartitionsWithoutCommittedOffset);
+
+                return preparedOffsetsForPartitionsWithCommittedOffset;
+            }
+
+            ToolsUtils.printUsageAndExit(opts.parser, String.format("Option '%s' requires one of the following scenarios: %s", opts.resetOffsetsOpt, opts.allResetOffsetScenarioOpts));
             return null;
         }
 
         private Map<TopicPartition, Long> checkOffsetsRange(Map<TopicPartition, Long> requestedOffsets) {
-            return null;
+            Map<TopicPartition, LogOffsetResult> logStartOffsets = getLogStartOffsets(requestedOffsets.keySet());
+            Map<TopicPartition, LogOffsetResult> logEndOffsets = getLogEndOffsets(requestedOffsets.keySet());
+
+            Map<TopicPartition, Long> res = new HashMap<>();
+
+            requestedOffsets.forEach((topicPartition, offset) -> {
+                LogOffsetResult logEndOffset = logEndOffsets.get(topicPartition);
+
+                if (logEndOffset != null) {
+                    if (logEndOffset instanceof LogOffset && offset > ((LogOffset)logEndOffset).value) {
+                        long endOffset = ((LogOffset)logEndOffset).value;
+                        log.warn("New offset (" + offset + ") is higher than latest offset for topic partition " + topicPartition + ". Value will be set to " + endOffset);
+                        res.put(topicPartition, endOffset);
+                    } else {
+                        LogOffsetResult logStartOffset = logStartOffsets.get(topicPartition);
+
+                        if (logStartOffset instanceof LogOffset && offset < ((LogOffset)logStartOffset).value) {
+                            long startOffset = ((LogOffset)logEndOffset).value;
+                            log.warn("New offset (" + offset + ") is lower than earliest offset for topic partition " + topicPartition + ". Value will be set to " + startOffset);
+                            res.put(topicPartition, startOffset);
+                        } else
+                            res.put(topicPartition, offset);
+                    }
+                } else {
+                    // the control should not reach here
+                    throw new IllegalStateException("Unexpected non-existing offset value for topic partition " + topicPartition);
+                }
+            });
+
+            return res;
         }
 
         String exportOffsetsToCsv(Map<String, Map<TopicPartition, OffsetAndMetadata>> assignments) {
-            return null;
+            boolean isSingleGroupQuery = opts.options.valuesOf(opts.groupOpt).size() == 1;
+            ObjectWriter csvWriter = isSingleGroupQuery
+                ? new CsvUtils().writerFor(CsvUtils.CsvRecordNoGroup.class)
+                : new CsvUtils().writerFor(CsvUtils.CsvRecordWithGroup.class);
+
+            return Utils.mkString(assignments.entrySet().stream().flatMap(e -> {
+                String groupId = e.getKey();
+                Map<TopicPartition, OffsetAndMetadata> partitionInfo = e.getValue();
+
+                return partitionInfo.entrySet().stream().map(e1 -> {
+                    TopicPartition k = e1.getKey();
+                    OffsetAndMetadata v = e1.getValue();
+                    CsvUtils.CsvRecord csvRecord = isSingleGroupQuery
+                        ? new CsvUtils.CsvRecordNoGroup(k.topic(), k.partition(), v.offset())
+                        : new CsvUtils.CsvRecordWithGroup(groupId, k.topic(), k.partition(), v.offset());
+
+                    try {
+                        return csvWriter.writeValueAsString(csvRecord);
+                    } catch (JsonProcessingException err) {
+                        throw new RuntimeException(err);
+                    }
+                });
+            }), "", "", "");
         }
 
         Map<String, Throwable> deleteGroups() {
