@@ -24,7 +24,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.temporal.ChronoField;
 import java.util.Collections;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
@@ -64,7 +63,7 @@ public class IQv2VersionedStoreIntegrationTest {
     private static final String STORE_NAME = "versioned-store";
     private static final Duration HISTORY_RETENTION = Duration.ofDays(1);
     private static final Instant RECORD_TIMESTAMP = Instant.now();
-    private static final Long RECORD_TIMESTAMP_LONG = RECORD_TIMESTAMP.getLong(ChronoField.INSTANT_SECONDS);
+    private static final Long RECORD_TIMESTAMP_LONG = RECORD_TIMESTAMP.toEpochMilli();
 
 
     private static final Logger LOG = LoggerFactory.getLogger(IQv2VersionedStoreIntegrationTest.class);

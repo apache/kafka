@@ -34,6 +34,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
+import org.apache.kafka.streams.query.KeyQuery;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
@@ -103,6 +104,10 @@ public class MeteredVersionedKeyValueStore<K, V>
                 mkEntry(
                     RangeQuery.class,
                     (query, positionBound, config, store) -> runRangeQuery(query, positionBound, config)
+                ),
+                mkEntry(
+                    KeyQuery.class,
+                    (query, positionBound, config, store) -> runKeyQuery(query, positionBound, config)
                 ),
                 mkEntry(
                     VersionedKeyQuery.class,
@@ -199,33 +204,37 @@ public class MeteredVersionedKeyValueStore<K, V>
             throw new UnsupportedOperationException("Versioned stores do not support RangeQuery queries at this time.");
         }
 
+        @Override
+        protected <R> QueryResult<R> runKeyQuery(final Query<R> query,
+                                                 final PositionBound positionBound,
+                                                 final QueryConfig config) {
+            // throw exception for now to reserve the ability to implement this in the future
+            // without clashing with users' custom implementations in the meantime
+            throw new UnsupportedOperationException("Versioned stores do not support KeyQuery queries at this time.");
+        }
+
         @SuppressWarnings("unchecked")
         protected <R> QueryResult<R> runVersionedKeyQuery(final Query<R> query,
-            final PositionBound positionBound,
-            final QueryConfig config) {
-            if (query instanceof VersionedKeyQuery) {
-                final QueryResult<R> result;
-                final VersionedKeyQuery<K, V> typedKeyQuery = (VersionedKeyQuery<K, V>) query;
-                VersionedKeyQuery<Bytes, byte[]> rawKeyQuery;
-                rawKeyQuery = VersionedKeyQuery.withKey(keyBytes(typedKeyQuery.key()));
-                if (typedKeyQuery.asOfTimestamp().isPresent()) {
-                    rawKeyQuery = rawKeyQuery.asOf(typedKeyQuery.asOfTimestamp().get());
-                }
-                final QueryResult<VersionedRecord<byte[]>> rawResult =
-                    wrapped().query(rawKeyQuery, positionBound, config);
-                if (rawResult.isSuccess()) {
-                    final VersionedRecord<V> versionedRecord = VersionedStoreQueryUtils.deserializeVersionedRecord(plainValueSerdes, rawResult.getResult());
-                    final QueryResult<VersionedRecord<V>> typedQueryResult =
-                        InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, versionedRecord);
-                    result = (QueryResult<R>) typedQueryResult;
-                } else {
-                    // the generic type doesn't matter, since failed queries have no result set.
-                    result = (QueryResult<R>) rawResult;
-                }
-                return result;
+                                                          final PositionBound positionBound,
+                                                          final QueryConfig config) {
+            final QueryResult<R> result;
+            final VersionedKeyQuery<K, V> typedKeyQuery = (VersionedKeyQuery<K, V>) query;
+            VersionedKeyQuery<Bytes, byte[]> rawKeyQuery = VersionedKeyQuery.withKey(keyBytes(typedKeyQuery.key()));
+            if (typedKeyQuery.asOfTimestamp().isPresent()) {
+                rawKeyQuery = rawKeyQuery.asOf(typedKeyQuery.asOfTimestamp().get());
             }
-            // reserved for other IQv2 query types (KIP-968, KIP-969)
-            throw new UnsupportedOperationException("Versioned stores do not support other types of versioned key queries at this time.");
+            final QueryResult<VersionedRecord<byte[]>> rawResult =
+                wrapped().query(rawKeyQuery, positionBound, config);
+            if (rawResult.isSuccess()) {
+                final VersionedRecord<V> versionedRecord = StoreQueryUtils.deserializeVersionedRecord(plainValueSerdes, rawResult.getResult());
+                final QueryResult<VersionedRecord<V>> typedQueryResult =
+                    InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, versionedRecord);
+                result = (QueryResult<R>) typedQueryResult;
+            } else {
+                // the generic type doesn't matter, since failed queries have no result set.
+                result = (QueryResult<R>) rawResult;
+            }
+            return result;
         }
 
         @SuppressWarnings("unchecked")

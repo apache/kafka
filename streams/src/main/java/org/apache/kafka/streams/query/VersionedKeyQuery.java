@@ -24,6 +24,9 @@ import org.apache.kafka.streams.state.VersionedRecord;
 
 /**
  * Interactive query for retrieving a single record from a versioned state store based on its key and timestamp.
+ *
+ * @param <K> The type of the key.
+ * @param <V> The type of the value.
  */
 @Evolving
 public final class VersionedKeyQuery<K, V> implements Query<VersionedRecord<V>> {
@@ -39,30 +42,35 @@ public final class VersionedKeyQuery<K, V> implements Query<VersionedRecord<V>> 
     /**
      * Creates a query that will retrieve the record from a versioned state store identified by {@code key} if it exists
      * (or {@code null} otherwise).
+     * <P>
+     * While the query by default returns the latest value of the specified {@code key}, setting
+     * the {@code asOfTimestamp} (by calling the {@link #asOf(Instant)} method), makes the query
+     * to return the value associated to the specified {@code asOfTimestamp}
+     *
      * @param key The key to retrieve
      * @param <K> The type of the key
      * @param <V> The type of the value that will be retrieved
-     * @throws NullPointerException if @param key is null
+     * @throws NullPointerException if {@code key} is null
      */
     public static <K, V> VersionedKeyQuery<K, V> withKey(final K key) {
         return new VersionedKeyQuery<>(key, Optional.empty());
     }
 
     /**
-     * Specifies the timestamp for the key query. The key query returns the record version for the specified timestamp.
-     * (To be more precise: The key query returns the record with the greatest timestamp <= asOfTimestamp)
-     * if @param asOfTimestamp is null, it will be considered as Optional.empty()
-     * @param asOfTimestamp The as of timestamp for timestamp
+     * Specifies the timestamp for the key query. The key query returns the record's version for the specified timestamp.
+     * (To be more precise: The key query returns the record with the greatest timestamp &lt;= asOfTimestamp)
+     *
+     * @param asOfTimestamp The timestamp bound of the query. This bound is inclusive.
+     * @throws NullPointerException if {@code asOfTimestamp} is null
      */
     public VersionedKeyQuery<K, V> asOf(final Instant asOfTimestamp) {
-        if (asOfTimestamp == null) {
-            return new VersionedKeyQuery<>(key, Optional.empty());
-        }
+        Objects.requireNonNull(asOfTimestamp);
         return new VersionedKeyQuery<>(key, Optional.of(asOfTimestamp));
     }
 
     /**
      * The key that was specified for this query.
+     * @return The specified {@code key} of the query
      */
     public K key() {
         return key;
@@ -70,6 +78,7 @@ public final class VersionedKeyQuery<K, V> implements Query<VersionedRecord<V>> 
 
     /**
      * The timestamp of the query, if specified
+     * @return The specified {@code asOfTimestamp} of the query
      */
     public Optional<Instant> asOfTimestamp() {
         return asOfTimestamp;

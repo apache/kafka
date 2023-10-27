@@ -283,7 +283,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
         final Query<R> query,
         final PositionBound positionBound,
         final QueryConfig config) {
-        return VersionedStoreQueryUtils.handleBasicQueries(
+        return StoreQueryUtils.handleBasicQueries(
             query,
             positionBound,
             config,
