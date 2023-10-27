@@ -4753,7 +4753,6 @@ class KafkaApisTest {
 
   @Test
   def testHandleOffsetFetchWithUnauthorizedTopicAndTopLevelError(): Unit = {
-
     def makeRequest(version: Short): RequestChannel.Request = {
       val groups = Map(
         "group-1" -> List(
