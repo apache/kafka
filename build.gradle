@@ -1350,7 +1350,7 @@ project(':clients') {
     implementation libs.slf4jApi
     implementation libs.opentelemetryProto
 
-    // declare runtime libraries
+    // libraries which should be added as runtime dependencies in generated pom.xml should be defined here:
     shadow libs.zstd
     shadow libs.lz4
     shadow libs.snappy
@@ -1375,21 +1375,6 @@ project(':clients') {
     generator project(':generator')
   }
 
-  shadowJar {
-    archiveClassifier = null
-    // KIP-714: move shaded dependencies to a shaded location
-    relocate('io.opentelemetry', 'org.apache.kafka.shaded.io.opentelemetry')
-    relocate('com.google.protobuf', 'org.apache.kafka.shaded.com.google.protobuf')
-
-    // dependencies exclusion from the final jar.
-    dependencies {
-      exclude(dependency(libs.snappy))
-      exclude(dependency(libs.zstd))
-      exclude(dependency(libs.lz4))
-      exclude(dependency(libs.slf4jApi))
-    }
-  }
-
   task createVersionFile() {
     def receiptFile = file("$buildDir/kafka/$buildVersionFileName")
     inputs.property "commitId", commitId
@@ -1408,13 +1393,37 @@ project(':clients') {
     }
   }
 
+  shadowJar {
+    dependsOn createVersionFile
+    // archiveClassifier defines the classifier for the shadow jar, the default is 'all'.
+    // We don't want to use the default classifier because it will cause the shadow jar to
+    // overwrite the original jar. We also don't want to use the 'shadow' classifier because
+    // it will cause the shadow jar to be named kafka-clients-shadow.jar. We want to use the
+    // same name as the original jar, kafka-clients.jar.
+    archiveClassifier = null
+    // KIP-714: move shaded dependencies to a shaded location
+    relocate('io.opentelemetry.proto', 'org.apache.kafka.shaded.io.opentelemetry.proto')
+    relocate('com.google.protobuf', 'org.apache.kafka.shaded.com.google.protobuf')
+
+    // dependencies exclusion from the final jar.
+    dependencies {
+      exclude(dependency(libs.snappy))
+      exclude(dependency(libs.zstd))
+      exclude(dependency(libs.lz4))
+      exclude(dependency(libs.slf4jApi))
+    }
+
+    from("$buildDir") {
+      include "kafka/$buildVersionFileName"
+    }
+
+    from "$rootDir/LICENSE"
+    from "$rootDir/NOTICE"
+  }
+
   jar {
     enabled false
-    dependsOn createVersionFile
     dependsOn 'shadowJar'
-    from("$buildDir") {
-        include "kafka/$buildVersionFileName"
-    }
   }
 
   clean.doFirst {
