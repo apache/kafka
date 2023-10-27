@@ -19,6 +19,7 @@ package kafka.server
 
 import com.yammer.metrics.core.Meter
 import kafka.network.RequestChannel
+import kafka.server.KafkaRequestHandler.ThreadSafeCallback
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.network.{ClientInformation, ListenerName}
 import org.apache.kafka.common.protocol.ApiKeys
@@ -57,10 +58,12 @@ class KafkaRequestHandlerTest {
       when(apiHandler.handle(ArgumentMatchers.eq(request), any())).thenAnswer { _ =>
         time.sleep(2)
         // Prepare the callback.
-        val callback = KafkaRequestHandler.wrap((reqLocal: RequestLocal, ms: Int) => {
-          time.sleep(ms)
-          handler.stop()
-        }, RequestLocal.NoCaching)
+        val callback = KafkaRequestHandler.wrap(
+          new ThreadSafeCallback[Int]((reqLocal: RequestLocal, ms: Int) => {
+            time.sleep(ms)
+            handler.stop()
+          }),
+          RequestLocal.NoCaching)
         // Execute the callback asynchronously.
         CompletableFuture.runAsync(() => callback(1))
         request.apiLocalCompleteTimeNanos = time.nanoseconds
@@ -94,9 +97,11 @@ class KafkaRequestHandlerTest {
     when(apiHandler.handle(ArgumentMatchers.eq(request), any())).thenAnswer { _ =>
       handledCount = handledCount + 1
       // Prepare the callback.
-      val callback = KafkaRequestHandler.wrap((reqLocal: RequestLocal, ms: Int) => {
-        handler.stop()
-      }, RequestLocal.NoCaching)
+      val callback = KafkaRequestHandler.wrap(
+        new ThreadSafeCallback[Int]((reqLocal: RequestLocal, ms: Int) => {
+          handler.stop()
+        }),
+        RequestLocal.NoCaching)
       // Execute the callback asynchronously.
       CompletableFuture.runAsync(() => callback(1))
     }
@@ -128,11 +133,13 @@ class KafkaRequestHandlerTest {
 
     when(apiHandler.handle(ArgumentMatchers.eq(request), any())).thenAnswer { _ =>
       // Prepare the callback.
-      val callback = KafkaRequestHandler.wrap((reqLocal: RequestLocal, ms: Int) => {
-        reqLocal.bufferSupplier.close()
-        handledCount = handledCount + 1
-        handler.stop()
-      }, originalRequestLocal)
+      val callback = KafkaRequestHandler.wrap(
+        new ThreadSafeCallback[Int]((reqLocal: RequestLocal, ms: Int) => {
+          reqLocal.bufferSupplier.close()
+          handledCount = handledCount + 1
+          handler.stop()
+        }),
+        originalRequestLocal)
       // Execute the callback asynchronously.
       CompletableFuture.runAsync(() => callback(1))
     }
@@ -161,11 +168,13 @@ class KafkaRequestHandlerTest {
 
     when(apiHandler.handle(ArgumentMatchers.eq(request), any())).thenAnswer { _ =>
       // Prepare the callback.
-      val callback = KafkaRequestHandler.wrap((reqLocal: RequestLocal, ms: Int) => {
-        reqLocal.bufferSupplier.close()
-        handledCount = handledCount + 1
-        handler.stop()
-      }, originalRequestLocal)
+      val callback = KafkaRequestHandler.wrap(
+        new ThreadSafeCallback[Int]((reqLocal: RequestLocal, ms: Int) => {
+          reqLocal.bufferSupplier.close()
+          handledCount = handledCount + 1
+          handler.stop()
+        }),
+        originalRequestLocal)
       // Execute the callback before the request returns.
       callback(1)
     }

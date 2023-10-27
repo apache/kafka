@@ -50,30 +50,37 @@ object KafkaRequestHandler {
   }
 
   /**
+   * A method that expected to be executed once as part of a callback that can be performed in an abitrary request handler thread.
+   * The RequestLocal passed in must belong to the request handler thread that is executing the callback.
+   * The method should be thread-safe. If the method accesses any shared data structures, those accesses must also be thread-safe.
+   */
+  class ThreadSafeCallback[T](val fun: (RequestLocal, T) => Unit)
+
+  /**
    * Wrap callback to schedule it on a request thread.
    * NOTE: this function must be called on a request thread.
-   * @param fun Callback function to execute
+   * @param threadSafeCallback thread-safe callback function to execute
    * @param requestLocal The RequestLocal for the current request handler thread in case we need to call
    *                     the callback function without queueing the callback request
    * @return Wrapped callback that would execute `fun` on a request thread
    */
-  def wrap[T](fun: (RequestLocal, T) => Unit, requestLocal: RequestLocal): T => Unit = {
+  def wrap[T](threadSafeCallback: ThreadSafeCallback[T], requestLocal: RequestLocal): T => Unit = {
     val requestChannel = threadRequestChannel.get()
     val currentRequest = threadCurrentRequest.get()
     if (requestChannel == null || currentRequest == null) {
       if (!bypassThreadCheck)
         throw new IllegalStateException("Attempted to reschedule to request handler thread from non-request handler thread.")
-      T => fun(requestLocal, T)
+      T => threadSafeCallback.fun(requestLocal, T)
     } else {
       T => {
         if (threadCurrentRequest.get() == currentRequest) {
           // If the callback is actually executed on the same request thread, we can directly execute
           // it without re-scheduling it.
-          fun(requestLocal, T)
+          threadSafeCallback.fun(requestLocal, T)
         } else {
           // The requestChannel and request are captured in this lambda, so when it's executed on the callback thread
           // we can re-schedule the original callback on a request thread and update the metrics accordingly.
-          requestChannel.sendCallbackRequest(RequestChannel.CallbackRequest(newRequestLocal => fun(newRequestLocal, T), currentRequest))
+          requestChannel.sendCallbackRequest(RequestChannel.CallbackRequest(newRequestLocal => threadSafeCallback.fun(newRequestLocal, T), currentRequest))
         }
       }
     }
