@@ -41,7 +41,7 @@ class ListGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBa
     new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
   ))
   def testListGroupsWithNewConsumerGroupProtocolAndNewGroupCoordinator(): Unit = {
-    testListGroupsWithNewProtocol()
+    testListGroups(true)
   }
 
   @ClusterTest(serverProperties = Array(
@@ -51,7 +51,7 @@ class ListGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBa
     new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
   ))
   def testListGroupsWithOldConsumerGroupProtocolAndNewGroupCoordinator(): Unit = {
-    testListGroupsWithOldProtocol()
+    testListGroups(false)
   }
 
   @ClusterTest(clusterType = Type.ALL, serverProperties = Array(
@@ -61,11 +61,11 @@ class ListGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBa
     new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
   ))
   def testListGroupsWithOldConsumerGroupProtocolAndOldGroupCoordinator(): Unit = {
-    testListGroupsWithOldProtocol()
+    testListGroups(false)
   }
 
-  private def testListGroupsWithNewProtocol(): Unit = {
-    if (!isNewGroupCoordinatorEnabled) {
+  private def testListGroups(useNewProtocol: Boolean): Unit = {
+    if (!isNewGroupCoordinatorEnabled && useNewProtocol) {
       fail("Cannot use the new protocol with the old group coordinator.")
     }
 
@@ -80,157 +80,132 @@ class ListGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBa
     )
 
     for (version <- ApiKeys.LIST_GROUPS.oldestVersion() to ApiKeys.LIST_GROUPS.latestVersion(isUnstableApiEnabled)) {
+      // Create grp-1 in old protocol and complete a rebalance. Grp-1 is in STABLE state.
+      val (memberId1InGroup1, _) = joinDynamicConsumerGroupWithOldProtocol(groupId = "grp-1")
+      val response1 = new ListGroupsResponseData.ListedGroup()
+        .setGroupId("grp-1")
+        .setGroupState(if (version >= 4) GenericGroupState.STABLE.toString else "")
+        .setProtocolType("consumer")
 
-      // Join the consumer group. Note that we don't heartbeat here so we must use
-      // a session long enough for the duration of the test.
-      val (memberId1, _) = joinConsumerGroup("grp", true)
+      // Create grp-2 in old protocol without completing rebalance. Grp-2 is in COMPLETING_REBALANCE state.
+      val (memberId1InGroup2, _) = joinDynamicConsumerGroupWithOldProtocol(groupId = "grp-2", completeRebalance = false)
+      val response2 = new ListGroupsResponseData.ListedGroup()
+        .setGroupId("grp-2")
+        .setGroupState(if (version >= 4) GenericGroupState.COMPLETING_REBALANCE.toString else "")
+        .setProtocolType("consumer")
 
-      checkListedGroups(
-        groupId = "grp",
-        state = ConsumerGroupState.STABLE.toString,
-        statesFilterExpectingEmptyListedGroups = List(ConsumerGroupState.ASSIGNING.toString),
-        version = version
-      )
+      // Create grp-3 in old protocol and complete a rebalance. Then memeber 1 leaves grp-3. Grp-3 is in EMPTY state.
+      val (memberId1InGroup3, _) = joinDynamicConsumerGroupWithOldProtocol(groupId = "grp-3")
+      leaveGroup(groupId = "grp-3", memberId = memberId1InGroup3, useNewProtocol = false, ApiKeys.LEAVE_GROUP.latestVersion(isUnstableApiEnabled))
+      val response3 = new ListGroupsResponseData.ListedGroup()
+        .setGroupId("grp-3")
+        .setGroupState(if (version >= 4) GenericGroupState.EMPTY.toString else "")
+        .setProtocolType("consumer")
 
-      // Member 2 joins the group, triggering a rebalance.
-      val (memberId2, _) = joinConsumerGroup("grp", true)
+      var memberId1InGroup4: String = null
+      var response4: ListGroupsResponseData.ListedGroup = null
+      var memberId1InGroup5: String = null
+      var memberId2InGroup5: String = null
+      var response5: ListGroupsResponseData.ListedGroup = null
+      var memberId1InGroup6: String = null
+      var response6: ListGroupsResponseData.ListedGroup = null
 
-      checkListedGroups(
-        groupId = "grp",
-        state = ConsumerGroupState.RECONCILING.toString,
-        statesFilterExpectingEmptyListedGroups = List(ConsumerGroupState.STABLE.toString),
-        version = version
-      )
-
-      leaveGroup(
-        groupId = "grp",
-        memberId = memberId1,
-        useNewProtocol = true,
-        version = ApiKeys.LEAVE_GROUP.latestVersion(isUnstableApiEnabled)
-      )
-      leaveGroup(
-        groupId = "grp",
-        memberId = memberId2,
-        useNewProtocol = true,
-        version = ApiKeys.LEAVE_GROUP.latestVersion(isUnstableApiEnabled)
-      )
-
-      checkListedGroups(
-        groupId = "grp",
-        state = ConsumerGroupState.EMPTY.toString,
-        statesFilterExpectingEmptyListedGroups = List(ConsumerGroupState.RECONCILING.toString),
-        version = version
-      )
-
-      deleteGroups(
-        groupIds = List("grp"),
-        expectedErrors = List(Errors.NONE),
-        version = ApiKeys.DELETE_GROUPS.latestVersion(isUnstableApiEnabled)
-      )
-
-      assertEquals(
-        List.empty,
-        listGroups(
-          statesFilter = List.empty,
-          version = version.toShort
-        )
-      )
-    }
-  }
-
-  private def testListGroupsWithOldProtocol(): Unit = {
-
-    // Creates the __consumer_offsets topics because it won't be created automatically
-    // in this test because it does not use FindCoordinator API.
-    createOffsetsTopic()
-
-    // Create the topic.
-    createTopic(
-      topic = "foo",
-      numPartitions = 3
-    )
-
-    for (version <- ApiKeys.LIST_GROUPS.oldestVersion() to ApiKeys.LIST_GROUPS.latestVersion(isUnstableApiEnabled)) {
-
-      // Join the consumer group. Note that we don't heartbeat here so we must use
-      // a session long enough for the duration of the test.
-      val (memberId, memberEpoch) = joinDynamicConsumerGroupWithOldProtocol(groupId = "grp", completeRebalance = false)
-
-      checkListedGroups(
-        groupId = "grp",
-        state = GenericGroupState.COMPLETING_REBALANCE.toString,
-        statesFilterExpectingEmptyListedGroups = List(GenericGroupState.STABLE.toString),
-        version = version
-      )
-
-      syncGroupWithOldProtocol(
-        groupId = "grp",
-        memberId = memberId,
-        generationId = memberEpoch
-      )
-
-      checkListedGroups(
-        groupId = "grp",
-        state = GenericGroupState.STABLE.toString,
-        statesFilterExpectingEmptyListedGroups = List(GenericGroupState.COMPLETING_REBALANCE.toString),
-        version = version
-      )
-
-      leaveGroup(
-        groupId = "grp",
-        memberId = memberId,
-        useNewProtocol = false,
-        version = ApiKeys.LEAVE_GROUP.latestVersion(isUnstableApiEnabled)
-      )
-
-      checkListedGroups(
-        groupId = "grp",
-        state = GenericGroupState.EMPTY.toString,
-        statesFilterExpectingEmptyListedGroups = List(GenericGroupState.STABLE.toString),
-        version = version
-      )
-
-      deleteGroups(
-        groupIds = List("grp"),
-        expectedErrors = List(Errors.NONE),
-        version = ApiKeys.DELETE_GROUPS.latestVersion(isUnstableApiEnabled)
-      )
-
-      assertEquals(
-        List.empty,
-        listGroups(
-          statesFilter = List.empty,
-          version = version.toShort
-        )
-      )
-    }
-  }
-
-  private def checkListedGroups(
-    groupId: String,
-    state: String,
-    statesFilterExpectingEmptyListedGroups: List[String],
-    version: Int
-  ): Unit = {
-    assertEquals(
-      List(
-        new ListGroupsResponseData.ListedGroup()
-          .setGroupId(groupId)
-          .setGroupState(if (version >= 4) state else "")
+      if (useNewProtocol) {
+        // Create grp-4 in new protocol. Grp-4 is in STABLE state.
+        memberId1InGroup4 = joinConsumerGroup("grp-4", true)._1
+        response4 = new ListGroupsResponseData.ListedGroup()
+          .setGroupId("grp-4")
+          .setGroupState(if (version >= 4) ConsumerGroupState.STABLE.toString else "")
           .setProtocolType("consumer")
-      ),
-      listGroups(
-        statesFilter = List.empty,
-        version = version.toShort
-      )
-    )
 
-    // we need v4 or newer to request groups by states
-    if (version >= 4) {
+        // Create grp-5 in new protocol. Then member 2 joins grp-5, triggering a rebalance. Grp-5 is in RECONCILING state.
+        memberId1InGroup5 = joinConsumerGroup("grp-5", true)._1
+        memberId2InGroup5 = joinConsumerGroup("grp-5", true)._1
+        response5 = new ListGroupsResponseData.ListedGroup()
+          .setGroupId("grp-5")
+          .setGroupState(if (version >= 4) ConsumerGroupState.RECONCILING.toString else "")
+          .setProtocolType("consumer")
+
+        // Create grp-6 in new protocol. Then member 1 leaves grp-6. Grp-6 is in Empty state.
+        memberId1InGroup6 = joinConsumerGroup("grp-6", true)._1
+        leaveGroup(groupId = "grp-6", memberId = memberId1InGroup6, useNewProtocol = true, ApiKeys.LEAVE_GROUP.latestVersion(isUnstableApiEnabled))
+        response6 = new ListGroupsResponseData.ListedGroup()
+          .setGroupId("grp-6")
+          .setGroupState(if (version >= 4) ConsumerGroupState.EMPTY.toString else "")
+          .setProtocolType("consumer")
+      }
+
+      assertEquals(
+        if (useNewProtocol)
+          List(response1, response2, response3, response4, response5, response6).toSet
+        else
+          List(response1, response2, response3).toSet,
+        listGroups(
+          statesFilter = List.empty,
+          version = version.toShort
+        ).toSet
+      )
+
+      // We need v4 or newer to request groups by states.
+      if (version >= 4) {
+        assertEquals(
+          if (useNewProtocol) List(response4) else List.empty,
+          listGroups(
+            statesFilter = List(ConsumerGroupState.STABLE.toString),
+            version = version.toShort
+          )
+        )
+
+        assertEquals(
+          if (useNewProtocol) List(response2, response5).toSet else List(response2).toSet,
+          listGroups(
+            statesFilter = List(
+              GenericGroupState.COMPLETING_REBALANCE.toString,
+              ConsumerGroupState.RECONCILING.toString,
+            ),
+            version = version.toShort
+          ).toSet
+        )
+
+        assertEquals(
+          if (useNewProtocol) List(response1, response3, response6).toSet else List(response1, response3).toSet,
+          listGroups(
+            statesFilter = List(
+              GenericGroupState.STABLE.toString,
+              GenericGroupState.EMPTY.toString,
+              ConsumerGroupState.EMPTY.toString
+            ),
+            version = version.toShort
+          ).toSet
+        )
+
+        assertEquals(
+          List.empty,
+          listGroups(
+            statesFilter = List(ConsumerGroupState.ASSIGNING.toString),
+            version = version.toShort
+          )
+        )
+      }
+
+      leaveGroup(groupId = "grp-1", memberId = memberId1InGroup1, useNewProtocol = false, ApiKeys.LEAVE_GROUP.latestVersion(isUnstableApiEnabled))
+      leaveGroup(groupId = "grp-2", memberId = memberId1InGroup2, useNewProtocol = false, ApiKeys.LEAVE_GROUP.latestVersion(isUnstableApiEnabled))
+      if (useNewProtocol) {
+        leaveGroup(groupId = "grp-4", memberId = memberId1InGroup4, useNewProtocol = true, ApiKeys.LEAVE_GROUP.latestVersion(isUnstableApiEnabled))
+        leaveGroup(groupId = "grp-5", memberId = memberId1InGroup5, useNewProtocol = true, ApiKeys.LEAVE_GROUP.latestVersion(isUnstableApiEnabled))
+        leaveGroup(groupId = "grp-5", memberId = memberId2InGroup5, useNewProtocol = true, ApiKeys.LEAVE_GROUP.latestVersion(isUnstableApiEnabled))
+      }
+
+      deleteGroups(
+        groupIds = if (useNewProtocol) List("grp-1", "grp-2", "grp-3", "grp-4", "grp-5", "grp-6") else List("grp-1", "grp-2", "grp-3"),
+        expectedErrors = if (useNewProtocol) List.fill(6)(Errors.NONE) else List.fill(3)(Errors.NONE),
+        version = ApiKeys.DELETE_GROUPS.latestVersion(isUnstableApiEnabled)
+      )
+
       assertEquals(
         List.empty,
         listGroups(
-          statesFilter = statesFilterExpectingEmptyListedGroups,
+          statesFilter = List.empty,
           version = version.toShort
         )
       )

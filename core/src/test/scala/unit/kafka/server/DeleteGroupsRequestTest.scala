@@ -87,13 +87,14 @@ class DeleteGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinator
     )
 
     for (version <- ApiKeys.DELETE_GROUPS.oldestVersion() to ApiKeys.DELETE_GROUPS.latestVersion(isUnstableApiEnabled)) {
-
       // Join the consumer group. Note that we don't heartbeat here so we must use
       // a session long enough for the duration of the test.
       val (memberId, memberEpoch) = joinConsumerGroup(
         groupId = "grp",
         useNewProtocol = useNewProtocol
       )
+
+      // The member leaves the group so that grp is empty and ready to be deleted.
       leaveGroup(
         groupId = "grp",
         memberId = memberId,
@@ -126,7 +127,7 @@ class DeleteGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinator
           ),
           describeGroups(
             groupIds = List("grp"),
-            version = version.toShort
+            version = ApiKeys.DESCRIBE_GROUPS.latestVersion(isUnstableApiEnabled)
           )
         )
       }
