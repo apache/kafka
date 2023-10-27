@@ -178,13 +178,11 @@ public class CommitRequestManager implements RequestManager {
             autoCommitState.ifPresent(autoCommitState -> autoCommitState.setInflightCommitStatus(false));
             if (throwable == null) {
                 log.debug("Completed asynchronous auto-commit of offsets {}", allConsumedOffsets);
+            } else if (throwable instanceof RetriableCommitFailedException) {
+                log.debug("Asynchronous auto-commit of offsets {} failed due to retriable error: {}",
+                    allConsumedOffsets, throwable.getMessage());
             } else {
-                if (throwable instanceof RetriableCommitFailedException) {
-                    log.debug("Asynchronous auto-commit of offsets {} failed due to retriable error: {}",
-                        allConsumedOffsets, throwable.getMessage());
-                } else {
-                    log.warn("Asynchronous auto-commit of offsets {} failed", allConsumedOffsets, throwable);
-                }
+                log.warn("Asynchronous auto-commit of offsets {} failed", allConsumedOffsets, throwable);
             }
         });
     }
@@ -195,7 +193,7 @@ public class CommitRequestManager implements RequestManager {
         }
     }
 
-    public class OffsetCommitRequestState extends RequestState {
+    class OffsetCommitRequestState extends RequestState {
         private final Map<TopicPartition, OffsetAndMetadata> offsets;
         private final String groupId;
         private final GroupState.Generation generation;
@@ -291,13 +289,12 @@ public class CommitRequestManager implements RequestManager {
                     }
 
                     if (error.exception() instanceof RetriableException) {
-                        log.warn("OffsetCommit failed on partition {} at offset {}: {}", tp, offset,
-                            error.message());
+                        log.warn("OffsetCommit failed on partition {} at offset {}: {}", tp, offset, error.message());
                     } else {
                         log.error("OffsetCommit failed on partition {} at offset {}: {}", tp, offset, error.message());
                     }
 
-                    if (!continueHandlePartitionErrors(error, tp, offset, unauthorizedTopics, responseTime)) {
+                    if (!continueHandlePartitionErrors(error, tp, unauthorizedTopics, responseTime)) {
                         return;
                     }
                 }
@@ -312,13 +309,12 @@ public class CommitRequestManager implements RequestManager {
         }
 
         private void retry(final long currentTimeMs) {
-            System.out.println("timeout" + currentTimeMs);
             onFailedAttempt(currentTimeMs);
             pendingRequests.addOffsetCommitRequest(this);
         }
 
-        private boolean continueHandlePartitionErrors(Errors error, TopicPartition tp, long offset,
-                                                      Set<String> unauthorizedTopics, long responseTime) {
+        private boolean continueHandlePartitionErrors(final Errors error, final TopicPartition tp,
+                                                      final Set<String> unauthorizedTopics, final long responseTime) {
             switch (error) {
                 case GROUP_AUTHORIZATION_FAILED:
                     future.completeExceptionally(GroupAuthorizationException.forGroupId(groupId));

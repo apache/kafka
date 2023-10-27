@@ -328,7 +328,8 @@ public class CommitRequestManagerTest {
                 assertPollDoesNotReturn(commitRequestManger, Long.MAX_VALUE);
                 break;
             case FENCED_INSTANCE_ID:
-                // what should we do
+                // This is a fatal failure, so we should not retry
+                assertPollDoesNotReturn(commitRequestManger, Long.MAX_VALUE);
                 break;
             default:
                 assertPollDoesNotReturn(commitRequestManger, Long.MAX_VALUE);
