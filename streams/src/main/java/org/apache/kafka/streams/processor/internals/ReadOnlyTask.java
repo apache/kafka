@@ -206,12 +206,15 @@ public class ReadOnlyTask implements Task {
 
     @Override
     public boolean commitNeeded() {
-        throw new UnsupportedOperationException("This task is read-only");
+        if (task.isActive()) {
+            throw new UnsupportedOperationException("This task is read-only");
+        }
+        return task.commitNeeded();
     }
 
     @Override
     public StateStore getStore(final String name) {
-        throw new UnsupportedOperationException("This task is read-only");
+        return task.getStore(name);
     }
 
     @Override

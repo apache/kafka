@@ -78,7 +78,7 @@ class NoOpPasswordEncoder extends PasswordEncoder {
   * @param keyLength Key length used for encoding. This should be valid for the specified algorithms.
   * @param iterations Iteration count used for encoding.
   *
-  * The provided `keyFactoryAlgorithm`, 'cipherAlgorithm`, `keyLength` and `iterations` are used for encoding passwords.
+  * The provided `keyFactoryAlgorithm`, `cipherAlgorithm`, `keyLength` and `iterations` are used for encoding passwords.
   * The values used for encoding are stored along with the encoded password and the stored values are used for decoding.
   *
   */

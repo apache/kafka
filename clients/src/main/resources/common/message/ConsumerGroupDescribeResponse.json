@@ -71,7 +71,7 @@
             { "name": "TargetAssignment", "type": "Assignment", "versions": "0+",
               "about": "The target assignment." }
           ]},
-        { "name": "AuthorizedOperations", "type": "int32", "versions": "3+", "default": "-2147483648",
+        { "name": "AuthorizedOperations", "type": "int32", "versions": "0+", "default": "-2147483648",
           "about": "32-bit bitfield to represent authorized operations for this group." }
       ]
     }

@@ -19,17 +19,18 @@ package kafka.tools
 
 import java.io.{ByteArrayOutputStream, PrintStream}
 import java.nio.charset.StandardCharsets
-import java.nio.file.Files
+import java.nio.file.{Files, Paths}
 import java.util
 import java.util.Properties
-import org.apache.kafka.common.KafkaException
-import kafka.server.{KafkaConfig, MetaProperties}
+import org.apache.kafka.common.{KafkaException, Uuid}
+import kafka.server.{BrokerMetadataCheckpoint, KafkaConfig, KafkaServer, MetaProperties}
 import kafka.utils.Exit
 import kafka.utils.TestUtils
+import org.apache.commons.io.output.NullOutputStream
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.common.metadata.UserScramCredentialRecord
-import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue}
 import org.junit.jupiter.api.{Test, Timeout}
 
 import scala.collection.mutable
@@ -114,7 +115,7 @@ Found problem:
     val stream = new ByteArrayOutputStream()
     val tempDir = TestUtils.tempDir()
     try {
-      Files.write(tempDir.toPath.resolve("meta.properties"),
+      Files.write(tempDir.toPath.resolve(KafkaServer.brokerMetaPropsFile),
         String.join("\n", util.Arrays.asList(
           "version=1",
           "cluster.id=XcZZOzUqS4yHOjhMQB6JLQ")).
@@ -138,7 +139,7 @@ Found problem:
     val stream = new ByteArrayOutputStream()
     val tempDir = TestUtils.tempDir()
     try {
-      Files.write(tempDir.toPath.resolve("meta.properties"),
+      Files.write(tempDir.toPath.resolve(KafkaServer.brokerMetaPropsFile),
         String.join("\n", util.Arrays.asList(
           "version=0",
           "broker.id=1",
@@ -360,5 +361,24 @@ Found problem:
     } finally {
       Exit.resetExitProcedure()
     }
+  }
+
+  @Test
+  def testDirUuidGeneration(): Unit = {
+    val tempDir = TestUtils.tempDir()
+    try {
+      val metaProperties = MetaProperties(
+        clusterId = "XcZZOzUqS4yHOjhMQB6JLQ", nodeId = 2)
+      val bootstrapMetadata = StorageTool.buildBootstrapMetadata(MetadataVersion.latest(), None, "test format command")
+      assertEquals(0, StorageTool.
+        formatCommand(new PrintStream(NullOutputStream.NULL_OUTPUT_STREAM), Seq(tempDir.toString), metaProperties, bootstrapMetadata, MetadataVersion.latest(), ignoreFormatted = false))
+
+      val metaPropertiesFile = Paths.get(tempDir.toURI).resolve(KafkaServer.brokerMetaPropsFile).toFile
+      assertTrue(metaPropertiesFile.exists())
+      val properties = new BrokerMetadataCheckpoint(metaPropertiesFile).read().get
+      assertTrue(properties.containsKey("directory.id"))
+      val directoryId = Uuid.fromString(properties.getProperty("directory.id"))
+      assertFalse(Uuid.RESERVED.contains(directoryId))
+    } finally Utils.delete(tempDir)
   }
 }

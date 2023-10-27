@@ -18,6 +18,8 @@ package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.DescribeGroupsResponseData;
+import org.apache.kafka.common.message.DeleteGroupsResponseData;
 import org.apache.kafka.common.message.HeartbeatRequestData;
 import org.apache.kafka.common.message.HeartbeatResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
@@ -27,12 +29,15 @@ import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
+import org.apache.kafka.common.message.OffsetDeleteRequestData;
+import org.apache.kafka.common.message.OffsetDeleteResponseData;
 import org.apache.kafka.common.message.OffsetFetchRequestData;
 import org.apache.kafka.common.message.OffsetFetchResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.protocol.ApiMessage;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -60,9 +65,12 @@ import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.timeline.SnapshotRegistry;
+import org.slf4j.Logger;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 
 /**
  * The group coordinator shard is a replicated state machine that manages the metadata of all
@@ -152,15 +160,30 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
                 .withSnapshotRegistry(snapshotRegistry)
                 .withTime(time)
                 .withGroupMetadataManager(groupMetadataManager)
-                .withOffsetMetadataMaxSize(config.offsetMetadataMaxSize)
+                .withGroupCoordinatorConfig(config)
                 .build();
 
             return new GroupCoordinatorShard(
+                logContext,
                 groupMetadataManager,
-                offsetMetadataManager
+                offsetMetadataManager,
+                timer,
+                config
             );
         }
     }
+
+    /**
+     * The group/offsets expiration key to schedule a timer task.
+     *
+     * Visible for testing.
+     */
+    static final String GROUP_EXPIRATION_KEY = "expire-group-metadata";
+
+    /**
+     * The logger.
+     */
+    private final Logger log;
 
     /**
      * The group metadata manager.
@@ -173,17 +196,34 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
     private final OffsetMetadataManager offsetMetadataManager;
 
     /**
+     * The coordinator timer.
+     */
+    private final CoordinatorTimer<Void, Record> timer;
+
+    /**
+     * The group coordinator config.
+     */
+    private final GroupCoordinatorConfig config;
+
+    /**
      * Constructor.
      *
+     * @param logContext            The log context.
      * @param groupMetadataManager  The group metadata manager.
      * @param offsetMetadataManager The offset metadata manager.
      */
     GroupCoordinatorShard(
+        LogContext logContext,
         GroupMetadataManager groupMetadataManager,
-        OffsetMetadataManager offsetMetadataManager
+        OffsetMetadataManager offsetMetadataManager,
+        CoordinatorTimer<Void, Record> timer,
+        GroupCoordinatorConfig config
     ) {
+        this.log = logContext.logger(GroupCoordinatorShard.class);
         this.groupMetadataManager = groupMetadataManager;
         this.offsetMetadataManager = offsetMetadataManager;
+        this.timer = timer;
+        this.config = config;
     }
 
     /**
@@ -263,6 +303,51 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
     }
 
     /**
+     * Handles a DeleteGroups request.
+     *
+     * @param context   The request context.
+     * @param groupIds  The groupIds of the groups to be deleted
+     * @return A Result containing the DeleteGroupsResponseData.DeletableGroupResultCollection response and
+     *         a list of records to update the state machine.
+     */
+    public CoordinatorResult<DeleteGroupsResponseData.DeletableGroupResultCollection, Record> deleteGroups(
+        RequestContext context,
+        List<String> groupIds
+    ) throws ApiException {
+        final DeleteGroupsResponseData.DeletableGroupResultCollection resultCollection =
+            new DeleteGroupsResponseData.DeletableGroupResultCollection(groupIds.size());
+        final List<Record> records = new ArrayList<>();
+        int numDeletedOffsets = 0;
+        final List<String> deletedGroups = new ArrayList<>();
+
+        for (String groupId : groupIds) {
+            try {
+                groupMetadataManager.validateDeleteGroup(groupId);
+                numDeletedOffsets += offsetMetadataManager.deleteAllOffsets(groupId, records);
+                groupMetadataManager.deleteGroup(groupId, records);
+                deletedGroups.add(groupId);
+
+                resultCollection.add(
+                    new DeleteGroupsResponseData.DeletableGroupResult()
+                        .setGroupId(groupId)
+                );
+            } catch (ApiException exception) {
+                resultCollection.add(
+                    new DeleteGroupsResponseData.DeletableGroupResult()
+                        .setGroupId(groupId)
+                        .setErrorCode(Errors.forException(exception).code())
+                );
+            }
+        }
+
+        log.info("The following groups were deleted: {}. A total of {} offsets were removed.",
+            String.join(", ", deletedGroups),
+            numDeletedOffsets
+        );
+        return new CoordinatorResult<>(records, resultCollection);
+    }
+
+    /**
      * Fetch offsets for a given set of partitions and a given group.
      *
      * @param request   The OffsetFetchRequestGroup request.
@@ -295,7 +380,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
     }
 
     /**
-     * Handles a OffsetCommit request.
+     * Handles an OffsetCommit request.
      *
      * @param context The request context.
      * @param request The actual OffsetCommit request.
@@ -326,6 +411,23 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
     }
 
     /**
+     * Handles a DescribeGroups request.
+     *
+     * @param context           The request context.
+     * @param groupIds          The IDs of the groups to describe.
+     * @param committedOffset   A specified committed offset corresponding to this shard.
+     *
+     * @return A list containing the DescribeGroupsResponseData.DescribedGroup.
+     */
+    public List<DescribeGroupsResponseData.DescribedGroup> describeGroups(
+        RequestContext context,
+        List<String> groupIds,
+        long committedOffset
+    ) {
+        return groupMetadataManager.describeGroups(groupIds, committedOffset);
+    }
+
+    /**
      * Handles a LeaveGroup request.
      *
      * @param context The request context.
@@ -342,6 +444,55 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
     }
 
     /**
+     * Handles a OffsetDelete request.
+     *
+     * @param context The request context.
+     * @param request The actual OffsetDelete request.
+     *
+     * @return A Result containing the OffsetDeleteResponse response and
+     *         a list of records to update the state machine.
+     */
+    public CoordinatorResult<OffsetDeleteResponseData, Record> deleteOffsets(
+        RequestContext context,
+        OffsetDeleteRequestData request
+    ) throws ApiException {
+        return offsetMetadataManager.deleteOffsets(request);
+    }
+
+    /**
+     * For each group, remove all expired offsets. If all offsets for the group are removed and the group is eligible
+     * for deletion, delete the group.
+     *
+     * @return The list of tombstones (offset commit and group metadata) to append.
+     */
+    public CoordinatorResult<Void, Record> cleanupGroupMetadata() {
+        List<Record> records = new ArrayList<>();
+        groupMetadataManager.groupIds().forEach(groupId -> {
+            if (offsetMetadataManager.cleanupExpiredOffsets(groupId, records)) {
+                groupMetadataManager.maybeDeleteGroup(groupId, records);
+            }
+        });
+
+        // Reschedule the next cycle.
+        scheduleGroupMetadataExpiration();
+        return new CoordinatorResult<>(records);
+    }
+
+    /**
+     * Schedule the group/offsets expiration job. If any exceptions are thrown above, the timer will retry.
+     */
+    private void scheduleGroupMetadataExpiration() {
+        timer.schedule(
+            GROUP_EXPIRATION_KEY,
+            config.offsetsRetentionCheckIntervalMs,
+            TimeUnit.MILLISECONDS,
+            true,
+            this::cleanupGroupMetadata
+        );
+    }
+
+
+    /**
      * The coordinator has been loaded. This is used to apply any
      * post loading operations (e.g. registering timers).
      *
@@ -354,6 +505,12 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
         offsetMetadataManager.onNewMetadataImage(newImage, emptyDelta);
 
         groupMetadataManager.onLoaded();
+        scheduleGroupMetadataExpiration();
+    }
+
+    @Override
+    public void onUnloaded() {
+        timer.cancel(GROUP_EXPIRATION_KEY);
     }
 
     /**

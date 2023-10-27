@@ -203,6 +203,7 @@ public final class QuorumController implements Controller {
         private QuorumFeatures quorumFeatures = null;
         private short defaultReplicationFactor = 3;
         private int defaultNumPartitions = 1;
+        private int defaultMinIsr = 1;
         private ReplicaPlacer replicaPlacer = new StripedReplicaPlacer(new Random());
         private OptionalLong leaderImbalanceCheckIntervalNs = OptionalLong.empty();
         private OptionalLong maxIdleIntervalNs = OptionalLong.empty();
@@ -215,6 +216,7 @@ public final class QuorumController implements Controller {
         private BootstrapMetadata bootstrapMetadata = null;
         private int maxRecordsPerBatch = MAX_RECORDS_PER_BATCH;
         private boolean zkMigrationEnabled = false;
+        private boolean eligibleLeaderReplicasEnabled = false;
         private DelegationTokenCache tokenCache;
         private String tokenSecretKeyString;
         private long delegationTokenMaxLifeMs;
@@ -280,6 +282,11 @@ public final class QuorumController implements Controller {
             return this;
         }
 
+        public Builder setDefaultMinIsr(int defaultMinIsr) {
+            this.defaultMinIsr = defaultMinIsr;
+            return this;
+        }
+
         public Builder setReplicaPlacer(ReplicaPlacer replicaPlacer) {
             this.replicaPlacer = replicaPlacer;
             return this;
@@ -337,6 +344,11 @@ public final class QuorumController implements Controller {
 
         public Builder setZkMigrationEnabled(boolean zkMigrationEnabled) {
             this.zkMigrationEnabled = zkMigrationEnabled;
+            return this;
+        }
+
+        public Builder setEligibleLeaderReplicasEnabled(boolean eligibleLeaderReplicasEnabled) {
+            this.eligibleLeaderReplicasEnabled = eligibleLeaderReplicasEnabled;
             return this;
         }
 
@@ -405,6 +417,7 @@ public final class QuorumController implements Controller {
                     quorumFeatures,
                     defaultReplicationFactor,
                     defaultNumPartitions,
+                    defaultMinIsr,
                     replicaPlacer,
                     leaderImbalanceCheckIntervalNs,
                     maxIdleIntervalNs,
@@ -421,7 +434,8 @@ public final class QuorumController implements Controller {
                     tokenSecretKeyString,
                     delegationTokenMaxLifeMs,
                     delegationTokenExpiryTimeMs,
-                    delegationTokenExpiryCheckIntervalMs
+                    delegationTokenExpiryCheckIntervalMs,
+                    eligibleLeaderReplicasEnabled
                 );
             } catch (Exception e) {
                 Utils.closeQuietly(queue, "event queue");
@@ -1746,6 +1760,8 @@ public final class QuorumController implements Controller {
 
     private final boolean zkMigrationEnabled;
 
+    private final boolean eligibleLeaderReplicasEnabled;
+
     /**
      * The maximum number of records per batch to allow.
      */
@@ -1769,6 +1785,7 @@ public final class QuorumController implements Controller {
         QuorumFeatures quorumFeatures,
         short defaultReplicationFactor,
         int defaultNumPartitions,
+        int defaultMinIsr,
         ReplicaPlacer replicaPlacer,
         OptionalLong leaderImbalanceCheckIntervalNs,
         OptionalLong maxIdleIntervalNs,
@@ -1785,7 +1802,8 @@ public final class QuorumController implements Controller {
         String tokenSecretKeyString,
         long delegationTokenMaxLifeMs,
         long delegationTokenExpiryTimeMs,
-        long delegationTokenExpiryCheckIntervalMs
+        long delegationTokenExpiryCheckIntervalMs,
+        boolean eligibleLeaderReplicasEnabled
     ) {
         this.nonFatalFaultHandler = nonFatalFaultHandler;
         this.fatalFaultHandler = fatalFaultHandler;
@@ -1854,6 +1872,8 @@ public final class QuorumController implements Controller {
             setLogContext(logContext).
             setDefaultReplicationFactor(defaultReplicationFactor).
             setDefaultNumPartitions(defaultNumPartitions).
+            setDefaultMinIsr(defaultMinIsr).
+            setEligibleLeaderReplicasEnabled(eligibleLeaderReplicasEnabled).
             setMaxElectionsPerImbalance(ReplicationControlManager.MAX_ELECTIONS_PER_IMBALANCE).
             setConfigurationControl(configurationControl).
             setClusterControl(clusterControl).
@@ -1887,9 +1907,11 @@ public final class QuorumController implements Controller {
         this.zkRecordConsumer = new MigrationRecordConsumer();
         this.zkMigrationEnabled = zkMigrationEnabled;
         this.recordRedactor = new RecordRedactor(configSchema);
+        this.eligibleLeaderReplicasEnabled = eligibleLeaderReplicasEnabled;
 
-        log.info("Creating new QuorumController with clusterId {}.{}",
-                clusterId, zkMigrationEnabled ? " ZK migration mode is enabled." : "");
+        log.info("Creating new QuorumController with clusterId {}.{}{}",
+            clusterId, zkMigrationEnabled ? " ZK migration mode is enabled." : "",
+            eligibleLeaderReplicasEnabled ? " Eligible leader replicas enabled." : "");
 
         this.raftClient.register(metaLogListener);
     }
@@ -2157,7 +2179,7 @@ public final class QuorumController implements Controller {
             () -> {
                 ControllerResult<BrokerRegistrationReply> result = clusterControl.
                     registerBroker(request, offsetControl.nextWriteOffset(), featureControl.
-                        finalizedFeatures(Long.MAX_VALUE));
+                        finalizedFeatures(Long.MAX_VALUE), context.requestHeader().requestApiVersion());
                 rescheduleMaybeFenceStaleBrokers();
                 return result;
             },

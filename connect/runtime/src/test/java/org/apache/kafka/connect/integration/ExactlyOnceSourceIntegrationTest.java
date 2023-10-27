@@ -48,7 +48,7 @@ import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
-import org.apache.kafka.connect.util.clusters.EmbeddedConnectClusterAssertions;
+import org.apache.kafka.connect.util.clusters.ConnectAssertions;
 import org.apache.kafka.connect.util.clusters.EmbeddedKafkaCluster;
 import org.apache.kafka.test.IntegrationTest;
 import org.junit.After;
@@ -650,7 +650,7 @@ public class ExactlyOnceSourceIntegrationTest {
         final String globalOffsetsTopic = "connect-worker-offsets-topic";
         workerProps.put(DistributedConfig.OFFSET_STORAGE_TOPIC_CONFIG, globalOffsetsTopic);
 
-        connectBuilder.clientConfigs(superUserClientConfig);
+        connectBuilder.clientProps(superUserClientConfig);
 
         startConnect();
 
@@ -1095,7 +1095,7 @@ public class ExactlyOnceSourceIntegrationTest {
     private void assertConnectorStarted(StartAndStopLatch connectorStart) throws InterruptedException {
         assertTrue("Connector and tasks did not finish startup in time",
                 connectorStart.await(
-                        EmbeddedConnectClusterAssertions.CONNECTOR_SETUP_DURATION_MS,
+                        ConnectAssertions.CONNECTOR_SETUP_DURATION_MS,
                         TimeUnit.MILLISECONDS
                 )
         );
@@ -1105,7 +1105,7 @@ public class ExactlyOnceSourceIntegrationTest {
         assertTrue(
                 "Connector and tasks did not finish shutdown in time",
                 connectorStop.await(
-                        EmbeddedConnectClusterAssertions.CONNECTOR_SHUTDOWN_DURATION_MS,
+                        ConnectAssertions.CONNECTOR_SHUTDOWN_DURATION_MS,
                         TimeUnit.MILLISECONDS
                 )
         );

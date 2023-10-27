@@ -16,16 +16,18 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
+import org.apache.kafka.common.KafkaException;
+
 public class ErrorBackgroundEvent extends BackgroundEvent {
 
-    private final Throwable error;
+    private final RuntimeException error;
 
-    public ErrorBackgroundEvent(Throwable error) {
+    public ErrorBackgroundEvent(Throwable t) {
         super(Type.ERROR);
-        this.error = error;
+        this.error = t instanceof RuntimeException ? (RuntimeException) t : new KafkaException(t);
     }
 
-    public Throwable error() {
+    public RuntimeException error() {
         return error;
     }
 
@@ -50,8 +52,8 @@ public class ErrorBackgroundEvent extends BackgroundEvent {
     @Override
     public String toString() {
         return "ErrorBackgroundEvent{" +
-                toStringBase() +
-                ", error=" + error +
-                '}';
+            toStringBase() +
+            ", error=" + error +
+            '}';
     }
 }

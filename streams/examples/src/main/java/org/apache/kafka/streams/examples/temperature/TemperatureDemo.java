@@ -37,26 +37,26 @@ import java.util.concurrent.CountDownLatch;
  * which ingests temperature value to compute the maximum value in the latest TEMPERATURE_WINDOW_SIZE seconds (which
  * is 5 seconds) and send a new message if it exceeds the TEMPERATURE_THRESHOLD (which is 20)
  *
- * In this example, the input stream reads from a topic named "iot-temperature", where the values of messages
+ * <p>In this example, the input stream reads from a topic named "iot-temperature", where the values of messages
  * represent temperature values; using a TEMPERATURE_WINDOW_SIZE seconds "tumbling" window, the maximum value is processed and
  * sent to a topic named "iot-temperature-max" if it exceeds the TEMPERATURE_THRESHOLD.
  *
- * Before running this example you must create the input topic for temperature values in the following way :
+ * <p>Before running this example you must create the input topic for temperature values in the following way :
  *
- * bin/kafka-topics.sh --create --bootstrap-server localhost:9092 --replication-factor 1 --partitions 1 --topic iot-temperature
+ * <p>bin/kafka-topics.sh --create --bootstrap-server localhost:9092 --replication-factor 1 --partitions 1 --topic iot-temperature
  *
- * and at same time create the output topic for filtered values :
+ * <p>and at same time create the output topic for filtered values :
  *
- * bin/kafka-topics.sh --create --bootstrap-server localhost:9092 --replication-factor 1 --partitions 1 --topic iot-temperature-max
+ * <p>bin/kafka-topics.sh --create --bootstrap-server localhost:9092 --replication-factor 1 --partitions 1 --topic iot-temperature-max
  *
- * After that, a console consumer can be started in order to read filtered values from the "iot-temperature-max" topic :
+ * <p>After that, a console consumer can be started in order to read filtered values from the "iot-temperature-max" topic :
  *
  * bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic iot-temperature-max --from-beginning
  *
- * On the other side, a console producer can be used for sending temperature values (which needs to be integers)
+ * <p>On the other side, a console producer can be used for sending temperature values (which needs to be integers)
  * to "iot-temperature" by typing them on the console :
  *
- * bin/kafka-console-producer.sh --bootstrap-server localhost:9092 --topic iot-temperature
+ * <p>bin/kafka-console-producer.sh --bootstrap-server localhost:9092 --topic iot-temperature
  * > 10
  * > 15
  * > 22
@@ -73,8 +73,8 @@ public class TemperatureDemo {
         final Properties props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "streams-temperature");
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
-        props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-        props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+        props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
+        props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
 
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         props.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
