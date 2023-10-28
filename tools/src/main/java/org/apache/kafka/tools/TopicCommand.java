@@ -469,7 +469,7 @@ public abstract class TopicCommand {
                 CreateTopicsResult createResult = adminClient.createTopics(Collections.singleton(newTopic),
                     new CreateTopicsOptions().retryOnQuotaViolation(false));
                 createResult.all().get();
-                System.out.println("Created topic " + topic.name + ".");
+                System.out.println("Created topic " + topic.name.get() + ".");
             } catch (ExecutionException e) {
                 if (e.getCause() == null) {
                     throw e;
