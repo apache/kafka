@@ -778,7 +778,7 @@ public class SenderTest {
         prepareAndReceiveInitProducerId(producerId, Errors.NONE);
         assertTrue(transactionManager.hasProducerId());
 
-        assertEquals(0, transactionManager.sequenceNumber(tp0).longValue());
+        assertEquals(0, transactionManager.sequenceNumber(tp0));
 
         // Send first ProduceRequest
         Future<RecordMetadata> request1 = appendToAccumulator(tp0);
@@ -786,14 +786,14 @@ public class SenderTest {
         String nodeId = client.requests().peek().destination();
         Node node = new Node(Integer.parseInt(nodeId), "localhost", 0);
         assertEquals(1, client.inFlightRequestCount());
-        assertEquals(1, transactionManager.sequenceNumber(tp0).longValue());
+        assertEquals(1, transactionManager.sequenceNumber(tp0));
         assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
 
         // Send second ProduceRequest
         Future<RecordMetadata> request2 = appendToAccumulator(tp0);
         sender.runOnce();
         assertEquals(2, client.inFlightRequestCount());
-        assertEquals(2, transactionManager.sequenceNumber(tp0).longValue());
+        assertEquals(2, transactionManager.sequenceNumber(tp0));
         assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
         assertFalse(request1.isDone());
         assertFalse(request2.isDone());
@@ -828,7 +828,7 @@ public class SenderTest {
         prepareAndReceiveInitProducerId(producerId, Errors.NONE);
         assertTrue(transactionManager.hasProducerId());
 
-        assertEquals(0, transactionManager.sequenceNumber(tp0).longValue());
+        assertEquals(0, transactionManager.sequenceNumber(tp0));
 
         // Send first ProduceRequest
         Future<RecordMetadata> request1 = appendToAccumulator(tp0);
@@ -836,7 +836,7 @@ public class SenderTest {
         String nodeId = client.requests().peek().destination();
         Node node = new Node(Integer.parseInt(nodeId), "localhost", 0);
         assertEquals(1, client.inFlightRequestCount());
-        assertEquals(1, transactionManager.sequenceNumber(tp0).longValue());
+        assertEquals(1, transactionManager.sequenceNumber(tp0));
         assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
 
         // Send second ProduceRequest
@@ -848,7 +848,7 @@ public class SenderTest {
         sender.runOnce();
 
         assertEquals(3, client.inFlightRequestCount());
-        assertEquals(3, transactionManager.sequenceNumber(tp0).longValue());
+        assertEquals(3, transactionManager.sequenceNumber(tp0));
         assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
         assertFalse(request1.isDone());
         assertFalse(request2.isDone());
@@ -875,7 +875,7 @@ public class SenderTest {
 
         sender.runOnce(); // Do nothing, we are reduced to one in flight request during retries.
 
-        assertEquals(3, transactionManager.sequenceNumber(tp0).longValue());  // the batch for request 4 shouldn't have been drained, and hence the sequence should not have been incremented.
+        assertEquals(3, transactionManager.sequenceNumber(tp0));  // the batch for request 4 shouldn't have been drained, and hence the sequence should not have been incremented.
         assertEquals(1, client.inFlightRequestCount());
 
         assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
@@ -928,7 +928,7 @@ public class SenderTest {
         prepareAndReceiveInitProducerId(producerId, Errors.NONE);
         assertTrue(transactionManager.hasProducerId());
 
-        assertEquals(0, transactionManager.sequenceNumber(tp0).longValue());
+        assertEquals(0, transactionManager.sequenceNumber(tp0));
 
         // Send first ProduceRequest
         Future<RecordMetadata> request1 = appendToAccumulator(tp0);
@@ -936,14 +936,14 @@ public class SenderTest {
         String nodeId = client.requests().peek().destination();
         Node node = new Node(Integer.parseInt(nodeId), "localhost", 0);
         assertEquals(1, client.inFlightRequestCount());
-        assertEquals(1, transactionManager.sequenceNumber(tp0).longValue());
+        assertEquals(1, transactionManager.sequenceNumber(tp0));
         assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
 
         // Send second ProduceRequest
         Future<RecordMetadata> request2 = appendToAccumulator(tp0);
         sender.runOnce();
         assertEquals(2, client.inFlightRequestCount());
-        assertEquals(2, transactionManager.sequenceNumber(tp0).longValue());
+        assertEquals(2, transactionManager.sequenceNumber(tp0));
         assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
         assertFalse(request1.isDone());
         assertFalse(request2.isDone());
@@ -987,7 +987,7 @@ public class SenderTest {
         prepareAndReceiveInitProducerId(producerId, Errors.NONE);
         assertTrue(transactionManager.hasProducerId());
 
-        assertEquals(0, transactionManager.sequenceNumber(tp0).longValue());
+        assertEquals(0, transactionManager.sequenceNumber(tp0));
 
         // Send first ProduceRequest with multiple messages.
         Future<RecordMetadata> request1 = appendToAccumulator(tp0);
@@ -998,7 +998,7 @@ public class SenderTest {
         assertEquals(1, client.inFlightRequestCount());
 
         // make sure the next sequence number accounts for multi-message batches.
-        assertEquals(2, transactionManager.sequenceNumber(tp0).longValue());
+        assertEquals(2, transactionManager.sequenceNumber(tp0));
         assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
         sendIdempotentProducerResponse(0, tp0, Errors.NONE, 0);
 
@@ -1008,7 +1008,7 @@ public class SenderTest {
         Future<RecordMetadata> request2 = appendToAccumulator(tp0);
         sender.runOnce();
         assertEquals(1, client.inFlightRequestCount());
-        assertEquals(3, transactionManager.sequenceNumber(tp0).longValue());
+        assertEquals(3, transactionManager.sequenceNumber(tp0));
         assertEquals(OptionalInt.of(1), transactionManager.lastAckedSequence(tp0));
         assertTrue(request1.isDone());
         assertEquals(0, request1.get().offset());
@@ -1023,7 +1023,7 @@ public class SenderTest {
 
         // epoch should be bumped and sequence numbers reset
         assertEquals(1, transactionManager.producerIdAndEpoch().epoch);
-        assertEquals(1, transactionManager.sequenceNumber(tp0).intValue());
+        assertEquals(1, transactionManager.sequenceNumber(tp0));
         assertEquals(0, transactionManager.firstInFlightSequence(tp0));
     }
 
@@ -1249,7 +1249,7 @@ public class SenderTest {
     ) {
         assertEquals(expectedProducerId, transactionManager.producerIdAndEpoch(tp).producerId, "Producer Id:");
         assertEquals(expectedProducerEpoch, transactionManager.producerIdAndEpoch(tp).epoch, "Producer Epoch:");
-        assertEquals(expectedSequenceValue, transactionManager.sequenceNumber(tp).longValue(), "Seq Number:");
+        assertEquals(expectedSequenceValue, transactionManager.sequenceNumber(tp), "Seq Number:");
         assertEquals(expectedLastAckedSequence, transactionManager.lastAckedSequence(tp), "Last Acked Seq Number:");
     }
 
@@ -1260,7 +1260,7 @@ public class SenderTest {
         setupWithTransactionState(transactionManager);
         prepareAndReceiveInitProducerId(producerId, Errors.NONE);
         assertTrue(transactionManager.hasProducerId());
-        assertEquals(0, transactionManager.sequenceNumber(tp0).longValue());
+        assertEquals(0, transactionManager.sequenceNumber(tp0));
 
         // Send first ProduceRequest
         Future<RecordMetadata> request1 = appendToAccumulator(tp0);
@@ -1268,14 +1268,14 @@ public class SenderTest {
         String nodeId = client.requests().peek().destination();
         Node node = new Node(Integer.parseInt(nodeId), "localhost", 0);
         assertEquals(1, client.inFlightRequestCount());
-        assertEquals(1, transactionManager.sequenceNumber(tp0).longValue());
+        assertEquals(1, transactionManager.sequenceNumber(tp0));
         assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
 
         // Send second ProduceRequest
         Future<RecordMetadata> request2 = appendToAccumulator(tp0);
         sender.runOnce();
         assertEquals(2, client.inFlightRequestCount());
-        assertEquals(2, transactionManager.sequenceNumber(tp0).longValue());
+        assertEquals(2, transactionManager.sequenceNumber(tp0));
         assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
         assertFalse(request1.isDone());
         assertFalse(request2.isDone());
@@ -1342,7 +1342,7 @@ public class SenderTest {
         prepareAndReceiveInitProducerId(producerId, Errors.NONE);
         assertTrue(transactionManager.hasProducerId());
 
-        assertEquals(0, transactionManager.sequenceNumber(tp0).longValue());
+        assertEquals(0, transactionManager.sequenceNumber(tp0));
 
         // Send first ProduceRequest
         Future<RecordMetadata> request1 = appendToAccumulator(tp0);
@@ -1410,7 +1410,7 @@ public class SenderTest {
         prepareAndReceiveInitProducerId(producerId, Errors.NONE);
         assertTrue(transactionManager.hasProducerId());
 
-        assertEquals(0, transactionManager.sequenceNumber(tp0).longValue());
+        assertEquals(0, transactionManager.sequenceNumber(tp0));
 
         // Send first ProduceRequest
         Future<RecordMetadata> request1 = appendToAccumulator(tp0, 0L, "key", "value");
@@ -1432,7 +1432,7 @@ public class SenderTest {
         setupWithTransactionState(transactionManager, false, null);
         prepareAndReceiveInitProducerId(producerId, Errors.NONE);
         assertTrue(transactionManager.hasProducerId());
-        assertEquals(0, transactionManager.sequenceNumber(tp0).longValue());
+        assertEquals(0, transactionManager.sequenceNumber(tp0));
 
         // Send first ProduceRequest
         Future<RecordMetadata> request1 = appendToAccumulator(tp0);
@@ -1480,7 +1480,7 @@ public class SenderTest {
         assertEquals(1, batches.size());
         assertFalse(batches.peekFirst().hasSequence());
         assertFalse(client.hasInFlightRequests());
-        assertEquals(2L, transactionManager.sequenceNumber(tp0).longValue());
+        assertEquals(2L, transactionManager.sequenceNumber(tp0));
         assertTrue(transactionManager.hasUnresolvedSequence(tp0));
 
         sender.runOnce();  // clear the unresolved state, send the pending request.
@@ -1499,7 +1499,7 @@ public class SenderTest {
         setupWithTransactionState(transactionManager);
         prepareAndReceiveInitProducerId(producerId, Errors.NONE);
         assertTrue(transactionManager.hasProducerId());
-        assertEquals(0, transactionManager.sequenceNumber(tp0).longValue());
+        assertEquals(0, transactionManager.sequenceNumber(tp0));
 
         // Send first ProduceRequest
         Future<RecordMetadata> request1 = appendToAccumulator(tp0);
@@ -1538,7 +1538,7 @@ public class SenderTest {
 
         sender.runOnce();
         assertEquals((short) 1, transactionManager.producerIdAndEpoch().epoch);
-        assertEquals(1, transactionManager.sequenceNumber(tp0).longValue());
+        assertEquals(1, transactionManager.sequenceNumber(tp0));
         assertFalse(transactionManager.hasUnresolvedSequence(tp0));
     }
 
@@ -1591,7 +1591,7 @@ public class SenderTest {
         prepareAndReceiveInitProducerId(producerId, Errors.NONE);
         assertTrue(transactionManager.hasProducerId());
 
-        assertEquals(0, transactionManager.sequenceNumber(tp0).longValue());
+        assertEquals(0, transactionManager.sequenceNumber(tp0));
 
         // Send first ProduceRequest
         Future<RecordMetadata> request1 = appendToAccumulator(tp0, 0L, "key", "value");
@@ -1599,7 +1599,7 @@ public class SenderTest {
         sendIdempotentProducerResponse(0, tp0, Errors.NOT_LEADER_OR_FOLLOWER, -1);
 
         sender.runOnce();  // receive response
-        assertEquals(1L, transactionManager.sequenceNumber(tp0).longValue());
+        assertEquals(1L, transactionManager.sequenceNumber(tp0));
 
         Node node = metadata.fetch().nodes().get(0);
         time.sleep(15000L);
@@ -1660,7 +1660,7 @@ public class SenderTest {
         assertEquals(10, successfulResponse.get().offset());
 
         // The epoch and the sequence are updated when the next batch is sent.
-        assertEquals(1, transactionManager.sequenceNumber(tp1).longValue());
+        assertEquals(1, transactionManager.sequenceNumber(tp1));
     }
 
     @Test
@@ -1772,7 +1772,7 @@ public class SenderTest {
         sender.runOnce();
         assertTrue(successfulResponse.isDone());
         // epoch of partition is bumped and sequence is reset when the next batch is sent
-        assertEquals(1, transactionManager.sequenceNumber(tp1).intValue());
+        assertEquals(1, transactionManager.sequenceNumber(tp1));
     }
 
     @Test
@@ -1783,7 +1783,7 @@ public class SenderTest {
         prepareAndReceiveInitProducerId(producerId, Errors.NONE);
         assertTrue(transactionManager.hasProducerId());
 
-        assertEquals(0, transactionManager.sequenceNumber(tp0).longValue());
+        assertEquals(0, transactionManager.sequenceNumber(tp0));
 
         // Send first ProduceRequest
         Future<RecordMetadata> request1 = appendToAccumulator(tp0);
@@ -1791,14 +1791,14 @@ public class SenderTest {
         String nodeId = client.requests().peek().destination();
         Node node = new Node(Integer.parseInt(nodeId), "localhost", 0);
         assertEquals(1, client.inFlightRequestCount());
-        assertEquals(1, transactionManager.sequenceNumber(tp0).longValue());
+        assertEquals(1, transactionManager.sequenceNumber(tp0));
         assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
 
         // Send second ProduceRequest
         Future<RecordMetadata> request2 = appendToAccumulator(tp0);
         sender.runOnce();
         assertEquals(2, client.inFlightRequestCount());
-        assertEquals(2, transactionManager.sequenceNumber(tp0).longValue());
+        assertEquals(2, transactionManager.sequenceNumber(tp0));
         assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
         assertFalse(request1.isDone());
         assertFalse(request2.isDone());
@@ -1842,14 +1842,14 @@ public class SenderTest {
         client.prepareResponse(buildAddPartitionsToTxnResponseData(0, Collections.singletonMap(tp0, Errors.NONE)));
         sender.runOnce(); // Receive AddPartitions response
 
-        assertEquals(0, transactionManager.sequenceNumber(tp0).longValue());
+        assertEquals(0, transactionManager.sequenceNumber(tp0));
 
         // Send first ProduceRequest
         Future<RecordMetadata> request1 = appendToAccumulator(tp0);
         sender.runOnce();
 
         assertEquals(1, client.inFlightRequestCount());
-        assertEquals(1, transactionManager.sequenceNumber(tp0).longValue());
+        assertEquals(1, transactionManager.sequenceNumber(tp0));
         assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
 
         sendIdempotentProducerResponse(0, tp0, Errors.NONE, 1000L, 10L);
@@ -1865,7 +1865,7 @@ public class SenderTest {
         appendToAccumulator(tp0);
         Future<RecordMetadata> request2 = appendToAccumulator(tp0);
         sender.runOnce();
-        assertEquals(3, transactionManager.sequenceNumber(tp0).longValue());
+        assertEquals(3, transactionManager.sequenceNumber(tp0));
         assertEquals(OptionalInt.of(0), transactionManager.lastAckedSequence(tp0));
 
         assertFalse(request2.isDone());
@@ -1875,7 +1875,7 @@ public class SenderTest {
 
         // We should have reset the sequence number state of the partition because the state was lost on the broker.
         assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
-        assertEquals(2, transactionManager.sequenceNumber(tp0).longValue());
+        assertEquals(2, transactionManager.sequenceNumber(tp0));
         assertFalse(request2.isDone());
         assertFalse(client.hasInFlightRequests());
 
@@ -1885,7 +1885,7 @@ public class SenderTest {
         sendIdempotentProducerResponse(0, tp0, Errors.NONE, 1011L, 1010L);
         sender.runOnce(); // receive response 1
         assertEquals(OptionalInt.of(1), transactionManager.lastAckedSequence(tp0));
-        assertEquals(2, transactionManager.sequenceNumber(tp0).longValue());
+        assertEquals(2, transactionManager.sequenceNumber(tp0));
         assertFalse(client.hasInFlightRequests());
         assertTrue(request2.isDone());
         assertEquals(1012L, request2.get().offset());
@@ -1900,14 +1900,14 @@ public class SenderTest {
         prepareAndReceiveInitProducerId(producerId, Errors.NONE);
         assertTrue(transactionManager.hasProducerId());
 
-        assertEquals(0, transactionManager.sequenceNumber(tp0).longValue());
+        assertEquals(0, transactionManager.sequenceNumber(tp0));
 
         // Send first ProduceRequest
         Future<RecordMetadata> request1 = appendToAccumulator(tp0);
         sender.runOnce();
 
         assertEquals(1, client.inFlightRequestCount());
-        assertEquals(1, transactionManager.sequenceNumber(tp0).longValue());
+        assertEquals(1, transactionManager.sequenceNumber(tp0));
         assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
 
         sendIdempotentProducerResponse(0, tp0, Errors.NONE, 1000L, 10L);
@@ -1923,7 +1923,7 @@ public class SenderTest {
         appendToAccumulator(tp0);
         Future<RecordMetadata> request2 = appendToAccumulator(tp0);
         sender.runOnce();
-        assertEquals(3, transactionManager.sequenceNumber(tp0).longValue());
+        assertEquals(3, transactionManager.sequenceNumber(tp0));
         assertEquals(OptionalInt.of(0), transactionManager.lastAckedSequence(tp0));
 
         assertFalse(request2.isDone());
@@ -1934,7 +1934,7 @@ public class SenderTest {
 
         // We should have reset the sequence number state of the partition because the state was lost on the broker.
         assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
-        assertEquals(2, transactionManager.sequenceNumber(tp0).longValue());
+        assertEquals(2, transactionManager.sequenceNumber(tp0));
         assertFalse(request2.isDone());
         assertTrue(client.hasInFlightRequests());
         assertEquals((short) 1, transactionManager.producerIdAndEpoch().epoch);
@@ -1943,7 +1943,7 @@ public class SenderTest {
         sendIdempotentProducerResponse(0, tp0, Errors.NONE, 1011L, 1010L);
         sender.runOnce(); // receive response 1
         assertEquals(OptionalInt.of(1), transactionManager.lastAckedSequence(tp0));
-        assertEquals(2, transactionManager.sequenceNumber(tp0).longValue());
+        assertEquals(2, transactionManager.sequenceNumber(tp0));
         assertFalse(client.hasInFlightRequests());
         assertTrue(request2.isDone());
         assertEquals(1012L, request2.get().offset());
@@ -1958,14 +1958,14 @@ public class SenderTest {
         prepareAndReceiveInitProducerId(producerId, Errors.NONE);
         assertTrue(transactionManager.hasProducerId());
 
-        assertEquals(0, transactionManager.sequenceNumber(tp0).longValue());
+        assertEquals(0, transactionManager.sequenceNumber(tp0));
 
         // Send first ProduceRequest
         Future<RecordMetadata> request1 = appendToAccumulator(tp0);
         sender.runOnce();
 
         assertEquals(1, client.inFlightRequestCount());
-        assertEquals(1, transactionManager.sequenceNumber(tp0).longValue());
+        assertEquals(1, transactionManager.sequenceNumber(tp0));
         assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
 
         sendIdempotentProducerResponse(0, tp0, Errors.NONE, 1000L, 10L);
@@ -1980,7 +1980,7 @@ public class SenderTest {
         // Send second ProduceRequest
         Future<RecordMetadata> request2 = appendToAccumulator(tp0);
         sender.runOnce();
-        assertEquals(2, transactionManager.sequenceNumber(tp0).longValue());
+        assertEquals(2, transactionManager.sequenceNumber(tp0));
         assertEquals(OptionalInt.of(0), transactionManager.lastAckedSequence(tp0));
 
         assertFalse(request2.isDone());
@@ -1990,7 +1990,7 @@ public class SenderTest {
 
         // We should have reset the sequence number state of the partition because the state was lost on the broker.
         assertEquals(OptionalInt.of(0), transactionManager.lastAckedSequence(tp0));
-        assertEquals(2, transactionManager.sequenceNumber(tp0).longValue());
+        assertEquals(2, transactionManager.sequenceNumber(tp0));
         assertFalse(request2.isDone());
         assertFalse(client.hasInFlightRequests());
 
@@ -2001,7 +2001,7 @@ public class SenderTest {
         sendIdempotentProducerResponse(1, tp0, Errors.NONE, 1011L, 1010L);
         sender.runOnce(); // receive response 1
         assertEquals(OptionalInt.of(1), transactionManager.lastAckedSequence(tp0));
-        assertEquals(2, transactionManager.sequenceNumber(tp0).longValue());
+        assertEquals(2, transactionManager.sequenceNumber(tp0));
         assertFalse(client.hasInFlightRequests());
         assertTrue(request2.isDone());
         assertEquals(1011L, request2.get().offset());
@@ -2016,14 +2016,14 @@ public class SenderTest {
         prepareAndReceiveInitProducerId(producerId, Errors.NONE);
         assertTrue(transactionManager.hasProducerId());
 
-        assertEquals(0, transactionManager.sequenceNumber(tp0).longValue());
+        assertEquals(0, transactionManager.sequenceNumber(tp0));
 
         // Send first ProduceRequest
         Future<RecordMetadata> request1 = appendToAccumulator(tp0);
         sender.runOnce();
 
         assertEquals(1, client.inFlightRequestCount());
-        assertEquals(1, transactionManager.sequenceNumber(tp0).longValue());
+        assertEquals(1, transactionManager.sequenceNumber(tp0));
         assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
 
         sendIdempotentProducerResponse(0, tp0, Errors.NONE, 1000L, 10L);
@@ -2038,14 +2038,14 @@ public class SenderTest {
         // Send second ProduceRequest
         Future<RecordMetadata> request2 = appendToAccumulator(tp0);
         sender.runOnce();
-        assertEquals(2, transactionManager.sequenceNumber(tp0).longValue());
+        assertEquals(2, transactionManager.sequenceNumber(tp0));
         assertEquals(OptionalInt.of(0), transactionManager.lastAckedSequence(tp0));
 
         // Send the third ProduceRequest, in parallel with the second. It should be retried even though the
         // lastAckedOffset > logStartOffset when its UnknownProducerResponse comes back.
         Future<RecordMetadata> request3 = appendToAccumulator(tp0);
         sender.runOnce();
-        assertEquals(3, transactionManager.sequenceNumber(tp0).longValue());
+        assertEquals(3, transactionManager.sequenceNumber(tp0));
         assertEquals(OptionalInt.of(0), transactionManager.lastAckedSequence(tp0));
 
         assertFalse(request2.isDone());
@@ -2058,7 +2058,7 @@ public class SenderTest {
 
         // We should have reset the sequence number state of the partition because the state was lost on the broker.
         assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
-        assertEquals(2, transactionManager.sequenceNumber(tp0).longValue());
+        assertEquals(2, transactionManager.sequenceNumber(tp0));
         assertFalse(request2.isDone());
         assertFalse(request3.isDone());
         assertEquals(2, client.inFlightRequestCount());
@@ -2070,7 +2070,7 @@ public class SenderTest {
 
         assertEquals(1, client.inFlightRequestCount());
         assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
-        assertEquals(2, transactionManager.sequenceNumber(tp0).longValue());
+        assertEquals(2, transactionManager.sequenceNumber(tp0));
 
         sendIdempotentProducerResponse(0, tp0, Errors.NONE, 1011L, 1010L);
         sender.runOnce();  // receive response 2, don't send request 3 since we can have at most 1 in flight when retrying
@@ -2102,14 +2102,14 @@ public class SenderTest {
         prepareAndReceiveInitProducerId(producerId, Errors.NONE);
         assertTrue(transactionManager.hasProducerId());
 
-        assertEquals(0, transactionManager.sequenceNumber(tp0).longValue());
+        assertEquals(0, transactionManager.sequenceNumber(tp0));
 
         // Send first ProduceRequest
         Future<RecordMetadata> request1 = appendToAccumulator(tp0);
         sender.runOnce();
 
         assertEquals(1, client.inFlightRequestCount());
-        assertEquals(1, transactionManager.sequenceNumber(tp0).longValue());
+        assertEquals(1, transactionManager.sequenceNumber(tp0));
         assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
 
         sendIdempotentProducerResponse(0, tp0, Errors.NONE, 1000L, 10L);
@@ -2124,7 +2124,7 @@ public class SenderTest {
         // Send second ProduceRequest,
         Future<RecordMetadata> request2 = appendToAccumulator(tp0);
         sender.runOnce();
-        assertEquals(2, transactionManager.sequenceNumber(tp0).longValue());
+        assertEquals(2, transactionManager.sequenceNumber(tp0));
         assertEquals(OptionalInt.of(0), transactionManager.lastAckedSequence(tp0));
 
         assertFalse(request2.isDone());
@@ -2432,7 +2432,7 @@ public class SenderTest {
             sender.runOnce(); // connect
             sender.runOnce(); // send produce request
 
-            assertEquals(2, txnManager.sequenceNumber(tp).longValue(), "The next sequence should be 2");
+            assertEquals(2, txnManager.sequenceNumber(tp), "The next sequence should be 2");
             String id = client.requests().peek().destination();
             assertEquals(ApiKeys.PRODUCE, client.requests().peek().requestBuilder().apiKey());
             Node node = new Node(Integer.parseInt(id), "localhost", 0);
@@ -2443,12 +2443,12 @@ public class SenderTest {
             responseMap.put(tp, new ProduceResponse.PartitionResponse(Errors.MESSAGE_TOO_LARGE));
             client.respond(new ProduceResponse(responseMap));
             sender.runOnce(); // split and reenqueue
-            assertEquals(2, txnManager.sequenceNumber(tp).longValue(), "The next sequence should be 2");
+            assertEquals(2, txnManager.sequenceNumber(tp), "The next sequence should be 2");
             // The compression ratio should have been improved once.
             assertEquals(CompressionType.GZIP.rate - CompressionRatioEstimator.COMPRESSION_RATIO_IMPROVING_STEP,
                     CompressionRatioEstimator.estimation(topic, CompressionType.GZIP), 0.01);
             sender.runOnce(); // send the first produce request
-            assertEquals(2, txnManager.sequenceNumber(tp).longValue(), "The next sequence number should be 2");
+            assertEquals(2, txnManager.sequenceNumber(tp), "The next sequence number should be 2");
             assertFalse(f1.isDone(), "The future shouldn't have been done.");
             assertFalse(f2.isDone(), "The future shouldn't have been done.");
             id = client.requests().peek().destination();
@@ -2463,7 +2463,7 @@ public class SenderTest {
 
             sender.runOnce(); // receive
             assertTrue(f1.isDone(), "The future should have been done.");
-            assertEquals(2, txnManager.sequenceNumber(tp).longValue(), "The next sequence number should still be 2");
+            assertEquals(2, txnManager.sequenceNumber(tp), "The next sequence number should still be 2");
             assertEquals(OptionalInt.of(0), txnManager.lastAckedSequence(tp), "The last ack'd sequence number should be 0");
             assertFalse(f2.isDone(), "The future shouldn't have been done.");
             assertEquals(0L, f1.get().offset(), "Offset of the first message should be 0");
@@ -2480,7 +2480,7 @@ public class SenderTest {
 
             sender.runOnce(); // receive
             assertTrue(f2.isDone(), "The future should have been done.");
-            assertEquals(2, txnManager.sequenceNumber(tp).longValue(), "The next sequence number should be 2");
+            assertEquals(2, txnManager.sequenceNumber(tp), "The next sequence number should be 2");
             assertEquals(OptionalInt.of(1), txnManager.lastAckedSequence(tp), "The last ack'd sequence number should be 1");
             assertEquals(1L, f2.get().offset(), "Offset of the first message should be 1");
             assertTrue(accumulator.getDeque(tp).isEmpty(), "There should be no batch in the accumulator");
