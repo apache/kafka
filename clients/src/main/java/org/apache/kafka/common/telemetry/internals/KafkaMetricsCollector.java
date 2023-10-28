@@ -289,7 +289,7 @@ public class KafkaMetricsCollector implements MetricsCollector {
 
         private final Map<MetricKey, KafkaMetric> metricMap = new ConcurrentHashMap<>();
         private final LastValueTracker<Double> doubleDeltas = new LastValueTracker<>();
-        private final ConcurrentMap<MetricKey, Instant> metricAdded = new ConcurrentHashMap<>();
+        private final Map<MetricKey, Instant> metricAdded = new ConcurrentHashMap<>();
 
         private Instant instantAdded(MetricKey metricKey) {
             // lookup when the metric was added to use it as the interval start. That should always

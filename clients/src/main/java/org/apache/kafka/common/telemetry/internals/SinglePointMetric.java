@@ -98,9 +98,6 @@ public class SinglePointMetric implements MetricKeyable {
      */
     private static SinglePointMetric sum(MetricKey metricKey, AggregationTemporality aggregationTemporality,
         boolean monotonic, NumberDataPoint.Builder point) {
-        Objects.requireNonNull(point, "metric number data point cannot be null");
-        Objects.requireNonNull(metricKey, "metric key cannot be null");
-
         point.addAllAttributes(asAttributes(metricKey.tags()));
 
         Metric.Builder metric = Metric.newBuilder().setName(metricKey.getName());
@@ -113,9 +110,6 @@ public class SinglePointMetric implements MetricKeyable {
     }
 
     private static SinglePointMetric gauge(MetricKey metricKey, NumberDataPoint.Builder point) {
-        Objects.requireNonNull(point, "metric number data point cannot be null");
-        Objects.requireNonNull(metricKey, "metric key cannot be null");
-
         point.addAllAttributes(asAttributes(metricKey.tags()));
 
         Metric.Builder metric = Metric.newBuilder().setName(metricKey.getName());
