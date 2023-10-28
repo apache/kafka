@@ -70,7 +70,7 @@ public class KafkaMetricsCollectorTest {
         when(clock.instant()).thenReturn(timeReference);
 
         // Define metric naming strategy.
-        metricNamingStrategy = MetricNamingConvention.getClientTelemetryMetricNamingStrategy(DOMAIN);
+        metricNamingStrategy = TelemetryMetricNamingConvention.getClientTelemetryMetricNamingStrategy(DOMAIN);
 
         // Define collector to test.
         collector = new KafkaMetricsCollector(

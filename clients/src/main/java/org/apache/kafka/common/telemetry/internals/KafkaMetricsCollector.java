@@ -261,11 +261,6 @@ public class KafkaMetricsCollector implements MetricsCollector {
         );
     }
 
-    @Override
-    public String toString() {
-        return this.getClass().getCanonicalName();
-    }
-
     private static boolean isMeasurable(KafkaMetric metric) {
         // KafkaMetric does not expose the internal MetricValueProvider and throws an IllegalStateException exception
         // if .measurable() is called for a Gauge.
