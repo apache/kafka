@@ -409,7 +409,7 @@ class ReplicaManager(val config: KafkaConfig,
     warn(s"Found stray partitions ${strayPartitions.mkString(",")}")
 
     // First, stop the partitions. This will shutdown the fetchers and other managers
-    val partitionsToStop = strayPartitions.map { tp => tp -> false }.toMap
+    val partitionsToStop = strayPartitions.map(tp => StopPartition(tp, false)).toSet
     stopPartitions(partitionsToStop).forKeyValue { (topicPartition, exception) =>
       error(s"Unable to stop stray partition $topicPartition", exception)
     }
@@ -573,20 +573,6 @@ class ReplicaManager(val config: KafkaConfig,
         (responseMap, Errors.NONE)
       }
     }
-  }
-
-  /**
-   * Stop the given partitions.
-   *
-   * @param partitionsToStop A map from a topic partition to a boolean indicating
-   *                         whether the partition should be deleted.
-   * @return A map from partitions to exceptions which occurred.
-   *         If no errors occurred, the map will be empty.
-   */
-  private def stopPartitions(partitionsToStop: Map[TopicPartition, Boolean]): Map[TopicPartition, Throwable] = {
-    stopPartitions(partitionsToStop.map {
-      case (topicPartition, deleteLocalLog) => StopPartition(topicPartition, deleteLocalLog)
-    }.toSet)
   }
 
   /**
@@ -2659,13 +2645,14 @@ class ReplicaManager(val config: KafkaConfig,
     }
 
     if (partitionsToStopFetching.nonEmpty) {
-      stopPartitions(partitionsToStopFetching)
+      val partitionsToStop = partitionsToStopFetching.map { case (tp, deleteLocalLog) => StopPartition(tp, deleteLocalLog) }.toSet
+      stopPartitions(partitionsToStop)
       stateChangeLogger.info(s"Stopped fetchers as part of controlled shutdown for ${partitionsToStopFetching.size} partitions")
     }
   }
 
   def deleteStrayReplicas(topicPartitions: Iterable[TopicPartition]): Unit = {
-    stopPartitions(topicPartitions.map(tp => tp -> true).toMap).forKeyValue { (topicPartition, exception) =>
+    stopPartitions(topicPartitions.map(tp => StopPartition(tp, true)).toSet).forKeyValue { (topicPartition, exception) =>
       exception match {
         case e: KafkaStorageException =>
           stateChangeLogger.error(s"Unable to delete stray replica $topicPartition because " +
