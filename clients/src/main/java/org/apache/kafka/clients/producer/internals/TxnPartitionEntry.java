@@ -123,6 +123,18 @@ class TxnPartitionEntry {
         lastAckedSequence = NO_LAST_ACKED_SEQUENCE_NUMBER;
     }
 
+    int maybeUpdateLastAckedSequence(int sequence) {
+        if (sequence > lastAckedSequence) {
+            lastAckedSequence = sequence;
+            return sequence;
+        }
+        return lastAckedSequence;
+    }
+
+    void removeInFlightBatch(ProducerBatch batch) {
+        inflightBatchesBySequence.remove(batch);
+    }
+
     void adjustSequencesDueToFailedBatch(long baseSequence, int recordCount) {
         decrementSequence(recordCount);
         resetSequenceNumbers(inFlightBatch -> {
@@ -136,18 +148,6 @@ class TxnPartitionEntry {
 
             inFlightBatch.resetProducerState(new ProducerIdAndEpoch(inFlightBatch.producerId(), inFlightBatch.producerEpoch()), newSequence);
         });
-    }
-
-    int maybeUpdateLastAckedSequence(int sequence) {
-        if (sequence > lastAckedSequence) {
-            lastAckedSequence = sequence;
-            return sequence;
-        }
-        return lastAckedSequence;
-    }
-
-    void removeInFlightBatch(ProducerBatch batch) {
-        inflightBatchesBySequence.remove(batch);
     }
 
     private void resetSequenceNumbers(Consumer<ProducerBatch> resetSequence) {

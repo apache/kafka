@@ -3450,7 +3450,6 @@ public class TransactionManagerTest {
 
         assertFalse(transactionManager.hasInflightBatches(tp1));
         assertEquals(1, transactionManager.sequenceNumber(tp1));
-        assertEquals(1, transactionManager.sequenceNumber(tp1));
     }
 
     @Test
