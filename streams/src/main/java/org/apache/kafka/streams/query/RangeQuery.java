@@ -30,7 +30,9 @@ import java.util.Optional;
  * <p>
  *  A range query retrieves a set of records, specified using an upper and/or lower bound on the keys.
  * <p>
- * A scan query retrieves all records contained in the store.
+ *  A scan query retrieves all records contained in the store.
+ * <p>
+ *  Keys' order is based on the serialized byte[] of the keys, not the 'logical' key order.
  * <p>
  */
 @Evolving
@@ -60,7 +62,8 @@ public final class RangeQuery<K, V> implements Query<KeyValueIterator<K, V>> {
     }
 
     /**
-     * Determines if the query keys are in ascending order.
+     * Determines if the serialized byte[] of the keys in ascending order.
+     * Order is based on the serialized byte[] of the keys, not the 'logical' key order.
      * @return true if ascending, false otherwise.
      */
     public boolean isKeyAscending() {
@@ -68,7 +71,8 @@ public final class RangeQuery<K, V> implements Query<KeyValueIterator<K, V>> {
     }
 
     /**
-     * Set the query to return keys in descending order.
+     * Set the query to return the serialized byte[] of the keys in descending order.
+     * Order is based on the serialized byte[] of the keys, not the 'logical' key order.
      * @return a new RangeQuery instance with descending flag set.
      */
     public RangeQuery<K, V> withDescendingKeys() {
