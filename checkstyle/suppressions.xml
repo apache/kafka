@@ -61,6 +61,8 @@
               files="AbstractRequest.java"/>
     <suppress checks="ClassFanOutComplexity"
               files="AbstractResponse.java"/>
+    <suppress checks="ClassFanOutComplexity"
+              files="PrototypeAsyncConsumer.java"/>
 
     <suppress checks="MethodLength"
               files="(KerberosLogin|RequestResponseTest|ConnectMetricsRegistry|KafkaConsumer|AbstractStickyAssignor|AbstractRequest|AbstractResponse).java"/>
@@ -68,7 +70,7 @@
     <suppress checks="ParameterNumber"
               files="(NetworkClient|FieldSpec|KafkaRaftClient).java"/>
     <suppress checks="ParameterNumber"
-              files="(KafkaConsumer|ConsumerCoordinator).java"/>
+              files="(KafkaConsumer|PrototypeAsyncConsumer|ConsumerCoordinator).java"/>
     <suppress checks="ParameterNumber"
               files="(RecordAccumulator|Sender).java"/>
     <suppress checks="ParameterNumber"
@@ -79,7 +81,7 @@
               files="MemoryRecordsBuilder.java"/>
 
     <suppress checks="ClassDataAbstractionCoupling"
-              files="(KafkaConsumer|ConsumerCoordinator|AbstractFetch|KafkaProducer|AbstractRequest|AbstractResponse|TransactionManager|Admin|KafkaAdminClient|MockAdminClient|KafkaRaftClient|KafkaRaftClientTest).java"/>
+              files="(KafkaConsumer|PrototypeAsyncConsumer|ConsumerCoordinator|AbstractFetch|KafkaProducer|AbstractRequest|AbstractResponse|TransactionManager|Admin|KafkaAdminClient|MockAdminClient|KafkaRaftClient|KafkaRaftClientTest).java"/>
     <suppress checks="ClassDataAbstractionCoupling"
               files="(Errors|SaslAuthenticatorTest|AgentTest|CoordinatorTest).java"/>
 
@@ -108,10 +110,10 @@
 
     <!-- Clients tests -->
     <suppress checks="ClassDataAbstractionCoupling"
-              files="(Sender|Fetcher|OffsetFetcher|KafkaConsumer|Metrics|RequestResponse|TransactionManager|KafkaAdminClient|Message|KafkaProducer)Test.java"/>
+              files="(Sender|Fetcher|FetchRequestManager|OffsetFetcher|KafkaConsumer|PrototypeAsyncConsumer|Metrics|RequestResponse|TransactionManager|KafkaAdminClient|Message|KafkaProducer)Test.java"/>
 
     <suppress checks="ClassFanOutComplexity"
-              files="(ConsumerCoordinator|KafkaConsumer|RequestResponse|Fetcher|KafkaAdminClient|Message|KafkaProducer)Test.java"/>
+              files="(ConsumerCoordinator|KafkaConsumer|RequestResponse|Fetcher|FetchRequestManager|KafkaAdminClient|Message|KafkaProducer)Test.java"/>
 
     <suppress checks="ClassFanOutComplexity"
               files="MockAdminClient.java"/>
@@ -120,7 +122,7 @@
               files="(OffsetFetcher|RequestResponse)Test.java"/>
 
     <suppress checks="JavaNCSS"
-              files="RequestResponseTest.java|FetcherTest.java|KafkaAdminClientTest.java"/>
+              files="RequestResponseTest.java|FetcherTest.java|FetchRequestManagerTest.java|KafkaAdminClientTest.java"/>
 
     <suppress checks="NPathComplexity"
               files="MemoryRecordsTest|MetricsTest|RequestResponseTest|TestSslUtils|AclAuthorizerBenchmark"/>

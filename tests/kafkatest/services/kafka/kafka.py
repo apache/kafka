@@ -203,7 +203,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                  isolated_kafka=None,
                  controller_num_nodes_override=0,
                  allow_zk_with_kraft=False,
-                 quorum_info_provider=None
+                 quorum_info_provider=None,
+                 use_new_coordinator=None
                  ):
         """
         :param context: test context
@@ -264,6 +265,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         :param int controller_num_nodes_override: the number of nodes to use in the cluster, instead of 5, 3, or 1 based on num_nodes, if positive, not using ZooKeeper, and isolated_kafka is not None; ignored otherwise
         :param bool allow_zk_with_kraft: if True, then allow a KRaft broker or controller to also use ZooKeeper
         :param quorum_info_provider: A function that takes this KafkaService as an argument and returns a ServiceQuorumInfo. If this is None, then the ServiceQuorumInfo is generated from the test context
+        :param use_new_coordinator: When true, use the new implementation of the group coordinator as per KIP-848. If this is None, the default existing group coordinator is used.
         """
 
         self.zk = zk
@@ -276,6 +278,19 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.controller_quorum = None # will define below if necessary
         self.isolated_controller_quorum = None # will define below if necessary
         self.configured_for_zk_migration = False
+        
+        # Set use_new_coordinator based on context and arguments.
+        default_use_new_coordinator = False
+       
+        if use_new_coordinator is None:
+            arg_name = 'use_new_coordinator'
+            if context.injected_args is not None:
+                use_new_coordinator = context.injected_args.get(arg_name)
+            if use_new_coordinator is None:
+                use_new_coordinator = context.globals.get(arg_name, default_use_new_coordinator)
+        
+        # Assign the determined value.
+        self.use_new_coordinator = use_new_coordinator
 
         if num_nodes < 1:
             raise Exception("Must set a positive number of nodes: %i" % num_nodes)
@@ -407,6 +422,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             kraft_broker_configs = {
                 config_property.PORT: config_property.FIRST_BROKER_PORT,
                 config_property.NODE_ID: self.idx(node),
+                config_property.NEW_GROUP_COORDINATOR_ENABLE: use_new_coordinator
             }
             kraft_broker_plus_zk_configs = kraft_broker_configs.copy()
             kraft_broker_plus_zk_configs.update(zk_broker_configs)
@@ -764,6 +780,9 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             else:
                 override_configs[config_property.ZOOKEEPER_SSL_CLIENT_ENABLE] = 'false'
 
+        if self.use_new_coordinator:
+            override_configs[config_property.NEW_GROUP_COORDINATOR_ENABLE] = 'true'
+    
         for prop in self.server_prop_overrides:
             override_configs[prop[0]] = prop[1]
 

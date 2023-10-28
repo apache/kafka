@@ -308,7 +308,8 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         }
     }
 
-    private void transitionTo(MigrationDriverState newState) {
+    // Visible for testing
+    void transitionTo(MigrationDriverState newState) {
         if (!isValidStateChange(newState)) {
             throw new IllegalStateException(
                 String.format("Invalid transition in migration driver from %s to %s", migrationState, newState));
@@ -498,6 +499,17 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                 return;
             }
 
+            // Until the metadata has been migrated, the migrationLeadershipState offset is -1. We need to ignore
+            // metadata images until we see that the migration has happened and the image exceeds the offset of the
+            // migration
+            if (!migrationLeadershipState.initialZkMigrationComplete()) {
+                log.info("Ignoring {} {} since the migration has not finished.", metadataType, provenance);
+                completionHandler.accept(null);
+                return;
+            }
+
+            // If the migration has finished, the migrationLeadershipState offset will be positive. Ignore any images
+            // which are older than the offset that has been written to ZK.
             if (image.highestOffsetAndEpoch().compareTo(migrationLeadershipState.offsetAndEpoch()) < 0) {
                 log.info("Ignoring {} {} which contains metadata that has already been written to ZK.", metadataType, provenance);
                 completionHandler.accept(null);
@@ -532,13 +544,18 @@ public class KRaftMigrationDriver implements MetadataPublisher {
             applyMigrationOperation("Updating ZK migration state after " + metadataType,
                     state -> zkMigrationClient.setMigrationRecoveryState(zkStateAfterDualWrite));
 
-            // TODO: Unhappy path: Probably relinquish leadership and let new controller
-            //  retry the write?
-            if (delta.topicsDelta() != null || delta.clusterDelta() != null) {
-                log.trace("Sending RPCs to brokers for metadata {}.", metadataType);
-                propagator.sendRPCsToBrokersFromMetadataDelta(delta, image, migrationLeadershipState.zkControllerEpoch());
+            if (isSnapshot) {
+                // When we load a snapshot, need to send full metadata updates to the brokers
+                log.debug("Sending full metadata RPCs to brokers for snapshot.");
+                propagator.sendRPCsToBrokersFromMetadataImage(image, migrationLeadershipState.zkControllerEpoch());
             } else {
-                log.trace("Not sending RPCs to brokers for metadata {} since no relevant metadata has changed", metadataType);
+                // delta
+                if (delta.topicsDelta() != null || delta.clusterDelta() != null) {
+                    log.trace("Sending incremental metadata RPCs to brokers for delta.");
+                    propagator.sendRPCsToBrokersFromMetadataDelta(delta, image, migrationLeadershipState.zkControllerEpoch());
+                } else {
+                    log.trace("Not sending RPCs to brokers for metadata {} since no relevant metadata has changed", metadataType);
+                }
             }
 
             completionHandler.accept(null);
@@ -699,6 +716,13 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         @Override
         public void run() throws Exception {
             if (checkDriverState(MigrationDriverState.SYNC_KRAFT_TO_ZK)) {
+                // The migration offset will be non-negative at this point, so we just need to check that the image
+                // we have actually includes the migration metadata.
+                if (image.highestOffsetAndEpoch().compareTo(migrationLeadershipState.offsetAndEpoch()) < 0) {
+                    log.info("Ignoring image {} which does not contain a superset of the metadata in ZK. Staying in " +
+                             "SYNC_KRAFT_TO_ZK until a newer image is loaded", image.provenance());
+                    return;
+                }
                 log.info("Performing a full metadata sync from KRaft to ZK.");
                 Map<String, Integer> dualWriteCounts = new TreeMap<>();
                 long startTime = time.nanoseconds();
