@@ -18,6 +18,8 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
+import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
@@ -58,6 +60,7 @@ import java.util.Collections;
  * <p>See {@link HeartbeatRequestState} for more details.</p>
  */
 public class HeartbeatRequestManager implements RequestManager {
+
     private final Logger logger;
     private final Time time;
 
@@ -90,22 +93,22 @@ public class HeartbeatRequestManager implements RequestManager {
     /**
      * ErrorEventHandler allows the background thread to propagate errors back to the user
      */
-    private final ErrorEventHandler nonRetriableErrorHandler;
+    private final BackgroundEventHandler backgroundEventHandler;
 
     public HeartbeatRequestManager(
-        final Time time,
         final LogContext logContext,
+        final Time time,
         final ConsumerConfig config,
         final CoordinatorRequestManager coordinatorRequestManager,
         final SubscriptionState subscriptions,
         final MembershipManager membershipManager,
-        final ErrorEventHandler nonRetriableErrorHandler) {
+        final BackgroundEventHandler backgroundEventHandler) {
         this.coordinatorRequestManager = coordinatorRequestManager;
         this.time = time;
         this.logger = logContext.logger(getClass());
         this.subscriptions = subscriptions;
         this.membershipManager = membershipManager;
-        this.nonRetriableErrorHandler = nonRetriableErrorHandler;
+        this.backgroundEventHandler = backgroundEventHandler;
         this.rebalanceTimeoutMs = config.getInt(CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG);
         long retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
         long retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
@@ -122,7 +125,7 @@ public class HeartbeatRequestManager implements RequestManager {
         final SubscriptionState subscriptions,
         final MembershipManager membershipManager,
         final HeartbeatRequestState heartbeatRequestState,
-        final ErrorEventHandler nonRetriableErrorHandler) {
+        final BackgroundEventHandler backgroundEventHandler) {
         this.logger = logContext.logger(this.getClass());
         this.time = time;
         this.subscriptions = subscriptions;
@@ -130,7 +133,7 @@ public class HeartbeatRequestManager implements RequestManager {
         this.coordinatorRequestManager = coordinatorRequestManager;
         this.heartbeatRequestState = heartbeatRequestState;
         this.membershipManager = membershipManager;
-        this.nonRetriableErrorHandler = nonRetriableErrorHandler;
+        this.backgroundEventHandler = backgroundEventHandler;
     }
 
     /**
@@ -146,18 +149,14 @@ public class HeartbeatRequestManager implements RequestManager {
      */
     @Override
     public NetworkClientDelegate.PollResult poll(long currentTimeMs) {
-        if (!coordinatorRequestManager.coordinator().isPresent() || !membershipManager.shouldSendHeartbeat()) {
-            return new NetworkClientDelegate.PollResult(
-                Long.MAX_VALUE, Collections.emptyList());
-        }
+        if (!coordinatorRequestManager.coordinator().isPresent() || !membershipManager.shouldSendHeartbeat())
+            return NetworkClientDelegate.PollResult.EMPTY;
 
         // TODO: We will need to send a heartbeat response after partitions being revoke. This needs to be
         //  implemented either with or after the partition reconciliation logic.
-        if (!heartbeatRequestState.canSendRequest(currentTimeMs)) {
-            return new NetworkClientDelegate.PollResult(
-                heartbeatRequestState.nextHeartbeatMs(currentTimeMs),
-                Collections.emptyList());
-        }
+        if (!heartbeatRequestState.canSendRequest(currentTimeMs))
+            return new NetworkClientDelegate.PollResult(heartbeatRequestState.nextHeartbeatMs(currentTimeMs));
+
         this.heartbeatRequestState.onSendAttempt(currentTimeMs);
         NetworkClientDelegate.UnsentRequest request = makeHeartbeatRequest();
         return new NetworkClientDelegate.PollResult(heartbeatRequestState.heartbeatIntervalMs, Collections.singletonList(request));
@@ -198,7 +197,7 @@ public class HeartbeatRequestManager implements RequestManager {
         this.heartbeatRequestState.onFailedAttempt(responseTimeMs);
         if (exception instanceof RetriableException) {
             String message = String.format("GroupHeartbeatRequest failed because of the retriable exception. " +
-                    "Will retry in %s ms: {}",
+                    "Will retry in %s ms: %s",
                 heartbeatRequestState.remainingBackoffMs(responseTimeMs),
                 exception.getMessage());
             logger.debug(message);
@@ -223,12 +222,13 @@ public class HeartbeatRequestManager implements RequestManager {
                                  final long currentTimeMs) {
         Errors error = Errors.forCode(response.data().errorCode());
         String errorMessage = response.data().errorMessage();
+        String message;
         // TODO: upon encountering a fatal/fenced error, trigger onPartitionLost logic to give up the current
         //  assignments.
         switch (error) {
             case NOT_COORDINATOR:
                 // the manager should retry immediately when the coordinator node becomes available again
-                String message = String.format("GroupHeartbeatRequest failed because the group coordinator %s is incorrect. " +
+                message = String.format("GroupHeartbeatRequest failed because the group coordinator %s is incorrect. " +
                                 "Will attempt to find the coordinator again and retry",
                         coordinatorRequestManager.coordinator());
                 logInfo(message, response, currentTimeMs);
@@ -274,7 +274,7 @@ public class HeartbeatRequestManager implements RequestManager {
                 break;
 
             case FENCED_MEMBER_EPOCH:
-                message = String.format("GroupHeartbeatRequest failed because member epoch %s is invalid. " +
+                message = String.format("GroupHeartbeatRequest failed because member ID %s with epoch %s is invalid. " +
                                 "Will abandon all partitions and rejoin the group",
                         membershipManager.memberId(), membershipManager.memberEpoch());
                 logInfo(message, response, currentTimeMs);
@@ -282,7 +282,7 @@ public class HeartbeatRequestManager implements RequestManager {
                 break;
 
             case UNKNOWN_MEMBER_ID:
-                message = String.format("GroupHeartbeatRequest failed because member id %s is invalid. " +
+                message = String.format("GroupHeartbeatRequest failed because member of unknown ID %s with epoch %s is invalid. " +
                                 "Will abandon all partitions and rejoin the group",
                         membershipManager.memberId(), membershipManager.memberEpoch());
                 logInfo(message, response, currentTimeMs);
@@ -307,7 +307,7 @@ public class HeartbeatRequestManager implements RequestManager {
     }
 
     private void handleFatalFailure(Throwable error) {
-        nonRetriableErrorHandler.handle(error);
+        backgroundEventHandler.add(new ErrorBackgroundEvent(error));
         membershipManager.transitionToFailed();
     }
 

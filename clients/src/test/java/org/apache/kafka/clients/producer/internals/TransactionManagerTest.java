@@ -564,9 +564,9 @@ public class TransactionManagerTest {
     @Test
     public void testDefaultSequenceNumber() {
         initializeTransactionManager(Optional.empty());
-        assertEquals((int) transactionManager.sequenceNumber(tp0), 0);
+        assertEquals(transactionManager.sequenceNumber(tp0), 0);
         transactionManager.incrementSequenceNumber(tp0, 3);
-        assertEquals((int) transactionManager.sequenceNumber(tp0), 3);
+        assertEquals(transactionManager.sequenceNumber(tp0), 3);
     }
 
     @Test
@@ -579,7 +579,7 @@ public class TransactionManagerTest {
         ProducerBatch b3 = writeIdempotentBatchWithValue(transactionManager, tp0, "3");
         ProducerBatch b4 = writeIdempotentBatchWithValue(transactionManager, tp0, "4");
         ProducerBatch b5 = writeIdempotentBatchWithValue(transactionManager, tp0, "5");
-        assertEquals(5, transactionManager.sequenceNumber(tp0).intValue());
+        assertEquals(5, transactionManager.sequenceNumber(tp0));
 
         // First batch succeeds
         long b1AppendTime = time.milliseconds();
@@ -624,8 +624,8 @@ public class TransactionManagerTest {
 
         ProducerBatch tp0b2 = writeIdempotentBatchWithValue(transactionManager, tp0, "2");
         ProducerBatch tp1b2 = writeIdempotentBatchWithValue(transactionManager, tp1, "2");
-        assertEquals(2, transactionManager.sequenceNumber(tp0).intValue());
-        assertEquals(2, transactionManager.sequenceNumber(tp1).intValue());
+        assertEquals(2, transactionManager.sequenceNumber(tp0));
+        assertEquals(2, transactionManager.sequenceNumber(tp1));
 
         ProduceResponse.PartitionResponse b1Response = new ProduceResponse.PartitionResponse(
                 Errors.UNKNOWN_PRODUCER_ID, -1, -1, 400L);
@@ -637,9 +637,9 @@ public class TransactionManagerTest {
 
         transactionManager.bumpIdempotentEpochAndResetIdIfNeeded();
 
-        assertEquals(1, transactionManager.sequenceNumber(tp0).intValue());
+        assertEquals(1, transactionManager.sequenceNumber(tp0));
         assertEquals(tp0b2, transactionManager.nextBatchBySequence(tp0));
-        assertEquals(2, transactionManager.sequenceNumber(tp1).intValue());
+        assertEquals(2, transactionManager.sequenceNumber(tp1));
         assertEquals(tp1b2, transactionManager.nextBatchBySequence(tp1));
     }
 
@@ -654,7 +654,7 @@ public class TransactionManagerTest {
         writeIdempotentBatchWithValue(transactionManager, tp1, "1");
 
         ProducerBatch b2 = writeIdempotentBatchWithValue(transactionManager, tp0, "2");
-        assertEquals(2, transactionManager.sequenceNumber(tp0).intValue());
+        assertEquals(2, transactionManager.sequenceNumber(tp0));
 
         // The producerId might be reset due to a failure on another partition
         transactionManager.requestEpochBumpForPartition(tp1);
@@ -666,7 +666,7 @@ public class TransactionManagerTest {
                 Errors.NONE, 500L, time.milliseconds(), 0L);
         transactionManager.handleCompletedBatch(b1, b1Response);
 
-        assertEquals(2, transactionManager.sequenceNumber(tp0).intValue());
+        assertEquals(2, transactionManager.sequenceNumber(tp0));
         assertEquals(0, transactionManager.lastAckedSequence(tp0).getAsInt());
         assertEquals(b2, transactionManager.nextBatchBySequence(tp0));
         assertEquals(epoch, transactionManager.nextBatchBySequence(tp0).producerEpoch());
@@ -676,7 +676,7 @@ public class TransactionManagerTest {
         transactionManager.handleCompletedBatch(b2, b2Response);
 
         transactionManager.maybeUpdateProducerIdAndEpoch(tp0);
-        assertEquals(0, transactionManager.sequenceNumber(tp0).intValue());
+        assertEquals(0, transactionManager.sequenceNumber(tp0));
         assertFalse(transactionManager.lastAckedSequence(tp0).isPresent());
         assertNull(transactionManager.nextBatchBySequence(tp0));
     }
@@ -698,23 +698,23 @@ public class TransactionManagerTest {
                 MAX_REQUEST_SIZE, ACKS_ALL, MAX_RETRIES, new SenderMetricsRegistry(metrics), this.time, requestTimeout,
                 0, transactionManager, apiVersions);
 
-        assertEquals(0, transactionManager.sequenceNumber(tp0).intValue());
+        assertEquals(0, transactionManager.sequenceNumber(tp0));
 
         Future<RecordMetadata> responseFuture1 = accumulator.append(tp0.topic(), tp0.partition(), time.milliseconds(),
                 "1".getBytes(), "1".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, false, time.milliseconds(),
                 TestUtils.singletonCluster()).future;
         sender.runOnce();
-        assertEquals(1, transactionManager.sequenceNumber(tp0).intValue());
+        assertEquals(1, transactionManager.sequenceNumber(tp0));
 
         time.sleep(requestTimeout);
         sender.runOnce();
         assertEquals(0, client.inFlightRequestCount());
         assertTrue(transactionManager.hasInflightBatches(tp0));
-        assertEquals(1, transactionManager.sequenceNumber(tp0).intValue());
+        assertEquals(1, transactionManager.sequenceNumber(tp0));
         sender.runOnce(); // retry
         assertEquals(1, client.inFlightRequestCount());
         assertTrue(transactionManager.hasInflightBatches(tp0));
-        assertEquals(1, transactionManager.sequenceNumber(tp0).intValue());
+        assertEquals(1, transactionManager.sequenceNumber(tp0));
 
         time.sleep(5000); // delivery time out
         sender.runOnce();
@@ -729,7 +729,7 @@ public class TransactionManagerTest {
 
         sender.runOnce(); // bump the epoch
         assertEquals(epoch + 1, transactionManager.producerIdAndEpoch().epoch);
-        assertEquals(0, transactionManager.sequenceNumber(tp0).intValue());
+        assertEquals(0, transactionManager.sequenceNumber(tp0));
 
         Future<RecordMetadata> responseFuture2 = accumulator.append(tp0.topic(), tp0.partition(), time.milliseconds(),
                 "2".getBytes(), "2".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, false, time.milliseconds(),
@@ -737,7 +737,7 @@ public class TransactionManagerTest {
         sender.runOnce();
         sender.runOnce();
         assertEquals(0, transactionManager.firstInFlightSequence(tp0));
-        assertEquals(1, transactionManager.sequenceNumber(tp0).intValue());
+        assertEquals(1, transactionManager.sequenceNumber(tp0));
 
         time.sleep(5000); // request time out again
         sender.runOnce();
@@ -770,30 +770,30 @@ public class TransactionManagerTest {
     @Test
     public void testSequenceNumberOverflow() {
         initializeTransactionManager(Optional.empty());
-        assertEquals((int) transactionManager.sequenceNumber(tp0), 0);
+        assertEquals(transactionManager.sequenceNumber(tp0), 0);
         transactionManager.incrementSequenceNumber(tp0, Integer.MAX_VALUE);
-        assertEquals((int) transactionManager.sequenceNumber(tp0), Integer.MAX_VALUE);
+        assertEquals(transactionManager.sequenceNumber(tp0), Integer.MAX_VALUE);
         transactionManager.incrementSequenceNumber(tp0, 100);
-        assertEquals((int) transactionManager.sequenceNumber(tp0), 99);
+        assertEquals(transactionManager.sequenceNumber(tp0), 99);
         transactionManager.incrementSequenceNumber(tp0, Integer.MAX_VALUE);
-        assertEquals((int) transactionManager.sequenceNumber(tp0), 98);
+        assertEquals(transactionManager.sequenceNumber(tp0), 98);
     }
 
     @Test
     public void testProducerIdReset() {
         initializeTransactionManager(Optional.empty());
         initializeIdempotentProducerId(15L, Short.MAX_VALUE);
-        assertEquals((int) transactionManager.sequenceNumber(tp0), 0);
-        assertEquals((int) transactionManager.sequenceNumber(tp1), 0);
+        assertEquals(transactionManager.sequenceNumber(tp0), 0);
+        assertEquals(transactionManager.sequenceNumber(tp1), 0);
         transactionManager.incrementSequenceNumber(tp0, 3);
-        assertEquals((int) transactionManager.sequenceNumber(tp0), 3);
+        assertEquals(transactionManager.sequenceNumber(tp0), 3);
         transactionManager.incrementSequenceNumber(tp1, 3);
-        assertEquals((int) transactionManager.sequenceNumber(tp1), 3);
+        assertEquals(transactionManager.sequenceNumber(tp1), 3);
 
         transactionManager.requestEpochBumpForPartition(tp0);
         transactionManager.bumpIdempotentEpochAndResetIdIfNeeded();
-        assertEquals((int) transactionManager.sequenceNumber(tp0), 0);
-        assertEquals((int) transactionManager.sequenceNumber(tp1), 3);
+        assertEquals(transactionManager.sequenceNumber(tp0), 0);
+        assertEquals(transactionManager.sequenceNumber(tp1), 3);
     }
 
     @Test
@@ -2835,7 +2835,7 @@ public class TransactionManagerTest {
         ProducerBatch b1 = writeIdempotentBatchWithValue(transactionManager, tp0, "1");
         ProducerBatch b2 = writeIdempotentBatchWithValue(transactionManager, tp0, "2");
         ProducerBatch b3 = writeIdempotentBatchWithValue(transactionManager, tp0, "3");
-        assertEquals(3, transactionManager.sequenceNumber(tp0).intValue());
+        assertEquals(3, transactionManager.sequenceNumber(tp0));
 
         // The first batch fails with a timeout
         transactionManager.markSequenceUnresolved(b1);
@@ -2860,7 +2860,7 @@ public class TransactionManagerTest {
         transactionManager.maybeResolveSequences();
         assertEquals(producerIdAndEpoch, transactionManager.producerIdAndEpoch());
         assertFalse(transactionManager.hasUnresolvedSequences());
-        assertEquals(3, transactionManager.sequenceNumber(tp0).intValue());
+        assertEquals(3, transactionManager.sequenceNumber(tp0));
     }
 
     @Test
@@ -2893,7 +2893,7 @@ public class TransactionManagerTest {
         // Run sender loop to trigger epoch bump
         runUntil(() -> transactionManager.producerIdAndEpoch().epoch == 2);
         assertFalse(transactionManager.hasUnresolvedSequences());
-        assertEquals(0, transactionManager.sequenceNumber(tp0).intValue());
+        assertEquals(0, transactionManager.sequenceNumber(tp0));
     }
 
     @Test
@@ -2966,7 +2966,7 @@ public class TransactionManagerTest {
         prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, producerId);
         runUntil(() -> transactionManager.isPartitionAdded(tp0));  // Send AddPartitionsRequest
 
-        assertEquals(2, transactionManager.sequenceNumber(tp0).intValue());
+        assertEquals(2, transactionManager.sequenceNumber(tp0));
     }
 
     @Test
@@ -3026,8 +3026,8 @@ public class TransactionManagerTest {
         prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, producerId);
         runUntil(() -> transactionManager.isPartitionAdded(tp0));
 
-        assertEquals(0, transactionManager.sequenceNumber(tp0).intValue());
-        assertEquals(1, transactionManager.sequenceNumber(tp1).intValue());
+        assertEquals(0, transactionManager.sequenceNumber(tp0));
+        assertEquals(1, transactionManager.sequenceNumber(tp1));
     }
 
     @Test
@@ -3073,7 +3073,7 @@ public class TransactionManagerTest {
         prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, bumpedEpoch, producerId);
         runUntil(() -> transactionManager.isPartitionAdded(tp0));
 
-        assertEquals(0, transactionManager.sequenceNumber(tp0).intValue());
+        assertEquals(0, transactionManager.sequenceNumber(tp0));
     }
 
     @Test
@@ -3120,7 +3120,7 @@ public class TransactionManagerTest {
         prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, bumpedEpoch, producerId);
         runUntil(() -> transactionManager.isPartitionAdded(tp0));
 
-        assertEquals(0, transactionManager.sequenceNumber(tp0).intValue());
+        assertEquals(0, transactionManager.sequenceNumber(tp0));
     }
 
     @Test
@@ -3179,7 +3179,7 @@ public class TransactionManagerTest {
         prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, bumpedEpoch, producerId);
         runUntil(() -> transactionManager.isPartitionAdded(tp0));
 
-        assertEquals(0, transactionManager.sequenceNumber(tp0).intValue());
+        assertEquals(0, transactionManager.sequenceNumber(tp0));
     }
 
     @Test
@@ -3249,8 +3249,8 @@ public class TransactionManagerTest {
         writeIdempotentBatchWithValue(transactionManager, tp0, "3");
         ProducerBatch tp1b1 = writeIdempotentBatchWithValue(transactionManager, tp1, "4");
         ProducerBatch tp1b2 = writeIdempotentBatchWithValue(transactionManager, tp1, "5");
-        assertEquals(3, transactionManager.sequenceNumber(tp0).intValue());
-        assertEquals(2, transactionManager.sequenceNumber(tp1).intValue());
+        assertEquals(3, transactionManager.sequenceNumber(tp0));
+        assertEquals(2, transactionManager.sequenceNumber(tp1));
 
         // First batch of each partition succeeds
         long b1AppendTime = time.milliseconds();
@@ -3311,7 +3311,7 @@ public class TransactionManagerTest {
 
         transactionManager.maybeUpdateProducerIdAndEpoch(tp1);
         assertFalse(transactionManager.hasInflightBatches(tp1));
-        assertEquals(0, transactionManager.sequenceNumber(tp1).intValue());
+        assertEquals(0, transactionManager.sequenceNumber(tp1));
 
         // The last batch should now be drained and sent
         runUntil(() -> transactionManager.hasInflightBatches(tp1));
@@ -3326,7 +3326,7 @@ public class TransactionManagerTest {
 
         transactionManager.maybeUpdateProducerIdAndEpoch(tp1);
         assertFalse(transactionManager.hasInflightBatches(tp1));
-        assertEquals(1, transactionManager.sequenceNumber(tp1).intValue());
+        assertEquals(1, transactionManager.sequenceNumber(tp1));
     }
 
     @Test
@@ -3373,8 +3373,8 @@ public class TransactionManagerTest {
         writeIdempotentBatchWithValue(transactionManager, tp0, "3");
         ProducerBatch tp1b1 = writeIdempotentBatchWithValue(transactionManager, tp1, "4");
         ProducerBatch tp1b2 = writeIdempotentBatchWithValue(transactionManager, tp1, "5");
-        assertEquals(3, transactionManager.sequenceNumber(tp0).intValue());
-        assertEquals(2, transactionManager.sequenceNumber(tp1).intValue());
+        assertEquals(3, transactionManager.sequenceNumber(tp0));
+        assertEquals(2, transactionManager.sequenceNumber(tp1));
 
         // First batch of each partition succeeds
         long b1AppendTime = time.milliseconds();
@@ -3435,7 +3435,7 @@ public class TransactionManagerTest {
 
         transactionManager.maybeUpdateProducerIdAndEpoch(tp1);
         assertFalse(transactionManager.hasInflightBatches(tp1));
-        assertEquals(0, transactionManager.sequenceNumber(tp1).intValue());
+        assertEquals(0, transactionManager.sequenceNumber(tp1));
 
         // The last batch should now be drained and sent
         runUntil(() -> transactionManager.hasInflightBatches(tp1));
@@ -3449,7 +3449,7 @@ public class TransactionManagerTest {
         transactionManager.handleCompletedBatch(tp1b3, t1b3Response);
 
         assertFalse(transactionManager.hasInflightBatches(tp1));
-        assertEquals(1, transactionManager.sequenceNumber(tp1).intValue());
+        assertEquals(1, transactionManager.sequenceNumber(tp1));
     }
 
     @Test
