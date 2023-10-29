@@ -18,10 +18,10 @@ package org.apache.kafka.storage.internals.log;
 
 /**
  * This class represents the verification state of a specific producer id.
- * It contains a verification guard object that is used to uniquely identify the transaction we want to verify.
+ * It contains a VerificationGuard that is used to uniquely identify the transaction we want to verify.
  * After verifying, we retain this object until we append to the log. This prevents any race conditions where the transaction
  * may end via a control marker before we write to the log. This mechanism is used to prevent hanging transactions.
- * We remove the verification guard object whenever we write data to the transaction or write an end marker for the transaction.
+ * We remove the VerificationGuard whenever we write data to the transaction or write an end marker for the transaction.
  *
  * We also store the lowest seen sequence to block a higher sequence from being written in the case of the lower sequence needing retries.
  *
@@ -30,13 +30,13 @@ package org.apache.kafka.storage.internals.log;
 public class VerificationStateEntry {
 
     final private long timestamp;
-    final private Object verificationGuard;
+    final private VerificationGuard verificationGuard;
     private int lowestSequence;
     private short epoch;
 
     public VerificationStateEntry(long timestamp, int sequence, short epoch) {
         this.timestamp = timestamp;
-        this.verificationGuard = new Object();
+        this.verificationGuard = new VerificationGuard();
         this.lowestSequence = sequence;
         this.epoch = epoch;
     }
@@ -45,7 +45,7 @@ public class VerificationStateEntry {
         return timestamp;
     }
 
-    public Object verificationGuard() {
+    public VerificationGuard verificationGuard() {
         return verificationGuard;
     }
 

@@ -73,7 +73,7 @@ public class StreamsAssignmentScaleTest {
 
     private final Logger log = LoggerFactory.getLogger(StreamsAssignmentScaleTest.class);
 
-    /************ HighAvailabilityTaskAssignor tests ************/
+    /* HighAvailabilityTaskAssignor tests */
 
     @Test(timeout = 120 * 1000)
     public void testHighAvailabilityTaskAssignorLargePartitionCount() {
@@ -95,7 +95,7 @@ public class StreamsAssignmentScaleTest {
         completeLargeAssignment(1_000, 10, 1000, 1, HighAvailabilityTaskAssignor.class);
     }
 
-    /************ StickyTaskAssignor tests ************/
+    /* StickyTaskAssignor tests */
 
     @Test(timeout = 120 * 1000)
     public void testStickyTaskAssignorLargePartitionCount() {
@@ -117,7 +117,7 @@ public class StreamsAssignmentScaleTest {
         completeLargeAssignment(1_000, 10, 1000, 1, StickyTaskAssignor.class);
     }
 
-    /************ FallbackPriorTaskAssignor tests ************/
+    /* FallbackPriorTaskAssignor tests */
 
     @Test(timeout = 120 * 1000)
     public void testFallbackPriorTaskAssignorLargePartitionCount() {

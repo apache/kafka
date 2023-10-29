@@ -51,7 +51,6 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Stream;
 
-import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createFetchConfig;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createFetchMetricsManager;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createMetrics;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createSubscriptionState;
@@ -79,10 +78,11 @@ public class FetchCollectorTest {
     private LogContext logContext;
 
     private SubscriptionState subscriptions;
-    private FetchConfig<String, String> fetchConfig;
+    private FetchConfig fetchConfig;
     private FetchMetricsManager metricsManager;
     private ConsumerMetadata metadata;
     private FetchBuffer fetchBuffer;
+    private Deserializers<String, String> deserializers;
     private FetchCollector<String, String> fetchCollector;
     private CompletedFetchBuilder completedFetchBuilder;
 
@@ -193,6 +193,7 @@ public class FetchCollectorTest {
                 metadata,
                 subscriptions,
                 fetchConfig,
+                deserializers,
                 metricsManager,
                 time) {
 
@@ -427,10 +428,10 @@ public class FetchCollectorTest {
 
         ConsumerConfig config = new ConsumerConfig(p);
 
-        Deserializers<String, String> deserializers = new Deserializers<>(new StringDeserializer(), new StringDeserializer());
+        deserializers = new Deserializers<>(new StringDeserializer(), new StringDeserializer());
 
         subscriptions = createSubscriptionState(config, logContext);
-        fetchConfig = createFetchConfig(config, deserializers);
+        fetchConfig = new FetchConfig(config);
 
         Metrics metrics = createMetrics(config, time);
         metricsManager = createFetchMetricsManager(metrics);
@@ -448,6 +449,7 @@ public class FetchCollectorTest {
                 metadata,
                 subscriptions,
                 fetchConfig,
+                deserializers,
                 metricsManager,
                 time);
         fetchBuffer = new FetchBuffer(logContext);

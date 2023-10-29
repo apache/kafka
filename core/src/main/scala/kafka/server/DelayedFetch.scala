@@ -17,6 +17,8 @@
 
 package kafka.server
 
+import com.yammer.metrics.core.Meter
+
 import java.util.concurrent.TimeUnit
 import org.apache.kafka.common.TopicIdPartition
 import org.apache.kafka.common.errors._
@@ -184,7 +186,7 @@ class DelayedFetch(
 object DelayedFetchMetrics {
   private val metricsGroup = new KafkaMetricsGroup(DelayedFetchMetrics.getClass)
   private val FetcherTypeKey = "fetcherType"
-  val followerExpiredRequestMeter = metricsGroup.newMeter("ExpiresPerSec", "requests", TimeUnit.SECONDS, Map(FetcherTypeKey -> "follower").asJava)
-  val consumerExpiredRequestMeter = metricsGroup.newMeter("ExpiresPerSec", "requests", TimeUnit.SECONDS, Map(FetcherTypeKey -> "consumer").asJava)
+  val followerExpiredRequestMeter: Meter = metricsGroup.newMeter("ExpiresPerSec", "requests", TimeUnit.SECONDS, Map(FetcherTypeKey -> "follower").asJava)
+  val consumerExpiredRequestMeter: Meter = metricsGroup.newMeter("ExpiresPerSec", "requests", TimeUnit.SECONDS, Map(FetcherTypeKey -> "consumer").asJava)
 }
 

@@ -262,7 +262,7 @@ public class ReplicaFetcherThreadBenchmark {
     public void tearDown() throws IOException, InterruptedException {
         metrics.close();
         replicaManager.shutdown(false);
-        logManager.shutdown();
+        logManager.shutdown(-1L);
         scheduler.shutdown();
         Utils.delete(logDir);
     }

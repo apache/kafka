@@ -157,6 +157,7 @@ public class StreamsConfig extends AbstractConfig {
     private static final long EOS_DEFAULT_COMMIT_INTERVAL_MS = 100L;
     private static final int DEFAULT_TRANSACTION_TIMEOUT = 10000;
 
+    @SuppressWarnings("unused")
     public static final int DUMMY_THREAD_INDEX = 1;
     public static final long MAX_TASK_IDLE_MS_DISABLED = -1;
 
@@ -240,14 +241,12 @@ public class StreamsConfig extends AbstractConfig {
     public static final String CLIENT_TAG_PREFIX = "client.tag.";
 
     /** {@code topology.optimization} */
-    private static final String CONFIG_ERROR_MSG = "Acceptable values are:"
-        + " \"+NO_OPTIMIZATION+\", \"+OPTIMIZE+\", "
-        + "or a comma separated list of specific optimizations: "
-        + "(\"+REUSE_KTABLE_SOURCE_TOPICS+\", \"+MERGE_REPARTITION_TOPICS+\" + "
-        + "\"SINGLE_STORE_SELF_JOIN+\").";
-
-
     public static final String TOPOLOGY_OPTIMIZATION_CONFIG = "topology.optimization";
+    private static final String CONFIG_ERROR_MSG = "Acceptable values are:"
+            + " \"+NO_OPTIMIZATION+\", \"+OPTIMIZE+\", "
+            + "or a comma separated list of specific optimizations: "
+            + "(\"+REUSE_KTABLE_SOURCE_TOPICS+\", \"+MERGE_REPARTITION_TOPICS+\" + "
+            + "\"SINGLE_STORE_SELF_JOIN+\").";
     private static final String TOPOLOGY_OPTIMIZATION_DOC = "A configuration telling Kafka "
         + "Streams if it should optimize the topology and what optimizations to apply. "
         + CONFIG_ERROR_MSG
@@ -1201,6 +1200,13 @@ public class StreamsConfig extends AbstractConfig {
         public static boolean getStateUpdaterEnabled(final Map<String, Object> configs) {
             return InternalConfig.getBoolean(configs, InternalConfig.STATE_UPDATER_ENABLED, true);
         }
+        
+        // Private API to enable processing threads (i.e. polling is decoupled from processing)
+        public static final String PROCESSING_THREADS_ENABLED = "__processing.threads.enabled__";
+
+        public static boolean getProcessingThreadsEnabled(final Map<String, Object> configs) {
+            return InternalConfig.getBoolean(configs, InternalConfig.PROCESSING_THREADS_ENABLED, false);
+        }
 
         public static boolean getBoolean(final Map<String, Object> configs, final String key, final boolean defaultValue) {
             final Object value = configs.getOrDefault(key, defaultValue);
@@ -1380,8 +1386,12 @@ public class StreamsConfig extends AbstractConfig {
     private void verifyEOSTransactionTimeoutCompatibility() {
         final long commitInterval = getLong(COMMIT_INTERVAL_MS_CONFIG);
         final String transactionTimeoutConfigKey = producerPrefix(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG);
-        final int transactionTimeout = originals().containsKey(transactionTimeoutConfigKey) ? (int) parseType(
-            transactionTimeoutConfigKey, originals().get(transactionTimeoutConfigKey), Type.INT) : DEFAULT_TRANSACTION_TIMEOUT;
+        final int transactionTimeout =
+                originals().containsKey(transactionTimeoutConfigKey) ?
+                    (int) Objects.requireNonNull(
+                        parseType(transactionTimeoutConfigKey, originals().get(transactionTimeoutConfigKey), Type.INT),
+                        "Could not parse config `" + COMMIT_INTERVAL_MS_CONFIG + "` because it's set to `null`") :
+                    DEFAULT_TRANSACTION_TIMEOUT;
 
         if (transactionTimeout < commitInterval) {
             throw new IllegalArgumentException(String.format("Transaction timeout %d was set lower than " +
@@ -1548,9 +1558,7 @@ public class StreamsConfig extends AbstractConfig {
 
         // Get main consumer override configs
         final Map<String, Object> mainConsumerProps = originalsWithPrefix(MAIN_CONSUMER_PREFIX);
-        for (final Map.Entry<String, Object> entry: mainConsumerProps.entrySet()) {
-            consumerProps.put(entry.getKey(), entry.getValue());
-        }
+        consumerProps.putAll(mainConsumerProps);
 
         // this is a hack to work around StreamsConfig constructor inside StreamsPartitionAssignor to avoid casting
         consumerProps.put(APPLICATION_ID_CONFIG, groupId);
@@ -1622,9 +1630,7 @@ public class StreamsConfig extends AbstractConfig {
 
         // Get restore consumer override configs
         final Map<String, Object> restoreConsumerProps = originalsWithPrefix(RESTORE_CONSUMER_PREFIX);
-        for (final Map.Entry<String, Object> entry: restoreConsumerProps.entrySet()) {
-            baseConsumerProps.put(entry.getKey(), entry.getValue());
-        }
+        baseConsumerProps.putAll(restoreConsumerProps);
 
         // no need to set group id for a restore consumer
         baseConsumerProps.remove(ConsumerConfig.GROUP_ID_CONFIG);
@@ -1657,9 +1663,7 @@ public class StreamsConfig extends AbstractConfig {
 
         // Get global consumer override configs
         final Map<String, Object> globalConsumerProps = originalsWithPrefix(GLOBAL_CONSUMER_PREFIX);
-        for (final Map.Entry<String, Object> entry: globalConsumerProps.entrySet()) {
-            baseConsumerProps.put(entry.getKey(), entry.getValue());
-        }
+        baseConsumerProps.putAll(globalConsumerProps);
 
         // no need to set group id for a global consumer
         baseConsumerProps.remove(ConsumerConfig.GROUP_ID_CONFIG);
@@ -1806,7 +1810,7 @@ public class StreamsConfig extends AbstractConfig {
      * @return an configured instance of key Serde class
      */
     @SuppressWarnings("WeakerAccess")
-    public Serde defaultKeySerde() {
+    public Serde<?> defaultKeySerde() {
         final Object keySerdeConfigSetting = get(DEFAULT_KEY_SERDE_CLASS_CONFIG);
         if (keySerdeConfigSetting ==  null) {
             throw new ConfigException("Please specify a key serde or set one through StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG");
@@ -1828,7 +1832,7 @@ public class StreamsConfig extends AbstractConfig {
      * @return an configured instance of value Serde class
      */
     @SuppressWarnings("WeakerAccess")
-    public Serde defaultValueSerde() {
+    public Serde<?> defaultValueSerde() {
         final Object valueSerdeConfigSetting = get(DEFAULT_VALUE_SERDE_CLASS_CONFIG);
         if (valueSerdeConfigSetting == null) {
             throw new ConfigException("Please specify a value serde or set one through StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG");

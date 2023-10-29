@@ -460,7 +460,10 @@ public class StreamThreadStateStoreProviderTest {
             new MockTime(),
             stateManager,
             recordCollector,
-            context, logContext);
+            context,
+            logContext,
+            false
+        );
     }
 
     private void mockThread(final boolean initialized) {
