@@ -347,6 +347,7 @@ class ControllerServer(
         time,
         s"controller-${config.nodeId}-",
         QuorumFeatures.defaultFeatureMap(),
+        config.migrationEnabled,
         incarnationId,
         listenerInfo)
 

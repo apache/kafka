@@ -1870,6 +1870,8 @@ object UnifiedLog extends Logging {
 
   val DeleteDirSuffix = LocalLog.DeleteDirSuffix
 
+  val StrayDirSuffix = LocalLog.StrayDirSuffix
+
   val FutureDirSuffix = LocalLog.FutureDirSuffix
 
   private[log] val DeleteDirPattern = LocalLog.DeleteDirPattern
@@ -1951,6 +1953,8 @@ object UnifiedLog extends Logging {
   def logDeleteDirName(topicPartition: TopicPartition): String = LocalLog.logDeleteDirName(topicPartition)
 
   def logFutureDirName(topicPartition: TopicPartition): String = LocalLog.logFutureDirName(topicPartition)
+
+  def logStrayDirName(topicPartition: TopicPartition): String = LocalLog.logStrayDirName(topicPartition)
 
   def logDirName(topicPartition: TopicPartition): String = LocalLog.logDirName(topicPartition)
 

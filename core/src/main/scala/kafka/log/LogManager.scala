@@ -92,6 +92,10 @@ class LogManager(logDirs: Seq[File],
   // Each element in the queue contains the log object to be deleted and the time it is scheduled for deletion.
   private val logsToBeDeleted = new LinkedBlockingQueue[(UnifiedLog, Long)]()
 
+  // Map of stray partition to stray log. This holds all stray logs detected on the broker.
+  // Visible for testing
+  private val strayLogs = new Pool[TopicPartition, UnifiedLog]()
+
   private val _liveLogDirs: ConcurrentLinkedQueue[File] = createAndValidateLogDirs(logDirs, initialOfflineDirs)
   @volatile private var _currentDefaultConfig = initialDefaultConfig
   @volatile private var numRecoveryThreadsPerDataDir = recoveryThreadsPerDataDir
@@ -302,6 +306,10 @@ class LogManager(logDirs: Seq[File],
     this.logsToBeDeleted.add((log, time.milliseconds()))
   }
 
+  def addStrayLog(strayPartition: TopicPartition, strayLog: UnifiedLog): Unit = {
+    this.strayLogs.put(strayPartition, strayLog)
+  }
+
   // Only for testing
   private[log] def hasLogsToBeDeleted: Boolean = !logsToBeDeleted.isEmpty
 
@@ -337,6 +345,9 @@ class LogManager(logDirs: Seq[File],
 
     if (logDir.getName.endsWith(UnifiedLog.DeleteDirSuffix)) {
       addLogToBeDeleted(log)
+    } else if (logDir.getName.endsWith(UnifiedLog.StrayDirSuffix)) {
+      addStrayLog(topicPartition, log)
+      warn(s"Loaded stray log: $logDir")
     } else {
       val previous = {
         if (log.isFuture)
@@ -1203,7 +1214,8 @@ class LogManager(logDirs: Seq[File],
     */
   def asyncDelete(topicPartition: TopicPartition,
                   isFuture: Boolean = false,
-                  checkpoint: Boolean = true): Option[UnifiedLog] = {
+                  checkpoint: Boolean = true,
+                  isStray: Boolean = false): Option[UnifiedLog] = {
     val removedLog: Option[UnifiedLog] = logCreationOrDeletionLock synchronized {
       removeLogAndMetrics(if (isFuture) futureLogs else currentLogs, topicPartition)
     }
@@ -1216,15 +1228,21 @@ class LogManager(logDirs: Seq[File],
             cleaner.updateCheckpoints(removedLog.parentDirFile, partitionToRemove = Option(topicPartition))
           }
         }
-        removedLog.renameDir(UnifiedLog.logDeleteDirName(topicPartition), false)
+        if (isStray) {
+          // Move aside stray partitions, don't delete them
+          removedLog.renameDir(UnifiedLog.logStrayDirName(topicPartition), false)
+          warn(s"Log for partition ${removedLog.topicPartition} is marked as stray and renamed to ${removedLog.dir.getAbsolutePath}")
+        } else {
+          removedLog.renameDir(UnifiedLog.logDeleteDirName(topicPartition), false)
+          addLogToBeDeleted(removedLog)
+          info(s"Log for partition ${removedLog.topicPartition} is renamed to ${removedLog.dir.getAbsolutePath} and is scheduled for deletion")
+        }
         if (checkpoint) {
           val logDir = removedLog.parentDirFile
           val logsToCheckpoint = logsInDir(logDir)
           checkpointRecoveryOffsetsInDir(logDir, logsToCheckpoint)
           checkpointLogStartOffsetsInDir(logDir, logsToCheckpoint)
         }
-        addLogToBeDeleted(removedLog)
-        info(s"Log for partition ${removedLog.topicPartition} is renamed to ${removedLog.dir.getAbsolutePath} and is scheduled for deletion")
 
       case None =>
         if (offlineLogDirs.nonEmpty) {
@@ -1244,6 +1262,7 @@ class LogManager(logDirs: Seq[File],
    *                     topic-partition is raised
    */
   def asyncDelete(topicPartitions: Set[TopicPartition],
+                  isStray: Boolean,
                   errorHandler: (TopicPartition, Throwable) => Unit): Unit = {
     val logDirs = mutable.Set.empty[File]
 
@@ -1251,11 +1270,11 @@ class LogManager(logDirs: Seq[File],
       try {
         getLog(topicPartition).foreach { log =>
           logDirs += log.parentDirFile
-          asyncDelete(topicPartition, checkpoint = false)
+          asyncDelete(topicPartition, checkpoint = false, isStray = isStray)
         }
         getLog(topicPartition, isFuture = true).foreach { log =>
           logDirs += log.parentDirFile
-          asyncDelete(topicPartition, isFuture = true, checkpoint = false)
+          asyncDelete(topicPartition, isFuture = true, checkpoint = false, isStray = isStray)
         }
       } catch {
         case e: Throwable => errorHandler(topicPartition, e)

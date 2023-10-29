@@ -133,6 +133,12 @@
         More details about the new config <code>StreamsConfig#TOPOLOGY_OPTIMIZATION</code> can be found in <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-295%3A+Add+Streams+Configuration+Allowing+for+Optional+Topology+Optimization">KIP-295</a>.
     </p>
 
+    <h3><a id="streams_api_changes_370" href="#streams_api_changes_370">Streams API changes in 3.7.0</a></h3>
+    <p>
+        IQv2 supports <code>RangeQuery</code> that allows to specify unbounded, bounded, or half-open key-ranges, which return data in ascending (byte[]-lexicographical) order (per partition).
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-985%3A+Add+reverseRange+and+reverseAll+query+over+kv-store+in+IQv2">KIP-985</a> extends this functionality by adding <code>.withDescendingKeys()<code> to allow user to receive data in descending order.
+    </p>
+
     <h3><a id="streams_api_changes_360" href="#streams_api_changes_360">Streams API changes in 3.6.0</a></h3>
     <p>
       Rack aware task assignment was introduced in <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-925%3A+Rack+aware+task+assignment+in+Kafka+Streams">KIP-925</a>.
