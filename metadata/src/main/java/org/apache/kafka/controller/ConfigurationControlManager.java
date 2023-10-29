@@ -44,6 +44,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Consumer;
@@ -432,6 +433,25 @@ public class ConfigurationControlManager {
         } else {
             return Collections.unmodifiableMap(new HashMap<>(map));
         }
+    }
+
+    /**
+     * Get the config value for the give topic and give config key.
+     * If the config value is not found, return null.
+     *
+     * @param topicName            The topic name for the config.
+     * @param configKey            The key for the config.
+     */
+    String getTopicConfig(String topicName, String configKey) throws NoSuchElementException {
+        Map<String, String> map = configData.get(new ConfigResource(Type.TOPIC, topicName));
+        if (map == null || !map.containsKey(configKey)) {
+            Map<String, ConfigEntry> effectiveConfigMap = computeEffectiveTopicConfigs(Collections.emptyMap());
+            if (!effectiveConfigMap.containsKey(configKey)) {
+                return null;
+            }
+            return effectiveConfigMap.get(configKey).value();
+        }
+        return map.get(configKey);
     }
 
     public Map<ConfigResource, ResultOrError<Map<String, String>>> describeConfigs(

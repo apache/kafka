@@ -105,6 +105,9 @@ public class CommonClientConfigs {
     public static final int RETRY_BACKOFF_EXP_BASE = 2;
     public static final double RETRY_BACKOFF_JITTER = 0.2;
 
+    public static final String ENABLE_METRICS_PUSH_CONFIG = "enable.metrics.push";
+    public static final String ENABLE_METRICS_PUSH_DOC = "Whether to enable pushing of client metrics to the cluster, if the cluster has a client metrics subscription which matches this client.";
+
     public static final String METRICS_SAMPLE_WINDOW_MS_CONFIG = "metrics.sample.window.ms";
     public static final String METRICS_SAMPLE_WINDOW_MS_DOC = "The window of time a metrics sample is computed over.";
 

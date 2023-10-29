@@ -264,7 +264,8 @@ public class ClusterControlManagerTest {
                     setRack(null).
                     setIncarnationId(Uuid.fromString("0H4fUu1xQEKXFYwB1aBjhg")),
                 123L,
-                new FinalizedControllerFeatures(Collections.emptyMap(), 456L)));
+                new FinalizedControllerFeatures(Collections.emptyMap(), 456L),
+                (short) 1));
     }
 
     @ParameterizedTest
@@ -294,7 +295,8 @@ public class ClusterControlManagerTest {
                 setRack(null).
                 setIncarnationId(Uuid.fromString("0H4fUu1xQEKXFYwB1aBjhg")),
             123L,
-            new FinalizedControllerFeatures(Collections.emptyMap(), 456L));
+            new FinalizedControllerFeatures(Collections.emptyMap(), 456L),
+            (short) 1);
 
         short expectedVersion = metadataVersion.registerBrokerRecordVersion();
 
@@ -517,7 +519,8 @@ public class ClusterControlManagerTest {
                         setRack(null).
                         setIncarnationId(Uuid.fromString("0H4fUu1xQEKXFYwB1aBjhg")),
                     123L,
-                    featureControl.finalizedFeatures(Long.MAX_VALUE))).getMessage());
+                    featureControl.finalizedFeatures(Long.MAX_VALUE),
+                    (short) 1)).getMessage());
 
         assertEquals("Unable to register because the broker does not support version 4 of " +
             "metadata.version. It wants a version between 7 and 7, inclusive.",
@@ -534,7 +537,8 @@ public class ClusterControlManagerTest {
                                     setMaxSupportedVersion(MetadataVersion.IBP_3_3_IV3.featureLevel())).iterator())).
                         setIncarnationId(Uuid.fromString("0H4fUu1xQEKXFYwB1aBjhg")),
                     123L,
-                    featureControl.finalizedFeatures(Long.MAX_VALUE))).getMessage());
+                    featureControl.finalizedFeatures(Long.MAX_VALUE),
+                    (short) 1)).getMessage());
     }
 
     @Test

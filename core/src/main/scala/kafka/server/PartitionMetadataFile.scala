@@ -117,7 +117,7 @@ class PartitionMetadataFile(val file: File,
             try {
               writer.write(PartitionMetadataFileFormatter.toFile(new PartitionMetadata(CurrentVersion, topicId)))
               writer.flush()
-              fileOutputStream.getFD().sync()
+              fileOutputStream.getFD.sync()
             } finally {
               writer.close()
             }

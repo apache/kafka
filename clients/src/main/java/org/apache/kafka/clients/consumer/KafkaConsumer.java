@@ -42,6 +42,7 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -77,14 +78,13 @@ import java.util.regex.Pattern;
 
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_JMX_PREFIX;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP_PREFIX;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.DEFAULT_CLOSE_TIMEOUT_MS;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createConsumerNetworkClient;
-import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createFetchConfig;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createFetchMetricsManager;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createLogContext;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createMetrics;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createSubscriptionState;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.configuredConsumerInterceptors;
-import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.configuredIsolationLevel;
 import static org.apache.kafka.common.utils.Utils.closeQuietly;
 import static org.apache.kafka.common.utils.Utils.isBlank;
 import static org.apache.kafka.common.utils.Utils.join;
@@ -569,7 +569,6 @@ import static org.apache.kafka.common.utils.Utils.swallow;
 public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     private static final long NO_CURRENT_THREAD = -1L;
-    static final long DEFAULT_CLOSE_TIMEOUT_MS = 30 * 1000;
     static final String DEFAULT_REASON = "rebalance enforced by user";
 
     // Visible for testing
@@ -714,7 +713,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             this.metadata.bootstrap(addresses);
 
             FetchMetricsManager fetchMetricsManager = createFetchMetricsManager(metrics);
-            this.isolationLevel = configuredIsolationLevel(config);
+            FetchConfig fetchConfig = new FetchConfig(config);
+            this.isolationLevel = fetchConfig.isolationLevel;
 
             ApiVersions apiVersions = new ApiVersions();
             this.client = createConsumerNetworkClient(config,
@@ -752,13 +752,13 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                         config.getBoolean(ConsumerConfig.THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED),
                         config.getString(ConsumerConfig.CLIENT_RACK_CONFIG));
             }
-            FetchConfig<K, V> fetchConfig = createFetchConfig(config, this.deserializers);
             this.fetcher = new Fetcher<>(
                     logContext,
                     this.client,
                     this.metadata,
                     this.subscriptions,
                     fetchConfig,
+                    this.deserializers,
                     fetchMetricsManager,
                     this.time);
             this.offsetFetcher = new OffsetFetcher(logContext,
@@ -1892,6 +1892,36 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
+     * Determines the client's unique client instance ID used for telemetry. This ID is unique to
+     * this specific client instance and will not change after it is initially generated.
+     * The ID is useful for correlating client operations with telemetry sent to the broker and
+     * to its eventual monitoring destinations.
+     * <p>
+     * If telemetry is enabled, this will first require a connection to the cluster to generate
+     * the unique client instance ID. This method waits up to {@code timeout} for the consumer
+     * client to complete the request.
+     * <p>
+     * Client telemetry is controlled by the {@link ConsumerConfig#ENABLE_METRICS_PUSH_CONFIG}
+     * configuration option.
+     *
+     * @param timeout The maximum time to wait for consumer client to determine its client instance ID.
+     *                The value must be non-negative. Specifying a timeout of zero means do not
+     *                wait for the initial request to complete if it hasn't already.
+     * @throws InterruptException If the thread is interrupted while blocked.
+     * @throws KafkaException If an unexpected error occurs while trying to determine the client
+     *                        instance ID, though this error does not necessarily imply the
+     *                        consumer client is otherwise unusable.
+     * @throws IllegalArgumentException If the {@code timeout} is negative.
+     * @throws IllegalStateException If telemetry is not enabled ie, config `{@code enable.metrics.push}`
+     *                               is set to `{@code false}`.
+     * @return The client's assigned instance id used for metrics collection.
+     */
+    @Override
+    public Uuid clientInstanceId(Duration timeout) {
+        throw new UnsupportedOperationException();
+    }
+
+  /**
      * Get the metrics kept by the consumer
      */
     @Override
@@ -2237,7 +2267,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @return This {@code Consumer} instance's current lag for the given partition.
      *
      * @throws IllegalStateException if the {@code topicPartition} is not assigned
-     **/
+     */
     @Override
     public OptionalLong currentLag(TopicPartition topicPartition) {
         acquireAndEnsureOpen();
@@ -2452,7 +2482,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         // coordinator lookup if there are partitions which have missing positions, so
         // a consumer with manually assigned partitions can avoid a coordinator dependence
         // by always ensuring that assigned partitions have an initial position.
-        if (coordinator != null && !coordinator.refreshCommittedOffsetsIfNeeded(timer)) return false;
+        if (coordinator != null && !coordinator.initWithCommittedOffsetsIfNeeded(timer)) return false;
 
         // If there are partitions still needing a position and a reset policy is defined,
         // request reset using the default policy. If no reset strategy is defined and there

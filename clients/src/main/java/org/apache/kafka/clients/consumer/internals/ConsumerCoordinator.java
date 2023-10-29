@@ -955,10 +955,16 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
      * @param timer Timer bounding how long this method can block
      * @return true iff the operation completed within the timeout
      */
-    public boolean refreshCommittedOffsetsIfNeeded(Timer timer) {
+    public boolean initWithCommittedOffsetsIfNeeded(Timer timer) {
         final Set<TopicPartition> initializingPartitions = subscriptions.initializingPartitions();
         final Map<TopicPartition, OffsetAndMetadata> offsets = fetchCommittedOffsets(initializingPartitions, timer);
-        return refreshCommittedOffsets(offsets, this.metadata, this.subscriptions);
+
+        // "offsets" will be null if the offset fetch requests did not receive responses within the given timeout
+        if (offsets == null)
+            return false;
+
+        refreshCommittedOffsets(offsets, this.metadata, this.subscriptions);
+        return true;
     }
 
     /**
