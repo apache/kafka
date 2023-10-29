@@ -16,9 +16,18 @@
  */
 package org.apache.kafka.common.serialization;
 
+import org.apache.kafka.common.header.Headers;
+
+import java.nio.ByteBuffer;
+
 public class VoidSerializer implements Serializer<Void> {
     @Override
     public byte[] serialize(String topic, Void data) {
+        return null;
+    }
+
+    @Override
+    public ByteBuffer serializeToByteBuffer(String topic, Headers headers, Void data) {
         return null;
     }
 }

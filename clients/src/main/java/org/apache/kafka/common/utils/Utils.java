@@ -87,6 +87,8 @@ import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 
+import static java.nio.ByteOrder.LITTLE_ENDIAN;
+
 public final class Utils {
 
     private Utils() {}
@@ -478,9 +480,12 @@ public final class Utils {
      * @param data byte array to hash
      * @return 32 bit hash of the given array
      */
-    @SuppressWarnings("fallthrough")
     public static int murmur2(final byte[] data) {
-        int length = data.length;
+        return murmur2(data, 0, data.length);
+    }
+
+    @SuppressWarnings("fallthrough")
+    private static int murmur2(final byte[] data, final int offset, final int length) {
         int seed = 0x9747b28c;
         // 'm' and 'r' are mixing constants generated offline.
         // They're not really 'magic', they just happen to work well.
@@ -490,10 +495,9 @@ public final class Utils {
         // Initialize the hash to a random value
         int h = seed ^ length;
         int length4 = length / 4;
-
         for (int i = 0; i < length4; i++) {
-            final int i4 = i * 4;
-            int k = (data[i4 + 0] & 0xff) + ((data[i4 + 1] & 0xff) << 8) + ((data[i4 + 2] & 0xff) << 16) + ((data[i4 + 3] & 0xff) << 24);
+            final int i4 = offset + i * 4;
+            int k = (data[i4] & 0xff) + ((data[i4 + 1] & 0xff) << 8) + ((data[i4 + 2] & 0xff) << 16) + ((data[i4 + 3] & 0xff) << 24);
             k *= m;
             k ^= k >>> r;
             k *= m;
@@ -504,18 +508,69 @@ public final class Utils {
         // Handle the last few bytes of the input array
         switch (length % 4) {
             case 3:
-                h ^= (data[(length & ~3) + 2] & 0xff) << 16;
+                h ^= (data[offset + (length & ~3) + 2] & 0xff) << 16;
             case 2:
-                h ^= (data[(length & ~3) + 1] & 0xff) << 8;
+                h ^= (data[offset + (length & ~3) + 1] & 0xff) << 8;
             case 1:
-                h ^= data[length & ~3] & 0xff;
+                h ^= data[offset + (length & ~3)] & 0xff;
                 h *= m;
         }
 
         h ^= h >>> 13;
         h *= m;
         h ^= h >>> 15;
+        return h;
+    }
 
+    /**
+     * Generates 32 bit murmur2 hash from ByteBuffer
+     * @param data ByteBuffer to hash
+     * @return 32 bit hash of the given ByteBuffer
+     */
+    public static int murmur2(ByteBuffer data) {
+        if (data.hasArray()) {
+            return murmur2(data.array(), data.arrayOffset() + data.position(), data.remaining());
+        }
+        return murmur2(data, data.position(), data.remaining());
+    }
+
+    @SuppressWarnings("fallthrough")
+    private static int murmur2(ByteBuffer data, final int offset, final int length) {
+        final int seed = 0x9747b28c;
+        // 'm' and 'r' are mixing constants generated offline.
+        // They're not really 'magic', they just happen to work well.
+        final int m = 0x5bd1e995;
+        final int r = 24;
+
+        // Initialize the hash to a random value
+        int h = seed ^ length;
+        final int length4 = length / 4;
+
+        // murmur2 works on little-endian byte order.
+        data = data.order() == LITTLE_ENDIAN ? data : data.slice().order(LITTLE_ENDIAN);
+        for (int i = offset; i < length4; i++) {
+            int k = data.getInt(i * 4);
+            k *= m;
+            k ^= k >>> r;
+            k *= m;
+            h *= m;
+            h ^= k;
+        }
+
+        // Handle the last few bytes of the input array
+        switch (length % 4) {
+            case 3:
+                h ^= (data.get(offset + (length & ~3) + 2) & 0xff) << 16;
+            case 2:
+                h ^= (data.get(offset + (length & ~3) + 1) & 0xff) << 8;
+            case 1:
+                h ^= data.get(offset + (length & ~3)) & 0xff;
+                h *= m;
+        }
+
+        h ^= h >>> 13;
+        h *= m;
+        h ^= h >>> 15;
         return h;
     }
 
@@ -1543,7 +1598,7 @@ public final class Utils {
      * Checks if a string is null, empty or whitespace only.
      * @param str a string to be checked
      * @return true if the string is null, empty or whitespace only; otherwise, return false.
-     */    
+     */
     public static boolean isBlank(String str) {
         return str == null || str.trim().isEmpty();
     }

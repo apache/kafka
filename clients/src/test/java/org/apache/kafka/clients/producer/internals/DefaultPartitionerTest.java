@@ -22,13 +22,14 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.junit.jupiter.api.Test;
 
+import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.List;
 import static java.util.Arrays.asList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class DefaultPartitionerTest {
-    private final static byte[] KEY_BYTES = "key".getBytes();
+    private final static ByteBuffer KEY_BYTES = ByteBuffer.wrap("key".getBytes());
     private final static Node[] NODES = new Node[] {
         new Node(0, "localhost", 99),
         new Node(1, "localhost", 100),

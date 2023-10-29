@@ -21,6 +21,9 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.function.Executable;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.stubbing.OngoingStubbing;
 
 import java.io.Closeable;
@@ -34,6 +37,8 @@ import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.StandardOpenOption;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
@@ -43,6 +48,7 @@ import java.time.temporal.ChronoField;
 import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -57,6 +63,9 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
+import static java.nio.ByteOrder.BIG_ENDIAN;
+import static java.nio.ByteOrder.LITTLE_ENDIAN;
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptySet;
 import static org.apache.kafka.common.utils.Utils.diff;
@@ -85,9 +94,6 @@ import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
-import java.util.Date;
 
 public class UtilsTest {
 
@@ -99,11 +105,70 @@ public class UtilsTest {
         cases.put("a-little-bit-long-string".getBytes(), -985981536);
         cases.put("a-little-bit-longer-string".getBytes(), -1486304829);
         cases.put("lkjh234lh9fiuh90y23oiuhsafujhadof229phr9h19h89h8".getBytes(), -58897971);
-        cases.put(new byte[] {'a', 'b', 'c'}, 479470107);
+        cases.put(new byte[]{'a', 'b', 'c'}, 479470107);
 
+        final byte[] bytes = "ByteBuffer".getBytes(UTF_8);
         for (Map.Entry<byte[], Integer> c : cases.entrySet()) {
-            assertEquals(c.getValue().intValue(), murmur2(c.getKey()));
+            final byte[] key = c.getKey();
+            final int expected = c.getValue();
+            assertEquals(expected, murmur2(key));
+            assertEquals(expected, murmur2(ByteBuffer.wrap(key)));
+
+            final ByteBuffer heapBuffer0 = ByteBuffer.allocate(key.length << 6).put(key);
+            final ByteBuffer heapBuffer1 = ByteBuffer.allocate(key.length << 6).put(bytes).slice().put(key);
+            final ByteBuffer directBuffer0 = ByteBuffer.allocateDirect(key.length << 6).put(key);
+            final ByteBuffer directBuffer1 = ByteBuffer.allocateDirect(key.length << 6).put(bytes).slice().put(key);
+            heapBuffer0.flip();
+            heapBuffer1.flip();
+            directBuffer0.flip();
+            directBuffer1.flip();
+            assertEquals(expected, murmur2(heapBuffer0));
+            assertEquals(expected, murmur2(heapBuffer1));
+            assertEquals(expected, murmur2(directBuffer0));
+            assertEquals(expected, murmur2(directBuffer1));
         }
+    }
+
+    @ParameterizedTest
+    @MethodSource("byteBufferProvider")
+    public void testByteBufferMurmur2(int longCnt, int intCnt, int shortCnt, ByteBuffer buffer) {
+        final Random random = new Random();
+        for (int i = 0; i < longCnt; i++) {
+            buffer.putLong(random.nextLong());
+        }
+
+        for (int i = 0; i < intCnt; i++) {
+            buffer.putInt(random.nextInt());
+        }
+
+        for (int i = 0; i < shortCnt; i++) {
+            buffer.putShort((short) random.nextInt());
+        }
+
+        buffer.flip();
+        assertEquals(murmur2(Utils.toArray(buffer)), murmur2(buffer));
+    }
+
+    private static Arguments[] byteBufferProvider() {
+        final Random random = new Random();
+        final int longCnt = random.nextInt(16);
+        final int intCnt = random.nextInt(16);
+        final int shortCnt = random.nextInt(16);
+        final int capacity = longCnt * 8 + intCnt * 4 + shortCnt * 2;
+        final byte[] bytes = "ByteBuffer1".getBytes(UTF_8);
+        return new Arguments[]{
+                //HeapByteBuffer
+                Arguments.of(longCnt, intCnt, shortCnt, ByteBuffer.allocate(capacity).order(LITTLE_ENDIAN)),
+                Arguments.of(longCnt, intCnt, shortCnt, ByteBuffer.allocate(capacity).order(BIG_ENDIAN)),
+                Arguments.of(longCnt, intCnt, shortCnt, ByteBuffer.allocate(capacity << 1).order(LITTLE_ENDIAN).put(bytes).slice()),
+                Arguments.of(longCnt, intCnt, shortCnt, ByteBuffer.allocate(capacity << 1).order(BIG_ENDIAN).put(bytes).slice()),
+
+                //DirectByteBuffer
+                Arguments.of(longCnt, intCnt, shortCnt, ByteBuffer.allocateDirect(capacity).order(LITTLE_ENDIAN)),
+                Arguments.of(longCnt, intCnt, shortCnt, ByteBuffer.allocateDirect(capacity).order(BIG_ENDIAN)),
+                Arguments.of(longCnt, intCnt, shortCnt, ByteBuffer.allocateDirect(capacity << 1).order(LITTLE_ENDIAN).put(bytes).slice()),
+                Arguments.of(longCnt, intCnt, shortCnt, ByteBuffer.allocateDirect(capacity << 1).order(BIG_ENDIAN).put(bytes).slice()),
+        };
     }
 
     @Test

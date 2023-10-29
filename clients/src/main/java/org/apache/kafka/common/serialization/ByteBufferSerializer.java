@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.serialization;
 
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
@@ -47,7 +48,35 @@ public class ByteBufferSerializer implements Serializer<ByteBuffer> {
             }
         }
 
-        data.flip();
+        // Consider that ByteBuffer#wrap(byte[]) return a ByteBuffer that does not need to call flip().
+        if (data.position() > 0) {
+            data.flip();
+        }
         return Utils.toArray(data);
+    }
+
+    /**
+     * Note that this method will modify the position and limit of the input ByteBuffer.
+     *
+     * @param topic   topic associated with data
+     * @param data    typed data
+     * @return serialized ByteBuffer
+     */
+    @Override
+    public ByteBuffer serializeToByteBuffer(String topic, ByteBuffer data) {
+        if (data == null) {
+            return null;
+        }
+
+        // Consider that ByteBuffer#wrap(byte[]) return a ByteBuffer that does not need to call flip().
+        if (data.position() > 0) {
+            data.flip();
+        }
+        return data;
+    }
+
+    @Override
+    public ByteBuffer serializeToByteBuffer(String topic, Headers headers, ByteBuffer data) {
+        return serializeToByteBuffer(topic, data);
     }
 }

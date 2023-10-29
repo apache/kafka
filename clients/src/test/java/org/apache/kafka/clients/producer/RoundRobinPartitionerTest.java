@@ -21,6 +21,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.junit.jupiter.api.Test;
 
+import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -53,7 +54,7 @@ public class RoundRobinPartitionerTest {
         Cluster cluster = new Cluster("clusterId", asList(NODES[0], NODES[1], NODES[2]), partitions,
             Collections.emptySet(), Collections.emptySet());
         for (int i = 1; i <= 100; i++) {
-            int part = partitioner.partition("test", null, null, null, null, cluster);
+            int part = partitioner.partition("test", null, (ByteBuffer) null, null, null, cluster);
             assertTrue(part == 0 || part == 2, "We should never choose a leader-less node in round robin");
             if (part == 0)
                 countForPart0++;
@@ -76,7 +77,7 @@ public class RoundRobinPartitionerTest {
 
         final Map<Integer, Integer> partitionCount = new HashMap<>();
 
-        final byte[] keyBytes = "key".getBytes();
+        final ByteBuffer keyBytes = ByteBuffer.wrap("key".getBytes());
         Partitioner partitioner = new RoundRobinPartitioner();
         for (int i = 0; i < 30; ++i) {
             int partition = partitioner.partition(topicA, null, keyBytes, null, null, testCluster);
@@ -110,14 +111,14 @@ public class RoundRobinPartitionerTest {
 
         Partitioner partitioner = new RoundRobinPartitioner();
         for (int i = 0; i < 30; ++i) {
-            int partition = partitioner.partition(topicA, null, null, null, null, testCluster);
+            int partition = partitioner.partition(topicA, null, (ByteBuffer)  null, null, null, testCluster);
             Integer count = partitionCount.get(partition);
             if (null == count)
                 count = 0;
             partitionCount.put(partition, count + 1);
 
             if (i % 5 == 0) {
-                partitioner.partition(topicB, null, null, null, null, testCluster);
+                partitioner.partition(topicB, null, (ByteBuffer) null, null, null, testCluster);
             }
         }
 

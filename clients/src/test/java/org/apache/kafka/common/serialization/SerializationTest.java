@@ -18,28 +18,31 @@ package org.apache.kafka.common.serialization;
 
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.Utils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
-import java.util.ArrayList;
-import java.util.LinkedList;
 import java.util.Stack;
+import java.util.UUID;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.apache.kafka.common.utils.Utils.wrapNullable;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class SerializationTest {
 
@@ -94,6 +97,9 @@ public class SerializationTest {
             try (Serde<?> serde = Serdes.serdeFrom(cls)) {
                 assertNull(serde.serializer().serialize(topic, null),
                     "Should support null in " + cls.getSimpleName() + " serialization");
+                assertNull(serde.serializer().serializeToByteBuffer(topic, null),
+                        "Should support null in " + cls.getSimpleName() + " serialization");
+
                 assertNull(serde.deserializer().deserialize(topic, null),
                     "Should support null in " + cls.getSimpleName() + " deserialization");
                 assertNull(serde.deserializer().deserialize(topic, null, (ByteBuffer) null),
@@ -117,7 +123,7 @@ public class SerializationTest {
     @Test
     public void stringSerdeShouldSupportDifferentEncodings() {
         String str = "my string";
-        List<String> encodings = Arrays.asList(StandardCharsets.UTF_8.name(), StandardCharsets.UTF_16.name());
+        List<String> encodings = Arrays.asList(UTF_8.name(), StandardCharsets.UTF_16.name());
 
         for (String encoding : encodings) {
             try (Serde<String> serDeser = getStringSerde(encoding)) {
@@ -406,25 +412,69 @@ public class SerializationTest {
         return Serdes.serdeFrom(serializer, deserializer);
     }
 
+    @ParameterizedTest
+    @MethodSource("byteBufferProvider")
+    public void testByteBufferSerCompatibility(byte[] expectedBytes, ByteBuffer buffer) {
+        try (final ByteBufferSerializer serializer = new ByteBufferSerializer()) {
+            assertNull(serializer.serialize(topic, null));
+            assertNull(serializer.serializeToByteBuffer(topic, null));
+
+            final ByteBuffer duplicatedBuf0 = buffer.duplicate();
+            final ByteBuffer duplicatedBuf1 = buffer.duplicate();
+            assertArrayEquals(expectedBytes, serializer.serialize(topic, duplicatedBuf0));
+            assertArrayEquals(expectedBytes, Utils.toArray(serializer.serializeToByteBuffer(topic, duplicatedBuf1)));
+            assertEquals(duplicatedBuf0, duplicatedBuf1);
+        }
+    }
+
+    private static Arguments[] byteBufferProvider() {
+        final byte[] bytes = "ByteBuffer".getBytes(UTF_8);
+        return new Arguments[]{
+                //HeapByteBuffer
+                Arguments.of(new byte[0], ByteBuffer.allocate(0)),
+                Arguments.of(bytes, ByteBuffer.allocate(bytes.length + 1).put(bytes)),
+                Arguments.of(bytes, ByteBuffer.allocate(bytes.length + 1).put(bytes).duplicate()),
+                Arguments.of(bytes, ByteBuffer.allocate(bytes.length + 1).put(bytes).asReadOnlyBuffer()),
+                Arguments.of(bytes, ByteBuffer.allocate(bytes.length).put(bytes)),
+                Arguments.of(bytes, ByteBuffer.allocate(bytes.length).put(bytes).duplicate()),
+                Arguments.of(bytes, ByteBuffer.allocate(bytes.length).put(bytes).asReadOnlyBuffer()),
+                Arguments.of(bytes, ByteBuffer.wrap(bytes)),
+                Arguments.of(bytes, ByteBuffer.wrap(bytes).duplicate()),
+                Arguments.of(bytes, ByteBuffer.wrap(bytes).asReadOnlyBuffer()),
+                Arguments.of(bytes, ByteBuffer.allocate(128).put("ByteBuffer".getBytes(UTF_8)).slice().put(bytes)),
+
+                //DirectByteBuffer
+                Arguments.of(bytes, ByteBuffer.allocateDirect(bytes.length + 1).put(bytes)),
+                Arguments.of(bytes, ByteBuffer.allocateDirect(bytes.length + 1).put(bytes).duplicate()),
+                Arguments.of(bytes, ByteBuffer.allocateDirect(bytes.length + 1).put(bytes).asReadOnlyBuffer()),
+                Arguments.of(bytes, ByteBuffer.allocateDirect(bytes.length).put(bytes)),
+                Arguments.of(bytes, ByteBuffer.allocateDirect(bytes.length).put(bytes).duplicate()),
+                Arguments.of(bytes, ByteBuffer.allocateDirect(bytes.length).put(bytes).asReadOnlyBuffer()),
+                Arguments.of(bytes, ByteBuffer.allocateDirect(128).put("ByteBuffer".getBytes(UTF_8)).slice().put(bytes))
+        };
+    }
+
     @Test
-    public void testByteBufferSerializer() {
+    public void testByteBufferSerde() {
         final byte[] bytes = "Hello".getBytes(UTF_8);
         final ByteBuffer heapBuffer0 = ByteBuffer.allocate(bytes.length + 1).put(bytes);
         final ByteBuffer heapBuffer1 = ByteBuffer.allocate(bytes.length).put(bytes);
         final ByteBuffer heapBuffer2 = ByteBuffer.wrap(bytes);
         final ByteBuffer directBuffer0 = ByteBuffer.allocateDirect(bytes.length + 1).put(bytes);
         final ByteBuffer directBuffer1 = ByteBuffer.allocateDirect(bytes.length).put(bytes);
-        try (final ByteBufferSerializer serializer = new ByteBufferSerializer()) {
-            assertArrayEquals(bytes, serializer.serialize(topic, heapBuffer0));
-            assertArrayEquals(bytes, serializer.serialize(topic, heapBuffer1));
-            assertArrayEquals(bytes, serializer.serialize(topic, heapBuffer2));
-            assertArrayEquals(bytes, serializer.serialize(topic, directBuffer0));
-            assertArrayEquals(bytes, serializer.serialize(topic, directBuffer1));
+        try (ByteBufferSerializer ser = new ByteBufferSerializer();
+             ByteBufferDeserializer des = new ByteBufferDeserializer()) {
+            assertNull(des.deserialize(topic, ser.serialize(topic, null)));
+            assertEquals(heapBuffer0.duplicate().flip(), des.deserialize(topic, ser.serialize(topic, heapBuffer0.duplicate())));
+            assertEquals(heapBuffer1.duplicate().flip(), des.deserialize(topic, ser.serialize(topic, heapBuffer1.duplicate())));
+            assertEquals(heapBuffer2.duplicate(), des.deserialize(topic, ser.serialize(topic, heapBuffer2.duplicate())));
+            assertEquals(directBuffer0.duplicate().flip(), des.deserialize(topic, ser.serialize(topic, directBuffer0.duplicate())));
+            assertEquals(directBuffer1.duplicate().flip(), des.deserialize(topic, ser.serialize(topic, directBuffer1.duplicate())));
         }
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
+    @ValueSource(booleans = {true, false})
     public void testBooleanSerializer(Boolean dataToSerialize) {
         byte[] testData = new byte[1];
         testData[0] = (byte) (dataToSerialize ? 1 : 0);
@@ -434,7 +484,7 @@ public class SerializationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
+    @ValueSource(booleans = {true, false})
     public void testBooleanDeserializer(Boolean dataToDeserialize) {
         byte[] testData = new byte[1];
         testData[0] = (byte) (dataToDeserialize ? 1 : 0);

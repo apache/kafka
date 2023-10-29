@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.producer;
 
+import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -51,12 +52,16 @@ public class RoundRobinPartitioner implements Partitioner {
      */
     @Override
     public int partition(String topic, Object key, byte[] keyBytes, Object value, byte[] valueBytes, Cluster cluster) {
-        List<PartitionInfo> partitions = cluster.partitionsForTopic(topic);
-        int numPartitions = partitions.size();
-        int nextValue = nextValue(topic);
-        List<PartitionInfo> availablePartitions = cluster.availablePartitionsForTopic(topic);
+        return partition(topic, cluster);
+    }
+
+    private int partition(String topic, Cluster cluster) {
+        final List<PartitionInfo> partitions = cluster.partitionsForTopic(topic);
+        final int numPartitions = partitions.size();
+        final int nextValue = nextValue(topic);
+        final List<PartitionInfo> availablePartitions = cluster.availablePartitionsForTopic(topic);
         if (!availablePartitions.isEmpty()) {
-            int part = Utils.toPositive(nextValue) % availablePartitions.size();
+            final int part = Utils.toPositive(nextValue) % availablePartitions.size();
             return availablePartitions.get(part).partition();
         } else {
             // no partitions are available, give a non-available partition
@@ -65,8 +70,17 @@ public class RoundRobinPartitioner implements Partitioner {
     }
 
     private int nextValue(String topic) {
-        AtomicInteger counter = topicCounterMap.computeIfAbsent(topic, k -> new AtomicInteger(0));
-        return counter.getAndIncrement();
+        return topicCounterMap.computeIfAbsent(topic, k -> new AtomicInteger(0)).getAndIncrement();
+    }
+
+    @Override
+    public int partition(String topic,
+                         Object key,
+                         ByteBuffer keyBytes,
+                         Object value,
+                         ByteBuffer valueBytes,
+                         Cluster cluster) {
+        return partition(topic, cluster);
     }
 
     public void close() {}

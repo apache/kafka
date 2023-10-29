@@ -90,6 +90,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import javax.management.MBeanServer;
 import javax.management.ObjectName;
 import java.lang.management.ManagementFactory;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -1014,6 +1015,11 @@ public class KafkaProducerTest {
         when(valueSerializer.serialize(any(), any(), any())).then(invocation ->
                 invocation.<String>getArgument(2).getBytes());
 
+        when(keySerializer.serializeToByteBuffer(any(), any(), any())).then(invocation ->
+                ByteBuffer.wrap(invocation.<String>getArgument(2).getBytes()));
+        when(valueSerializer.serializeToByteBuffer(any(), any(), any())).then(invocation ->
+                ByteBuffer.wrap(invocation.<String>getArgument(2).getBytes()));
+
         String value = "value";
         String key = "key";
         ProducerRecord<String, String> record = new ProducerRecord<>(topic, key, value);
@@ -1028,8 +1034,8 @@ public class KafkaProducerTest {
         //ensure existing headers are not changed, and last header for key is still original value
         assertArrayEquals(record.headers().lastHeader("test").value(), "header2".getBytes());
 
-        verify(valueSerializer).serialize(topic, record.headers(), value);
-        verify(keySerializer).serialize(topic, record.headers(), key);
+        verify(valueSerializer).serializeToByteBuffer(topic, record.headers(), value);
+        verify(keySerializer).serializeToByteBuffer(topic, record.headers(), key);
 
         producer.close(Duration.ofMillis(0));
     }
@@ -2109,14 +2115,12 @@ public class KafkaProducerTest {
         }
     }
 
-    private <T> FutureRecordMetadata expectAppend(
-        KafkaProducerTestContext<T> ctx,
-        ProducerRecord<T, T> record,
-        TopicPartition initialSelectedPartition,
-        Cluster cluster
-    ) throws InterruptedException {
-        byte[] serializedKey = ctx.serializer.serialize(topic, record.key());
-        byte[] serializedValue = ctx.serializer.serialize(topic, record.value());
+    private <T> FutureRecordMetadata expectAppend(KafkaProducerTestContext<T> ctx,
+                                                  ProducerRecord<T, T> record,
+                                                  TopicPartition initialSelectedPartition,
+                                                  Cluster cluster) throws InterruptedException {
+        ByteBuffer serializedKey = ctx.serializer.serializeToByteBuffer(topic, record.key());
+        ByteBuffer serializedValue = ctx.serializer.serializeToByteBuffer(topic, record.value());
         long timestamp = record.timestamp() == null ? ctx.time.milliseconds() : record.timestamp();
 
         ProduceRequestResult requestResult = new ProduceRequestResult(initialSelectedPartition);
@@ -2124,8 +2128,8 @@ public class KafkaProducerTest {
             requestResult,
             5,
             timestamp,
-            serializedKey.length,
-            serializedValue.length,
+            serializedKey.remaining(),
+            serializedValue.remaining(),
             ctx.time
         );
 
@@ -2165,15 +2169,13 @@ public class KafkaProducerTest {
         return futureRecordMetadata;
     }
 
-    private <T> FutureRecordMetadata expectAppendWithAbortForNewBatch(
-        KafkaProducerTestContext<T> ctx,
-        ProducerRecord<T, T> record,
-        TopicPartition initialSelectedPartition,
-        TopicPartition retrySelectedPartition,
-        Cluster cluster
-    ) throws InterruptedException {
-        byte[] serializedKey = ctx.serializer.serialize(topic, record.key());
-        byte[] serializedValue = ctx.serializer.serialize(topic, record.value());
+    private <T> FutureRecordMetadata expectAppendWithAbortForNewBatch(KafkaProducerTestContext<T> ctx,
+                                                                      ProducerRecord<T, T> record,
+                                                                      TopicPartition initialSelectedPartition,
+                                                                      TopicPartition retrySelectedPartition,
+                                                                      Cluster cluster) throws InterruptedException {
+        ByteBuffer serializedKey = ctx.serializer.serializeToByteBuffer(topic, record.key());
+        ByteBuffer serializedValue = ctx.serializer.serializeToByteBuffer(topic, record.value());
         long timestamp = record.timestamp() == null ? ctx.time.milliseconds() : record.timestamp();
 
         ProduceRequestResult requestResult = new ProduceRequestResult(retrySelectedPartition);
@@ -2181,8 +2183,8 @@ public class KafkaProducerTest {
             requestResult,
             0,
             timestamp,
-            serializedKey.length,
-            serializedValue.length,
+            serializedKey.remaining(),
+            serializedValue.remaining(),
             ctx.time
         );
 

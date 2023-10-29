@@ -20,6 +20,8 @@ import org.apache.kafka.clients.producer.internals.BuiltInPartitioner;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 
+import java.nio.ByteBuffer;
+
 public class DefaultStreamPartitioner<K, V> implements StreamPartitioner<K, V> {
 
     private final Serializer<K> keySerializer;
@@ -31,7 +33,7 @@ public class DefaultStreamPartitioner<K, V> implements StreamPartitioner<K, V> {
     @Override
     @Deprecated
     public Integer partition(final String topic, final K key, final V value, final int numPartitions) {
-        final byte[] keyBytes = keySerializer.serialize(topic, key);
+        final ByteBuffer keyBytes = keySerializer.serializeToByteBuffer(topic, key);
 
         // if the key bytes are not available, we just return null to let the producer to decide
         // which partition to send internally; otherwise stick with the same built-in partitioner
