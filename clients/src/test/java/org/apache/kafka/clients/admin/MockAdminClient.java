@@ -1313,6 +1313,11 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
+    public Uuid clientInstanceId(Duration timeout) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
     synchronized public Map<MetricName, ? extends Metric> metrics() {
         return mockMetrics;
     }
