@@ -1377,7 +1377,9 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                     context.lock.unlock();
                 }
             } else {
-                log.debug("No unloading was required since broker was not a coordinator for {} with epoch {}", tp, partitionEpoch);
+                log.debug("Ignored unloading metadata for {} in epoch {} since metadata was never loaded ",
+                    tp, partitionEpoch
+                );
             }
         });
     }
