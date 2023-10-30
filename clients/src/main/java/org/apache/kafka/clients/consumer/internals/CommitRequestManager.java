@@ -342,15 +342,7 @@ public class CommitRequestManager implements RequestManager {
                         continue;
                     }
 
-                    if (error.exception() instanceof RetriableException) {
-                        log.warn("OffsetCommit failed on partition {} at offset {}: {}", tp, offset, error.message());
-                    } else {
-                        log.error("OffsetCommit failed on partition {} at offset {}: {}", tp, offset, error.message());
-                    }
-
-                    if (error == Errors.NONE) {
-                        log.debug("OffsetCommit {} for partition {}", offset, tp);
-                    } else if (error == Errors.TOPIC_AUTHORIZATION_FAILED) {
+                    if (error == Errors.TOPIC_AUTHORIZATION_FAILED) {
                         // Collect all unauthorized topics before failing
                         unauthorizedTopics.add(tp.topic());
                     } else if (error.exception() instanceof RetriableException) {
