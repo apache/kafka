@@ -183,6 +183,7 @@ class KafkaRequestHandler(
 
   private def completeShutdown(): Unit = {
     requestLocal.close()
+    threadRequestChannel.remove()
     shutdownComplete.countDown()
   }
 
