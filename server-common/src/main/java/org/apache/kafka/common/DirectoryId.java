@@ -42,29 +42,27 @@ public class DirectoryId {
     public static final Uuid MIGRATING = new Uuid(0L, 2L);
 
     /**
-     * The set of reserved UUIDs that will never be returned by the random method.
+     * @return true if the given ID is reserved. An ID is reserved if it is one of the first 100,
+     * or if its string representation starts with a dash. ("-")
      */
-    public static final Set<Uuid> RESERVED;
-
-    static {
-        HashSet<Uuid> reserved = new HashSet<>(Uuid.RESERVED);
-        // The first 100 UUIDs are reserved for future use.
-        for (long i = 0L; i < 100L; i++) {
-            reserved.add(new Uuid(0L, i));
-        }
-        RESERVED = Collections.unmodifiableSet(reserved);
+    public boolean isReserved(Uuid id) {
+        return id.toString().startsWith("-") ||
+            (uuid.getMostSignificantBits() == 0 &&
+                uuid.getLeastSignificantBits() < 100);
     }
 
     /**
      * Static factory to generate a directory ID.
      *
-     * This will not generate a reserved UUID (first 100), or one whose string representation starts with a dash ("-")
+     * This will not generate a reserved UUID (first 100), or one whose string representation
+     * starts with a dash ("-")
      */
     public static Uuid random() {
-        Uuid uuid = Uuid.randomUuid();
-        while (RESERVED.contains(uuid) || uuid.toString().startsWith("-")) {
-            uuid = Uuid.randomUuid();
+        while (true) {
+            Uuid uuid = Uuid.randomUuid();
+            if (isReserved(uuid)) {
+                return uuid;
+            }
         }
-        return uuid;
     }
 }
