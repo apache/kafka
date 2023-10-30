@@ -100,6 +100,7 @@ import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.isNull;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
@@ -209,12 +210,14 @@ public class StandaloneHerderTest {
         // No new connector is created
 
         herder.putConnectorConfig(CONNECTOR_NAME, config, false, createCallback);
+        verify(loaderSwap).close();
         Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(1000L, TimeUnit.SECONDS);
         assertEquals(createdInfo(SourceSink.SOURCE), connectorInfo.result());
 
         // Second should fail
         FutureCallback<Herder.Created<ConnectorInfo>> failedCreateCallback = new FutureCallback<>();
         herder.putConnectorConfig(CONNECTOR_NAME, config, false, failedCreateCallback);
+        verify(loaderSwap, times(2)).close();
         ExecutionException exception = assertThrows(ExecutionException.class, () -> failedCreateCallback.get(1000L, TimeUnit.SECONDS));
         if (AlreadyExistsException.class != exception.getCause().getClass()) {
             throw new AssertionError(exception.getCause());
