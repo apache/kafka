@@ -20,6 +20,6 @@ public class HardcodedConsumerDelegateDecider implements ConsumerDelegateDecider
 
     @Override
     public boolean useExisting() {
-        return false;
+        return true;
     }
 }
