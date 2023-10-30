@@ -600,6 +600,9 @@ public class StandaloneHerderTest {
         FutureCallback<ConnectorStateInfo> restartCallback = new FutureCallback<>();
         herder.restartConnectorAndTasks(restartRequest, restartCallback);
         assertEquals(connectorStateInfo, restartCallback.get(1000L, TimeUnit.MILLISECONDS));
+        ArgumentCaptor<TaskStatus> taskStatus = ArgumentCaptor.forClass(TaskStatus.class);
+        verify(statusBackingStore, atLeastOnce()).put(taskStatus.capture());
+        assertEquals(AbstractStatus.State.RESTARTING, taskStatus.getValue().state());
     }
 
     @Test
@@ -1126,5 +1129,4 @@ public class StandaloneHerderTest {
         assertEquals(CONNECTOR_NAME, connectorStatus.getValue().id());
         assertEquals(AbstractStatus.State.RESTARTING, connectorStatus.getValue().state());
     }
-
 }
