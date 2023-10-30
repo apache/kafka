@@ -1087,6 +1087,13 @@ public class PartitionChangeBuilderTest {
         assertTrue(Arrays.equals(new int[]{1, 2, 3, 4}, partition.elr), partition.toString());
         if (lastKnownLeaderEnabled) {
             assertTrue(Arrays.equals(new int[]{1}, partition.lastKnownElr), partition.toString());
+            builder = new PartitionChangeBuilder(partition, topicId, 0, r -> false, metadataVersionForPartitionChangeRecordVersion(version), 3)
+                .setElection(Election.PREFERRED)
+                .setEligibleLeaderReplicasEnabled(true)
+                .setUncleanShutdownReplicas(Arrays.asList(2))
+                .setUseLastKnownLeaderInBalancedRecovery(lastKnownLeaderEnabled);
+            PartitionChangeRecord changeRecord = (PartitionChangeRecord) builder.build().get().message();
+            assertTrue(changeRecord.lastKnownELR() == null, changeRecord.toString());
         } else {
             assertTrue(Arrays.equals(new int[]{}, partition.lastKnownElr), partition.toString());
         }

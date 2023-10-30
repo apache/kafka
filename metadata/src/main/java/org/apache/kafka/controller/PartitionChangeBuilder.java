@@ -483,7 +483,14 @@ public class PartitionChangeBuilder {
             record.setEligibleLeaderReplicas(targetElr);
         }
 
-        if (!useLastKnownLeaderInBalancedRecovery && !targetLastKnownElr.equals(Replicas.toList(partition.lastKnownElr))) {
+        if (useLastKnownLeaderInBalancedRecovery && partition.lastKnownElr.length == 1 &&
+                (record.leader() == NO_LEADER || record.leader() == NO_LEADER_CHANGE && partition.leader == NO_LEADER)) {
+            // If the last known leader is stored in the lastKnownElr, the last known elr should not be updated when
+            // the partition does not have a leader.
+            targetLastKnownElr = Replicas.toList(partition.lastKnownElr);
+        }
+
+        if (!targetLastKnownElr.equals(Replicas.toList(partition.lastKnownElr))) {
             record.setLastKnownELR(targetLastKnownElr);
         }
     }
