@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
 import org.apache.kafka.common.KafkaException;
@@ -52,8 +51,6 @@ import static org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.
 
 public class CommitRequestManager implements RequestManager {
 
-    // TODO: current in ConsumerConfig but inaccessible in the internal package.
-    private static final String THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED = "internal.throw.on.fetch.stable.offset.unsupported";
     private final SubscriptionState subscriptions;
     private final LogContext logContext;
     private final Logger log;
@@ -65,30 +62,31 @@ public class CommitRequestManager implements RequestManager {
     private final boolean throwOnFetchStableOffsetUnsupported;
     final PendingRequests pendingRequests;
 
-    public CommitRequestManager(
-            final Time time,
-            final LogContext logContext,
-            final SubscriptionState subscriptions,
-            final ConsumerConfig config,
-            final CoordinatorRequestManager coordinatorRequestManager,
-            final GroupState groupState) {
+    public CommitRequestManager(final LogContext logContext,
+                                final Time time,
+                                final SubscriptionState subscriptions,
+                                final CoordinatorRequestManager coordinatorRequestManager,
+                                final GroupState groupState,
+                                final boolean enableAutoCommit,
+                                final long autoCommitIntervalMs,
+                                final long retryBackoffMs,
+                                final long retryBackoffMaxMs,
+                                final boolean throwOnFetchStableOffsetUnsupported) {
         Objects.requireNonNull(coordinatorRequestManager, "Coordinator is needed upon committing offsets");
         this.logContext = logContext;
         this.log = logContext.logger(getClass());
         this.pendingRequests = new PendingRequests();
-        if (config.getBoolean(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG)) {
-            final long autoCommitInterval =
-                    Integer.toUnsignedLong(config.getInt(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG));
-            this.autoCommitState = Optional.of(new AutoCommitState(time, autoCommitInterval));
+        if (enableAutoCommit) {
+            this.autoCommitState = Optional.of(new AutoCommitState(time, autoCommitIntervalMs));
         } else {
             this.autoCommitState = Optional.empty();
         }
         this.coordinatorRequestManager = coordinatorRequestManager;
         this.groupState = groupState;
         this.subscriptions = subscriptions;
-        this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
-        this.retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
-        this.throwOnFetchStableOffsetUnsupported = config.getBoolean(THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED);
+        this.retryBackoffMs = retryBackoffMs;
+        this.retryBackoffMaxMs = retryBackoffMaxMs;
+        this.throwOnFetchStableOffsetUnsupported = throwOnFetchStableOffsetUnsupported;
     }
 
     /**

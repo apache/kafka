@@ -59,8 +59,8 @@ import static org.mockito.Mockito.spy;
 @SuppressWarnings("ClassDataAbstractionCoupling")
 public class ConsumerTestBuilder implements Closeable {
 
-    static final long DEFAULT_RETRY_BACKOFF_MS = 80;
-    static final long DEFAULT_RETRY_BACKOFF_MAX_MS = 1000;
+    static final long DEFAULT_RETRY_BACKOFF_MS = CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS;
+    static final long DEFAULT_RETRY_BACKOFF_MAX_MS = CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MAX_MS;
     static final int DEFAULT_REQUEST_TIMEOUT_MS = 500;
     static final int DEFAULT_MAX_POLL_INTERVAL_MS = 10000;
     static final String DEFAULT_GROUP_INSTANCE_ID = "group-instance-id";
@@ -130,10 +130,15 @@ public class ConsumerTestBuilder implements Closeable {
         });
 
         this.config = new ConsumerConfig(properties);
+        int requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
+        this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
+        long retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
+        int autoCommitIntervalMs = config.getInt(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG);
+        boolean enableAutoCommit = true;
+        boolean throwOnFetchStableOffsetUnsupported = false;
+        boolean allowAutoTopicCreation = config.getBoolean(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG);
 
         this.fetchConfig = new FetchConfig(config);
-        this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
-        final long requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
         this.metrics = createMetrics(config, time);
 
         this.subscriptions = spy(createSubscriptionState(config, logContext));
@@ -151,10 +156,13 @@ public class ConsumerTestBuilder implements Closeable {
         });
         this.client.updateMetadata(metadataResponse);
 
-        this.networkClientDelegate = spy(new NetworkClientDelegate(time,
-                config,
+        this.networkClientDelegate = spy(new NetworkClientDelegate(
                 logContext,
-                client));
+                time,
+                this.client,
+                config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG),
+                config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG)
+        ));
         this.offsetsRequestManager = spy(new OffsetsRequestManager(subscriptions,
                 metadata,
                 fetchConfig.isolationLevel,
@@ -169,43 +177,46 @@ public class ConsumerTestBuilder implements Closeable {
         if (groupInfo.isPresent()) {
             GroupInformation gi = groupInfo.get();
             CoordinatorRequestManager coordinator = spy(new CoordinatorRequestManager(
-                    time,
                     logContext,
+                    time,
                     DEFAULT_RETRY_BACKOFF_MS,
                     DEFAULT_RETRY_BACKOFF_MAX_MS,
                     backgroundEventHandler,
                     gi.groupState.groupId
             ));
-            CommitRequestManager commit = spy(new CommitRequestManager(time,
+            CommitRequestManager commit = spy(new CommitRequestManager(
                     logContext,
-                    subscriptions,
-                    config,
-                    coordinator,
-                    groupState));
-            MembershipManager mm = spy(
-                    new MembershipManagerImpl(
-                        gi.groupState.groupId,
-                        gi.groupState.groupInstanceId.orElse(null),
-                        null,
-                        logContext
-                )
-            );
-            HeartbeatRequestManager.HeartbeatRequestState state = spy(new HeartbeatRequestManager.HeartbeatRequestState(logContext,
                     time,
-                    gi.heartbeatIntervalMs,
+                    subscriptions,
+                    coordinator,
+                    groupState,
+                    enableAutoCommit,
+                    autoCommitIntervalMs,
                     retryBackoffMs,
-                    DEFAULT_RETRY_BACKOFF_MAX_MS,
-                    gi.heartbeatJitterMs));
+                    retryBackoffMaxMs,
+                    throwOnFetchStableOffsetUnsupported));
+            MembershipManager mm = spy(new MembershipManagerImpl(
+                    gi.groupState.groupId,
+                    gi.groupState.groupInstanceId.orElse(null),
+                    null,
+                    logContext
+            ));
+            HeartbeatRequestManager.HeartbeatRequestState state = spy(new HeartbeatRequestManager.HeartbeatRequestState(
+                    logContext,
+                    time,
+                    groupRebalanceConfig.heartbeatIntervalMs,
+                    groupRebalanceConfig.retryBackoffMs,
+                    groupRebalanceConfig.retryBackoffMaxMs
+            ));
             HeartbeatRequestManager heartbeat = spy(new HeartbeatRequestManager(
                     logContext,
-                    time,
-                    config,
                     coordinator,
                     subscriptions,
                     mm,
+                    backgroundEventHandler,
                     state,
-                    backgroundEventHandler));
-
+                    groupRebalanceConfig.rebalanceTimeoutMs
+            ));
             this.coordinatorRequestManager = Optional.of(coordinator);
             this.commitRequestManager = Optional.of(commit);
             this.heartbeatRequestManager = Optional.of(heartbeat);
@@ -228,8 +239,12 @@ public class ConsumerTestBuilder implements Closeable {
                 fetchBuffer,
                 metricsManager,
                 networkClientDelegate));
-        this.topicMetadataRequestManager = spy(new TopicMetadataRequestManager(logContext,
-                config));
+        this.topicMetadataRequestManager = spy(new TopicMetadataRequestManager(
+                logContext,
+                retryBackoffMs,
+                retryBackoffMaxMs,
+                allowAutoTopicCreation
+        ));
         this.requestManagers = new RequestManagers(logContext,
                 offsetsRequestManager,
                 topicMetadataRequestManager,

@@ -17,7 +17,6 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ClientResponse;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
@@ -29,7 +28,6 @@ import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.OffsetFetchRequest;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
 import org.apache.kafka.common.requests.RequestHeader;
-import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.junit.jupiter.api.BeforeEach;
@@ -45,17 +43,14 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.kafka.clients.consumer.ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG;
-import static org.apache.kafka.clients.consumer.ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG;
-import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
-import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_GROUP_ID;
+import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_RETRY_BACKOFF_MAX_MS;
+import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_RETRY_BACKOFF_MS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -68,7 +63,6 @@ public class CommitRequestManagerTest {
     private LogContext logContext;
     private MockTime time;
     private CoordinatorRequestManager coordinatorRequestManager;
-    private Properties props;
     private Node mockedNode = new Node(1, "host1", 9092);
 
     @BeforeEach
@@ -78,11 +72,6 @@ public class CommitRequestManagerTest {
         this.subscriptionState = mock(SubscriptionState.class);
         this.coordinatorRequestManager = mock(CoordinatorRequestManager.class);
         this.groupState = new GroupState(DEFAULT_GROUP_ID, Optional.empty());
-
-        this.props = new Properties();
-        this.props.put(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG, 100);
-        this.props.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        this.props.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
     }
 
     @Test
@@ -358,15 +347,18 @@ public class CommitRequestManagerTest {
     }
 
     private CommitRequestManager create(final boolean autoCommitEnabled, final long autoCommitInterval) {
-        props.setProperty(AUTO_COMMIT_INTERVAL_MS_CONFIG, String.valueOf(autoCommitInterval));
-        props.setProperty(ENABLE_AUTO_COMMIT_CONFIG, String.valueOf(autoCommitEnabled));
         return new CommitRequestManager(
-                this.time,
-                this.logContext,
-                this.subscriptionState,
-                new ConsumerConfig(props),
-                this.coordinatorRequestManager,
-                this.groupState);
+                logContext,
+                time,
+                subscriptionState,
+                coordinatorRequestManager,
+                groupState,
+                autoCommitEnabled,
+                autoCommitInterval,
+                DEFAULT_RETRY_BACKOFF_MS,
+                DEFAULT_RETRY_BACKOFF_MAX_MS,
+                false
+        );
     }
 
     private ClientResponse buildOffsetFetchClientResponse(

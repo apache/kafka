@@ -20,6 +20,7 @@ import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.GroupRebalanceConfig;
+import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -191,6 +192,13 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
             this.time = time;
             this.metrics = createMetrics(config, time);
             this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
+            int requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
+            long retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
+            int autoCommitIntervalMs = config.getInt(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG);
+            int rebalanceTimeoutMs = config.getInt(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG);
+            int heartbeatIntervalMs = config.getInt(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG);
+            boolean enableAutoCommit = config.getBoolean(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG);
+            boolean throwOnFetchStableOffsetUnsupported = false;
 
             List<ConsumerInterceptor<K, V>> interceptorList = configuredConsumerInterceptors(config);
             this.interceptors = new ConsumerInterceptors<>(interceptorList);
@@ -213,34 +221,58 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
 
             // This FetchBuffer is shared between the application and network threads.
             this.fetchBuffer = new FetchBuffer(logContext);
-            final Supplier<NetworkClientDelegate> networkClientDelegateSupplier = NetworkClientDelegate.supplier(time,
-                    logContext,
-                    metadata,
+            final Supplier<KafkaClient> kafkaClientSupplier = () -> ConsumerUtils.createNetworkClient(
                     config,
-                    apiVersions,
                     metrics,
-                    fetchMetricsManager);
-            final Supplier<RequestManagers> requestManagersSupplier = RequestManagers.supplier(time,
+                    logContext,
+                    apiVersions,
+                    time,
+                    metadata,
+                    fetchMetricsManager.throttleTimeSensor()
+            );
+            final Supplier<NetworkClientDelegate> networkClientDelegateSupplier = NetworkClientDelegate.supplier(
+                    logContext,
+                    time,
+                    kafkaClientSupplier,
+                    config.getInt(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG),
+                    retryBackoffMs
+            );
+
+            final Supplier<RequestManagers> requestManagersSupplier = RequestManagers.supplier(
+                    time,
                     logContext,
                     backgroundEventQueue,
                     metadata,
                     subscriptions,
+                    fetchConfig,
                     fetchBuffer,
-                    config,
                     groupRebalanceConfig,
                     apiVersions,
                     fetchMetricsManager,
-                    networkClientDelegateSupplier);
-            final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(logContext,
+                    enableAutoCommit,
+                    autoCommitIntervalMs,
+                    rebalanceTimeoutMs,
+                    heartbeatIntervalMs,
+                    retryBackoffMs,
+                    retryBackoffMaxMs,
+                    requestTimeoutMs,
+                    throwOnFetchStableOffsetUnsupported,
+                    networkClientDelegateSupplier
+            );
+            final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(
+                    logContext,
                     metadata,
                     applicationEventQueue,
-                    requestManagersSupplier);
-            this.applicationEventHandler = new ApplicationEventHandler(logContext,
+                    requestManagersSupplier
+            );
+            this.applicationEventHandler = new ApplicationEventHandler(
+                    logContext,
                     time,
                     applicationEventQueue,
                     applicationEventProcessorSupplier,
                     networkClientDelegateSupplier,
-                    requestManagersSupplier);
+                    requestManagersSupplier
+            );
             this.backgroundEventProcessor = new BackgroundEventProcessor(logContext, backgroundEventQueue);
             this.assignors = ConsumerPartitionAssignor.getAssignorInstances(
                     config.getList(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG),

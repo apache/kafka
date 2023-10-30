@@ -18,7 +18,6 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.GroupRebalanceConfig;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.common.internals.IdempotentCloser;
@@ -111,21 +110,25 @@ public class RequestManagers implements Closeable {
                                                      final BlockingQueue<BackgroundEvent> backgroundEventQueue,
                                                      final ConsumerMetadata metadata,
                                                      final SubscriptionState subscriptions,
+                                                     final FetchConfig fetchConfig,
                                                      final FetchBuffer fetchBuffer,
-                                                     final ConsumerConfig config,
                                                      final GroupRebalanceConfig groupRebalanceConfig,
                                                      final ApiVersions apiVersions,
                                                      final FetchMetricsManager fetchMetricsManager,
+                                                     final boolean enableAutoCommit,
+                                                     final long autoCommitIntervalMs,
+                                                     final int rebalanceTimeoutMs,
+                                                     final int heartbeatIntervalMs,
+                                                     final long retryBackoffMs,
+                                                     final long retryBackoffMaxMs,
+                                                     final long requestTimeoutMs,
+                                                     final boolean throwOnFetchStableOffsetUnsupported,
                                                      final Supplier<NetworkClientDelegate> networkClientDelegateSupplier) {
         return new CachedSupplier<RequestManagers>() {
             @Override
             protected RequestManagers create() {
                 final NetworkClientDelegate networkClientDelegate = networkClientDelegateSupplier.get();
                 final BackgroundEventHandler backgroundEventHandler = new BackgroundEventHandler(logContext, backgroundEventQueue);
-                final FetchConfig fetchConfig = new FetchConfig(config);
-                long retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
-                long retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
-                final int requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
                 final OffsetsRequestManager listOffsets = new OffsetsRequestManager(subscriptions,
                         metadata,
                         fetchConfig.isolationLevel,
@@ -146,29 +149,48 @@ public class RequestManagers implements Closeable {
                         networkClientDelegate);
                 final TopicMetadataRequestManager topic = new TopicMetadataRequestManager(
                         logContext,
-                        config);
+                        retryBackoffMs,
+                        retryBackoffMaxMs,
+                        metadata.allowAutoTopicCreation());
                 HeartbeatRequestManager heartbeatRequestManager = null;
                 CoordinatorRequestManager coordinator = null;
                 CommitRequestManager commit = null;
 
                 if (groupRebalanceConfig != null && groupRebalanceConfig.groupId != null) {
                     final GroupState groupState = new GroupState(groupRebalanceConfig);
-                    coordinator = new CoordinatorRequestManager(time,
+                    coordinator = new CoordinatorRequestManager(
                             logContext,
+                            time,
                             retryBackoffMs,
                             retryBackoffMaxMs,
                             backgroundEventHandler,
-                            groupState.groupId);
-                    commit = new CommitRequestManager(time, logContext, subscriptions, config, coordinator, groupState);
+                            groupState.groupId
+                    );
+                    commit = new CommitRequestManager(
+                            logContext,
+                            time,
+                            subscriptions,
+                            coordinator,
+                            groupState,
+                            enableAutoCommit,
+                            autoCommitIntervalMs,
+                            retryBackoffMs,
+                            retryBackoffMaxMs,
+                            throwOnFetchStableOffsetUnsupported
+                    );
                     MembershipManager membershipManager = new MembershipManagerImpl(groupState.groupId, logContext);
                     heartbeatRequestManager = new HeartbeatRequestManager(
                             logContext,
                             time,
-                            config,
                             coordinator,
                             subscriptions,
                             membershipManager,
-                            backgroundEventHandler);
+                            backgroundEventHandler,
+                            heartbeatIntervalMs,
+                            retryBackoffMs,
+                            retryBackoffMaxMs,
+                            rebalanceTimeoutMs
+                    );
                 }
 
                 return new RequestManagers(

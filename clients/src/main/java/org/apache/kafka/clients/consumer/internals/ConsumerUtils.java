@@ -20,6 +20,7 @@ import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.GroupRebalanceConfig;
+import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -53,6 +54,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 
 public final class ConsumerUtils {
 
@@ -97,6 +99,44 @@ public final class ConsumerUtils {
                 retryBackoffMs,
                 config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG),
                 heartbeatIntervalMs);
+    }
+
+    public static NetworkClient createNetworkClient(ConsumerConfig config,
+                                                    Metrics metrics,
+                                                    LogContext logContext,
+                                                    ApiVersions apiVersions,
+                                                    Time time,
+                                                    Metadata metadata,
+                                                    Sensor throttleTimeSensor) {
+        return ClientUtils.createNetworkClient(
+                config,
+                metrics,
+                CONSUMER_METRIC_GROUP_PREFIX,
+                logContext,
+                apiVersions,
+                time,
+                CONSUMER_MAX_INFLIGHT_REQUESTS_PER_CONNECTION,
+                metadata,
+                throttleTimeSensor
+        );
+    }
+
+    public static ConsumerNetworkClient createConsumerNetworkClient(KafkaClient client,
+                                                                    LogContext logContext,
+                                                                    Time time,
+                                                                    Metadata metadata,
+                                                                    long retryBackoffMs,
+                                                                    int heartbeatIntervalMs,
+                                                                    int requestTimeoutMs) {
+        return new ConsumerNetworkClient(
+                logContext,
+                client,
+                metadata,
+                time,
+                retryBackoffMs,
+                requestTimeoutMs,
+                heartbeatIntervalMs
+        );
     }
 
     public static LogContext createLogContext(ConsumerConfig config, GroupRebalanceConfig groupRebalanceConfig) {

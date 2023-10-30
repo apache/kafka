@@ -30,12 +30,15 @@ import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
 import java.util.Optional;
 
+import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_GROUP_ID;
+import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_RETRY_BACKOFF_MS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -45,9 +48,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 public class CoordinatorRequestManagerTest {
-    private static final int RETRY_BACKOFF_MS = 500;
-    private static final String GROUP_ID = "group-1";
-    private MockTime time;
+    private static final long RETRY_BACKOFF_MS = DEFAULT_RETRY_BACKOFF_MS;
+    private static final String GROUP_ID = DEFAULT_GROUP_ID;
+    private Time time;
     private BackgroundEventHandler backgroundEventHandler;
     private Node node;
 
@@ -188,8 +191,8 @@ public class CoordinatorRequestManagerTest {
 
     private CoordinatorRequestManager setupCoordinatorManager(String groupId) {
         return new CoordinatorRequestManager(
-            time,
             new LogContext(),
+            time,
             RETRY_BACKOFF_MS,
             RETRY_BACKOFF_MS,
             this.backgroundEventHandler,

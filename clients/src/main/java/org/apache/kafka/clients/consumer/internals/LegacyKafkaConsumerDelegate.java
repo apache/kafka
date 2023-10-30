@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.ApiVersions;
+import org.apache.kafka.clients.GroupRebalanceConfig;
+import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
@@ -23,7 +26,6 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.common.Cluster;
-import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
@@ -45,6 +47,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP_PREFIX;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createConsumerNetworkClient;
 import static org.apache.kafka.common.utils.Utils.closeQuietly;
 import static org.apache.kafka.common.utils.Utils.swallow;
 
@@ -74,18 +78,23 @@ public class LegacyKafkaConsumerDelegate<K, V> extends AbstractConsumerDelegate<
                                        Time time,
                                        Metrics metrics,
                                        KafkaConsumerMetrics kafkaConsumerMetrics,
-                                       long requestTimeoutMs,
+                                       FetchMetricsManager fetchMetricsManager,
+                                       ApiVersions apiVersions,
+                                       int requestTimeoutMs,
                                        int defaultApiTimeoutMs,
                                        long retryBackoffMs,
+                                       long retryBackoffMaxMs,
+                                       int autoCommitIntervalMs,
+                                       int heartbeatIntervalMs,
+                                       boolean enableAutoCommit,
+                                       boolean throwOnFetchStableOffsetUnsupported,
                                        ConsumerInterceptors<K, V> interceptors,
-                                       IsolationLevel isolationLevel,
+                                       FetchConfig fetchConfig,
                                        List<ConsumerPartitionAssignor> assignors,
-                                       ConsumerCoordinator coordinator,
                                        Deserializers<K, V> deserializers,
-                                       Fetcher<K, V> fetcher,
-                                       OffsetFetcher offsetFetcher,
-                                       TopicMetadataFetcher topicMetadataFetcher,
-                                       ConsumerNetworkClient client) {
+                                       GroupRebalanceConfig groupRebalanceConfig,
+                                       KafkaClient kafkaClient,
+                                       String clientRack) {
         super(
                 logContext,
                 clientId,
@@ -100,15 +109,107 @@ public class LegacyKafkaConsumerDelegate<K, V> extends AbstractConsumerDelegate<
                 defaultApiTimeoutMs,
                 retryBackoffMs,
                 interceptors,
+                fetchConfig.isolationLevel,
+                assignors
+        );
+
+        this.log = logContext.logger(LegacyKafkaConsumerDelegate.class);
+        this.client = createConsumerNetworkClient(kafkaClient,
+                logContext,
+                time,
+                metadata,
+                retryBackoffMs,
+                heartbeatIntervalMs,
+                requestTimeoutMs);
+
+        // no coordinator will be constructed for the default (null) group id
+        if (!groupId.isPresent()) {
+            this.coordinator = null;
+        } else {
+            this.coordinator = new ConsumerCoordinator(
+                    groupRebalanceConfig,
+                    logContext,
+                    this.client,
+                    assignors,
+                    this.metadata,
+                    this.subscriptions,
+                    metrics,
+                    CONSUMER_METRIC_GROUP_PREFIX,
+                    this.time,
+                    enableAutoCommit,
+                    autoCommitIntervalMs,
+                    this.interceptors,
+                    throwOnFetchStableOffsetUnsupported,
+                    clientRack
+            );
+        }
+        this.fetcher = new Fetcher<>(
+                logContext,
+                this.client,
+                this.metadata,
+                this.subscriptions,
+                fetchConfig,
+                this.deserializers,
+                fetchMetricsManager,
+                this.time);
+        this.offsetFetcher = new OffsetFetcher(logContext,
+                client,
+                metadata,
+                subscriptions,
+                time,
+                retryBackoffMs,
+                requestTimeoutMs,
                 isolationLevel,
+                apiVersions);
+        this.topicMetadataFetcher = new TopicMetadataFetcher(logContext,
+                client,
+                retryBackoffMs,
+                retryBackoffMaxMs);
+    }
+
+    public LegacyKafkaConsumerDelegate(LogContext logContext,
+                                       String clientId,
+                                       Optional<String> groupId,
+                                       SubscriptionState subscriptions,
+                                       ConsumerMetadata metadata,
+                                       Time time,
+                                       Metrics metrics,
+                                       KafkaConsumerMetrics kafkaConsumerMetrics,
+                                       long requestTimeoutMs,
+                                       int defaultApiTimeoutMs,
+                                       long retryBackoffMs,
+                                       ConsumerInterceptors<K, V> interceptors,
+                                       FetchConfig fetchConfig,
+                                       List<ConsumerPartitionAssignor> assignors,
+                                       Deserializers<K, V> deserializers,
+                                       ConsumerNetworkClient client,
+                                       ConsumerCoordinator coordinator,
+                                       Fetcher<K, V> fetcher,
+                                       OffsetFetcher offsetFetcher,
+                                       TopicMetadataFetcher topicMetadataFetcher) {
+        super(
+                logContext,
+                clientId,
+                groupId,
+                subscriptions,
+                metadata,
+                time,
+                metrics,
+                kafkaConsumerMetrics,
+                deserializers,
+                requestTimeoutMs,
+                defaultApiTimeoutMs,
+                retryBackoffMs,
+                interceptors,
+                fetchConfig.isolationLevel,
                 assignors
         );
         this.log = logContext.logger(LegacyKafkaConsumerDelegate.class);
+        this.client = client;
         this.coordinator = coordinator;
         this.fetcher = fetcher;
         this.offsetFetcher = offsetFetcher;
         this.topicMetadataFetcher = topicMetadataFetcher;
-        this.client = client;
     }
 
     public Set<TopicPartition> assignment() {
@@ -372,7 +473,7 @@ public class LegacyKafkaConsumerDelegate<K, V> extends AbstractConsumerDelegate<
 
     @Override
     public void wakeup() {
-        this.client.wakeup();
+        client.wakeup();
     }
 
     /**
@@ -381,7 +482,7 @@ public class LegacyKafkaConsumerDelegate<K, V> extends AbstractConsumerDelegate<
      */
     private void acquireAndEnsureOpen() {
         acquire();
-        if (this.closed) {
+        if (closed) {
             release();
             throw new IllegalStateException("This consumer has already been closed.");
         }
@@ -419,20 +520,22 @@ public class LegacyKafkaConsumerDelegate<K, V> extends AbstractConsumerDelegate<
 
     @Override
     protected void updatePatternSubscription(Cluster cluster) {
-        coordinator.updatePatternSubscription(cluster);
+        if (coordinator != null)
+            coordinator.updatePatternSubscription(cluster);
     }
 
     @Override
     protected void unsubscribeInternal() {
-        if (this.coordinator != null) {
-            this.coordinator.onLeavePrepare();
-            this.coordinator.maybeLeaveGroup("the consumer unsubscribed from all topics");
+        if (coordinator != null) {
+            coordinator.onLeavePrepare();
+            coordinator.maybeLeaveGroup("the consumer unsubscribed from all topics");
         }
     }
 
     @Override
     protected void maybeAutoCommitOffsetsAsync(long currentTimeMs) {
-        this.coordinator.maybeAutoCommitOffsetsAsync(currentTimeMs);
+        if (coordinator != null)
+            coordinator.maybeAutoCommitOffsetsAsync(currentTimeMs);
     }
 
     @Override
@@ -442,7 +545,8 @@ public class LegacyKafkaConsumerDelegate<K, V> extends AbstractConsumerDelegate<
 
     @Override
     protected void commitOffsetsAsync(Map<TopicPartition, OffsetAndMetadata> offsets, OffsetCommitCallback callback) {
-        coordinator.commitOffsetsAsync(new HashMap<>(offsets), callback);
+        if (coordinator != null)
+            coordinator.commitOffsetsAsync(new HashMap<>(offsets), callback);
     }
 
     @Override

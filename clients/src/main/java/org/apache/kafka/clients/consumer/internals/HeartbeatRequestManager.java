@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.CommonClientConfigs;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
@@ -62,7 +60,6 @@ import java.util.Collections;
 public class HeartbeatRequestManager implements RequestManager {
 
     private final Logger logger;
-    private final Time time;
 
     /**
      * Time that the group coordinator will wait on member to revoke its partitions. This is provided by the group
@@ -95,43 +92,46 @@ public class HeartbeatRequestManager implements RequestManager {
      */
     private final BackgroundEventHandler backgroundEventHandler;
 
-    public HeartbeatRequestManager(
-        final LogContext logContext,
-        final Time time,
-        final ConsumerConfig config,
-        final CoordinatorRequestManager coordinatorRequestManager,
-        final SubscriptionState subscriptions,
-        final MembershipManager membershipManager,
-        final BackgroundEventHandler backgroundEventHandler) {
-        this.coordinatorRequestManager = coordinatorRequestManager;
-        this.time = time;
-        this.logger = logContext.logger(getClass());
-        this.subscriptions = subscriptions;
-        this.membershipManager = membershipManager;
-        this.backgroundEventHandler = backgroundEventHandler;
-        this.rebalanceTimeoutMs = config.getInt(CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG);
-        long retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
-        long retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
-        this.heartbeatRequestState = new HeartbeatRequestState(logContext, time, 0, retryBackoffMs,
-            retryBackoffMaxMs, rebalanceTimeoutMs);
+    public HeartbeatRequestManager(final LogContext logContext,
+                                   final Time time,
+                                   final CoordinatorRequestManager coordinatorRequestManager,
+                                   final SubscriptionState subscriptions,
+                                   final MembershipManager membershipManager,
+                                   final BackgroundEventHandler backgroundEventHandler,
+                                   final int heartbeatIntervalMs,
+                                   final long retryBackoffMs,
+                                   final long retryBackoffMaxMs,
+                                   final int rebalanceTimeoutMs) {
+        this(
+                logContext,
+                coordinatorRequestManager,
+                subscriptions,
+                membershipManager,
+                backgroundEventHandler,
+                new HeartbeatRequestState(
+                        logContext,
+                        time,
+                        heartbeatIntervalMs,
+                        retryBackoffMs,
+                        retryBackoffMaxMs
+                ),
+                rebalanceTimeoutMs
+        );
     }
 
     // Visible for testing
-    HeartbeatRequestManager(
-        final LogContext logContext,
-        final Time time,
-        final ConsumerConfig config,
-        final CoordinatorRequestManager coordinatorRequestManager,
-        final SubscriptionState subscriptions,
-        final MembershipManager membershipManager,
-        final HeartbeatRequestState heartbeatRequestState,
-        final BackgroundEventHandler backgroundEventHandler) {
+    HeartbeatRequestManager(final LogContext logContext,
+                            final CoordinatorRequestManager coordinatorRequestManager,
+                            final SubscriptionState subscriptions,
+                            final MembershipManager membershipManager,
+                            final BackgroundEventHandler backgroundEventHandler,
+                            final HeartbeatRequestState heartbeatRequestState,
+                            final int rebalanceTimeoutMs) {
         this.logger = logContext.logger(this.getClass());
-        this.time = time;
-        this.subscriptions = subscriptions;
-        this.rebalanceTimeoutMs = config.getInt(CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG);
         this.coordinatorRequestManager = coordinatorRequestManager;
+        this.subscriptions = subscriptions;
         this.heartbeatRequestState = heartbeatRequestState;
+        this.rebalanceTimeoutMs = rebalanceTimeoutMs;
         this.membershipManager = membershipManager;
         this.backgroundEventHandler = backgroundEventHandler;
     }
@@ -327,24 +327,22 @@ public class HeartbeatRequestManager implements RequestManager {
          */
         private long heartbeatIntervalMs;
 
-        public HeartbeatRequestState(
-            final LogContext logContext,
-            final Time time,
-            final long heartbeatIntervalMs,
-            final long retryBackoffMs,
-            final long retryBackoffMaxMs) {
+        public HeartbeatRequestState(final LogContext logContext,
+                                     final Time time,
+                                     final long heartbeatIntervalMs,
+                                     final long retryBackoffMs,
+                                     final long retryBackoffMaxMs) {
             super(logContext, HeartbeatRequestState.class.getName(), retryBackoffMs, retryBackoffMaxMs);
             this.heartbeatIntervalMs = heartbeatIntervalMs;
             this.heartbeatTimer = time.timer(heartbeatIntervalMs);
         }
 
-        public HeartbeatRequestState(
-            final LogContext logContext,
-            final Time time,
-            final long heartbeatIntervalMs,
-            final long retryBackoffMs,
-            final long retryBackoffMaxMs,
-            final double jitter) {
+        public HeartbeatRequestState(final LogContext logContext,
+                                     final Time time,
+                                     final long heartbeatIntervalMs,
+                                     final long retryBackoffMs,
+                                     final long retryBackoffMaxMs,
+                                     final double jitter) {
             super(logContext, HeartbeatRequestState.class.getName(), retryBackoffMs, 2, retryBackoffMaxMs, jitter);
             this.heartbeatIntervalMs = heartbeatIntervalMs;
             this.heartbeatTimer = time.timer(heartbeatIntervalMs);
@@ -371,7 +369,7 @@ public class HeartbeatRequestManager implements RequestManager {
             return heartbeatTimer.remainingMs();
         }
 
-        private void updateHeartbeatIntervalMs(final long heartbeatIntervalMs) {
+        private void updateHeartbeatIntervalMs(final int heartbeatIntervalMs) {
             if (this.heartbeatIntervalMs == heartbeatIntervalMs) {
                 // no need to update the timer if the interval hasn't changed
                 return;

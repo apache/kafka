@@ -178,7 +178,7 @@ public class FetchRequestManagerTest {
     private int maxWaitMs = 0;
     private int fetchSize = 1000;
     private long retryBackoffMs = 100;
-    private long requestTimeoutMs = 30000;
+    private int requestTimeoutMs = 30000;
     private MockTime time = new MockTime(1);
     private SubscriptionState subscriptions;
     private ConsumerMetadata metadata;
@@ -3337,7 +3337,7 @@ public class FetchRequestManagerTest {
                 metadata,
                 time,
                 retryBackoffMs,
-                (int) requestTimeoutMs,
+                requestTimeoutMs,
                 Integer.MAX_VALUE);
         offsetFetcher = new OffsetFetcher(logContext,
                 consumerNetworkClient,
@@ -3369,7 +3369,12 @@ public class FetchRequestManagerTest {
         properties.setProperty(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG, String.valueOf(requestTimeoutMs));
         properties.setProperty(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG, String.valueOf(retryBackoffMs));
         ConsumerConfig config = new ConsumerConfig(properties);
-        networkClientDelegate = spy(new TestableNetworkClientDelegate(time, config, logContext, client));
+        networkClientDelegate = spy(new TestableNetworkClientDelegate(
+                logContext,
+                time,
+                client,
+                requestTimeoutMs,
+                retryBackoffMs));
     }
 
     private <T> List<Long> collectRecordOffsets(List<ConsumerRecord<T, T>> records) {
@@ -3413,11 +3418,12 @@ public class FetchRequestManagerTest {
         private final Logger log = LoggerFactory.getLogger(NetworkClientDelegate.class);
         private final ConcurrentLinkedQueue<Node> pendingDisconnects = new ConcurrentLinkedQueue<>();
 
-        public TestableNetworkClientDelegate(Time time,
-                                             ConsumerConfig config,
-                                             LogContext logContext,
-                                             KafkaClient client) {
-            super(time, config, logContext, client);
+        public TestableNetworkClientDelegate(final LogContext logContext,
+                                             final Time time,
+                                             final KafkaClient client,
+                                             final int requestTimeoutMs,
+                                             final long retryBackoffMs) {
+            super(logContext, time, client, requestTimeoutMs, retryBackoffMs);
         }
 
         @Override

@@ -16,7 +16,10 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.GroupRebalanceConfig;
+import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.NoOffsetForPartitionException;
@@ -25,7 +28,9 @@ import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventHandler;
+import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsApplicationEvent;
@@ -33,7 +38,6 @@ import org.apache.kafka.clients.consumer.internals.events.OffsetFetchApplication
 import org.apache.kafka.clients.consumer.internals.events.ResetPositionsApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ValidatePositionsApplicationEvent;
 import org.apache.kafka.common.Cluster;
-import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
@@ -53,9 +57,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.refreshCommittedOffsets;
@@ -90,23 +97,102 @@ public class AsyncKafkaConsumerDelegate<K, V> extends AbstractConsumerDelegate<K
                                       Time time,
                                       Metrics metrics,
                                       KafkaConsumerMetrics kafkaConsumerMetrics,
-                                      long requestTimeoutMs,
+                                      FetchMetricsManager fetchMetricsManager,
+                                      ApiVersions apiVersions,
+                                      int requestTimeoutMs,
                                       int defaultApiTimeoutMs,
                                       long retryBackoffMs,
+                                      long retryBackoffMaxMs,
+                                      int autoCommitIntervalMs,
+                                      int rebalanceTimeoutMs,
+                                      int heartbeatIntervalMs,
+                                      boolean enableAutoCommit,
+                                      boolean throwOnFetchStableOffsetUnsupported,
                                       ConsumerInterceptors<K, V> interceptors,
-                                      IsolationLevel isolationLevel,
+                                      FetchConfig fetchConfig,
                                       List<ConsumerPartitionAssignor> assignors,
-                                      ApplicationEventHandler applicationEventHandler,
-                                      BackgroundEventProcessor backgroundEventProcessor,
                                       Deserializers<K, V> deserializers,
-                                      FetchBuffer fetchBuffer,
-                                      FetchCollector<K, V> fetchCollector) {
-        super(logContext, clientId, groupId, subscriptions, metadata, time, metrics, kafkaConsumerMetrics, deserializers, requestTimeoutMs, defaultApiTimeoutMs, retryBackoffMs, interceptors, isolationLevel, assignors);
+                                      GroupRebalanceConfig groupRebalanceConfig,
+                                      Supplier<KafkaClient> kafkaClientSupplier) {
+        super(
+                logContext,
+                clientId,
+                groupId,
+                subscriptions,
+                metadata,
+                time,
+                metrics,
+                kafkaConsumerMetrics,
+                deserializers,
+                requestTimeoutMs,
+                defaultApiTimeoutMs,
+                retryBackoffMs,
+                interceptors,
+                fetchConfig.isolationLevel,
+                assignors);
+
         this.log = logContext.logger(AsyncKafkaConsumerDelegate.class);
-        this.applicationEventHandler = applicationEventHandler;
-        this.backgroundEventProcessor = backgroundEventProcessor;
-        this.fetchBuffer = fetchBuffer;
-        this.fetchCollector = fetchCollector;
+
+        final BlockingQueue<ApplicationEvent> applicationEventQueue = new LinkedBlockingQueue<>();
+        final BlockingQueue<BackgroundEvent> backgroundEventQueue = new LinkedBlockingQueue<>();
+
+        // This FetchBuffer is shared between the application and network threads.
+        this.fetchBuffer = new FetchBuffer(logContext);
+        final Supplier<NetworkClientDelegate> networkClientDelegateSupplier = NetworkClientDelegate.supplier(
+                logContext,
+                time,
+                kafkaClientSupplier,
+                requestTimeoutMs,
+                retryBackoffMs
+        );
+
+        final Supplier<RequestManagers> requestManagersSupplier = RequestManagers.supplier(
+                time,
+                logContext,
+                backgroundEventQueue,
+                metadata,
+                subscriptions,
+                fetchConfig,
+                fetchBuffer,
+                groupRebalanceConfig,
+                apiVersions,
+                fetchMetricsManager,
+                enableAutoCommit,
+                autoCommitIntervalMs,
+                rebalanceTimeoutMs,
+                heartbeatIntervalMs,
+                retryBackoffMs,
+                retryBackoffMaxMs,
+                requestTimeoutMs,
+                throwOnFetchStableOffsetUnsupported,
+                networkClientDelegateSupplier
+        );
+        final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(
+                logContext,
+                metadata,
+                applicationEventQueue,
+                requestManagersSupplier
+        );
+        this.applicationEventHandler = new ApplicationEventHandler(
+                logContext,
+                time,
+                applicationEventQueue,
+                applicationEventProcessorSupplier,
+                networkClientDelegateSupplier,
+                requestManagersSupplier
+        );
+        this.backgroundEventProcessor = new BackgroundEventProcessor(logContext, backgroundEventQueue);
+
+        // The FetchCollector is only used on the application thread.
+        this.fetchCollector = new FetchCollector<>(
+                logContext,
+                metadata,
+                subscriptions,
+                fetchConfig,
+                deserializers,
+                fetchMetricsManager,
+                time
+        );
     }
 
     // Visible for testing
@@ -238,25 +324,6 @@ public class AsyncKafkaConsumerDelegate<K, V> extends AbstractConsumerDelegate<K
         // logic
         return updateFetchPositions(timer);
     }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     @Override
     protected void clearBufferedDataForUnassignedPartitions(Collection<TopicPartition> currentTopicPartitions) {

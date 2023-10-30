@@ -18,7 +18,6 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.MockClient;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -26,9 +25,9 @@ import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
-import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -36,12 +35,10 @@ import org.junit.jupiter.api.Test;
 import java.util.Collections;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Properties;
 
-import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
-import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
-import static org.apache.kafka.clients.consumer.ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG;
-import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
+import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_GROUP_ID;
+import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_REQUEST_TIMEOUT_MS;
+import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_RETRY_BACKOFF_MS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -49,9 +46,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 public class NetworkClientDelegateTest {
-    private static final int REQUEST_TIMEOUT_MS = 5000;
-    private static final String GROUP_ID = "group";
-    private MockTime time;
+
+    private Time time;
     private MockClient client;
 
     @BeforeEach
@@ -77,11 +73,11 @@ public class NetworkClientDelegateTest {
     @Test
     public void testTimeoutBeforeSend() throws Exception {
         try (NetworkClientDelegate ncd = newNetworkClientDelegate()) {
-            client.setUnreachable(mockNode(), REQUEST_TIMEOUT_MS);
+            client.setUnreachable(mockNode(), DEFAULT_REQUEST_TIMEOUT_MS);
             NetworkClientDelegate.UnsentRequest unsentRequest = newUnsentFindCoordinatorRequest();
             ncd.send(unsentRequest);
             ncd.poll(0, time.milliseconds());
-            time.sleep(REQUEST_TIMEOUT_MS);
+            time.sleep(DEFAULT_REQUEST_TIMEOUT_MS);
             ncd.poll(0, time.milliseconds());
             assertTrue(unsentRequest.future().isDone());
             TestUtils.assertFutureThrows(unsentRequest.future(), TimeoutException.class);
@@ -94,7 +90,7 @@ public class NetworkClientDelegateTest {
             NetworkClientDelegate.UnsentRequest unsentRequest = newUnsentFindCoordinatorRequest();
             ncd.send(unsentRequest);
             ncd.poll(0, time.milliseconds());
-            time.sleep(REQUEST_TIMEOUT_MS);
+            time.sleep(DEFAULT_REQUEST_TIMEOUT_MS);
             ncd.poll(0, time.milliseconds());
             assertTrue(unsentRequest.future().isDone());
             TestUtils.assertFutureThrows(unsentRequest.future(), DisconnectException.class);
@@ -124,30 +120,31 @@ public class NetworkClientDelegateTest {
 
     public NetworkClientDelegate newNetworkClientDelegate() {
         LogContext logContext = new LogContext();
-        Properties properties = new Properties();
-        properties.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        properties.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        properties.put(GROUP_ID_CONFIG, GROUP_ID);
-        properties.put(REQUEST_TIMEOUT_MS_CONFIG, REQUEST_TIMEOUT_MS);
-        return new NetworkClientDelegate(this.time, new ConsumerConfig(properties), logContext, this.client);
+        return new NetworkClientDelegate(
+                logContext,
+                time,
+                client,
+                DEFAULT_REQUEST_TIMEOUT_MS,
+                DEFAULT_RETRY_BACKOFF_MS
+        );
     }
 
     public NetworkClientDelegate.UnsentRequest newUnsentFindCoordinatorRequest() {
-        Objects.requireNonNull(GROUP_ID);
+        Objects.requireNonNull(DEFAULT_GROUP_ID);
         NetworkClientDelegate.UnsentRequest req = new NetworkClientDelegate.UnsentRequest(
                 new FindCoordinatorRequest.Builder(new FindCoordinatorRequestData()
-                    .setKey(GROUP_ID)
+                    .setKey(DEFAULT_GROUP_ID)
                     .setKeyType(FindCoordinatorRequest.CoordinatorType.GROUP.id())
                 ),
             Optional.empty()
         );
-        req.setTimer(this.time, REQUEST_TIMEOUT_MS);
+        req.setTimer(this.time, DEFAULT_REQUEST_TIMEOUT_MS);
         return req;
     }
 
     public void prepareFindCoordinatorResponse(Errors error) {
         FindCoordinatorResponse findCoordinatorResponse =
-            FindCoordinatorResponse.prepareResponse(error, GROUP_ID, mockNode());
+            FindCoordinatorResponse.prepareResponse(error, DEFAULT_GROUP_ID, mockNode());
         client.prepareResponse(findCoordinatorResponse);
     }
 

@@ -61,18 +61,16 @@ public class CoordinatorRequestManager implements RequestManager {
     private long totalDisconnectedMin = 0;
     private Node coordinator;
 
-    public CoordinatorRequestManager(
-        final Time time,
-        final LogContext logContext,
-        final long retryBackoffMs,
-        final long retryBackoffMaxMs,
-        final BackgroundEventHandler errorHandler,
-        final String groupId
-    ) {
+    public CoordinatorRequestManager(final LogContext logContext,
+                                     final Time time,
+                                     final long retryBackoffMs,
+                                     final long retryBackoffMaxMs,
+                                     final BackgroundEventHandler backgroundEventHandler,
+                                     final String groupId) {
         Objects.requireNonNull(groupId);
         this.time = time;
         this.log = logContext.logger(this.getClass());
-        this.backgroundEventHandler = errorHandler;
+        this.backgroundEventHandler = backgroundEventHandler;
         this.groupId = groupId;
         this.coordinatorRequestState = new RequestState(
                 logContext,

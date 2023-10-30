@@ -16,18 +16,10 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.utils.Timer;
+import java.util.function.Supplier;
 
-public interface ConsumerDelegate<K, V> extends Consumer<K, V> {
+public interface ConsumerDelegateDecider {
 
-    Metrics metricsInternal();
-
-    KafkaConsumerMetrics kafkaConsumerMetrics();
-
-    String getClientId();
-
-    boolean updateAssignmentMetadataIfNeeded(final Timer timer);
+    boolean useExisting();
 
 }

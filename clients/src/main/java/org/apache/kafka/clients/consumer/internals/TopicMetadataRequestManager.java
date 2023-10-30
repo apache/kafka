@@ -17,7 +17,6 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ClientResponse;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
@@ -63,20 +62,24 @@ import static org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.
  */
 
 public class TopicMetadataRequestManager implements RequestManager {
+
+    private final Logger log;
     private final boolean allowAutoTopicCreation;
     private final Map<Optional<String>, TopicMetadataRequestState> inflightRequests;
     private final long retryBackoffMs;
     private final long retryBackoffMaxMs;
-    private final Logger log;
     private final LogContext logContext;
 
-    public TopicMetadataRequestManager(final LogContext context, final ConsumerConfig config) {
-        logContext = context;
-        log = logContext.logger(getClass());
-        inflightRequests = new HashMap<>();
-        retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
-        retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
-        allowAutoTopicCreation = config.getBoolean(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG);
+    public TopicMetadataRequestManager(final LogContext context,
+                                       final long retryBackoffMs,
+                                       final long retryBackoffMaxMs,
+                                       final boolean allowAutoTopicCreation) {
+        this.logContext = context;
+        this.log = logContext.logger(getClass());
+        this.inflightRequests = new HashMap<>();
+        this.retryBackoffMs = retryBackoffMs;
+        this.retryBackoffMaxMs = retryBackoffMaxMs;
+        this.allowAutoTopicCreation = allowAutoTopicCreation;
     }
 
     @Override

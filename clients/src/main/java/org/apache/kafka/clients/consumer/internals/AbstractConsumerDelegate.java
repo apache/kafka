@@ -119,6 +119,21 @@ public abstract class AbstractConsumerDelegate<K, V> implements ConsumerDelegate
     }
 
     @Override
+    public Metrics metricsInternal() {
+        return metrics;
+    }
+
+    @Override
+    public KafkaConsumerMetrics kafkaConsumerMetrics() {
+        return kafkaConsumerMetrics;
+    }
+
+    @Override
+    public String getClientId() {
+        return clientId;
+    }
+
+    @Override
     public Set<TopicPartition> assignment() {
         return Collections.unmodifiableSet(this.subscriptions.assignedPartitions());
     }
@@ -233,6 +248,11 @@ public abstract class AbstractConsumerDelegate<K, V> implements ConsumerDelegate
                                                 final AtomicReference<Throwable> firstException);
 
     protected abstract void closeUntimedResources(final AtomicReference<Throwable> firstException);
+
+    @Override
+    public boolean updateAssignmentMetadataIfNeeded(final Timer timer) {
+        return updateAssignmentMetadataIfNeeded(timer, true);
+    }
 
     @Override
     public void subscribe(Collection<String> topics) {
@@ -652,8 +672,6 @@ public abstract class AbstractConsumerDelegate<K, V> implements ConsumerDelegate
         return groupMetadataInternal();
     }
 
-
-
     /**
      * @throws KafkaException if the rebalance callback throws exception
      */
@@ -784,4 +802,5 @@ public abstract class AbstractConsumerDelegate<K, V> implements ConsumerDelegate
         if (offsetAndMetadata != null)
             offsetAndMetadata.leaderEpoch().ifPresent(epoch -> metadata.updateLastSeenEpochIfNewer(topicPartition, epoch));
     }
+
 }
