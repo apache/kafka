@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -34,6 +35,7 @@ import java.util.Map;
 import static org.apache.kafka.common.requests.AbstractResponse.DEFAULT_THROTTLE_TIME;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class LeaveGroupResponseTest {
@@ -163,6 +165,35 @@ public class LeaveGroupResponseTest {
             assertEquals(primaryResponse, primaryResponse);
             assertEquals(primaryResponse, reversedResponse);
             assertEquals(primaryResponse.hashCode(), reversedResponse.hashCode());
+        }
+    }
+
+    @Test
+    public void testNoMembersResponses() {
+        for (short version : ApiKeys.LEAVE_GROUP.allVersions()) {
+            LeaveGroupResponseData data = new LeaveGroupResponseData()
+                .setErrorCode(Errors.NONE.code())
+                .setMembers(Collections.emptyList());
+
+            LeaveGroupResponse response = new LeaveGroupResponse(data, version);
+            assertEquals(Errors.NONE, response.topLevelError());
+        }
+    }
+
+    @Test
+    public void testMultipleMembersResponses() {
+        for (short version : ApiKeys.LEAVE_GROUP.allVersions()) {
+            LeaveGroupResponseData data = new LeaveGroupResponseData()
+                .setErrorCode(Errors.NONE.code())
+                .setMembers(memberResponses);
+
+            if (version < 3) {
+                assertThrows(UnsupportedVersionException.class,
+                             () -> new LeaveGroupResponse(data, version));
+            } else {
+                LeaveGroupResponse response = new LeaveGroupResponse(data, version);
+                assertEquals(Errors.NONE, response.topLevelError());
+            }
         }
     }
 }
