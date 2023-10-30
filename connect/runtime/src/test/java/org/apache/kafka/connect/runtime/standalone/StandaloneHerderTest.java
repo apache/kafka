@@ -206,13 +206,6 @@ public class StandaloneHerderTest {
         Map<String, String> config = connectorConfig(SourceSink.SOURCE);
         Connector connectorMock = mock(SourceConnector.class);
         expectConfigValidation(connectorMock, true, config, config);
-
-        when(worker.configTransformer()).thenReturn(transformer);
-        final ArgumentCaptor<Map<String, String>> configCapture = ArgumentCaptor.forClass(Map.class);
-        when(transformer.transform(configCapture.capture())).thenAnswer(invocation -> configCapture.getValue());
-        when(worker.getPlugins()).thenReturn(plugins);
-        when(plugins.connectorLoader(anyString())).thenReturn(pluginLoader);
-        when(plugins.withClassLoader(pluginLoader)).thenReturn(loaderSwap);
         // No new connector is created
 
         herder.putConnectorConfig(CONNECTOR_NAME, config, false, createCallback);
