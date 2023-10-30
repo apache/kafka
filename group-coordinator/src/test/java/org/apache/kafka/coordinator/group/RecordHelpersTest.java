@@ -413,7 +413,6 @@ public class RecordHelpersTest {
                 new ConsumerGroupCurrentMemberAssignmentValue()
                     .setMemberEpoch(22)
                     .setPreviousMemberEpoch(21)
-                    .setTargetMemberEpoch(23)
                     .setAssignedPartitions(Arrays.asList(
                         new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
                             .setTopicId(topicId1)
@@ -421,20 +420,13 @@ public class RecordHelpersTest {
                         new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
                             .setTopicId(topicId2)
                             .setPartitions(Arrays.asList(21, 22, 23))))
-                    .setPartitionsPendingRevocation(Arrays.asList(
+                    .setRevokedPartitions(Arrays.asList(
                         new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
                             .setTopicId(topicId1)
                             .setPartitions(Arrays.asList(14, 15, 16)),
                         new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
                             .setTopicId(topicId2)
-                            .setPartitions(Arrays.asList(24, 25, 26))))
-                    .setPartitionsPendingAssignment(Arrays.asList(
-                        new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
-                            .setTopicId(topicId1)
-                            .setPartitions(Arrays.asList(17, 18, 19)),
-                        new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
-                            .setTopicId(topicId2)
-                            .setPartitions(Arrays.asList(27, 28, 29)))),
+                            .setPartitions(Arrays.asList(24, 25, 26)))),
                 (short) 0));
 
         assertEquals(expectedRecord, newCurrentAssignmentRecord(
@@ -442,10 +434,8 @@ public class RecordHelpersTest {
             new ConsumerGroupMember.Builder("member-id")
                 .setMemberEpoch(22)
                 .setPreviousMemberEpoch(21)
-                .setTargetMemberEpoch(23)
                 .setAssignedPartitions(assigned)
-                .setPartitionsPendingRevocation(revoking)
-                .setPartitionsPendingAssignment(assigning)
+                .setRevokedPartitions(revoking)
                 .build()
         ));
     }
@@ -926,18 +916,12 @@ public class RecordHelpersTest {
 
             assertEquals(expectedValue.memberEpoch(), actualValue.memberEpoch());
             assertEquals(expectedValue.previousMemberEpoch(), actualValue.previousMemberEpoch());
-            assertEquals(expectedValue.targetMemberEpoch(), actualValue.targetMemberEpoch());
-            assertEquals(expectedValue.error(), actualValue.error());
-            assertEquals(expectedValue.metadataVersion(), actualValue.metadataVersion());
-            assertEquals(expectedValue.metadataBytes(), actualValue.metadataBytes());
 
             // We transform those to Maps before comparing them.
             assertEquals(fromTopicPartitions(expectedValue.assignedPartitions()),
                 fromTopicPartitions(actualValue.assignedPartitions()));
-            assertEquals(fromTopicPartitions(expectedValue.partitionsPendingRevocation()),
-                fromTopicPartitions(actualValue.partitionsPendingRevocation()));
-            assertEquals(fromTopicPartitions(expectedValue.partitionsPendingAssignment()),
-                fromTopicPartitions(actualValue.partitionsPendingAssignment()));
+            assertEquals(fromTopicPartitions(expectedValue.revokedPartitions()),
+                fromTopicPartitions(actualValue.revokedPartitions()));
         } else if (actual.message() instanceof ConsumerGroupPartitionMetadataValue) {
             // The order of the racks stored in the PartitionMetadata of the ConsumerGroupPartitionMetadataValue
             // is not always guaranteed. Therefore, we need a special comparator.

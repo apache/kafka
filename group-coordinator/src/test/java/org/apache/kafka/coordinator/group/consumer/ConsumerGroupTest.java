@@ -112,10 +112,8 @@ public class ConsumerGroupTest {
             .setMemberEpoch(10)
             .setAssignedPartitions(mkAssignment(
                 mkTopicAssignment(fooTopicId, 1, 2, 3)))
-            .setPartitionsPendingRevocation(mkAssignment(
+            .setRevokedPartitions(mkAssignment(
                 mkTopicAssignment(barTopicId, 4, 5, 6)))
-            .setPartitionsPendingAssignment(mkAssignment(
-                mkTopicAssignment(zarTopicId, 7, 8, 9)))
             .build();
 
         consumerGroup.updateMember(member);
@@ -134,10 +132,8 @@ public class ConsumerGroupTest {
             .setMemberEpoch(11)
             .setAssignedPartitions(mkAssignment(
                 mkTopicAssignment(barTopicId, 1, 2, 3)))
-            .setPartitionsPendingRevocation(mkAssignment(
+            .setRevokedPartitions(mkAssignment(
                 mkTopicAssignment(zarTopicId, 4, 5, 6)))
-            .setPartitionsPendingAssignment(mkAssignment(
-                mkTopicAssignment(fooTopicId, 7, 8, 9)))
             .build();
 
         consumerGroup.updateMember(member);
@@ -166,10 +162,8 @@ public class ConsumerGroupTest {
             .setMemberEpoch(10)
             .setAssignedPartitions(mkAssignment(
                 mkTopicAssignment(fooTopicId, 1, 2, 3)))
-            .setPartitionsPendingRevocation(mkAssignment(
+            .setRevokedPartitions(mkAssignment(
                 mkTopicAssignment(barTopicId, 4, 5, 6)))
-            .setPartitionsPendingAssignment(mkAssignment(
-                mkTopicAssignment(zarTopicId, 7, 8, 9)))
             .build();
 
         consumerGroup.updateMember(member);
@@ -204,9 +198,9 @@ public class ConsumerGroupTest {
         assertEquals(ConsumerGroup.ConsumerGroupState.EMPTY, consumerGroup.state());
 
         ConsumerGroupMember member1 = new ConsumerGroupMember.Builder("member1")
+            .setState(ConsumerGroupMember.MemberState.STABLE)
             .setMemberEpoch(1)
             .setPreviousMemberEpoch(0)
-            .setTargetMemberEpoch(1)
             .build();
 
         consumerGroup.updateMember(member1);
@@ -216,9 +210,9 @@ public class ConsumerGroupTest {
         assertEquals(ConsumerGroup.ConsumerGroupState.ASSIGNING, consumerGroup.state());
 
         ConsumerGroupMember member2 = new ConsumerGroupMember.Builder("member2")
+            .setState(ConsumerGroupMember.MemberState.STABLE)
             .setMemberEpoch(1)
             .setPreviousMemberEpoch(0)
-            .setTargetMemberEpoch(1)
             .build();
 
         consumerGroup.updateMember(member2);
@@ -232,9 +226,9 @@ public class ConsumerGroupTest {
         assertEquals(ConsumerGroup.ConsumerGroupState.RECONCILING, consumerGroup.state());
 
         member1 = new ConsumerGroupMember.Builder(member1)
+            .setState(ConsumerGroupMember.MemberState.STABLE)
             .setMemberEpoch(2)
             .setPreviousMemberEpoch(1)
-            .setTargetMemberEpoch(2)
             .build();
 
         consumerGroup.updateMember(member1);
@@ -244,25 +238,20 @@ public class ConsumerGroupTest {
 
         // Member 2 is not stable so the group stays in reconciling state.
         member2 = new ConsumerGroupMember.Builder(member2)
+            .setState(ConsumerGroupMember.MemberState.UNACKNOWLEDGED_ASSIGNMENT)
             .setMemberEpoch(2)
             .setPreviousMemberEpoch(1)
-            .setTargetMemberEpoch(2)
-            .setPartitionsPendingAssignment(mkAssignment(
-                mkTopicAssignment(fooTopicId, 0)))
             .build();
 
         consumerGroup.updateMember(member2);
 
-        assertEquals(ConsumerGroupMember.MemberState.ASSIGNING, member2.state());
+        assertEquals(ConsumerGroupMember.MemberState.UNACKNOWLEDGED_ASSIGNMENT, member2.state());
         assertEquals(ConsumerGroup.ConsumerGroupState.RECONCILING, consumerGroup.state());
 
         member2 = new ConsumerGroupMember.Builder(member2)
+            .setState(ConsumerGroupMember.MemberState.STABLE)
             .setMemberEpoch(2)
             .setPreviousMemberEpoch(1)
-            .setTargetMemberEpoch(2)
-            .setAssignedPartitions(mkAssignment(
-                mkTopicAssignment(fooTopicId, 0)))
-            .setPartitionsPendingAssignment(Collections.emptyMap())
             .build();
 
         consumerGroup.updateMember(member2);
@@ -691,7 +680,6 @@ public class ConsumerGroupTest {
         ConsumerGroupMember member1 = new ConsumerGroupMember.Builder("member1")
             .setMemberEpoch(1)
             .setPreviousMemberEpoch(0)
-            .setTargetMemberEpoch(1)
             .build();
         consumerGroup.updateMember(member1);
 

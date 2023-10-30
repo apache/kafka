@@ -934,7 +934,7 @@ public class GroupMetadataManager {
         // 3. Reconcile the member's assignment with the target assignment. This is only required if
         // the member is not stable or if a new target assignment has been installed.
         boolean assignmentUpdated = false;
-        if (updatedMember.state() != ConsumerGroupMember.MemberState.STABLE || updatedMember.targetMemberEpoch() != targetAssignmentEpoch) {
+        if (!updatedMember.isReconciledTo(targetAssignmentEpoch)) {
             ConsumerGroupMember prevMember = updatedMember;
             updatedMember = new CurrentAssignmentBuilder(updatedMember)
                 .withTargetAssignment(targetAssignmentEpoch, targetAssignment)
@@ -942,24 +942,17 @@ public class GroupMetadataManager {
                 .withOwnedTopicPartitions(ownedTopicPartitions)
                 .build();
 
-            // Checking the reference is enough here because a new instance
-            // is created only when the state has changed.
-            if (updatedMember != prevMember) {
-                assignmentUpdated = true;
+            if (!updatedMember.assignmentEquals(prevMember)) {
                 records.add(newCurrentAssignmentRecord(groupId, updatedMember));
 
                 log.info("[GroupId {}] Member {} transitioned from {} to {}.",
                     groupId, memberId, member.currentAssignmentSummary(), updatedMember.currentAssignmentSummary());
 
-                if (updatedMember.state() == ConsumerGroupMember.MemberState.REVOKING) {
-                    scheduleConsumerGroupRevocationTimeout(
-                        groupId,
-                        memberId,
-                        updatedMember.rebalanceTimeoutMs(),
-                        updatedMember.memberEpoch()
-                    );
+                if (updatedMember.state() == ConsumerGroupMember.MemberState.UNACKNOWLEDGED_ASSIGNMENT) {
+                    assignmentUpdated = true;
+                    scheduleConsumerGroupRebalanceTimeout(groupId, updatedMember);
                 } else {
-                    cancelConsumerGroupRevocationTimeout(groupId, memberId);
+                    cancelConsumerGroupRebalanceTimeout(groupId, memberId);
                 }
             }
         }
@@ -1045,7 +1038,7 @@ public class GroupMetadataManager {
 
         // Cancel all the timers of the member.
         cancelConsumerGroupSessionTimeout(group.groupId(), member.memberId());
-        cancelConsumerGroupRevocationTimeout(group.groupId(), member.memberId());
+        cancelConsumerGroupRebalanceTimeout(group.groupId(), member.memberId());
 
         return records;
     }
@@ -1094,41 +1087,37 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Schedules a revocation timeout for the member.
+     * Schedules a rebalance timeout for the member.
      *
-     * @param groupId               The group id.
-     * @param memberId              The member id.
-     * @param revocationTimeoutMs   The revocation timeout.
-     * @param expectedMemberEpoch   The expected member epoch.
+     * @param groupId           The group id.
+     * @param expectedMember    The expected member.
      */
-    private void scheduleConsumerGroupRevocationTimeout(
+    private void scheduleConsumerGroupRebalanceTimeout(
         String groupId,
-        String memberId,
-        long revocationTimeoutMs,
-        int expectedMemberEpoch
+        ConsumerGroupMember expectedMember
     ) {
-        String key = consumerGroupRevocationTimeoutKey(groupId, memberId);
-        timer.schedule(key, revocationTimeoutMs, TimeUnit.MILLISECONDS, true, () -> {
+        String key = consumerGroupRebalanceTimeoutKey(groupId, expectedMember.memberId());
+        timer.schedule(key, expectedMember.rebalanceTimeoutMs(), TimeUnit.MILLISECONDS, true, () -> {
             try {
                 ConsumerGroup group = getOrMaybeCreateConsumerGroup(groupId, false);
-                ConsumerGroupMember member = group.getOrMaybeCreateMember(memberId, false);
+                ConsumerGroupMember member = group.getOrMaybeCreateMember(expectedMember.memberId(), false);
 
-                if (member.state() != ConsumerGroupMember.MemberState.REVOKING ||
-                    member.memberEpoch() != expectedMemberEpoch) {
-                    log.debug("[GroupId {}] Ignoring revocation timeout for {} because the member " +
-                        "state does not match the expected state.", groupId, memberId);
+                if (!member.assignmentEquals(expectedMember)) {
+                    log.debug("[GroupId {}] Ignoring rebalance timeout for {} because the member " +
+                        "state does not match the expected state.", groupId, expectedMember.memberId());
                     return new CoordinatorResult<>(Collections.emptyList());
                 }
 
                 log.info("[GroupId {}] Member {} fenced from the group because " +
-                    "it failed to revoke partitions within {}ms.", groupId, memberId, revocationTimeoutMs);
+                    "it failed to acknowledge new assignment within {}ms.",
+                    groupId, expectedMember.memberId(), expectedMember.rebalanceTimeoutMs());
                 return new CoordinatorResult<>(consumerGroupFenceMember(group, member));
             } catch (GroupIdNotFoundException ex) {
                 log.debug("[GroupId {}] Could not fence {}} because the group does not exist.",
-                    groupId, memberId);
+                    groupId, expectedMember.memberId());
             } catch (UnknownMemberIdException ex) {
                 log.debug("[GroupId {}] Could not fence {} because the member does not exist.",
-                    groupId, memberId);
+                    groupId, expectedMember.memberId());
             }
 
             return new CoordinatorResult<>(Collections.emptyList());
@@ -1136,16 +1125,16 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Cancels the revocation timeout of the member.
+     * Cancels the rebalance timeout of the member.
      *
      * @param groupId       The group id.
      * @param memberId      The member id.
      */
-    private void cancelConsumerGroupRevocationTimeout(
+    private void cancelConsumerGroupRebalanceTimeout(
         String groupId,
         String memberId
     ) {
-        timer.cancel(consumerGroupRevocationTimeoutKey(groupId, memberId));
+        timer.cancel(consumerGroupRebalanceTimeoutKey(groupId, memberId));
     }
 
     /**
@@ -1435,10 +1424,8 @@ public class GroupMetadataManager {
             ConsumerGroupMember newMember = new ConsumerGroupMember.Builder(oldMember)
                 .setMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH)
                 .setPreviousMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH)
-                .setTargetMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH)
                 .setAssignedPartitions(Collections.emptyMap())
-                .setPartitionsPendingRevocation(Collections.emptyMap())
-                .setPartitionsPendingAssignment(Collections.emptyMap())
+                .setRevokedPartitions(Collections.emptyMap())
                 .build();
             consumerGroup.updateMember(newMember);
         }
@@ -1487,13 +1474,8 @@ public class GroupMetadataManager {
                     consumerGroup.members().forEach((memberId, member) -> {
                         log.debug("Loaded member {} in consumer group {}.", memberId, groupId);
                         scheduleConsumerGroupSessionTimeout(groupId, memberId);
-                        if (member.state() == ConsumerGroupMember.MemberState.REVOKING) {
-                            scheduleConsumerGroupRevocationTimeout(
-                                groupId,
-                                memberId,
-                                member.rebalanceTimeoutMs(),
-                                member.memberEpoch()
-                            );
+                        if (member.state() == ConsumerGroupMember.MemberState.UNACKNOWLEDGED_ASSIGNMENT) {
+                            scheduleConsumerGroupRebalanceTimeout(groupId, member);
                         }
                     });
                     break;
@@ -1521,8 +1503,8 @@ public class GroupMetadataManager {
         return "session-timeout-" + groupId + "-" + memberId;
     }
 
-    public static String consumerGroupRevocationTimeoutKey(String groupId, String memberId) {
-        return "revocation-timeout-" + groupId + "-" + memberId;
+    public static String consumerGroupRebalanceTimeoutKey(String groupId, String memberId) {
+        return "rebalance-timeout-" + groupId + "-" + memberId;
     }
 
     /**

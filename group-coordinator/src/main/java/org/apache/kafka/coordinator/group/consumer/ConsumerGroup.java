@@ -678,7 +678,7 @@ public class ConsumerGroup implements Group {
             state.set(ConsumerGroupState.ASSIGNING);
         } else {
             for (ConsumerGroupMember member : members.values()) {
-                if (member.targetMemberEpoch() != targetAssignmentEpoch.get() || member.state() != ConsumerGroupMember.MemberState.STABLE) {
+                if (!member.isReconciledTo(targetAssignmentEpoch.get())) {
                     state.set(ConsumerGroupState.RECONCILING);
                     return;
                 }
@@ -775,15 +775,15 @@ public class ConsumerGroup implements Group {
     ) {
         if (oldMember == null) {
             addPartitionEpochs(newMember.assignedPartitions(), newMember.memberEpoch());
-            addPartitionEpochs(newMember.partitionsPendingRevocation(), newMember.memberEpoch());
+            addPartitionEpochs(newMember.revokedPartitions(), newMember.memberEpoch());
         } else {
             if (!oldMember.assignedPartitions().equals(newMember.assignedPartitions())) {
                 removePartitionEpochs(oldMember.assignedPartitions());
                 addPartitionEpochs(newMember.assignedPartitions(), newMember.memberEpoch());
             }
-            if (!oldMember.partitionsPendingRevocation().equals(newMember.partitionsPendingRevocation())) {
-                removePartitionEpochs(oldMember.partitionsPendingRevocation());
-                addPartitionEpochs(newMember.partitionsPendingRevocation(), newMember.memberEpoch());
+            if (!oldMember.revokedPartitions().equals(newMember.revokedPartitions())) {
+                removePartitionEpochs(oldMember.revokedPartitions());
+                addPartitionEpochs(newMember.revokedPartitions(), newMember.memberEpoch());
             }
         }
     }
@@ -798,7 +798,7 @@ public class ConsumerGroup implements Group {
     ) {
         if (oldMember != null) {
             removePartitionEpochs(oldMember.assignedPartitions());
-            removePartitionEpochs(oldMember.partitionsPendingRevocation());
+            removePartitionEpochs(oldMember.revokedPartitions());
         }
     }
 

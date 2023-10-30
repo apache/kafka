@@ -987,7 +987,6 @@ public class OffsetMetadataManagerTest {
         // Add member.
         group.updateMember(new ConsumerGroupMember.Builder("member")
             .setMemberEpoch(10)
-            .setTargetMemberEpoch(10)
             .setPreviousMemberEpoch(10)
             .build()
         );
@@ -1033,7 +1032,6 @@ public class OffsetMetadataManagerTest {
         // Add member.
         group.updateMember(new ConsumerGroupMember.Builder("member")
             .setMemberEpoch(10)
-            .setTargetMemberEpoch(10)
             .setPreviousMemberEpoch(10)
             .build()
         );
@@ -1127,7 +1125,6 @@ public class OffsetMetadataManagerTest {
         // Add member.
         group.updateMember(new ConsumerGroupMember.Builder("member")
             .setMemberEpoch(10)
-            .setTargetMemberEpoch(10)
             .setPreviousMemberEpoch(10)
             .build()
         );
@@ -1198,7 +1195,6 @@ public class OffsetMetadataManagerTest {
         // Add member.
         group.updateMember(new ConsumerGroupMember.Builder("member")
             .setMemberEpoch(10)
-            .setTargetMemberEpoch(10)
             .setPreviousMemberEpoch(10)
             .build()
         );
