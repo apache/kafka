@@ -1,8 +1,0 @@
-{
-    "type": "record",
-    "name": "Message",
-    "fields": [
-        {"name": "key", "type": "string"},
-        {"name": "value", "type": "string"}
-    ]
-}
