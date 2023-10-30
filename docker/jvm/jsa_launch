@@ -11,5 +11,5 @@ sleep 5
 echo $(opt/kafka/bin/kafka-console-consumer.sh --topic test-topic --from-beginning --bootstrap-server localhost:9092 --max-messages 1)
 sleep 5
 
-kill -s TERM $PIDS 
-sleep 10
+opt/kafka/bin/kafka-server-stop.sh
+sleep 5

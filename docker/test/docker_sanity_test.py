@@ -77,13 +77,11 @@ class DockerSanityTestCommon(unittest.TestCase):
     def produce_message(self, topic, producer_config, key, value):
         command = ["echo", f'"{key}:{value}"', "|", constants.KAFKA_CONSOLE_PRODUCER, "--topic", topic, "--property", "'parse.key=true'", "--property", "'key.separator=:'"]
         command.extend(producer_config)
-        print(" ".join(command))
         subprocess.run(["bash", "-c", " ".join(command)], timeout=constants.CLIENT_TIMEOUT)
     
     def consume_message(self, topic, consumer_config):
         command = [constants.KAFKA_CONSOLE_CONSUMER, "--topic", topic, "--property", "'print.key=true'", "--property", "'key.separator=:'", "--from-beginning", "--max-messages", "1"]
         command.extend(consumer_config)
-        print(" ".join(command))
         message = subprocess.check_output(["bash", "-c", " ".join(command)], timeout=constants.CLIENT_TIMEOUT)
         return message.decode("utf-8").strip()
 
@@ -168,14 +166,6 @@ class DockerSanityTestKraftMode(DockerSanityTestCommon):
     def test_bed(self):
         self.execute()
 
-class DockerSanityTestZookeeper(DockerSanityTestCommon):
-    def setUp(self) -> None:
-        self.startCompose(constants.ZOOKEEPER_COMPOSE)
-    def tearDown(self) -> None:
-        self.destroyCompose(constants.ZOOKEEPER_COMPOSE)
-    def test_bed(self):
-        self.execute()
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("image")
@@ -186,7 +176,7 @@ if __name__ == "__main__":
 
     test_classes_to_run = []
     if args.mode in ("all", "jvm"):
-        test_classes_to_run.extend([DockerSanityTestKraftMode, DockerSanityTestZookeeper])
+        test_classes_to_run.extend([DockerSanityTestKraftMode])
     
     loader = unittest.TestLoader()
     suites_list = []

@@ -39,7 +39,7 @@ COPY jsa_launch /etc/kafka/docker/jsa_launch
 RUN set -eux ; \
     apk update ; \
     apk upgrade ; \
-    apk add --no-cache wget gcompat; \
+    apk add --no-cache wget gcompat procps; \
     mkdir opt/kafka; \
     wget -nv -O kafka.tgz "$KAFKA_URL"; \
     tar xfz kafka.tgz -C /opt/kafka --strip-components 1;
@@ -82,12 +82,12 @@ RUN set -eux ; \
     mkdir -p /var/lib/kafka/data /etc/kafka/secrets /var/log/kafka /var/lib/zookeeper; \
     mkdir -p /etc/kafka/docker /usr/logs; \
     adduser -h /home/appuser -D --shell /bin/bash appuser; \
-    chown appuser:appuser -R /etc/kafka/ /usr/logs /opt/kafka; \
-    chown appuser:root -R /etc/kafka /var/lib/kafka /etc/kafka/secrets /var/lib/kafka /etc/kafka /var/log/kafka /var/lib/zookeeper; \
+    chown appuser:appuser -R /usr/logs /opt/kafka; \
+    chown appuser:root -R /var/lib/kafka /etc/kafka/secrets /var/lib/kafka /etc/kafka /var/log/kafka /var/lib/zookeeper; \
     chmod -R ug+w /etc/kafka /var/lib/kafka /var/lib/kafka /etc/kafka/secrets /etc/kafka /var/log/kafka /var/lib/zookeeper; \
-    rm kafka.tgz; \
-    apk cache clean; \
-    rm kafka.tgz.asc;
+    rm kafka.tgz kafka.tgz.asc KEYS; \
+    apk del curl wget gpg dirmngr gpg-agent; \
+    apk cache clean;
 
 COPY --from=build-jsa kafka.jsa /opt/kafka/kafka.jsa
 COPY --chown=appuser:appuser --from=build-ub /build/ub /usr/bin

@@ -1,10 +1,8 @@
 {
   "prefixes": {
-    "KAFKA": false,
-    "CONFLUENT": true
+    "KAFKA": false
   },
   "renamed": {
-    "KAFKA_ZOOKEEPER_CLIENT_CNXN_SOCKET": "zookeeper.clientCnxnSocket"
   },
   "excludes": [
     "KAFKA_VERSION",
@@ -16,8 +14,7 @@
     "KAFKA_GC_LOG_OPTS",
     "KAFKA_LOG4J_ROOT_LOGLEVEL",
     "KAFKA_LOG4J_LOGGERS",
-    "KAFKA_TOOLS_LOG4J_LOGLEVEL",
-    "KAFKA_ZOOKEEPER_CLIENT_CNXN_SOCKET"
+    "KAFKA_TOOLS_LOG4J_LOGLEVEL"
   ],
   "defaults": {
   },
