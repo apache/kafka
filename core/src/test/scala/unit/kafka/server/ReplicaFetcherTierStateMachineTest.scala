@@ -192,18 +192,18 @@ class ReplicaFetcherTierStateMachineTest {
     stateManager = new ProducerStateManager(topicPartition, tpDir, 5 * 60 * 1000, producerStateManagerConfig, time)
     val unifiedLog = buildUnifiedLog(topicPartition, stateManager, tpDir)
 
-    doReturn(unifiedLog).when(mockReplicaMgr).localLogOrException(any(classOf[TopicPartition]))
+    doReturn(unifiedLog, Nil: _*).when(mockReplicaMgr).localLogOrException(any(classOf[TopicPartition]))
     val mockRemoteLogManager = mock(classOf[RemoteLogManager])
-    doReturn(Option.apply(mockRemoteLogManager)).when(mockReplicaMgr).remoteLogManager
+    doReturn(Option.apply(mockRemoteLogManager), Nil: _*).when(mockReplicaMgr).remoteLogManager
 
     val remoteLogSegmentMetadata = new RemoteLogSegmentMetadata(
       RemoteLogSegmentId.generateNew(new TopicIdPartition(Uuid.randomUuid(), topicPartition)),
       4L, 4L, -1L, brokerId, -1L, 1024,
-      Optional.empty, RemoteLogSegmentState.COPY_SEGMENT_FINISHED, Collections.singletonMap(4, 4L))
-    doReturn(Optional.of(remoteLogSegmentMetadata)).when(mockRemoteLogManager).fetchRemoteLogSegmentMetadata(any(classOf[TopicPartition]), ArgumentMatchers.eq(4), ArgumentMatchers.eq(4L))
+      Optional.empty(), RemoteLogSegmentState.COPY_SEGMENT_FINISHED, Collections.singletonMap(4, 4L))
+    doReturn(Optional.of(remoteLogSegmentMetadata), Nil: _*).when(mockRemoteLogManager).fetchRemoteLogSegmentMetadata(any(classOf[TopicPartition]), ArgumentMatchers.eq(4), ArgumentMatchers.eq(4L))
 
     val mockPartition = mock(classOf[Partition])
-    doReturn(mockPartition).when(mockReplicaMgr).getPartitionOrException(any(classOf[TopicPartition]))
+    doReturn(mockPartition, Nil: _*).when(mockReplicaMgr).getPartitionOrException(any(classOf[TopicPartition]))
     when(mockPartition.truncateFullyAndStartAt(anyLong(), anyBoolean(), any(classOf[Option[Long]])))
       .thenAnswer(ans => {
         val newOffset = ans.getArgument[Long](0)
@@ -212,7 +212,7 @@ class ReplicaFetcherTierStateMachineTest {
       })
 
     val mockRemoteStorageManager = mock(classOf[RemoteStorageManager])
-    doReturn(mockRemoteStorageManager).when(mockRemoteLogManager).storageManager()
+    doReturn(mockRemoteStorageManager, Nil: _*).when(mockRemoteLogManager).storageManager()
 
     tpDirForRemoteSnapshotFile = JTestUtils.tempDirectory(JTestUtils.tempDirectory(s"remote-kafka-${this.getClass.getSimpleName}").toPath, idPartition.toString)
     val stateManagerForRemoteSnapshotFile = new ProducerStateManager(topicPartition, tpDirForRemoteSnapshotFile, 5 * 60 * 1000, producerStateManagerConfig, time)
