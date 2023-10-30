@@ -29,10 +29,10 @@ import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 
 /**
- * This test exercises the consumption of remote data on a leader that was previously a follower
- * and had rebuilt its auxiliary state from remote storage.
+ * This test exercises the consumption of remote data on a leader that was previously an empty
+ * follower and had rebuilt its auxiliary state from remote storage.
  */
-public final class LocalLogStartOffsetTest extends TieredStorageTestHarness {
+public final class ReassignToEmptyReplicaTest extends TieredStorageTestHarness {
 
     @Override
     public int brokerCount() {
