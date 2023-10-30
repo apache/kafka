@@ -315,7 +315,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         }
 
         if (newState != migrationState) {
-            log.debug("{} transitioning from {} to {} state", nodeId, migrationState, newState);
+            log.info("{} transitioning from {} to {} state", nodeId, migrationState, newState);
             pollTimeSupplier.reset();
             wakeup();
         } else {
