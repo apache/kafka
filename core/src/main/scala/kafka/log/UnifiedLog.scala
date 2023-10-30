@@ -40,12 +40,13 @@ import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.util.Scheduler
 import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
-import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, BatchMetadata, CompletedTxn, EpochEntry, FetchDataInfo, FetchIsolation, LastRecord, LeaderHwChange, LogAppendInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogStartOffsetIncrementReason, LogValidator, ProducerAppendInfo, ProducerStateManager, ProducerStateManagerConfig, RollParams}
+import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, BatchMetadata, CompletedTxn, EpochEntry, FetchDataInfo, FetchIsolation, LastRecord, LeaderHwChange, LogAppendInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogSegment, LogSegments, LogStartOffsetIncrementReason, LogValidator, ProducerAppendInfo, ProducerStateManager, ProducerStateManagerConfig, RollParams, VerificationGuard}
 
 import java.io.{File, IOException}
 import java.nio.file.Files
 import java.util
 import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap}
+import java.util.stream.Collectors
 import java.util.{Collections, Optional, OptionalInt, OptionalLong}
 import scala.annotation.nowarn
 import scala.collection.mutable.ListBuffer
@@ -165,7 +166,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
     initializePartitionMetadata()
     updateLogStartOffset(logStartOffset)
-    updateLocalLogStartOffset(math.max(logStartOffset, localLog.segments.firstSegmentBaseOffset.getOrElse(0L)))
+    updateLocalLogStartOffset(math.max(logStartOffset, localLog.segments.firstSegmentBaseOffset.orElse(0L)))
     if (!remoteLogEnabled())
       logStartOffset = localLogStartOffset()
     maybeIncrementFirstUnstableOffset()
@@ -598,31 +599,32 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   }
 
   /**
-   * Maybe create and return the verification guard object for the given producer ID if the transaction is not yet ongoing.
-   * Creation starts the verification process. Otherwise return null.
+   * Maybe create and return the VerificationGuard for the given producer ID if the transaction is not yet ongoing.
+   * Creation starts the verification process. Otherwise return the sentinel VerificationGuard.
    */
-  def maybeStartTransactionVerification(producerId: Long, sequence: Int, epoch: Short): Object = lock synchronized {
+  def maybeStartTransactionVerification(producerId: Long, sequence: Int, epoch: Short): VerificationGuard = lock synchronized {
     if (hasOngoingTransaction(producerId))
-      null
+      VerificationGuard.SENTINEL
     else
       maybeCreateVerificationGuard(producerId, sequence, epoch)
   }
 
   /**
-   * Maybe create the VerificationStateEntry for the given producer ID -- always return the verification guard
+   * Maybe create the VerificationStateEntry for the given producer ID -- always return the VerificationGuard
    */
   def maybeCreateVerificationGuard(producerId: Long,
                                    sequence: Int,
-                                   epoch: Short): Object = lock synchronized {
+                                   epoch: Short): VerificationGuard = lock synchronized {
     producerStateManager.maybeCreateVerificationStateEntry(producerId, sequence, epoch).verificationGuard
   }
 
   /**
-   * If an VerificationStateEntry is present for the given producer ID, return its verification guard, otherwise, return null.
+   * If an VerificationStateEntry is present for the given producer ID, return its VerificationGuard, otherwise, return the
+   * sentinel VerificationGuard.
    */
-  def verificationGuard(producerId: Long): Object = lock synchronized {
+  def verificationGuard(producerId: Long): VerificationGuard = lock synchronized {
     val entry = producerStateManager.verificationStateEntry(producerId)
-    if (entry != null) entry.verificationGuard else null
+    if (entry != null) entry.verificationGuard else VerificationGuard.SENTINEL
   }
 
   /**
@@ -714,7 +716,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
                      origin: AppendOrigin = AppendOrigin.CLIENT,
                      interBrokerProtocolVersion: MetadataVersion = MetadataVersion.latest,
                      requestLocal: RequestLocal = RequestLocal.NoCaching,
-                     verificationGuard: Object = null): LogAppendInfo = {
+                     verificationGuard: VerificationGuard = VerificationGuard.SENTINEL): LogAppendInfo = {
     val validateAndAssignOffsets = origin != AppendOrigin.RAFT_LEADER
     append(records, origin, interBrokerProtocolVersion, validateAndAssignOffsets, leaderEpoch, Some(requestLocal), verificationGuard, ignoreRecordSize = false)
   }
@@ -733,7 +735,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
       validateAndAssignOffsets = false,
       leaderEpoch = -1,
       requestLocal = None,
-      verificationGuard = null,
+      verificationGuard = VerificationGuard.SENTINEL,
       // disable to check the validation of record size since the record is already accepted by leader.
       ignoreRecordSize = true)
   }
@@ -762,7 +764,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
                      validateAndAssignOffsets: Boolean,
                      leaderEpoch: Int,
                      requestLocal: Option[RequestLocal],
-                     verificationGuard: Object,
+                     verificationGuard: VerificationGuard,
                      ignoreRecordSize: Boolean): LogAppendInfo = {
     // We want to ensure the partition metadata file is written to the log dir before any log data is written to disk.
     // This will ensure that any log data can be recovered with the correct topic ID in the case of failure.
@@ -1023,7 +1025,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   private def analyzeAndValidateProducerState(appendOffsetMetadata: LogOffsetMetadata,
                                               records: MemoryRecords,
                                               origin: AppendOrigin,
-                                              requestVerificationGuard: Object):
+                                              requestVerificationGuard: VerificationGuard):
   (mutable.Map[Long, ProducerAppendInfo], List[CompletedTxn], Option[BatchMetadata]) = {
     val updatedProducers = mutable.Map.empty[Long, ProducerAppendInfo]
     val completedTxns = ListBuffer.empty[CompletedTxn]
@@ -1048,17 +1050,17 @@ class UnifiedLog(@volatile var logStartOffset: Long,
           // the partition. If we do not have an ongoing transaction or correct guard, return an error and do not append.
           // There are two phases -- the first append to the log and subsequent appends.
           //
-          // 1. First append: Verification starts with creating a verification guard object, sending a verification request to the transaction coordinator, and
-          // given a "verified" response, continuing the append path. (A non-verified response throws an error.) We create the unique verification guard for the transaction
+          // 1. First append: Verification starts with creating a VerificationGuard, sending a verification request to the transaction coordinator, and
+          // given a "verified" response, continuing the append path. (A non-verified response throws an error.) We create the unique VerificationGuard for the transaction
           // to ensure there is no race between the transaction coordinator response and an abort marker getting written to the log. We need a unique guard because we could
           // have a sequence of events where we start a transaction verification, have the transaction coordinator send a verified response, write an abort marker,
-          // start a new transaction not aware of the partition, and receive the stale verification (ABA problem). With a unique verification guard object, this sequence would not
+          // start a new transaction not aware of the partition, and receive the stale verification (ABA problem). With a unique VerificationGuard, this sequence would not
           // result in appending to the log and would return an error. The guard is removed after the first append to the transaction and from then, we can rely on phase 2.
           //
           // 2. Subsequent appends: Once we write to the transaction, the in-memory state currentTxnFirstOffset is populated. This field remains until the
           // transaction is completed or aborted. We can guarantee the transaction coordinator knows about the transaction given step 1 and that the transaction is still
-          // ongoing. If the transaction is expected to be ongoing, we will not set a verification guard. If the transaction is aborted, hasOngoingTransaction is false and
-          // requestVerificationGuard is null, so we will throw an error. A subsequent produce request (retry) should create verification state and return to phase 1.
+          // ongoing. If the transaction is expected to be ongoing, we will not set a VerificationGuard. If the transaction is aborted, hasOngoingTransaction is false and
+          // requestVerificationGuard is the sentinel, so we will throw an error. A subsequent produce request (retry) should create verification state and return to phase 1.
           if (batch.isTransactional && !hasOngoingTransaction(batch.producerId) && batchMissingRequiredVerification(batch, requestVerificationGuard))
             throw new InvalidTxnStateException("Record was not part of an ongoing transaction")
         }
@@ -1079,9 +1081,9 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     (updatedProducers, completedTxns.toList, None)
   }
 
-  private def batchMissingRequiredVerification(batch: MutableRecordBatch, requestVerificationGuard: Object): Boolean = {
+  private def batchMissingRequiredVerification(batch: MutableRecordBatch, requestVerificationGuard: VerificationGuard): Boolean = {
     producerStateManager.producerStateManagerConfig().transactionVerificationEnabled() && !batch.isControlBatch &&
-      (requestVerificationGuard != verificationGuard(batch.producerId) || requestVerificationGuard == null)
+      !verificationGuard(batch.producerId).verify(requestVerificationGuard)
   }
 
   /**
@@ -1313,9 +1315,9 @@ class UnifiedLog(@volatile var logStartOffset: Long,
       } else if (targetTimestamp == ListOffsetsRequest.MAX_TIMESTAMP) {
         // Cache to avoid race conditions. `toBuffer` is faster than most alternatives and provides
         // constant time access while being safe to use with concurrent collections unlike `toArray`.
-        val segmentsCopy = logSegments.toBuffer
+        val segmentsCopy = logSegments.asScala.toBuffer
         val latestTimestampSegment = segmentsCopy.maxBy(_.maxTimestampSoFar)
-        val latestTimestampAndOffset = latestTimestampSegment.maxTimestampAndOffsetSoFar
+        val latestTimestampAndOffset = latestTimestampSegment.readMaxTimestampAndOffsetSoFar
 
         Some(new TimestampAndOffset(latestTimestampAndOffset.timestamp,
           latestTimestampAndOffset.offset,
@@ -1347,15 +1349,15 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   private def searchOffsetInLocalLog(targetTimestamp: Long, startOffset: Long): Option[TimestampAndOffset] = {
     // Cache to avoid race conditions. `toBuffer` is faster than most alternatives and provides
     // constant time access while being safe to use with concurrent collections unlike `toArray`.
-    val segmentsCopy = logSegments.toBuffer
+    val segmentsCopy = logSegments.asScala.toBuffer
     val targetSeg = segmentsCopy.find(_.largestTimestamp >= targetTimestamp)
-    targetSeg.flatMap(_.findOffsetByTimestamp(targetTimestamp, startOffset))
+    targetSeg.flatMap(_.findOffsetByTimestamp(targetTimestamp, startOffset).asScala)
   }
 
   def legacyFetchOffsetsBefore(timestamp: Long, maxNumOffsets: Int): Seq[Long] = {
     // Cache to avoid race conditions. `toBuffer` is faster than most alternatives and provides
     // constant time access while being safe to use with concurrent collections unlike `toArray`.
-    val allSegments = logSegments.toBuffer
+    val allSegments = logSegments.asScala.toBuffer
     val lastSegmentHasSize = allSegments.last.size > 0
 
     val offsetTimeArray =
@@ -1463,7 +1465,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
         // remove the segments for lookups
         localLog.removeAndDeleteSegments(segmentsToDelete, asyncDelete = true, reason)
         deleteProducerSnapshots(deletable, asyncDelete = true)
-        incrementStartOffset(localLog.segments.firstSegmentBaseOffset.get, LogStartOffsetIncrementReason.SegmentDeletion)
+        incrementStartOffset(localLog.segments.firstSegmentBaseOffset.getAsLong, LogStartOffsetIncrementReason.SegmentDeletion)
       }
       numToDelete
     }
@@ -1531,7 +1533,8 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   /**
    * The log size in bytes for all segments that are only in local log but not yet in remote log.
    */
-  def onlyLocalLogSegmentsSize: Long = UnifiedLog.sizeInBytes(logSegments.filter(_.baseOffset >= highestOffsetInRemoteStorage))
+  def onlyLocalLogSegmentsSize: Long =
+    UnifiedLog.sizeInBytes(logSegments.stream.filter(_.baseOffset >= highestOffsetInRemoteStorage).collect(Collectors.toList[LogSegment]))
 
   /**
    * The offset of the next message that will be appended to the log
@@ -1719,7 +1722,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
         info(s"Truncating to offset $targetOffset")
         lock synchronized {
           localLog.checkIfMemoryMappedBufferClosed()
-          if (localLog.segments.firstSegmentBaseOffset.get > targetOffset) {
+          if (localLog.segments.firstSegmentBaseOffset.getAsLong > targetOffset) {
             truncateFullyAndStartAt(targetOffset)
           } else {
             val deletedSegments = localLog.truncateTo(targetOffset)
@@ -1770,17 +1773,17 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   /**
    * All the log segments in this log ordered from oldest to newest
    */
-  def logSegments: Iterable[LogSegment] = localLog.segments.values
+  def logSegments: util.Collection[LogSegment] = localLog.segments.values
 
   /**
    * Get all segments beginning with the segment that includes "from" and ending with the segment
    * that includes up to "to-1" or the end of the log (if to > logEndOffset).
    */
   def logSegments(from: Long, to: Long): Iterable[LogSegment] = lock synchronized {
-    localLog.segments.values(from, to)
+    localLog.segments.values(from, to).asScala
   }
 
-  def nonActiveLogSegmentsFrom(from: Long): Iterable[LogSegment] = lock synchronized {
+  def nonActiveLogSegmentsFrom(from: Long): util.Collection[LogSegment] = lock synchronized {
     localLog.segments.nonActiveLogSegmentsFrom(from)
   }
 
@@ -1814,7 +1817,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    * Currently, it is used by LogCleaner threads on log compact non-active segments only with LogCleanerManager's lock
    * to ensure no other logcleaner threads and retention thread can work on the same segment.
    */
-  private[log] def getFirstBatchTimestampForSegments(segments: Iterable[LogSegment]): Iterable[Long] = {
+  private[log] def getFirstBatchTimestampForSegments(segments: util.Collection[LogSegment]): util.Collection[java.lang.Long] = {
     LogSegments.getFirstBatchTimestampForSegments(segments)
   }
 
@@ -1866,6 +1869,8 @@ object UnifiedLog extends Logging {
   val SwapFileSuffix = LocalLog.SwapFileSuffix
 
   val DeleteDirSuffix = LocalLog.DeleteDirSuffix
+
+  val StrayDirSuffix = LocalLog.StrayDirSuffix
 
   val FutureDirSuffix = LocalLog.FutureDirSuffix
 
@@ -1926,7 +1931,7 @@ object UnifiedLog extends Logging {
       segments,
       logStartOffset,
       recoveryPoint,
-      leaderEpochCache,
+      leaderEpochCache.asJava,
       producerStateManager,
       numRemainingSegments,
       isRemoteLogEnabled,
@@ -1945,26 +1950,19 @@ object UnifiedLog extends Logging {
       logOffsetsListener)
   }
 
-  def logFile(dir: File, offset: Long, suffix: String = ""): File = LogFileUtils.logFile(dir, offset, suffix)
-
   def logDeleteDirName(topicPartition: TopicPartition): String = LocalLog.logDeleteDirName(topicPartition)
 
   def logFutureDirName(topicPartition: TopicPartition): String = LocalLog.logFutureDirName(topicPartition)
 
+  def logStrayDirName(topicPartition: TopicPartition): String = LocalLog.logStrayDirName(topicPartition)
+
   def logDirName(topicPartition: TopicPartition): String = LocalLog.logDirName(topicPartition)
-
-  def offsetIndexFile(dir: File, offset: Long, suffix: String = ""): File = LogFileUtils.offsetIndexFile(dir, offset, suffix)
-
-  def timeIndexFile(dir: File, offset: Long, suffix: String = ""): File = LogFileUtils.timeIndexFile(dir, offset, suffix)
-
-  def deleteFileIfExists(file: File, suffix: String = ""): Unit =
-    Files.deleteIfExists(new File(file.getPath + suffix).toPath)
 
   def transactionIndexFile(dir: File, offset: Long, suffix: String = ""): File = LogFileUtils.transactionIndexFile(dir, offset, suffix)
 
   def offsetFromFile(file: File): Long = LogFileUtils.offsetFromFile(file)
 
-  def sizeInBytes(segments: Iterable[LogSegment]): Long = LogSegments.sizeInBytes(segments)
+  def sizeInBytes(segments: util.Collection[LogSegment]): Long = LogSegments.sizeInBytes(segments)
 
   def parseTopicPartitionName(dir: File): TopicPartition = LocalLog.parseTopicPartitionName(dir)
 
@@ -1998,7 +1996,7 @@ object UnifiedLog extends Logging {
     val producerId = batch.producerId
     val appendInfo = producers.getOrElseUpdate(producerId, producerStateManager.prepareUpdate(producerId, origin))
     val completedTxn = appendInfo.append(batch, firstOffsetMetadata.asJava).asScala
-    // Whether we wrote a control marker or a data batch, we can remove verification guard since either the transaction is complete or we have a first offset.
+    // Whether we wrote a control marker or a data batch, we can remove VerificationGuard since either the transaction is complete or we have a first offset.
     if (batch.isTransactional)
       producerStateManager.clearVerificationStateEntry(producerId)
     completedTxn
@@ -2103,7 +2101,7 @@ object UnifiedLog extends Logging {
     val offsetsToSnapshot =
       if (segments.nonEmpty) {
         val lastSegmentBaseOffset = segments.lastSegment.get.baseOffset
-        val nextLatestSegmentBaseOffset = segments.lowerSegment(lastSegmentBaseOffset).map(_.baseOffset)
+        val nextLatestSegmentBaseOffset = segments.lowerSegment(lastSegmentBaseOffset).asScala.map(_.baseOffset)
         Seq(nextLatestSegmentBaseOffset, Some(lastSegmentBaseOffset), Some(lastOffset))
       } else {
         Seq(Some(lastOffset))
@@ -2147,14 +2145,14 @@ object UnifiedLog extends Logging {
       if (lastOffset > producerStateManager.mapEndOffset && !isEmptyBeforeTruncation) {
         val segmentOfLastOffset = segments.floorSegment(lastOffset)
 
-        segments.values(producerStateManager.mapEndOffset, lastOffset).foreach { segment =>
+        segments.values(producerStateManager.mapEndOffset, lastOffset).forEach { segment =>
           val startOffset = Utils.max(segment.baseOffset, producerStateManager.mapEndOffset, logStartOffset)
           producerStateManager.updateMapEndOffset(startOffset)
 
           if (offsetsToSnapshot.contains(Some(segment.baseOffset)))
             producerStateManager.takeSnapshot()
 
-          val maxPosition = if (segmentOfLastOffset.contains(segment)) {
+          val maxPosition = if (segmentOfLastOffset.isPresent && segmentOfLastOffset.get == segment) {
             Option(segment.translateOffset(lastOffset))
               .map(_.position)
               .getOrElse(segment.size)
@@ -2162,9 +2160,7 @@ object UnifiedLog extends Logging {
             segment.size
           }
 
-          val fetchDataInfo = segment.read(startOffset,
-            maxSize = Int.MaxValue,
-            maxPosition = maxPosition)
+          val fetchDataInfo = segment.read(startOffset, Int.MaxValue, maxPosition)
           if (fetchDataInfo != null)
             loadProducersFromRecords(producerStateManager, fetchDataInfo.records)
         }
@@ -2264,21 +2260,20 @@ case class RetentionMsBreach(log: UnifiedLog, remoteLogEnabled: Boolean) extends
   override def logReason(toDelete: List[LogSegment]): Unit = {
     val retentionMs = UnifiedLog.localRetentionMs(log.config, remoteLogEnabled)
     toDelete.foreach { segment =>
-      segment.largestRecordTimestamp match {
-        case Some(_) =>
-          if (remoteLogEnabled)
-            log.info(s"Deleting segment $segment due to local log retention time ${retentionMs}ms breach based on the largest " +
-              s"record timestamp in the segment")
-          else
-            log.info(s"Deleting segment $segment due to log retention time ${retentionMs}ms breach based on the largest " +
-              s"record timestamp in the segment")
-        case None =>
-          if (remoteLogEnabled)
-            log.info(s"Deleting segment $segment due to local log retention time ${retentionMs}ms breach based on the " +
-              s"last modified time of the segment")
-          else
-            log.info(s"Deleting segment $segment due to log retention time ${retentionMs}ms breach based on the " +
-              s"last modified time of the segment")
+      if (segment.largestRecordTimestamp.isPresent)
+        if (remoteLogEnabled)
+          log.info(s"Deleting segment $segment due to local log retention time ${retentionMs}ms breach based on the largest " +
+            s"record timestamp in the segment")
+        else
+          log.info(s"Deleting segment $segment due to log retention time ${retentionMs}ms breach based on the largest " +
+            s"record timestamp in the segment")
+      else {
+        if (remoteLogEnabled)
+          log.info(s"Deleting segment $segment due to local log retention time ${retentionMs}ms breach based on the " +
+            s"last modified time of the segment")
+        else
+          log.info(s"Deleting segment $segment due to log retention time ${retentionMs}ms breach based on the " +
+            s"last modified time of the segment")
       }
     }
   }

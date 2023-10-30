@@ -818,7 +818,7 @@ public class RecordAccumulator {
     }
 
     private boolean shouldStopDrainBatchesForPartition(ProducerBatch first, TopicPartition tp) {
-        ProducerIdAndEpoch producerIdAndEpoch = null;
+        ProducerIdAndEpoch producerIdAndEpoch;
         if (transactionManager != null) {
             if (!transactionManager.isSendToPartitionAllowed(tp))
                 return true;

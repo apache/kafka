@@ -109,6 +109,7 @@ ext {
     throw new GradleException("Unexpected value for scalaOptimizerMode property. Expected one of $scalaOptimizerValues, but received: $userScalaOptimizerMode")
 
   generatedDocsDir = new File("${project.rootDir}/docs/generated")
+  repo = file("$rootDir/.git").isDirectory() ? Grgit.open(currentDir: project.getRootDir()) : null
 
   commitId = determineCommitId()
 }
@@ -164,16 +165,8 @@ def determineCommitId() {
   def takeFromHash = 16
   if (project.hasProperty('commitId')) {
     commitId.take(takeFromHash)
-  } else if (file("$rootDir/.git/HEAD").exists()) {
-    def headRef = file("$rootDir/.git/HEAD").text
-    if (headRef.contains('ref: ')) {
-      headRef = headRef.replaceAll('ref: ', '').trim()
-      if (file("$rootDir/.git/$headRef").exists()) {
-        file("$rootDir/.git/$headRef").text.trim().take(takeFromHash)
-      }
-    } else {
-      headRef.trim().take(takeFromHash)
-    }
+  } else if (repo != null) {
+    repo.head().id.take(takeFromHash)
   } else {
     "unknown"
   }
@@ -181,7 +174,7 @@ def determineCommitId() {
 
 apply from: file('wrapper.gradle')
 
-if (file('.git').exists()) {
+if (repo != null) {
   rat {
     dependsOn subprojects.collect {
       it.tasks.matching {
@@ -195,7 +188,6 @@ if (file('.git').exists()) {
 
     // Exclude everything under the directory that git should be ignoring via .gitignore or that isn't checked in. These
     // restrict us only to files that are checked in or are staged.
-    def repo = Grgit.open(currentDir: project.getRootDir())
     excludes = new ArrayList<String>(repo.clean(ignore: false, directories: true, dryRun: true))
     // And some of the files that we have checked in should also be excluded from this check
     excludes.addAll([
@@ -420,7 +412,7 @@ subprojects {
       // connect tests
       "**/KafkaConfigBackingStoreTest.*",
       "**/StandaloneHerderTest.*",
-      "**/WorkerSinkTaskTest.*", "**/WorkerSinkTaskThreadedTest.*"
+      "**/WorkerSinkTaskTest.*"
     ])
   }
 
@@ -782,7 +774,7 @@ def fineTuneEclipseClasspathFile(eclipse, project) {
       }
       /*
        * Set all eclipse build output to go to 'build_eclipse' directory. This is to ensure that gradle and eclipse use different
-       * build output directories, and also avoid using the eclpise default of 'bin' which clashes with some of our script directories.
+       * build output directories, and also avoid using the eclipse default of 'bin' which clashes with some of our script directories.
        * https://discuss.gradle.org/t/eclipse-generated-files-should-be-put-in-the-same-place-as-the-gradle-generated-files/6986/2
        */
       cp.entries.findAll { it.kind == "output" }*.path = "build_eclipse"
@@ -1260,6 +1252,7 @@ project(':group-coordinator') {
     implementation project(':clients')
     implementation project(':metadata')
     implementation libs.slf4jApi
+    implementation libs.metrics
 
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':server-common').sourceSets.test.output
@@ -1471,6 +1464,7 @@ project(':clients') {
     include "**/org/apache/kafka/server/authorizer/*"
     include "**/org/apache/kafka/server/policy/*"
     include "**/org/apache/kafka/server/quota/*"
+    include "**/org/apache/kafka/server/telemetry/*"
   }
 }
 
@@ -1882,17 +1876,14 @@ project(':tools:tools-api') {
 
 project(':tools') {
   archivesBaseName = "kafka-tools"
-
   dependencies {
     implementation project(':clients')
+    implementation project(':storage')
     implementation project(':server-common')
-    implementation project(':connect:api')
     implementation project(':connect:runtime')
     implementation project(':log4j-appender')
     implementation project(':tools:tools-api')
     implementation libs.argparse4j
-    implementation libs.jacksonDatabind
-    implementation libs.jacksonJDK8Datatypes
     implementation libs.slf4jApi
     implementation libs.log4j
     implementation libs.joptSimple
@@ -2180,6 +2171,8 @@ project(':streams') {
             ':streams:upgrade-system-tests-31:test',
             ':streams:upgrade-system-tests-32:test',
             ':streams:upgrade-system-tests-33:test',
+            ':streams:upgrade-system-tests-34:test',
+            ':streams:upgrade-system-tests-35:test',
             ':streams:examples:test'
     ]
   )
@@ -2557,6 +2550,32 @@ project(':streams:upgrade-system-tests-33') {
 
   dependencies {
     testImplementation libs.kafkaStreams_33
+    testRuntimeOnly libs.junitJupiter
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
+project(':streams:upgrade-system-tests-34') {
+  archivesBaseName = "kafka-streams-upgrade-system-tests-34"
+
+  dependencies {
+    testImplementation libs.kafkaStreams_34
+    testRuntimeOnly libs.junitJupiter
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
+project(':streams:upgrade-system-tests-35') {
+  archivesBaseName = "kafka-streams-upgrade-system-tests-35"
+
+  dependencies {
+    testImplementation libs.kafkaStreams_35
     testRuntimeOnly libs.junitJupiter
   }
 

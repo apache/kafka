@@ -241,6 +241,21 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
     def validate_config(self, connector_type, validate_request, node=None):
         return self._rest('/connector-plugins/' + connector_type + '/config/validate', validate_request, node=node, method="PUT")
 
+    def get_logger(self, node, logger):
+        return self._rest('/admin/loggers/' + logger, node=node)
+
+    def get_all_loggers(self, node):
+        return self._rest('/admin/loggers', node=node)
+
+    def set_logger(self, node, logger, level, scope=None):
+        set_request = {
+            'level': level
+        }
+        path = '/admin/loggers/' + logger
+        if scope is not None:
+            path += '?scope=' + scope
+        return self._rest(path, set_request, node, "PUT")
+
     def _rest(self, path, body=None, node=None, method="GET"):
         if node is None:
             node = random.choice(self.nodes)

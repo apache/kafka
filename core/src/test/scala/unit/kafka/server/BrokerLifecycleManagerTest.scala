@@ -22,7 +22,7 @@ import kafka.utils.TestUtils
 import org.apache.kafka.common.Node
 import org.apache.kafka.common.message.{BrokerHeartbeatResponseData, BrokerRegistrationResponseData}
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.{AbstractRequest, BrokerHeartbeatRequest, BrokerHeartbeatResponse, BrokerRegistrationResponse}
+import org.apache.kafka.common.requests.{AbstractRequest, BrokerHeartbeatRequest, BrokerHeartbeatResponse, BrokerRegistrationRequest, BrokerRegistrationResponse}
 import org.apache.kafka.metadata.BrokerState
 import org.junit.jupiter.api.{Test, Timeout}
 import org.junit.jupiter.api.Assertions._
@@ -55,7 +55,7 @@ class BrokerLifecycleManagerTest {
     assertEquals(BrokerState.NOT_RUNNING, manager.state)
     manager.start(() => context.highestMetadataOffset.get(),
       context.mockChannelManager, context.clusterId, context.advertisedListeners,
-      Collections.emptyMap())
+      Collections.emptyMap(), -1)
     TestUtils.retry(60000) {
       assertEquals(BrokerState.STARTING, manager.state)
     }
@@ -69,17 +69,20 @@ class BrokerLifecycleManagerTest {
     val manager = new BrokerLifecycleManager(context.config, context.time, "successful-registration-", isZkBroker = false)
     val controllerNode = new Node(3000, "localhost", 8021)
     context.controllerNodeProvider.node.set(controllerNode)
-    context.mockClient.prepareResponseFrom(new BrokerRegistrationResponse(
-      new BrokerRegistrationResponseData().setBrokerEpoch(1000)), controllerNode)
     manager.start(() => context.highestMetadataOffset.get(),
       context.mockChannelManager, context.clusterId, context.advertisedListeners,
-      Collections.emptyMap())
+      Collections.emptyMap(), 10L)
+    TestUtils.retry(60000) {
+      assertEquals(1, context.mockChannelManager.unsentQueue.size)
+      assertEquals(10L, context.mockChannelManager.unsentQueue.getFirst.request.build().asInstanceOf[BrokerRegistrationRequest].data().previousBrokerEpoch())
+    }
+    context.mockClient.prepareResponseFrom(new BrokerRegistrationResponse(
+      new BrokerRegistrationResponseData().setBrokerEpoch(1000)), controllerNode)
     TestUtils.retry(10000) {
       context.poll()
       assertEquals(1000L, manager.brokerEpoch)
     }
     manager.close()
-
   }
 
   @Test
@@ -98,7 +101,7 @@ class BrokerLifecycleManagerTest {
     assertEquals(1, context.mockClient.futureResponses().size)
     manager.start(() => context.highestMetadataOffset.get(),
       context.mockChannelManager, context.clusterId, context.advertisedListeners,
-      Collections.emptyMap())
+      Collections.emptyMap(), -1)
     // We should send the first registration request and get a failure immediately
     TestUtils.retry(60000) {
       context.poll()
@@ -136,7 +139,7 @@ class BrokerLifecycleManagerTest {
       new BrokerHeartbeatResponseData().setIsCaughtUp(true)), controllerNode)
     manager.start(() => context.highestMetadataOffset.get(),
       context.mockChannelManager, context.clusterId, context.advertisedListeners,
-      Collections.emptyMap())
+      Collections.emptyMap(), -1)
     TestUtils.retry(10000) {
       context.poll()
       manager.eventQueue.wakeup()
