@@ -31,8 +31,14 @@ def build_jvm(image, tag, kafka_url):
         return
     shutil.rmtree("jvm/resources")
 
-def run_jvm_tests(image, tag):
+def run_jvm_tests(image, tag, kafka_url):
+    subprocess.run(["wget", "-nv", "-O", "kafka.tgz", kafka_url])
+    subprocess.run(["ls"])
+    subprocess.run(["mkdir", "./test/fixtures/kafka"])
+    subprocess.run(["tar", "xfz", "kafka.tgz", "-C", "./test/fixtures/kafka", "--strip-components", "1"])
     subprocess.run(["python3", "docker_sanity_test.py", f"{image}:{tag}", "jvm"], cwd="test")
+    subprocess.run(["rm", "kafka.tgz"])
+    shutil.rmtree("./test/fixtures/kafka")
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -51,4 +57,4 @@ if __name__ == '__main__':
             raise ValueError("--kafka-url is a required argument for jvm image")
     
     if args.image_type in ("all", "jvm") and (args.test_only or not (args.build_only or args.test_only)):
-        run_jvm_tests(args.image, args.tag)
+        run_jvm_tests(args.image, args.tag, args.kafka_url)
