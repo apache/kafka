@@ -28,6 +28,7 @@ CONNECT_TEST_TOPIC="test_topic_connect"
 CONNECT_SOURCE_CONNECTOR_CONFIG="@fixtures/source_connector.json"
 
 SSL_CLIENT_CONFIG="./fixtures/secrets/client-ssl.properties"
+SSL_TOPIC="test_topic_ssl"
 
 BROKER_RESTART_TEST_TOPIC="test_topic_broker_restart"
 
