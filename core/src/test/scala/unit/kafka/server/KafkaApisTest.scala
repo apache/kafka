@@ -4814,7 +4814,8 @@ class KafkaApisTest {
     createKafkaApis(authorizer = Some(authorizer)).handle(requestChannelRequest, RequestLocal.NoCaching)
 
     // group-2 mocks using the new group coordinator.
-    // When the coordinator is not active, a response with error code is returned.
+    // When the coordinator is not active, a response with top-level error code is returned
+    // despite that the requested topic is not authorized and fails.
     val group2ResponseFromCoordinator = new OffsetFetchResponseData.OffsetFetchResponseGroup()
       .setGroupId("group-2")
       .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code)
