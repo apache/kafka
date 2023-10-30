@@ -136,9 +136,24 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   def testFederatedTopicCreateDeleteAndGet(): Unit = {
     client = Admin.create(createConfig)
     val federatedTopic = Map("federated-test-topic" -> "tracking").asJava
-
-    // create the federated topic znode
+    val expectedFedTopic = Seq("/tracking/federated-test-topic")
+    // create one federated topic
     client.createFederatedTopicZnodes(federatedTopic)
+    // since creation is async, wait for federated topic znodes to be created
+    waitForFederatedTopicZnodes(zkClient, expectedFedTopic, List())
+
+    // check federated topic is created
+    val federatedTopics = zkClient.getAllFederatedTopics
+    assertEquals(1, federatedTopics.size)
+
+    // delete federated topic znode
+    client.deleteFederatedTopicZnodes(federatedTopic)
+
+    waitForFederatedTopicZnodes(zkClient, List(), expectedFedTopic)
+
+    // after deletion, federated topic znodes should be empty
+    val result1 = zkClient.getAllFederatedTopics
+    assertEquals(0, result1.size)
   }
 
   @Test

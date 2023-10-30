@@ -23,6 +23,7 @@ import kafka.security.authorizer.AclEntry
 import kafka.server.KafkaConfig
 import kafka.utils.Logging
 import kafka.utils.TestUtils._
+import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, CreateTopicsOptions, CreateTopicsResult, DescribeClusterOptions, DescribeTopicsOptions, NewTopic, TopicDescription}
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.acl.AclOperation
@@ -220,6 +221,14 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
       expectedPresent.forall(topicName => topics.contains(topicName)) &&
         expectedMissing.forall(topicName => !topics.contains(topicName))
     }, "timed out waiting for topics")
+  }
+
+  def waitForFederatedTopicZnodes(client: KafkaZkClient, expectedPresent: Seq[String], expectedMissing: Seq[String]): Unit = {
+    waitUntilTrue(() => {
+      val topics = client.getAllFederatedTopics
+      expectedPresent.forall(topicName => topics.contains(topicName)) &&
+        expectedMissing.forall(topicName => !topics.contains(topicName))
+    }, "timed out waiting for federated topics")
   }
 
   def getTopicMetadata(client: Admin,

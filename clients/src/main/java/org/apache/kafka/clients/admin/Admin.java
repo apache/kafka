@@ -199,6 +199,13 @@ public interface Admin extends AutoCloseable {
      */
     CreateTopicsResult createTopics(Collection<NewTopic> newTopics, CreateTopicsOptions options);
 
+    /**
+     * Create federated topic znodes, with znode name as the topic name and data as namespace name.
+     * This operation is decoupled from createTopics and will eventually only change
+     * the ACL validation behavior within kafka-server level
+     * @param federatedTopics map of topic name to namespace name for federated topics
+     * @return The CreateOrDeleteFederatedTopicZnodesResult
+     */
     default CreateOrDeleteFederatedTopicZnodesResult createFederatedTopicZnodes(Map<String, String> federatedTopics) {
         return createFederatedTopicZnodes(federatedTopics, new CreateFederatedTopicZnodesOptions());
     }
@@ -269,6 +276,18 @@ public interface Admin extends AutoCloseable {
      * @return The DeleteTopicsResult.
      */
     DeleteTopicsResult deleteTopics(TopicCollection topics, DeleteTopicsOptions options);
+
+    /**
+     * Delete federated topic znodes. This operation is decoupled from deleteTopics and will eventually only change
+     * the ACL validation behavior within kafka-server level
+     * @param federatedTopics map of topic name to namespace name for federated topics
+     * @return The CreateOrDeleteFederatedTopicZnodesResult
+     */
+    default CreateOrDeleteFederatedTopicZnodesResult deleteFederatedTopicZnodes(Map<String, String> federatedTopics) {
+        return deleteFederatedTopicZnodes(federatedTopics, new DeleteFederatedTopicZnodesOptions());
+    }
+
+    CreateOrDeleteFederatedTopicZnodesResult deleteFederatedTopicZnodes(Map<String, String> federatedTopics, DeleteFederatedTopicZnodesOptions options);
 
     /**
      * List the topics available in the cluster with the default options.

@@ -145,6 +145,28 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient,
     }.toMap
   }
 
+  def getAllFederatedTopics: Set[String] = {
+    val topics = getChildren(FederatedTopicsZNode.path)
+
+    val merge: ((String, String)) => String = {
+      case (key, value) => "/" + value + "/" + key
+    }
+
+    val getDataRequests = topics.map(topic => GetDataRequest(
+      FederatedTopicZnode.path(topic),
+      ctx = Some(topic)))
+
+    val getDataResponses = retryRequestsUntilConnected(getDataRequests)
+    getDataResponses.flatMap { getDataResponse =>
+      val topic = getDataResponse.ctx.get.asInstanceOf[String]
+      getDataResponse.resultCode match {
+        case Code.OK => Some(topic, FederatedTopicZnode.decode(getDataResponse.data))
+        case Code.NONODE => None
+        case _ => throw getDataResponse.resultException.get
+      }
+    }.toMap.map(merge)
+  }.toSet
+
   /**
    * Registers a given broker in zookeeper as the controller and increments controller epoch.
    * @param controllerId the id of the broker that is to be registered as the controller.
@@ -1866,6 +1888,10 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient,
   def createFederatedTopicZNode(topic: String, namespace: String): Unit = {
     val path = FederatedTopicZnode.path(topic)
     createRecursive(path, FederatedTopicZnode.encode(namespace))
+  }
+
+  def deleteFederatedTopicZNode(topic: String): Unit = {
+    deletePath(FederatedTopicZnode.path(topic), ZkVersion.MatchAnyVersion, false)
   }
 
   private def setConsumerOffset(group: String, topicPartition: TopicPartition, offset: Long): SetDataResponse = {

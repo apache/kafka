@@ -256,7 +256,12 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.LI_CONTROLLED_SHUTDOWN_SKIP_SAFETY_CHECK => handleLiControlledShutdownSkipSafetyCheck(request)
         case ApiKeys.LI_COMBINED_CONTROL => handleLiCombinedControlRequest(request, requestLocal)
         case ApiKeys.LI_MOVE_CONTROLLER => handleMoveControllerRequest(request)
+        // LI_CREATE_FEDERATED_TOPIC_ZNODES is decoupled from CREATE_TOPICS and only changes the ACL validation behavior
+        // within kafka-server level
         case ApiKeys.LI_CREATE_FEDERATED_TOPIC_ZNODES => maybeForwardToController(request, handleMarkFederatedTopicRequest)
+        // LI_DELETE_FEDERATED_TOPIC_ZNODES is decoupled from DELETE_TOPICS and only changes the ACL validation behavior
+        // within kafka-server level
+        case ApiKeys.LI_DELETE_FEDERATED_TOPIC_ZNODES => maybeForwardToController(request, handleDeleteFederatedTopicZnodesRequest)
         case _ => throw new IllegalStateException(s"No handler for request api key ${request.header.apiKey}")
       }
     } catch {
@@ -3732,7 +3737,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
 
       try {
-        toCreate.foreach( entry => {
+        toCreate.foreach(entry => {
           zkSupport.zkClient.createFederatedTopicZNode(entry._1, entry._2)
         })
         requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
@@ -3741,6 +3746,70 @@ class KafkaApis(val requestChannel: RequestChannel,
       } catch {
         case throwable: Throwable =>
           requestHelper.sendResponseExemptThrottle(request, markFederatedTopicRequest.getErrorResponse(throwable))
+      }
+    }
+  }
+
+
+  def handleDeleteFederatedTopicZnodesRequest(request: RequestChannel.Request): Unit = {
+    val federatedTopicZnodesDeleteRequest = request.body[LiDeleteFederatedTopicZnodesRequest]
+    val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.shouldNeverReceive(request))
+
+    if (!zkSupport.controller.isActive) {
+      requestHelper.sendResponseExemptThrottle(request,
+        LiDeleteFederatedTopicZnodesResponse.prepareResponse(Errors.NOT_CONTROLLER, 0, federatedTopicZnodesDeleteRequest.version())
+      )
+    } else if (!zkSupport.controller.topicDeletionManager.isDeleteTopicEnabled) {
+      val error = if (request.context.apiVersion < 3) Errors.INVALID_REQUEST else Errors.TOPIC_DELETION_DISABLED
+      requestHelper.sendResponseExemptThrottle(request,
+        LiDeleteFederatedTopicZnodesResponse.prepareResponse(error, 0, federatedTopicZnodesDeleteRequest.version())
+      )
+    } else {
+      val allTopics = mutable.Set[String]()
+      federatedTopicZnodesDeleteRequest.data().topics().forEach(federatedTopic => {
+        allTopics += federatedTopic.name()
+      })
+      val results = new DeletableTopicResultCollection(allTopics.size)
+      val toDelete = mutable.Set[String]()
+
+      allTopics.foreach(topic => {
+        results.add(new DeletableTopicResult().setName(topic))
+      })
+
+      val authorizedDescribeTopics = authHelper.filterByAuthorized(request.context, DESCRIBE, TOPIC,
+        results.asScala.filter(result => result.name() != null))(_.name)
+      val authorizedDeleteTopics = authHelper.filterByAuthorized(request.context, DELETE, TOPIC,
+        results.asScala.filter(result => result.name() != null))(_.name)
+      results.forEach { topic =>
+        val unresolvedTopicId = topic.topicId() != Uuid.ZERO_UUID && topic.name() == null
+        if (unresolvedTopicId) {
+          topic.setErrorCode(Errors.UNKNOWN_TOPIC_ID.code)
+        } else if (!authorizedDescribeTopics.contains(topic.name)) {
+
+          // Because the client does not have Describe permission, the name should
+          // not be returned in the response. Note, however, that we do not consider
+          // the topicId itself to be sensitive, so there is no reason to obscure
+          // this case with `UNKNOWN_TOPIC_ID`.
+          topic.setName(null)
+          topic.setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
+        } else if (!authorizedDeleteTopics.contains(topic.name)) {
+          topic.setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
+        } else {
+          toDelete += topic.name
+        }
+      }
+
+      try {
+        toDelete.foreach(federatedTopic => {
+          zkSupport.zkClient.deleteFederatedTopicZNode(federatedTopic)
+        })
+        requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
+          LiDeleteFederatedTopicZnodesResponse.prepareResponse(Errors.NONE, requestThrottleMs,
+            federatedTopicZnodesDeleteRequest.version())
+        )
+      } catch {
+        case throwable: Throwable =>
+          requestHelper.sendResponseExemptThrottle(request, federatedTopicZnodesDeleteRequest.getErrorResponse(throwable))
       }
     }
   }

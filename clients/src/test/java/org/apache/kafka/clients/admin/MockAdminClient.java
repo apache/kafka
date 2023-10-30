@@ -413,6 +413,11 @@ public class MockAdminClient extends AdminClient {
         return result;
     }
 
+    @Override
+    public CreateOrDeleteFederatedTopicZnodesResult deleteFederatedTopicZnodes(Map<String, String> federatedTopics, DeleteFederatedTopicZnodesOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
     private Map<String, KafkaFuture<Void>> handleDeleteTopicsUsingNames(Collection<String> topicNameCollection, DeleteTopicsOptions options) {
         Map<String, KafkaFuture<Void>> deleteTopicsResult = new HashMap<>();
         Collection<String> topicNames = new ArrayList<>(topicNameCollection);

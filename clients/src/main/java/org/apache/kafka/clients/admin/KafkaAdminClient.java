@@ -142,6 +142,7 @@ import org.apache.kafka.common.message.ExpireDelegationTokenRequestData;
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
 import org.apache.kafka.common.message.LiControlledShutdownSkipSafetyCheckRequestData;
 import org.apache.kafka.common.message.LiCreateFederatedTopicZnodesRequestData;
+import org.apache.kafka.common.message.LiDeleteFederatedTopicZnodesRequestData;
 import org.apache.kafka.common.message.LiMoveControllerRequestData;
 import org.apache.kafka.common.message.ListGroupsRequestData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
@@ -224,6 +225,8 @@ import org.apache.kafka.common.requests.LiMoveControllerRequest;
 import org.apache.kafka.common.requests.LiMoveControllerResponse;
 import org.apache.kafka.common.requests.LiCreateFederatedTopicZnodesRequest;
 import org.apache.kafka.common.requests.LiCreateFederatedTopicZnodesResponse;
+import org.apache.kafka.common.requests.LiDeleteFederatedTopicZnodesRequest;
+import org.apache.kafka.common.requests.LiDeleteFederatedTopicZnodesResponse;
 import org.apache.kafka.common.requests.ListGroupsRequest;
 import org.apache.kafka.common.requests.ListGroupsResponse;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
@@ -1748,6 +1751,45 @@ public class KafkaAdminClient extends AdminClient {
             return DeleteTopicsResult.ofTopicNames(handleDeleteTopicsUsingNames(((TopicNameCollection) topics).topicNames(), options));
         else
             throw new IllegalArgumentException("The TopicCollection: " + topics + " provided did not match any supported classes for deleteTopics.");
+    }
+
+    @Override
+    public CreateOrDeleteFederatedTopicZnodesResult deleteFederatedTopicZnodes(Map<String, String> federatedTopics,
+                                                                               DeleteFederatedTopicZnodesOptions options) {
+        final Map<String, KafkaFutureImpl<Void>> topicFutures = new HashMap<>(federatedTopics.size());
+        final long now = time.milliseconds();
+        List<LiDeleteFederatedTopicZnodesRequestData.FederatedTopics> topics = new ArrayList<>();
+        federatedTopics.forEach((topic, namespace) -> {
+            topics.add(new LiDeleteFederatedTopicZnodesRequestData.FederatedTopics().setName(topic).setNamespace(namespace));
+            topicFutures.put(topic, new KafkaFutureImpl<>());
+        });
+        runnable.call(new Call("deleteFederatedTopicsZnode", calcDeadlineMs(now, options.timeoutMs()),
+            new ControllerNodeProvider()) {
+            @Override
+            AbstractRequest.Builder<?> createRequest(int timeoutMs) {
+                return new LiDeleteFederatedTopicZnodesRequest.Builder(new LiDeleteFederatedTopicZnodesRequestData()
+                    .setTopics(topics)
+                    .setTimeoutMs(timeoutMs),  (short) 0);
+            }
+
+            @Override
+            void handleResponse(AbstractResponse abstractResponse) {
+                LiDeleteFederatedTopicZnodesResponse response = (LiDeleteFederatedTopicZnodesResponse) abstractResponse;
+                Errors errors = Errors.forCode(response.data().errorCode());
+                if (errors != Errors.NONE) {
+                    completeAllExceptionally(topicFutures.values(), errors.exception());
+                    return;
+                }
+                topicFutures.values().forEach(f -> f.complete(null));
+            }
+
+            @Override
+            void handleFailure(Throwable throwable) {
+                // Fail all the other remaining futures
+                completeAllExceptionally(topicFutures.values(), throwable);
+            }
+        }, now);
+        return new CreateOrDeleteFederatedTopicZnodesResult(new HashMap<>(topicFutures));
     }
 
     private Map<String, KafkaFuture<Void>> handleDeleteTopicsUsingNames(final Collection<String> topicNames,

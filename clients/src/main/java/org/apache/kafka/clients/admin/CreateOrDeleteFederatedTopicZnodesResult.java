@@ -22,7 +22,7 @@ import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
- * The result of {@link Admin#CreateFederatedTopicZnode()} or {@link Admin#DeleteFederatedTopicZnode()}.
+ * The result of {@link Admin#CreateFederatedTopicZnodes()} or {@link Admin#DeleteFederatedTopicZnodes()}.
  *
  * The API of this class is evolving, see {@link Admin} for details.
  */
