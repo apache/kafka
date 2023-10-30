@@ -27,8 +27,8 @@ import kafka.api.LeaderAndIsr
 import kafka.cluster.Broker
 import kafka.controller.{ControllerContext, KafkaController}
 import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinator}
-import kafka.network.{RequestChannel, RequestMetrics}
 import kafka.metrics.ClientMetricsTestUtils
+import kafka.network.{RequestChannel, RequestMetrics}
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.metadata.{ConfigRepository, KRaftMetadataCache, MockConfigRepository, ZkMetadataCache}
 import kafka.utils.{Log4jController, TestUtils}
@@ -214,7 +214,8 @@ class KafkaApisTest {
       clusterId = clusterId,
       time = time,
       tokenManager = null,
-      apiVersionManager = apiVersionManager)
+      apiVersionManager = apiVersionManager,
+      clientMetricsManager = null)
   }
 
   @Test

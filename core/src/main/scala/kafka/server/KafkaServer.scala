@@ -201,6 +201,8 @@ class KafkaServer(
 
   def brokerEpochSupplier(): Long = Option(brokerEpochManager).map(_.get()).getOrElse(-1)
 
+  var clientMetricsManager: ClientMetricsManager = _
+
   /**
    * Start up API for bringing up a single instance of the Kafka server.
    * Instantiates the LogManager, the SocketServer and the request handlers - KafkaRequestHandlers
@@ -521,6 +523,8 @@ class KafkaServer(
           rlm.startup()
         }
 
+        clientMetricsManager = ClientMetricsManager.getInstance()
+
         /* start processing requests */
         val zkSupport = ZkSupport(adminManager, kafkaController, zkClient, forwardingManager, metadataCache, brokerEpochManager)
 
@@ -543,7 +547,8 @@ class KafkaServer(
           clusterId = clusterId,
           time = time,
           tokenManager = tokenManager,
-          apiVersionManager = apiVersionManager)
+          apiVersionManager = apiVersionManager,
+          clientMetricsManager = clientMetricsManager)
 
         dataPlaneRequestProcessor = createKafkaApis(socketServer.dataPlaneRequestChannel)
 
@@ -568,7 +573,7 @@ class KafkaServer(
                                                            ConfigType.User -> new UserConfigHandler(quotaManagers, credentialProvider),
                                                            ConfigType.Broker -> new BrokerConfigHandler(config, quotaManagers),
                                                            ConfigType.Ip -> new IpConfigHandler(socketServer.connectionQuotas),
-                                                           ConfigType.ClientMetrics -> new ClientMetricsConfigHandler)
+                                                           ConfigType.ClientMetrics -> new ClientMetricsConfigHandler(clientMetricsManager))
 
         // Create the config manager. start listening to notifications
         dynamicConfigManager = new ZkConfigManager(zkClient, dynamicConfigHandlers)

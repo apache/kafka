@@ -144,6 +144,8 @@ class BrokerServer(
 
   val metadataPublishers: util.List[MetadataPublisher] = new util.ArrayList[MetadataPublisher]()
 
+  var clientMetricsManager: ClientMetricsManager = _
+
   private def maybeChangeStatus(from: ProcessStatus, to: ProcessStatus): Boolean = {
     lock.lock()
     try {
@@ -312,10 +314,12 @@ class BrokerServer(
         config, Some(clientToControllerChannelManager), None, None,
         groupCoordinator, transactionCoordinator)
 
+      clientMetricsManager = ClientMetricsManager.getInstance()
+
       dynamicConfigHandlers = Map[String, ConfigHandler](
         ConfigType.Topic -> new TopicConfigHandler(replicaManager, config, quotaManagers, None),
         ConfigType.Broker -> new BrokerConfigHandler(config, quotaManagers),
-        ConfigType.ClientMetrics -> new ClientMetricsConfigHandler)
+        ConfigType.ClientMetrics -> new ClientMetricsConfigHandler(clientMetricsManager))
 
       val featuresRemapped = brokerFeatures.supportedFeatures.features().asScala.map {
         case (k: String, v: SupportedVersionRange) =>
@@ -374,7 +378,8 @@ class BrokerServer(
         clusterId = clusterId,
         time = time,
         tokenManager = tokenManager,
-        apiVersionManager = apiVersionManager)
+        apiVersionManager = apiVersionManager,
+        clientMetricsManager = clientMetricsManager)
 
       dataPlaneRequestHandlerPool = new KafkaRequestHandlerPool(config.nodeId,
         socketServer.dataPlaneRequestChannel, dataPlaneRequestProcessor, time,

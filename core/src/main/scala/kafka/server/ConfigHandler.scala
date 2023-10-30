@@ -258,8 +258,8 @@ class BrokerConfigHandler(private val brokerConfig: KafkaConfig,
 /**
  * The ClientMetricsConfigHandler will process individual client metrics subscription changes.
  */
-class ClientMetricsConfigHandler() extends ConfigHandler with Logging {
+class ClientMetricsConfigHandler(private val clientMetricsManager: ClientMetricsManager) extends ConfigHandler with Logging {
   def processConfigChanges(subscriptionGroupId: String, properties: Properties): Unit = {
-    ClientMetricsManager.getInstance.updateSubscription(subscriptionGroupId, properties)
+    clientMetricsManager.updateSubscription(subscriptionGroupId, properties)
   }
 }

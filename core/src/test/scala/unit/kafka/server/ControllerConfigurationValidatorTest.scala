@@ -17,7 +17,7 @@
 
 package kafka.server
 
-import kafka.metrics.ClientMetricsConfig
+import kafka.metrics.ClientMetricsConfigs
 import kafka.utils.TestUtils
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, BROKER_LOGGER, CLIENT_METRICS, TOPIC}
@@ -106,10 +106,10 @@ class ControllerConfigurationValidatorTest {
   @Test
   def testValidClientMetricsConfig(): Unit = {
     val config = new TreeMap[String, String]()
-    config.put(ClientMetricsConfig.ClientMetrics.PushIntervalMs, "2000")
-    config.put(ClientMetricsConfig.ClientMetrics.SubscriptionMetrics, "org.apache.kafka.client.producer.partition.queue.,org.apache.kafka.client.producer.partition.latency")
-    config.put(ClientMetricsConfig.ClientMetrics.ClientMatchPattern, "client_instance_id=b69cc35a-7a54-4790-aa69-cc2bd4ee4538,client_id=1" +
-      ",client_software_name=apache-kafka-java,client_software_version=2.8.0-SNAPSHOT,client_source_address=127.0.0.1" +
+    config.put(ClientMetricsConfigs.PUSH_INTERVAL_MS, "2000")
+    config.put(ClientMetricsConfigs.SUBSCRIPTION_METRICS, "org.apache.kafka.client.producer.partition.queue.,org.apache.kafka.client.producer.partition.latency")
+    config.put(ClientMetricsConfigs.CLIENT_MATCH_PATTERN, "client_instance_id=b69cc35a-7a54-4790-aa69-cc2bd4ee4538,client_id=1" +
+      ",client_software_name=apache-kafka-java,client_software_version=2.8.0-SNAPSHOT,client_source_address=127.0.0.1," +
       "client_source_port=1234")
     validator.validate(new ConfigResource(CLIENT_METRICS, "subscription-1"), config)
   }
@@ -117,7 +117,7 @@ class ControllerConfigurationValidatorTest {
   @Test
   def testInvalidSubscriptionIdClientMetricsConfig(): Unit = {
     val config = new TreeMap[String, String]()
-    assertEquals("subscriptionId can't be empty",
+    assertEquals("Subscription name can't be empty",
       assertThrows(classOf[InvalidRequestException], () => validator.validate(
         new ConfigResource(CLIENT_METRICS, ""), config)). getMessage())
   }
@@ -125,13 +125,13 @@ class ControllerConfigurationValidatorTest {
   @Test
   def testInvalidIntervalClientMetricsConfig(): Unit = {
     val config = new TreeMap[String, String]()
-    config.put(ClientMetricsConfig.ClientMetrics.PushIntervalMs, "10")
-    assertEquals("Invalid value for interval.ms. Interval must be between 100 and 3600000 (1 hour)",
+    config.put(ClientMetricsConfigs.PUSH_INTERVAL_MS, "10")
+    assertEquals("Invalid value for interval.ms, interval must be between 100 and 3600000 (1 hour)",
       assertThrows(classOf[InvalidRequestException], () => validator.validate(
         new ConfigResource(CLIENT_METRICS, "subscription-1"), config)). getMessage())
 
-    config.put(ClientMetricsConfig.ClientMetrics.PushIntervalMs, "3600001")
-    assertEquals("Invalid value for interval.ms. Interval must be between 100 and 3600000 (1 hour)",
+    config.put(ClientMetricsConfigs.PUSH_INTERVAL_MS, "3600001")
+    assertEquals("Invalid value for interval.ms, interval must be between 100 and 3600000 (1 hour)",
       assertThrows(classOf[InvalidRequestException], () => validator.validate(
         new ConfigResource(CLIENT_METRICS, "subscription-1"), config)). getMessage())
   }
@@ -148,7 +148,7 @@ class ControllerConfigurationValidatorTest {
   @Test
   def testInvalidMatchClientMetricsConfig(): Unit = {
     val config = new TreeMap[String, String]()
-    config.put(ClientMetricsConfig.ClientMetrics.ClientMatchPattern, "10")
+    config.put(ClientMetricsConfigs.CLIENT_MATCH_PATTERN, "10")
     assertEquals("Illegal client matching pattern: 10",
       assertThrows(classOf[InvalidConfigurationException], () => validator.validate(
         new ConfigResource(CLIENT_METRICS, "subscription-1"), config)). getMessage())
