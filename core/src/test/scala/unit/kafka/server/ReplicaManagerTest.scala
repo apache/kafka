@@ -3126,7 +3126,7 @@ class ReplicaManagerTest {
     propsModifier.apply(props)
     val config = KafkaConfig.fromProps(props)
     val logProps = new Properties()
-    logProps.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, true)
+    logProps.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
     val mockLog = setupMockLog(path1)
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)), new LogConfig(logProps), log = if (shouldMockLog) Some(mockLog) else None, remoteStorageSystemEnable = true)
     val aliveBrokers = aliveBrokerIds.map(brokerId => new Node(brokerId, s"host$brokerId", brokerId))
