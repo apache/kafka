@@ -146,7 +146,7 @@ versions += [
   lz4: "1.8.0",
   mavenArtifact: "3.8.8",
   metrics: "2.2.0",
-  netty: "4.1.94.Final",
+  netty: "4.1.100.Final",
   pcollections: "4.0.1",
   powermock: "2.0.9",
   reflections: "0.10.2",
