@@ -25,12 +25,16 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -170,15 +174,41 @@ public class ConsumerConfigTest {
     }
 
     @Test
-    public void testValidConsumerGroupConfig() {
+    public void testRemoteAssignorConfig() {
         String remoteAssignorName = "org.apache.kafka.clients.group.someAssignor";
+        String protocol = "consumer";
         final Map<String, Object> configs = new HashMap<>();
         configs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializerClass);
         configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClass);
-        configs.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, "consumer");
-        configs.put(ConsumerConfig.REMOTE_ASSIGNOR_CONFIG, "org.apache.kafka.clients.group.someAssignor");
+        configs.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, protocol);
         final ConsumerConfig consumerConfig = new ConsumerConfig(configs);
-        assertEquals("consumer", consumerConfig.getString(ConsumerConfig.GROUP_PROTOCOL_CONFIG));
+        assertEquals(protocol, consumerConfig.getString(ConsumerConfig.GROUP_PROTOCOL_CONFIG));
         assertEquals(remoteAssignorName, consumerConfig.getString(ConsumerConfig.REMOTE_ASSIGNOR_CONFIG));
+    }
+
+    @ParameterizedTest
+    @MethodSource("protocolNameSupplier")
+    public void testConfigurationValidation(String protocol, boolean isValid) {
+        final Map<String, Object> configs = new HashMap<>();
+        configs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializerClass);
+        configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClass);
+        configs.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, protocol);
+        try {
+            ConsumerConfig config = new ConsumerConfig(configs);
+            assertEquals(protocol, config.getString(ConsumerConfig.GROUP_PROTOCOL_CONFIG));
+        } catch (ConfigException e) {
+            if (isValid)
+                fail("Should not have thrown an exception");
+        }
+    }
+
+    // Supplies (name, isValid)
+    private static Stream<Arguments> protocolNameSupplier() {
+        return Stream.of(
+            Arguments.of("consumer", true),
+            Arguments.of("generic", true),
+            Arguments.of("Consumer", true),
+            Arguments.of("Generic", true),
+            Arguments.of("invalid", false));
     }
 }

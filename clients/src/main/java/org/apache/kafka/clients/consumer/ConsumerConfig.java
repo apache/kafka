@@ -110,9 +110,9 @@ public class ConsumerConfig extends AbstractConfig {
      */
     public static final String GROUP_PROTOCOL_CONFIG = "group.protocol";
     public static final String DEFAULT_GROUP_PROTOCOL = GroupProtocol.GENERIC.name().toLowerCase(Locale.ROOT);
-    public static final String GROUP_PROTOCOL_DOC = "The group protocol consumer should use.  We currently " +
+    public static final String GROUP_PROTOCOL_DOC = "The group protocol consumer should use. We currently " +
         "support \"generic\" or \"consumer\". If \"consumer\" is specified, then the consumer group protocol will be " +
-        "used.  Otherwise, the generic group protocol will be used.";
+        "used. Otherwise, the generic group protocol will be used.";
 
     /**
     * <code>group.remote.assignor</code>
