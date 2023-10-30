@@ -261,12 +261,12 @@ public class StandaloneHerderTest {
         // Second deletion should fail since the connector is gone
         FutureCallback<Herder.Created<ConnectorInfo>> failedDeleteCallback = new FutureCallback<>();
         herder.deleteConnectorConfig(CONNECTOR_NAME, failedDeleteCallback);
-        try {
-            failedDeleteCallback.get(1000L, TimeUnit.MILLISECONDS);
-            fail("Should have thrown NotFoundException");
-        } catch (ExecutionException e) {
-            assertTrue(e.getCause() instanceof NotFoundException);
-        }
+        ExecutionException e = assertThrows(
+                "Should have thrown NotFoundException",
+                ExecutionException.class,
+                () -> failedDeleteCallback.get(1000L, TimeUnit.MILLISECONDS)
+        );
+        assertTrue(e.getCause() instanceof NotFoundException);
     }
 
     @Test
@@ -819,20 +819,20 @@ public class StandaloneHerderTest {
         when(connectorMock.config()).thenReturn(configDef);
 
         herder.putConnectorConfig(CONNECTOR_NAME, config, true, createCallback);
-        try {
-            createCallback.get(1000L, TimeUnit.SECONDS);
-            fail("Should have failed to configure connector");
-        } catch (ExecutionException e) {
-            assertNotNull(e.getCause());
-            Throwable cause = e.getCause();
-            assertTrue(cause instanceof BadRequestException);
-            assertEquals(
+        ExecutionException e = assertThrows(
+                "Should have failed to configure connector",
+                ExecutionException.class,
+                () -> createCallback.get(1000L, TimeUnit.SECONDS)
+        );
+        assertNotNull(e.getCause());
+        Throwable cause = e.getCause();
+        assertTrue(cause instanceof BadRequestException);
+        assertEquals(
                 cause.getMessage(),
                 "Connector configuration is invalid and contains the following 1 error(s):\n" +
-                    error + "\n" +
-                    "You can also find the above list of errors at the endpoint `/connector-plugins/{connectorType}/config/validate`"
-            );
-        }
+                        error + "\n" +
+                        "You can also find the above list of errors at the endpoint `/connector-plugins/{connectorType}/config/validate`"
+        );
     }
 
     @Test
