@@ -483,7 +483,7 @@ public class PartitionChangeBuilder {
             record.setEligibleLeaderReplicas(targetElr);
         }
 
-        if (!targetLastKnownElr.equals(Replicas.toList(partition.lastKnownElr))) {
+        if (!useLastKnownLeaderInBalancedRecovery && !targetLastKnownElr.equals(Replicas.toList(partition.lastKnownElr))) {
             record.setLastKnownELR(targetLastKnownElr);
         }
     }
