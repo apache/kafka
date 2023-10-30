@@ -385,7 +385,7 @@ public class PartitionChangeBuilder {
     private void setAssignmentChanges(PartitionChangeRecord record) {
         if (!targetReplicas.isEmpty() && !targetReplicas.equals(Replicas.toList(partition.replicas))) {
             if (metadataVersion.isDirectoryAssignmentSupported()) {
-                record.setDirectories(DirectoryId.update(partition.replicas, partition.directories, targetReplicas));
+                record.setDirectories(DirectoryId.createDirectoriesFrom(partition.replicas, partition.directories, targetReplicas));
             }
             record.setReplicas(targetReplicas);
         }

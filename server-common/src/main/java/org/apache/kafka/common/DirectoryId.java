@@ -134,13 +134,12 @@ public class DirectoryId extends Uuid {
      * @throws IllegalArgumentException     If currentReplicas and currentDirectories have different lengths,
      *                                      or if there are duplicate broker IDs in the replica lists
      */
-    public static List<Uuid> update(int[] currentReplicas, DirectoryId[] currentDirectories, List<Integer> newReplicas) {
+    public static List<Uuid> createDirectoriesFrom(int[] currentReplicas, DirectoryId[] currentDirectories, List<Integer> newReplicas) {
         if (currentReplicas == null) currentReplicas = new int[0];
         if (currentDirectories == null) currentDirectories = new DirectoryId[0];
-        Map<Integer, Uuid> assignments = buildAssignmentMap(currentReplicas, currentDirectories);
+        Map<Integer, DirectoryId> assignments = createAssignmentMap(currentReplicas, currentDirectories);
         List<Uuid> consolidated = new ArrayList<>(newReplicas.size());
-        for (int i = 0; i < newReplicas.size(); i++) {
-            int newReplica = newReplicas.get(i);
+        for (int newReplica : newReplicas) {
             Uuid newDirectory = assignments.getOrDefault(newReplica, UNASSIGNED);
             consolidated.add(newDirectory);
         }
@@ -155,14 +154,14 @@ public class DirectoryId extends Uuid {
      * @throws IllegalArgumentException     If replicas and directories have different lengths,
      *                                      or if there are duplicate broker IDs in the replica list
      */
-    private static Map<Integer, Uuid> buildAssignmentMap(int[] replicas, DirectoryId[] directories) {
+    public static Map<Integer, DirectoryId> createAssignmentMap(int[] replicas, DirectoryId[] directories) {
         if (replicas.length != directories.length) {
             throw new IllegalArgumentException("The lengths for replicas and directories do not match.");
         }
-        Map<Integer, Uuid> assignments = new HashMap<>();
+        Map<Integer, DirectoryId> assignments = new HashMap<>();
         for (int i = 0; i < replicas.length; i++) {
             int brokerId = replicas[i];
-            Uuid directory = directories[i];
+            DirectoryId directory = directories[i];
             if (assignments.put(brokerId, directory) != null) {
                 throw new IllegalArgumentException("Duplicate broker ID in assignment");
             }

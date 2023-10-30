@@ -132,10 +132,6 @@ public class PartitionRegistration {
                 throw new IllegalStateException("You must set last known elr.");
             }
 
-            if (directories == null) {
-                directories = DirectoryId.unassignedArray(replicas.length);
-            }
-
             return new PartitionRegistration(
                 replicas,
                 directories,
@@ -186,7 +182,7 @@ public class PartitionRegistration {
                                  int[] addingReplicas, int leader, LeaderRecoveryState leaderRecoveryState,
                                  int leaderEpoch, int partitionEpoch, int[] elr, int[] lastKnownElr) {
         this.replicas = replicas;
-        this.directories = directories;
+        this.directories = directories != null ? directories : DirectoryId.unassignedArray(replicas.length);
         this.isr = isr;
         this.removingReplicas = removingReplicas;
         this.addingReplicas = addingReplicas;
@@ -345,8 +341,7 @@ public class PartitionRegistration {
             record.setDirectories(DirectoryId.toList(directories));
         } else {
             for (int i = 0; i < directories.length; i++) {
-                Uuid directory = directories[i];
-                if (!DirectoryId.UNASSIGNED.equals(directory)) {
+                if (!DirectoryId.UNASSIGNED.equals(directories[i])) {
                     options.handleLoss("the directory assignment state of one or more replicas");
                     break;
                 }

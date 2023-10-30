@@ -38,6 +38,7 @@ import org.mockito.Mockito;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Map;
 import java.util.Optional;
 import java.util.function.IntPredicate;
 import java.util.stream.IntStream;
@@ -57,9 +58,7 @@ import static org.mockito.Mockito.when;
 @Timeout(value = 40)
 public class PartitionChangeBuilderTest {
     private static Stream<Arguments> partitionChangeRecordVersions() {
-        return IntStream.range(PartitionChangeRecord.LOWEST_SUPPORTED_VERSION, PartitionChangeRecord.HIGHEST_SUPPORTED_VERSION + 1)
-                .filter(v -> v != PartitionChangeRecord.HIGHEST_SUPPORTED_VERSION) // TODO test latest record version in KAFKA-15514
-                .mapToObj(version -> Arguments.of((short) version));
+        return IntStream.range(PartitionChangeRecord.LOWEST_SUPPORTED_VERSION, PartitionChangeRecord.HIGHEST_SUPPORTED_VERSION + 1).mapToObj(version -> Arguments.of((short) version));
     }
 
     @Test
@@ -115,6 +114,7 @@ public class PartitionChangeBuilderTest {
 
     private final static Uuid FOO_ID = Uuid.fromString("FbrrdcfiR-KC2CPSTHaJrg");
 
+    // TODO remove this after after MetadataVersion bump for KIP-858
     private static MetadataVersion metadataVersionForDirAssignmentInfo() {
         MetadataVersion metadataVersion = Mockito.spy(MetadataVersion.latest());
         when(metadataVersion.isDirectoryAssignmentSupported()).thenReturn(true);
@@ -385,26 +385,34 @@ public class PartitionChangeBuilderTest {
     @ParameterizedTest
     @MethodSource("partitionChangeRecordVersions")
     public void testReassignmentRearrangesReplicas(short version) {
-        assertEquals(Optional.of(new ApiMessageAndVersion(new PartitionChangeRecord().
+        PartitionChangeRecord expectedRecord = new PartitionChangeRecord().
                 setTopicId(FOO_ID).
                 setPartitionId(0).
-                setReplicas(Arrays.asList(3, 2, 1)),
-                version)),
+                setReplicas(Arrays.asList(3, 2, 1));
+        if (version > 1) {
+            Map<Integer, DirectoryId> dirs = DirectoryId.createAssignmentMap(FOO.replicas, FOO.directories);
+            expectedRecord.setDirectories(Arrays.asList(dirs.get(3), dirs.get(2), dirs.get(1)));
+        }
+        assertEquals(Optional.of(new ApiMessageAndVersion(expectedRecord, version)),
             createFooBuilder(version).setTargetReplicas(Arrays.asList(3, 2, 1)).build());
     }
 
     @ParameterizedTest
     @MethodSource("partitionChangeRecordVersions")
     public void testIsrEnlargementCompletesReassignment(short version) {
-        assertEquals(Optional.of(new ApiMessageAndVersion(new PartitionChangeRecord().
+        PartitionChangeRecord expectedRecord = new PartitionChangeRecord().
                 setTopicId(BAR_ID).
                 setPartitionId(0).
                 setReplicas(Arrays.asList(2, 3, 4)).
                 setIsr(Arrays.asList(2, 3, 4)).
                 setLeader(2).
                 setRemovingReplicas(Collections.emptyList()).
-                setAddingReplicas(Collections.emptyList()),
-                version)),
+                setAddingReplicas(Collections.emptyList());
+        if (version > 1) {
+            Map<Integer, DirectoryId> dirs = DirectoryId.createAssignmentMap(BAR.replicas, BAR.directories);
+            expectedRecord.setDirectories(Arrays.asList(dirs.get(2), dirs.get(3), dirs.get(4)));
+        }
+        assertEquals(Optional.of(new ApiMessageAndVersion(expectedRecord, version)),
             createBarBuilder(version).setTargetIsrWithBrokerStates(AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(Arrays.asList(1, 2, 3, 4))).build());
     }
 
@@ -414,14 +422,18 @@ public class PartitionChangeBuilderTest {
         PartitionReassignmentRevert revert = new PartitionReassignmentRevert(BAR);
         assertEquals(Arrays.asList(1, 2, 3), revert.replicas());
         assertEquals(Arrays.asList(1, 2, 3), revert.isr());
-        assertEquals(Optional.of(new ApiMessageAndVersion(new PartitionChangeRecord().
+        PartitionChangeRecord expectedRecord = new PartitionChangeRecord().
                 setTopicId(BAR_ID).
                 setPartitionId(0).
                 setReplicas(Arrays.asList(1, 2, 3)).
                 setLeader(1).
                 setRemovingReplicas(Collections.emptyList()).
-                setAddingReplicas(Collections.emptyList()),
-                version)),
+                setAddingReplicas(Collections.emptyList());
+        if (version > 1) {
+            Map<Integer, DirectoryId> dirs = DirectoryId.createAssignmentMap(BAR.replicas, BAR.directories);
+            expectedRecord.setDirectories(Arrays.asList(dirs.get(1), dirs.get(2), dirs.get(3)));
+        }
+        assertEquals(Optional.of(new ApiMessageAndVersion(expectedRecord, version)),
             createBarBuilder(version).
                 setTargetReplicas(revert.replicas()).
                 setTargetIsrWithBrokerStates(AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(revert.isr())).
@@ -438,13 +450,17 @@ public class PartitionChangeBuilderTest {
         assertEquals(Collections.singletonList(3), replicas.removing());
         assertEquals(Collections.emptyList(), replicas.adding());
         assertEquals(Arrays.asList(1, 2, 3), replicas.replicas());
-        assertEquals(Optional.of(new ApiMessageAndVersion(new PartitionChangeRecord().
+        PartitionChangeRecord expectedRecord = new PartitionChangeRecord().
                 setTopicId(FOO_ID).
                 setPartitionId(0).
                 setReplicas(Arrays.asList(1, 2)).
                 setIsr(Arrays.asList(2, 1)).
-                setLeader(1),
-                version)),
+                setLeader(1);
+        if (version > 1) {
+            Map<Integer, DirectoryId> dirs = DirectoryId.createAssignmentMap(FOO.replicas, FOO.directories);
+            expectedRecord.setDirectories(Arrays.asList(dirs.get(1), dirs.get(2)));
+        }
+        assertEquals(Optional.of(new ApiMessageAndVersion(expectedRecord, version)),
             createFooBuilder(version).
                 setTargetReplicas(replicas.replicas()).
                 setTargetRemoving(replicas.removing()).
@@ -459,12 +475,16 @@ public class PartitionChangeBuilderTest {
         assertEquals(Collections.emptyList(), replicas.removing());
         assertEquals(Collections.singletonList(4), replicas.adding());
         assertEquals(Arrays.asList(1, 2, 3, 4), replicas.replicas());
-        assertEquals(Optional.of(new ApiMessageAndVersion(new PartitionChangeRecord().
+        PartitionChangeRecord expectedRecord = new PartitionChangeRecord().
                 setTopicId(FOO_ID).
                 setPartitionId(0).
                 setReplicas(Arrays.asList(1, 2, 3, 4)).
-                setAddingReplicas(Collections.singletonList(4)),
-                version)),
+                setAddingReplicas(Collections.singletonList(4));
+        if (version > 1) {
+            Map<Integer, DirectoryId> dirs = DirectoryId.createAssignmentMap(FOO.replicas, FOO.directories);
+            expectedRecord.setDirectories(Arrays.asList(dirs.get(1), dirs.get(2), dirs.get(3), DirectoryId.UNASSIGNED));
+        }
+        assertEquals(Optional.of(new ApiMessageAndVersion(expectedRecord, version)),
             createFooBuilder(version).
                 setTargetReplicas(replicas.replicas()).
                 setTargetAdding(replicas.adding()).
