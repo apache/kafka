@@ -150,7 +150,7 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
          */
         SegmentSearchResult find(long timestamp, boolean includeValue);
 
-        List<SegmentSearchResult> findAll();
+        List<SegmentSearchResult> findAll(long fromTime, long toTime);
 
 
         /**
@@ -341,7 +341,7 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
         }
 
         @Override
-        public List<SegmentSearchResult> findAll() {
+        public List<SegmentSearchResult> findAll(final long fromTime, final long toTime) {
             long currNextTimestamp = nextTimestamp;
             final List<SegmentSearchResult> segmentSearchResults = new ArrayList<>();
             long currTimestamp = -1L; // choose an invalid timestamp. if this is valid, this needs to be re-worked
@@ -351,6 +351,9 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
             while (currTimestamp != minTimestamp) {
                 final int timestampSegmentIndex = 2 * TIMESTAMP_SIZE + currIndex * (TIMESTAMP_SIZE + VALUE_SIZE);
                 currTimestamp = ByteBuffer.wrap(segmentValue).getLong(timestampSegmentIndex);
+                if (currTimestamp > toTime || currNextTimestamp < fromTime) {
+                    break;
+                }
                 currValueSize = ByteBuffer.wrap(segmentValue).getInt(timestampSegmentIndex + TIMESTAMP_SIZE);
                 cumValueSize += Math.max(currValueSize, 0);
                 if (currValueSize >= 0) {

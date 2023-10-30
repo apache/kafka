@@ -226,7 +226,8 @@ public class RocksDBVersionedStoreSegmentValueFormatterTest {
 
 
             // verify results
-            final List<SegmentSearchResult> results = segmentValue.findAll();
+            final List<SegmentSearchResult> results =
+                segmentValue.findAll(testCase.records.get(testCase.records.size() - 1).timestamp, testCase.records.get(0).timestamp);
 
             int i = 0;
             for (final TestRecord expectedRecord : testCase.records) {

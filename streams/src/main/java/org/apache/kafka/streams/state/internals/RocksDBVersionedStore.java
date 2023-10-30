@@ -315,7 +315,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
                     // the desired result is contained in this segment
                     final List<SegmentSearchResult> searchResults = RocksDBVersionedStoreSegmentValueFormatter
                                                                     .deserialize(rawSegmentValue)
-                                                                    .findAll();
+                                                                    .findAll(fromTimestamp, toTimestamp);
                     for (final SegmentSearchResult searchResult : searchResults) {
                         if (searchResult.value() != null && searchResult.validFrom() <= toTimestamp && searchResult.validTo() >= fromTimestamp) {
                             queryResults.add(new VersionedRecord<>(searchResult.value(),
