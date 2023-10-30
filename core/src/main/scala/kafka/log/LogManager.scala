@@ -25,7 +25,7 @@ import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.server.metadata.ConfigRepository
 import kafka.server._
 import kafka.utils._
-import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
+import org.apache.kafka.common.{DirectoryId, KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.common.utils.{KafkaThread, Time, Utils}
 import org.apache.kafka.common.errors.{InconsistentTopicIdException, KafkaStorageException, LogDirNotFoundException}
 
@@ -287,7 +287,7 @@ class LogManager(logDirs: Seq[File],
           val uuid = rawMetaProperties.directoryId match {
             case Some(uuidStr) => Uuid.fromString(uuidStr)
             case None =>
-              val uuid = Uuid.randomUuid()
+              val uuid = DirectoryId.random()
               rawMetaProperties.directoryId = uuid.toString
               metadataCheckpoint.write(rawMetaProperties.props)
               uuid
