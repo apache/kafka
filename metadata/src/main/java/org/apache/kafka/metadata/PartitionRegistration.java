@@ -20,6 +20,7 @@ package org.apache.kafka.metadata;
 import org.apache.kafka.common.DirectoryId;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.InvalidMetadataException;
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
@@ -28,6 +29,7 @@ import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.slf4j.Logger;
 
 import java.util.Arrays;
+import java.util.List;
 import java.util.Objects;
 
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER;
@@ -164,9 +166,16 @@ public class PartitionRegistration {
         return newLeader == NO_LEADER || Replicas.contains(isr, newLeader);
     }
 
+    private static List<Uuid> checkDirectories(PartitionRecord record) {
+        if (record.replicas().size() != record.directories().size()) {
+            throw new InvalidMetadataException("The lengths for replicas and directories do not match: " + record);
+        }
+        return record.directories();
+    }
+
     public PartitionRegistration(PartitionRecord record) {
         this(Replicas.toArray(record.replicas()),
-            DirectoryId.toArray(record.directories()),
+            DirectoryId.toArray(checkDirectories(record)),
             Replicas.toArray(record.isr()),
             Replicas.toArray(record.removingReplicas()),
             Replicas.toArray(record.addingReplicas()),
