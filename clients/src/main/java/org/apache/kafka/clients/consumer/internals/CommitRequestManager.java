@@ -52,8 +52,6 @@ import static org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.
 
 public class CommitRequestManager implements RequestManager {
 
-    // TODO: current in ConsumerConfig but inaccessible in the internal package.
-    private static final String THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED = "internal.throw.on.fetch.stable.offset.unsupported";
     private final SubscriptionState subscriptions;
     private final LogContext logContext;
     private final Logger log;
@@ -88,7 +86,7 @@ public class CommitRequestManager implements RequestManager {
         this.subscriptions = subscriptions;
         this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
         this.retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
-        this.throwOnFetchStableOffsetUnsupported = config.getBoolean(THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED);
+        this.throwOnFetchStableOffsetUnsupported = config.getBoolean(ConsumerUtils.THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED);
     }
 
     /**

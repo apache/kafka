@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.consumer.internals.ConsumerUtils;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
@@ -25,7 +26,6 @@ import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SecurityConfig;
-import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
@@ -38,7 +38,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -321,20 +320,6 @@ public class ConsumerConfig extends AbstractConfig {
      */
     static final String LEAVE_GROUP_ON_CLOSE_CONFIG = "internal.leave.group.on.close";
 
-    /**
-     * <code>internal.throw.on.fetch.stable.offset.unsupported</code>
-     * Whether or not the consumer should throw when the new stable offset feature is supported.
-     * If set to <code>true</code> then the client shall crash upon hitting it.
-     * The purpose of this flag is to prevent unexpected broker downgrade which makes
-     * the offset fetch protection against pending commit invalid. The safest approach
-     * is to fail fast to avoid introducing correctness issue.
-     *
-     * <p>
-     * Note: this is an internal configuration and could be changed in the future in a backward incompatible way
-     *
-     */
-    static final String THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED = "internal.throw.on.fetch.stable.offset.unsupported";
-
     /** <code>isolation.level</code> */
     public static final String ISOLATION_LEVEL_CONFIG = "isolation.level";
     public static final String ISOLATION_LEVEL_DOC = "Controls how to read messages written transactionally. If set to <code>read_committed</code>, consumer.poll() will only return" +
@@ -595,7 +580,7 @@ public class ConsumerConfig extends AbstractConfig {
                                         Type.BOOLEAN,
                                         true,
                                         Importance.LOW)
-                                .defineInternal(THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED,
+                                .defineInternal(ConsumerUtils.THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED,
                                         Type.BOOLEAN,
                                         false,
                                         Importance.LOW)
@@ -664,19 +649,6 @@ public class ConsumerConfig extends AbstractConfig {
         else if (newConfigs.get(VALUE_DESERIALIZER_CLASS_CONFIG) == null)
             throw new ConfigException(VALUE_DESERIALIZER_CLASS_CONFIG, null, "must be non-null.");
         return newConfigs;
-    }
-
-    boolean maybeOverrideEnableAutoCommit() {
-        Optional<String> groupId = Optional.ofNullable(getString(CommonClientConfigs.GROUP_ID_CONFIG));
-        boolean enableAutoCommit = getBoolean(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG);
-        if (!groupId.isPresent()) { // overwrite in case of default group id where the config is not explicitly provided
-            if (!originals().containsKey(ENABLE_AUTO_COMMIT_CONFIG)) {
-                enableAutoCommit = false;
-            } else if (enableAutoCommit) {
-                throw new InvalidConfigurationException(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG + " cannot be set to true when default group id (null) is used.");
-            }
-        }
-        return enableAutoCommit;
     }
 
     public ConsumerConfig(Properties props) {

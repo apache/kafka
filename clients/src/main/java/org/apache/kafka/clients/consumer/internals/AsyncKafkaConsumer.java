@@ -53,7 +53,6 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -91,8 +90,6 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import static java.util.Objects.requireNonNull;
-import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
-import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_JMX_PREFIX;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP_PREFIX;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.DEFAULT_CLOSE_TIMEOUT_MS;
@@ -108,13 +105,13 @@ import static org.apache.kafka.common.utils.Utils.join;
 import static org.apache.kafka.common.utils.Utils.propsToMap;
 
 /**
- * This prototype consumer uses an {@link ApplicationEventHandler event handler} to process
- * {@link ApplicationEvent application events} so that the network IO can be processed in a dedicated
+ * This {@link Consumer} implementation uses an {@link ApplicationEventHandler event handler} to process
+ * {@link ApplicationEvent application events} so that the network I/O can be processed in a dedicated
  * {@link ConsumerNetworkThread network thread}. Visit
  * <a href="https://cwiki.apache.org/confluence/display/KAFKA/Proposal%3A+Consumer+Threading+Model+Refactor">this document</a>
- * for detail implementation.
+ * for implementation detail.
  */
-public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
+public class AsyncKafkaConsumer<K, V> implements Consumer<K, V> {
 
     private final ApplicationEventHandler applicationEventHandler;
     private final Time time;
@@ -148,30 +145,38 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     private boolean cachedSubscriptionHasAllFetchPositions;
     private final WakeupTrigger wakeupTrigger = new WakeupTrigger();
 
-    public PrototypeAsyncConsumer(final Properties properties,
-                                  final Deserializer<K> keyDeserializer,
-                                  final Deserializer<V> valueDeserializer) {
+    public AsyncKafkaConsumer(Map<String, Object> configs) {
+        this(configs, null, null);
+    }
+
+    public AsyncKafkaConsumer(Properties properties) {
+        this(properties, null, null);
+    }
+
+    public AsyncKafkaConsumer(final Properties properties,
+                              final Deserializer<K> keyDeserializer,
+                              final Deserializer<V> valueDeserializer) {
         this(propsToMap(properties), keyDeserializer, valueDeserializer);
     }
 
-    public PrototypeAsyncConsumer(final Map<String, Object> configs,
-                                  final Deserializer<K> keyDeserializer,
-                                  final Deserializer<V> valueDeserializer) {
-        this(new ConsumerConfig(appendDeserializerToConfig(configs, keyDeserializer, valueDeserializer)),
+    public AsyncKafkaConsumer(final Map<String, Object> configs,
+                              final Deserializer<K> keyDeserializer,
+                              final Deserializer<V> valueDeserializer) {
+        this(new ConsumerConfig(ConsumerConfig.appendDeserializerToConfig(configs, keyDeserializer, valueDeserializer)),
                 keyDeserializer,
                 valueDeserializer);
     }
 
-    public PrototypeAsyncConsumer(final ConsumerConfig config,
-                                  final Deserializer<K> keyDeserializer,
-                                  final Deserializer<V> valueDeserializer) {
+    public AsyncKafkaConsumer(final ConsumerConfig config,
+                              final Deserializer<K> keyDeserializer,
+                              final Deserializer<V> valueDeserializer) {
         this(Time.SYSTEM, config, keyDeserializer, valueDeserializer);
     }
 
-    public PrototypeAsyncConsumer(final Time time,
-                                  final ConsumerConfig config,
-                                  final Deserializer<K> keyDeserializer,
-                                  final Deserializer<V> valueDeserializer) {
+    public AsyncKafkaConsumer(final Time time,
+                              final ConsumerConfig config,
+                              final Deserializer<K> keyDeserializer,
+                              final Deserializer<V> valueDeserializer) {
         try {
             GroupRebalanceConfig groupRebalanceConfig = new GroupRebalanceConfig(config,
                     GroupRebalanceConfig.ProtocolType.CONSUMER);
@@ -250,7 +255,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
             // no coordinator will be constructed for the default (null) group id
             if (!groupId.isPresent()) {
                 config.ignore(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG);
-                //config.ignore(ConsumerConfig.THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED);
+                config.ignore(ConsumerUtils.THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED);
             }
 
             // The FetchCollector is only used on the application thread.
@@ -278,22 +283,22 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         }
     }
 
-    public PrototypeAsyncConsumer(LogContext logContext,
-                                  String clientId,
-                                  Deserializers<K, V> deserializers,
-                                  FetchBuffer fetchBuffer,
-                                  FetchCollector<K, V> fetchCollector,
-                                  ConsumerInterceptors<K, V> interceptors,
-                                  Time time,
-                                  ApplicationEventHandler applicationEventHandler,
-                                  BlockingQueue<BackgroundEvent> backgroundEventQueue,
-                                  Metrics metrics,
-                                  SubscriptionState subscriptions,
-                                  ConsumerMetadata metadata,
-                                  long retryBackoffMs,
-                                  int defaultApiTimeoutMs,
-                                  List<ConsumerPartitionAssignor> assignors,
-                                  String groupId) {
+    public AsyncKafkaConsumer(LogContext logContext,
+                              String clientId,
+                              Deserializers<K, V> deserializers,
+                              FetchBuffer fetchBuffer,
+                              FetchCollector<K, V> fetchCollector,
+                              ConsumerInterceptors<K, V> interceptors,
+                              Time time,
+                              ApplicationEventHandler applicationEventHandler,
+                              BlockingQueue<BackgroundEvent> backgroundEventQueue,
+                              Metrics metrics,
+                              SubscriptionState subscriptions,
+                              ConsumerMetadata metadata,
+                              long retryBackoffMs,
+                              int defaultApiTimeoutMs,
+                              List<ConsumerPartitionAssignor> assignors,
+                              String groupId) {
         this.log = logContext.logger(getClass());
         this.subscriptions = subscriptions;
         this.clientId = clientId;
@@ -1035,23 +1040,6 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
             log.error("Couldn't refresh committed offsets before timeout expired");
             return false;
         }
-    }
-
-    // This is here temporary as we don't have public access to the ConsumerConfig in this module.
-    public static Map<String, Object> appendDeserializerToConfig(Map<String, Object> configs,
-                                                                 Deserializer<?> keyDeserializer,
-                                                                 Deserializer<?> valueDeserializer) {
-        // validate deserializer configuration, if the passed deserializer instance is null, the user must explicitly set a valid deserializer configuration value
-        Map<String, Object> newConfigs = new HashMap<>(configs);
-        if (keyDeserializer != null)
-            newConfigs.put(KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializer.getClass());
-        else if (newConfigs.get(KEY_DESERIALIZER_CLASS_CONFIG) == null)
-            throw new ConfigException(KEY_DESERIALIZER_CLASS_CONFIG, null, "must be non-null.");
-        if (valueDeserializer != null)
-            newConfigs.put(VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializer.getClass());
-        else if (newConfigs.get(VALUE_DESERIALIZER_CLASS_CONFIG) == null)
-            throw new ConfigException(VALUE_DESERIALIZER_CLASS_CONFIG, null, "must be non-null.");
-        return newConfigs;
     }
 
     private void throwIfNoAssignorsConfigured() {

@@ -24,11 +24,11 @@ import java.time.Duration
 import scala.jdk.CollectionConverters._
 
 class BaseAsyncConsumerTest extends AbstractConsumerTest {
-  val defaultBlockingAPITimeoutMs = 1000
+  val defaultBlockingAPITimeoutMs = 10000
 
   @Test
   def testCommitAsync(): Unit = {
-    val consumer = createAsyncConsumer()
+    val consumer = createConsumer()
     val producer = createProducer()
     val numRecords = 10000
     val startingTimestamp = System.currentTimeMillis()
@@ -49,7 +49,7 @@ class BaseAsyncConsumerTest extends AbstractConsumerTest {
 
   @Test
   def testCommitSync(): Unit = {
-    val consumer = createAsyncConsumer()
+    val consumer = createConsumer()
     val producer = createProducer()
     val numRecords = 10000
     val startingTimestamp = System.currentTimeMillis()

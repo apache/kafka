@@ -30,6 +30,7 @@ import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.InterruptException;
+import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
@@ -55,6 +56,20 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
 public final class ConsumerUtils {
+
+    /**
+     * <code>internal.throw.on.fetch.stable.offset.unsupported</code>
+     * Whether or not the consumer should throw when the new stable offset feature is supported.
+     * If set to <code>true</code> then the client shall crash upon hitting it.
+     * The purpose of this flag is to prevent unexpected broker downgrade which makes
+     * the offset fetch protection against pending commit invalid. The safest approach
+     * is to fail fast to avoid introducing correctness issue.
+     *
+     * <p>
+     * Note: this is an internal configuration and could be changed in the future in a backward incompatible way
+     *
+     */
+    public static final String THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED = "internal.throw.on.fetch.stable.offset.unsupported";
 
     public static final long DEFAULT_CLOSE_TIMEOUT_MS = 30 * 1000;
     public static final String CONSUMER_JMX_PREFIX = "kafka.consumer";
@@ -211,4 +226,19 @@ public final class ConsumerUtils {
             throw new TimeoutException(e);
         }
     }
+
+    public static boolean maybeOverrideEnableAutoCommit(ConsumerConfig config) {
+        Optional<String> groupId = Optional.ofNullable(config.getString(CommonClientConfigs.GROUP_ID_CONFIG));
+        boolean enableAutoCommit = config.getBoolean(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG);
+        if (!groupId.isPresent()) { // overwrite in case of default group id where the config is not explicitly provided
+            if (!config.originals().containsKey(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG)) {
+                enableAutoCommit = false;
+            } else if (enableAutoCommit) {
+                throw new InvalidConfigurationException(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG + " cannot be set to true when default group id (null) is used.");
+            }
+        }
+        return enableAutoCommit;
+    }
+
+
 }

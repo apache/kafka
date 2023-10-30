@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.consumer.internals.ConsumerUtils;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
@@ -64,13 +65,13 @@ public class ConsumerConfigTest {
     @Test
     public void testOverrideEnableAutoCommit() {
         ConsumerConfig config = new ConsumerConfig(properties);
-        boolean overrideEnableAutoCommit = config.maybeOverrideEnableAutoCommit();
+        boolean overrideEnableAutoCommit = ConsumerUtils.maybeOverrideEnableAutoCommit(config);
         assertFalse(overrideEnableAutoCommit);
 
         properties.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true");
         config = new ConsumerConfig(properties);
         try {
-            config.maybeOverrideEnableAutoCommit();
+            ConsumerUtils.maybeOverrideEnableAutoCommit(config);
             fail("Should have thrown an exception");
         } catch (InvalidConfigurationException e) {
             // expected
@@ -119,7 +120,7 @@ public class ConsumerConfigTest {
 
     @Test
     public void ensureDefaultThrowOnUnsupportedStableFlagToFalse() {
-        assertFalse(new ConsumerConfig(properties).getBoolean(ConsumerConfig.THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED));
+        assertFalse(new ConsumerConfig(properties).getBoolean(ConsumerUtils.THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED));
     }
 
     @Test
