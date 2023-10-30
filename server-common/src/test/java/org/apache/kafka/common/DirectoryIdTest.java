@@ -28,17 +28,19 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class DirectoryIdTest {
+    @Test
+    void testUnassignedIsReserved() {
+        assertTrue(DirectoryId.reserved(DirectoryId.UNASSIGNED));
+    }
 
     @Test
-    void testReserved() {
-        Set<Long> seen = new HashSet<>(100);
-        for (Uuid reservedId : DirectoryId.RESERVED) {
-            assertEquals(0L, reservedId.getMostSignificantBits(), "Unexpected reserved msb value");
-            long lsb = reservedId.getLeastSignificantBits();
-            assertTrue(lsb >= 0 && lsb < 100L, "Unexpected reserved lsb value");
-            assertTrue(seen.add(lsb), "Duplicate reserved value");
-        }
-        assertEquals(100, DirectoryId.RESERVED.size());
+    void testLostIsReserved() {
+        assertTrue(DirectoryId.reserved(DirectoryId.LOST));
+    }
+
+    @Test
+    void testMigratingIsReserved() {
+        assertTrue(DirectoryId.reserved(DirectoryId.MIGRATING));
     }
 
     @Test

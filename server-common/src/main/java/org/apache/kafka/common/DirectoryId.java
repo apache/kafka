@@ -18,12 +18,9 @@ package org.apache.kafka.common;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 public class DirectoryId {
 
@@ -47,30 +44,31 @@ public class DirectoryId {
     public static final Uuid MIGRATING = new Uuid(0L, 2L);
 
     /**
-     * The set of reserved UUIDs that will never be returned by the random method.
+     * Static factory to generate a directory ID.
+     *
+     * This will not generate a reserved UUID (first 100), or one whose string representation
+     * starts with a dash ("-")
      */
-    public static final Set<Uuid> RESERVED;
-
-    static {
-        HashSet<Uuid> reserved = new HashSet<>();
-        // The first 100 Uuids are reserved for future use.
-        for (long i = 0L; i < 100L; i++) {
-            reserved.add(new Uuid(0L, i));
+    public static Uuid random() {
+        while (true) {
+            // Uuid.randomUuid does not generate Uuids whose string representation starts with a
+            // dash.
+            Uuid uuid = Uuid.randomUuid();
+            if (!DirectoryId.reserved(uuid)) {
+                return uuid;
+            }
         }
-        RESERVED = Collections.unmodifiableSet(reserved);
     }
 
     /**
-     * Static factory to generate a directory ID.
+     * Check if a directory ID is part of the first 100 reserved IDs.
      *
-     * This will not generate a reserved UUID (first 100), or one whose string representation starts with a dash ("-")
+     * @param uuid the directory ID to check.
+     * @return     true only if the directory ID is reserved.
      */
-    public static Uuid random() {
-        Uuid uuid = Uuid.randomUuid();
-        while (RESERVED.contains(uuid) || uuid.toString().startsWith("-")) {
-            uuid = Uuid.randomUuid();
-        }
-        return uuid;
+    public static boolean reserved(Uuid uuid) {
+        return (uuid.getMostSignificantBits() == 0 &&
+            uuid.getLeastSignificantBits() < 100);
     }
 
     /**
