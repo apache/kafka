@@ -296,9 +296,8 @@ public class StandaloneHerderTest {
 
         FutureCallback<Void> restartCallback = new FutureCallback<>();
         herder.restartConnector(CONNECTOR_NAME, restartCallback);
-        worker.stopAndAwaitConnector(CONNECTOR_NAME);
         restartCallback.get(1000L, TimeUnit.MILLISECONDS);
-        verify(worker, atLeastOnce()).stopAndAwaitConnector(eq(CONNECTOR_NAME));
+        verify(worker).stopAndAwaitConnector(eq(CONNECTOR_NAME));
     }
 
     @Test
