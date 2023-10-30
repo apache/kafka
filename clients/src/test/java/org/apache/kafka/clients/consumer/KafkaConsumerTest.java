@@ -2674,7 +2674,7 @@ public class KafkaConsumerTest {
         }
         IsolationLevel isolationLevel = IsolationLevel.READ_UNCOMMITTED;
         FetchMetricsManager metricsManager = new FetchMetricsManager(metrics, metricsRegistry.fetcherMetrics);
-        FetchConfig<String, String> fetchConfig = new FetchConfig<>(
+        FetchConfig fetchConfig = new FetchConfig(
                 minBytes,
                 maxBytes,
                 maxWaitMs,
@@ -2682,7 +2682,6 @@ public class KafkaConsumerTest {
                 maxPollRecords,
                 checkCrcs,
                 CommonClientConfigs.DEFAULT_CLIENT_RACK,
-                new Deserializers<>(keyDeserializer, deserializer),
                 isolationLevel);
         Fetcher<String, String> fetcher = new Fetcher<>(
                 loggerFactory,
@@ -2690,6 +2689,7 @@ public class KafkaConsumerTest {
                 metadata,
                 subscription,
                 fetchConfig,
+                new Deserializers<>(keyDeserializer, deserializer),
                 metricsManager,
                 time);
         OffsetFetcher offsetFetcher = new OffsetFetcher(loggerFactory,

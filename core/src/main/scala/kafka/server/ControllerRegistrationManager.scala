@@ -49,6 +49,7 @@ class ControllerRegistrationManager(
   val time: Time,
   val threadNamePrefix: String,
   val supportedFeatures: util.Map[String, VersionRange],
+  val zkMigrationEnabled: Boolean,
   val incarnationId: Uuid,
   val listenerInfo: ListenerInfo,
   val resendExponentialBackoff: ExponentialBackoff = new ExponentialBackoff(100, 2, 120000L, 0.02)
@@ -224,7 +225,9 @@ class ControllerRegistrationManager(
       setControllerId(nodeId).
       setFeatures(features).
       setIncarnationId(incarnationId).
-      setListeners(listenerInfo.toControllerRegistrationRequest)
+      setListeners(listenerInfo.toControllerRegistrationRequest).
+      setZkMigrationReady(zkMigrationEnabled)
+
     info(s"sendControllerRegistration: attempting to send $data")
     _channelManager.sendRequest(new ControllerRegistrationRequest.Builder(data),
       new RegistrationResponseHandler())

@@ -24,7 +24,7 @@ import kafka.utils.{Exit, Logging}
 import net.sourceforge.argparse4j.ArgumentParsers
 import net.sourceforge.argparse4j.impl.Arguments.{append, store, storeTrue}
 import net.sourceforge.argparse4j.inf.Namespace
-import org.apache.kafka.common.Uuid
+import org.apache.kafka.common.{DirectoryId, Uuid}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.metadata.bootstrap.{BootstrapDirectory, BootstrapMetadata}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
@@ -430,7 +430,7 @@ object StorageTool extends Logging {
       }
       val metaPropertiesPath = Paths.get(directory, KafkaServer.brokerMetaPropsFile)
       val checkpoint = new BrokerMetadataCheckpoint(metaPropertiesPath.toFile)
-      checkpoint.write(metaProperties.toPropertiesWithDirectoryId(Uuid.randomUuid().toString))
+      checkpoint.write(metaProperties.toPropertiesWithDirectoryId(DirectoryId.random().toString))
 
       val bootstrapDirectory = new BootstrapDirectory(directory, Optional.empty())
       bootstrapDirectory.writeBinaryFile(bootstrapMetadata)
