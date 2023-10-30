@@ -17,7 +17,6 @@
 package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.clients.consumer.internals.ConsumerCreator;
-import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
@@ -674,7 +673,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void subscribe(Collection<String> topics) {
-        delegate.subscribe(topics, new NoOpConsumerRebalanceListener());
+        delegate.subscribe(topics);
     }
 
     /**
@@ -719,7 +718,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void subscribe(Pattern pattern) {
-        delegate.subscribe(pattern, new NoOpConsumerRebalanceListener());
+        delegate.subscribe(pattern);
     }
 
     /**

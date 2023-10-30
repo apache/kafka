@@ -789,42 +789,6 @@ public class AsyncKafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
-    public void subscribe(Collection<String> topics) {
-        subscribe(topics, new NoOpConsumerRebalanceListener());
-    }
-
-    @Override
-    public void subscribe(Collection<String> topics, ConsumerRebalanceListener callback) {
-        maybeThrowInvalidGroupIdException();
-        if (topics == null)
-            throw new IllegalArgumentException("Topic collection to subscribe to cannot be null");
-        if (topics.isEmpty()) {
-            // treat subscribing to empty topic list as the same as unsubscribing
-            unsubscribe();
-        } else {
-            for (String topic : topics) {
-                if (isBlank(topic))
-                    throw new IllegalArgumentException("Topic collection to subscribe to cannot contain null or empty topic");
-            }
-
-            throwIfNoAssignorsConfigured();
-
-            // Clear the buffered data which are not a part of newly assigned topics
-            final Set<TopicPartition> currentTopicPartitions = new HashSet<>();
-
-            for (TopicPartition tp : subscriptions.assignedPartitions()) {
-                if (topics.contains(tp.topic()))
-                    currentTopicPartitions.add(tp);
-            }
-
-            fetchBuffer.retainAll(currentTopicPartitions);
-            log.info("Subscribed to topic(s): {}", join(topics, ", "));
-            if (subscriptions.subscribe(new HashSet<>(topics), callback))
-                metadata.requestUpdateForNewTopics();
-        }
-    }
-
-    @Override
     public void assign(Collection<TopicPartition> partitions) {
         if (partitions == null) {
             throw new IllegalArgumentException("Topic partitions collection to assign to cannot be null");
@@ -863,20 +827,6 @@ public class AsyncKafkaConsumer<K, V> implements Consumer<K, V> {
             applicationEventHandler.add(new NewTopicsMetadataUpdateRequestEvent());
     }
 
-    @Override
-    public void subscribe(Pattern pattern, ConsumerRebalanceListener listener) {
-        maybeThrowInvalidGroupIdException();
-        if (pattern == null || pattern.toString().isEmpty())
-            throw new IllegalArgumentException("Topic pattern to subscribe to cannot be " + (pattern == null ?
-                    "null" : "empty"));
-
-        throwIfNoAssignorsConfigured();
-        log.info("Subscribed to pattern: '{}'", pattern);
-        subscriptions.subscribe(pattern, listener);
-        updatePatternSubscription(metadata.fetch());
-        metadata.requestUpdateForNewTopics();
-    }
-
     /**
      * TODO: remove this when we implement the KIP-848 protocol.
      *
@@ -893,11 +843,6 @@ public class AsyncKafkaConsumer<K, V> implements Consumer<K, V> {
                 .collect(Collectors.toSet());
         if (subscriptions.subscribeFromPattern(topicsToSubscribe))
             metadata.requestUpdateForNewTopics();
-    }
-
-    @Override
-    public void subscribe(Pattern pattern) {
-        subscribe(pattern, new NoOpConsumerRebalanceListener());
     }
 
     @Override
@@ -1069,4 +1014,74 @@ public class AsyncKafkaConsumer<K, V> implements Consumer<K, V> {
         // logic
         return updateFetchPositions(timer);
     }
+
+    @Override
+    public void subscribe(Collection<String> topics) {
+        subscribeInternal(topics, Optional.empty());
+    }
+
+    @Override
+    public void subscribe(Collection<String> topics, ConsumerRebalanceListener listener) {
+        if (listener == null)
+            throw new IllegalArgumentException("RebalanceListener cannot be null");
+
+        subscribeInternal(topics, Optional.of(listener));
+    }
+
+    @Override
+    public void subscribe(Pattern pattern) {
+        subscribeInternal(pattern, Optional.empty());
+    }
+
+    @Override
+    public void subscribe(Pattern pattern, ConsumerRebalanceListener listener) {
+        if (listener == null)
+            throw new IllegalArgumentException("RebalanceListener cannot be null");
+
+        subscribeInternal(pattern, Optional.of(listener));
+    }
+
+    private void subscribeInternal(Pattern pattern, Optional<ConsumerRebalanceListener> listener) {
+        maybeThrowInvalidGroupIdException();
+        if (pattern == null || pattern.toString().isEmpty())
+            throw new IllegalArgumentException("Topic pattern to subscribe to cannot be " + (pattern == null ?
+                    "null" : "empty"));
+
+        throwIfNoAssignorsConfigured();
+        log.info("Subscribed to pattern: '{}'", pattern);
+        subscriptions.subscribe(pattern, listener);
+        updatePatternSubscription(metadata.fetch());
+        metadata.requestUpdateForNewTopics();
+    }
+
+    private void subscribeInternal(Collection<String> topics, Optional<ConsumerRebalanceListener> listener) {
+        maybeThrowInvalidGroupIdException();
+        if (topics == null)
+            throw new IllegalArgumentException("Topic collection to subscribe to cannot be null");
+        if (topics.isEmpty()) {
+            // treat subscribing to empty topic list as the same as unsubscribing
+            unsubscribe();
+        } else {
+            for (String topic : topics) {
+                if (isBlank(topic))
+                    throw new IllegalArgumentException("Topic collection to subscribe to cannot contain null or empty topic");
+            }
+
+            throwIfNoAssignorsConfigured();
+
+            // Clear the buffered data which are not a part of newly assigned topics
+            final Set<TopicPartition> currentTopicPartitions = new HashSet<>();
+
+            for (TopicPartition tp : subscriptions.assignedPartitions()) {
+                if (topics.contains(tp.topic()))
+                    currentTopicPartitions.add(tp);
+            }
+
+            fetchBuffer.retainAll(currentTopicPartitions);
+            log.info("Subscribed to topic(s): {}", join(topics, ", "));
+            if (subscriptions.subscribe(new HashSet<>(topics), listener))
+                metadata.requestUpdateForNewTopics();
+        }
+    }
+
 }
