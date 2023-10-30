@@ -1377,7 +1377,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                     context.lock.unlock();
                 }
             } else {
-                log.debug("Ignored unloading metadata for {} in epoch {} since metadata was never loaded ",
+                log.info("Ignored unloading metadata for {} in epoch {} since metadata was never loaded.",
                     tp, partitionEpoch
                 );
             }
