@@ -281,7 +281,7 @@ public class StreamsResetter {
 
             if (!options.hasDryRun()) {
                 for (final TopicPartition p : partitions) {
-                    client.position(p);
+                    long pos = client.position(p);
                 }
                 client.commitSync();
             }
