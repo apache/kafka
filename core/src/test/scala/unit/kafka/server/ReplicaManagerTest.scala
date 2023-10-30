@@ -67,7 +67,7 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{EnumSource, ValueSource}
 import com.yammer.metrics.core.Gauge
 import kafka.log.remote.RemoteLogManager
-import org.apache.kafka.common.config.AbstractConfig
+import org.apache.kafka.common.config.{AbstractConfig, TopicConfig}
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.server.log.remote.storage.{NoOpRemoteLogMetadataManager, NoOpRemoteStorageManager, RemoteLogManagerConfig}
 import org.apache.kafka.server.util.timer.MockTimer
@@ -3126,8 +3126,9 @@ class ReplicaManagerTest {
     propsModifier.apply(props)
     val config = KafkaConfig.fromProps(props)
     val logProps = new Properties()
+    logProps.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, true)
     val mockLog = setupMockLog(path1)
-    val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)), new LogConfig(logProps), log = if (shouldMockLog) Some(mockLog) else None)
+    val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)), new LogConfig(logProps), log = if (shouldMockLog) Some(mockLog) else None, remoteStorageSystemEnable = true)
     val aliveBrokers = aliveBrokerIds.map(brokerId => new Node(brokerId, s"host$brokerId", brokerId))
 
     val metadataCache: MetadataCache = mock(classOf[MetadataCache])
