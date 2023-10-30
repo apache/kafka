@@ -57,6 +57,10 @@ import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult.EMPTY;
+import static org.apache.kafka.common.protocol.Errors.COORDINATOR_LOAD_IN_PROGRESS;
+import static org.apache.kafka.common.protocol.Errors.COORDINATOR_NOT_AVAILABLE;
+import static org.apache.kafka.common.protocol.Errors.NOT_COORDINATOR;
+import static org.apache.kafka.common.protocol.Errors.REQUEST_TIMED_OUT;
 
 public class CommitRequestManager implements RequestManager {
 
@@ -344,7 +348,19 @@ public class CommitRequestManager implements RequestManager {
                         log.error("OffsetCommit failed on partition {} at offset {}: {}", tp, offset, error.message());
                     }
 
-                    if (!continueHandlePartitionErrors(error, tp, unauthorizedTopics, responseTime)) {
+                    if (error == Errors.NONE) {
+                        log.debug("OffsetCommit {} for partition {}", offset, tp);
+                    } else if (error == Errors.TOPIC_AUTHORIZATION_FAILED) {
+                        // Collect all unauthorized topics before failing
+                        unauthorizedTopics.add(tp.topic());
+                    } else if (error.exception() instanceof RetriableException) {
+                        log.warn("OffsetCommit failed on partition {} at offset {}: {}", tp, offset, error.message());
+                        handleRetriableError(error, response);
+                        retry(responseTime);
+                        return;
+                    } else {
+                        log.error("OffsetCommit failed on partition {} at offset {}: {}", tp, offset, error.message());
+                        handleFatalError(error);
                         return;
                     }
                 }
@@ -358,47 +374,39 @@ public class CommitRequestManager implements RequestManager {
             }
         }
 
+        private void handleRetriableError(Errors error, ClientResponse response) {
+            if (error == COORDINATOR_NOT_AVAILABLE ||
+                    error == NOT_COORDINATOR ||
+                    error == REQUEST_TIMED_OUT) {
+                coordinatorRequestManager.markCoordinatorUnknown(error.message(), response.receivedTimeMs());
+            }
+        }
+
         private void retry(final long currentTimeMs) {
             onFailedAttempt(currentTimeMs);
             pendingRequests.addOffsetCommitRequest(this);
         }
 
-        private boolean continueHandlePartitionErrors(final Errors error, final TopicPartition tp,
-                                                      final Set<String> unauthorizedTopics, final long responseTime) {
+        private void handleFatalError(final Errors error) {
             switch (error) {
                 case GROUP_AUTHORIZATION_FAILED:
                     future.completeExceptionally(GroupAuthorizationException.forGroupId(groupId));
-                    return false;
-                case TOPIC_AUTHORIZATION_FAILED:
-                    // Collect all unauthorized topics before failing
-                    unauthorizedTopics.add(tp.topic());
-                    return true;
+                    break;
                 case OFFSET_METADATA_TOO_LARGE:
                 case INVALID_COMMIT_OFFSET_SIZE:
                     future.completeExceptionally(error.exception());
-                    return false;
-                case COORDINATOR_LOAD_IN_PROGRESS:
-                case UNKNOWN_TOPIC_OR_PARTITION:
-                    retry(responseTime);
-                    return false;
-                case COORDINATOR_NOT_AVAILABLE:
-                case NOT_COORDINATOR:
-                case REQUEST_TIMED_OUT:
-                    // Backoff and re-poll the request manager, because the coordinator can become available again.
-                    coordinatorRequestManager.markCoordinatorUnknown(error.message(), responseTime);
-                    retry(responseTime);
-                    return false;
+                    break;
                 case FENCED_INSTANCE_ID:
                     log.info("OffsetCommit failed due to group instance id {} fenced: {}", groupInstanceId, error.message());
                     future.completeExceptionally(new CommitFailedException());
-                    return false;
+                    break;
                 case UNKNOWN_MEMBER_ID:
                     log.info("OffsetCommit failed due to unknown member id memberId {}: {}", null, error.message());
                     future.completeExceptionally(error.exception());
-                    return false;
+                    break;
                 default:
                     future.completeExceptionally(new KafkaException("Unexpected error in commit: " + error.message()));
-                    return false;
+                    break;
             }
         }
     }
@@ -447,9 +455,8 @@ public class CommitRequestManager implements RequestManager {
             handleCoordinatorDisconnect(responseError.exception(), currentTimeMs);
             log.debug("Offset fetch failed: {}", responseError.message());
             // TODO: should we retry on COORDINATOR_NOT_AVAILABLE as well ?
-            if (responseError == Errors.COORDINATOR_LOAD_IN_PROGRESS) {
-                retry(currentTimeMs);
-            } else if (responseError == Errors.NOT_COORDINATOR) {
+            if (responseError == COORDINATOR_LOAD_IN_PROGRESS ||
+                    responseError == Errors.NOT_COORDINATOR) {
                 // re-discover the coordinator and retry
                 retry(currentTimeMs);
             } else if (responseError == Errors.GROUP_AUTHORIZATION_FAILED) {
