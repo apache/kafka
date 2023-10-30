@@ -17,7 +17,6 @@
 package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.clients.Metadata;
-import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
@@ -109,10 +108,10 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
 
         // rebalance callbacks
         if (!added.isEmpty()) {
-            this.subscriptions.rebalanceListener().onPartitionsAssigned(added);
+            this.subscriptions.rebalanceListener().ifPresent(crl -> crl.onPartitionsAssigned(added));
         }
         if (!removed.isEmpty()) {
-            this.subscriptions.rebalanceListener().onPartitionsRevoked(removed);
+            this.subscriptions.rebalanceListener().ifPresent(crl -> crl.onPartitionsRevoked(removed));
         }
     }
 
@@ -123,11 +122,37 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public synchronized void subscribe(Collection<String> topics) {
-        subscribe(topics, new NoOpConsumerRebalanceListener());
+        subscribe(topics, Optional.empty());
     }
 
     @Override
     public synchronized void subscribe(Pattern pattern, final ConsumerRebalanceListener listener) {
+        if (listener == null)
+            throw new IllegalArgumentException("RebalanceListener cannot be null");
+
+        subscribe(pattern, Optional.of(listener));
+    }
+
+    @Override
+    public synchronized void subscribe(Pattern pattern) {
+        subscribe(pattern, Optional.empty());
+    }
+
+    @Override
+    public void subscribe(Collection<String> topics, final ConsumerRebalanceListener listener) {
+        if (listener == null)
+            throw new IllegalArgumentException("RebalanceListener cannot be null");
+
+        subscribe(topics, Optional.of(listener));
+    }
+
+    private synchronized void subscribe(Collection<String> topics, Optional<ConsumerRebalanceListener> listener) {
+        ensureNotClosed();
+        committed.clear();
+        this.subscriptions.subscribe(new HashSet<>(topics), listener);
+    }
+
+    private synchronized void subscribe(Pattern pattern, Optional<ConsumerRebalanceListener> listener) {
         ensureNotClosed();
         committed.clear();
         this.subscriptions.subscribe(pattern, listener);
@@ -147,18 +172,6 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
 
         }
         subscriptions.assignFromSubscribed(assignedPartitions);
-    }
-
-    @Override
-    public synchronized void subscribe(Pattern pattern) {
-        subscribe(pattern, new NoOpConsumerRebalanceListener());
-    }
-
-    @Override
-    public synchronized void subscribe(Collection<String> topics, final ConsumerRebalanceListener listener) {
-        ensureNotClosed();
-        committed.clear();
-        this.subscriptions.subscribe(new HashSet<>(topics), listener);
     }
 
     @Override
