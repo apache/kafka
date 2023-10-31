@@ -78,6 +78,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -155,8 +156,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     // to keep from repeatedly scanning subscriptions in poll(), cache the result during metadata updates
     private boolean cachedSubscriptionHasAllFetchPositions;
     private final WakeupTrigger wakeupTrigger = new WakeupTrigger();
-    private AtomicBoolean fencedInstance = new AtomicBoolean(false);
+    private final AtomicBoolean fencedInstance = new AtomicBoolean(false);
     private final Optional<String> groupInstanceId;
+
+    private final CallbackInvoker invoker = new CallbackInvoker();
 
     AsyncKafkaConsumer(final ConsumerConfig config,
                        final Deserializer<K> keyDeserializer,
@@ -395,6 +398,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      */
     @Override
     public ConsumerRecords<K, V> poll(final Duration timeout) {
+        maybeInvokeCallbacks();
         maybeThrowFencedInstanceException();
         Timer timer = time.timer(timeout);
 
@@ -451,18 +455,27 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     @Override
     public void commitAsync(Map<TopicPartition, OffsetAndMetadata> offsets, OffsetCommitCallback callback) {
         CompletableFuture<Void> future = commit(offsets, false);
-        final OffsetCommitCallback commitCallback = callback == null ? new DefaultOffsetCommitCallback() : callback;
         future.whenComplete((r, t) -> {
-            if (t != null) {
+            if (callback == null) {
+                if (t != null) {
+                    log.error("Offset commit with offsets {} failed", offsets, t);
+                }
+                return;
+            }
+
+            Runnable task = () -> {
                 if (t instanceof RetriableException) {
-                    commitCallback.onComplete(offsets, new RetriableCommitFailedException(t));
+                    callback.onComplete(offsets, new RetriableCommitFailedException(t));
                 } else if (t instanceof FencedInstanceIdException) {
                     fencedInstance.set(true);
+                    callback.onComplete(offsets, (Exception) t);
+                } else if (t != null) {
+                    callback.onComplete(offsets, (Exception) t);
+                } else {
+                    callback.onComplete(offsets, null);
                 }
-                commitCallback.onComplete(offsets, (Exception) t);
-            } else {
-                commitCallback.onComplete(offsets, null);
-            }
+            };
+            invoker.submit(task);  // Store the callback task for future execution
         });
     }
 
@@ -1070,14 +1083,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             offsetAndMetadata.leaderEpoch().ifPresent(epoch -> metadata.updateLastSeenEpochIfNewer(topicPartition, epoch));
     }
 
-    private class DefaultOffsetCommitCallback implements OffsetCommitCallback {
-        @Override
-        public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception) {
-            if (exception != null)
-                log.error("Offset commit with offsets {} failed", offsets, exception);
-        }
-    }
-
     @Override
     public boolean updateAssignmentMetadataIfNeeded(Timer timer) {
         backgroundEventProcessor.process();
@@ -1169,6 +1174,43 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     @Override
     public KafkaConsumerMetrics kafkaConsumerMetrics() {
-        return kafkaConsumerMetrics;
+            return kafkaConsumerMetrics;
+    }
+
+    // Visible for testing
+    void maybeInvokeCallbacks() {
+        if (callbacks() > 0) {
+            invoker.executeCallbacks();
+        }
+    }
+
+    // Visible for testing
+    int callbacks() {
+        return invoker.callbackQueue.size();
+    }
+
+    /**
+     * Utility class that helps the application thread to invoke user registered callbacks such as
+     * {@link OffsetCommitCallback}.  This is achieved by having the background thread to register a runnable to the
+     * invoker upon the future completion, and execute the callbacks when user polls the consumer.
+     */
+    private static class CallbackInvoker {
+        // Thread-safe queue to store callbacks
+        private final BlockingQueue<Runnable> callbackQueue = new LinkedBlockingQueue<>();
+
+        public void submit(Runnable callback) {
+            callbackQueue.offer(callback);
+        }
+
+        public void executeCallbacks() {
+            LinkedList<Runnable> callbacks = new LinkedList<>();
+            callbackQueue.drainTo(callbacks);
+            while (!callbacks.isEmpty()) {
+                Runnable callback = callbacks.poll();
+                if (callback != null) {
+                    callback.run();
+                }
+            }
+        }
     }
 }
