@@ -100,9 +100,9 @@ public class PartitionChangeBuilderTest {
 
     private static final PartitionRegistration FOO = new PartitionRegistration.Builder().
         setReplicas(new int[] {2, 1, 3}).
-        setDirectories(new DirectoryId[]{
-            DirectoryId.fromString("dpdvA5AZSWySmnPFTnu5Kw"),
-            DirectoryId.fromString("V60B3cglScq3Xk8BX1NxAQ"),
+        setDirectories(new Uuid[]{
+            Uuid.fromString("dpdvA5AZSWySmnPFTnu5Kw"),
+            Uuid.fromString("V60B3cglScq3Xk8BX1NxAQ"),
             DirectoryId.UNASSIGNED,
         }).
         setIsr(new int[] {2, 1, 3}).
@@ -136,11 +136,11 @@ public class PartitionChangeBuilderTest {
 
     private static final PartitionRegistration BAR = new PartitionRegistration.Builder().
         setReplicas(new int[] {1, 2, 3, 4}).
-        setDirectories(new DirectoryId[] {
+        setDirectories(new Uuid[] {
             DirectoryId.UNASSIGNED,
-            DirectoryId.fromString("X5FnAcIgTheWgTMzeO5WHw"),
-            DirectoryId.fromString("GtrcdoSOTm2vFMGFeZq0eg"),
-            DirectoryId.fromString("YcOqPw5ARmeKr1y9W3AkFw"),
+            Uuid.fromString("X5FnAcIgTheWgTMzeO5WHw"),
+            Uuid.fromString("GtrcdoSOTm2vFMGFeZq0eg"),
+            Uuid.fromString("YcOqPw5ARmeKr1y9W3AkFw"),
         }).
         setIsr(new int[] {1, 2, 3}).
         setRemovingReplicas(new int[] {1}).
@@ -167,10 +167,10 @@ public class PartitionChangeBuilderTest {
 
     private static final PartitionRegistration BAZ = new PartitionRegistration.Builder().
         setReplicas(new int[] {2, 1, 3}).
-        setDirectories(new DirectoryId[] {
-            DirectoryId.fromString("ywnfFpTBTbOsFdZ6uAdOmw"),
-            DirectoryId.fromString("Th0x70ecRbWvZNNV33jyRA"),
-            DirectoryId.fromString("j216tuSoQsC9JFd1Z5ZP6w"),
+        setDirectories(new Uuid[] {
+            Uuid.fromString("ywnfFpTBTbOsFdZ6uAdOmw"),
+            Uuid.fromString("Th0x70ecRbWvZNNV33jyRA"),
+            Uuid.fromString("j216tuSoQsC9JFd1Z5ZP6w"),
         }).
         setIsr(new int[] {1, 3}).
         setLeader(3).
@@ -187,10 +187,10 @@ public class PartitionChangeBuilderTest {
 
     private static final PartitionRegistration OFFLINE = new PartitionRegistration.Builder().
         setReplicas(new int[] {2, 1, 3}).
-        setDirectories(new DirectoryId[]{
-           DirectoryId.fromString("iYGgiDV5Sb2EtH6hbgYnCA"),
-           DirectoryId.fromString("XI2t4qAUSkGlLZSKeEVf8g"),
-           DirectoryId.fromString("eqRW24kIRlitzQFzmovE0Q")
+        setDirectories(new Uuid[]{
+           Uuid.fromString("iYGgiDV5Sb2EtH6hbgYnCA"),
+           Uuid.fromString("XI2t4qAUSkGlLZSKeEVf8g"),
+           Uuid.fromString("eqRW24kIRlitzQFzmovE0Q")
         }).
         setIsr(new int[] {3}).
         setLeader(-1).
@@ -390,7 +390,7 @@ public class PartitionChangeBuilderTest {
                 setPartitionId(0).
                 setReplicas(Arrays.asList(3, 2, 1));
         if (version > 1) {
-            Map<Integer, DirectoryId> dirs = DirectoryId.createAssignmentMap(FOO.replicas, FOO.directories);
+            Map<Integer, Uuid> dirs = DirectoryId.createAssignmentMap(FOO.replicas, FOO.directories);
             expectedRecord.setDirectories(Arrays.asList(dirs.get(3), dirs.get(2), dirs.get(1)));
         }
         assertEquals(Optional.of(new ApiMessageAndVersion(expectedRecord, version)),
@@ -409,7 +409,7 @@ public class PartitionChangeBuilderTest {
                 setRemovingReplicas(Collections.emptyList()).
                 setAddingReplicas(Collections.emptyList());
         if (version > 1) {
-            Map<Integer, DirectoryId> dirs = DirectoryId.createAssignmentMap(BAR.replicas, BAR.directories);
+            Map<Integer, Uuid> dirs = DirectoryId.createAssignmentMap(BAR.replicas, BAR.directories);
             expectedRecord.setDirectories(Arrays.asList(dirs.get(2), dirs.get(3), dirs.get(4)));
         }
         assertEquals(Optional.of(new ApiMessageAndVersion(expectedRecord, version)),
@@ -430,7 +430,7 @@ public class PartitionChangeBuilderTest {
                 setRemovingReplicas(Collections.emptyList()).
                 setAddingReplicas(Collections.emptyList());
         if (version > 1) {
-            Map<Integer, DirectoryId> dirs = DirectoryId.createAssignmentMap(BAR.replicas, BAR.directories);
+            Map<Integer, Uuid> dirs = DirectoryId.createAssignmentMap(BAR.replicas, BAR.directories);
             expectedRecord.setDirectories(Arrays.asList(dirs.get(1), dirs.get(2), dirs.get(3)));
         }
         assertEquals(Optional.of(new ApiMessageAndVersion(expectedRecord, version)),
@@ -457,7 +457,7 @@ public class PartitionChangeBuilderTest {
                 setIsr(Arrays.asList(2, 1)).
                 setLeader(1);
         if (version > 1) {
-            Map<Integer, DirectoryId> dirs = DirectoryId.createAssignmentMap(FOO.replicas, FOO.directories);
+            Map<Integer, Uuid> dirs = DirectoryId.createAssignmentMap(FOO.replicas, FOO.directories);
             expectedRecord.setDirectories(Arrays.asList(dirs.get(1), dirs.get(2)));
         }
         assertEquals(Optional.of(new ApiMessageAndVersion(expectedRecord, version)),
@@ -481,7 +481,7 @@ public class PartitionChangeBuilderTest {
                 setReplicas(Arrays.asList(1, 2, 3, 4)).
                 setAddingReplicas(Collections.singletonList(4));
         if (version > 1) {
-            Map<Integer, DirectoryId> dirs = DirectoryId.createAssignmentMap(FOO.replicas, FOO.directories);
+            Map<Integer, Uuid> dirs = DirectoryId.createAssignmentMap(FOO.replicas, FOO.directories);
             expectedRecord.setDirectories(Arrays.asList(dirs.get(1), dirs.get(2), dirs.get(3), DirectoryId.UNASSIGNED));
         }
         assertEquals(Optional.of(new ApiMessageAndVersion(expectedRecord, version)),
@@ -547,10 +547,10 @@ public class PartitionChangeBuilderTest {
         LeaderRecoveryState recoveryState = LeaderRecoveryState.RECOVERING;
         PartitionRegistration registration = new PartitionRegistration.Builder().
             setReplicas(new int[] {leaderId, leaderId + 1, leaderId + 2}).
-            setDirectories(new DirectoryId[] {
-                    DirectoryId.fromString("1sF6XXLkSN2LtDums7CJ8Q"),
-                    DirectoryId.fromString("iaBBVsoHQR6NDKXwliKMqw"),
-                    DirectoryId.fromString("sHaBwjdrR2S3bL4E1RKC8Q")
+            setDirectories(new Uuid[] {
+                    Uuid.fromString("1sF6XXLkSN2LtDums7CJ8Q"),
+                    Uuid.fromString("iaBBVsoHQR6NDKXwliKMqw"),
+                    Uuid.fromString("sHaBwjdrR2S3bL4E1RKC8Q")
             }).
             setIsr(new int[] {leaderId}).
             setLeader(leaderId).
@@ -617,10 +617,10 @@ public class PartitionChangeBuilderTest {
         int leaderId = 1;
         PartitionRegistration registration = new PartitionRegistration.Builder().
             setReplicas(new int[] {leaderId, leaderId + 1, leaderId + 2}).
-            setDirectories(new DirectoryId[] {
-                DirectoryId.fromString("uYpxts0pS4K4bk5XOoXB4g"),
-                DirectoryId.fromString("kS6fHEqwRYucduWkmvsevw"),
-                DirectoryId.fromString("De9RqRThQRGjKg3i3yzUxA")
+            setDirectories(new Uuid[] {
+                Uuid.fromString("uYpxts0pS4K4bk5XOoXB4g"),
+                Uuid.fromString("kS6fHEqwRYucduWkmvsevw"),
+                Uuid.fromString("De9RqRThQRGjKg3i3yzUxA")
             }).
             setIsr(new int[] {leaderId + 1, leaderId + 2}).
             setLeader(NO_LEADER).
@@ -673,11 +673,11 @@ public class PartitionChangeBuilderTest {
     public void testStoppedLeaderIsDemotedAfterReassignmentCompletesEvenIfNoNewEligibleLeaders() {
         // Set up PartitionRegistration as if there's an ongoing reassignment from [0, 1] to [2, 3]
         int[] replicas = new int[] {2, 3, 0, 1};
-        DirectoryId[] directories = {
-                DirectoryId.fromString("XCBQClkBSZyphD87QUXzDA"),
-                DirectoryId.fromString("Or2Rp9tTQOSVuy12hsfmTA"),
-                DirectoryId.fromString("pThsodMNSwGvljTfc1RNVQ"),
-                DirectoryId.fromString("d8CGoNJmS5mJdF20tc8P7g")
+        Uuid[] directories = {
+                Uuid.fromString("XCBQClkBSZyphD87QUXzDA"),
+                Uuid.fromString("Or2Rp9tTQOSVuy12hsfmTA"),
+                Uuid.fromString("pThsodMNSwGvljTfc1RNVQ"),
+                Uuid.fromString("d8CGoNJmS5mJdF20tc8P7g")
         };
         // The ISR starts off with the old replicas
         int[] isr = new int[] {0, 1};
@@ -747,11 +747,11 @@ public class PartitionChangeBuilderTest {
     public void testEligibleLeaderReplicas_IsrShrinkBelowMinISR(short version) {
         PartitionRegistration partition = new PartitionRegistration.Builder()
             .setReplicas(new int[] {1, 2, 3, 4})
-            .setDirectories(new DirectoryId[] {
-                DirectoryId.fromString("NeQeLdHhSXi4tQGaFcszKA"),
-                DirectoryId.fromString("LsVrQZ73RSSuEWA8hhqQhg"),
-                DirectoryId.fromString("0IaY4zXKRR6sROgE8yHfnw"),
-                DirectoryId.fromString("1WxphfLCSZqMHKK4JMppuw")
+            .setDirectories(new Uuid[] {
+                Uuid.fromString("NeQeLdHhSXi4tQGaFcszKA"),
+                Uuid.fromString("LsVrQZ73RSSuEWA8hhqQhg"),
+                Uuid.fromString("0IaY4zXKRR6sROgE8yHfnw"),
+                Uuid.fromString("1WxphfLCSZqMHKK4JMppuw")
             })
             .setIsr(new int[] {1, 2, 3, 4})
             .setLeader(1)
@@ -796,11 +796,11 @@ public class PartitionChangeBuilderTest {
     public void testEligibleLeaderReplicas_IsrExpandAboveMinISR(short version) {
         PartitionRegistration partition = new PartitionRegistration.Builder()
             .setReplicas(new int[] {1, 2, 3, 4})
-            .setDirectories(new DirectoryId[]{
-                DirectoryId.fromString("CWgRKBKkToGn1HKzNb2qqQ"),
-                DirectoryId.fromString("SCnk7zfSQSmlKqvV702d3A"),
-                DirectoryId.fromString("9tO0QHlJRhimjKfH8m9d8A"),
-                DirectoryId.fromString("JaaqVOxNT2OGVNCCIFA2JQ")
+            .setDirectories(new Uuid[]{
+                Uuid.fromString("CWgRKBKkToGn1HKzNb2qqQ"),
+                Uuid.fromString("SCnk7zfSQSmlKqvV702d3A"),
+                Uuid.fromString("9tO0QHlJRhimjKfH8m9d8A"),
+                Uuid.fromString("JaaqVOxNT2OGVNCCIFA2JQ")
             })
             .setIsr(new int[] {1, 2})
             .setElr(new int[] {3})
@@ -842,11 +842,11 @@ public class PartitionChangeBuilderTest {
     public void testEligibleLeaderReplicas_IsrAddNewMemberNotInELR(short version) {
         PartitionRegistration partition = new PartitionRegistration.Builder()
             .setReplicas(new int[] {1, 2, 3, 4})
-            .setDirectories(new DirectoryId[]{
-                DirectoryId.fromString("gPcIwlldQXikdUB3F4GB6w"),
-                DirectoryId.fromString("gFs7V8mKR66z8e5qwtjIMA"),
-                DirectoryId.fromString("zKHU2fwrRkuypqTgITl46g"),
-                DirectoryId.fromString("zEgmBBh8QJGqbBIvzvH7JA")
+            .setDirectories(new Uuid[]{
+                Uuid.fromString("gPcIwlldQXikdUB3F4GB6w"),
+                Uuid.fromString("gFs7V8mKR66z8e5qwtjIMA"),
+                Uuid.fromString("zKHU2fwrRkuypqTgITl46g"),
+                Uuid.fromString("zEgmBBh8QJGqbBIvzvH7JA")
             })
             .setIsr(new int[] {1})
             .setElr(new int[] {3})
@@ -894,11 +894,11 @@ public class PartitionChangeBuilderTest {
     public void testEligibleLeaderReplicas_RemoveUncleanShutdownReplicasFromElr(short version) {
         PartitionRegistration partition = new PartitionRegistration.Builder()
                 .setReplicas(new int[] {1, 2, 3, 4})
-                .setDirectories(new DirectoryId[] {
-                        DirectoryId.fromString("keB9ssIPRlibyVJT5FcBVA"),
-                        DirectoryId.fromString("FhezfoReTSmHoKxi8wOIOg"),
-                        DirectoryId.fromString("QHtFxu8LShm6RiyAP6PxYg"),
-                        DirectoryId.fromString("tUJOMtvMQkGga30ydluvbQ")
+                .setDirectories(new Uuid[] {
+                        Uuid.fromString("keB9ssIPRlibyVJT5FcBVA"),
+                        Uuid.fromString("FhezfoReTSmHoKxi8wOIOg"),
+                        Uuid.fromString("QHtFxu8LShm6RiyAP6PxYg"),
+                        Uuid.fromString("tUJOMtvMQkGga30ydluvbQ")
                 })
                 .setIsr(new int[] {1})
                 .setElr(new int[] {2, 3})
@@ -946,10 +946,10 @@ public class PartitionChangeBuilderTest {
     void testKeepsDirectoriesAfterReassignment() {
         PartitionRegistration registration = new PartitionRegistration.Builder().
                 setReplicas(new int[] {2, 1, 3}).
-                setDirectories(new DirectoryId[] {
-                        DirectoryId.fromString("v1PVrX6uS5m8CByXlLfmWg"),
-                        DirectoryId.fromString("iU2znv45Q9yQkOpkTSy3jA"),
-                        DirectoryId.fromString("fM5NKyWTQHqEihjIkUl99Q")
+                setDirectories(new Uuid[] {
+                        Uuid.fromString("v1PVrX6uS5m8CByXlLfmWg"),
+                        Uuid.fromString("iU2znv45Q9yQkOpkTSy3jA"),
+                        Uuid.fromString("fM5NKyWTQHqEihjIkUl99Q")
                 }).
                 setIsr(new int[] {2, 1, 3}).
                 setLeader(1).
@@ -967,8 +967,8 @@ public class PartitionChangeBuilderTest {
                         setLeader(1).
                         setReplicas(Arrays.asList(3, 1, 4)).
                         setDirectories(Arrays.asList(
-                            DirectoryId.fromString("fM5NKyWTQHqEihjIkUl99Q"),
-                            DirectoryId.fromString("iU2znv45Q9yQkOpkTSy3jA"),
+                            Uuid.fromString("fM5NKyWTQHqEihjIkUl99Q"),
+                            Uuid.fromString("iU2znv45Q9yQkOpkTSy3jA"),
                             DirectoryId.UNASSIGNED
                         )),
                 (short) 2

@@ -23,9 +23,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Set;
 
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -34,7 +32,7 @@ public class DirectoryIdTest {
     @Test
     void testReserved() {
         Set<Long> seen = new HashSet<>(100);
-        for (DirectoryId reservedId : DirectoryId.RESERVED) {
+        for (Uuid reservedId : DirectoryId.RESERVED) {
             assertEquals(0L, reservedId.getMostSignificantBits(), "Unexpected reserved msb value");
             long lsb = reservedId.getLeastSignificantBits();
             assertTrue(lsb >= 0 && lsb < 100L, "Unexpected reserved lsb value");
@@ -44,50 +42,24 @@ public class DirectoryIdTest {
     }
 
     @Test
-    void testToArray() {
-        assertNull(DirectoryId.toArray(null));
-        assertArrayEquals(
-                new DirectoryId[]{
-                    DirectoryId.MIGRATING, DirectoryId.fromString("UXyU9i5ARn6W00ON2taeWA")
-                },
-                DirectoryId.toArray(Arrays.asList(
-                    DirectoryId.MIGRATING, DirectoryId.fromString("UXyU9i5ARn6W00ON2taeWA")
-                ))
-        );
-    }
-
-    @Test
-    void testToList() {
-        assertNull(DirectoryId.toList(null));
-        assertEquals(
-            Arrays.asList(
-                DirectoryId.MIGRATING, DirectoryId.fromString("UXyU9i5ARn6W00ON2taeWA")
-            ),
-            DirectoryId.toList(new DirectoryId[]{
-                DirectoryId.MIGRATING, DirectoryId.fromString("UXyU9i5ARn6W00ON2taeWA")
-            })
-        );
-    }
-
-    @Test
     void testCreateDirectoriesFrom() {
         assertThrows(IllegalArgumentException.class, () -> DirectoryId.createDirectoriesFrom(
                 new int[] {1},
-                new DirectoryId[] {DirectoryId.UNASSIGNED, DirectoryId.LOST},
+                new Uuid[] {DirectoryId.UNASSIGNED, DirectoryId.LOST},
                 Arrays.asList(2, 3)
         ));
         assertEquals(
             Arrays.asList(
-                DirectoryId.fromString("YXY0bQYEQmmyOQ6ZDfGgSQ"),
-                DirectoryId.fromString("5SZij3DRQgaFbvzR9KooLg"),
+                Uuid.fromString("YXY0bQYEQmmyOQ6ZDfGgSQ"),
+                Uuid.fromString("5SZij3DRQgaFbvzR9KooLg"),
                 DirectoryId.UNASSIGNED
             ),
             DirectoryId.createDirectoriesFrom(
                 new int[] {1, 2, 3},
-                new DirectoryId[] {
-                        DirectoryId.fromString("MgVK5KSwTxe65eYATaoQrg"),
-                        DirectoryId.fromString("YXY0bQYEQmmyOQ6ZDfGgSQ"),
-                        DirectoryId.fromString("5SZij3DRQgaFbvzR9KooLg")
+                new Uuid[] {
+                        Uuid.fromString("MgVK5KSwTxe65eYATaoQrg"),
+                        Uuid.fromString("YXY0bQYEQmmyOQ6ZDfGgSQ"),
+                        Uuid.fromString("5SZij3DRQgaFbvzR9KooLg")
                 },
                 Arrays.asList(2, 3, 4)
             )
@@ -100,7 +72,7 @@ public class DirectoryIdTest {
                 ),
                 DirectoryId.createDirectoriesFrom(
                         new int[] {1, 2},
-                        new DirectoryId[] {
+                        new Uuid[] {
                             DirectoryId.UNASSIGNED,
                             DirectoryId.UNASSIGNED
                         },
@@ -114,19 +86,19 @@ public class DirectoryIdTest {
         assertThrows(IllegalArgumentException.class,
                 () -> DirectoryId.createAssignmentMap(new int[]{1, 2}, DirectoryId.unassignedArray(3)));
         assertEquals(
-            new HashMap<Integer, DirectoryId>() {{
-                    put(1, DirectoryId.fromString("upjfkCrUR9GNn1i94ip1wg"));
-                    put(2, DirectoryId.fromString("bCF3l0RIQjOKhUqgbivHZA"));
-                    put(3, DirectoryId.fromString("Fg3mFhcVQlqCWRk4dZazxw"));
-                    put(4, DirectoryId.fromString("bv9TEYi4TqOm52hLmrxT5w"));
+            new HashMap<Integer, Uuid>() {{
+                    put(1, Uuid.fromString("upjfkCrUR9GNn1i94ip1wg"));
+                    put(2, Uuid.fromString("bCF3l0RIQjOKhUqgbivHZA"));
+                    put(3, Uuid.fromString("Fg3mFhcVQlqCWRk4dZazxw"));
+                    put(4, Uuid.fromString("bv9TEYi4TqOm52hLmrxT5w"));
                 }},
             DirectoryId.createAssignmentMap(
                     new int[] {1, 2, 3, 4},
-                    new DirectoryId[] {
-                            DirectoryId.fromString("upjfkCrUR9GNn1i94ip1wg"),
-                            DirectoryId.fromString("bCF3l0RIQjOKhUqgbivHZA"),
-                            DirectoryId.fromString("Fg3mFhcVQlqCWRk4dZazxw"),
-                            DirectoryId.fromString("bv9TEYi4TqOm52hLmrxT5w")
+                    new Uuid[] {
+                            Uuid.fromString("upjfkCrUR9GNn1i94ip1wg"),
+                            Uuid.fromString("bCF3l0RIQjOKhUqgbivHZA"),
+                            Uuid.fromString("Fg3mFhcVQlqCWRk4dZazxw"),
+                            Uuid.fromString("bv9TEYi4TqOm52hLmrxT5w")
                     })
         );
     }

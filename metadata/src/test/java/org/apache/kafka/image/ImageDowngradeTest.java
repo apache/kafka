@@ -17,7 +17,6 @@
 
 package org.apache.kafka.image;
 
-import org.apache.kafka.common.DirectoryId;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
@@ -144,8 +143,8 @@ public class ImageDowngradeTest {
                         TEST_RECORDS.get(0),
                         new ApiMessageAndVersion(
                                 testPartitionRecord.duplicate().setDirectories(Arrays.asList(
-                                        DirectoryId.fromString("c7QfSi6xSIGQVh3Qd5RJxA"),
-                                        DirectoryId.fromString("rWaCHejCRRiptDMvW5Xw0g"))),
+                                        Uuid.fromString("c7QfSi6xSIGQVh3Qd5RJxA"),
+                                        Uuid.fromString("rWaCHejCRRiptDMvW5Xw0g"))),
                                 (short) 2)),
                 Arrays.asList(
                         metadataVersionRecord(outputMetadataVersion),

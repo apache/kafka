@@ -133,7 +133,7 @@ public class PartitionRegistrationTest {
     @Test
     public void testMergePartitionChangeRecordWithReassignmentData() {
         PartitionRegistration partition0 = new PartitionRegistration.Builder().setReplicas(new int[] {1, 2, 3}).
-            setDirectories(new DirectoryId[]{DirectoryId.fromString("FbRuu7CeQtq5YFreEzg16g"), DirectoryId.fromString("4rtHTelWSSStAFMODOg3cQ"), DirectoryId.fromString("Id1WXzHURROilVxZWJNZlw")}).
+            setDirectories(new Uuid[]{Uuid.fromString("FbRuu7CeQtq5YFreEzg16g"), Uuid.fromString("4rtHTelWSSStAFMODOg3cQ"), Uuid.fromString("Id1WXzHURROilVxZWJNZlw")}).
             setIsr(new int[] {1, 2, 3}).setLeader(1).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(100).setPartitionEpoch(200).build();
         PartitionRegistration partition1 = partition0.merge(new PartitionChangeRecord().
             setRemovingReplicas(Collections.singletonList(3)).
@@ -261,12 +261,12 @@ public class PartitionRegistrationTest {
     public void testPartitionRegistrationToRecord(short version) {
         PartitionRegistration.Builder builder = new PartitionRegistration.Builder().
             setReplicas(new int[]{0, 1, 2, 3, 4}).
-            setDirectories(new DirectoryId[]{
+            setDirectories(new Uuid[]{
                 DirectoryId.UNASSIGNED,
-                DirectoryId.fromString("KBJBm9GVRAG9Ffe25odmmg"),
+                Uuid.fromString("KBJBm9GVRAG9Ffe25odmmg"),
                 DirectoryId.LOST,
-                DirectoryId.fromString("7DZNT5qBS7yFF7VMMHS7kw"),
-                DirectoryId.fromString("cJGPUZsMSEqbidOLYLOIXg")
+                Uuid.fromString("7DZNT5qBS7yFF7VMMHS7kw"),
+                Uuid.fromString("cJGPUZsMSEqbidOLYLOIXg")
             }).
             setIsr(new int[]{0, 1}).
             setLeader(0).
@@ -298,10 +298,10 @@ public class PartitionRegistrationTest {
         if (version > 1) {
             expectRecord.setDirectories(Arrays.asList(
                     DirectoryId.UNASSIGNED,
-                    DirectoryId.fromString("KBJBm9GVRAG9Ffe25odmmg"),
+                    Uuid.fromString("KBJBm9GVRAG9Ffe25odmmg"),
                     DirectoryId.LOST,
-                    DirectoryId.fromString("7DZNT5qBS7yFF7VMMHS7kw"),
-                    DirectoryId.fromString("cJGPUZsMSEqbidOLYLOIXg")
+                    Uuid.fromString("7DZNT5qBS7yFF7VMMHS7kw"),
+                    Uuid.fromString("cJGPUZsMSEqbidOLYLOIXg")
             ));
             when(metadataVersion.isDirectoryAssignmentSupported()).thenReturn(true);
         }

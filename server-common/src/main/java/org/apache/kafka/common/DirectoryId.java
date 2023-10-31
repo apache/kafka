@@ -25,61 +25,39 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-public class DirectoryId extends Uuid {
+public class DirectoryId {
 
     /**
-     * A DirectoryId that is used to identify new or unknown dir assignments.
+     * A Uuid that is used to identify new or unknown dir assignments.
      */
-    public static final DirectoryId UNASSIGNED = new DirectoryId(0L, 0L);
+    public static final Uuid UNASSIGNED = new Uuid(0L, 0L);
 
     /**
-     * A DirectoryId that is used to represent unspecified offline dirs.
+     * A Uuid that is used to represent unspecified offline dirs.
      */
-    public static final DirectoryId LOST = new DirectoryId(0L, 1L);
+    public static final Uuid LOST = new Uuid(0L, 1L);
 
     /**
-     * A DirectoryId that is used to represent and unspecified log directory,
+     * A Uuid that is used to represent and unspecified log directory,
      * that is expected to have been previously selected to host an
      * associated replica. This contrasts with {@code UNASSIGNED_DIR},
      * which is associated with (typically new) replicas that may not
      * yet have been placed in any log directory.
      */
-    public static final DirectoryId MIGRATING = new DirectoryId(0L, 2L);
+    public static final Uuid MIGRATING = new Uuid(0L, 2L);
 
     /**
      * The set of reserved UUIDs that will never be returned by the random method.
      */
-    public static final Set<DirectoryId> RESERVED;
+    public static final Set<Uuid> RESERVED;
 
     static {
-        HashSet<DirectoryId> reserved = new HashSet<>();
-        // The first 100 DirectoryIds are reserved for future use.
+        HashSet<Uuid> reserved = new HashSet<>();
+        // The first 100 Uuids are reserved for future use.
         for (long i = 0L; i < 100L; i++) {
-            reserved.add(new DirectoryId(0L, i));
+            reserved.add(new Uuid(0L, i));
         }
         RESERVED = Collections.unmodifiableSet(reserved);
-    }
-
-    /**
-     * Constructs a Directory ID from the underlying 128 bits,
-     * exactly as a {@link Uuid} is constructed.
-     */
-    private DirectoryId(long mostSigBits, long leastSigBits) {
-        super(mostSigBits, leastSigBits);
-    }
-
-    /**
-     * Creates a DirectoryId based on a base64 string encoding used in the toString() method.
-     */
-    public static DirectoryId fromString(String str) {
-        return DirectoryId.fromUuid(Uuid.fromString(str));
-    }
-
-    /**
-     * Creates a DirectoryId based on a {@link Uuid}.
-     */
-    public static DirectoryId fromUuid(Uuid uuid) {
-        return new DirectoryId(uuid.getMostSignificantBits(), uuid.getLeastSignificantBits());
     }
 
     /**
@@ -87,40 +65,12 @@ public class DirectoryId extends Uuid {
      *
      * This will not generate a reserved UUID (first 100), or one whose string representation starts with a dash ("-")
      */
-    public static DirectoryId random() {
+    public static Uuid random() {
         Uuid uuid = Uuid.randomUuid();
         while (RESERVED.contains(uuid) || uuid.toString().startsWith("-")) {
             uuid = Uuid.randomUuid();
         }
-        return DirectoryId.fromUuid(uuid);
-    }
-
-    /**
-     * Convert a list of Uuid to an array of DirectoryId.
-     *
-     * @param list          The input list
-     * @return              The output array
-     */
-    public static DirectoryId[] toArray(List<Uuid> list) {
-        if (list == null) return null;
-        DirectoryId[] array = new DirectoryId[list.size()];
-        for (int i = 0; i < list.size(); i++) {
-            array[i] = DirectoryId.fromUuid(list.get(i));
-        }
-        return array;
-    }
-
-    /**
-     * Convert an array of DirectoryIds to a list of Uuid.
-     *
-     * @param array         The input array
-     * @return              The output list
-     */
-    public static List<Uuid> toList(DirectoryId[] array) {
-        if (array == null) return null;
-        List<Uuid> list = new ArrayList<>(array.length);
-        list.addAll(Arrays.asList(array));
-        return list;
+        return uuid;
     }
 
     /**
@@ -134,10 +84,10 @@ public class DirectoryId extends Uuid {
      * @throws IllegalArgumentException     If currentReplicas and currentDirectories have different lengths,
      *                                      or if there are duplicate broker IDs in the replica lists
      */
-    public static List<Uuid> createDirectoriesFrom(int[] currentReplicas, DirectoryId[] currentDirectories, List<Integer> newReplicas) {
+    public static List<Uuid> createDirectoriesFrom(int[] currentReplicas, Uuid[] currentDirectories, List<Integer> newReplicas) {
         if (currentReplicas == null) currentReplicas = new int[0];
-        if (currentDirectories == null) currentDirectories = new DirectoryId[0];
-        Map<Integer, DirectoryId> assignments = createAssignmentMap(currentReplicas, currentDirectories);
+        if (currentDirectories == null) currentDirectories = new Uuid[0];
+        Map<Integer, Uuid> assignments = createAssignmentMap(currentReplicas, currentDirectories);
         List<Uuid> consolidated = new ArrayList<>(newReplicas.size());
         for (int newReplica : newReplicas) {
             Uuid newDirectory = assignments.getOrDefault(newReplica, UNASSIGNED);
@@ -154,14 +104,14 @@ public class DirectoryId extends Uuid {
      * @throws IllegalArgumentException     If replicas and directories have different lengths,
      *                                      or if there are duplicate broker IDs in the replica list
      */
-    public static Map<Integer, DirectoryId> createAssignmentMap(int[] replicas, DirectoryId[] directories) {
+    public static Map<Integer, Uuid> createAssignmentMap(int[] replicas, Uuid[] directories) {
         if (replicas.length != directories.length) {
             throw new IllegalArgumentException("The lengths for replicas and directories do not match.");
         }
-        Map<Integer, DirectoryId> assignments = new HashMap<>();
+        Map<Integer, Uuid> assignments = new HashMap<>();
         for (int i = 0; i < replicas.length; i++) {
             int brokerId = replicas[i];
-            DirectoryId directory = directories[i];
+            Uuid directory = directories[i];
             if (assignments.put(brokerId, directory) != null) {
                 throw new IllegalArgumentException("Duplicate broker ID in assignment");
             }
@@ -172,8 +122,8 @@ public class DirectoryId extends Uuid {
     /**
      * Create an array with the specified number of entries set to {@link #UNASSIGNED}.
      */
-    public static DirectoryId[] unassignedArray(int length) {
-        DirectoryId[] array = new DirectoryId[length];
+    public static Uuid[] unassignedArray(int length) {
+        Uuid[] array = new Uuid[length];
         Arrays.fill(array, UNASSIGNED);
         return array;
     }

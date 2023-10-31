@@ -43,7 +43,7 @@ public class PartitionRegistration {
      */
     static public class Builder {
         private int[] replicas;
-        private DirectoryId[] directories;
+        private Uuid[] directories;
         private int[] isr;
         private int[] removingReplicas = Replicas.NONE;
         private int[] addingReplicas = Replicas.NONE;
@@ -59,7 +59,7 @@ public class PartitionRegistration {
             return this;
         }
 
-        public Builder setDirectories(DirectoryId[] directories) {
+        public Builder setDirectories(Uuid[] directories) {
             this.directories = directories;
             return this;
         }
@@ -151,7 +151,7 @@ public class PartitionRegistration {
     }
 
     public final int[] replicas;
-    public final DirectoryId[] directories;
+    public final Uuid[] directories;
     public final int[] isr;
     public final int[] removingReplicas;
     public final int[] addingReplicas;
@@ -182,7 +182,7 @@ public class PartitionRegistration {
 
     public PartitionRegistration(PartitionRecord record) {
         this(Replicas.toArray(record.replicas()),
-            DirectoryId.toArray(checkDirectories(record)),
+            Uuid.toArray(checkDirectories(record)),
             Replicas.toArray(record.isr()),
             Replicas.toArray(record.removingReplicas()),
             Replicas.toArray(record.addingReplicas()),
@@ -194,7 +194,7 @@ public class PartitionRegistration {
             Replicas.toArray(record.lastKnownELR()));
     }
 
-    private PartitionRegistration(int[] replicas, DirectoryId[] directories, int[] isr, int[] removingReplicas,
+    private PartitionRegistration(int[] replicas, Uuid[] directories, int[] isr, int[] removingReplicas,
                                  int[] addingReplicas, int leader, LeaderRecoveryState leaderRecoveryState,
                                  int leaderEpoch, int partitionEpoch, int[] elr, int[] lastKnownElr) {
         this.replicas = replicas;
@@ -215,8 +215,8 @@ public class PartitionRegistration {
     public PartitionRegistration merge(PartitionChangeRecord record) {
         int[] newReplicas = (record.replicas() == null) ?
             replicas : Replicas.toArray(record.replicas());
-        DirectoryId[] newDirectories = (record.directories() == null) ?
-                directories : DirectoryId.toArray(checkDirectories(record));
+        Uuid[] newDirectories = (record.directories() == null) ?
+                directories : Uuid.toArray(checkDirectories(record));
         int[] newIsr = (record.isr() == null) ? isr : Replicas.toArray(record.isr());
         int[] newRemovingReplicas = (record.removingReplicas() == null) ?
             removingReplicas : Replicas.toArray(record.removingReplicas());
@@ -354,7 +354,7 @@ public class PartitionRegistration {
                 setLastKnownELR(Replicas.toList(lastKnownElr));
         }
         if (options.metadataVersion().isDirectoryAssignmentSupported()) {
-            record.setDirectories(DirectoryId.toList(directories));
+            record.setDirectories(Uuid.toList(directories));
         } else {
             for (int i = 0; i < directories.length; i++) {
                 if (!DirectoryId.UNASSIGNED.equals(directories[i])) {
