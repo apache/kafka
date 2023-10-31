@@ -21,7 +21,6 @@ import org.apache.kafka.clients.consumer.internals.CachedSupplier;
 import org.apache.kafka.clients.consumer.internals.CommitRequestManager;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkThread;
-import org.apache.kafka.clients.consumer.internals.RequestManager;
 import org.apache.kafka.clients.consumer.internals.RequestManagers;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
@@ -34,7 +33,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 /**
@@ -126,21 +124,26 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
     }
 
     private void process(final CommitApplicationEvent event) {
-        process(
-                requestManagers.commitRequestManager,
-                event,
-                crm -> event.chain(crm.addOffsetCommitRequest(event.offsets())),
-                () -> "Unable to commit offset"
-        );
+        if (!requestManagers.commitRequestManager.isPresent()) {
+            // Leaving this error handling here, but it is a bit strange as the commit API should enforce the group.id
+            // upfront, so we should never get to this block.
+            Exception exception = new KafkaException("Unable to commit offset. Most likely because the group.id wasn't set");
+            event.future().completeExceptionally(exception);
+            return;
+        }
+
+        CommitRequestManager manager = requestManagers.commitRequestManager.get();
+        event.chain(manager.addOffsetCommitRequest(event.offsets()));
     }
 
     private void process(final OffsetFetchApplicationEvent event) {
-        process(
-                requestManagers.commitRequestManager,
-                event,
-                crm -> event.chain(crm.addOffsetFetchRequest(event.partitions())),
-                () -> "Unable to fetch committed offset"
-        );
+        if (!requestManagers.commitRequestManager.isPresent()) {
+            event.future().completeExceptionally(new KafkaException("Unable to fetch committed " +
+                    "offset because the CommittedRequestManager is not available. Check if group.id was set correctly"));
+            return;
+        }
+        CommitRequestManager manager = requestManagers.commitRequestManager.get();
+        event.chain(manager.addOffsetFetchRequest(event.partitions()));
     }
 
     private void process(final NewTopicsMetadataUpdateRequestEvent ignored) {
@@ -175,21 +178,6 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         final CompletableFuture<Map<String, List<PartitionInfo>>> future =
                 this.requestManagers.topicMetadataRequestManager.requestTopicMetadata(Optional.of(event.topic()));
         event.chain(future);
-    }
-
-    private <T extends RequestManager> void process(final Optional<T> requestManager,
-                                                    final CompletableApplicationEvent<?> event,
-                                                    final Consumer<T> ifPresentOperation,
-                                                    final Supplier<String> ifNotPresentMessage) {
-        if (requestManager.isPresent()) {
-            ifPresentOperation.accept(requestManager.get());
-        } else {
-            // Leaving this error handling here, but it is a bit strange as the Consumer implementation should enforce
-            // the group.id upfront, so we should never get here.
-            String message = ifNotPresentMessage.get();
-            Exception exception = new KafkaException(message + ". Most likely because the group.id wasn't set");
-            event.future().completeExceptionally(exception);
-        }
     }
 
     /**
