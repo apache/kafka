@@ -3117,7 +3117,8 @@ class ReplicaManagerTest {
     isShuttingDown: AtomicBoolean = new AtomicBoolean(false),
     enableRemoteStorage: Boolean = false,
     shouldMockLog: Boolean = false,
-    remoteLogManager: Option[RemoteLogManager] = None
+    remoteLogManager: Option[RemoteLogManager] = None,
+    defaultTopicRemoteLogStorageEnable: Boolean = true
   ): ReplicaManager = {
     val props = TestUtils.createBrokerConfig(brokerId, TestUtils.MockZkConnect)
     val path1 = TestUtils.tempRelativeDir("data").getAbsolutePath
@@ -3126,7 +3127,9 @@ class ReplicaManagerTest {
     propsModifier.apply(props)
     val config = KafkaConfig.fromProps(props)
     val logProps = new Properties()
-    logProps.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
+    if (defaultTopicRemoteLogStorageEnable) {
+      logProps.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
+    }
     val mockLog = setupMockLog(path1)
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)), new LogConfig(logProps), log = if (shouldMockLog) Some(mockLog) else None, remoteStorageSystemEnable = true)
     val aliveBrokers = aliveBrokerIds.map(brokerId => new Node(brokerId, s"host$brokerId", brokerId))
@@ -5667,6 +5670,47 @@ class ReplicaManagerTest {
     spyRm.shutdown(checkpointHW = true)
 
     verify(spyRm).checkpointHighWatermarks()
+  }
+
+  @Test
+  def testNotCallStopPartitionsForNonTieredTopics(): Unit = {
+    val mockTimer = new MockTimer(time)
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(mockTimer, aliveBrokerIds = Seq(0, 1),
+      enableRemoteStorage = true, defaultTopicRemoteLogStorageEnable = false)
+
+    try {
+      val tp0 = new TopicPartition(topic, 0)
+      val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints)
+      val partition = replicaManager.createPartition(tp0)
+      // The unified log created is not tiered because `defaultTopicRemoteLogStorageEnable` is set to false
+      partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
+
+      val becomeLeaderRequest = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
+        Seq(leaderAndIsrPartitionState(tp0, 1, 0, Seq(0, 1), true)).asJava,
+        Collections.singletonMap(tp0.topic(), Uuid.randomUuid()),
+        Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava
+      ).build()
+
+      replicaManager.becomeLeaderOrFollower(1, becomeLeaderRequest, (_, _) => ())
+      verifyRLMOnLeadershipChange(Collections.singleton(partition), Collections.emptySet())
+
+      val requestLeaderEpoch = 1
+      val deleteLocalLog = true
+      val partitionStates = Map(tp0 -> new StopReplicaPartitionState()
+        .setPartitionIndex(tp0.partition)
+        .setLeaderEpoch(requestLeaderEpoch)
+        .setDeletePartition(deleteLocalLog)
+      )
+
+      val (result, error) = replicaManager.stopReplicas(1, 0, 0, partitionStates)
+
+      assertEquals(Errors.NONE, error)
+      assertEquals(Map(tp0 -> Errors.NONE), result)
+      assertEquals(HostedPartition.None, replicaManager.getPartition(tp0))
+      verifyNoMoreInteractions(mockRemoteLogManager)
+    } finally {
+      replicaManager.shutdown(checkpointHW = false)
+    }
   }
 }
 
