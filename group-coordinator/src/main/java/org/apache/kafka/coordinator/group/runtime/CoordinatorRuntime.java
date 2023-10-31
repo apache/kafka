@@ -1359,18 +1359,28 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         log.info("Scheduling unloading of metadata for {} with epoch {}", tp, partitionEpoch);
 
         scheduleInternalOperation("UnloadCoordinator(tp=" + tp + ", epoch=" + partitionEpoch + ")", tp, () -> {
-            withContextOrThrow(tp, context -> {
-                if (context.epoch < partitionEpoch) {
-                    log.info("Started unloading metadata for {} with epoch {}.", tp, partitionEpoch);
-                    context.transitionTo(CoordinatorState.CLOSED);
-                    coordinators.remove(tp, context);
-                    log.info("Finished unloading metadata for {} with epoch {}.", tp, partitionEpoch);
-                } else {
-                    log.info("Ignored unloading metadata for {} in epoch {} since current epoch is {}.",
-                        tp, partitionEpoch, context.epoch
-                    );
+            CoordinatorContext context = coordinators.get(tp);
+            if (context != null) {
+                try {
+                    context.lock.lock();
+                    if (context.epoch < partitionEpoch) {
+                        log.info("Started unloading metadata for {} with epoch {}.", tp, partitionEpoch);
+                        context.transitionTo(CoordinatorState.CLOSED);
+                        coordinators.remove(tp, context);
+                        log.info("Finished unloading metadata for {} with epoch {}.", tp, partitionEpoch);
+                    } else {
+                        log.info("Ignored unloading metadata for {} in epoch {} since current epoch is {}.",
+                            tp, partitionEpoch, context.epoch
+                        );
+                    }
+                } finally {
+                    context.lock.unlock();
                 }
-            });
+            } else {
+                log.info("Ignored unloading metadata for {} in epoch {} since metadata was never loaded.",
+                    tp, partitionEpoch
+                );
+            }
         });
     }
 
