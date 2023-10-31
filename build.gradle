@@ -1355,7 +1355,6 @@ project(':clients') {
     shadow libs.lz4
     shadow libs.snappy
     shadow libs.slf4jApi
-    shadow libs.opentelemetryProto
 
     compileOnly libs.jacksonDatabind // for SASL/OAUTHBEARER bearer token parsing
     compileOnly libs.jacksonJDK8Datatypes
@@ -1411,6 +1410,9 @@ project(':clients') {
       exclude(dependency(libs.zstd))
       exclude(dependency(libs.lz4))
       exclude(dependency(libs.slf4jApi))
+      // exclude proto files from the jar
+      exclude "**/opentelemetry/proto/**/*.proto"
+      exclude "**/google/protobuf/*.proto"
     }
 
     from("$buildDir") {
