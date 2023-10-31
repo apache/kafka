@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.clients.consumer;
 
-import org.apache.kafka.clients.consumer.internals.ConsumerCreator;
+import org.apache.kafka.clients.consumer.internals.ConsumerDelegateCreator;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
@@ -513,7 +513,7 @@ import java.util.regex.Pattern;
  */
 public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
-    private final static ConsumerCreator CREATOR = new ConsumerCreator();
+    private final static ConsumerDelegateCreator CREATOR = new ConsumerDelegateCreator();
 
     private final Consumer<K, V> delegate;
 

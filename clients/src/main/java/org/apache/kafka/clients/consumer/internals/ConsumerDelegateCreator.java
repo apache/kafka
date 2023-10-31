@@ -27,7 +27,7 @@ import java.util.Properties;
 import java.util.function.Supplier;
 
 /**
- * {@code ConsumerCreator} implements a quasi-factory pattern to allow the caller to remain unaware of the
+ * {@code ConsumerDelegateCreator} implements a quasi-factory pattern to allow the caller to remain unaware of the
  * underlying {@link Consumer} implementation that is created. This provides the means by which {@link KafkaConsumer}
  * can remain the top-level facade for implementations, but allow different implementations to co-exist under
  * the covers.
@@ -46,7 +46,7 @@ import java.util.function.Supplier;
  * as this will make such code very brittle. Users of this facility should honor the top-level {@link Consumer} API
  * contract as-is.
  */
-public class ConsumerCreator {
+public class ConsumerDelegateCreator {
 
     /**
      * This is it! This is the core logic. It's extremely rudimentary.
@@ -82,8 +82,8 @@ public class ConsumerCreator {
     }
 
     public <K, V> Consumer<K, V> create(Properties properties,
-                                 Deserializer<K> keyDeserializer,
-                                 Deserializer<V> valueDeserializer) {
+                                        Deserializer<K> keyDeserializer,
+                                        Deserializer<V> valueDeserializer) {
         return createInternal(() -> {
             if (useNewConsumer(properties)) {
                 return new AsyncKafkaConsumer<>(properties, keyDeserializer, valueDeserializer);
@@ -94,8 +94,8 @@ public class ConsumerCreator {
     }
 
     public <K, V> Consumer<K, V> create(Map<String, Object> configs,
-                                 Deserializer<K> keyDeserializer,
-                                 Deserializer<V> valueDeserializer) {
+                                        Deserializer<K> keyDeserializer,
+                                        Deserializer<V> valueDeserializer) {
         return createInternal(() -> {
             if (useNewConsumer(configs)) {
                 return new AsyncKafkaConsumer<>(configs, keyDeserializer, valueDeserializer);
@@ -117,6 +117,9 @@ public class ConsumerCreator {
         });
     }
 
+    /**
+     * This is here to remove the exception handling boilerplate from every other {@code create} method.
+     */
     private <K, V> Consumer<K, V> createInternal(Supplier<Consumer<K, V>> consumerSupplier) {
         try {
             return consumerSupplier.get();
