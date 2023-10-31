@@ -215,10 +215,8 @@ public class CommitRequestManager implements RequestManager {
                     .setMemberId(generation.memberId)
                     .setGroupInstanceId(groupInstanceId)
                     .setTopics(new ArrayList<>(requestTopicDataMap.values())));
-            return new NetworkClientDelegate.UnsentRequest(
-                builder,
-                coordinatorRequestManager.coordinator(),
-                (response, throwable) -> {
+            return new NetworkClientDelegate.UnsentRequest(builder, coordinatorRequestManager.coordinator())
+                .whenComplete((response, throwable) -> {
                     if (throwable == null) {
                         future.complete(null);
                     } else {
@@ -252,10 +250,8 @@ public class CommitRequestManager implements RequestManager {
                     true,
                     new ArrayList<>(this.requestedPartitions),
                     throwOnFetchStableOffsetUnsupported);
-            return new NetworkClientDelegate.UnsentRequest(
-                builder,
-                coordinatorRequestManager.coordinator(),
-                (r, t) -> onResponse(r.receivedTimeMs(), (OffsetFetchResponse) r.responseBody()));
+            return new NetworkClientDelegate.UnsentRequest(builder, coordinatorRequestManager.coordinator())
+                .whenComplete((r, t) -> onResponse(r.receivedTimeMs(), (OffsetFetchResponse) r.responseBody()));
         }
 
         public void onResponse(

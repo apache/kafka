@@ -180,7 +180,7 @@ public class CoordinatorRequestManagerTest {
         assertEquals(1, res.unsentRequests.size());
 
         NetworkClientDelegate.UnsentRequest unsentRequest = res.unsentRequests.get(0);
-        unsentRequest.future().complete(buildResponse(unsentRequest, error));
+        unsentRequest.handler().onComplete(buildResponse(unsentRequest, error));
 
         boolean expectCoordinatorFound = error == Errors.NONE;
         assertEquals(expectCoordinatorFound, coordinatorManager.coordinator().isPresent());

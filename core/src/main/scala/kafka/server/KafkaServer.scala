@@ -61,6 +61,7 @@ import org.apache.zookeeper.client.ZKClientConfig
 
 import java.io.{File, IOException}
 import java.net.{InetAddress, SocketTimeoutException}
+import java.util.OptionalLong
 import java.util.concurrent._
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import scala.collection.{Map, Seq}
@@ -438,7 +439,7 @@ class KafkaServer(
             kraftMetaProps.clusterId,
             networkListeners,
             ibpAsFeature,
-            -1
+            OptionalLong.empty()
           )
           logger.debug("Start RaftManager")
         }
