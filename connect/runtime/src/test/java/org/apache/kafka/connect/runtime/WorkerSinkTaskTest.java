@@ -674,7 +674,7 @@ public class WorkerSinkTaskTest {
                 rebalanceListener.getValue().onPartitionsAssigned(Collections.singleton(TOPIC_PARTITION));
                 return ConsumerRecords.empty();
             });
-        EasyMock.expect(consumer.assignment()).andReturn(INITIAL_ASSIGNMENT).times(4);
+        EasyMock.expect(consumer.assignment()).andReturn(INITIAL_ASSIGNMENT).times(3);
         sinkTask.close(Collections.singleton(TOPIC_PARTITION3));
         EasyMock.expectLastCall();
         EasyMock.expect(consumer.position(TOPIC_PARTITION)).andReturn(FIRST_OFFSET);
@@ -1381,7 +1381,7 @@ public class WorkerSinkTaskTest {
         expectTaskGetTopic(true);
 
         expectPollInitialAssignment();
-        EasyMock.expect(consumer.assignment()).andReturn(INITIAL_ASSIGNMENT).times(2);
+        EasyMock.expect(consumer.assignment()).andReturn(INITIAL_ASSIGNMENT).times(1);
 
         // Put one message through the task to get some offsets to commit
         expectConsumerPoll(1);
@@ -1536,7 +1536,7 @@ public class WorkerSinkTaskTest {
         EasyMock.expect(consumer.position(TOPIC_PARTITION)).andReturn(offsetTp1);
         EasyMock.expect(consumer.position(TOPIC_PARTITION2)).andReturn(offsetTp2);
         EasyMock.expect(consumer.position(TOPIC_PARTITION3)).andReturn(offsetTp3);
-        EasyMock.expect(consumer.assignment()).andReturn(new HashSet<>(rebalancedPartitions)).times(6);
+        EasyMock.expect(consumer.assignment()).andReturn(new HashSet<>(rebalancedPartitions)).times(5);
 
         // onPartitionsAssigned - step 2
         sinkTask.open(EasyMock.eq(rebalancedPartitions));
@@ -2047,7 +2047,7 @@ public class WorkerSinkTaskTest {
         sinkTask.open(INITIAL_ASSIGNMENT);
         EasyMock.expectLastCall().andThrow(e);
 
-        EasyMock.expect(consumer.assignment()).andReturn(INITIAL_ASSIGNMENT).times(3);
+        EasyMock.expect(consumer.assignment()).andReturn(INITIAL_ASSIGNMENT).times(2);
         EasyMock.expect(consumer.poll(Duration.ofMillis(EasyMock.anyLong()))).andAnswer(
             () -> {
                 rebalanceListener.getValue().onPartitionsRevoked(INITIAL_ASSIGNMENT);
