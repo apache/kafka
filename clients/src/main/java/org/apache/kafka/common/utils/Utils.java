@@ -1576,16 +1576,26 @@ public final class Utils {
     }
 
     /**
-     * Ensure that the class is concrete (i.e., not abstract). If it is, throw a {@link ConfigException}
+     * Ensure that the class is concrete (i.e., not abstract), and that it subclasses a given base class.
+     * If it is abstract or does not subclass the given base class, throw a {@link ConfigException}
      * with a friendly error message suggesting a list of concrete child subclasses (if any are known).
+     * @param baseClass the expected superclass; may not be null
      * @param klass the class to check; may not be null
      * @throws ConfigException if the class is not concrete
      */
-    public static void ensureConcrete(Class<?> klass) {
+    public static void ensureConcreteSubclass(Class<?> baseClass, Class<?> klass) {
+        Objects.requireNonNull(baseClass);
         Objects.requireNonNull(klass);
+
+        if (!baseClass.isAssignableFrom(klass)) {
+            String inheritFrom = baseClass.isInterface() ? "implement" : "extend";
+            String baseClassType = baseClass.isInterface() ? "interface" : "class";
+            throw new ConfigException("Class " + klass + " does not " + inheritFrom + " the " + baseClass.getSimpleName() + " " + baseClassType);
+        }
+
         if (Modifier.isAbstract(klass.getModifiers())) {
             String childClassNames = Stream.of(klass.getClasses())
-                    .filter(klass::isAssignableFrom)
+                    .filter(baseClass::isAssignableFrom)
                     .filter(c -> !Modifier.isAbstract(c.getModifiers()))
                     .filter(c -> Modifier.isPublic(c.getModifiers()))
                     .map(Class::getName)

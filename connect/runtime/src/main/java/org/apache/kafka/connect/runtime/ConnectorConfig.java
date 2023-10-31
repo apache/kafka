@@ -505,10 +505,10 @@ public class ConnectorConfig extends AbstractConfig {
          * @param cls The subclass of the baseclass.
          */
         ConfigDef getConfigDefFromConfigProvidingClass(String key, Class<?> cls) {
-            if (cls == null || !baseClass.isAssignableFrom(cls)) {
-                throw new ConfigException(key, String.valueOf(cls), "Not a " + baseClass.getSimpleName());
+            if (cls == null) {
+                throw new ConfigException(key, null, "Not a " + baseClass.getSimpleName());
             }
-            Utils.ensureConcrete(cls);
+            Utils.ensureConcreteSubclass(baseClass, cls);
 
             T transformation;
             try {

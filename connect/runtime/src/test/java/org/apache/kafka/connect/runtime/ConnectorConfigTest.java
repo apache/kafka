@@ -234,7 +234,7 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
         props.put("predicates", "my-pred");
         props.put("predicates.my-pred.type", TestConnector.class.getName());
         ConfigException e = assertThrows(ConfigException.class, () -> new ConnectorConfig(MOCK_PLUGINS, props));
-        assertTrue(e.getMessage().contains("Not a Predicate"));
+        assertEquals("Class " + TestConnector.class + " does not implement the Predicate interface", e.getMessage());
     }
 
     @Test

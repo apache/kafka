@@ -17,7 +17,6 @@
 package org.apache.kafka.connect.util;
 
 import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.Utils;
 
 public class ConcreteSubClassValidator implements ConfigDef.Validator {
@@ -39,11 +38,7 @@ public class ConcreteSubClassValidator implements ConfigDef.Validator {
         }
 
         Class<?> cls = (Class<?>) value;
-        if (!expectedSuperClass.isAssignableFrom(cls)) {
-            throw new ConfigException(name, String.valueOf(cls), "Not a " + expectedSuperClass.getSimpleName());
-        }
-
-        Utils.ensureConcrete(cls);
+        Utils.ensureConcreteSubclass(expectedSuperClass, cls);
     }
 
     @Override
