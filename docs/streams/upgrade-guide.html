@@ -153,6 +153,51 @@
       as upper and lower bound (with semantics "no bound") to simplify the usage of the <code>RangeQuery</code> class.
     </p>
 
+    <p>
+        The non-null key requirements for Kafka Streams join operators were relaxed as part of <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-962%3A+Relax+non-null+key+requirement+in+Kafka+Streams">KIP-962</a>.
+        The behavior of the following operators changed.
+    <ul>
+        <li>left join KStream-KStream: no longer drop left records with null-key and call ValueJoiner with 'null' for right value.</li>
+        <li>outer join KStream-KStream: no longer drop left/right records with null-key and call ValueJoiner with 'null' for right/left value.</li>
+        <li>left-foreign-key join KTable-KTable: no longer drop left records with null-foreign-key returned by the ForeignKeyExtractor and call ValueJoiner with 'null' for right value.</li>
+        <li>left join KStream-KTable: no longer drop left records with null-key and call ValueJoiner with 'null' for right value.</li>
+        <li>left join KStream-GlobalTable: no longer drop records when KeyValueMapper returns 'null' and call ValueJoiner with 'null' for right value.</li>
+    </ul>
+    Stream-DSL users who want to keep the current behavior can prepend a .filter() operator to the aforementioned operators and filter accordingly.
+    The following snippets illustrate how to keep the old behavior.
+    <pre>
+    <code class="java">
+            //left join KStream-KStream
+            leftStream
+            .filter((key, value) -> key != null)
+            .leftJoin(rightStream, (leftValue, rightValue) -> join(leftValue, rightValue), windows);
+
+            //outer join KStream-KStream
+            rightStream
+            .filter((key, value) -> key != null);
+            leftStream
+            .filter((key, value) -> key != null)
+            .outerJoin(rightStream, (leftValue, rightValue) -> join(leftValue, rightValue), windows);
+
+            //left-foreign-key join KTable-KTable
+            Function&ltString, String&gt foreignKeyExtractor = leftValue -> ...
+            leftTable
+            .filter((key, value) -> foreignKeyExtractor.apply(value) != null)
+            .leftJoin(rightTable, foreignKeyExtractor, (leftValue, rightValue) -> join(leftValue, rightValue), Named.as("left-foreign-key-table-join"));
+
+            //left join KStream-KTable
+            leftStream
+            .filter((key, value) -> key != null)
+            .leftJoin(kTable, (k, leftValue, rightValue) -> join(leftValue, rightValue));
+
+            //left join KStream-GlobalTable
+            KeyValueMapper&ltString, String, String&gt keyValueMapper = (key, value) -> ...;
+            leftStream
+            .filter((key, value) -> keyValueMapper.apply(key,value) != null)
+            .leftJoin(globalTable, keyValueMapper, (leftValue, rightValue) -> join(leftValue, rightValue));
+    </code>
+    </pre>
+    </p>
     <h3><a id="streams_api_changes_350" href="#streams_api_changes_350">Streams API changes in 3.5.0</a></h3>
     <p>      
       A new state store type, versioned key-value stores, was introduced in
