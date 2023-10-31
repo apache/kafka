@@ -173,7 +173,6 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
                                   final Deserializer<K> keyDeserializer,
                                   final Deserializer<V> valueDeserializer) {
         try {
-            this.groupMetadata = new AtomicReference<>(Optional.empty());
             GroupRebalanceConfig groupRebalanceConfig = new GroupRebalanceConfig(config,
                     GroupRebalanceConfig.ProtocolType.CONSUMER);
 
@@ -183,7 +182,15 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
                 }
 
                 // Create our initial group metadata. It will be updated by messages passed from the network thread.
-                groupMetadata.set(Optional.of(new ConsumerGroupMetadata(groupRebalanceConfig.groupId)));
+                ConsumerGroupMetadata cgm = new ConsumerGroupMetadata(
+                        groupRebalanceConfig.groupId,
+                        GroupState.Generation.NO_GENERATION.generationId,
+                        GroupState.Generation.NO_GENERATION.memberId,
+                        groupRebalanceConfig.groupInstanceId
+                );
+                this.groupMetadata = new AtomicReference<>(Optional.of(cgm));
+            } else {
+                this.groupMetadata = new AtomicReference<>(Optional.empty());
             }
 
             this.clientId = config.getString(CommonClientConfigs.CLIENT_ID_CONFIG);

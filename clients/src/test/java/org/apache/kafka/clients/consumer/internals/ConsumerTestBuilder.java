@@ -97,6 +97,7 @@ public class ConsumerTestBuilder implements Closeable {
     public final BackgroundEventHandler backgroundEventHandler;
     final MockClient client;
     final Optional<GroupInformation> groupInfo;
+    final AtomicReference<Optional<ConsumerGroupMetadata>> groupMetadata;
 
     public ConsumerTestBuilder() {
         this(Optional.empty());
@@ -104,6 +105,20 @@ public class ConsumerTestBuilder implements Closeable {
 
     public ConsumerTestBuilder(Optional<GroupInformation> groupInfo) {
         this.groupInfo = groupInfo;
+
+        if (groupInfo.isPresent()) {
+            GroupState groupState = groupInfo.get().groupState;
+            ConsumerGroupMetadata cgm = new ConsumerGroupMetadata(
+                    groupState.groupId,
+                    GroupState.Generation.NO_GENERATION.generationId,
+                    GroupState.Generation.NO_GENERATION.memberId,
+                    groupState.groupInstanceId
+            );
+            this.groupMetadata = new AtomicReference<>(Optional.of(cgm));
+        } else {
+            this.groupMetadata = new AtomicReference<>(Optional.empty());
+        }
+
         this.applicationEventQueue = new LinkedBlockingQueue<>();
         this.backgroundEventQueue = new LinkedBlockingQueue<>();
         this.backgroundEventHandler = spy(new BackgroundEventHandler(logContext, backgroundEventQueue));
@@ -248,7 +263,7 @@ public class ConsumerTestBuilder implements Closeable {
         this.backgroundEventProcessor = spy(new BackgroundEventProcessor(
                 logContext,
                 backgroundEventQueue,
-                new AtomicReference<>(Optional.empty())
+                groupMetadata
         ));
     }
 
@@ -315,16 +330,6 @@ public class ConsumerTestBuilder implements Closeable {
 
         public PrototypeAsyncConsumerTestBuilder(Optional<GroupInformation> groupInfo) {
             super(groupInfo);
-            ConsumerGroupMetadata groupMetadata = groupInfo
-                    .map(groupInformation -> groupInformation.groupState)
-                    .map(groupState -> new ConsumerGroupMetadata(
-                            groupState.groupId,
-                            groupState.generation.generationId,
-                            groupState.generation.memberId,
-                            groupState.groupInstanceId
-                    ))
-                    .orElse(null);
-
             String clientId = config.getString(CommonClientConfigs.CLIENT_ID_CONFIG);
             List<ConsumerPartitionAssignor> assignors = ConsumerPartitionAssignor.getAssignorInstances(
                     config.getList(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG),
@@ -354,7 +359,8 @@ public class ConsumerTestBuilder implements Closeable {
                     retryBackoffMs,
                     60000,
                     assignors,
-                    new AtomicReference<>(Optional.ofNullable(groupMetadata))));
+                    groupMetadata
+            ));
         }
 
         @Override
