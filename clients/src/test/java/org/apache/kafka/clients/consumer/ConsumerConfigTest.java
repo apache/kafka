@@ -38,6 +38,7 @@ import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -170,7 +171,7 @@ public class ConsumerConfigTest {
         configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClass);
         final ConsumerConfig consumerConfig = new ConsumerConfig(configs);
         assertEquals("generic", consumerConfig.getString(ConsumerConfig.GROUP_PROTOCOL_CONFIG));
-        assertEquals(null, consumerConfig.getString(ConsumerConfig.REMOTE_ASSIGNOR_CONFIG));
+        assertNull(consumerConfig.getString(ConsumerConfig.REMOTE_ASSIGNOR_CONFIG));
     }
 
     @Test
@@ -180,6 +181,7 @@ public class ConsumerConfigTest {
         final Map<String, Object> configs = new HashMap<>();
         configs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializerClass);
         configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClass);
+        configs.put(ConsumerConfig.REMOTE_ASSIGNOR_CONFIG, remoteAssignorName);
         configs.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, protocol);
         final ConsumerConfig consumerConfig = new ConsumerConfig(configs);
         assertEquals(protocol, consumerConfig.getString(ConsumerConfig.GROUP_PROTOCOL_CONFIG));
@@ -188,7 +190,7 @@ public class ConsumerConfigTest {
 
     @ParameterizedTest
     @MethodSource("protocolNameSupplier")
-    public void testConfigurationValidation(String protocol, boolean isValid) {
+    public void testProtocolConfigValidation(String protocol, boolean isValid) {
         final Map<String, Object> configs = new HashMap<>();
         configs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializerClass);
         configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClass);
