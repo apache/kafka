@@ -67,13 +67,13 @@ class GroupedStreamAggregateBuilder<K, V> {
     }
 
     <KR, VR> KTable<KR, VR> build(final NamedInternal functionName,
-                                  final StoreFactory<?> storeBuilder,
+                                  final StoreFactory<?> storeFactory,
                                   final KStreamAggProcessorSupplier<K, V, KR, VR> aggregateSupplier,
                                   final String queryableStoreName,
                                   final Serde<KR> keySerde,
                                   final Serde<VR> valueSerde,
                                   final boolean isOutputVersioned) {
-        assert queryableStoreName == null || queryableStoreName.equals(storeBuilder.name());
+        assert queryableStoreName == null || queryableStoreName.equals(storeFactory.name());
 
         final String aggFunctionName = functionName.name();
 
@@ -82,7 +82,7 @@ class GroupedStreamAggregateBuilder<K, V> {
 
         if (repartitionRequired) {
             final OptimizableRepartitionNodeBuilder<K, V> repartitionNodeBuilder = optimizableRepartitionNodeBuilder();
-            final String repartitionTopicPrefix = userProvidedRepartitionTopicName != null ? userProvidedRepartitionTopicName : storeBuilder.name();
+            final String repartitionTopicPrefix = userProvidedRepartitionTopicName != null ? userProvidedRepartitionTopicName : storeFactory.name();
             sourceName = createRepartitionSource(repartitionTopicPrefix, repartitionNodeBuilder);
 
             // First time through we need to create a repartition node.
@@ -101,7 +101,7 @@ class GroupedStreamAggregateBuilder<K, V> {
             new StatefulProcessorNode<>(
                 aggFunctionName,
                 new ProcessorParameters<>(aggregateSupplier, aggFunctionName),
-                storeBuilder
+                storeFactory
             );
         statefulProcessorNode.setOutputVersioned(isOutputVersioned);
 

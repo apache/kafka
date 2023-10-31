@@ -29,7 +29,7 @@ import org.apache.kafka.streams.state.internals.WindowStoreBuilder;
 public class StoreBuilderWrapper<S extends StateStore> implements StoreFactory<S> {
 
     private final StoreBuilder<S> builder;
-    private final Set<String> users = new HashSet<>();
+    private final Set<String> connectedProcessorNames = new HashSet<>();
 
     public StoreBuilderWrapper(final StoreBuilder<S> builder) {
         this.builder = builder;
@@ -65,8 +65,8 @@ public class StoreBuilderWrapper<S extends StateStore> implements StoreFactory<S
     }
 
     @Override
-    public Set<String> users() {
-        return users;
+    public Set<String> connectedProcessorNames() {
+        return connectedProcessorNames;
     }
 
     @Override
@@ -91,9 +91,6 @@ public class StoreBuilderWrapper<S extends StateStore> implements StoreFactory<S
         return builder instanceof VersionedKeyValueStoreBuilder;
     }
 
-    // Apparently Java strips the generics from this method because we're using the raw type for builder,
-    // even though this method doesn't use builder's (missing) type parameter. Our usage seems obviously
-    // correct, though, hence the suppression.
     @Override
     public Map<String, String> logConfig() {
         return builder.logConfig();

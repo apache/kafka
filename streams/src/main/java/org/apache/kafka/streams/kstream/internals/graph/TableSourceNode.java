@@ -93,12 +93,12 @@ public class TableSourceNode<K, V> extends SourceGraphNode<K, V> {
             throw new IllegalStateException("A table source node must have a single topic as input");
         }
 
-        final StoreFactory<?> storeBuilder =
-            new KeyValueStoreMaterializer<>((MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>>) materializedInternal).materialize();
+        final StoreFactory<?> storeFactory =
+            new KeyValueStoreMaterializer<>((MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>>) materializedInternal);
 
         if (isGlobalKTable) {
             topologyBuilder.addGlobalStore(
-                storeBuilder,
+                storeFactory,
                 sourceName,
                 consumedInternal().timestampExtractor(),
                 consumedInternal().keyDeserializer(),
@@ -120,11 +120,11 @@ public class TableSourceNode<K, V> extends SourceGraphNode<K, V> {
             // only add state store if the source KTable should be materialized
             final KTableSource<K, V> tableSource = (KTableSource<K, V>) processorParameters.processorSupplier();
             if (tableSource.materialized()) {
-                topologyBuilder.addStateStore(storeBuilder, nodeName());
+                topologyBuilder.addStateStore(storeFactory, nodeName());
 
                 if (shouldReuseSourceTopicForChangelog) {
-                    storeBuilder.withLoggingDisabled();
-                    topologyBuilder.connectSourceStoreAndTopic(storeBuilder.name(), topicName);
+                    storeFactory.withLoggingDisabled();
+                    topologyBuilder.connectSourceStoreAndTopic(storeFactory.name(), topicName);
                 }
             }
         }

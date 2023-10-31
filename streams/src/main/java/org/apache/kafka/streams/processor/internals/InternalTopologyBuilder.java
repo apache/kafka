@@ -362,15 +362,15 @@ public class InternalTopologyBuilder {
                 storeFactory.withCachingDisabled();
             }
 
-            for (final StoreFactory<?> storeBuilder : globalStateBuilders.values()) {
-                storeBuilder.withCachingDisabled();
+            for (final StoreFactory<?> storeFactory : globalStateBuilders.values()) {
+                storeFactory.withCachingDisabled();
             }
         }
 
         // build global state stores
-        for (final StoreFactory<?> storeBuilder : globalStateBuilders.values()) {
-            storeBuilder.configure(config);
-            globalStateStores.put(storeBuilder.name(), storeBuilder.build());
+        for (final StoreFactory<?> storeFactory : globalStateBuilders.values()) {
+            storeFactory.configure(config);
+            globalStateStores.put(storeFactory.name(), storeFactory.build());
         }
 
         return this;
@@ -548,9 +548,9 @@ public class InternalTopologyBuilder {
         addStateStore(new StoreBuilderWrapper<>(storeBuilder), false, processorNames);
     }
 
-    public final void addStateStore(final StoreFactory<?> storeBuilder,
+    public final void addStateStore(final StoreFactory<?> storeFactory,
                                     final String... processorNames) {
-        addStateStore(storeBuilder, false, processorNames);
+        addStateStore(storeFactory, false, processorNames);
     }
 
     public final void addStateStore(final StoreFactory<?> storeFactory,
@@ -576,7 +576,7 @@ public class InternalTopologyBuilder {
         nodeGroups = null;
     }
 
-    public final <KIn, VIn> void addGlobalStore(final StoreFactory<?> storeBuilder,
+    public final <KIn, VIn> void addGlobalStore(final StoreFactory<?> storeFactory,
                                                 final String sourceName,
                                                 final TimestampExtractor timestampExtractor,
                                                 final Deserializer<KIn> keyDeserializer,
@@ -584,14 +584,14 @@ public class InternalTopologyBuilder {
                                                 final String topic,
                                                 final String processorName,
                                                 final ProcessorSupplier<KIn, VIn, Void, Void> stateUpdateSupplier) {
-        Objects.requireNonNull(storeBuilder, "store builder must not be null");
+        Objects.requireNonNull(storeFactory, "store builder must not be null");
         ApiUtils.checkSupplier(stateUpdateSupplier);
         validateGlobalStoreArguments(sourceName,
                                      topic,
                                      processorName,
                                      stateUpdateSupplier,
-                                     storeBuilder.name(),
-                                     storeBuilder.loggingEnabled());
+                                     storeFactory.name(),
+                                     storeFactory.loggingEnabled());
         validateTopicNotAlreadyRegistered(topic);
 
         final String[] topics = {topic};
@@ -614,12 +614,12 @@ public class InternalTopologyBuilder {
         );
         nodeToSourceTopics.put(sourceName, Arrays.asList(topics));
         nodeGrouper.add(sourceName);
-        nodeFactory.addStateStore(storeBuilder.name());
+        nodeFactory.addStateStore(storeFactory.name());
         nodeFactories.put(processorName, nodeFactory);
         nodeGrouper.add(processorName);
         nodeGrouper.unite(processorName, predecessors);
-        globalStateBuilders.put(storeBuilder.name(), storeBuilder);
-        connectSourceStoreAndTopic(storeBuilder.name(), topic);
+        globalStateBuilders.put(storeFactory.name(), storeFactory);
+        connectSourceStoreAndTopic(storeFactory.name(), topic);
         nodeGroups = null;
     }
 
@@ -772,12 +772,12 @@ public class InternalTopologyBuilder {
         }
 
         final StoreFactory<?> storeFactory = stateFactories.get(stateStoreName);
-        final Iterator<String> iter = storeFactory.users().iterator();
+        final Iterator<String> iter = storeFactory.connectedProcessorNames().iterator();
         if (iter.hasNext()) {
             final String user = iter.next();
             nodeGrouper.unite(user, processorName);
         }
-        storeFactory.users().add(processorName);
+        storeFactory.connectedProcessorNames().add(processorName);
 
         final NodeFactory<?, ?, ?, ?> nodeFactory = nodeFactories.get(processorName);
         if (nodeFactory instanceof ProcessorNodeFactory) {
@@ -1180,7 +1180,7 @@ public class InternalTopologyBuilder {
                 // if the node is connected to a state store whose changelog topics are not predefined,
                 // add to the changelog topics
                 for (final StoreFactory<?> stateFactory : stateFactories.values()) {
-                    if (stateFactory.users().contains(node) && storeToChangelogTopic.containsKey(stateFactory.name())) {
+                    if (stateFactory.connectedProcessorNames().contains(node) && storeToChangelogTopic.containsKey(stateFactory.name())) {
                         final String topicName = storeToChangelogTopic.get(stateFactory.name());
                         if (!stateChangelogTopics.containsKey(topicName)) {
                             final InternalTopicConfig internalTopicConfig =

@@ -169,7 +169,7 @@ public class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
         private String[] joinThisStoreNames;
         private String[] joinOtherStoreNames;
         private String queryableStoreName;
-        private StoreFactory<?> storeBuilder;
+        private StoreFactory<?> storeFactory;
 
         private KTableKTableJoinNodeBuilder() {
         }
@@ -224,8 +224,8 @@ public class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
             return this;
         }
 
-        public KTableKTableJoinNodeBuilder<K, V1, V2, VR> withStoreBuilder(final StoreFactory<?> storeBuilder) {
-            this.storeBuilder = storeBuilder;
+        public KTableKTableJoinNodeBuilder<K, V1, V2, VR> withStoreBuilder(final StoreFactory<?> storeFactory) {
+            this.storeFactory = storeFactory;
             return this;
         }
 
@@ -247,7 +247,7 @@ public class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
                 valueSerde,
                 joinThisStoreNames,
                 joinOtherStoreNames,
-                storeBuilder
+                storeFactory
             );
         }
     }

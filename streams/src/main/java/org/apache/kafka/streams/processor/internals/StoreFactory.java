@@ -57,7 +57,7 @@ public interface StoreFactory<S extends StateStore> {
 
     long historyRetention();
 
-    Set<String> users();
+    Set<String> connectedProcessorNames();
 
     boolean loggingEnabled();
 
