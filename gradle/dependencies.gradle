@@ -70,9 +70,8 @@ else
 // The default strategy (i.e. what `mockito-core` uses) changed to `inline` in 5.x because it works better with newer
 // Java versions.
 // We always use the `inline` strategy.
-// For Scala 2.12 we have to use the mockito-inline library because otherwise we cannot return mocks of final classes.
 String mockitoArtifactName
-if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_11) && scalaVersion != "2.12")
+if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_11))
   mockitoArtifactName = "mockito-core"
 else
   mockitoArtifactName = "mockito-inline"
