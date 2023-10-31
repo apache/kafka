@@ -239,7 +239,7 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
         return this;
     }
 
-    private <VR> StoreFactory<TimestampedWindowStore<K, VR>> materialize(final MaterializedInternal<K, VR, WindowStore<Bytes, byte[]>> materialized) {
+    private <VR> StoreFactory materialize(final MaterializedInternal<K, VR, WindowStore<Bytes, byte[]>> materialized) {
         WindowBytesStoreSupplier supplier = (WindowBytesStoreSupplier) materialized.storeSupplier();
         if (supplier == null) {
             final long retentionPeriod = materialized.retention() != null ?
@@ -298,7 +298,7 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
         if (materialized.cachingEnabled()) {
             builder.withCachingEnabled();
         }
-        return new StoreBuilderWrapper<>(builder);
+        return new StoreBuilderWrapper(builder);
     }
 
     private Aggregator<K, V, V> aggregatorForReducer(final Reducer<V> reducer) {

@@ -27,7 +27,7 @@ import org.apache.kafka.streams.state.StoreBuilder;
 public class StatefulProcessorNode<K, V> extends ProcessorGraphNode<K, V> {
 
     private final String[] storeNames;
-    private final StoreFactory<?> storeFactory;
+    private final StoreFactory storeFactory;
 
     /**
      * Create a node representing a stateful processor, where the named stores have already been registered.
@@ -61,7 +61,7 @@ public class StatefulProcessorNode<K, V> extends ProcessorGraphNode<K, V> {
      */
     public StatefulProcessorNode(final String nodeName,
                                  final ProcessorParameters<K, V, ?, ?> processorParameters,
-                                 final StoreFactory<?> materializedKTableStoreBuilder) {
+                                 final StoreFactory materializedKTableStoreBuilder) {
         super(nodeName, processorParameters);
 
         this.storeNames = null;

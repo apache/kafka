@@ -77,9 +77,9 @@ public class InternalTopologyBuilder {
     // node factories in a topological order
     private final Map<String, NodeFactory<?, ?, ?, ?>> nodeFactories = new LinkedHashMap<>();
 
-    private final Map<String, StoreFactory<?>> stateFactories = new HashMap<>();
+    private final Map<String, StoreFactory> stateFactories = new HashMap<>();
 
-    private final Map<String, StoreFactory<?>> globalStateBuilders = new LinkedHashMap<>();
+    private final Map<String, StoreFactory> globalStateBuilders = new LinkedHashMap<>();
 
     // built global state stores
     private final Map<String, StateStore> globalStateStores = new LinkedHashMap<>();
@@ -358,17 +358,17 @@ public class InternalTopologyBuilder {
 
         // maybe strip out caching layers
         if (topologyConfigs.cacheSize == 0L) {
-            for (final StoreFactory<?> storeFactory : stateFactories.values()) {
+            for (final StoreFactory storeFactory : stateFactories.values()) {
                 storeFactory.withCachingDisabled();
             }
 
-            for (final StoreFactory<?> storeFactory : globalStateBuilders.values()) {
+            for (final StoreFactory storeFactory : globalStateBuilders.values()) {
                 storeFactory.withCachingDisabled();
             }
         }
 
         // build global state stores
-        for (final StoreFactory<?> storeFactory : globalStateBuilders.values()) {
+        for (final StoreFactory storeFactory : globalStateBuilders.values()) {
             storeFactory.configure(config);
             globalStateStores.put(storeFactory.name(), storeFactory.build());
         }
@@ -545,19 +545,19 @@ public class InternalTopologyBuilder {
 
     public final void addStateStore(final StoreBuilder<?> storeBuilder,
                                     final String... processorNames) {
-        addStateStore(new StoreBuilderWrapper<>(storeBuilder), false, processorNames);
+        addStateStore(new StoreBuilderWrapper(storeBuilder), false, processorNames);
     }
 
-    public final void addStateStore(final StoreFactory<?> storeFactory,
+    public final void addStateStore(final StoreFactory storeFactory,
                                     final String... processorNames) {
         addStateStore(storeFactory, false, processorNames);
     }
 
-    public final void addStateStore(final StoreFactory<?> storeFactory,
+    public final void addStateStore(final StoreFactory storeFactory,
                                     final boolean allowOverride,
                                     final String... processorNames) {
         Objects.requireNonNull(storeFactory, "stateStoreFactory can't be null");
-        final StoreFactory<?> stateFactory = stateFactories.get(storeFactory.name());
+        final StoreFactory stateFactory = stateFactories.get(storeFactory.name());
         if (!allowOverride && stateFactory != null && !stateFactory.isCompatibleWith(storeFactory)) {
             throw new TopologyException("A different StateStore has already been added with the name " + storeFactory.name());
         }
@@ -576,7 +576,7 @@ public class InternalTopologyBuilder {
         nodeGroups = null;
     }
 
-    public final <KIn, VIn> void addGlobalStore(final StoreFactory<?> storeFactory,
+    public final <KIn, VIn> void addGlobalStore(final StoreFactory storeFactory,
                                                 final String sourceName,
                                                 final TimestampExtractor timestampExtractor,
                                                 final Deserializer<KIn> keyDeserializer,
@@ -771,7 +771,7 @@ public class InternalTopologyBuilder {
             throw new TopologyException("Processor " + processorName + " is not added yet.");
         }
 
-        final StoreFactory<?> storeFactory = stateFactories.get(stateStoreName);
+        final StoreFactory storeFactory = stateFactories.get(stateStoreName);
         final Iterator<String> iter = storeFactory.connectedProcessorNames().iterator();
         if (iter.hasNext()) {
             final String user = iter.next();
@@ -1067,7 +1067,7 @@ public class InternalTopologyBuilder {
             if (!stateStoreMap.containsKey(stateStoreName)) {
                 final StateStore store;
                 if (stateFactories.containsKey(stateStoreName)) {
-                    final StoreFactory<?> storeFactory = stateFactories.get(stateStoreName);
+                    final StoreFactory storeFactory = stateFactories.get(stateStoreName);
 
                     // remember the changelog topic if this state store is change-logging enabled
                     if (storeFactory.loggingEnabled() && !storeToChangelogTopic.containsKey(stateStoreName)) {
@@ -1079,7 +1079,9 @@ public class InternalTopologyBuilder {
                         storeToChangelogTopic.put(stateStoreName, changelogTopic);
                         changelogTopicToStore.put(changelogTopic, stateStoreName);
                     }
-                    storeFactory.configure(topologyConfigs.applicationConfigs);
+                    if (topologyConfigs != null) {
+                        storeFactory.configure(topologyConfigs.applicationConfigs);
+                    }
                     store = storeFactory.build();
                     stateStoreMap.put(stateStoreName, store);
                 } else {
@@ -1179,7 +1181,7 @@ public class InternalTopologyBuilder {
 
                 // if the node is connected to a state store whose changelog topics are not predefined,
                 // add to the changelog topics
-                for (final StoreFactory<?> stateFactory : stateFactories.values()) {
+                for (final StoreFactory stateFactory : stateFactories.values()) {
                     if (stateFactory.connectedProcessorNames().contains(node) && storeToChangelogTopic.containsKey(stateFactory.name())) {
                         final String topicName = storeToChangelogTopic.get(stateFactory.name());
                         if (!stateChangelogTopics.containsKey(topicName)) {
@@ -1253,7 +1255,7 @@ public class InternalTopologyBuilder {
         }
     }
 
-    private <S extends StateStore> InternalTopicConfig createChangelogTopicConfig(final StoreFactory<S> factory,
+    private <S extends StateStore> InternalTopicConfig createChangelogTopicConfig(final StoreFactory factory,
                                                                                   final String name) {
         if (factory.isVersionedStore()) {
             final VersionedChangelogTopicConfig config = new VersionedChangelogTopicConfig(name, factory.logConfig(), factory.historyRetention());
@@ -2158,7 +2160,7 @@ public class InternalTopologyBuilder {
         return topologyName != null;
     }
 
-    public synchronized Map<String, StoreFactory<?>> stateStores() {
+    public synchronized Map<String, StoreFactory> stateStores() {
         return stateFactories;
     }
 }

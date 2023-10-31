@@ -212,11 +212,11 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         return prefix + String.format(KTableImpl.STATE_STORE_NAME + "%010d", index.getAndIncrement());
     }
 
-    public synchronized void addStateStore(final StoreFactory<?> builder) {
+    public synchronized void addStateStore(final StoreFactory builder) {
         addGraphNode(root, new StateStoreNode<>(builder));
     }
 
-    public synchronized <KIn, VIn> void addGlobalStore(final StoreFactory<?> storeFactory,
+    public synchronized <KIn, VIn> void addGlobalStore(final StoreFactory storeFactory,
                                                        final String topic,
                                                        final ConsumedInternal<KIn, VIn> consumed,
                                                        final org.apache.kafka.streams.processor.api.ProcessorSupplier<KIn, VIn, Void, Void> stateUpdateSupplier) {

@@ -240,7 +240,7 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
             false);
     }
 
-    private <VR> StoreFactory<SessionStore<K, VR>> materialize(final MaterializedInternal<K, VR, SessionStore<Bytes, byte[]>> materialized) {
+    private <VR> StoreFactory materialize(final MaterializedInternal<K, VR, SessionStore<Bytes, byte[]>> materialized) {
         SessionBytesStoreSupplier supplier = (SessionBytesStoreSupplier) materialized.storeSupplier();
         if (supplier == null) {
             final long retentionPeriod = materialized.retention() != null ?
@@ -298,7 +298,7 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
             builder.withCachingDisabled();
         }
 
-        return new StoreBuilderWrapper<>(builder);
+        return new StoreBuilderWrapper(builder);
     }
 
     private Merger<K, V> mergerForAggregator(final Aggregator<K, V, V> aggregator) {

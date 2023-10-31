@@ -100,7 +100,7 @@ public class SlidingWindowedCogroupedKStreamImpl<K, V> extends AbstractStream<K,
             windows);
     }
 
-    private StoreFactory<TimestampedWindowStore<K, V>> materialize(final MaterializedInternal<K, V, WindowStore<Bytes, byte[]>> materialized) {
+    private StoreFactory materialize(final MaterializedInternal<K, V, WindowStore<Bytes, byte[]>> materialized) {
         WindowBytesStoreSupplier supplier = (WindowBytesStoreSupplier) materialized.storeSupplier();
         if (supplier == null) {
             final long retentionPeriod = materialized.retention() != null ? materialized.retention().toMillis() : windows.gracePeriodMs() + 2 * windows.timeDifferenceMs();
@@ -155,7 +155,7 @@ public class SlidingWindowedCogroupedKStreamImpl<K, V> extends AbstractStream<K,
         } else {
             builder.withCachingDisabled();
         }
-        return new StoreBuilderWrapper<>(builder);
+        return new StoreBuilderWrapper(builder);
     }
 
 }

@@ -83,7 +83,7 @@ public class InternalTopologyBuilderTest {
 
     private final Serde<String> stringSerde = Serdes.String();
     private final InternalTopologyBuilder builder = new InternalTopologyBuilder();
-    private final StoreFactory<KeyValueStore<Object, Object>> storeBuilder = new MockKeyValueStoreBuilder("testStore", false).asFactory();
+    private final StoreFactory storeBuilder = new MockKeyValueStoreBuilder("testStore", false).asFactory();
 
     @Test
     public void shouldAddSourceWithOffsetReset() {
@@ -453,7 +453,7 @@ public class InternalTopologyBuilderTest {
 
     @Test
     public void shouldNotAllowToAddStoresWithSameNameWhenFirstStoreIsGlobal() {
-        final StoreFactory<?> globalBuilder =
+        final StoreFactory globalBuilder =
             new MockKeyValueStoreBuilder("testStore", false).asFactory().withLoggingDisabled();
 
         builder.addGlobalStore(
@@ -480,7 +480,7 @@ public class InternalTopologyBuilderTest {
 
     @Test
     public void shouldNotAllowToAddStoresWithSameNameWhenSecondStoreIsGlobal() {
-        final StoreFactory<?> globalBuilder =
+        final StoreFactory globalBuilder =
             new MockKeyValueStoreBuilder("testStore", false).asFactory().withLoggingDisabled();
 
         builder.addStateStore(storeBuilder);
@@ -507,9 +507,9 @@ public class InternalTopologyBuilderTest {
 
     @Test
     public void shouldNotAllowToAddGlobalStoresWithSameName() {
-        final StoreFactory<?> firstGlobalBuilder =
+        final StoreFactory firstGlobalBuilder =
             new MockKeyValueStoreBuilder("testStore", false).asFactory().withLoggingDisabled();
-        final StoreFactory<?> secondGlobalBuilder =
+        final StoreFactory secondGlobalBuilder =
             new MockKeyValueStoreBuilder("testStore", false).asFactory().withLoggingDisabled();
 
         builder.addGlobalStore(

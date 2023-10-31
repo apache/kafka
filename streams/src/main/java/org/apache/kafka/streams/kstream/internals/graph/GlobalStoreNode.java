@@ -31,7 +31,7 @@ public class GlobalStoreNode<KIn, VIn, S extends StateStore> extends StateStoreN
     private final ProcessorSupplier<KIn, VIn, Void, Void> stateUpdateSupplier;
 
 
-    public GlobalStoreNode(final StoreFactory<S> storeBuilder,
+    public GlobalStoreNode(final StoreFactory storeBuilder,
                            final String sourceName,
                            final String topic,
                            final ConsumedInternal<KIn, VIn> consumed,

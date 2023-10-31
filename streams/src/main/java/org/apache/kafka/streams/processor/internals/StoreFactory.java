@@ -45,13 +45,13 @@ import org.apache.kafka.streams.processor.StateStore;
  *     to {@link org.apache.kafka.streams.StreamsBuilder#StreamsBuilder(TopologyConfig)}</li>
  * </ul>
  */
-public interface StoreFactory<S extends StateStore> {
+public interface StoreFactory {
 
     default void configure(final StreamsConfig config) {
         // do nothing
     }
 
-    S build();
+    StateStore build();
 
     long retentionPeriod();
 
@@ -69,10 +69,10 @@ public interface StoreFactory<S extends StateStore> {
 
     Map<String, String> logConfig();
 
-    StoreFactory<?> withCachingDisabled();
+    StoreFactory withCachingDisabled();
 
-    StoreFactory<?> withLoggingDisabled();
+    StoreFactory withLoggingDisabled();
 
-    boolean isCompatibleWith(StoreFactory<?> storeFactory);
+    boolean isCompatibleWith(StoreFactory storeFactory);
 
 }

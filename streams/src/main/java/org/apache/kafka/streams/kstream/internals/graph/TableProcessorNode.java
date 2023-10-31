@@ -26,18 +26,18 @@ import org.apache.kafka.streams.processor.internals.StoreFactory;
 public class TableProcessorNode<K, V> extends GraphNode {
 
     private final ProcessorParameters<K, V, ?, ?> processorParameters;
-    private final StoreFactory<?> storeFactory;
+    private final StoreFactory storeFactory;
     private final String[] storeNames;
 
     public TableProcessorNode(final String nodeName,
                               final ProcessorParameters<K, V, ?, ?> processorParameters,
-                              final StoreFactory<?> storeFactory) {
+                              final StoreFactory storeFactory) {
         this(nodeName, processorParameters, storeFactory, null);
     }
 
     public TableProcessorNode(final String nodeName,
                               final ProcessorParameters<K, V, ?, ?> processorParameters,
-                              final StoreFactory<?> storeFactory,
+                              final StoreFactory storeFactory,
                               final String[] storeNames) {
         super(nodeName);
         this.processorParameters = processorParameters;

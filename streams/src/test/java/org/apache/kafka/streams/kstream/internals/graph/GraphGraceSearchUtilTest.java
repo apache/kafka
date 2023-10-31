@@ -59,7 +59,7 @@ public class GraphGraceSearchUtilTest {
                 },
                 "dummy"
             ),
-            (StoreFactory<?>) null
+            (StoreFactory) null
         );
 
         final ProcessorGraphNode<String, Long> node = new ProcessorGraphNode<>("stateless", null);
@@ -88,7 +88,7 @@ public class GraphGraceSearchUtilTest {
                 ),
                 "asdf"
             ),
-            (StoreFactory<?>) null
+            (StoreFactory) null
         );
 
         final long extracted = GraphGraceSearchUtil.findAndVerifyWindowGrace(node);
@@ -112,7 +112,7 @@ public class GraphGraceSearchUtilTest {
                 ),
                 "asdf"
             ),
-            (StoreFactory<?>) null
+            (StoreFactory) null
         );
 
         final long extracted = GraphGraceSearchUtil.findAndVerifyWindowGrace(node);
@@ -127,7 +127,7 @@ public class GraphGraceSearchUtilTest {
             new ProcessorParameters<>(new KStreamSessionWindowAggregate<String, Long, Integer>(
                 windows, "asdf", EmitStrategy.onWindowUpdate(), null, null, null
             ), "asdf"),
-            (StoreFactory<?>) null
+            (StoreFactory) null
         );
 
         final StatefulProcessorNode<String, Long> statefulParent = new StatefulProcessorNode<>(
@@ -141,7 +141,7 @@ public class GraphGraceSearchUtilTest {
                 },
                 "dummy"
             ),
-            (StoreFactory<?>) null
+            (StoreFactory) null
         );
         graceGrandparent.addChild(statefulParent);
 
@@ -168,7 +168,7 @@ public class GraphGraceSearchUtilTest {
                 ),
                 "asdf"
             ),
-            (StoreFactory<?>) null
+            (StoreFactory) null
         );
 
         final ProcessorGraphNode<String, Long> statelessParent = new ProcessorGraphNode<>("stateless", null);
@@ -196,7 +196,7 @@ public class GraphGraceSearchUtilTest {
                 ),
                 "asdf"
             ),
-            (StoreFactory<?>) null
+            (StoreFactory) null
         );
 
         final StatefulProcessorNode<String, Long> rightParent = new StatefulProcessorNode<>(
@@ -211,7 +211,7 @@ public class GraphGraceSearchUtilTest {
                 ),
                 "asdf"
             ),
-            (StoreFactory<?>) null
+            (StoreFactory) null
         );
 
         final ProcessorGraphNode<String, Long> node = new ProcessorGraphNode<>("stateless", null);

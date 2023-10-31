@@ -776,7 +776,7 @@ public class Topology {
                                                        final String processorName,
                                                        final org.apache.kafka.streams.processor.ProcessorSupplier<K, V> stateUpdateSupplier) {
         internalTopologyBuilder.addGlobalStore(
-            new StoreBuilderWrapper<>(storeBuilder),
+            new StoreBuilderWrapper(storeBuilder),
             sourceName,
             null,
             keyDeserializer,
@@ -828,7 +828,7 @@ public class Topology {
                                                        final String processorName,
                                                        final org.apache.kafka.streams.processor.ProcessorSupplier<K, V> stateUpdateSupplier) {
         internalTopologyBuilder.addGlobalStore(
-            new StoreBuilderWrapper<>(storeBuilder),
+            new StoreBuilderWrapper(storeBuilder),
             sourceName,
             timestampExtractor,
             keyDeserializer,
@@ -871,7 +871,7 @@ public class Topology {
                                                            final String processorName,
                                                            final ProcessorSupplier<KIn, VIn, Void, Void> stateUpdateSupplier) {
         internalTopologyBuilder.addGlobalStore(
-            new StoreBuilderWrapper<>(storeBuilder),
+            new StoreBuilderWrapper(storeBuilder),
             sourceName,
             null,
             keyDeserializer,
@@ -916,7 +916,7 @@ public class Topology {
                                                            final String processorName,
                                                            final ProcessorSupplier<KIn, VIn, Void, Void> stateUpdateSupplier) {
         internalTopologyBuilder.addGlobalStore(
-            new StoreBuilderWrapper<>(storeBuilder),
+            new StoreBuilderWrapper(storeBuilder),
             sourceName,
             timestampExtractor,
             keyDeserializer,

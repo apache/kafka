@@ -26,17 +26,17 @@ import org.apache.kafka.streams.state.internals.TimestampedWindowStoreBuilder;
 import org.apache.kafka.streams.state.internals.VersionedKeyValueStoreBuilder;
 import org.apache.kafka.streams.state.internals.WindowStoreBuilder;
 
-public class StoreBuilderWrapper<S extends StateStore> implements StoreFactory<S> {
+public class StoreBuilderWrapper implements StoreFactory {
 
-    private final StoreBuilder<S> builder;
+    private final StoreBuilder<?> builder;
     private final Set<String> connectedProcessorNames = new HashSet<>();
 
-    public StoreBuilderWrapper(final StoreBuilder<S> builder) {
+    public StoreBuilderWrapper(final StoreBuilder<?> builder) {
         this.builder = builder;
     }
 
     @Override
-    public S build() {
+    public StateStore build() {
         return builder.build();
     }
 
@@ -97,20 +97,20 @@ public class StoreBuilderWrapper<S extends StateStore> implements StoreFactory<S
     }
 
     @Override
-    public StoreFactory<S> withCachingDisabled() {
+    public StoreFactory withCachingDisabled() {
         builder.withCachingDisabled();
         return this;
     }
 
     @Override
-    public StoreFactory<S> withLoggingDisabled() {
+    public StoreFactory withLoggingDisabled() {
         builder.withLoggingDisabled();
         return this;
     }
 
     @Override
-    public boolean isCompatibleWith(final StoreFactory<?> storeFactory) {
+    public boolean isCompatibleWith(final StoreFactory storeFactory) {
         return storeFactory instanceof StoreBuilderWrapper
-                && builder.equals(((StoreBuilderWrapper<?>) storeFactory).builder);
+                && builder.equals(((StoreBuilderWrapper) storeFactory).builder);
     }
 }

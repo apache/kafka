@@ -108,7 +108,7 @@ public class SessionWindowedCogroupedKStreamImpl<K, V> extends
             sessionMerger);
     }
 
-    private StoreFactory<SessionStore<K, V>> materialize(final MaterializedInternal<K, V, SessionStore<Bytes, byte[]>> materialized) {
+    private StoreFactory materialize(final MaterializedInternal<K, V, SessionStore<Bytes, byte[]>> materialized) {
         SessionBytesStoreSupplier supplier = (SessionBytesStoreSupplier) materialized.storeSupplier();
         if (supplier == null) {
             final long retentionPeriod = materialized.retention() != null ?
@@ -157,7 +157,7 @@ public class SessionWindowedCogroupedKStreamImpl<K, V> extends
         if (materialized.cachingEnabled()) {
             builder.withCachingEnabled();
         }
-        return new StoreBuilderWrapper<>(builder);
+        return new StoreBuilderWrapper(builder);
     }
 
 }

@@ -93,7 +93,7 @@ public class TableSourceNode<K, V> extends SourceGraphNode<K, V> {
             throw new IllegalStateException("A table source node must have a single topic as input");
         }
 
-        final StoreFactory<?> storeFactory =
+        final StoreFactory storeFactory =
             new KeyValueStoreMaterializer<>((MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>>) materializedInternal);
 
         if (isGlobalKTable) {

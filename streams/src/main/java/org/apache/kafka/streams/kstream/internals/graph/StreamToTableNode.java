@@ -52,7 +52,7 @@ public class StreamToTableNode<K, V> extends GraphNode {
     @SuppressWarnings("unchecked")
     @Override
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
-        final StoreFactory<?> storeFactory =
+        final StoreFactory storeFactory =
             new KeyValueStoreMaterializer<>((MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>>) materializedInternal);
 
         final String processorName = processorParameters.processorName();

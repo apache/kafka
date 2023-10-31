@@ -104,7 +104,7 @@ public class TimeWindowedCogroupedKStreamImpl<K, V, W extends Window> extends Ab
             windows);
     }
 
-    private StoreFactory<TimestampedWindowStore<K, V>> materialize(
+    private StoreFactory materialize(
         final MaterializedInternal<K, V, WindowStore<Bytes, byte[]>> materialized) {
         WindowBytesStoreSupplier supplier = (WindowBytesStoreSupplier) materialized.storeSupplier();
         if (supplier == null) {
@@ -160,6 +160,6 @@ public class TimeWindowedCogroupedKStreamImpl<K, V, W extends Window> extends Ab
         if (materialized.cachingEnabled()) {
             builder.withCachingEnabled();
         }
-        return new StoreBuilderWrapper<>(builder);
+        return new StoreBuilderWrapper(builder);
     }
 }

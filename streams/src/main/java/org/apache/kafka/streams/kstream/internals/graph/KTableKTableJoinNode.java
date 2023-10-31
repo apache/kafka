@@ -37,7 +37,7 @@ public class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
     private final Serde<VR> valueSerde;
     private final String[] joinThisStoreNames;
     private final String[] joinOtherStoreNames;
-    private final StoreFactory<?> storeFactory;
+    private final StoreFactory storeFactory;
 
     KTableKTableJoinNode(final String nodeName,
                          final ProcessorParameters<K, Change<V1>, ?, ?> joinThisProcessorParameters,
@@ -49,7 +49,7 @@ public class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
                          final Serde<VR> valueSerde,
                          final String[] joinThisStoreNames,
                          final String[] joinOtherStoreNames,
-                         final StoreFactory<?> storeFactory) {
+                         final StoreFactory storeFactory) {
 
         super(nodeName,
             null,
@@ -169,7 +169,7 @@ public class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
         private String[] joinThisStoreNames;
         private String[] joinOtherStoreNames;
         private String queryableStoreName;
-        private StoreFactory<?> storeFactory;
+        private StoreFactory storeFactory;
 
         private KTableKTableJoinNodeBuilder() {
         }
@@ -224,7 +224,7 @@ public class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
             return this;
         }
 
-        public KTableKTableJoinNodeBuilder<K, V1, V2, VR> withStoreBuilder(final StoreFactory<?> storeFactory) {
+        public KTableKTableJoinNodeBuilder<K, V1, V2, VR> withStoreBuilder(final StoreFactory storeFactory) {
             this.storeFactory = storeFactory;
             return this;
         }

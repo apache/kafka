@@ -521,7 +521,7 @@ public class StreamsBuilder {
      */
     public synchronized StreamsBuilder addStateStore(final StoreBuilder<?> builder) {
         Objects.requireNonNull(builder, "builder can't be null");
-        internalStreamsBuilder.addStateStore(new StoreBuilderWrapper<>(builder));
+        internalStreamsBuilder.addStateStore(new StoreBuilderWrapper(builder));
         return this;
     }
 
@@ -564,7 +564,7 @@ public class StreamsBuilder {
         Objects.requireNonNull(storeBuilder, "storeBuilder can't be null");
         Objects.requireNonNull(consumed, "consumed can't be null");
         internalStreamsBuilder.addGlobalStore(
-            new StoreBuilderWrapper<>(storeBuilder),
+            new StoreBuilderWrapper(storeBuilder),
             topic,
             new ConsumedInternal<>(consumed),
             () -> ProcessorAdapter.adapt(stateUpdateSupplier.get())
@@ -608,7 +608,7 @@ public class StreamsBuilder {
         Objects.requireNonNull(storeBuilder, "storeBuilder can't be null");
         Objects.requireNonNull(consumed, "consumed can't be null");
         internalStreamsBuilder.addGlobalStore(
-            new StoreBuilderWrapper<>(storeBuilder),
+            new StoreBuilderWrapper(storeBuilder),
             topic,
             new ConsumedInternal<>(consumed),
             stateUpdateSupplier

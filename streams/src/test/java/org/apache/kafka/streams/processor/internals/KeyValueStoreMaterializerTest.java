@@ -230,13 +230,13 @@ public class KeyValueStoreMaterializerTest {
     private static TimestampedKeyValueStore<String, String> getTimestampedStore(
         final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materialized) {
         final KeyValueStoreMaterializer<String, String> materializer = new KeyValueStoreMaterializer<>(materialized);
-        return (TimestampedKeyValueStore<String, String>) ((StoreFactory<?>) materializer).build();
+        return (TimestampedKeyValueStore<String, String>) ((StoreFactory) materializer).build();
     }
 
     @SuppressWarnings("unchecked")
     private static VersionedKeyValueStore<String, String> getVersionedStore(
         final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materialized) {
         final KeyValueStoreMaterializer<String, String> materializer = new KeyValueStoreMaterializer<>(materialized);
-        return (VersionedKeyValueStore<String, String>) ((StoreFactory<?>) materializer).build();
+        return (VersionedKeyValueStore<String, String>) ((StoreFactory) materializer).build();
     }
 }

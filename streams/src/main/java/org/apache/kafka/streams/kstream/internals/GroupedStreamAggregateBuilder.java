@@ -67,7 +67,7 @@ class GroupedStreamAggregateBuilder<K, V> {
     }
 
     <KR, VR> KTable<KR, VR> build(final NamedInternal functionName,
-                                  final StoreFactory<?> storeFactory,
+                                  final StoreFactory storeFactory,
                                   final KStreamAggProcessorSupplier<K, V, KR, VR> aggregateSupplier,
                                   final String queryableStoreName,
                                   final Serde<KR> keySerde,

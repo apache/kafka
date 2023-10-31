@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.StoreFactory;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -38,14 +39,13 @@ import java.util.Set;
  * Materializes a key-value store as either a {@link TimestampedKeyValueStoreBuilder} or a
  * {@link VersionedKeyValueStoreBuilder} depending on whether the store is versioned or not.
  */
-public class KeyValueStoreMaterializer<K, V> implements StoreFactory<KeyValueStore<Bytes, byte[]>> {
+public class KeyValueStoreMaterializer<K, V> implements StoreFactory {
     private static final Logger LOG = LoggerFactory.getLogger(KeyValueStoreMaterializer.class);
 
     private final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materialized;
     private final Set<String> connectedProcessorNames = new HashSet<>();
 
     private Materialized.StoreType defaultStoreType = Materialized.StoreType.ROCKS_DB;
-    private long historyRetention;
 
     public KeyValueStoreMaterializer(
             final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materialized
@@ -64,11 +64,8 @@ public class KeyValueStoreMaterializer<K, V> implements StoreFactory<KeyValueSto
         // in a follow-up PR, this will set the defaultStoreType to the configured value
     }
 
-    // both versionedKeyValueStoreBuilder and timestampedKeyValueStoreBuilder will
-    // provide the correct store types, so it is safe to suppress the unchecked warning
-    @SuppressWarnings("unchecked")
     @Override
-    public KeyValueStore<Bytes, byte[]> build() {
+    public StateStore build() {
         KeyValueBytesStoreSupplier supplier = (KeyValueBytesStoreSupplier) materialized.storeSupplier();
         if (supplier == null) {
             switch (defaultStoreType) {
@@ -89,7 +86,6 @@ public class KeyValueStoreMaterializer<K, V> implements StoreFactory<KeyValueSto
                     (VersionedBytesStoreSupplier) supplier,
                     materialized.keySerde(),
                     materialized.valueSerde());
-            historyRetention = ((VersionedBytesStoreSupplier) supplier).historyRetentionMs();
         } else {
             builder = Stores.timestampedKeyValueStoreBuilder(
                     supplier,
@@ -112,7 +108,7 @@ public class KeyValueStoreMaterializer<K, V> implements StoreFactory<KeyValueSto
         }
 
 
-        return (KeyValueStore<Bytes, byte[]>) builder.build();
+        return builder.build();
     }
 
     @Override
@@ -127,7 +123,7 @@ public class KeyValueStoreMaterializer<K, V> implements StoreFactory<KeyValueSto
             throw new IllegalStateException(
                     "historyRetention is not supported when not a versioned store");
         }
-        return historyRetention;
+        return ((VersionedBytesStoreSupplier) materialized.storeSupplier()).historyRetentionMs();
     }
 
     @Override
@@ -161,19 +157,19 @@ public class KeyValueStoreMaterializer<K, V> implements StoreFactory<KeyValueSto
     }
 
     @Override
-    public StoreFactory<?> withCachingDisabled() {
+    public StoreFactory withCachingDisabled() {
         materialized.withCachingDisabled();
         return this;
     }
 
     @Override
-    public StoreFactory<?> withLoggingDisabled() {
+    public StoreFactory withLoggingDisabled() {
         materialized.withLoggingDisabled();
         return null;
     }
 
     @Override
-    public boolean isCompatibleWith(final StoreFactory<?> storeFactory) {
+    public boolean isCompatibleWith(final StoreFactory storeFactory) {
         return (storeFactory instanceof KeyValueStoreMaterializer)
                 && ((KeyValueStoreMaterializer<?, ?>) storeFactory).materialized.equals(materialized);
     }

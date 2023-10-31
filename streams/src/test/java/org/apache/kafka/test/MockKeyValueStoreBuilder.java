@@ -38,8 +38,8 @@ public class MockKeyValueStoreBuilder extends AbstractStoreBuilder<Integer, byte
         return new MockKeyValueStore(name, persistent);
     }
 
-    public StoreFactory<KeyValueStore<Object, Object>> asFactory() {
-        return new StoreBuilderWrapper<>(this);
+    public StoreFactory asFactory() {
+        return new StoreBuilderWrapper(this);
     }
 }
 

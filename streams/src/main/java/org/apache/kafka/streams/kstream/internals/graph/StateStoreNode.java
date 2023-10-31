@@ -22,9 +22,9 @@ import org.apache.kafka.streams.processor.internals.StoreFactory;
 
 public class StateStoreNode<S extends StateStore> extends GraphNode {
 
-    protected final StoreFactory<S> storeBuilder;
+    protected final StoreFactory storeBuilder;
 
-    public StateStoreNode(final StoreFactory<S> storeBuilder) {
+    public StateStoreNode(final StoreFactory storeBuilder) {
         super(storeBuilder.name());
 
         this.storeBuilder = storeBuilder;
