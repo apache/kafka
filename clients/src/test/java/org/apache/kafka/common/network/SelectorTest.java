@@ -114,10 +114,6 @@ public class SelectorTest {
         }
     }
 
-    public SecurityProtocol securityProtocol() {
-        return SecurityProtocol.PLAINTEXT;
-    }
-
     protected Map<String, Object> clientConfigs() {
         return new HashMap<>();
     }
@@ -1019,7 +1015,6 @@ public class SelectorTest {
 
     private String blockingRequest(String node, String s) throws IOException {
         selector.send(createSend(node, s));
-        selector.poll(1000L);
         while (true) {
             selector.poll(1000L);
             for (NetworkReceive receive : selector.completedReceives())
