@@ -618,7 +618,7 @@ public class ProducerConfig extends AbstractConfig {
         super(CONFIG, props);
     }
 
-    ProducerConfig(Map<?, ?> props, boolean doLog) {
+    protected ProducerConfig(Map<?, ?> props, boolean doLog) {
         super(CONFIG, props, doLog);
     }
 
