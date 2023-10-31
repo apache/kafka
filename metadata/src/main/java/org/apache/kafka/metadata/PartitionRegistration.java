@@ -20,7 +20,7 @@ package org.apache.kafka.metadata;
 import org.apache.kafka.common.DirectoryId;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.errors.InvalidMetadataException;
+import org.apache.kafka.common.errors.InvalidReplicaDirectoriesException;
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
@@ -167,8 +167,15 @@ public class PartitionRegistration {
     }
 
     private static List<Uuid> checkDirectories(PartitionRecord record) {
-        if (record.replicas().size() != record.directories().size()) {
-            throw new InvalidMetadataException("The lengths for replicas and directories do not match: " + record);
+        if (record.directories() != null && !record.directories().isEmpty() && record.replicas().size() != record.directories().size()) {
+            throw new InvalidReplicaDirectoriesException(record);
+        }
+        return record.directories();
+    }
+
+    private static List<Uuid> checkDirectories(PartitionChangeRecord record) {
+        if (record.replicas() != null && record.directories() != null && !record.directories().isEmpty() && record.replicas().size() != record.directories().size()) {
+            throw new InvalidReplicaDirectoriesException(record);
         }
         return record.directories();
     }
@@ -191,7 +198,7 @@ public class PartitionRegistration {
                                  int[] addingReplicas, int leader, LeaderRecoveryState leaderRecoveryState,
                                  int leaderEpoch, int partitionEpoch, int[] elr, int[] lastKnownElr) {
         this.replicas = replicas;
-        this.directories = directories != null ? directories : DirectoryId.unassignedArray(replicas.length);
+        this.directories = directories != null && directories.length > 0 ? directories : DirectoryId.unassignedArray(replicas.length);
         this.isr = isr;
         this.removingReplicas = removingReplicas;
         this.addingReplicas = addingReplicas;
@@ -209,7 +216,7 @@ public class PartitionRegistration {
         int[] newReplicas = (record.replicas() == null) ?
             replicas : Replicas.toArray(record.replicas());
         DirectoryId[] newDirectories = (record.directories() == null) ?
-                directories : DirectoryId.toArray(record.directories());
+                directories : DirectoryId.toArray(checkDirectories(record));
         int[] newIsr = (record.isr() == null) ? isr : Replicas.toArray(record.isr());
         int[] newRemovingReplicas = (record.removingReplicas() == null) ?
             removingReplicas : Replicas.toArray(record.removingReplicas());
