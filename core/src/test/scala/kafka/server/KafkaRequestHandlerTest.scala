@@ -19,7 +19,7 @@ package kafka.server
 
 import com.yammer.metrics.core.Meter
 import kafka.network.RequestChannel
-import kafka.server.KafkaRequestHandler.ThreadSafeCallback
+import kafka.server.KafkaRequestHandler.AsynchronousCompletionCallback
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.network.{ClientInformation, ListenerName}
 import org.apache.kafka.common.protocol.ApiKeys
@@ -59,7 +59,7 @@ class KafkaRequestHandlerTest {
         time.sleep(2)
         // Prepare the callback.
         val callback = KafkaRequestHandler.wrap(
-          new ThreadSafeCallback[Int]((reqLocal: RequestLocal, ms: Int) => {
+          new AsynchronousCompletionCallback[Int]((reqLocal: RequestLocal, ms: Int) => {
             time.sleep(ms)
             handler.stop()
           }),
@@ -98,7 +98,7 @@ class KafkaRequestHandlerTest {
       handledCount = handledCount + 1
       // Prepare the callback.
       val callback = KafkaRequestHandler.wrap(
-        new ThreadSafeCallback[Int]((reqLocal: RequestLocal, ms: Int) => {
+        new AsynchronousCompletionCallback[Int]((reqLocal: RequestLocal, ms: Int) => {
           handler.stop()
         }),
         RequestLocal.NoCaching)
@@ -134,7 +134,7 @@ class KafkaRequestHandlerTest {
     when(apiHandler.handle(ArgumentMatchers.eq(request), any())).thenAnswer { _ =>
       // Prepare the callback.
       val callback = KafkaRequestHandler.wrap(
-        new ThreadSafeCallback[Int]((reqLocal: RequestLocal, ms: Int) => {
+        new AsynchronousCompletionCallback[Int]((reqLocal: RequestLocal, ms: Int) => {
           reqLocal.bufferSupplier.close()
           handledCount = handledCount + 1
           handler.stop()
@@ -169,7 +169,7 @@ class KafkaRequestHandlerTest {
     when(apiHandler.handle(ArgumentMatchers.eq(request), any())).thenAnswer { _ =>
       // Prepare the callback.
       val callback = KafkaRequestHandler.wrap(
-        new ThreadSafeCallback[Int]((reqLocal: RequestLocal, ms: Int) => {
+        new AsynchronousCompletionCallback[Int]((reqLocal: RequestLocal, ms: Int) => {
           reqLocal.bufferSupplier.close()
           handledCount = handledCount + 1
           handler.stop()

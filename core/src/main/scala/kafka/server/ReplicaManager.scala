@@ -23,7 +23,7 @@ import kafka.controller.{KafkaController, StateChangeLogger}
 import kafka.log.remote.RemoteLogManager
 import kafka.log.{LogManager, UnifiedLog}
 import kafka.server.HostedPartition.Online
-import kafka.server.KafkaRequestHandler.ThreadSafeCallback
+import kafka.server.KafkaRequestHandler.AsynchronousCompletionCallback
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.ReplicaManager.{AtMinIsrPartitionCountMetricName, FailedIsrUpdatesPerSecMetricName, IsrExpandsPerSecMetricName, IsrShrinksPerSecMetricName, LeaderCountMetricName, OfflineReplicaCountMetricName, PartitionCountMetricName, PartitionsWithLateTransactionsCountMetricName, ProducerIdCountMetricName, ReassigningPartitionsMetricName, UnderMinIsrPartitionCountMetricName, UnderReplicatedPartitionsMetricName}
 import kafka.server.ReplicaManager.createLogReadResult
@@ -761,7 +761,7 @@ class ReplicaManager(val config: KafkaConfig,
           producerEpoch = batchInfo.producerEpoch,
           topicPartitions = notYetVerifiedEntriesPerPartition.keySet.toSeq,
           callback = KafkaRequestHandler.wrap(
-            new ThreadSafeCallback[Map[TopicPartition, Errors]](appendEntries(entriesPerPartition, internalTopicsAllowed, origin, requiredAcks, verificationGuards.toMap,
+            new AsynchronousCompletionCallback[Map[TopicPartition, Errors]](appendEntries(entriesPerPartition, internalTopicsAllowed, origin, requiredAcks, verificationGuards.toMap,
             errorsPerPartition, sTime, recordConversionStatsCallback, timeout, responseCallback, delayedProduceLock)(_)(_)),
             requestLocal)
         ))
