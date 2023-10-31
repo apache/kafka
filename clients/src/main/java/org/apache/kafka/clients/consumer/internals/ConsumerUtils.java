@@ -239,6 +239,4 @@ public final class ConsumerUtils {
         }
         return enableAutoCommit;
     }
-
-
 }
