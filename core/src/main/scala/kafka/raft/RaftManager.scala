@@ -26,7 +26,7 @@ import kafka.log.LogManager
 import kafka.log.UnifiedLog
 import kafka.raft.KafkaRaftManager.RaftIoThread
 import kafka.server.KafkaRaftServer.ControllerRole
-import kafka.server.{KafkaConfig, MetaProperties}
+import kafka.server.KafkaConfig
 import kafka.utils.CoreUtils
 import kafka.utils.FileLock
 import kafka.utils.Logging
@@ -128,7 +128,7 @@ trait RaftManager[T] {
 }
 
 class KafkaRaftManager[T](
-  metaProperties: MetaProperties,
+  clusterId: String,
   config: KafkaConfig,
   recordSerde: RecordSerde[T],
   topicPartition: TopicPartition,
@@ -241,7 +241,7 @@ class KafkaRaftManager[T](
       metrics,
       expirationService,
       logContext,
-      metaProperties.clusterId,
+      clusterId,
       nodeId,
       raftConfig
     )

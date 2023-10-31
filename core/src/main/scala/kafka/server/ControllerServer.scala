@@ -137,7 +137,7 @@ class ControllerServer(
     true
   }
 
-  def clusterId: String = sharedServer.metaProps.clusterId
+  def clusterId: String = sharedServer.clusterId()
 
   def startup(): Unit = {
     if (!maybeChangeStatus(SHUTDOWN, STARTING)) return
@@ -319,7 +319,7 @@ class ControllerServer(
         controller,
         raftManager,
         config,
-        sharedServer.metaProps,
+        clusterId,
         registrationsPublisher,
         apiVersionManager,
         metadataCache)
