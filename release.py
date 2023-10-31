@@ -80,9 +80,9 @@ def fail(msg):
 
     if delete_gitrefs:
         try:
-            cmd("Resetting repository working state to branch %s" % starting_branch, "git reset --hard HEAD && git checkout %s" % starting_branch, shell=True, allow_failure=True)
-            cmd("Deleting git branches %s" % release_version, "git branch -D %s" % release_version, shell=True, allow_failure=True)
-            cmd("Deleting git tag %s" %rc_tag , "git tag -d %s" % rc_tag, shell=True, allow_failure=True)
+            cmd("Resetting repository working state to branch %s" % starting_branch, "git reset --hard HEAD && git checkout %s" % starting_branch, shell=True)
+            cmd("Deleting git branches %s" % release_version, "git branch -D %s" % release_version, shell=True)
+            cmd("Deleting git tag %s" %rc_tag , "git tag -d %s" % rc_tag, shell=True)
         except subprocess.CalledProcessError:
             print("Failed when trying to clean up git references added by this script. You may need to clean up branches/tags yourself before retrying.")
             print("Expected git branch: " + release_version)
@@ -504,13 +504,13 @@ try:
 except Exception as e:
     fail(f"Pre-requisite not met: Unable to check if maven cli is installed. Error: {e}")
 
-try:
-    test_sftp = subprocess.run(f"sftp {apache_id}@home.apache.org".split())
-    if test_sftp.returncode != 0:
-        fail("Pre-requisite not met: Cannot establish sftp connection. Please check your apache-id and ssh keys.")
-    print("Pre-requisite met: sftp connection is successful")
-except Exception as e:
-    fail(f"Pre-requisite not met: Unable to check if sftp connection is successful. Error: {e}")
+# try:
+#     test_sftp = subprocess.run(f"sftp {apache_id}@home.apache.org".split())
+#     if test_sftp.returncode != 0:
+#         fail("Pre-requisite not met: Cannot establish sftp connection. Please check your apache-id and ssh keys.")
+#     print("Pre-requisite met: sftp connection is successful")
+# except Exception as e:
+#     fail(f"Pre-requisite not met: Unable to check if sftp connection is successful. Error: {e}")
 
 try:
     test_svn = cmd_output("svn --version")
@@ -730,7 +730,7 @@ if not user_ok("Have you successfully deployed the artifacts (y/n)?: "):
     fail("Ok, giving up")
 if not user_ok("Ok to push RC tag %s (y/n)?: " % rc_tag):
     fail("Ok, giving up")
-cmd("Pushing RC tag", "git push %s %s" % (PUSH_REMOTE_NAME, rc_tag), num_retries=0)
+cmd("Pushing RC tag", "git push %s %s" % (PUSH_REMOTE_NAME, rc_tag))
 
 # Move back to starting branch and clean out the temporary release branch (e.g. 1.0.0) we used to generate everything
 cmd("Resetting repository working state", "git reset --hard HEAD && git checkout %s" % starting_branch, shell=True)
