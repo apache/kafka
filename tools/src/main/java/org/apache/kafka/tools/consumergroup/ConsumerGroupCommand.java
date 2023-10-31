@@ -164,10 +164,14 @@ public class ConsumerGroupCommand {
         final Map<String, String> configOverrides;
         private final Admin adminClient;
 
-        public ConsumerGroupService(ConsumerGroupCommandOptions opts, Map<String, String> configOverrides) throws IOException {
+        public ConsumerGroupService(ConsumerGroupCommandOptions opts, Map<String, String> configOverrides) {
             this.opts = opts;
             this.configOverrides = configOverrides;
-            this.adminClient = createAdminClient(configOverrides);
+            try {
+                this.adminClient = createAdminClient(configOverrides);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
         }
 
         Optional<Map<String, Map<TopicPartition, OffsetAndMetadata>>> resetPlanFromFile() {
@@ -795,7 +799,7 @@ public class ConsumerGroupCommand {
         }
 
         @Override
-        public void close() throws Exception {
+        public void close() {
             adminClient.close();
         }
 
