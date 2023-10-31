@@ -172,7 +172,7 @@ class OffsetDeleteRequestTest(cluster: ClusterInstance) extends GroupCoordinator
       // Delete offset with both invalid id and invalid partition should return with a response with top-level error.
       deleteOffset(
         groupId = "",
-        topic = "foo-unknown",
+        topic = "foo",
         partition = 5,
         expectedResponseError = Errors.INVALID_GROUP_ID,
         version = version.toShort
