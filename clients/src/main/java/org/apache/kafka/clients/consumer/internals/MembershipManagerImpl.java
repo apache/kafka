@@ -17,6 +17,7 @@
 
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest;
@@ -151,6 +152,13 @@ public class MembershipManagerImpl implements MembershipManager {
     @Override
     public int memberEpoch() {
         return memberEpoch;
+    }
+
+    @Override
+    public ConsumerGroupMetadata groupMetadata() {
+        // TODO: what do we use here, epoch?
+        int generationId = -1;
+        return new ConsumerGroupMetadata(groupId, generationId, memberId, groupInstanceId);
     }
 
     /**

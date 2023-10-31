@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
@@ -160,6 +161,12 @@ public class HeartbeatRequestManager implements RequestManager {
         this.heartbeatRequestState.onSendAttempt(currentTimeMs);
         NetworkClientDelegate.UnsentRequest request = makeHeartbeatRequest();
         return new NetworkClientDelegate.PollResult(heartbeatRequestState.heartbeatIntervalMs, Collections.singletonList(request));
+    }
+
+    public ConsumerGroupMetadata groupMetadata() {
+        // TODO: we probably want to make MembershipManager directly accessible to the caller vs. having to
+        //       go through the request manager :\
+        return membershipManager.groupMetadata();
     }
 
     private NetworkClientDelegate.UnsentRequest makeHeartbeatRequest() {

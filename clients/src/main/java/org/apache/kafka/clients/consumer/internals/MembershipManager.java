@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 
 import java.util.Optional;
@@ -50,6 +51,11 @@ public interface MembershipManager {
      * @return Current epoch of the member, maintained by the server.
      */
     int memberEpoch();
+
+    /**
+     * @return {@link ConsumerGroupMetadata} as it is updated by the group.
+     */
+    ConsumerGroupMetadata groupMetadata();
 
     /**
      * @return Current state of this member in relationship to a consumer group, as defined in

@@ -44,6 +44,7 @@ import org.apache.kafka.clients.consumer.internals.events.ListOffsetsApplication
 import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
 import org.apache.kafka.clients.consumer.internals.events.OffsetFetchApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ResetPositionsApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.RetrieveGroupMetadataApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ValidatePositionsApplicationEvent;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.IsolationLevel;
@@ -671,7 +672,11 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public ConsumerGroupMetadata groupMetadata() {
-        throw new KafkaException("method not implemented");
+        maybeThrowInvalidGroupIdException();
+
+        // TODO: ugh...
+        Duration timeout = Duration.ofMillis(1000);
+        return applicationEventHandler.addAndGet(new RetrieveGroupMetadataApplicationEvent(), time.timer(timeout));
     }
 
     @Override
