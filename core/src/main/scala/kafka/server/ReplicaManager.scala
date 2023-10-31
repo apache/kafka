@@ -630,17 +630,15 @@ class ReplicaManager(val config: KafkaConfig,
 
     // Third delete the logs and checkpoint.
     val errorMap = new mutable.HashMap[TopicPartition, Throwable]()
-    // `tieredEnabledPartitions` has exclude internal topics
+    // `tieredEnabledPartitions` has excluded internal topics because the logic of `unifiedLog.remoteLogEnabled()`
     val tieredEnabledPartitions = partitionsToStop.filter(sp => logManager.getLog(sp.topicPartition).exists(unifiedLog => unifiedLog.remoteLogEnabled()))
     if (partitionsToDelete.nonEmpty) {
       // Delete the logs and checkpoint.
       logManager.asyncDelete(partitionsToDelete, isStray = false, (tp, e) => errorMap.put(tp, e))
     }
     remoteLogManager.foreach { rlm =>
-      // exclude the partitions with offline/error state
-      val partitions = partitionsToStop.filterNot(sp => errorMap.contains(sp.topicPartition))
-        .filter(tieredEnabledPartitions.contains)
-        .asJava
+      // exclude the partitions with offline/error state and internal topics
+      val partitions = partitionsToStop.filter(sp => !errorMap.contains(sp.topicPartition) && tieredEnabledPartitions.contains(sp)).asJava
       if (!partitions.isEmpty) {
         rlm.stopPartitions(partitions, (tp, e) => errorMap.put(tp, e))
       }

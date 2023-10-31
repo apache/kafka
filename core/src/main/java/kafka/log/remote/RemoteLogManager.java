@@ -378,6 +378,8 @@ public class RemoteLogManager implements Closeable {
                     if (stopPartition.deleteRemoteLog()) {
                         LOGGER.info("Deleting the remote log segments task for partition: {}", tpId);
                         deleteRemoteLogPartition(tpId);
+                    } else {
+                        LOGGER.warn("Unexpected call of stopPartitions for non-tiered and internal topic partition: {}", tpId);
                     }
                 }
             } catch (Exception ex) {
