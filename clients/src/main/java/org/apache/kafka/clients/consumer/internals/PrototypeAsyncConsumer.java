@@ -315,9 +315,9 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         this.isolationLevel = IsolationLevel.READ_UNCOMMITTED;
         this.interceptors = Objects.requireNonNull(interceptors);
         this.time = time;
+        this.backgroundEventProcessor = new BackgroundEventProcessor(logContext, backgroundEventQueue);
         this.metrics = metrics;
         this.groupMetadata = groupMetadata;
-        this.backgroundEventProcessor = new BackgroundEventProcessor(logContext, backgroundEventQueue);
         this.metadata = metadata;
         this.retryBackoffMs = retryBackoffMs;
         this.defaultApiTimeoutMs = defaultApiTimeoutMs;
@@ -528,12 +528,10 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         }
     }
 
-    private ConsumerGroupMetadata maybeThrowInvalidGroupIdException() {
-        if (groupMetadata.isPresent())
-            return groupMetadata.get();
-
-        throw new InvalidGroupIdException("To use the group management or offset commit APIs, you must " +
-                "provide a valid " + ConsumerConfig.GROUP_ID_CONFIG + " in the consumer configuration.");
+    private void maybeThrowInvalidGroupIdException() {
+        if (!groupMetadata.isPresent())
+            throw new InvalidGroupIdException("To use the group management or offset commit APIs, you must " +
+                    "provide a valid " + ConsumerConfig.GROUP_ID_CONFIG + " in the consumer configuration.");
     }
 
     @Override
@@ -685,7 +683,10 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public ConsumerGroupMetadata groupMetadata() {
-        return maybeThrowInvalidGroupIdException();
+        maybeThrowInvalidGroupIdException();
+
+        // Since we just checked for the group metadata presence above, this "should never happen."
+        return groupMetadata.orElseThrow(IllegalStateException::new);
     }
 
     @Override
@@ -1120,10 +1121,10 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
      *     <li>{@link ConsumerRebalanceListener} callbacks that are to be executed on the application thread</li>
      * </ul>
      */
-    public class BackgroundEventProcessor extends EventProcessor<BackgroundEvent> {
+    private class BackgroundEventProcessor extends EventProcessor<BackgroundEvent> {
 
-        public BackgroundEventProcessor(final LogContext logContext,
-                                        final BlockingQueue<BackgroundEvent> backgroundEventQueue) {
+        private BackgroundEventProcessor(final LogContext logContext,
+                                         final BlockingQueue<BackgroundEvent> backgroundEventQueue) {
             super(logContext, backgroundEventQueue);
         }
 
