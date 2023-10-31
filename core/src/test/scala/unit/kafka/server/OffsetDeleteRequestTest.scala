@@ -159,6 +159,24 @@ class OffsetDeleteRequestTest(cluster: ClusterInstance) extends GroupCoordinator
         expectedResponseError = Errors.INVALID_GROUP_ID,
         version = version.toShort
       )
+
+      // Delete offset with both invalid id and invalid topic should return with a response with top-level error.
+      deleteOffset(
+        groupId = "",
+        topic = "foo-unknown",
+        partition = 2,
+        expectedResponseError = Errors.INVALID_GROUP_ID,
+        version = version.toShort
+      )
+
+      // Delete offset with both invalid id and invalid partition should return with a response with top-level error.
+      deleteOffset(
+        groupId = "",
+        topic = "foo-unknown",
+        partition = 5,
+        expectedResponseError = Errors.INVALID_GROUP_ID,
+        version = version.toShort
+      )
     }
   }
 }
