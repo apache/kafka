@@ -26,7 +26,6 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -44,7 +43,6 @@ import static java.lang.Math.min;
  * the subscriptions are different across the members.
  *
  * Assignments are done according to the following principles:
- *
  *
  * <li> Balance:          Ensure partitions are distributed equally among all members.
  *                        The difference in assignments sizes between any two members
@@ -73,7 +71,7 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
     /**
      * The set of topic Ids that the consumer group is subscribed to.
      */
-    private final Set<Uuid> subscriptionIds;
+    private final Set<Uuid> subscribedTopicIds;
 
     /**
      * Rack information and helper methods.
@@ -114,8 +112,8 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
     OptimizedUniformAssignmentBuilder(AssignmentSpec assignmentSpec, SubscribedTopicDescriber subscribedTopicDescriber) {
         this.assignmentSpec = assignmentSpec;
         this.subscribedTopicDescriber = subscribedTopicDescriber;
-        this.subscriptionIds = new HashSet<>(assignmentSpec.members().values().iterator().next().subscribedTopicIds());
-        this.rackInfo = new RackInfo(assignmentSpec, subscribedTopicDescriber, subscriptionIds);
+        this.subscribedTopicIds = new HashSet<>(assignmentSpec.members().values().iterator().next().subscribedTopicIds());
+        this.rackInfo = new RackInfo(assignmentSpec, subscribedTopicDescriber, subscribedTopicIds);
         this.potentiallyUnfilledMembers = new HashMap<>();
         this.targetAssignment = new HashMap<>();
         // Without rack-aware strategy, tracking current owners of unassigned partitions is unnecessary
@@ -141,7 +139,7 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
     protected GroupAssignment buildAssignment() throws PartitionAssignorException {
         int totalPartitionsCount = 0;
 
-        for (Uuid topicId : subscriptionIds) {
+        for (Uuid topicId : subscribedTopicIds) {
             int partitionCount = subscribedTopicDescriber.numPartitions(topicId);
             if (partitionCount == -1) {
                 throw new PartitionAssignorException(
@@ -152,7 +150,7 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
             }
         }
 
-        if (subscriptionIds.isEmpty()) {
+        if (subscribedTopicIds.isEmpty()) {
             LOG.debug("The subscription list is empty, returning an empty assignment");
             return new GroupAssignment(Collections.emptyMap());
         }
@@ -167,8 +165,7 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
             targetAssignment.put(memberId, new MemberAssignment(new HashMap<>())
         ));
 
-        // Sorted list of all partitions.
-        unassignedPartitions = new HashSet<>(allTopicIdPartitions(subscriptionIds, subscribedTopicDescriber));
+        unassignedPartitions = topicIdPartitions(subscribedTopicIds, subscribedTopicDescriber);
         potentiallyUnfilledMembers = assignStickyPartitions(minQuota);
 
         if (rackInfo.useRackStrategy) rackAwarePartitionAssignment();
@@ -186,7 +183,7 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
      * Only relevant partitions that exist in the current topic metadata and subscriptions are considered.
      * In addition, if rack awareness is enabled, it is ensured that a partition's rack matches the member's rack.
      *
-     * <p>For each member:
+     * <p> For each member:
      * <ol>
      *     <li> Find the valid current assignment considering topic subscriptions, metadata and rack information.</li>
      *     <li> When rack aware strategy is used, only partitions with their rack matching their current
@@ -269,7 +266,7 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
     ) {
         List<TopicIdPartition> validCurrentAssignmentList = new ArrayList<>();
         currentMemberAssignment.forEach((topicId, partitions) -> {
-            if (subscriptionIds.contains(topicId)) {
+            if (subscribedTopicIds.contains(topicId)) {
                 partitions.forEach(partition -> {
                     TopicIdPartition topicIdPartition = new TopicIdPartition(topicId, partition);
                     if (rackInfo.useRackStrategy && rackInfo.racksMismatch(memberId, topicIdPartition)) {
@@ -325,9 +322,7 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
             .sorted(Comparator.comparing(TopicIdPartition::topicId).thenComparing(TopicIdPartition::partitionId))
             .collect(Collectors.toList());
 
-        Iterator<TopicIdPartition> partitionIterator = sortedPartitionsList.iterator();
-        while (partitionIterator.hasNext()) {
-            TopicIdPartition topicIdPartition = partitionIterator.next();
+        for (TopicIdPartition topicIdPartition : sortedPartitionsList) {
             boolean assigned = false;
 
             if (rackInfo.useRackStrategy && currentPartitionOwners.containsKey(topicIdPartition)) {
@@ -352,7 +347,6 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
             }
 
             if (assigned) {
-                partitionIterator.remove();
                 unassignedPartitions.remove(topicIdPartition);
             }
         }

@@ -76,25 +76,22 @@ public abstract class AbstractUniformAssignmentBuilder {
     }
 
     /**
-     * Constructs a list of {@code TopicIdPartition} for each topic Id based on its partition count.
+     * Constructs a set of {@code TopicIdPartition} including all the given topic Ids based on their partition counts.
      *
-     * @param allTopicIds                   The subscribed topic Ids.
+     * @param topicIds                      The topic Ids.
      * @param subscribedTopicDescriber      Utility to fetch the partition count for a given topic.
      *
-     * @return List of sorted {@code TopicIdPartition} for all provided topic Ids.
+     * @return Set of {@code TopicIdPartition} including all the provided topic Ids.
      */
-    protected static List<TopicIdPartition> allTopicIdPartitions(
-        Collection<Uuid> allTopicIds,
+    protected static Set<TopicIdPartition> topicIdPartitions(
+        Collection<Uuid> topicIds,
         SubscribedTopicDescriber subscribedTopicDescriber
     ) {
-        List<TopicIdPartition> allTopicIdPartitions = new ArrayList<>();
-        // Sorted so that partitions from each topic can be distributed amongst its subscribers equally.
-        allTopicIds.stream().sorted().forEach(topic ->
-            IntStream.range(0, subscribedTopicDescriber.numPartitions(topic))
-                .forEach(i -> allTopicIdPartitions.add(new TopicIdPartition(topic, i)))
-        );
-
-        return allTopicIdPartitions;
+        return topicIds.stream()
+            .flatMap(topic ->
+                IntStream.range(0, subscribedTopicDescriber.numPartitions(topic))
+                .mapToObj(i -> new TopicIdPartition(topic, i))
+            ).collect(Collectors.toSet());
     }
 
     /**
@@ -144,7 +141,6 @@ public abstract class AbstractUniformAssignmentBuilder {
 
             Set<String> allPartitionRacks;
             Map<TopicIdPartition, Set<String>> racksPerPartition;
-            List<TopicIdPartition> topicIdPartitions = allTopicIdPartitions(topicIds, subscribedTopicDescriber);
 
             if (membersByRack.isEmpty()) {
                 allPartitionRacks = Collections.emptySet();
@@ -152,7 +148,7 @@ public abstract class AbstractUniformAssignmentBuilder {
             } else {
                 racksPerPartition = new HashMap<>();
                 allPartitionRacks = new HashSet<>();
-                topicIdPartitions.forEach(tp -> {
+                topicIdPartitions(topicIds, subscribedTopicDescriber).forEach(tp -> {
                     Set<String> racks = subscribedTopicDescriber.racksForPartition(tp.topicId(), tp.partitionId());
                     racksPerPartition.put(tp, racks);
                     if (!racks.isEmpty()) allPartitionRacks.addAll(racks);
