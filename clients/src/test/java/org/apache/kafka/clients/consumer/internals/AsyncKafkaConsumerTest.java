@@ -33,6 +33,7 @@ import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.test.TestUtils;
@@ -154,6 +155,15 @@ public class AsyncKafkaConsumerTest {
             future.completeExceptionally(exception);
             verify(customCallback).onComplete(eq(offsets), any(exception.getClass()));
         }
+    }
+
+    @Test
+    public void testFencedInstanceException() {
+        CompletableFuture<Void> future = new CompletableFuture<>();
+        doReturn(future).when(consumer).commit(new HashMap<>(), false);
+        assertDoesNotThrow(() -> consumer.commitAsync());
+        future.completeExceptionally(Errors.FENCED_INSTANCE_ID.exception());
+        assertTrue(consumer.instanceFenced());
     }
 
     private static Stream<Exception> commitExceptionSupplier() {
