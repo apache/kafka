@@ -782,7 +782,7 @@ public class KStreamKStreamOuterJoinTest {
                 new KeyValueTimestamp<>(1, "A1+null", 1L)
             );
 
-            // push one item to the other stream; this should not produce any items
+            // push one item to the other stream; this should produce one right-join item
             // w1 = { 0:A0 (ts: 0), 1:A1 (ts: 1) }
             // w2 = { 0:a0 (ts: 100), 1:a1 (ts: 102) }
             // --> w1 = { 0:A0 (ts: 0), 1:A1 (ts: 1) }
@@ -790,7 +790,9 @@ public class KStreamKStreamOuterJoinTest {
             time += 1;
             inputTopic2.pipeInput(expectedKeys[2], "a" + expectedKeys[2], time);
 
-            processor.checkAndClearProcessResult();
+            processor.checkAndClearProcessResult(
+                    new KeyValueTimestamp<>(1, "null+a1", 102L)
+                );
 
             // push one item to the first stream; this should not produce one full-join item
             // w1 = { 0:A0 (ts: 0), 1:A1 (ts: 1) }
@@ -884,13 +886,12 @@ public class KStreamKStreamOuterJoinTest {
             // w1 = { 0:A0 (ts: 0), 1:A1 (ts: 1) }
             // w2 = { 1:a1 (ts: 1), 2:a2 (ts: 101), 3:a3 (ts: 101) }
             // --> w1 = { 0:A0 (ts: 0), 1:A1 (ts: 1), 2:A2 (ts: 201) }
-            // --> w2 = { 1:a1 (ts: 1), 2:a2 (ts: 101), 3:a3 (ts: 101 }
+            // --> w2 = { 1:a1 (ts: 1), 2:a2 (ts: 101), 3:a3 (ts: 101) }
             time += 100;
             inputTopic1.pipeInput(expectedKeys[2], "A" + expectedKeys[2], time);
 
             processor.checkAndClearProcessResult(
-                    new KeyValueTimestamp<>(2, "A2+a2", 201L),
-                    new KeyValueTimestamp<>(3, "null+a3", 101L)
+                    new KeyValueTimestamp<>(2, "A2+a2", 201L)
             );
         }
     }
