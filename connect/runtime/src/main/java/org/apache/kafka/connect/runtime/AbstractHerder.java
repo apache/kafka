@@ -79,6 +79,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -394,73 +395,107 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         return configDef.validateAll(config);
     }
 
+    /**
+     * General-purpose validation logic for converters that are configured directly
+     * in a connector config (as opposed to inherited from the worker config).
+     * @param connectorConfig the configuration for the connector; may not be null
+     * @param pluginConfigValue the {@link ConfigValue} for the converter property in the connector config;
+     *                          may be null, in which case no validation will be performed under the assumption that the
+     *                          connector will use inherit the converter settings from the worker
+     * @param pluginInterface the interface for the plugin type
+     *                        (e.g., {@code org.apache.kafka.connect.storage.Converter.class});
+     *                        may not be null
+     * @param configDefAccessor an accessor that can be used to retrieve a {@link ConfigDef}
+     *                          from an instance of the plugin type (e.g., {@code Converter::config});
+     *                          may not be null
+     * @param pluginName a lowercase, human-readable name for the type of plugin (e.g., {@code "key converter"});
+     *                   may not be null
+     * @param pluginProperty the property used to define a custom class for the plugin type
+     *                       in a connector config (e.g., {@link ConnectorConfig#KEY_CONVERTER_CLASS_CONFIG});
+     *                       may not be null
+     * @param defaultProperties any default properties to include in the configuration that will be used for
+     *                          the plugin; may be null
+
+     * @return a {@link ConfigInfos} object containing validation results for the plugin in the connector config,
+     * or null if no custom validation was performed (possibly because no custom plugin was defined in the connector
+     * config)
+
+     * @param <T> the plugin class to perform validation for
+     */
     private <T> ConfigInfos validateConverterConfig(
             Map<String, String> connectorConfig,
-            ConfigValue converterConfigValue,
-            Class<T> converterInterface,
+            ConfigValue pluginConfigValue,
+            Class<T> pluginInterface,
             Function<T, ConfigDef> configDefAccessor,
-            String converterName,
-            String converterProperty,
-            ConverterType converterType
+            String pluginName,
+            String pluginProperty,
+            Map<String, String> defaultProperties
     ) {
-        String converterClass = connectorConfig.get(converterProperty);
+        Objects.requireNonNull(connectorConfig);
+        Objects.requireNonNull(pluginInterface);
+        Objects.requireNonNull(configDefAccessor);
+        Objects.requireNonNull(pluginName);
+        Objects.requireNonNull(pluginProperty);
 
-        if (converterClass == null
-                || converterConfigValue == null
-                || !converterConfigValue.errorMessages().isEmpty()
+        String pluginClass = connectorConfig.get(pluginProperty);
+
+        if (pluginClass == null
+                || pluginConfigValue == null
+                || !pluginConfigValue.errorMessages().isEmpty()
         ) {
             // Either no custom converter was specified, or one was specified but there's a problem with it.
             // No need to proceed any further.
             return null;
         }
 
-        T converterInstance;
+        T pluginInstance;
         try {
-            converterInstance = Utils.newInstance(converterClass, converterInterface);
+            pluginInstance = Utils.newInstance(pluginClass, pluginInterface);
         } catch (ClassNotFoundException | RuntimeException e) {
-            log.error("Failed to instantiate {} class {}; this should have been caught by prior validation logic", converterName, converterClass, e);
-            converterConfigValue.addErrorMessage("Failed to load class " + converterClass + (e.getMessage() != null ? ": " + e.getMessage() : ""));
+            log.error("Failed to instantiate {} class {}; this should have been caught by prior validation logic", pluginName, pluginClass, e);
+            pluginConfigValue.addErrorMessage("Failed to load class " + pluginClass + (e.getMessage() != null ? ": " + e.getMessage() : ""));
             return null;
         }
 
         try {
             ConfigDef configDef;
             try {
-                configDef = configDefAccessor.apply(converterInstance);
+                configDef = configDefAccessor.apply(pluginInstance);
             } catch (RuntimeException e) {
-                log.error("Failed to load ConfigDef from {} of type {}", converterName, converterClass, e);
-                converterConfigValue.addErrorMessage("Failed to load ConfigDef from " + converterName + (e.getMessage() != null ? ": " + e.getMessage() : ""));
+                log.error("Failed to load ConfigDef from {} of type {}", pluginName, pluginClass, e);
+                pluginConfigValue.addErrorMessage("Failed to load ConfigDef from " + pluginName + (e.getMessage() != null ? ": " + e.getMessage() : ""));
                 return null;
             }
             if (configDef == null) {
-                log.warn("{}.config() has returned a null ConfigDef; no further preflight config validation for this converter will be performed", converterClass);
+                log.warn("{}.config() has returned a null ConfigDef; no further preflight config validation for this converter will be performed", pluginClass);
                 // Older versions of Connect didn't do any converter validation.
                 // Even though converters are technically required to return a non-null ConfigDef object from their config() method,
                 // we permit this case in order to avoid breaking existing converters that, despite not adhering to this requirement,
                 // can be used successfully with a connector.
                 return null;
             }
-            final String converterPrefix = converterProperty + ".";
-            Map<String, String> converterConfig = connectorConfig.entrySet().stream()
-                    .filter(e -> e.getKey().startsWith(converterPrefix))
+            final String pluginPrefix = pluginProperty + ".";
+            Map<String, String> pluginConfig = connectorConfig.entrySet().stream()
+                    .filter(e -> e.getKey().startsWith(pluginPrefix))
                     .collect(Collectors.toMap(
-                            e -> e.getKey().substring(converterPrefix.length()),
+                            e -> e.getKey().substring(pluginPrefix.length()),
                             Map.Entry::getValue
                     ));
-            converterConfig.putIfAbsent(ConverterConfig.TYPE_CONFIG, converterType.getName());
+            if (defaultProperties != null)
+                defaultProperties.forEach(pluginConfig::putIfAbsent);
 
             List<ConfigValue> configValues;
             try {
-                configValues = configDef.validate(converterConfig);
+                configValues = configDef.validate(pluginConfig);
             } catch (RuntimeException e) {
-                log.error("Failed to perform custom config validation for {} of type {}", converterName, converterClass, e);
-                converterConfigValue.addErrorMessage("Failed to perform custom config validation for " + converterName + (e.getMessage() != null ? ": " + e.getMessage() : ""));
+                log.error("Failed to perform custom config validation for {} of type {}", pluginName, pluginClass, e);
+                pluginConfigValue.addErrorMessage("Failed to perform custom config validation for " + pluginName + (e.getMessage() != null ? ": " + e.getMessage() : ""));
                 return null;
             }
 
-            return prefixedConfigInfos(configDef.configKeys(), configValues, converterPrefix);
+            return prefixedConfigInfos(configDef.configKeys(), configValues, pluginPrefix);
         } finally {
-            Utils.maybeCloseQuietly(converterInstance, converterName + " " + converterClass);
+            Utils.maybeCloseQuietly(pluginInstance, pluginName + " " + pluginClass);
         }
     }
 
@@ -472,7 +507,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                 HeaderConverter::config,
                 "header converter",
                 HEADER_CONVERTER_CLASS_CONFIG,
-                ConverterType.HEADER
+                Collections.singletonMap(ConverterConfig.TYPE_CONFIG, ConverterType.HEADER.getName())
         );
     }
 
@@ -484,7 +519,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                 Converter::config,
                 "key converter",
                 KEY_CONVERTER_CLASS_CONFIG,
-                ConverterType.KEY
+                Collections.singletonMap(ConverterConfig.TYPE_CONFIG, ConverterType.KEY.getName())
         );
     }
 
@@ -496,7 +531,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                 Converter::config,
                 "value converter",
                 VALUE_CONVERTER_CLASS_CONFIG,
-                ConverterType.VALUE
+                Collections.singletonMap(ConverterConfig.TYPE_CONFIG, ConverterType.VALUE.getName())
         );
     }
 
