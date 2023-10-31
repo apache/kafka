@@ -29,6 +29,7 @@ import org.apache.kafka.clients.consumer.internals.events.ResetPositionsApplicat
 import org.apache.kafka.clients.consumer.internals.events.ValidatePositionsApplicationEvent;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.WakeupException;
@@ -38,6 +39,8 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.ArgumentMatchers;
 import org.mockito.MockedConstruction;
 import org.mockito.stubbing.Answer;
@@ -52,6 +55,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static java.util.Collections.singleton;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -61,6 +65,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -129,8 +134,9 @@ public class AsyncKafkaConsumerTest {
         assertFalse(future.isCompletedExceptionally());
     }
 
-    @Test
-    public void testCommitAsync_UserSuppliedCallback() {
+    @ParameterizedTest
+    @MethodSource("commitExceptionSupplier")
+    public void testCommitAsync_UserSuppliedCallback(Exception exception) {
         CompletableFuture<Void> future = new CompletableFuture<>();
 
         Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
@@ -139,9 +145,22 @@ public class AsyncKafkaConsumerTest {
 
         doReturn(future).when(consumer).commit(offsets, false);
         OffsetCommitCallback customCallback = mock(OffsetCommitCallback.class);
-        consumer.commitAsync(offsets, customCallback);
-        future.complete(null);
-        verify(customCallback).onComplete(offsets, null);
+        assertDoesNotThrow(() -> consumer.commitAsync(offsets, customCallback));
+
+        if (exception == null) {
+            future.complete(null);
+            verify(customCallback).onComplete(offsets, null);
+        } else {
+            future.completeExceptionally(exception);
+            verify(customCallback).onComplete(eq(offsets), any(exception.getClass()));
+        }
+    }
+
+    private static Stream<Exception> commitExceptionSupplier() {
+        return Stream.of(
+            null,  // For the successful completion scenario
+            new KafkaException("Test exception"),
+            new GroupAuthorizationException("Group authorization exception"));
     }
 
     @Test
