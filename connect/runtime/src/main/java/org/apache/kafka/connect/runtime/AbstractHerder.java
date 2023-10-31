@@ -423,7 +423,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             return null;
         }
 
-        try (Utils.UncheckedCloseable close = () -> Utils.maybeCloseQuietly(converterInstance, converterName + " " + converterClass);) {
+        try {
             ConfigDef configDef;
             try {
                 configDef = configDefAccessor.apply(converterInstance);
@@ -459,6 +459,8 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             }
 
             return prefixedConfigInfos(configDef.configKeys(), configValues, converterPrefix);
+        } finally {
+            Utils.maybeCloseQuietly(converterInstance, converterName + " " + converterClass);
         }
     }
 
