@@ -26,15 +26,13 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
-import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -189,28 +187,17 @@ public class ConsumerConfigTest {
     }
 
     @ParameterizedTest
-    @MethodSource("protocolNameSupplier")
+    @CsvSource({"consumer, true", "generic, true", "Consumer, true", "Generic, true", "invalid, false"})
     public void testProtocolConfigValidation(String protocol, boolean isValid) {
         final Map<String, Object> configs = new HashMap<>();
         configs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializerClass);
         configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClass);
         configs.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, protocol);
-        try {
+        if (isValid) {
             ConsumerConfig config = new ConsumerConfig(configs);
             assertEquals(protocol, config.getString(ConsumerConfig.GROUP_PROTOCOL_CONFIG));
-        } catch (ConfigException e) {
-            if (isValid)
-                fail("Should not have thrown an exception");
+        } else {
+            assertThrows(ConfigException.class, () -> new ConsumerConfig(configs));
         }
-    }
-
-    // Supplies (name, isValid)
-    private static Stream<Arguments> protocolNameSupplier() {
-        return Stream.of(
-            Arguments.of("consumer", true),
-            Arguments.of("generic", true),
-            Arguments.of("Consumer", true),
-            Arguments.of("Generic", true),
-            Arguments.of("invalid", false));
     }
 }
