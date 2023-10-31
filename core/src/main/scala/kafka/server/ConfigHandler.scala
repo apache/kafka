@@ -18,7 +18,7 @@
 package kafka.server
 
 import java.net.{InetAddress, UnknownHostException}
-import java.util.{Collections, Properties}
+import java.util.Properties
 import DynamicConfig.Broker._
 import kafka.controller.KafkaController
 import kafka.log.UnifiedLog
@@ -82,9 +82,8 @@ class TopicConfigHandler(private val replicaManager: ReplicaManager,
     if (!wasRemoteLogEnabledBeforeUpdate && isRemoteLogEnabled) {
       val (leaderPartitions, followerPartitions) =
         logs.flatMap(log => replicaManager.onlinePartition(log.topicPartition)).partition(_.isLeader)
-      val topicIds = Collections.singletonMap(topic, replicaManager.metadataCache.getTopicId(topic))
       replicaManager.remoteLogManager.foreach(rlm =>
-        rlm.onLeadershipChange(leaderPartitions.toSet.asJava, followerPartitions.toSet.asJava, topicIds))
+        rlm.onLeadershipChange(leaderPartitions.toSet.asJava, followerPartitions.toSet.asJava))
     } else if (wasRemoteLogEnabledBeforeUpdate && !isRemoteLogEnabled) {
       warn(s"Disabling remote log on the topic: $topic is not supported.")
     }

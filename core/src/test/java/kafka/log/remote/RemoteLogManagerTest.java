@@ -22,6 +22,7 @@ import kafka.cluster.Partition;
 import kafka.log.UnifiedLog;
 import kafka.server.BrokerTopicStats;
 import kafka.server.KafkaConfig;
+import kafka.server.MetadataCache;
 import kafka.server.StopPartition;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
@@ -198,18 +199,34 @@ public class RemoteLogManagerTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        topicIds.put(leaderTopicIdPartition.topicPartition().topic(), leaderTopicIdPartition.topicId());
-        topicIds.put(followerTopicIdPartition.topicPartition().topic(), followerTopicIdPartition.topicId());
         Properties props = kafka.utils.TestUtils.createDummyBrokerConfig();
         props.setProperty(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, "true");
         remoteLogManagerConfig = createRLMConfig(props);
         brokerTopicStats = new BrokerTopicStats(Optional.of(KafkaConfig.fromProps(props)));
 
         kafka.utils.TestUtils.clearYammerMetrics();
+        MetadataCache mockMetadataCache = Mockito.mock(MetadataCache.class);
+        Map<String, Uuid> mapping = new HashMap<>();
+        mapping.put(
+                leaderTopicIdPartition.topicPartition().topic(),
+                leaderTopicIdPartition.topicId()
+        );
+        mapping.put(
+                followerTopicIdPartition.topicPartition().topic(),
+                followerTopicIdPartition.topicId()
+        );
+        Mockito.when(mockMetadataCache.getTopicId(Mockito.anyString()))
+                .thenAnswer(invocation -> mapping.get(invocation.getArgument(0)));
+
+        Mockito.when(mockMetadataCache.contains(leaderTopicIdPartition.topicPartition()))
+                .thenReturn(true);
+
+        Mockito.when(mockMetadataCache.contains(followerTopicIdPartition.topicPartition()))
+                .thenReturn(true);
         remoteLogManager = new RemoteLogManager(remoteLogManagerConfig, brokerId, logDir, clusterId, time,
                 tp -> Optional.of(mockLog),
                 (topicPartition, offset) -> currentLogStartOffset.set(offset),
-                brokerTopicStats) {
+                brokerTopicStats, mockMetadataCache) {
             public RemoteStorageManager createRemoteStorageManager() {
                 return remoteStorageManager;
             }
@@ -310,7 +327,8 @@ public class RemoteLogManagerTest {
                 time,
                 tp -> Optional.of(mockLog),
                 (topicPartition, offset) -> { },
-                brokerTopicStats) {
+                brokerTopicStats,
+                Mockito.mock(MetadataCache.class)) {
             public RemoteStorageManager createRemoteStorageManager() {
                 return remoteStorageManager;
             }
@@ -654,7 +672,7 @@ public class RemoteLogManagerTest {
 
         // before running tasks, the remote log manager tasks should be all idle
         assertEquals(1.0, yammerMetricValue("RemoteLogManagerTasksAvgIdlePercent"));
-        remoteLogManager.onLeadershipChange(Collections.singleton(mockLeaderPartition), Collections.singleton(mockFollowerPartition), topicIds);
+        remoteLogManager.onLeadershipChange(Collections.singleton(mockLeaderPartition), Collections.singleton(mockFollowerPartition));
         assertTrue(yammerMetricValue("RemoteLogManagerTasksAvgIdlePercent") < 1.0);
         // unlock copyLogSegmentData
         latch.countDown();
@@ -881,7 +899,8 @@ public class RemoteLogManagerTest {
             new RemoteLogManager(remoteLogManagerConfig, brokerId, logDir, clusterId, time,
                     t -> Optional.empty(),
                     (topicPartition, offset) -> { },
-                    brokerTopicStats) {
+                    brokerTopicStats,
+                    Mockito.mock(MetadataCache.class)) {
                 public RemoteStorageManager createRemoteStorageManager() {
                     return rsmManager;
                 }
@@ -911,27 +930,26 @@ public class RemoteLogManagerTest {
 
         when(remoteLogMetadataManager.remoteLogSegmentMetadata(any(TopicIdPartition.class), anyInt(), anyLong()))
             .thenReturn(Optional.empty());
-        verifyNotInCache(followerTopicIdPartition, leaderTopicIdPartition);
+        verifyInCache(followerTopicIdPartition, leaderTopicIdPartition);
         // Load topicId cache
-        remoteLogManager.onLeadershipChange(Collections.singleton(mockLeaderPartition), Collections.singleton(mockFollowerPartition), topicIds);
+        remoteLogManager.onLeadershipChange(Collections.singleton(mockLeaderPartition), Collections.singleton(mockFollowerPartition));
         verify(remoteLogMetadataManager, times(1))
             .onPartitionLeadershipChanges(Collections.singleton(leaderTopicIdPartition), Collections.singleton(followerTopicIdPartition));
         verifyInCache(followerTopicIdPartition, leaderTopicIdPartition);
 
         // Evicts from topicId cache
         remoteLogManager.stopPartitions(Collections.singleton(new StopPartition(leaderTopicIdPartition.topicPartition(), true, true)), (tp, ex) -> { });
-        verifyNotInCache(leaderTopicIdPartition);
-        verifyInCache(followerTopicIdPartition);
+        verifyInCache(followerTopicIdPartition, leaderTopicIdPartition);
 
         // Evicts from topicId cache
         remoteLogManager.stopPartitions(Collections.singleton(new StopPartition(followerTopicIdPartition.topicPartition(), true, true)), (tp, ex) -> { });
-        verifyNotInCache(leaderTopicIdPartition, followerTopicIdPartition);
+        verifyInCache(leaderTopicIdPartition, followerTopicIdPartition);
     }
 
     @Test
     void testFetchRemoteLogSegmentMetadata() throws RemoteStorageException {
         remoteLogManager.onLeadershipChange(
-            Collections.singleton(mockPartition(leaderTopicIdPartition)), Collections.singleton(mockPartition(followerTopicIdPartition)), topicIds);
+            Collections.singleton(mockPartition(leaderTopicIdPartition)), Collections.singleton(mockPartition(followerTopicIdPartition)));
         remoteLogManager.fetchRemoteLogSegmentMetadata(leaderTopicIdPartition.topicPartition(), 10, 100L);
         remoteLogManager.fetchRemoteLogSegmentMetadata(followerTopicIdPartition.topicPartition(), 20, 200L);
 
@@ -945,13 +963,13 @@ public class RemoteLogManagerTest {
     void testOnLeadershipChangeWillInvokeHandleLeaderOrFollowerPartitions() {
         RemoteLogManager spyRemoteLogManager = spy(remoteLogManager);
         spyRemoteLogManager.onLeadershipChange(
-            Collections.emptySet(), Collections.singleton(mockPartition(followerTopicIdPartition)), topicIds);
+            Collections.emptySet(), Collections.singleton(mockPartition(followerTopicIdPartition)));
         verify(spyRemoteLogManager).doHandleLeaderOrFollowerPartitions(eq(followerTopicIdPartition), any(java.util.function.Consumer.class));
 
         Mockito.reset(spyRemoteLogManager);
 
         spyRemoteLogManager.onLeadershipChange(
-            Collections.singleton(mockPartition(leaderTopicIdPartition)), Collections.emptySet(), topicIds);
+            Collections.singleton(mockPartition(leaderTopicIdPartition)), Collections.emptySet());
         verify(spyRemoteLogManager).doHandleLeaderOrFollowerPartitions(eq(leaderTopicIdPartition), any(java.util.function.Consumer.class));
     }
 
@@ -1093,7 +1111,7 @@ public class RemoteLogManagerTest {
 
         when(mockLog.logEndOffset()).thenReturn(600L);
 
-        remoteLogManager.onLeadershipChange(Collections.singleton(mockPartition(leaderTopicIdPartition)), Collections.emptySet(), topicIds);
+        remoteLogManager.onLeadershipChange(Collections.singleton(mockPartition(leaderTopicIdPartition)), Collections.emptySet());
     }
 
     @Test
@@ -1110,7 +1128,7 @@ public class RemoteLogManagerTest {
         MockedConstruction<KafkaMetricsGroup> mockMetricsGroupCtor = mockConstruction(KafkaMetricsGroup.class);
         try {
             RemoteLogManager remoteLogManager = new RemoteLogManager(remoteLogManagerConfig, brokerId, logDir, clusterId,
-                time, tp -> Optional.of(mockLog), (topicPartition, offset) -> { }, brokerTopicStats) {
+                time, tp -> Optional.of(mockLog), (topicPartition, offset) -> { }, brokerTopicStats, Mockito.mock(MetadataCache.class)) {
                 public RemoteStorageManager createRemoteStorageManager() {
                     return remoteStorageManager;
                 }
@@ -1379,7 +1397,7 @@ public class RemoteLogManagerTest {
         partitions.add(new StopPartition(leaderTopicIdPartition.topicPartition(), true, false));
         partitions.add(new StopPartition(followerTopicIdPartition.topicPartition(), true, false));
         remoteLogManager.onLeadershipChange(Collections.singleton(mockPartition(leaderTopicIdPartition)),
-                Collections.singleton(mockPartition(followerTopicIdPartition)), topicIds);
+                Collections.singleton(mockPartition(followerTopicIdPartition)));
         assertNotNull(remoteLogManager.task(leaderTopicIdPartition));
         assertNotNull(remoteLogManager.task(followerTopicIdPartition));
 
@@ -1399,7 +1417,7 @@ public class RemoteLogManagerTest {
         partitions.add(new StopPartition(leaderTopicIdPartition.topicPartition(), true, true));
         partitions.add(new StopPartition(followerTopicIdPartition.topicPartition(), true, true));
         remoteLogManager.onLeadershipChange(Collections.singleton(mockPartition(leaderTopicIdPartition)),
-                Collections.singleton(mockPartition(followerTopicIdPartition)), topicIds);
+                Collections.singleton(mockPartition(followerTopicIdPartition)));
         assertNotNull(remoteLogManager.task(leaderTopicIdPartition));
         assertNotNull(remoteLogManager.task(followerTopicIdPartition));
 
@@ -1455,7 +1473,8 @@ public class RemoteLogManagerTest {
         try (RemoteLogManager remoteLogManager = new RemoteLogManager(remoteLogManagerConfig, brokerId, logDir, clusterId, time,
                 tp -> Optional.of(mockLog),
                 (topicPartition, offset) -> { },
-                brokerTopicStats) {
+                brokerTopicStats,
+                Mockito.mock(MetadataCache.class)) {
             public RemoteLogMetadataManager createRemoteLogMetadataManager() {
                 return remoteLogMetadataManager;
             }
@@ -1480,7 +1499,8 @@ public class RemoteLogManagerTest {
         try (RemoteLogManager remoteLogManager = new RemoteLogManager(remoteLogManagerConfig, brokerId, logDir, clusterId, time,
                 tp -> Optional.of(mockLog),
                 (topicPartition, offset) -> { },
-                brokerTopicStats) {
+                brokerTopicStats,
+                Mockito.mock(MetadataCache.class)) {
             public RemoteLogMetadataManager createRemoteLogMetadataManager() {
                 return remoteLogMetadataManager;
             }
@@ -1514,7 +1534,8 @@ public class RemoteLogManagerTest {
         try (RemoteLogManager remoteLogManager = new RemoteLogManager(remoteLogManagerConfig, brokerId, logDir, clusterId, time,
                 tp -> Optional.of(mockLog),
                 (topicPartition, offset) ->  logStartOffset.set(offset),
-                brokerTopicStats) {
+                brokerTopicStats,
+                Mockito.mock(MetadataCache.class)) {
             public RemoteLogMetadataManager createRemoteLogMetadataManager() {
                 return remoteLogMetadataManager;
             }
@@ -1816,7 +1837,8 @@ public class RemoteLogManagerTest {
                 time,
                 tp -> Optional.of(mockLog),
                 (topicPartition, offset) -> { },
-                brokerTopicStats) {
+                brokerTopicStats,
+                Mockito.mock(MetadataCache.class)) {
             public RemoteStorageManager createRemoteStorageManager() {
                 return rsmManager;
             }
@@ -1883,7 +1905,8 @@ public class RemoteLogManagerTest {
                 time,
                 tp -> Optional.of(mockLog),
                 (topicPartition, offset) -> { },
-                brokerTopicStats) {
+                brokerTopicStats,
+                Mockito.mock(MetadataCache.class)) {
             public RemoteStorageManager createRemoteStorageManager() {
                 return rsmManager;
             }
