@@ -792,7 +792,7 @@ public class KStreamKStreamOuterJoinTest {
 
             processor.checkAndClearProcessResult(
                     new KeyValueTimestamp<>(1, "null+a1", 102L)
-                );
+            );
 
             // push one item to the first stream; this should not produce one full-join item
             // w1 = { 0:A0 (ts: 0), 1:A1 (ts: 1) }
