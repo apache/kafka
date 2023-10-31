@@ -398,11 +398,6 @@ public class RecordHelpersTest {
             mkSortedTopicAssignment(topicId2, 24, 25, 26)
         );
 
-        Map<Uuid, Set<Integer>> assigning = mkSortedAssignment(
-            mkSortedTopicAssignment(topicId1, 17, 18, 19),
-            mkSortedTopicAssignment(topicId2, 27, 28, 29)
-        );
-
         Record expectedRecord = new Record(
             new ApiMessageAndVersion(
                 new ConsumerGroupCurrentMemberAssignmentKey()
@@ -411,6 +406,7 @@ public class RecordHelpersTest {
                 (short) 8),
             new ApiMessageAndVersion(
                 new ConsumerGroupCurrentMemberAssignmentValue()
+                    .setState(ConsumerGroupMember.MemberState.UNACKNOWLEDGED_ASSIGNMENT.value())
                     .setMemberEpoch(22)
                     .setPreviousMemberEpoch(21)
                     .setAssignedPartitions(Arrays.asList(
@@ -432,6 +428,7 @@ public class RecordHelpersTest {
         assertEquals(expectedRecord, newCurrentAssignmentRecord(
             "group-id",
             new ConsumerGroupMember.Builder("member-id")
+                .setState(ConsumerGroupMember.MemberState.UNACKNOWLEDGED_ASSIGNMENT)
                 .setMemberEpoch(22)
                 .setPreviousMemberEpoch(21)
                 .setAssignedPartitions(assigned)
