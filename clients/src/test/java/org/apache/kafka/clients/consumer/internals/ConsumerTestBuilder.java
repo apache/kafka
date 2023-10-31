@@ -28,7 +28,6 @@ import org.apache.kafka.clients.consumer.internals.events.ApplicationEventHandle
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
-import org.apache.kafka.clients.consumer.internals.events.BackgroundEventProcessor;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.requests.MetadataResponse;
@@ -46,7 +45,6 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.atomic.AtomicReference;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_INSTANCE_ID_CONFIG;
@@ -93,11 +91,10 @@ public class ConsumerTestBuilder implements Closeable {
     final FetchRequestManager fetchRequestManager;
     final RequestManagers requestManagers;
     public final ApplicationEventProcessor applicationEventProcessor;
-    public final BackgroundEventProcessor backgroundEventProcessor;
     public final BackgroundEventHandler backgroundEventHandler;
     final MockClient client;
     final Optional<GroupInformation> groupInfo;
-    final AtomicReference<Optional<ConsumerGroupMetadata>> groupMetadata;
+    final Optional<ConsumerGroupMetadata> groupMetadata;
 
     public ConsumerTestBuilder() {
         this(Optional.empty());
@@ -114,9 +111,9 @@ public class ConsumerTestBuilder implements Closeable {
                     GroupState.Generation.NO_GENERATION.memberId,
                     groupState.groupInstanceId
             );
-            this.groupMetadata = new AtomicReference<>(Optional.of(cgm));
+            this.groupMetadata = Optional.of(cgm);
         } else {
-            this.groupMetadata = new AtomicReference<>(Optional.empty());
+            this.groupMetadata = Optional.empty();
         }
 
         this.applicationEventQueue = new LinkedBlockingQueue<>();
@@ -260,18 +257,12 @@ public class ConsumerTestBuilder implements Closeable {
                 requestManagers,
                 metadata)
         );
-        this.backgroundEventProcessor = spy(new BackgroundEventProcessor(
-                logContext,
-                backgroundEventQueue,
-                groupMetadata
-        ));
     }
 
     @Override
     public void close() {
         closeQuietly(requestManagers, RequestManagers.class.getSimpleName());
         closeQuietly(applicationEventProcessor, ApplicationEventProcessor.class.getSimpleName());
-        closeQuietly(backgroundEventProcessor, BackgroundEventProcessor.class.getSimpleName());
     }
 
     public static class ConsumerNetworkThreadTestBuilder extends ConsumerTestBuilder {

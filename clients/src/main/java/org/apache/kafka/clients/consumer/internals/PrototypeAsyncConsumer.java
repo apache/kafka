@@ -37,9 +37,11 @@ import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
-import org.apache.kafka.clients.consumer.internals.events.BackgroundEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.events.EventProcessor;
+import org.apache.kafka.clients.consumer.internals.events.GroupMetadataUpdatedEvent;
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
 import org.apache.kafka.clients.consumer.internals.events.OffsetFetchApplicationEvent;
@@ -118,7 +120,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
 
     private final ApplicationEventHandler applicationEventHandler;
     private final Time time;
-    private final AtomicReference<Optional<ConsumerGroupMetadata>> groupMetadata;
+    private volatile Optional<ConsumerGroupMetadata> groupMetadata;
     private final KafkaConsumerMetrics kafkaConsumerMetrics;
     private Logger log;
     private final String clientId;
@@ -188,9 +190,9 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
                         GroupState.Generation.NO_GENERATION.memberId,
                         groupRebalanceConfig.groupInstanceId
                 );
-                this.groupMetadata = new AtomicReference<>(Optional.of(cgm));
+                this.groupMetadata = Optional.of(cgm);
             } else {
-                this.groupMetadata = new AtomicReference<>(Optional.empty());
+                this.groupMetadata = Optional.empty();
             }
 
             this.clientId = config.getString(CommonClientConfigs.CLIENT_ID_CONFIG);
@@ -252,18 +254,14 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
                     applicationEventProcessorSupplier,
                     networkClientDelegateSupplier,
                     requestManagersSupplier);
-            this.backgroundEventProcessor = new BackgroundEventProcessor(
-                    logContext,
-                    backgroundEventQueue,
-                    groupMetadata
-            );
+            this.backgroundEventProcessor = new BackgroundEventProcessor(logContext, backgroundEventQueue);
             this.assignors = ConsumerPartitionAssignor.getAssignorInstances(
                     config.getList(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG),
                     config.originals(Collections.singletonMap(ConsumerConfig.CLIENT_ID_CONFIG, clientId))
             );
 
             // no coordinator will be constructed for the default (null) group id
-            if (!groupMetadata.get().isPresent()) {
+            if (!groupMetadata.isPresent()) {
                 config.ignore(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG);
                 //config.ignore(ConsumerConfig.THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED);
             }
@@ -308,7 +306,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
                                   long retryBackoffMs,
                                   int defaultApiTimeoutMs,
                                   List<ConsumerPartitionAssignor> assignors,
-                                  AtomicReference<Optional<ConsumerGroupMetadata>> groupMetadata) {
+                                  Optional<ConsumerGroupMetadata> groupMetadata) {
         this.log = logContext.logger(getClass());
         this.subscriptions = subscriptions;
         this.clientId = clientId;
@@ -319,7 +317,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         this.time = time;
         this.metrics = metrics;
         this.groupMetadata = groupMetadata;
-        this.backgroundEventProcessor = new BackgroundEventProcessor(logContext, backgroundEventQueue, groupMetadata);
+        this.backgroundEventProcessor = new BackgroundEventProcessor(logContext, backgroundEventQueue);
         this.metadata = metadata;
         this.retryBackoffMs = retryBackoffMs;
         this.defaultApiTimeoutMs = defaultApiTimeoutMs;
@@ -531,14 +529,11 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     }
 
     private ConsumerGroupMetadata maybeThrowInvalidGroupIdException() {
-        Optional<ConsumerGroupMetadata> gm = groupMetadata.get();
+        if (groupMetadata.isPresent())
+            return groupMetadata.get();
 
-        if (!gm.isPresent()) {
-            throw new InvalidGroupIdException("To use the group management or offset commit APIs, you must " +
-                    "provide a valid " + ConsumerConfig.GROUP_ID_CONFIG + " in the consumer configuration.");
-        }
-
-        return gm.get();
+        throw new InvalidGroupIdException("To use the group management or offset commit APIs, you must " +
+                "provide a valid " + ConsumerConfig.GROUP_ID_CONFIG + " in the consumer configuration.");
     }
 
     @Override
@@ -977,7 +972,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
      * according to config {@link CommonClientConfigs#GROUP_ID_CONFIG}
      */
     private boolean isCommittedOffsetsManagementEnabled() {
-        return groupMetadata.get().isPresent();
+        return groupMetadata.isPresent();
     }
 
     /**
@@ -1115,4 +1110,65 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         }
     }
 
+    /**
+     * An {@link EventProcessor} that is created and executes in the application thread for the purpose of processing
+     * {@link BackgroundEvent background events} generated by the {@link ConsumerNetworkThread network thread}.
+     * Those events are generally of two types:
+     *
+     * <ul>
+     *     <li>Errors that occur in the network thread that need to be propagated to the application thread</li>
+     *     <li>{@link ConsumerRebalanceListener} callbacks that are to be executed on the application thread</li>
+     * </ul>
+     */
+    public class BackgroundEventProcessor extends EventProcessor<BackgroundEvent> {
+
+        public BackgroundEventProcessor(final LogContext logContext,
+                                        final BlockingQueue<BackgroundEvent> backgroundEventQueue) {
+            super(logContext, backgroundEventQueue);
+        }
+
+        /**
+         * Process the events—if any—that were produced by the {@link ConsumerNetworkThread network thread}.
+         * It is possible that {@link ErrorBackgroundEvent an error} could occur when processing the events.
+         * In such cases, the processor will take a reference to the first error, continue to process the
+         * remaining events, and then throw the first error that occurred.
+         */
+        @Override
+        public void process() {
+            AtomicReference<KafkaException> firstError = new AtomicReference<>();
+            process((event, error) -> firstError.compareAndSet(null, error));
+
+            if (firstError.get() != null)
+                throw firstError.get();
+        }
+
+        @Override
+        public void process(final BackgroundEvent event) {
+            switch (event.type()) {
+                case ERROR:
+                    process((ErrorBackgroundEvent) event);
+                    return;
+
+                case GROUP_METADATA_UPDATED:
+                    process((GroupMetadataUpdatedEvent) event);
+                    return;
+
+                default:
+                    throw new IllegalArgumentException("Background event type " + event.type() + " was not expected");
+            }
+        }
+
+        @Override
+        protected Class<BackgroundEvent> getEventClass() {
+            return BackgroundEvent.class;
+        }
+
+        private void process(final ErrorBackgroundEvent event) {
+            throw event.error();
+        }
+
+        private void process(final GroupMetadataUpdatedEvent event) {
+            PrototypeAsyncConsumer.this.groupMetadata = Optional.ofNullable(event.groupMetadata());
+        }
+    }
 }
