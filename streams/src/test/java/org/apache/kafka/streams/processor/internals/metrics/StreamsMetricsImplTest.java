@@ -148,7 +148,8 @@ public class StreamsMetricsImplTest {
 
     private ArgumentCaptor<String> addSensorsOnAllLevels(final Metrics metrics, final StreamsMetricsImpl streamsMetrics) {
         final ArgumentCaptor<String> sensorKeys = ArgumentCaptor.forClass(String.class);
-        when(metrics.sensor(sensorKeys.capture(), any(RecordingLevel.class), any()))
+        final Sensor[] parents = {};
+        when(metrics.sensor(sensorKeys.capture(), eq(INFO_RECORDING_LEVEL), parents))
             .thenReturn(sensor);
         when(metrics.metricName(METRIC_NAME1, CLIENT_LEVEL_GROUP, DESCRIPTION1, clientLevelTags))
             .thenReturn(metricName1);
@@ -199,7 +200,8 @@ public class StreamsMetricsImplTest {
                                                   final RecordingLevel recordingLevel) {
         final ArgumentCaptor<String> sensorKey = ArgumentCaptor.forClass(String.class);
         when(metrics.getSensor(sensorKey.capture())).thenReturn(null);
-        when(metrics.sensor(sensorKey.capture(), any(RecordingLevel.class), any())).thenReturn(sensor);
+        final Sensor[] parents = {};
+        when(metrics.sensor(sensorKey.capture(), eq(INFO_RECORDING_LEVEL), parents)).thenReturn(sensor);
         return sensorKey;
     }
 
