@@ -16,52 +16,59 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
+import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkThread;
 
 import java.util.Objects;
 
 /**
- * This is the abstract definition of the events created by the {@link ConsumerNetworkThread network thread}.
+ * This event is sent by the {@link ConsumerNetworkThread consumer's network thread} to the application thread
+ * so that when the user calls the {@link Consumer#groupMetadata()} API, the information is up-to-date. The
+ * information for the current state of the group member is managed on the consumer network thread and thus
+ * requires this interplay between threads.
  */
-public abstract class BackgroundEvent {
+public class GroupMetadataUpdatedEvent extends BackgroundEvent {
 
-    public enum Type {
-        ERROR, GROUP_METADATA_UPDATED
+    private final ConsumerGroupMetadata groupMetadata;
+
+    public GroupMetadataUpdatedEvent(ConsumerGroupMetadata groupMetadata) {
+        super(Type.GROUP_METADATA_UPDATED);
+        this.groupMetadata = Objects.requireNonNull(groupMetadata, "ConsumerGroupMetadata must be non-null");
     }
 
-    protected final Type type;
-
-    public BackgroundEvent(Type type) {
-        this.type = Objects.requireNonNull(type);
-    }
-
-    public Type type() {
-        return type;
+    public ConsumerGroupMetadata groupMetadata() {
+        return groupMetadata;
     }
 
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
+        if (!super.equals(o)) return false;
 
-        BackgroundEvent that = (BackgroundEvent) o;
+        GroupMetadataUpdatedEvent that = (GroupMetadataUpdatedEvent) o;
 
-        return type == that.type;
+        return groupMetadata.equals(that.groupMetadata);
     }
 
     @Override
     public int hashCode() {
-        return type.hashCode();
+        int result = super.hashCode();
+        result = 31 * result + groupMetadata.hashCode();
+        return result;
     }
 
+    @Override
     protected String toStringBase() {
-        return "type=" + type;
+        return super.toStringBase() + ", groupMetadata=" + groupMetadata;
     }
 
     @Override
     public String toString() {
-        return "BackgroundEvent{" +
+        return "GroupMetadataUpdatedEvent{" +
                 toStringBase() +
                 '}';
     }
+
 }

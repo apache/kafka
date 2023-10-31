@@ -106,10 +106,6 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
                 processValidatePositionsEvent();
                 return;
 
-            case RETRIEVE_GROUP_METADATA:
-                process((RetrieveGroupMetadataApplicationEvent) event);
-                return;
-
             default:
                 log.warn("Application event type " + event.type() + " was not expected");
         }
@@ -179,15 +175,6 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         final CompletableFuture<Map<String, List<PartitionInfo>>> future =
                 this.requestManagers.topicMetadataRequestManager.requestTopicMetadata(Optional.of(event.topic()));
         event.chain(future);
-    }
-
-    private void process(final RetrieveGroupMetadataApplicationEvent event) {
-        process(
-                requestManagers.heartbeatRequestManager,
-                event,
-                hrm -> event.future().complete(hrm.groupMetadata()),
-                () -> "Unable to retrieve group metadata"
-        );
     }
 
     private <T extends RequestManager> void process(final Optional<T> requestManager,

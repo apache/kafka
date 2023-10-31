@@ -16,11 +16,13 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
+import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkThread;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.utils.LogContext;
 
+import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -36,9 +38,13 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 public class BackgroundEventProcessor extends EventProcessor<BackgroundEvent> {
 
+    private final AtomicReference<Optional<ConsumerGroupMetadata>> groupMetadata;
+
     public BackgroundEventProcessor(final LogContext logContext,
-                                    final BlockingQueue<BackgroundEvent> backgroundEventQueue) {
+                                    final BlockingQueue<BackgroundEvent> backgroundEventQueue,
+                                    final AtomicReference<Optional<ConsumerGroupMetadata>> groupMetadata) {
         super(logContext, backgroundEventQueue);
+        this.groupMetadata = groupMetadata;
     }
 
     /**
@@ -58,10 +64,18 @@ public class BackgroundEventProcessor extends EventProcessor<BackgroundEvent> {
 
     @Override
     public void process(final BackgroundEvent event) {
-        if (event.type() == BackgroundEvent.Type.ERROR)
-            process((ErrorBackgroundEvent) event);
-        else
-            throw new IllegalArgumentException("Background event type " + event.type() + " was not expected");
+        switch (event.type()) {
+            case ERROR:
+                process((ErrorBackgroundEvent) event);
+                return;
+
+            case GROUP_METADATA_UPDATED:
+                process((GroupMetadataUpdatedEvent) event);
+                return;
+
+            default:
+                throw new IllegalArgumentException("Background event type " + event.type() + " was not expected");
+        }
     }
 
     @Override
@@ -71,5 +85,9 @@ public class BackgroundEventProcessor extends EventProcessor<BackgroundEvent> {
 
     private void process(final ErrorBackgroundEvent event) {
         throw event.error();
+    }
+
+    private void process(final GroupMetadataUpdatedEvent event) {
+        groupMetadata.set(Optional.of(event.groupMetadata()));
     }
 }

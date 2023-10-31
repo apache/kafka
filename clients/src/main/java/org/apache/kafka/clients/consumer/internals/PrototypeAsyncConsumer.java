@@ -44,7 +44,6 @@ import org.apache.kafka.clients.consumer.internals.events.ListOffsetsApplication
 import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
 import org.apache.kafka.clients.consumer.internals.events.OffsetFetchApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ResetPositionsApplicationEvent;
-import org.apache.kafka.clients.consumer.internals.events.RetrieveGroupMetadataApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ValidatePositionsApplicationEvent;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.IsolationLevel;
@@ -119,7 +118,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
 
     private final ApplicationEventHandler applicationEventHandler;
     private final Time time;
-    private final Optional<String> groupId;
+    private final AtomicReference<Optional<ConsumerGroupMetadata>> groupMetadata;
     private final KafkaConsumerMetrics kafkaConsumerMetrics;
     private Logger log;
     private final String clientId;
@@ -174,18 +173,22 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
                                   final Deserializer<K> keyDeserializer,
                                   final Deserializer<V> valueDeserializer) {
         try {
+            this.groupMetadata = new AtomicReference<>(Optional.empty());
             GroupRebalanceConfig groupRebalanceConfig = new GroupRebalanceConfig(config,
                     GroupRebalanceConfig.ProtocolType.CONSUMER);
 
-            this.groupId = Optional.ofNullable(groupRebalanceConfig.groupId);
+            if (groupRebalanceConfig.groupId != null) {
+                if (groupRebalanceConfig.groupId.isEmpty()) {
+                    log.warn("Support for using the empty group id by consumers is deprecated and will be removed in the next major release.");
+                }
+
+                // Create our initial group metadata. It will be updated by messages passed from the network thread.
+                groupMetadata.set(Optional.of(new ConsumerGroupMetadata(groupRebalanceConfig.groupId)));
+            }
+
             this.clientId = config.getString(CommonClientConfigs.CLIENT_ID_CONFIG);
             LogContext logContext = createLogContext(config, groupRebalanceConfig);
             this.log = logContext.logger(getClass());
-            groupId.ifPresent(groupIdStr -> {
-                if (groupIdStr.isEmpty()) {
-                    log.warn("Support for using the empty group id by consumers is deprecated and will be removed in the next major release.");
-                }
-            });
 
             log.debug("Initializing the Kafka consumer");
             this.defaultApiTimeoutMs = config.getInt(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
@@ -242,14 +245,18 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
                     applicationEventProcessorSupplier,
                     networkClientDelegateSupplier,
                     requestManagersSupplier);
-            this.backgroundEventProcessor = new BackgroundEventProcessor(logContext, backgroundEventQueue);
+            this.backgroundEventProcessor = new BackgroundEventProcessor(
+                    logContext,
+                    backgroundEventQueue,
+                    groupMetadata
+            );
             this.assignors = ConsumerPartitionAssignor.getAssignorInstances(
                     config.getList(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG),
                     config.originals(Collections.singletonMap(ConsumerConfig.CLIENT_ID_CONFIG, clientId))
             );
 
             // no coordinator will be constructed for the default (null) group id
-            if (!groupId.isPresent()) {
+            if (!groupMetadata.get().isPresent()) {
                 config.ignore(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG);
                 //config.ignore(ConsumerConfig.THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED);
             }
@@ -294,7 +301,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
                                   long retryBackoffMs,
                                   int defaultApiTimeoutMs,
                                   List<ConsumerPartitionAssignor> assignors,
-                                  String groupId) {
+                                  AtomicReference<Optional<ConsumerGroupMetadata>> groupMetadata) {
         this.log = logContext.logger(getClass());
         this.subscriptions = subscriptions;
         this.clientId = clientId;
@@ -303,9 +310,9 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         this.isolationLevel = IsolationLevel.READ_UNCOMMITTED;
         this.interceptors = Objects.requireNonNull(interceptors);
         this.time = time;
-        this.backgroundEventProcessor = new BackgroundEventProcessor(logContext, backgroundEventQueue);
         this.metrics = metrics;
-        this.groupId = Optional.ofNullable(groupId);
+        this.groupMetadata = groupMetadata;
+        this.backgroundEventProcessor = new BackgroundEventProcessor(logContext, backgroundEventQueue, groupMetadata);
         this.metadata = metadata;
         this.retryBackoffMs = retryBackoffMs;
         this.defaultApiTimeoutMs = defaultApiTimeoutMs;
@@ -516,11 +523,15 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         }
     }
 
-    private void maybeThrowInvalidGroupIdException() {
-        if (!groupId.isPresent() || groupId.get().isEmpty()) {
+    private ConsumerGroupMetadata maybeThrowInvalidGroupIdException() {
+        Optional<ConsumerGroupMetadata> gm = groupMetadata.get();
+
+        if (!gm.isPresent()) {
             throw new InvalidGroupIdException("To use the group management or offset commit APIs, you must " +
                     "provide a valid " + ConsumerConfig.GROUP_ID_CONFIG + " in the consumer configuration.");
         }
+
+        return gm.get();
     }
 
     @Override
@@ -672,11 +683,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public ConsumerGroupMetadata groupMetadata() {
-        maybeThrowInvalidGroupIdException();
-
-        // TODO: ugh...
-        Duration timeout = Duration.ofMillis(1000);
-        return applicationEventHandler.addAndGet(new RetrieveGroupMetadataApplicationEvent(), time.timer(timeout));
+        return maybeThrowInvalidGroupIdException();
     }
 
     @Override
@@ -963,7 +970,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
      * according to config {@link CommonClientConfigs#GROUP_ID_CONFIG}
      */
     private boolean isCommittedOffsetsManagementEnabled() {
-        return groupId.isPresent();
+        return groupMetadata.get().isPresent();
     }
 
     /**

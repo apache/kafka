@@ -21,6 +21,7 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventHandler;
@@ -45,6 +46,7 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_INSTANCE_ID_CONFIG;
@@ -243,7 +245,11 @@ public class ConsumerTestBuilder implements Closeable {
                 requestManagers,
                 metadata)
         );
-        this.backgroundEventProcessor = spy(new BackgroundEventProcessor(logContext, backgroundEventQueue));
+        this.backgroundEventProcessor = spy(new BackgroundEventProcessor(
+                logContext,
+                backgroundEventQueue,
+                new AtomicReference<>(Optional.empty())
+        ));
     }
 
     @Override
@@ -309,6 +315,16 @@ public class ConsumerTestBuilder implements Closeable {
 
         public PrototypeAsyncConsumerTestBuilder(Optional<GroupInformation> groupInfo) {
             super(groupInfo);
+            ConsumerGroupMetadata groupMetadata = groupInfo
+                    .map(groupInformation -> groupInformation.groupState)
+                    .map(groupState -> new ConsumerGroupMetadata(
+                            groupState.groupId,
+                            groupState.generation.generationId,
+                            groupState.generation.memberId,
+                            groupState.groupInstanceId
+                    ))
+                    .orElse(null);
+
             String clientId = config.getString(CommonClientConfigs.CLIENT_ID_CONFIG);
             List<ConsumerPartitionAssignor> assignors = ConsumerPartitionAssignor.getAssignorInstances(
                     config.getList(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG),
@@ -338,7 +354,7 @@ public class ConsumerTestBuilder implements Closeable {
                     retryBackoffMs,
                     60000,
                     assignors,
-                    groupInfo.map(groupInformation -> groupInformation.groupState.groupId).orElse(null)));
+                    new AtomicReference<>(Optional.ofNullable(groupMetadata))));
         }
 
         @Override
