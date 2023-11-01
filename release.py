@@ -504,13 +504,13 @@ try:
 except Exception as e:
     fail(f"Pre-requisite not met: Unable to check if maven cli is installed. Error: {e}")
 
-# try:
-#     test_sftp = subprocess.run(f"sftp {apache_id}@home.apache.org".split())
-#     if test_sftp.returncode != 0:
-#         fail("Pre-requisite not met: Cannot establish sftp connection. Please check your apache-id and ssh keys.")
-#     print("Pre-requisite met: sftp connection is successful")
-# except Exception as e:
-#     fail(f"Pre-requisite not met: Unable to check if sftp connection is successful. Error: {e}")
+try:
+    test_sftp = subprocess.run(f"sftp {apache_id}@home.apache.org".split())
+    if test_sftp.returncode != 0:
+        fail("Pre-requisite not met: Cannot establish sftp connection. Please check your apache-id and ssh keys.")
+    print("Pre-requisite met: sftp connection is successful")
+except Exception as e:
+    fail(f"Pre-requisite not met: Unable to check if sftp connection is successful. Error: {e}")
 
 try:
     test_svn = cmd_output("svn --version")
@@ -730,7 +730,27 @@ if not user_ok("Have you successfully deployed the artifacts (y/n)?: "):
     fail("Ok, giving up")
 if not user_ok("Ok to push RC tag %s (y/n)?: " % rc_tag):
     fail("Ok, giving up")
-cmd("Pushing RC tag", "git push %s %s" % (PUSH_REMOTE_NAME, rc_tag))
+
+print(f"Pushing RC tag {rc_tag} to {PUSH_REMOTE_NAME}")
+try:
+    push_command = f"git push {PUSH_REMOTE_NAME} {rc_tag}".split()
+    output = subprocess.check_output(push_command, stderr=subprocess.STDOUT)
+    print_output(output.decode('utf-8'))
+except Exception:
+    print(f"Failed when trying to git push {rc_tag}. You may need to clean up branches/tags yourself before retrying.")
+finally:
+    if "error" in output.decode('utf-8'):
+        print("*********************************************")
+        print("*** ERROR when trying to perform git push ***")
+        print("*********************************************")
+        print(output)
+        print("")
+        print("Due the failure of git push, the program will exit here. Please note that: ")
+        print(f"1) You are still at branch {release_version}, not {starting_branch}")
+        print(f"2) Tag {rc_tag} is still present locally")
+        print("")
+        print(f"In order to restart the workflow, you will have to manually switch back to the original branch and delete the branch {release_version} and tag {rc_tag}")
+        sys.exit(1)
 
 # Move back to starting branch and clean out the temporary release branch (e.g. 1.0.0) we used to generate everything
 cmd("Resetting repository working state", "git reset --hard HEAD && git checkout %s" % starting_branch, shell=True)
