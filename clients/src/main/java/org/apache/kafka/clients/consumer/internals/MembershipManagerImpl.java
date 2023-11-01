@@ -662,8 +662,8 @@ public class MembershipManagerImpl implements MembershipManager {
     }
 
     private CompletableFuture<Void> invokeOnPartitionsRevokedCallback(Set<TopicPartition> partitionsRevoked) {
-        ConsumerRebalanceListener listener = subscriptions.rebalanceListener();
-        if (listener != null) {
+        Optional<ConsumerRebalanceListener> listener = subscriptions.rebalanceListener();
+        if (listener.isPresent()) {
             throw new UnsupportedOperationException("User-defined callbacks not supported yet");
         } else {
             return CompletableFuture.completedFuture(null);
@@ -671,8 +671,8 @@ public class MembershipManagerImpl implements MembershipManager {
     }
 
     private CompletableFuture<Void> invokeOnPartitionsAssignedCallback(Set<TopicPartition> partitionsAssigned) {
-        ConsumerRebalanceListener listener = subscriptions.rebalanceListener();
-        if (listener != null) {
+        Optional<ConsumerRebalanceListener> listener = subscriptions.rebalanceListener();
+        if (listener.isPresent()) {
             throw new UnsupportedOperationException("User-defined callbacks not supported yet");
         } else {
             return CompletableFuture.completedFuture(null);
@@ -680,8 +680,8 @@ public class MembershipManagerImpl implements MembershipManager {
     }
 
     private CompletableFuture<Void> invokeOnPartitionsLostCallback(Set<TopicPartition> partitionsLost) {
-        ConsumerRebalanceListener listener = subscriptions.rebalanceListener();
-        if (listener != null) {
+        Optional<ConsumerRebalanceListener> listener = subscriptions.rebalanceListener();
+        if (listener.isPresent()) {
             throw new UnsupportedOperationException("User-defined callbacks not supported yet");
         } else {
             return CompletableFuture.completedFuture(null);
