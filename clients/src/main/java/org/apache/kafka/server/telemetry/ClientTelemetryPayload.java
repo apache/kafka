@@ -37,14 +37,14 @@ public interface ClientTelemetryPayload {
     Uuid clientInstanceId();
 
     /**
-     * Indicates whether client is terminating, e.g., the last metrics push from this client instance.
+     * Indicates whether the client is terminating and thus making its last metrics push.
      *
      * @return {@code true} if client is terminating, else false
      */
     boolean isTerminating();
 
     /**
-     * Method returns the content-typ format of the metrics data which is being sent by the client.
+     * Method returns the content-type format of the metrics data which is being sent by the client.
      *
      * @return Metrics data content-type/serialization format.
      */
