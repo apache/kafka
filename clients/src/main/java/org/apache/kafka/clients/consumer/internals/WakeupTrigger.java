@@ -90,8 +90,7 @@ public class WakeupTrigger {
         return pendingTask.get();
     }
 
-    interface Wakeupable {
-    }
+    interface Wakeupable { }
 
     static class ActiveFuture implements Wakeupable {
         private final CompletableFuture<?> future;
@@ -105,6 +104,5 @@ public class WakeupTrigger {
         }
     }
 
-    static class WakeupFuture implements Wakeupable {
-    }
+    static class WakeupFuture implements Wakeupable { }
 }
