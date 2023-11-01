@@ -230,6 +230,9 @@ class KStreamImplJoin {
 
         final GraphNode joinGraphNode = joinBuilder.build();
 
+        if (leftOuter || rightOuter) {
+            joinGraphNode.addLabel(GraphNode.Label.NULL_KEY_RELAXED_JOIN);
+        }
         builder.addGraphNode(Arrays.asList(thisGraphNode, otherGraphNode), joinGraphNode);
 
         final Set<String> allSourceNodes = new HashSet<>(((KStreamImpl<K, V1>) lhs).subTopologySourceNodes);
