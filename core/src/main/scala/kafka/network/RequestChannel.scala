@@ -858,7 +858,6 @@ class RequestMetrics(name: String, config: KafkaConfig) extends KafkaMetricsGrou
     removeMetric(ResponseSendTimeNs, tags)
     removeMetric(RequestBytes, tags)
     removeMetric(ResponseBytes, tags)
-    removeMetric(ResponseSendTimeMs, tags)
     if (name == ApiKeys.FETCH.name || name == ApiKeys.PRODUCE.name) {
       removeMetric(MessageConversionsTimeMs, tags)
       removeMetric(TemporaryMemoryBytes, tags)
