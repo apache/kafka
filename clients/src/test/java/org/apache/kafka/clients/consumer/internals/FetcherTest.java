@@ -24,7 +24,6 @@ import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.NodeApiVersions;
-import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetOutOfRangeException;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
@@ -147,7 +146,6 @@ import static org.mockito.Mockito.verify;
 public class FetcherTest {
     private static final double EPSILON = 0.0001;
 
-    private ConsumerRebalanceListener listener = new NoOpConsumerRebalanceListener();
     private String topicName = "test";
     private String groupId = "test-group";
     private Uuid topicId = Uuid.randomUuid();
@@ -1268,7 +1266,7 @@ public class FetcherTest {
     public void testFetchDuringEagerRebalance() {
         buildFetcher();
 
-        subscriptions.subscribe(singleton(topicName), listener);
+        subscriptions.subscribe(singleton(topicName), Optional.empty());
         subscriptions.assignFromSubscribed(singleton(tp0));
         subscriptions.seek(tp0, 0);
 
@@ -1292,7 +1290,7 @@ public class FetcherTest {
     public void testFetchDuringCooperativeRebalance() {
         buildFetcher();
 
-        subscriptions.subscribe(singleton(topicName), listener);
+        subscriptions.subscribe(singleton(topicName), Optional.empty());
         subscriptions.assignFromSubscribed(singleton(tp0));
         subscriptions.seek(tp0, 0);
 

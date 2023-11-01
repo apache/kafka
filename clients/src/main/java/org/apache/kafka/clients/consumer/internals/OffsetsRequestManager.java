@@ -356,7 +356,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
                 Optional.ofNullable(node));
         unsentRequests.add(unsentRequest);
         CompletableFuture<ListOffsetResult> result = new CompletableFuture<>();
-        unsentRequest.future().whenComplete((response, error) -> {
+        unsentRequest.whenComplete((response, error) -> {
             if (error != null) {
                 log.debug("Sending ListOffset request {} to broker {} failed",
                         builder,
@@ -505,7 +505,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
                 Optional.ofNullable(node));
         unsentRequests.add(unsentRequest);
         CompletableFuture<OffsetsForLeaderEpochUtils.OffsetForEpochResult> result = new CompletableFuture<>();
-        unsentRequest.future().whenComplete((response, error) -> {
+        unsentRequest.whenComplete((response, error) -> {
             if (error != null) {
                 log.debug("Sending OffsetsForLeaderEpoch request {} to broker {} failed",
                         builder,

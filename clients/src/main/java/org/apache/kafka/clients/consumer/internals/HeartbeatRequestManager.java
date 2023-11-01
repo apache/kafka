@@ -183,14 +183,13 @@ public class HeartbeatRequestManager implements RequestManager {
         NetworkClientDelegate.UnsentRequest request = new NetworkClientDelegate.UnsentRequest(
             new ConsumerGroupHeartbeatRequest.Builder(data),
             coordinatorRequestManager.coordinator());
-        request.future().whenComplete((response, exception) -> {
+        return request.whenComplete((response, exception) -> {
             if (response != null) {
                 onResponse((ConsumerGroupHeartbeatResponse) response.responseBody(), request.handler().completionTimeMs());
             } else {
                 onFailure(exception, request.handler().completionTimeMs());
             }
         });
-        return request;
     }
 
     private void onFailure(final Throwable exception, final long responseTimeMs) {
