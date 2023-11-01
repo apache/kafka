@@ -178,6 +178,12 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
             GroupRebalanceConfig groupRebalanceConfig = new GroupRebalanceConfig(config,
                     GroupRebalanceConfig.ProtocolType.CONSUMER);
 
+            this.clientId = config.getString(CommonClientConfigs.CLIENT_ID_CONFIG);
+            LogContext logContext = createLogContext(config, groupRebalanceConfig);
+            this.log = logContext.logger(getClass());
+
+            log.debug("Initializing the Kafka consumer");
+
             if (groupRebalanceConfig.groupId != null) {
                 if (groupRebalanceConfig.groupId.isEmpty()) {
                     log.warn("Support for using the empty group id by consumers is deprecated and will be removed in the next major release.");
@@ -195,11 +201,6 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
                 this.groupMetadata = Optional.empty();
             }
 
-            this.clientId = config.getString(CommonClientConfigs.CLIENT_ID_CONFIG);
-            LogContext logContext = createLogContext(config, groupRebalanceConfig);
-            this.log = logContext.logger(getClass());
-
-            log.debug("Initializing the Kafka consumer");
             this.defaultApiTimeoutMs = config.getInt(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
             this.time = time;
             this.metrics = createMetrics(config, time);
