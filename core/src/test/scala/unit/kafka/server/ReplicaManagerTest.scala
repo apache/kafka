@@ -5685,11 +5685,8 @@ class ReplicaManagerTest {
       // The unified log created is not tiered because `defaultTopicRemoteLogStorageEnable` is set to false
       partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
 
-      val becomeLeaderRequest = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
-        Seq(leaderAndIsrPartitionState(tp0, 1, 0, Seq(0, 1), true)).asJava,
-        Collections.singletonMap(tp0.topic(), Uuid.randomUuid()),
-        Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava
-      ).build()
+      val leaderAndIsr = LeaderAndIsr(0, 1, List(0, 1), LeaderRecoveryState.RECOVERED, LeaderAndIsr.InitialPartitionEpoch)
+      val becomeLeaderRequest = makeLeaderAndIsrRequest(topicIds(tp0.topic), tp0, Seq(0, 1), leaderAndIsr)  
 
       replicaManager.becomeLeaderOrFollower(1, becomeLeaderRequest, (_, _) => ())
       verifyRLMOnLeadershipChange(Collections.singleton(partition), Collections.emptySet())
