@@ -15,13 +15,19 @@
  * limitations under the License.
  */
 
-package kafka.log;
+package org.apache.kafka.storage.internals.checkpoint;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
+import java.io.BufferedWriter;
 import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.OutputStreamWriter;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.util.OptionalLong;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -38,7 +44,7 @@ class CleanShutdownFileHandlerTest {
         CleanShutdownFileHandler cleanShutdownFileHandler = new CleanShutdownFileHandler(logDir.getPath());
         assertDoesNotThrow(() -> cleanShutdownFileHandler.write(10L));
         assertTrue(cleanShutdownFileHandler.exists());
-        assertEquals(10L, cleanShutdownFileHandler.read());
+        assertEquals(OptionalLong.of(10L), cleanShutdownFileHandler.read());
         assertDoesNotThrow(() -> cleanShutdownFileHandler.delete());
         assertFalse(cleanShutdownFileHandler.exists());
     }
@@ -52,6 +58,24 @@ class CleanShutdownFileHandlerTest {
         assertTrue(cleanShutdownFileHandler.exists());
         assertDoesNotThrow(() -> cleanShutdownFileHandler.delete());
         assertFalse(cleanShutdownFileHandler.exists());
-        assertEquals(-1L, cleanShutdownFileHandler.read());
+        assertEquals(OptionalLong.empty(), cleanShutdownFileHandler.read());
+    }
+
+    @Test
+    public void testCleanShutdownFileCanParseWithUnknownFields() throws IOException {
+        File logDir;
+        logDir = assertDoesNotThrow(() -> Files.createTempDirectory("kafka-cleanShutdownFile").toFile());
+        CleanShutdownFileHandler cleanShutdownFileHandler = new CleanShutdownFileHandler(logDir.getPath());
+
+        FileOutputStream os = new FileOutputStream(cleanShutdownFileHandler.cleanShutdownFile);
+        BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(os, StandardCharsets.UTF_8));
+        bw.write("{\"version\":0,\"brokerEpoch\":10,\"unknown\":123}");
+        bw.flush();
+        os.getFD().sync();
+
+        assertTrue(cleanShutdownFileHandler.exists());
+        assertEquals(OptionalLong.of(10L), cleanShutdownFileHandler.read());
+        assertDoesNotThrow(() -> cleanShutdownFileHandler.delete());
+        assertFalse(cleanShutdownFileHandler.exists());
     }
 }

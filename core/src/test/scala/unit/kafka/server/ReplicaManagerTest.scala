@@ -71,6 +71,7 @@ import org.apache.kafka.common.config.AbstractConfig
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.server.log.remote.storage.{NoOpRemoteLogMetadataManager, NoOpRemoteStorageManager, RemoteLogManagerConfig}
 import org.apache.kafka.server.util.timer.MockTimer
+import org.apache.kafka.storage.internals.checkpoint.PartitionMetadataFile
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.stubbing.Answer
 import org.mockito.{ArgumentCaptor, ArgumentMatchers}
@@ -2551,7 +2552,7 @@ class ReplicaManagerTest {
   def testFullLeaderAndIsrStrayPartitions(zkMigrationEnabled: Boolean): Unit = {
     val props = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect)
     if (zkMigrationEnabled) {
-      props.put(KafkaConfig.MigrationEnabledProp, zkMigrationEnabled)
+      props.put(KafkaConfig.MigrationEnabledProp, "" + zkMigrationEnabled)
       props.put(RaftConfig.QUORUM_VOTERS_CONFIG, "3000@localhost:9071")
       props.put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
       props.put(KafkaConfig.ListenerSecurityProtocolMapProp, "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")

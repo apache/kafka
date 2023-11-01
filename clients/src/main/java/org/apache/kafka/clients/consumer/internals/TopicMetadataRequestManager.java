@@ -153,15 +153,13 @@ public class TopicMetadataRequestManager implements RequestManager {
                 request,
                 Optional.empty());
 
-            unsent.future().whenComplete((response, exception) -> {
+            return unsent.whenComplete((response, exception) -> {
                 if (response == null) {
                     handleError(exception, unsent.handler().completionTimeMs());
                 } else {
                     handleResponse(response);
                 }
             });
-
-            return unsent;
         }
 
         private void handleError(final Throwable exception,

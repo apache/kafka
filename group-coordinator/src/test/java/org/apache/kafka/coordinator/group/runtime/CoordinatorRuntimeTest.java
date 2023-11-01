@@ -554,6 +554,45 @@ public class CoordinatorRuntimeTest {
         // Getting the coordinator context fails because it no longer exists.
         assertThrows(NotCoordinatorException.class, () -> runtime.contextOrThrow(TP));
     }
+    @Test
+    public void testScheduleUnloadingWhenContextDoesntExist() {
+        MockTimer timer = new MockTimer();
+        MockPartitionWriter writer = mock(MockPartitionWriter.class);
+        MockCoordinatorShardBuilderSupplier supplier = mock(MockCoordinatorShardBuilderSupplier.class);
+        MockCoordinatorShardBuilder builder = mock(MockCoordinatorShardBuilder.class);
+        MockCoordinatorShard coordinator = mock(MockCoordinatorShard.class);
+
+        CoordinatorRuntime<MockCoordinatorShard, String> runtime =
+            new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
+                .withLoader(new MockCoordinatorLoader())
+                .withEventProcessor(new DirectEventProcessor())
+                .withPartitionWriter(writer)
+                .withCoordinatorShardBuilderSupplier(supplier)
+                .withCoordinatorRuntimeMetrics(mock(GroupCoordinatorRuntimeMetrics.class))
+                .build();
+
+        when(builder.withSnapshotRegistry(any())).thenReturn(builder);
+        when(builder.withLogContext(any())).thenReturn(builder);
+        when(builder.withTime(any())).thenReturn(builder);
+        when(builder.withTimer(any())).thenReturn(builder);
+        when(builder.withTopicPartition(any())).thenReturn(builder);
+        when(builder.build()).thenReturn(coordinator);
+        when(supplier.get()).thenReturn(builder);
+
+        // No loading is scheduled. This is to check the case when a follower that was never a coordinator
+        // is asked to unload its state. The unload event is skipped in this case.
+
+        // Schedule the unloading.
+        runtime.scheduleUnloadOperation(TP, 11);
+
+        // Verify that onUnloaded is not called.
+        verify(coordinator, times(0)).onUnloaded();
+
+        // Getting the coordinator context fails because it doesn't exist.
+        assertThrows(NotCoordinatorException.class, () -> runtime.contextOrThrow(TP));
+    }
 
     @Test
     public void testScheduleUnloadingWithStalePartitionEpoch() {

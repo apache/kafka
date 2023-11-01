@@ -265,8 +265,11 @@ public class KStreamRepartitionIntegrationTest {
             new KeyValue<>(2, "B")
         );
 
-        sendEvents(timestamp, expectedRecords);
-        sendEvents(topicB, timestamp, expectedRecords);
+        final List<KeyValue<Integer, String>> recordsToSend = new ArrayList<>(expectedRecords);
+        recordsToSend.add(new KeyValue<>(null, "C"));
+
+        sendEvents(timestamp, recordsToSend);
+        sendEvents(topicB, timestamp, recordsToSend);
 
         final StreamsBuilder builder = new StreamsBuilder();
 
