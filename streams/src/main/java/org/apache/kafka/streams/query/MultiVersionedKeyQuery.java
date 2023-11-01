@@ -61,7 +61,7 @@ public final class MultiVersionedKeyQuery<K, V> implements Query<ValueIterator<V
      * and are valid in the query specified time range (the whole time range or even partially). The key query in fact returns all the records that have NOT become tombstone at or after {@code fromTime}.
      * </pre>
      * @param fromTime The starting time point
-     * If @param fromTime is null, will be considered as empty optional
+     * If @param fromTime is null, will be considered as negative infinity
      */
     public MultiVersionedKeyQuery<K, V> fromTime(final Instant fromTime) {
         if (fromTime == null) {
@@ -74,7 +74,7 @@ public final class MultiVersionedKeyQuery<K, V> implements Query<ValueIterator<V
      * Specifies the ending time point for the key query.
      * The key query returns all the records that have timestamp <= {@code toTime}.
      * @param toTime The ending time point
-     * If @param toTime is null, will be considered as empty optional
+     * If @param toTime is null, will be considered as positive infinity
      */
     public MultiVersionedKeyQuery<K, V> toTime(final Instant toTime) {
         if (toTime == null) {

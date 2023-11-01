@@ -18,6 +18,7 @@ package org.apache.kafka.streams.integration;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.empty;
+import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -67,8 +68,9 @@ public class IQv2VersionedStoreIntegrationTest {
     private static final Duration HISTORY_RETENTION = Duration.ofDays(1);
     private static final Instant RECORD_TIMESTAMP = Instant.parse("2023-01-01T10:00:00.00Z");
     private static final Long RECORD_TIMESTAMP_LONG = RECORD_TIMESTAMP.getLong(ChronoField.INSTANT_SECONDS);
-    private static final Integer[] RECORD_VALUES = {2, 20, 200, 200};
+    private static final Integer[] RECORD_VALUES = {2, 20, 200, 2000};
     private static final Long[] RECORD_TIMESTAMPS = {RECORD_TIMESTAMP_LONG, RECORD_TIMESTAMP_LONG + 10, RECORD_TIMESTAMP_LONG + 20, RECORD_TIMESTAMP_LONG + 30};
+    private static final int RECORD_NUMBER = RECORD_VALUES.length;
 
 
     private static final Logger LOG = LoggerFactory.getLogger(IQv2VersionedStoreIntegrationTest.class);
@@ -127,37 +129,38 @@ public class IQv2VersionedStoreIntegrationTest {
     @Test
     public void verifyStore() {
         try {
-
-            shouldHandleMultiVersionedKeyQuery(2, RECORD_VALUES, RECORD_TIMESTAMPS);
-            shouldHandleMultiVersionedKeyQueryWithTS(2, RECORD_VALUES, RECORD_TIMESTAMPS);
-
+            shouldHandleMultiVersionedKeyQuery(2);
+            shouldHandleMultiVersionedKeyQueryOrderedDescendingly(2);
+            shouldHandleMultiVersionedKeyQueryWithTS(2,  Instant.ofEpochMilli(RECORD_TIMESTAMPS[1] + 5), Instant.now());
         } catch (final AssertionError e) {
             LOG.error("Failed assertion", e);
             throw e;
         }
     }
 
-    public void shouldHandleMultiVersionedKeyQuery(
-        final Integer key,
-        final Integer[] expectedValues,
-        final Long[] expectedTimestamps) {
+    public void shouldHandleMultiVersionedKeyQuery(final Integer key) {
         final MultiVersionedKeyQuery<Integer, Integer> query = MultiVersionedKeyQuery.withKey(key);
-        handleMultiVersionedKeyQuery(query, expectedValues, expectedTimestamps);
+        handleMultiVersionedKeyQuery(query, 0, RECORD_NUMBER - 1, true);
     }
 
-
-    public void shouldHandleMultiVersionedKeyQueryWithTS(
-        final Integer key,
-        final Integer[] expectedValues,
-        final Long[] expectedTimestamps) {
+    public void shouldHandleMultiVersionedKeyQueryOrderedDescendingly(final Integer key) {
         MultiVersionedKeyQuery<Integer, Integer> query = MultiVersionedKeyQuery.withKey(key);
-        query = query.fromTime(Instant.ofEpochSecond(RECORD_TIMESTAMPS[1] + 5)).toTime(Instant.now());
-        handleMultiVersionedKeyQuery(query, expectedValues, expectedTimestamps);
+        query = query.withDescendingTimestamps();
+        handleMultiVersionedKeyQuery(query, 0, RECORD_NUMBER - 1, false);
     }
-    private void handleMultiVersionedKeyQuery(final MultiVersionedKeyQuery<Integer, Integer> query, final Integer[] expectedValues, final Long[] expectedTimestamps) {
 
-        final StateQueryRequest<ValueIterator<VersionedRecord<Integer>>> request = StateQueryRequest.inStore(
-            STORE_NAME).withQuery(query);
+    public void shouldHandleMultiVersionedKeyQueryWithTS(final Integer key, final Instant fromTime, final Instant toTime) {
+        MultiVersionedKeyQuery<Integer, Integer> query = MultiVersionedKeyQuery.withKey(key);
+        query = query.fromTime(fromTime).toTime(toTime);
+        handleMultiVersionedKeyQuery(query, 1, RECORD_NUMBER - 1, true);
+    }
+
+    private void handleMultiVersionedKeyQuery(final MultiVersionedKeyQuery<Integer, Integer> query,
+                                              final int arrayLowerBound,
+                                              final int arrayUpperBound,
+                                              final boolean ascending) {
+
+        final StateQueryRequest<ValueIterator<VersionedRecord<Integer>>> request = StateQueryRequest.inStore(STORE_NAME).withQuery(query);
         final StateQueryResult<ValueIterator<VersionedRecord<Integer>>> result = kafkaStreams.query(request);
         final QueryResult<ValueIterator<VersionedRecord<Integer>>> queryResult = result.getOnlyPartitionResult();
         final boolean failure = queryResult.isFailure();
@@ -173,24 +176,27 @@ public class IQv2VersionedStoreIntegrationTest {
         );
 
 
-        final Map<Integer, QueryResult<ValueIterator<VersionedRecord<Integer>>>> partitionResults =
-            result.getPartitionResults();
+        final Map<Integer, QueryResult<ValueIterator<VersionedRecord<Integer>>>> partitionResults = result.getPartitionResults();
         for (final Entry<Integer, QueryResult<ValueIterator<VersionedRecord<Integer>>>> entry : partitionResults.entrySet()) {
             try (final ValueIterator<VersionedRecord<Integer>> iterator = entry.getValue().getResult()) {
-                int i = 0;
+                int i = ascending ? arrayUpperBound : 0;
+                int iteratorSize = 0;
                 while (iterator.hasNext()) {
                     final VersionedRecord<Integer> record = iterator.next();
                     final Long timestamp = record.timestamp();
                     final Long validTo = record.validTo();
                     final Integer value = record.value();
 
-                    final Long expectedValidTo = i < expectedTimestamps.length - 1 ? expectedTimestamps[i + 1] : Instant.now().getLong(ChronoField.INSTANT_SECONDS);
-                    assertThat(value, is(expectedValues[i]));
-                    assertThat(timestamp, is(expectedTimestamps[i]));
+                    final Long expectedValidTo = i < arrayUpperBound ? RECORD_TIMESTAMPS[i + 1] : Long.MAX_VALUE;
+                    assertThat(value, is(RECORD_VALUES[i]));
+                    assertThat(timestamp, is(RECORD_TIMESTAMPS[i]));
                     assertThat(validTo, is(expectedValidTo));
                     assertThat(queryResult.getExecutionInfo(), is(empty()));
-                    i++;
+                    i = ascending ? i - 1 : i + 1;
+                    iteratorSize++;
                 }
+                // The number of returned records by query is equal to expected number of records
+                assertThat(iteratorSize, equalTo(arrayUpperBound - arrayLowerBound + 1));
             }
         }
     }

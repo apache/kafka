@@ -16,12 +16,17 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.prepareKeySerde;
 import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.prepareValueSerde;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
 
+import java.time.Instant;
+import java.util.Map;
 import java.util.Objects;
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -29,18 +34,24 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
+import org.apache.kafka.streams.query.KeyQuery;
+import org.apache.kafka.streams.query.MultiVersionedKeyQuery;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.query.RangeQuery;
+import org.apache.kafka.streams.query.internals.InternalQueryResultUtil;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.ValueIterator;
 import org.apache.kafka.streams.state.VersionedBytesStore;
 import org.apache.kafka.streams.state.VersionedKeyValueStore;
 import org.apache.kafka.streams.state.VersionedRecord;
+import org.apache.kafka.streams.state.internals.StoreQueryUtils.QueryHandler;
 
 /**
  * A metered {@link VersionedKeyValueStore} wrapper that is used for recording operation
@@ -88,6 +99,22 @@ public class MeteredVersionedKeyValueStore<K, V>
         private final VersionedBytesStore inner;
         private final Serde<V> plainValueSerde;
         private StateSerdes<K, V> plainValueSerdes;
+
+        private final Map<Class, QueryHandler> queryHandlers =
+            mkMap(
+                mkEntry(
+                    RangeQuery.class,
+                    (query, positionBound, config, store) -> runRangeQuery(query, positionBound, config)
+                ),
+                mkEntry(
+                    KeyQuery.class,
+                    (query, positionBound, config, store) -> runKeyQuery(query, positionBound, config)
+                ),
+                mkEntry(
+                    MultiVersionedKeyQuery.class,
+                    (query, positionBound, config, store) -> runMultiVersionedKeyQuery(query, positionBound, config)
+                )
+            );
 
         MeteredVersionedKeyValueStoreInternal(final VersionedBytesStore inner,
                                               final String metricScope,
@@ -138,6 +165,35 @@ public class MeteredVersionedKeyValueStore<K, V>
                 throw new ProcessorStateException(message, e);
             }
         }
+        @SuppressWarnings("unchecked")
+        @Override
+        public <R> QueryResult<R> query(final Query<R> query, final PositionBound positionBound, final QueryConfig config) {
+
+            final long start = time.nanoseconds();
+            final QueryResult<R> result;
+
+            final QueryHandler handler = queryHandlers.get(query.getClass());
+            if (handler == null) {
+                result = wrapped().query(query, positionBound, config);
+                if (config.isCollectExecutionInfo()) {
+                    result.addExecutionInfo(
+                        "Handled in " + getClass() + " in " + (time.nanoseconds() - start) + "ns");
+                }
+            } else {
+                result = (QueryResult<R>) handler.apply(
+                    query,
+                    positionBound,
+                    config,
+                    this
+                );
+                if (config.isCollectExecutionInfo()) {
+                    result.addExecutionInfo(
+                        "Handled in " + getClass() + " with serdes "
+                            + serdes + " in " + (time.nanoseconds() - start) + "ns");
+                }
+            }
+            return result;
+        }
 
         @Override
         protected <R> QueryResult<R> runRangeQuery(final Query<R> query,
@@ -155,6 +211,34 @@ public class MeteredVersionedKeyValueStore<K, V>
             // throw exception for now to reserve the ability to implement this in the future
             // without clashing with users' custom implementations in the meantime
             throw new UnsupportedOperationException("Versioned stores do not support KeyQuery queries at this time.");
+        }
+
+        @SuppressWarnings("unchecked")
+        protected <R> QueryResult<R> runMultiVersionedKeyQuery(final Query<R> query,
+                                                               final PositionBound positionBound,
+                                                               final QueryConfig config) {
+            final QueryResult<R> result;
+            final MultiVersionedKeyQuery<K, V> typedKeyQuery = (MultiVersionedKeyQuery<K, V>) query;
+
+            final Instant fromTime = typedKeyQuery.fromTime().isPresent() ? typedKeyQuery.fromTime().get() : Instant.ofEpochMilli(Long.MIN_VALUE);
+            final Instant toTime = typedKeyQuery.toTime().isPresent() ? typedKeyQuery.toTime().get() : Instant.ofEpochMilli(Long.MAX_VALUE);
+            MultiVersionedKeyQuery<Bytes, byte[]> rawKeyQuery = MultiVersionedKeyQuery.withKey(keyBytes(typedKeyQuery.key()));
+            rawKeyQuery = rawKeyQuery.fromTime(fromTime).toTime(toTime);
+            if (!typedKeyQuery.isAscending()) {
+                rawKeyQuery = rawKeyQuery.withDescendingTimestamps();
+            }
+
+            final QueryResult<ValueIterator<VersionedRecord<byte[]>>> rawResult = wrapped().query(rawKeyQuery, positionBound, config);
+            if (rawResult.isSuccess()) {
+                final ValueIterator<VersionedRecord<V>> valueIterator = StoreQueryUtils.deserializeValueIterator(plainValueSerdes, rawResult.getResult());
+                final QueryResult<ValueIterator<VersionedRecord<V>>> typedQueryResult =
+                    InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, valueIterator);
+                result = (QueryResult<R>) typedQueryResult;
+            } else {
+                // the generic type doesn't matter, since failed queries have no result set.
+                result = (QueryResult<R>) rawResult;
+            }
+            return result;
         }
 
         @SuppressWarnings("unchecked")

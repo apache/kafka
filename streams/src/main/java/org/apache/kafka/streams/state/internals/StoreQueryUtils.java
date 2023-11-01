@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import java.util.ArrayList;
+import java.util.List;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
@@ -27,6 +29,7 @@ import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.query.FailureReason;
 import org.apache.kafka.streams.query.KeyQuery;
+import org.apache.kafka.streams.query.MultiVersionedKeyQuery;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
@@ -39,6 +42,9 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StateSerdes;
+import org.apache.kafka.streams.state.ValueIterator;
+import org.apache.kafka.streams.state.VersionedKeyValueStore;
+import org.apache.kafka.streams.state.VersionedRecord;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
@@ -90,6 +96,10 @@ public final class StoreQueryUtils {
             mkEntry(
                 WindowRangeQuery.class,
                 StoreQueryUtils::runWindowRangeQuery
+            ),
+            mkEntry(
+                MultiVersionedKeyQuery.class,
+                StoreQueryUtils::runMultiVersionedKeyQuery
             )
         );
 
@@ -335,6 +345,28 @@ public final class StoreQueryUtils {
         }
     }
 
+    @SuppressWarnings("unchecked")
+    private static <R> QueryResult<R> runMultiVersionedKeyQuery(final Query<R> query,
+                                                                final PositionBound positionBound,
+                                                                final QueryConfig config,
+                                                                final StateStore store) {
+        if (store instanceof VersionedKeyValueStore) {
+            final RocksDBVersionedStore rocksDBVersionedStore = (RocksDBVersionedStore) store;
+            final MultiVersionedKeyQuery<Bytes, byte[]> rawKeyQuery = (MultiVersionedKeyQuery<Bytes, byte[]>) query;
+            try {
+                final long fromTime = rawKeyQuery.fromTime().isPresent() ? rawKeyQuery.fromTime().get().toEpochMilli() : Long.MIN_VALUE;
+                final long toTime = rawKeyQuery.toTime().isPresent() ? rawKeyQuery.toTime().get().toEpochMilli() : Long.MAX_VALUE;
+                final ValueIterator<VersionedRecord<byte[]>> bytes = rocksDBVersionedStore.get(rawKeyQuery.key(), fromTime, toTime, rawKeyQuery.isAscending());
+                return (QueryResult<R>) QueryResult.forResult(bytes);
+            } catch (final Exception e) {
+                final String message = parseStoreException(e, store, query);
+                return QueryResult.forFailure(FailureReason.STORE_EXCEPTION, message);
+            }
+        } else {
+            return QueryResult.forUnknownQueryType(query, store);
+        }
+    }
+
     @SuppressWarnings({"unchecked", "rawtypes"})
     public static <V> Function<byte[], V> getDeserializeValue(final StateSerdes<?, V> serdes,
                                                               final StateStore wrapped) {
@@ -349,6 +381,21 @@ public final class StoreQueryUtils {
             deserializer = valueSerde.deserializer();
         }
         return byteArray -> deserializer.deserialize(serdes.topic(), byteArray);
+    }
+
+    public static <V> ValueIterator<VersionedRecord<V>> deserializeValueIterator(final StateSerdes<?, V> serdes,
+        final ValueIterator<VersionedRecord<byte[]>> rawValueIterator) {
+
+        final List<VersionedRecord<V>> versionedRecords = new ArrayList<>();
+        while (rawValueIterator.hasNext()) {
+            final VersionedRecord<byte[]> rawVersionedRecord = rawValueIterator.peek();
+            final Deserializer<V> valueDeserializer = serdes.valueDeserializer();
+            final long timestamp = rawVersionedRecord.timestamp();
+            final long validTo = rawVersionedRecord.validTo();
+            final V value = valueDeserializer.deserialize(serdes.topic(), rawVersionedRecord.value());
+            versionedRecords.add(new VersionedRecord<>(value, timestamp, validTo));
+        }
+        return new VersionedRecordIterator<>(versionedRecords);
     }
 
     public static void checkpointPosition(final OffsetCheckpoint checkpointFile,

@@ -42,6 +42,10 @@ import org.apache.kafka.streams.processor.internals.StoreToProcessorContextAdapt
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.query.Position;
+import org.apache.kafka.streams.query.PositionBound;
+import org.apache.kafka.streams.query.Query;
+import org.apache.kafka.streams.query.QueryConfig;
+import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.ValueIterator;
 import org.apache.kafka.streams.state.VersionedKeyValueStore;
 import org.apache.kafka.streams.state.VersionedRecord;
@@ -256,7 +260,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
     }
 
     // Visible for testing
-    ValueIterator<VersionedRecord<byte[]>> get(final Bytes key, final long fromTimestamp, final long toTimestamp) {
+    ValueIterator<VersionedRecord<byte[]>> get(final Bytes key, final long fromTimestamp, final long toTimestamp, final boolean isAscending) {
 
         Objects.requireNonNull(key, "key cannot be null");
         validateStoreOpen();
@@ -284,6 +288,9 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
             // is still present in segments.
             if (queryResults.size() == 0) {
                 LOG.warn("Returning null for expired get.");
+            }
+            if (!isAscending) {
+                queryResults.sort((r1, r2) -> (int) (r1.timestamp() - r2.timestamp()));
             }
             return new VersionedRecordIterator<>(queryResults);
         } else {
@@ -324,6 +331,9 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
                     }
                 }
             }
+            if (!isAscending) {
+                queryResults.sort((r1, r2) -> (int) (r1.timestamp() - r2.timestamp()));
+            }
             return new VersionedRecordIterator<>(queryResults);
         }
     }
@@ -339,6 +349,20 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
         segmentStores.flush();
         // flushing segments store includes flushing latest value store, since they share the
         // same physical RocksDB instance
+    }
+
+    @Override
+    public <R> QueryResult<R> query(final Query<R> query,
+                                    final PositionBound positionBound,
+                                    final QueryConfig config) {
+        return StoreQueryUtils.handleBasicQueries(
+            query,
+            positionBound,
+            config,
+            this,
+            position,
+            stateStoreContext
+        );
     }
 
     @Override
