@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.Task.State;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
@@ -31,10 +32,12 @@ import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.test.StreamsTestUtils.TaskBuilder.standbyTask;
 import static org.apache.kafka.test.StreamsTestUtils.TaskBuilder.statefulTask;
 import static org.apache.kafka.test.StreamsTestUtils.TaskBuilder.statelessTask;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TasksTest {
@@ -51,6 +54,20 @@ public class TasksTest {
     private final static TaskId TASK_1_2 = new TaskId(1, 2);
 
     private final Tasks tasks = new Tasks(new LogContext());
+
+    @Test
+    public void shouldCheckStateWhenRemoveTask() {
+        final StreamTask closedTask = statefulTask(TASK_0_0, mkSet(TOPIC_PARTITION_A_0)).inState(State.CLOSED).build();
+        final StandbyTask suspendedTask = standbyTask(TASK_0_1, mkSet(TOPIC_PARTITION_A_1)).inState(State.SUSPENDED).build();
+        final StreamTask runningTask = statelessTask(TASK_1_0).inState(State.RUNNING).build();
+
+        tasks.addActiveTasks(mkSet(closedTask, runningTask));
+        tasks.addStandbyTasks(Collections.singletonList(suspendedTask));
+
+        assertDoesNotThrow(() -> tasks.removeTask(closedTask));
+        assertDoesNotThrow(() -> tasks.removeTask(suspendedTask));
+        assertThrows(IllegalStateException.class, () -> tasks.removeTask(runningTask));
+    }
 
     @Test
     public void shouldKeepAddedTasks() {

@@ -61,6 +61,7 @@ import org.apache.zookeeper.client.ZKClientConfig
 
 import java.io.{File, IOException}
 import java.net.{InetAddress, SocketTimeoutException}
+import java.util.OptionalLong
 import java.util.concurrent._
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import scala.collection.{Map, Seq}
@@ -68,6 +69,8 @@ import scala.compat.java8.OptionConverters.RichOptionForJava8
 import scala.jdk.CollectionConverters._
 
 object KafkaServer {
+
+  val brokerMetaPropsFile = "meta.properties"
 
   def zkClientConfigFromKafkaConfig(config: KafkaConfig, forceZkSslClientEnable: Boolean = false): ZKClientConfig = {
     val clientConfig = new ZKClientConfig
@@ -165,9 +168,8 @@ class KafkaServer(
   private var configRepository: ZkConfigRepository = _
 
   val correlationId: AtomicInteger = new AtomicInteger(0)
-  val brokerMetaPropsFile = "meta.properties"
   val brokerMetadataCheckpoints = config.logDirs.map { logDir =>
-    (logDir, new BrokerMetadataCheckpoint(new File(logDir + File.separator + brokerMetaPropsFile)))
+    (logDir, new BrokerMetadataCheckpoint(new File(logDir + File.separator + KafkaServer.brokerMetaPropsFile)))
   }.toMap
 
   private var _clusterId: String = _
@@ -436,7 +438,8 @@ class KafkaServer(
             brokerToQuorumChannelManager,
             kraftMetaProps.clusterId,
             networkListeners,
-            ibpAsFeature
+            ibpAsFeature,
+            OptionalLong.empty()
           )
           logger.debug("Start RaftManager")
         }

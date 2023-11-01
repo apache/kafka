@@ -86,7 +86,6 @@ import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
@@ -730,6 +729,17 @@ public class KafkaStreams implements AutoCloseable {
                 }
             }
         }
+
+        @Override
+        public void onRestoreSuspended(final TopicPartition topicPartition, final String storeName, final long totalRestored) {
+            if (globalStateRestoreListener != null) {
+                try {
+                    globalStateRestoreListener.onRestoreSuspended(topicPartition, storeName, totalRestored);
+                } catch (final Exception fatalUserException) {
+                    throwOnFatalException(fatalUserException, topicPartition, storeName);
+                }
+            }
+        }
     }
 
     /**
@@ -1082,7 +1092,7 @@ public class KafkaStreams implements AutoCloseable {
      * threads are adapted so that the sum of the cache sizes over all stream threads equals the total
      * cache size specified in configuration {@link StreamsConfig#STATESTORE_CACHE_MAX_BYTES_CONFIG}.
      *
-     * @param timeout The length of time to wait for the thread to shutdown
+     * @param timeout The length of time to wait for the thread to shut down
      * @throws org.apache.kafka.common.errors.TimeoutException if the thread does not stop in time
      * @return name of the removed stream thread or empty if a stream thread could not be removed because
      *         no stream threads are alive
@@ -1137,20 +1147,32 @@ public class KafkaStreams implements AutoCloseable {
                             try {
                                 final long remainingTimeMs = timeoutMs - (time.milliseconds() - startMs);
                                 removeMembersFromConsumerGroupResult.memberResult(memberToRemove).get(remainingTimeMs, TimeUnit.MILLISECONDS);
-                            } catch (final java.util.concurrent.TimeoutException e) {
-                                log.error("Could not remove static member {} from consumer group {} due to a timeout: {}",
-                                          groupInstanceID.get(), applicationConfigs.getString(StreamsConfig.APPLICATION_ID_CONFIG), e);
-                                throw new TimeoutException(e.getMessage(), e);
+                            } catch (final java.util.concurrent.TimeoutException exception) {
+                                log.error(
+                                    String.format(
+                                        "Could not remove static member %s from consumer group %s due to a timeout:",
+                                        groupInstanceID.get(),
+                                        applicationConfigs.getString(StreamsConfig.APPLICATION_ID_CONFIG)
+                                    ),
+                                        exception
+                                );
+                                throw new TimeoutException(exception.getMessage(), exception);
                             } catch (final InterruptedException e) {
                                 Thread.currentThread().interrupt();
-                            } catch (final ExecutionException e) {
-                                log.error("Could not remove static member {} from consumer group {} due to: {}",
-                                          groupInstanceID.get(), applicationConfigs.getString(StreamsConfig.APPLICATION_ID_CONFIG), e);
+                            } catch (final ExecutionException exception) {
+                                log.error(
+                                    String.format(
+                                        "Could not remove static member %s from consumer group %s due to:",
+                                        groupInstanceID.get(),
+                                        applicationConfigs.getString(StreamsConfig.APPLICATION_ID_CONFIG)
+                                    ),
+                                        exception
+                                );
                                 throw new StreamsException(
                                         "Could not remove static member " + groupInstanceID.get()
                                             + " from consumer group " + applicationConfigs.getString(StreamsConfig.APPLICATION_ID_CONFIG)
                                             + " for the following reason: ",
-                                        e.getCause()
+                                        exception.getCause()
                                 );
                             }
                         }
@@ -1169,7 +1191,7 @@ public class KafkaStreams implements AutoCloseable {
         return Optional.empty();
     }
 
-    /**
+    /*
      * Takes a snapshot and counts the number of stream threads which are not in PENDING_SHUTDOWN or DEAD
      *
      * note: iteration over SynchronizedList is not thread safe so it must be manually synchronized. However, we may
@@ -1537,9 +1559,9 @@ public class KafkaStreams implements AutoCloseable {
                     removeMembersFromConsumerGroupResult.memberResult(memberToRemove)
                         .get(remainingTimeMs, TimeUnit.MILLISECONDS);
                 } catch (final Exception e) {
-                    log.error("Could not remove static member {} from consumer group {} due to a: {}",
-                        groupInstanceId.get(),
-                        applicationConfigs.getString(StreamsConfig.APPLICATION_ID_CONFIG), e);
+                    final String msg = String.format("Could not remove static member %s from consumer group %s.",
+                                                     groupInstanceId.get(), applicationConfigs.getString(StreamsConfig.APPLICATION_ID_CONFIG));
+                    log.error(msg, e);
                 }
             }
         };
@@ -1712,7 +1734,7 @@ public class KafkaStreams implements AutoCloseable {
     /**
      *  This method pauses processing for the KafkaStreams instance.
      *
-     *  Paused topologies will only skip over a) processing, b) punctuation, and c) standby tasks.
+     *  <p>Paused topologies will only skip over a) processing, b) punctuation, and c) standby tasks.
      *  Notably, paused topologies will still poll Kafka consumers, and commit offsets.
      *  This method sets transient state that is not maintained or managed among instances.
      *  Note that pause() can be called before start() in order to start a KafkaStreams instance
@@ -1776,7 +1798,6 @@ public class KafkaStreams implements AutoCloseable {
      * @deprecated since 3.0 use {@link #metadataForLocalThreads()}
      */
     @Deprecated
-    @SuppressWarnings("deprecation")
     public Set<org.apache.kafka.streams.processor.ThreadMetadata> localThreadsMetadata() {
         return metadataForLocalThreads().stream().map(threadMetadata -> new org.apache.kafka.streams.processor.ThreadMetadata(
                 threadMetadata.threadName(),
@@ -1824,7 +1845,7 @@ public class KafkaStreams implements AutoCloseable {
      * values returned are just estimates and meant to be used for making soft decisions on whether the data in the store
      * partition is fresh enough for querying.
      *
-     * Note: Each invocation of this method issues a call to the Kafka brokers. Thus its advisable to limit the frequency
+     * <p>Note: Each invocation of this method issues a call to the Kafka brokers. Thus, it's advisable to limit the frequency
      * of invocation to once every few seconds.
      *
      * @return map of store names to another map of partition to {@link LagInfo}s
@@ -1874,7 +1895,7 @@ public class KafkaStreams implements AutoCloseable {
      * Run an interactive query against a state store.
      * <p>
      * This method allows callers outside of the Streams runtime to access the internal state of
-     * stateful processors. See https://kafka.apache.org/documentation/streams/developer-guide/interactive-queries.html
+     * stateful processors. See <a href="https://kafka.apache.org/documentation/streams/developer-guide/interactive-queries.html">IQ docs</a>
      * for more information.
      * <p>
      * NOTICE: This functionality is {@link Evolving} and subject to change in minor versions.

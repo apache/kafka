@@ -17,7 +17,11 @@
 package org.apache.kafka.common;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.Base64;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * This class defines an immutable universally unique identifier (UUID). It represents a 128-bit value.
@@ -28,14 +32,28 @@ import java.util.Base64;
 public class Uuid implements Comparable<Uuid> {
 
     /**
+     * A reserved UUID. Will never be returned by the randomUuid method.
+     */
+    public static final Uuid ONE_UUID = new Uuid(0L, 1L);
+
+    /**
      * A UUID for the metadata topic in KRaft mode. Will never be returned by the randomUuid method.
      */
-    public static final Uuid METADATA_TOPIC_ID = new Uuid(0L, 1L);
+    public static final Uuid METADATA_TOPIC_ID = ONE_UUID;
 
     /**
      * A UUID that represents a null or empty UUID. Will never be returned by the randomUuid method.
      */
     public static final Uuid ZERO_UUID = new Uuid(0L, 0L);
+
+    /**
+     * The set of reserved UUIDs that will never be returned by the randomUuid method.
+     */
+    public static final Set<Uuid> RESERVED = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
+            METADATA_TOPIC_ID,
+            ZERO_UUID,
+            ONE_UUID
+    )));
 
     private final long mostSignificantBits;
     private final long leastSignificantBits;
@@ -61,7 +79,7 @@ public class Uuid implements Comparable<Uuid> {
      */
     public static Uuid randomUuid() {
         Uuid uuid = unsafeRandomUuid();
-        while (uuid.equals(METADATA_TOPIC_ID) || uuid.equals(ZERO_UUID) || uuid.toString().startsWith("-")) {
+        while (RESERVED.contains(uuid) || uuid.toString().startsWith("-")) {
             uuid = unsafeRandomUuid();
         }
         return uuid;

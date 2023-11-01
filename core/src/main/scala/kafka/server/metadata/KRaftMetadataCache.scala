@@ -39,7 +39,7 @@ import org.apache.kafka.common.message.{DescribeUserScramCredentialsRequestData,
 import org.apache.kafka.metadata.{PartitionRegistration, Replicas}
 import org.apache.kafka.server.common.{Features, MetadataVersion}
 
-import scala.collection.{Seq, Set, mutable}
+import scala.collection.{Map, Seq, Set, mutable}
 import scala.jdk.CollectionConverters._
 import scala.compat.java8.OptionConverters._
 
@@ -279,15 +279,18 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
     val result = new mutable.HashMap[Int, Node]()
     Option(image.topics().getTopic(tp.topic())).foreach { topic =>
       topic.partitions().values().forEach { partition =>
-        partition.replicas.map { replicaId =>
-          result.put(replicaId, Option(image.cluster().broker(replicaId)) match {
-            case None => Node.noNode()
-            case Some(broker) => broker.node(listenerName.value()).asScala.getOrElse(Node.noNode())
-          })
+        partition.replicas.foreach { replicaId =>
+          val broker = image.cluster().broker(replicaId)
+          if (broker != null && !broker.fenced()) {
+            broker.node(listenerName.value).ifPresent { node =>
+              if (!node.isEmpty)
+                result.put(replicaId, node)
+            }
+          }
         }
       }
     }
-    result.toMap
+    result
   }
 
   /**
@@ -378,7 +381,9 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
     }
   }
 
-  def setImage(newImage: MetadataImage): Unit = _currentImage = newImage
+  def setImage(newImage: MetadataImage): Unit = {
+    _currentImage = newImage
+  }
 
   override def config(configResource: ConfigResource): Properties =
     _currentImage.configs().configProperties(configResource)

@@ -49,6 +49,7 @@ class ControllerRegistrationManager(
   val time: Time,
   val threadNamePrefix: String,
   val supportedFeatures: util.Map[String, VersionRange],
+  val zkMigrationEnabled: Boolean,
   val incarnationId: Uuid,
   val listenerInfo: ListenerInfo,
   val resendExponentialBackoff: ExponentialBackoff = new ExponentialBackoff(100, 2, 120000L, 0.02)
@@ -143,7 +144,7 @@ class ControllerRegistrationManager(
    * Start shutting down the ControllerRegistrationManager, but do not block.
    */
   def beginShutdown(): Unit = {
-    eventQueue.beginShutdown("beginShutdown");
+    eventQueue.beginShutdown("beginShutdown")
   }
 
   /**
@@ -206,7 +207,7 @@ class ControllerRegistrationManager(
       info("maybeSendControllerRegistration: cannot register yet because the metadata version is " +
           s"still $metadataVersion, which does not support KIP-919 controller registration.")
     } else if (pendingRpc) {
-      info("maybeSendControllerRegistration: waiting for the previous RPC to complete.");
+      info("maybeSendControllerRegistration: waiting for the previous RPC to complete.")
     } else {
       sendControllerRegistration()
     }
@@ -224,7 +225,9 @@ class ControllerRegistrationManager(
       setControllerId(nodeId).
       setFeatures(features).
       setIncarnationId(incarnationId).
-      setListeners(listenerInfo.toControllerRegistrationRequest())
+      setListeners(listenerInfo.toControllerRegistrationRequest).
+      setZkMigrationReady(zkMigrationEnabled)
+
     info(s"sendControllerRegistration: attempting to send $data")
     _channelManager.sendRequest(new ControllerRegistrationRequest.Builder(data),
       new RegistrationResponseHandler())
@@ -274,7 +277,7 @@ class ControllerRegistrationManager(
   }
 
   private def scheduleNextCommunication(intervalMs: Long): Unit = {
-    trace(s"Scheduling next communication at ${intervalMs} ms from now.")
+    trace(s"Scheduling next communication at $intervalMs ms from now.")
     val deadlineNs = time.nanoseconds() + MILLISECONDS.toNanos(intervalMs)
     eventQueue.scheduleDeferred("communication",
       new DeadlineFunction(deadlineNs),

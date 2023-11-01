@@ -30,7 +30,7 @@ import java.util.Optional;
  * Provides methods for parsing JSON with Jackson and encoding to JSON with a simple and naive custom implementation.
  */
 public final class Json {
-    private static ObjectMapper mapper = new ObjectMapper();
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     /**
      * Parse a JSON string into a JsonValue if possible. `None` is returned if `input` is not valid JSON.
@@ -48,7 +48,7 @@ public final class Json {
      * exception.
      */
     public static <T> T parseStringAs(String input, Class<T> clazz) throws JsonProcessingException {
-        return mapper.readValue(input, clazz);
+        return MAPPER.readValue(input, clazz);
     }
 
     /**
@@ -56,21 +56,21 @@ public final class Json {
      */
     public static Optional<JsonValue> parseBytes(byte[] input) throws IOException {
         try {
-            return Optional.ofNullable(mapper.readTree(input)).map(JsonValue::apply);
+            return Optional.ofNullable(MAPPER.readTree(input)).map(JsonValue::apply);
         } catch (JsonProcessingException e) {
             return Optional.empty();
         }
     }
 
     public static JsonValue tryParseBytes(byte[] input) throws IOException {
-        return JsonValue.apply(mapper.readTree(input));
+        return JsonValue.apply(MAPPER.readTree(input));
     }
 
     /**
      * Parse a JSON byte array into a generic type T, or throws a JsonProcessingException in the case of exception.
      */
     public static <T> T parseBytesAs(byte[] input, Class<T> clazz) throws IOException {
-        return mapper.readValue(input, clazz);
+        return MAPPER.readValue(input, clazz);
     }
 
     /**
@@ -83,7 +83,7 @@ public final class Json {
         if (input == null || input.isEmpty()) {
             throw new JsonParseException(MissingNode.getInstance().traverse(), "The input string shouldn't be empty");
         } else {
-            return JsonValue.apply(mapper.readTree(input));
+            return JsonValue.apply(MAPPER.readTree(input));
         }
     }
 
@@ -93,7 +93,7 @@ public final class Json {
      * a jackson-scala dependency).
      */
     public static String encodeAsString(Object obj) throws JsonProcessingException {
-        return mapper.writeValueAsString(obj);
+        return MAPPER.writeValueAsString(obj);
     }
 
     /**
@@ -102,6 +102,6 @@ public final class Json {
      * a jackson-scala dependency).
      */
     public static byte[] encodeAsBytes(Object obj) throws JsonProcessingException {
-        return mapper.writeValueAsBytes(obj);
+        return MAPPER.writeValueAsBytes(obj);
     }
 }

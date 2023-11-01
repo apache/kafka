@@ -210,7 +210,7 @@ public interface EventQueue extends AutoCloseable {
 
     /**
      * Asynchronously shut down the event queue.
-     *
+     * <br>
      * No new events will be accepted, and the queue thread will exit after running the existing events.
      * Deferred events will receive TimeoutExceptions.
      *

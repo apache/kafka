@@ -17,7 +17,7 @@
 
 package kafka.server
 
-import kafka.log.{LogSegment, UnifiedLog}
+import kafka.log.UnifiedLog
 import kafka.utils.TestUtils
 import org.apache.kafka.common.message.ListOffsetsRequestData.{ListOffsetsPartition, ListOffsetsTopic}
 import org.apache.kafka.common.message.ListOffsetsResponseData.{ListOffsetsPartitionResponse, ListOffsetsTopicResponse}
@@ -25,7 +25,7 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, ListOffsetsRequest, ListOffsetsResponse}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{IsolationLevel, TopicPartition}
-import org.apache.kafka.storage.internals.log.LogStartOffsetIncrementReason
+import org.apache.kafka.storage.internals.log.{LogSegment, LogStartOffsetIncrementReason}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.params.ParameterizedTest
@@ -35,6 +35,8 @@ import org.mockito.invocation.InvocationOnMock
 import org.mockito.stubbing.Answer
 
 import java.io.File
+import java.util
+import java.util.Arrays.asList
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.{Optional, Properties, Random}
 import scala.collection.mutable.Buffer
@@ -276,7 +278,7 @@ class LogOffsetTest extends BaseRequestTest {
       private[this] val value = new AtomicInteger(0)
       override def answer(invocation: InvocationOnMock): Int = value.getAndIncrement()
     })
-    val logSegments = Seq(logSegment)
+    val logSegments = Seq(logSegment).asJava
     when(log.logSegments).thenReturn(logSegments)
     log.legacyFetchOffsetsBefore(System.currentTimeMillis, 100)
   }
@@ -289,9 +291,9 @@ class LogOffsetTest extends BaseRequestTest {
     val log: UnifiedLog = mock(classOf[UnifiedLog])
     val logSegment: LogSegment = mock(classOf[LogSegment])
     when(log.logSegments).thenReturn(
-      new Iterable[LogSegment] {
+      new util.AbstractCollection[LogSegment] {
         override def size = 2
-        override def iterator = Seq(logSegment).iterator
+        override def iterator = asList(logSegment).iterator
       }
     )
     log.legacyFetchOffsetsBefore(System.currentTimeMillis, 100)

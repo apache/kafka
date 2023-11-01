@@ -111,7 +111,7 @@ public class BootstrapControllersIntegrationTest {
     }
 
     @Test
-    public void testPutBrokersInBootstrapControllersConfig() throws Exception {
+    public void testPutBrokersInBootstrapControllersConfig() {
         Properties properties = cluster.clientProperties();
         properties.put(BOOTSTRAP_CONTROLLERS_CONFIG, properties.getProperty(BOOTSTRAP_SERVERS_CONFIG));
         properties.remove(BOOTSTRAP_SERVERS_CONFIG);
@@ -127,7 +127,7 @@ public class BootstrapControllersIntegrationTest {
 
     @Disabled
     @Test
-    public void testPutControllersInBootstrapBrokersConfig() throws Exception {
+    public void testPutControllersInBootstrapBrokersConfig() {
         Properties properties = cluster.clientProperties();
         properties.put(BOOTSTRAP_SERVERS_CONFIG, bootstrapControllerString);
         try (Admin admin = Admin.create(properties)) {
@@ -169,7 +169,7 @@ public class BootstrapControllersIntegrationTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
-    public void testUpdateFeatures(boolean usingBootstrapControllers) throws Exception {
+    public void testUpdateFeatures(boolean usingBootstrapControllers) {
         try (Admin admin = Admin.create(adminProperties(usingBootstrapControllers))) {
             UpdateFeaturesResult result = admin.updateFeatures(Collections.singletonMap("foo.bar.feature",
                 new FeatureUpdate((short) 1, FeatureUpdate.UpgradeType.UPGRADE)),
@@ -196,7 +196,7 @@ public class BootstrapControllersIntegrationTest {
     }
 
     @Test
-    public void testUsingBootstrapControllersOnUnsupportedAdminApi() throws Exception {
+    public void testUsingBootstrapControllersOnUnsupportedAdminApi() {
         try (Admin admin = Admin.create(adminProperties(true))) {
             ListOffsetsResult result = admin.listOffsets(Collections.singletonMap(
                     new TopicPartition("foo", 0), OffsetSpec.earliest()));

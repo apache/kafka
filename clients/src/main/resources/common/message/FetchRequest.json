@@ -53,7 +53,9 @@
   //
   // Version 15 adds the ReplicaState which includes new field ReplicaEpoch and the ReplicaId. Also,
   // deprecate the old ReplicaId field and set its default value to -1. (KIP-903)
-  "validVersions": "0-15",
+  //
+  // Version 16 is the same as version 15 (KIP-951).
+  "validVersions": "0-16",
   "flexibleVersions": "12+",
   "fields": [
     { "name": "ClusterId", "type": "string", "versions": "12+", "nullableVersions": "12+", "default": "null",
