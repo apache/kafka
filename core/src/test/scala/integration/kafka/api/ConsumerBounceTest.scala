@@ -29,7 +29,7 @@ import org.apache.kafka.server.util.ShutdownableThread
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Disabled, Test}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 
 import java.time.Duration
 import scala.annotation.nowarn
@@ -62,8 +62,10 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     properties.put(KafkaConfig.GroupMaxSizeProp, maxGroupSize)
     properties.put(KafkaConfig.UncleanLeaderElectionEnableProp, "true")
     properties.put(KafkaConfig.AutoCreateTopicsEnableProp, "false")
-    properties.put(KafkaConfig.UnstableApiVersionsEnableProp, "true")
-    properties.put(KafkaConfig.NewGroupCoordinatorEnableProp, "true")
+    if (isNewGroupCoordinatorEnabled()) {
+      properties.put(KafkaConfig.UnstableApiVersionsEnableProp, "true")
+      properties.put(KafkaConfig.NewGroupCoordinatorEnableProp, "true")
+    }
 
     FixedPortTestUtils.createBrokerConfigs(brokerCount, zkConnectOrNull, enableControlledShutdown = false)
       .map(KafkaConfig.fromProps(_, properties))
@@ -126,8 +128,8 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testSeekAndCommitWithBrokerFailures(quorum: String): Unit = seekAndCommitWithBrokerFailures(5)
+  @MethodSource(Array("parameters"))
+  def testSeekAndCommitWithBrokerFailures(quorum: String, isNewGroupCoordinatorEnabled: String): Unit = seekAndCommitWithBrokerFailures(5)
 
   def seekAndCommitWithBrokerFailures(numIters: Int): Unit = {
     val numRecords = 1000
@@ -467,7 +469,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
   }
 
   private def submitCloseAndValidate(consumer: Consumer[Array[Byte], Array[Byte]],
-    closeTimeoutMs: Long, minCloseTimeMs: Option[Long], maxCloseTimeMs: Option[Long]): Future[Any] = {
+      closeTimeoutMs: Long, minCloseTimeMs: Option[Long], maxCloseTimeMs: Option[Long]): Future[Any] = {
     executor.submit(() => {
       val closeGraceTimeMs = 2000
       val startMs = System.currentTimeMillis()
@@ -549,4 +551,14 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     futures.map(_.get)
   }
 
+}
+
+object ConsumerBounceTest {
+  def parameters: java.util.stream.Stream[Arguments] = {
+    java.util.stream.Stream.of[Arguments](
+      Arguments.of("zk", "false"),
+      Arguments.of("kraft", "false"),
+      Arguments.of("kraft", "true")
+    )
+  }
 }
