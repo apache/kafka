@@ -28,6 +28,7 @@ import org.apache.kafka.clients.consumer.ConsumerInterceptor;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.NoOffsetForPartitionException;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
@@ -110,6 +111,12 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  * {@link ConsumerNetworkThread network thread}. Visit
  * <a href="https://cwiki.apache.org/confluence/display/KAFKA/Proposal%3A+Consumer+Threading+Model+Refactor">this document</a>
  * for implementation detail.
+ *
+ * <p/>
+ *
+ * <em>Note:</em> this {@link Consumer} implementation is part of the revised consumer group protocol from KIP-848.
+ * This class should not be invoked directly; users should instead create a {@link KafkaConsumer} as before.
+ * This consumer implements the new consumer group protocol and is intended to be the default in coming releases.
  */
 public class AsyncKafkaConsumer<K, V> implements Consumer<K, V> {
 

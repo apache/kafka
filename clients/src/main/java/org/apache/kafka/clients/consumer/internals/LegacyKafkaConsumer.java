@@ -30,6 +30,7 @@ import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.NoOffsetForPartitionException;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
@@ -565,6 +566,12 @@ import static org.apache.kafka.common.utils.Utils.swallow;
  * There are many possible variations on this approach. For example each processor thread can have its own queue, and
  * the consumer threads can hash into these queues using the TopicPartition to ensure in-order consumption and simplify
  * commit.
+ *
+ * <p/>
+ *
+ * <em>Note:</em> per its name, this implementation is left for backward compatibility purposes. The updated consumer
+ * group protocol (from KIP-848) introduces allows users continue using the legacy "generic" group protocol.
+ * This class should not be invoked directly; users should instead create a {@link KafkaConsumer} as before.
  */
 public class LegacyKafkaConsumer<K, V> implements Consumer<K, V> {
 
