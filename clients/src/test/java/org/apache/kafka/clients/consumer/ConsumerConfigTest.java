@@ -169,7 +169,7 @@ public class ConsumerConfigTest {
         configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClass);
         final ConsumerConfig consumerConfig = new ConsumerConfig(configs);
         assertEquals("generic", consumerConfig.getString(ConsumerConfig.GROUP_PROTOCOL_CONFIG));
-        assertNull(consumerConfig.getString(ConsumerConfig.REMOTE_ASSIGNOR_CONFIG));
+        assertNull(consumerConfig.getString(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG));
     }
 
     @Test
@@ -179,11 +179,11 @@ public class ConsumerConfigTest {
         final Map<String, Object> configs = new HashMap<>();
         configs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializerClass);
         configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClass);
-        configs.put(ConsumerConfig.REMOTE_ASSIGNOR_CONFIG, remoteAssignorName);
+        configs.put(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG, remoteAssignorName);
         configs.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, protocol);
         final ConsumerConfig consumerConfig = new ConsumerConfig(configs);
         assertEquals(protocol, consumerConfig.getString(ConsumerConfig.GROUP_PROTOCOL_CONFIG));
-        assertEquals(remoteAssignorName, consumerConfig.getString(ConsumerConfig.REMOTE_ASSIGNOR_CONFIG));
+        assertEquals(remoteAssignorName, consumerConfig.getString(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG));
     }
 
     @ParameterizedTest

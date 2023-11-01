@@ -117,9 +117,9 @@ public class ConsumerConfig extends AbstractConfig {
     /**
     * <code>group.remote.assignor</code>
     */
-    public static final String REMOTE_ASSIGNOR_CONFIG = "group.remote.assignor";
-    public static final String DEFAULT_REMOTE_ASSIGNOR = null;
-    public static final String REMOTE_ASSIGNOR_DOC = "The server-side assignor to use. If no assignor is specified, " +
+    public static final String GROUP_REMOTE_ASSIGNOR_CONFIG = "group.remote.assignor";
+    public static final String DEFAULT_GROUP_REMOTE_ASSIGNOR = null;
+    public static final String GROUP_REMOTE_ASSIGNOR_DOC = "The server-side assignor to use. If no assignor is specified, " +
         "the group coordinator will pick one. This configuration is applied only if <code>group.protocol</code> is " +
         "set to \"consumer\".";
 
@@ -634,11 +634,11 @@ public class ConsumerConfig extends AbstractConfig {
                                         ConfigDef.CaseInsensitiveValidString.in(Utils.enumOptions(GroupProtocol.class)),
                                         Importance.HIGH,
                                         GROUP_PROTOCOL_DOC)
-                                .define(REMOTE_ASSIGNOR_CONFIG,
+                                .define(GROUP_REMOTE_ASSIGNOR_CONFIG,
                                         Type.STRING,
-                                        DEFAULT_REMOTE_ASSIGNOR,
+                                        DEFAULT_GROUP_REMOTE_ASSIGNOR,
                                         Importance.MEDIUM,
-                                        REMOTE_ASSIGNOR_DOC)
+                                        GROUP_REMOTE_ASSIGNOR_DOC)
                                 // security support
                                 .define(SECURITY_PROVIDERS_CONFIG,
                                         Type.STRING,
