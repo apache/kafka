@@ -100,7 +100,7 @@ public class GlobalStreamThreadTest {
             };
 
         builder.addGlobalStore(
-            new KeyValueStoreMaterializer<>(materialized),
+            new KeyValueStoreMaterializer<>(materialized).withLoggingDisabled(),
             "sourceName",
             null,
             null,

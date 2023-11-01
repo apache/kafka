@@ -165,7 +165,7 @@ public class KeyValueStoreMaterializer<K, V> implements StoreFactory {
     @Override
     public StoreFactory withLoggingDisabled() {
         materialized.withLoggingDisabled();
-        return null;
+        return this;
     }
 
     @Override
