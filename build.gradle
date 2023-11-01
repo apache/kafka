@@ -1404,7 +1404,7 @@ project(':clients') {
     relocate('io.opentelemetry.proto', 'org.apache.kafka.shaded.io.opentelemetry.proto')
     relocate('com.google.protobuf', 'org.apache.kafka.shaded.com.google.protobuf')
 
-    // dependencies exclusion from the final jar.
+    // dependencies excluded from the final jar, since they are declared as runtime dependencies
     dependencies {
       exclude(dependency(libs.snappy))
       exclude(dependency(libs.zstd))
