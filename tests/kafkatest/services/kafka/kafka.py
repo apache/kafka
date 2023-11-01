@@ -926,7 +926,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     def pids(self, node):
         """Return process ids associated with running processes on the given node."""
         try:
-            cmd = "jcmd | grep -e %s | awk '{print $1}'" % self.java_class_name()
+            cmd = "jcmd | grep -e %s -e %s | awk '{print $1}'" % (self.java_class_name(), self.deprecated_cp_java_class_name())
             pid_arr = [pid for pid in node.account.ssh_capture(cmd, allow_fail=True, callback=int)]
             return pid_arr
         except (RemoteCommandError, ValueError) as e:
@@ -995,6 +995,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         JmxMixin.clean_node(self, node)
         self.security_config.clean_node(node)
         node.account.kill_java_processes(self.java_class_name(),
+                                         clean_shutdown=False, allow_fail=True)
+        node.account.kill_java_processes(self.deprecated_cp_java_class_name(),
                                          clean_shutdown=False, allow_fail=True)
         node.account.ssh("sudo rm -rf -- %s" % KafkaService.PERSISTENT_ROOT, allow_fail=False)
 
@@ -1821,3 +1823,6 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
     def java_class_name(self):
         return "kafka.Kafka"
+
+    def deprecated_cp_java_class_name(self):
+        return "io.confluent.support.metrics.SupportedKafka"
