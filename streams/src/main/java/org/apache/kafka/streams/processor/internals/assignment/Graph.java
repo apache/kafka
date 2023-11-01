@@ -349,7 +349,7 @@ public class Graph<V extends Comparable<V>> {
     }
 
     /**
-     * Detect negative cycle using Bellman-ford shortest path algorithm.
+     * Detect negative cycle using Bellman-ford's shortest path algorithm.
      * @param source Source node
      * @param parentNodes Parent nodes to store negative cycle nodes
      * @param parentEdges Parent edges to store negative cycle edges
@@ -362,29 +362,29 @@ public class Graph<V extends Comparable<V>> {
         distance.put(source, 0L);
         final int nodeCount = nodes.size();
 
-        // Iterate nodeCount iterations since Bellaman-Ford will find shortest path in nodeCount - 1
+        // Iterate nodeCount iterations since Bellaman-Ford will find the shortest path in nodeCount - 1
         // iterations. If the distance can still be relaxed in nodeCount iteration, there's a negative
         // cycle
         for (int i = 0; i < nodeCount; i++) {
             // Iterate through all edges
             for (final Entry<V, SortedMap<V, Edge>> nodeEdges : adjList.entrySet()) {
-                final V u = nodeEdges.getKey();
+                final V start = nodeEdges.getKey();
                 for (final Entry<V, Edge> nodeEdge : nodeEdges.getValue().entrySet()) {
                     final Edge edge = nodeEdge.getValue();
                     if (edge.residualFlow == 0) {
                         continue;
                     }
-                    final V v = edge.destination;
-                    final Long distanceU = distance.get(u);
-                    final Long distanceV = distance.get(v);
+                    final V end = edge.destination;
+                    final Long distanceStart = distance.get(start);
+                    final Long distanceEnd = distance.get(end);
                     // There's a path to u and either we haven't computed V or distance to V is shorter
-                    if (distanceU != null && (distanceV == null || distanceV > distanceU + edge.cost)) {
+                    if (distanceStart != null && (distanceEnd == null || distanceEnd > distanceStart + edge.cost)) {
                         if (i == nodeCount - 1) {
-                            return v;
+                            return end;
                         }
-                        distance.put(v, distanceU + edge.cost);
-                        parentNodes.put(v, u);
-                        parentEdges.put(v, edge);
+                        distance.put(end, distanceStart + edge.cost);
+                        parentNodes.put(end, start);
+                        parentEdges.put(end, edge);
                     }
                 }
             }
