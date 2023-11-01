@@ -360,7 +360,9 @@ public enum MetadataVersion {
     }
 
     public short fetchRequestVersion() {
-        if (this.isAtLeast(IBP_3_5_IV1)) {
+        if (this.isAtLeast(IBP_3_7_IV0)) {
+            return 16;
+        } else if (this.isAtLeast(IBP_3_5_IV1)) {
             return 15;
         } else if (this.isAtLeast(IBP_3_5_IV0)) {
             return 14;

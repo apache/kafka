@@ -291,7 +291,7 @@ public class CommitRequestManagerTest {
         topicPartitionData.put(tp1, new OffsetFetchResponse.PartitionData(100L, Optional.of(1), "metadata", error));
         topicPartitionData.put(tp2, new OffsetFetchResponse.PartitionData(100L, Optional.of(1), "metadata", Errors.NONE));
 
-        res.unsentRequests.get(0).future().complete(buildOffsetFetchClientResponse(
+        res.unsentRequests.get(0).handler().onComplete(buildOffsetFetchClientResponse(
                 res.unsentRequests.get(0),
                 topicPartitionData,
                 Errors.NONE));
@@ -329,7 +329,7 @@ public class CommitRequestManagerTest {
 
         NetworkClientDelegate.PollResult res = commitRequestManger.poll(time.milliseconds());
         assertEquals(1, res.unsentRequests.size());
-        res.unsentRequests.get(0).future().complete(buildOffsetFetchClientResponse(res.unsentRequests.get(0),
+        res.unsentRequests.get(0).handler().onComplete(buildOffsetFetchClientResponse(res.unsentRequests.get(0),
             partitions, error));
         res = commitRequestManger.poll(time.milliseconds());
         assertEquals(0, res.unsentRequests.size());
