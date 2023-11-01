@@ -3602,7 +3602,6 @@ foo
 
   <ul>
     <li>Supporting JBOD configurations with multiple storage directories</li>
-    <li>Modifying certain dynamic configurations on the standalone KRaft controller</li>
   </ul>
 
   <h4 class="anchor-heading"><a id="kraft_zk_migration" class="anchor-link"></a><a href="#kraft_zk_migration">ZooKeeper to KRaft Migration</a></h4>
@@ -3625,7 +3624,7 @@ foo
 
   For
   <ul>
-    <li>In the <b>pre-migration phase</b>, all the brokers are in ZK mode, and there is a ZK-based controller. But a KRaft controller has been provisioned and has migration enabled</li>
+    <li>In the <b>pre-migration phase</b>, all the brokers are in ZK mode, and there is a ZK-based controller quorum. But a KRaft controller quorum has been provisioned and has migration enabled</li>
     <li>During the <b>initial metadata load</b>, a KRaft quorum loads the metadata from ZooKeeper.</li>
     <li>In <b>migration phase</b>, all brokers are transitioning from ZK to KRaft. The KRaft controller has begun the data migration, brokers are being restarted, dual-writes are in progress. The KRaft controller is continuing to write to ZK.</li>
     <li>In the post migration phase, when the migration has been <b>finalized</b>, we no longer write metadata to ZooKeeper.</li>
