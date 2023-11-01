@@ -16,20 +16,21 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
+import org.apache.kafka.common.Topic;
 import org.apache.kafka.common.PartitionInfo;
 
 import java.util.List;
 import java.util.Map;
 
-public class TopicMetadataApplicationEvent extends CompletableApplicationEvent<Map<String, List<PartitionInfo>>> {
-    private final String topic;
-    public TopicMetadataApplicationEvent(final String topic) {
+public class TopicMetadataApplicationEvent extends CompletableApplicationEvent<Map<Topic, List<PartitionInfo>>> {
+    private final Topic topic;
+    public TopicMetadataApplicationEvent(final Topic topic) {
         super(Type.TOPIC_METADATA);
         this.topic = topic;
     }
 
     public String topic() {
-        return topic;
+        return topic.topicName();
     }
 
     @Override

@@ -24,6 +24,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
+import org.apache.kafka.common.Topic;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
@@ -96,7 +97,7 @@ public class TopicMetadataRequestManager implements RequestManager {
      * @param topic to be requested. If empty, return the metadata for all topics.
      * @return the future of the metadata request.
      */
-    public CompletableFuture<Map<String, List<PartitionInfo>>> requestTopicMetadata(final Optional<String> topic) {
+    public CompletableFuture<Map<Topic, List<PartitionInfo>>> requestTopicMetadata(final Optional<String> topic) {
         if (inflightRequests.containsKey(topic)) {
             return inflightRequests.get(topic).future;
         }
@@ -117,7 +118,7 @@ public class TopicMetadataRequestManager implements RequestManager {
 
     class TopicMetadataRequestState extends RequestState {
         private final Optional<String> topic;
-        CompletableFuture<Map<String, List<PartitionInfo>>> future;
+        CompletableFuture<Map<Topic, List<PartitionInfo>>> future;
 
         public TopicMetadataRequestState(final LogContext logContext,
                                          final Optional<String> topic,
@@ -175,7 +176,7 @@ public class TopicMetadataRequestManager implements RequestManager {
         private void handleResponse(final ClientResponse response) {
             long responseTimeMs = response.receivedTimeMs();
             try {
-                Map<String, List<PartitionInfo>> res = handleTopicMetadataResponse((MetadataResponse) response.responseBody());
+                Map<Topic, List<PartitionInfo>> res = handleTopicMetadataResponse((MetadataResponse) response.responseBody());
                 future.complete(res);
                 inflightRequests.remove(topic);
             } catch (RetriableException e) {
@@ -190,7 +191,7 @@ public class TopicMetadataRequestManager implements RequestManager {
             inflightRequests.remove(topic);
         }
 
-        private Map<String, List<PartitionInfo>> handleTopicMetadataResponse(final MetadataResponse response) {
+        private Map<Topic, List<PartitionInfo>> handleTopicMetadataResponse(final MetadataResponse response) {
             Cluster cluster = response.buildCluster();
 
             final Set<String> unauthorizedTopics = cluster.unauthorizedTopics();
@@ -222,9 +223,9 @@ public class TopicMetadataRequestManager implements RequestManager {
                 }
             }
 
-            HashMap<String, List<PartitionInfo>> topicsPartitionInfos = new HashMap<>();
+            HashMap<Topic, List<PartitionInfo>> topicsPartitionInfos = new HashMap<>();
             for (String topic : cluster.topics())
-                topicsPartitionInfos.put(topic, cluster.partitionsForTopic(topic));
+                topicsPartitionInfos.put(new Topic(cluster.topicId(topic), topic), cluster.partitionsForTopic(topic));
             return topicsPartitionInfos;
         }
 

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.common.Topic;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.Cluster;
@@ -111,9 +112,8 @@ public class TopicMetadataRequestManagerTest {
     @ParameterizedTest
     @MethodSource("topicsProvider")
     public void testSendingTheSameRequest(Optional<String> topic) {
-        CompletableFuture<Map<String, List<PartitionInfo>>> future = this.topicMetadataRequestManager.requestTopicMetadata(topic);
-        CompletableFuture<Map<String, List<PartitionInfo>>> future2 =
-            this.topicMetadataRequestManager.requestTopicMetadata(topic);
+        CompletableFuture<Map<Topic, List<PartitionInfo>>> future = this.topicMetadataRequestManager.requestTopicMetadata(topic);
+        CompletableFuture<Map<Topic, List<PartitionInfo>>> future2 = this.topicMetadataRequestManager.requestTopicMetadata(topic);
         this.time.sleep(100);
         NetworkClientDelegate.PollResult res = this.topicMetadataRequestManager.poll(this.time.milliseconds());
         assertEquals(1, res.unsentRequests.size());
