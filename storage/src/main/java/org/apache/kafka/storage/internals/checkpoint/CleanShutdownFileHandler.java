@@ -15,11 +15,12 @@
  * limitations under the License.
  */
 
-package kafka.log;
+package org.apache.kafka.storage.internals.checkpoint;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.server.util.Json;
 import org.slf4j.Logger;
 
 import java.io.File;
@@ -28,9 +29,7 @@ import java.io.BufferedWriter;
 import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.util.HashMap;
-import java.util.Locale;
-import java.util.Map;
+import java.util.OptionalLong;
 
 /**
  * Clean shutdown file that indicates the broker was cleanly shutdown in 0.8 and higher.
@@ -45,17 +44,21 @@ import java.util.Map;
 
 public class CleanShutdownFileHandler {
     public static final String CLEAN_SHUTDOWN_FILE_NAME = ".kafka_cleanshutdown";
-    private final File cleanShutdownFile;
+    // Visible for testing
+    final File cleanShutdownFile;
     private static final int CURRENT_VERSION = 0;
     private final Logger logger;
 
-    private enum Fields {
-        VERSION,
-        BROKER_EPOCH;
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    private static class Content {
+        public int version;
+        public Long brokerEpoch;
 
-        @Override
-        public String toString() {
-            return name().toLowerCase(Locale.ROOT);
+        public Content() {};
+
+        public Content(int version, Long brokerEpoch) {
+            this.version = version;
+            this.brokerEpoch = brokerEpoch;
         }
     }
 
@@ -73,10 +76,8 @@ public class CleanShutdownFileHandler {
         FileOutputStream os = new FileOutputStream(cleanShutdownFile);
         BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(os, StandardCharsets.UTF_8));
         try {
-            Map<String, String> payload = new HashMap<>();
-            payload.put(Fields.VERSION.toString(), Integer.toString(version));
-            payload.put(Fields.BROKER_EPOCH.toString(), Long.toString(brokerEpoch));
-            bw.write(new ObjectMapper().writeValueAsString(payload));
+            Content content = new Content(version, brokerEpoch);
+            bw.write(Json.encodeAsString(content));
             bw.flush();
             os.getFD().sync();
         } finally {
@@ -85,17 +86,16 @@ public class CleanShutdownFileHandler {
         }
     }
 
-    public long read() {
-        long brokerEpoch = -1L;
+    @SuppressWarnings("unchecked")
+    public OptionalLong read() {
         try {
             String text = Utils.readFileAsString(cleanShutdownFile.toPath().toString());
-            Map<String, String> content = new ObjectMapper().readValue(text, HashMap.class);
-
-            brokerEpoch = Long.parseLong(content.getOrDefault(Fields.BROKER_EPOCH.toString(), "-1L"));
+            Content content = Json.parseStringAs(text, Content.class);
+            return OptionalLong.of(content.brokerEpoch);
         } catch (Exception e) {
-            logger.warn("Fail to read the clean shutdown file in " + cleanShutdownFile.toPath() + ":" + e);
+            logger.debug("Fail to read the clean shutdown file in " + cleanShutdownFile.toPath() + ":" + e);
+            return OptionalLong.empty();
         }
-        return brokerEpoch;
     }
 
     public void delete() throws Exception {

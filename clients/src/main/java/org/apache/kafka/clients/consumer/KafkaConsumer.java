@@ -31,7 +31,6 @@ import org.apache.kafka.clients.consumer.internals.FetchConfig;
 import org.apache.kafka.clients.consumer.internals.FetchMetricsManager;
 import org.apache.kafka.clients.consumer.internals.Fetcher;
 import org.apache.kafka.clients.consumer.internals.KafkaConsumerMetrics;
-import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.OffsetFetcher;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.clients.consumer.internals.TopicMetadataFetcher;
@@ -903,6 +902,59 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void subscribe(Collection<String> topics, ConsumerRebalanceListener listener) {
+        if (listener == null)
+            throw new IllegalArgumentException("RebalanceListener cannot be null");
+
+        subscribe(topics, Optional.of(listener));
+    }
+
+    /**
+     * Subscribe to the given list of topics to get dynamically assigned partitions.
+     * <b>Topic subscriptions are not incremental. This list will replace the current
+     * assignment (if there is one).</b> It is not possible to combine topic subscription with group management
+     * with manual partition assignment through {@link #assign(Collection)}.
+     *
+     * If the given list of topics is empty, it is treated the same as {@link #unsubscribe()}.
+     *
+     * <p>
+     * This is a short-hand for {@link #subscribe(Collection, ConsumerRebalanceListener)}, which
+     * uses a no-op listener. If you need the ability to seek to particular offsets, you should prefer
+     * {@link #subscribe(Collection, ConsumerRebalanceListener)}, since group rebalances will cause partition offsets
+     * to be reset. You should also provide your own listener if you are doing your own offset
+     * management since the listener gives you an opportunity to commit offsets before a rebalance finishes.
+     *
+     * @param topics The list of topics to subscribe to
+     * @throws IllegalArgumentException If topics is null or contains null or empty elements
+     * @throws IllegalStateException If {@code subscribe()} is called previously with pattern, or assign is called
+     *                               previously (without a subsequent call to {@link #unsubscribe()}), or if not
+     *                               configured at-least one partition assignment strategy
+     */
+    @Override
+    public void subscribe(Collection<String> topics) {
+        subscribe(topics, Optional.empty());
+    }
+
+    /**
+     * Internal helper method for {@link #subscribe(Collection)} and
+     * {@link #subscribe(Collection, ConsumerRebalanceListener)}
+     * <p>
+     * Subscribe to the given list of topics to get dynamically assigned partitions.
+     * <b>Topic subscriptions are not incremental. This list will replace the current
+     * assignment (if there is one).</b> It is not possible to combine topic subscription with group management
+     * with manual partition assignment through {@link #assign(Collection)}.
+     *
+     * If the given list of topics is empty, it is treated the same as {@link #unsubscribe()}.
+     *
+     * <p>
+     * @param topics The list of topics to subscribe to
+     * @param listener {@link Optional} listener instance to get notifications on partition assignment/revocation
+     *                 for the subscribed topics
+     * @throws IllegalArgumentException If topics is null or contains null or empty elements
+     * @throws IllegalStateException If {@code subscribe()} is called previously with pattern, or assign is called
+     *                               previously (without a subsequent call to {@link #unsubscribe()}), or if not
+     *                               configured at-least one partition assignment strategy
+     */
+    private void subscribe(Collection<String> topics, Optional<ConsumerRebalanceListener> listener) {
         acquireAndEnsureOpen();
         try {
             maybeThrowInvalidGroupIdException();
@@ -939,32 +991,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * Subscribe to the given list of topics to get dynamically assigned partitions.
-     * <b>Topic subscriptions are not incremental. This list will replace the current
-     * assignment (if there is one).</b> It is not possible to combine topic subscription with group management
-     * with manual partition assignment through {@link #assign(Collection)}.
-     *
-     * If the given list of topics is empty, it is treated the same as {@link #unsubscribe()}.
-     *
-     * <p>
-     * This is a short-hand for {@link #subscribe(Collection, ConsumerRebalanceListener)}, which
-     * uses a no-op listener. If you need the ability to seek to particular offsets, you should prefer
-     * {@link #subscribe(Collection, ConsumerRebalanceListener)}, since group rebalances will cause partition offsets
-     * to be reset. You should also provide your own listener if you are doing your own offset
-     * management since the listener gives you an opportunity to commit offsets before a rebalance finishes.
-     *
-     * @param topics The list of topics to subscribe to
-     * @throws IllegalArgumentException If topics is null or contains null or empty elements
-     * @throws IllegalStateException If {@code subscribe()} is called previously with pattern, or assign is called
-     *                               previously (without a subsequent call to {@link #unsubscribe()}), or if not
-     *                               configured at-least one partition assignment strategy
-     */
-    @Override
-    public void subscribe(Collection<String> topics) {
-        subscribe(topics, new NoOpConsumerRebalanceListener());
-    }
-
-    /**
      * Subscribe to all topics matching specified pattern to get dynamically assigned partitions.
      * The pattern matching will be done periodically against all topics existing at the time of check.
      * This can be controlled through the {@code metadata.max.age.ms} configuration: by lowering
@@ -985,21 +1011,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void subscribe(Pattern pattern, ConsumerRebalanceListener listener) {
-        maybeThrowInvalidGroupIdException();
-        if (pattern == null || pattern.toString().equals(""))
-            throw new IllegalArgumentException("Topic pattern to subscribe to cannot be " + (pattern == null ?
-                    "null" : "empty"));
+        if (listener == null)
+            throw new IllegalArgumentException("RebalanceListener cannot be null");
 
-        acquireAndEnsureOpen();
-        try {
-            throwIfNoAssignorsConfigured();
-            log.info("Subscribed to pattern: '{}'", pattern);
-            this.subscriptions.subscribe(pattern, listener);
-            this.coordinator.updatePatternSubscription(metadata.fetch());
-            this.metadata.requestUpdateForNewTopics();
-        } finally {
-            release();
-        }
+        subscribe(pattern, Optional.of(listener));
     }
 
     /**
@@ -1020,7 +1035,47 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void subscribe(Pattern pattern) {
-        subscribe(pattern, new NoOpConsumerRebalanceListener());
+        subscribe(pattern, Optional.empty());
+    }
+
+    /**
+     * Internal helper method for {@link #subscribe(Pattern)} and
+     * {@link #subscribe(Pattern, ConsumerRebalanceListener)}
+     * <p>
+     * Subscribe to all topics matching specified pattern to get dynamically assigned partitions.
+     * The pattern matching will be done periodically against all topics existing at the time of check.
+     * This can be controlled through the {@code metadata.max.age.ms} configuration: by lowering
+     * the max metadata age, the consumer will refresh metadata more often and check for matching topics.
+     * <p>
+     * See {@link #subscribe(Collection, ConsumerRebalanceListener)} for details on the
+     * use of the {@link ConsumerRebalanceListener}. Generally rebalances are triggered when there
+     * is a change to the topics matching the provided pattern and when consumer group membership changes.
+     * Group rebalances only take place during an active call to {@link #poll(Duration)}.
+     *
+     * @param pattern Pattern to subscribe to
+     * @param listener {@link Optional} listener instance to get notifications on partition assignment/revocation
+     *                 for the subscribed topics
+     * @throws IllegalArgumentException If pattern or listener is null
+     * @throws IllegalStateException If {@code subscribe()} is called previously with topics, or assign is called
+     *                               previously (without a subsequent call to {@link #unsubscribe()}), or if not
+     *                               configured at-least one partition assignment strategy
+     */
+    private void subscribe(Pattern pattern, Optional<ConsumerRebalanceListener> listener) {
+        maybeThrowInvalidGroupIdException();
+        if (pattern == null || pattern.toString().equals(""))
+            throw new IllegalArgumentException("Topic pattern to subscribe to cannot be " + (pattern == null ?
+                    "null" : "empty"));
+
+        acquireAndEnsureOpen();
+        try {
+            throwIfNoAssignorsConfigured();
+            log.info("Subscribed to pattern: '{}'", pattern);
+            this.subscriptions.subscribe(pattern, listener);
+            this.coordinator.updatePatternSubscription(metadata.fetch());
+            this.metadata.requestUpdateForNewTopics();
+        } finally {
+            release();
+        }
     }
 
     /**
