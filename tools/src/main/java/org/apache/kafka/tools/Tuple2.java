@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.tools;
 
-
 import java.util.Objects;
 
 public final class Tuple2<V1, V2> {
