@@ -676,12 +676,12 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public void enforceRebalance() {
-        throw new KafkaException("method not implemented");
+        throw new UnsupportedOperationException("Operation not supported in new consumer group protocol");
     }
 
     @Override
     public void enforceRebalance(String reason) {
-        throw new KafkaException("method not implemented");
+        throw new UnsupportedOperationException("Operation not supported in new consumer group protocol");
     }
 
     @Override
@@ -898,6 +898,8 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     @Override
     public void unsubscribe() {
         fetchBuffer.retainAll(Collections.emptySet());
+        // TODO: send leave group event to release assignment and send HB to leave. The event
+        //  should end up triggering the membershipManager.leaveGroup()
         subscriptions.unsubscribe();
     }
 

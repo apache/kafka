@@ -16,9 +16,12 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 
 import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * A stateful object tracking the state of a single member in relationship to a consumer group:
@@ -58,11 +61,19 @@ public interface MembershipManager {
     MemberState state();
 
     /**
-     * Update member info and transition member state based on a heartbeat response.
+     * Update member info and transition member state based on a successful heartbeat response.
      *
      * @param response Heartbeat response to extract member info and errors from.
      */
-    void updateState(ConsumerGroupHeartbeatResponseData response);
+    void onHeartbeatResponseReceived(ConsumerGroupHeartbeatResponseData response);
+
+    /**
+     * Update state when a heartbeat is sent out. This will transition out of the states that end
+     * when a heartbeat request is sent, without waiting for a response (ex.
+     * {@link MemberState#ACKNOWLEDGING_RECONCILED_ASSIGNMENT} and
+     * {@link MemberState#SENDING_LEAVE_REQUEST}.
+     */
+    void onHeartbeatRequestSent();
 
     /**
      * @return Server-side assignor implementation configured for the member, that will be sent
@@ -73,30 +84,55 @@ public interface MembershipManager {
     /**
      * @return Current assignment for the member.
      */
-    ConsumerGroupHeartbeatResponseData.Assignment currentAssignment();
+    Set<TopicPartition> currentAssignment();
 
     /**
-     * Update the assignment for the member, indicating that the provided assignment is the new
-     * current assignment.
+     * @return Assignment that the member received from the server but hasn't finished processing
+     * yet.
      */
-    void onTargetAssignmentProcessComplete(ConsumerGroupHeartbeatResponseData.Assignment assignment);
+    Optional<ConsumerGroupHeartbeatResponseData.Assignment> targetAssignment();
 
     /**
-     * Transition the member to the FENCED state and update the member info as required. This is
-     * only invoked when the heartbeat returns a FENCED_MEMBER_EPOCH or UNKNOWN_MEMBER_ID error.
-     * code.
+     * Transition to the {@link MemberState#JOINING} state, indicating that the member will
+     * try to join the group on the next heartbeat request. This is expected to be invoked when
+     * the user calls the subscribe API, or when the member wants to rejoin after getting fenced.
+     */
+    void transitionToJoinGroup();
+
+    /**
+     * Transition the member to the FENCED state, where the member will release the assignment by
+     * calling the onPartitionsLost callback, and when the callback completes, it will transition
+     * to {@link MemberState#JOINING} to rejoin the group. This is expected to be invoked when
+     * the heartbeat returns a FENCED_MEMBER_EPOCH or UNKNOWN_MEMBER_ID error.
      */
     void transitionToFenced();
 
     /**
      * Transition the member to the FAILED state and update the member info as required. This is
      * invoked when un-recoverable errors occur (ex. when the heartbeat returns a non-retriable
-     * error or when errors occur while executing the user-provided callbacks)
+     * error)
      */
     void transitionToFailed();
 
     /**
-     * @return True if the member should send heartbeat to the coordinator.
+     * Release assignment and transition to {@link MemberState#LEAVING_GROUP} so that a heartbeat
+     * request is sent indicating the broker that the member wants to leave the group. This is
+     * expected to be invoked when the user calls the unsubscribe API.
+     *
+     * @return Future that will complete when the callback execution completes and the heartbeat
+     * to leave the group has been sent out.
      */
-    boolean shouldSendHeartbeat();
+    CompletableFuture<Void> leaveGroup();
+
+    /**
+     * @return True if the member should send heartbeat to the coordinator without waiting for
+     * the interval.
+     */
+    boolean shouldHeartbeatNow();
+
+    /**
+     * @return True if the member should not send heartbeat to the coordinator. This could be the
+     * case then the member is not in a group, or when it failed with a fatal error.
+     */
+    boolean shouldSkipHeartbeat();
 }

@@ -41,7 +41,7 @@ import java.util.Collections;
  * {@link MembershipManager} and handle any errors.</p>
  *
  * <p>The manager will try to send a heartbeat when the member is in {@link MemberState#STABLE},
- * {@link MemberState#UNJOINED}, or {@link MemberState#RECONCILING}. Which mean the member is either in a stable
+ * {@link MemberState#JOINING}, or {@link MemberState#RECONCILING}. Which mean the member is either in a stable
  * group, is trying to join a group, or is in the process of reconciling the assignment changes.</p>
  *
  * <p>If the member got kick out of a group, it will try to give up the current assignment by invoking {@code
@@ -149,15 +149,17 @@ public class HeartbeatRequestManager implements RequestManager {
      */
     @Override
     public NetworkClientDelegate.PollResult poll(long currentTimeMs) {
-        if (!coordinatorRequestManager.coordinator().isPresent() || !membershipManager.shouldSendHeartbeat())
+        if (!coordinatorRequestManager.coordinator().isPresent() || membershipManager.shouldSkipHeartbeat())
             return NetworkClientDelegate.PollResult.EMPTY;
 
-        // TODO: We will need to send a heartbeat response after partitions being revoke. This needs to be
-        //  implemented either with or after the partition reconciliation logic.
-        if (!heartbeatRequestState.canSendRequest(currentTimeMs))
-            return new NetworkClientDelegate.PollResult(heartbeatRequestState.nextHeartbeatMs(currentTimeMs));
+        boolean heartbeatNow = membershipManager.shouldHeartbeatNow() && !heartbeatRequestState.requestInFlight();
 
-        this.heartbeatRequestState.onSendAttempt(currentTimeMs);
+        if (!heartbeatRequestState.canSendRequest(currentTimeMs) && !heartbeatNow) {
+            return new NetworkClientDelegate.PollResult(heartbeatRequestState.nextHeartbeatMs(currentTimeMs));
+        }
+
+        heartbeatRequestState.onSendAttempt(currentTimeMs);
+        membershipManager.onHeartbeatRequestSent();
         NetworkClientDelegate.UnsentRequest request = makeHeartbeatRequest();
         return new NetworkClientDelegate.PollResult(heartbeatRequestState.heartbeatIntervalMs, Collections.singletonList(request));
     }
@@ -212,7 +214,7 @@ public class HeartbeatRequestManager implements RequestManager {
             this.heartbeatRequestState.updateHeartbeatIntervalMs(response.data().heartbeatIntervalMs());
             this.heartbeatRequestState.onSuccessfulAttempt(currentTimeMs);
             this.heartbeatRequestState.resetTimer();
-            this.membershipManager.updateState(response.data());
+            this.membershipManager.onHeartbeatResponseReceived(response.data());
             return;
         }
         onErrorResponse(response, currentTimeMs);

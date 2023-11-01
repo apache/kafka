@@ -24,9 +24,17 @@ import java.util.List;
 public enum MemberState {
 
     /**
-     * Member has not joined a consumer group yet, or has been fenced and needs to re-join.
+     * Member is not part of the group. This could be the case when it has never joined (no call
+     * has been made to the subscribe API), or when the member intentionally leaves the group
+     * after a call to the unsubscribe API.
      */
-    UNJOINED,
+    NOT_IN_GROUP,
+
+    /**
+     * Member is attempting to join a consumer group. This could be the case when joining for the
+     * first time, or when it has been fenced and tries to re-join.
+     */
+    JOINING,
 
     /**
      * Member has received a new target assignment (partitions could have been assigned or
@@ -34,11 +42,16 @@ public enum MemberState {
      * invoke the user callbacks for onPartitionsAssigned or onPartitionsRevoked, and then make
      * the new assignment effective.
      */
-    // TODO: determine if separate state will be needed for assign/revoke (not for now)
     RECONCILING,
 
     /**
-     * Member is active in a group (heartbeating) and has processed all assignments received.
+     * Member has completed reconciling an assignment received, and stays in this state until the
+     * next heartbeat request is sent out to acknowledge the assignment to the server.
+     */
+    ACKNOWLEDGING_RECONCILED_ASSIGNMENT,
+
+    /**
+     * Member is active in a group, sending heartbeats, and has processed all assignments received.
      */
     STABLE,
 
@@ -48,26 +61,50 @@ public enum MemberState {
      * {@link org.apache.kafka.common.protocol.Errors#FENCED_MEMBER_EPOCH} error from the
      * broker. This is a recoverable state, where the member
      * gives up its partitions by invoking the user callbacks for onPartitionsLost, and then
-     * transitions to {@link #UNJOINED} to rejoin the group as a new member.
+     * transitions to {@link #JOINING} to rejoin the group as a new member.
      */
     FENCED,
 
     /**
-     * The member failed with an unrecoverable error
+     * The member transitions to this state when it is leaving the group after a call to
+     * unsubscribe. It stays in this state while releasing its assignment (calling user's callback
+     * for partitions revoked or lost), until the callback completes and a heartbeat request is
+     * sent out to effectively leave the group (without waiting for a response).
      */
-    FAILED;
+    LEAVING_GROUP,
 
+    /**
+     * Member has completed releasing its assignment, and stays in this state until the next
+     * heartbeat request is sent out to leave the group.
+     */
+    SENDING_LEAVE_REQUEST,
+
+    /**
+     * The member failed with an unrecoverable error.
+     */
+    FATAL;
+
+    /**
+     * Valid state transitions
+     */
     static {
-        // Valid state transitions
-        STABLE.previousValidStates = Arrays.asList(UNJOINED, RECONCILING);
 
-        RECONCILING.previousValidStates = Arrays.asList(STABLE, UNJOINED);
+        STABLE.previousValidStates = Arrays.asList(JOINING, ACKNOWLEDGING_RECONCILED_ASSIGNMENT);
 
-        FAILED.previousValidStates = Arrays.asList(UNJOINED, STABLE, RECONCILING);
+        RECONCILING.previousValidStates = Arrays.asList(STABLE, JOINING);
 
-        FENCED.previousValidStates = Arrays.asList(STABLE, RECONCILING);
+        ACKNOWLEDGING_RECONCILED_ASSIGNMENT.previousValidStates = Arrays.asList(RECONCILING);
 
-        UNJOINED.previousValidStates = Arrays.asList(FENCED);
+        FATAL.previousValidStates = Arrays.asList(JOINING, STABLE, RECONCILING, ACKNOWLEDGING_RECONCILED_ASSIGNMENT);
+
+        FENCED.previousValidStates = Arrays.asList(JOINING, STABLE, RECONCILING, ACKNOWLEDGING_RECONCILED_ASSIGNMENT);
+
+        JOINING.previousValidStates = Arrays.asList(FENCED, RECONCILING, NOT_IN_GROUP);
+
+        LEAVING_GROUP.previousValidStates = Arrays.asList(JOINING, STABLE, RECONCILING,
+                ACKNOWLEDGING_RECONCILED_ASSIGNMENT, NOT_IN_GROUP);
+
+        SENDING_LEAVE_REQUEST.previousValidStates = Arrays.asList(LEAVING_GROUP);
     }
 
     private List<MemberState> previousValidStates;

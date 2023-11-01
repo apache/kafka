@@ -101,26 +101,48 @@ public class CommitRequestManager implements RequestManager {
         if (!coordinatorRequestManager.coordinator().isPresent())
             return EMPTY;
 
-        maybeAutoCommit(this.subscriptions.allConsumed());
+        maybeAutoCommitAllConsumed();
         if (!pendingRequests.hasUnsentRequests())
             return EMPTY;
 
         return new NetworkClientDelegate.PollResult(pendingRequests.drain(currentTimeMs));
     }
 
-    public void maybeAutoCommit(final Map<TopicPartition, OffsetAndMetadata> offsets) {
+    /**
+     * Generate a request to commit offsets if auto-commit is enabled. The request will be
+     * returned to be sent out on the next call to {@link #poll(long)}. This will only generate a
+     * request if there is no other commit request already in-flight, and if the commit interval
+     * has elapsed.
+     *
+     * @param offsets Offsets to commit
+     * @return Future that will complete when a response is received for the request, or a
+     * completed future if no request is generated.
+     */
+    public CompletableFuture<Void> maybeAutoCommit(final Map<TopicPartition, OffsetAndMetadata> offsets) {
         if (!autoCommitState.isPresent()) {
-            return;
+            return CompletableFuture.completedFuture(null);
         }
 
         AutoCommitState autocommit = autoCommitState.get();
         if (!autocommit.canSendAutocommit()) {
-            return;
+            return CompletableFuture.completedFuture(null);
         }
 
-        sendAutoCommit(offsets);
+        CompletableFuture<Void> result = sendAutoCommit(offsets);
         autocommit.resetTimer();
         autocommit.setInflightCommitStatus(true);
+        return result;
+    }
+
+    /**
+     * If auto-commit is enabled, this will generate a commit offsets request for all assigned
+     * partitions and their current positions.
+     *
+     * @return Future that will complete when a response is received for the request, or a
+     * completed future if no request is generated.
+     */
+    public CompletableFuture<Void> maybeAutoCommitAllConsumed() {
+        return maybeAutoCommit(subscriptions.allConsumed());
     }
 
     /**
@@ -167,6 +189,24 @@ public class CommitRequestManager implements RequestManager {
                     }
                     return null;
                 });
+    }
+
+    /**
+     * @return True if auto-commit is enabled as defined in the config {@link ConsumerConfig#ENABLE_AUTO_COMMIT_CONFIG}
+     */
+    public boolean autoCommitEnabled() {
+        return autoCommitState.isPresent();
+    }
+
+    /**
+     * Reset the auto-commit timer so that the next auto-commit is sent out on the interval
+     * starting from now. If auto-commit is not enabled this will perform no action.
+     */
+    public void resetAutoCommitTimer() {
+        if (!autoCommitState.isPresent()) {
+            return;
+        }
+        autoCommitState.get().resetTimer();
     }
 
     private class OffsetCommitRequestState {

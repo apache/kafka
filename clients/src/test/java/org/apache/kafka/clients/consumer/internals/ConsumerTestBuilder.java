@@ -166,6 +166,9 @@ public class ConsumerTestBuilder implements Closeable {
                 backgroundEventHandler,
                 logContext));
 
+        this.topicMetadataRequestManager = spy(new TopicMetadataRequestManager(logContext,
+                config));
+
         if (groupInfo.isPresent()) {
             GroupInformation gi = groupInfo.get();
             CoordinatorRequestManager coordinator = spy(new CoordinatorRequestManager(
@@ -187,6 +190,10 @@ public class ConsumerTestBuilder implements Closeable {
                         gi.groupState.groupId,
                         gi.groupState.groupInstanceId.orElse(null),
                         null,
+                        subscriptions,
+                        commit,
+                        topicMetadataRequestManager,
+                        metadata,
                         logContext
                 )
             );
@@ -228,8 +235,6 @@ public class ConsumerTestBuilder implements Closeable {
                 fetchBuffer,
                 metricsManager,
                 networkClientDelegate));
-        this.topicMetadataRequestManager = spy(new TopicMetadataRequestManager(logContext,
-                config));
         this.requestManagers = new RequestManagers(logContext,
                 offsetsRequestManager,
                 topicMetadataRequestManager,
