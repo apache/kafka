@@ -71,6 +71,7 @@ import org.apache.kafka.common.config.AbstractConfig
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.server.log.remote.storage.{NoOpRemoteLogMetadataManager, NoOpRemoteStorageManager, RemoteLogManagerConfig}
 import org.apache.kafka.server.util.timer.MockTimer
+import org.apache.kafka.storage.internals.checkpoint.PartitionMetadataFile
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.stubbing.Answer
 import org.mockito.{ArgumentCaptor, ArgumentMatchers}
