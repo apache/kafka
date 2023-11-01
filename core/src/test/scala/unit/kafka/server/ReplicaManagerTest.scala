@@ -51,7 +51,7 @@ import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.KafkaPrincipal
-import org.apache.kafka.common.utils.{LogContext, Time, Utils}
+import org.apache.kafka.common.utils.{BufferSupplier, LogContext, Time, Utils}
 import org.apache.kafka.common.{IsolationLevel, Node, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.image._
 import org.apache.kafka.metadata.LeaderConstants.NO_LEADER
@@ -3920,7 +3920,7 @@ class ReplicaManagerTest {
       val batch = TestUtils.records(records = List(
         new SimpleRecord(10, "k1".getBytes, "v1".getBytes),
         new SimpleRecord(11, "k2".getBytes, "v2".getBytes)))
-      partition.appendRecordsToLeader(batch, AppendOrigin.CLIENT, requiredAcks = 0, RequestLocal.withThreadConfinedCaching)
+      partition.appendRecordsToLeader(batch, AppendOrigin.CLIENT, requiredAcks = 0, BufferSupplier.create())
       partition.log.get.updateHighWatermark(2L)
       partition.log.get.maybeIncrementLogStartOffset(1L, LogStartOffsetIncrementReason.LeaderOffsetIncremented)
       replicaManager.logManager.checkpointLogRecoveryOffsets()

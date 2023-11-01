@@ -18,7 +18,7 @@ package kafka.coordinator.transaction
 
 import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
-import kafka.server.{KafkaConfig, MetadataCache, ReplicaManager, RequestLocal}
+import kafka.server.{KafkaConfig, MetadataCache, ReplicaManager}
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.Topic
@@ -28,7 +28,7 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.{AddPartitionsToTxnResponse, TransactionResult}
-import org.apache.kafka.common.utils.{LogContext, ProducerIdAndEpoch, Time}
+import org.apache.kafka.common.utils.{BufferSupplier, LogContext, ProducerIdAndEpoch, Time}
 import org.apache.kafka.server.util.Scheduler
 
 import scala.jdk.CollectionConverters._
@@ -109,7 +109,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                            transactionTimeoutMs: Int,
                            expectedProducerIdAndEpoch: Option[ProducerIdAndEpoch],
                            responseCallback: InitProducerIdCallback,
-                           requestLocal: RequestLocal = RequestLocal.NoCaching): Unit = {
+                           bufferSupplier: BufferSupplier = BufferSupplier.NO_CACHING): Unit = {
 
     if (transactionalId == null) {
       // if the transactional id is null, then always blindly accept the request
@@ -182,7 +182,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
               TransactionResult.ABORT,
               isFromClient = false,
               sendRetriableErrorCallback,
-              requestLocal)
+              bufferSupplier)
           } else {
             def sendPidResponseCallback(error: Errors): Unit = {
               if (error == Errors.NONE) {
@@ -197,7 +197,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
             }
 
             txnManager.appendTransactionToLog(transactionalId, coordinatorEpoch, newMetadata,
-              sendPidResponseCallback, requestLocal = requestLocal)
+              sendPidResponseCallback, bufferSupplier = bufferSupplier)
           }
       }
     }
@@ -336,7 +336,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
       }
     }
   }
-  
+
   def handleVerifyPartitionsInTransaction(transactionalId: String,
                                           producerId: Long,
                                           producerEpoch: Short,
@@ -378,12 +378,12 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
         case Left(err) =>
           debug(s"Returning $err error code to client for $transactionalId's AddPartitions request for verification")
           responseCallback(AddPartitionsToTxnResponse.resultForTransaction(transactionalId, partitions.map(_ -> err).toMap.asJava))
-          
+
         case Right(errors) =>
           responseCallback(AddPartitionsToTxnResponse.resultForTransaction(transactionalId, errors.asJava))
       }
     }
-    
+
   }
 
   def handleAddPartitionsToTransaction(transactionalId: String,
@@ -391,7 +391,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                                        producerEpoch: Short,
                                        partitions: collection.Set[TopicPartition],
                                        responseCallback: AddPartitionsCallback,
-                                       requestLocal: RequestLocal = RequestLocal.NoCaching): Unit = {
+                                       bufferSupplier: BufferSupplier = BufferSupplier.NO_CACHING): Unit = {
     if (transactionalId == null || transactionalId.isEmpty) {
       debug(s"Returning ${Errors.INVALID_REQUEST} error code to client for $transactionalId's AddPartitions request")
       responseCallback(Errors.INVALID_REQUEST)
@@ -432,7 +432,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
 
         case Right((coordinatorEpoch, newMetadata)) =>
           txnManager.appendTransactionToLog(transactionalId, coordinatorEpoch, newMetadata,
-            responseCallback, requestLocal = requestLocal)
+            responseCallback, bufferSupplier = bufferSupplier)
       }
     }
   }
@@ -486,14 +486,14 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                            producerEpoch: Short,
                            txnMarkerResult: TransactionResult,
                            responseCallback: EndTxnCallback,
-                           requestLocal: RequestLocal = RequestLocal.NoCaching): Unit = {
+                           bufferSupplier: BufferSupplier = BufferSupplier.NO_CACHING): Unit = {
     endTransaction(transactionalId,
       producerId,
       producerEpoch,
       txnMarkerResult,
       isFromClient = true,
       responseCallback,
-      requestLocal)
+      bufferSupplier)
   }
 
   private def endTransaction(transactionalId: String,
@@ -502,7 +502,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                              txnMarkerResult: TransactionResult,
                              isFromClient: Boolean,
                              responseCallback: EndTxnCallback,
-                             requestLocal: RequestLocal): Unit = {
+                             bufferSupplier: BufferSupplier): Unit = {
     var isEpochFence = false
     if (transactionalId == null || transactionalId.isEmpty)
       responseCallback(Errors.INVALID_REQUEST)
@@ -662,7 +662,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
           }
 
           txnManager.appendTransactionToLog(transactionalId, coordinatorEpoch, newMetadata,
-            sendTxnMarkersCallback, requestLocal = requestLocal)
+            sendTxnMarkersCallback, bufferSupplier = bufferSupplier)
       }
     }
   }
@@ -720,7 +720,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
               TransactionResult.ABORT,
               isFromClient = false,
               onComplete(txnIdAndPidEpoch),
-              RequestLocal.NoCaching)
+              BufferSupplier.NO_CACHING)
           }
       }
     }

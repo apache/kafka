@@ -18,11 +18,11 @@ package kafka.log
 
 import java.nio.ByteBuffer
 import java.util.concurrent.TimeUnit
-import kafka.server.{BrokerTopicStats, RequestLocal}
+import kafka.server.BrokerTopicStats
 import kafka.utils.TestUtils.meterCount
 import org.apache.kafka.common.errors.{InvalidTimestampException, UnsupportedCompressionTypeException, UnsupportedForMessageFormatException}
 import org.apache.kafka.common.record._
-import org.apache.kafka.common.utils.{PrimitiveRef, Time}
+import org.apache.kafka.common.utils.{BufferSupplier, PrimitiveRef, Time}
 import org.apache.kafka.common.{InvalidRecordException, TopicPartition}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.storage.internals.log.LogValidator.ValidationResult
@@ -128,7 +128,7 @@ class LogValidatorTest {
       AppendOrigin.CLIENT,
       MetadataVersion.IBP_2_3_IV1
     ).validateMessagesAndAssignOffsets(
-      PrimitiveRef.ofLong(0L), metricsRecorder, RequestLocal.withThreadConfinedCaching.bufferSupplier)
+      PrimitiveRef.ofLong(0L), metricsRecorder, BufferSupplier.create())
   }
 
   @Test
@@ -162,7 +162,7 @@ class LogValidatorTest {
     ).validateMessagesAndAssignOffsets(
       offsetCounter,
       metricsRecorder,
-      RequestLocal.withThreadConfinedCaching.bufferSupplier
+      BufferSupplier.create()
     )
 
     assertEquals(offsetCounter.value, records.records.asScala.size)
@@ -207,7 +207,7 @@ class LogValidatorTest {
     ).validateMessagesAndAssignOffsets(
       PrimitiveRef.ofLong(0),
       metricsRecorder,
-      RequestLocal.withThreadConfinedCaching.bufferSupplier
+      BufferSupplier.create()
     )
 
     val validatedRecords = validatedResults.validatedRecords
@@ -259,7 +259,7 @@ class LogValidatorTest {
     ).validateMessagesAndAssignOffsets(
       PrimitiveRef.ofLong(0),
       metricsRecorder,
-      RequestLocal.withThreadConfinedCaching.bufferSupplier
+      BufferSupplier.create()
     )
     val validatedRecords = validatedResults.validatedRecords
 
@@ -325,7 +325,7 @@ class LogValidatorTest {
     ).validateMessagesAndAssignOffsets(
       PrimitiveRef.ofLong(0),
       metricsRecorder,
-      RequestLocal.withThreadConfinedCaching.bufferSupplier
+      BufferSupplier.create()
     )
   }
 
@@ -373,7 +373,7 @@ class LogValidatorTest {
     ).validateMessagesAndAssignOffsets(
       offsetCounter,
       metricsRecorder,
-      RequestLocal.withThreadConfinedCaching.bufferSupplier
+      BufferSupplier.create()
     )
 
     val validatedRecords = validatingResults.validatedRecords
@@ -451,7 +451,7 @@ class LogValidatorTest {
     ).validateMessagesAndAssignOffsets(
       PrimitiveRef.ofLong(0),
       metricsRecorder,
-      RequestLocal.withThreadConfinedCaching.bufferSupplier
+      BufferSupplier.create()
     )
     val validatedRecords = validatingResults.validatedRecords
 
@@ -510,7 +510,7 @@ class LogValidatorTest {
     ).validateMessagesAndAssignOffsets(
       PrimitiveRef.ofLong(0),
       metricsRecorder,
-      RequestLocal.withThreadConfinedCaching.bufferSupplier
+      BufferSupplier.create()
     )
     val validatedRecords = validatedResults.validatedRecords
 
@@ -558,7 +558,7 @@ class LogValidatorTest {
     ).validateMessagesAndAssignOffsets(
       PrimitiveRef.ofLong(0),
       metricsRecorder,
-      RequestLocal.withThreadConfinedCaching.bufferSupplier
+      BufferSupplier.create()
     )
     val validatedRecords = validatedResults.validatedRecords
 
@@ -618,7 +618,7 @@ class LogValidatorTest {
     ).validateMessagesAndAssignOffsets(
       PrimitiveRef.ofLong(0),
       metricsRecorder,
-      RequestLocal.withThreadConfinedCaching.bufferSupplier
+      BufferSupplier.create()
     )
     val validatedRecords = validatedResults.validatedRecords
 
@@ -674,7 +674,7 @@ class LogValidatorTest {
     ).validateMessagesAndAssignOffsets(
       PrimitiveRef.ofLong(0),
       metricsRecorder,
-      RequestLocal.withThreadConfinedCaching.bufferSupplier
+      BufferSupplier.create()
     ))
   }
 
@@ -700,7 +700,7 @@ class LogValidatorTest {
     ).validateMessagesAndAssignOffsets(
       PrimitiveRef.ofLong(0),
       metricsRecorder,
-      RequestLocal.withThreadConfinedCaching.bufferSupplier
+      BufferSupplier.create()
     ))
   }
 
@@ -726,7 +726,7 @@ class LogValidatorTest {
     ).validateMessagesAndAssignOffsets(
       PrimitiveRef.ofLong(0),
       metricsRecorder,
-      RequestLocal.withThreadConfinedCaching.bufferSupplier
+      BufferSupplier.create()
     ))
   }
 
@@ -752,7 +752,7 @@ class LogValidatorTest {
     ).validateMessagesAndAssignOffsets(
       PrimitiveRef.ofLong(0),
       metricsRecorder,
-      RequestLocal.withThreadConfinedCaching.bufferSupplier
+      BufferSupplier.create()
     ))
   }
 
@@ -775,7 +775,7 @@ class LogValidatorTest {
       AppendOrigin.CLIENT,
       MetadataVersion.latest,
     ).validateMessagesAndAssignOffsets(
-      PrimitiveRef.ofLong(offset), metricsRecorder, RequestLocal.withThreadConfinedCaching.bufferSupplier
+      PrimitiveRef.ofLong(offset), metricsRecorder, BufferSupplier.create()
     ).validatedRecords, offset)
   }
 
@@ -798,7 +798,7 @@ class LogValidatorTest {
       AppendOrigin.CLIENT,
       MetadataVersion.latest
     ).validateMessagesAndAssignOffsets(
-      PrimitiveRef.ofLong(offset), metricsRecorder, RequestLocal.withThreadConfinedCaching.bufferSupplier
+      PrimitiveRef.ofLong(offset), metricsRecorder, BufferSupplier.create()
     ).validatedRecords, offset)
   }
 
@@ -822,7 +822,7 @@ class LogValidatorTest {
       AppendOrigin.CLIENT,
       MetadataVersion.latest
     ).validateMessagesAndAssignOffsets(
-      PrimitiveRef.ofLong(offset), metricsRecorder, RequestLocal.withThreadConfinedCaching.bufferSupplier
+      PrimitiveRef.ofLong(offset), metricsRecorder, BufferSupplier.create()
     ).validatedRecords
     checkOffsets(messageWithOffset, offset)
   }
@@ -847,7 +847,7 @@ class LogValidatorTest {
       AppendOrigin.CLIENT,
       MetadataVersion.latest
     ).validateMessagesAndAssignOffsets(
-      PrimitiveRef.ofLong(offset), metricsRecorder, RequestLocal.withThreadConfinedCaching.bufferSupplier
+      PrimitiveRef.ofLong(offset), metricsRecorder, BufferSupplier.create()
     ).validatedRecords
     checkOffsets(messageWithOffset, offset)
   }
@@ -873,7 +873,7 @@ class LogValidatorTest {
       AppendOrigin.CLIENT,
       MetadataVersion.latest
     ).validateMessagesAndAssignOffsets(
-      PrimitiveRef.ofLong(offset), metricsRecorder, RequestLocal.withThreadConfinedCaching.bufferSupplier
+      PrimitiveRef.ofLong(offset), metricsRecorder, BufferSupplier.create()
     ).validatedRecords
     checkOffsets(compressedMessagesWithOffset, offset)
   }
@@ -899,7 +899,7 @@ class LogValidatorTest {
       AppendOrigin.CLIENT,
       MetadataVersion.latest
     ).validateMessagesAndAssignOffsets(
-      PrimitiveRef.ofLong(offset), metricsRecorder, RequestLocal.withThreadConfinedCaching.bufferSupplier
+      PrimitiveRef.ofLong(offset), metricsRecorder, BufferSupplier.create()
     ).validatedRecords
     checkOffsets(compressedMessagesWithOffset, offset)
   }
@@ -923,7 +923,7 @@ class LogValidatorTest {
       AppendOrigin.CLIENT,
       MetadataVersion.latest
     ).validateMessagesAndAssignOffsets(
-      PrimitiveRef.ofLong(offset), metricsRecorder, RequestLocal.withThreadConfinedCaching.bufferSupplier
+      PrimitiveRef.ofLong(offset), metricsRecorder, BufferSupplier.create()
     )
     checkOffsets(validatedResults.validatedRecords, offset)
     verifyRecordConversionStats(validatedResults.recordConversionStats, numConvertedRecords = 3, records,
@@ -949,7 +949,7 @@ class LogValidatorTest {
       AppendOrigin.CLIENT,
       MetadataVersion.latest
     ).validateMessagesAndAssignOffsets(
-      PrimitiveRef.ofLong(offset), metricsRecorder, RequestLocal.withThreadConfinedCaching.bufferSupplier
+      PrimitiveRef.ofLong(offset), metricsRecorder, BufferSupplier.create()
     )
     checkOffsets(validatedResults.validatedRecords, offset)
     verifyRecordConversionStats(validatedResults.recordConversionStats, numConvertedRecords = 3, records,
@@ -975,7 +975,7 @@ class LogValidatorTest {
       AppendOrigin.CLIENT,
       MetadataVersion.latest
     ).validateMessagesAndAssignOffsets(
-      PrimitiveRef.ofLong(offset), metricsRecorder, RequestLocal.withThreadConfinedCaching.bufferSupplier
+      PrimitiveRef.ofLong(offset), metricsRecorder, BufferSupplier.create()
     )
     checkOffsets(validatedResults.validatedRecords, offset)
     verifyRecordConversionStats(validatedResults.recordConversionStats, numConvertedRecords = 3, records,
@@ -1001,7 +1001,7 @@ class LogValidatorTest {
       AppendOrigin.CLIENT,
       MetadataVersion.latest
     ).validateMessagesAndAssignOffsets(
-      PrimitiveRef.ofLong(offset), metricsRecorder, RequestLocal.withThreadConfinedCaching.bufferSupplier
+      PrimitiveRef.ofLong(offset), metricsRecorder, BufferSupplier.create()
     )
     checkOffsets(validatedResults.validatedRecords, offset)
     verifyRecordConversionStats(validatedResults.recordConversionStats, numConvertedRecords = 3, records,
@@ -1027,7 +1027,7 @@ class LogValidatorTest {
       AppendOrigin.CLIENT,
       MetadataVersion.latest
     ).validateMessagesAndAssignOffsets(
-      PrimitiveRef.ofLong(offset), metricsRecorder, RequestLocal.withThreadConfinedCaching.bufferSupplier
+      PrimitiveRef.ofLong(offset), metricsRecorder, BufferSupplier.create()
     ))
   }
 
@@ -1050,7 +1050,7 @@ class LogValidatorTest {
       AppendOrigin.COORDINATOR,
       MetadataVersion.latest
     ).validateMessagesAndAssignOffsets(
-      PrimitiveRef.ofLong(offset), metricsRecorder, RequestLocal.withThreadConfinedCaching.bufferSupplier
+      PrimitiveRef.ofLong(offset), metricsRecorder, BufferSupplier.create()
     )
     val batches = TestUtils.toList(result.validatedRecords.batches)
     assertEquals(1, batches.size)
@@ -1078,7 +1078,7 @@ class LogValidatorTest {
       AppendOrigin.CLIENT,
       MetadataVersion.latest
     ).validateMessagesAndAssignOffsets(
-      PrimitiveRef.ofLong(offset), metricsRecorder, RequestLocal.withThreadConfinedCaching.bufferSupplier
+      PrimitiveRef.ofLong(offset), metricsRecorder, BufferSupplier.create()
     ).validatedRecords, offset)
   }
 
@@ -1102,7 +1102,7 @@ class LogValidatorTest {
       AppendOrigin.CLIENT,
       MetadataVersion.latest
     ).validateMessagesAndAssignOffsets(
-      PrimitiveRef.ofLong(offset), metricsRecorder, RequestLocal.withThreadConfinedCaching.bufferSupplier
+      PrimitiveRef.ofLong(offset), metricsRecorder, BufferSupplier.create()
     ).validatedRecords, offset)
   }
 
@@ -1125,7 +1125,7 @@ class LogValidatorTest {
       AppendOrigin.CLIENT,
       MetadataVersion.latest
     ).validateMessagesAndAssignOffsets(
-      PrimitiveRef.ofLong(offset), metricsRecorder, RequestLocal.withThreadConfinedCaching.bufferSupplier
+      PrimitiveRef.ofLong(offset), metricsRecorder, BufferSupplier.create()
     ).validatedRecords, offset)
   }
 
@@ -1148,7 +1148,7 @@ class LogValidatorTest {
       AppendOrigin.CLIENT,
       MetadataVersion.latest
     ).validateMessagesAndAssignOffsets(
-      PrimitiveRef.ofLong(offset), metricsRecorder, RequestLocal.withThreadConfinedCaching.bufferSupplier
+      PrimitiveRef.ofLong(offset), metricsRecorder, BufferSupplier.create()
     ).validatedRecords, offset)
   }
 
@@ -1172,7 +1172,7 @@ class LogValidatorTest {
       AppendOrigin.CLIENT,
       MetadataVersion.latest
     ).validateMessagesAndAssignOffsets(
-      PrimitiveRef.ofLong(offset), metricsRecorder, RequestLocal.withThreadConfinedCaching.bufferSupplier
+      PrimitiveRef.ofLong(offset), metricsRecorder, BufferSupplier.create()
     ).validatedRecords, offset)
   }
 
@@ -1196,7 +1196,7 @@ class LogValidatorTest {
       AppendOrigin.CLIENT,
       MetadataVersion.latest
     ).validateMessagesAndAssignOffsets(
-      PrimitiveRef.ofLong(offset), metricsRecorder, RequestLocal.withThreadConfinedCaching.bufferSupplier
+      PrimitiveRef.ofLong(offset), metricsRecorder, BufferSupplier.create()
     ).validatedRecords, offset)
   }
 
@@ -1222,7 +1222,7 @@ class LogValidatorTest {
       AppendOrigin.CLIENT,
       MetadataVersion.latest
     ).validateMessagesAndAssignOffsets(
-      PrimitiveRef.ofLong(offset), metricsRecorder, RequestLocal.withThreadConfinedCaching.bufferSupplier
+      PrimitiveRef.ofLong(offset), metricsRecorder, BufferSupplier.create()
     ))
   }
 
@@ -1248,7 +1248,7 @@ class LogValidatorTest {
       AppendOrigin.CLIENT,
       MetadataVersion.latest
     ).validateMessagesAndAssignOffsets(
-      PrimitiveRef.ofLong(offset), metricsRecorder, RequestLocal.withThreadConfinedCaching.bufferSupplier
+      PrimitiveRef.ofLong(offset), metricsRecorder, BufferSupplier.create()
     ))
   }
 
@@ -1272,7 +1272,7 @@ class LogValidatorTest {
       AppendOrigin.CLIENT,
       MetadataVersion.latest
     ).validateMessagesAndAssignOffsets(
-      PrimitiveRef.ofLong(offset), metricsRecorder, RequestLocal.withThreadConfinedCaching.bufferSupplier
+      PrimitiveRef.ofLong(offset), metricsRecorder, BufferSupplier.create()
     ).validatedRecords, offset)
   }
 
@@ -1296,7 +1296,7 @@ class LogValidatorTest {
       AppendOrigin.CLIENT,
       MetadataVersion.latest
     ).validateMessagesAndAssignOffsets(
-      PrimitiveRef.ofLong(offset), metricsRecorder, RequestLocal.withThreadConfinedCaching.bufferSupplier
+      PrimitiveRef.ofLong(offset), metricsRecorder, BufferSupplier.create()
     ).validatedRecords, offset)
   }
 
@@ -1318,7 +1318,7 @@ class LogValidatorTest {
         AppendOrigin.CLIENT,
         MetadataVersion.latest
     ).validateMessagesAndAssignOffsets(
-      PrimitiveRef.ofLong(0L), metricsRecorder, RequestLocal.withThreadConfinedCaching.bufferSupplier
+      PrimitiveRef.ofLong(0L), metricsRecorder, BufferSupplier.create()
     ))
     assertEquals(metricsKeySet.count(_.getMBeanName.endsWith(s"${BrokerTopicStats.InvalidOffsetOrSequenceRecordsPerSec}")), 1)
     assertTrue(meterCount(s"${BrokerTopicStats.InvalidOffsetOrSequenceRecordsPerSec}") > 0)
@@ -1347,7 +1347,7 @@ class LogValidatorTest {
       AppendOrigin.CLIENT,
       MetadataVersion.IBP_2_0_IV1
     ).validateMessagesAndAssignOffsets(
-      PrimitiveRef.ofLong(0L), metricsRecorder, RequestLocal.withThreadConfinedCaching.bufferSupplier
+      PrimitiveRef.ofLong(0L), metricsRecorder, BufferSupplier.create()
     ))
   }
 
@@ -1382,7 +1382,7 @@ class LogValidatorTest {
         AppendOrigin.CLIENT,
         MetadataVersion.latest
       ).validateMessagesAndAssignOffsets(
-        PrimitiveRef.ofLong(0L), metricsRecorder, RequestLocal.withThreadConfinedCaching.bufferSupplier
+        PrimitiveRef.ofLong(0L), metricsRecorder, BufferSupplier.create()
       )
     )
 
@@ -1461,7 +1461,7 @@ class LogValidatorTest {
         AppendOrigin.CLIENT,
         MetadataVersion.latest
       ).validateMessagesAndAssignOffsets(
-        PrimitiveRef.ofLong(0L), metricsRecorder, RequestLocal.withThreadConfinedCaching.bufferSupplier
+        PrimitiveRef.ofLong(0L), metricsRecorder, BufferSupplier.create()
       )
     )
 
@@ -1495,7 +1495,7 @@ class LogValidatorTest {
         AppendOrigin.CLIENT,
         MetadataVersion.latest
       ).validateMessagesAndAssignOffsets(
-        PrimitiveRef.ofLong(0L), metricsRecorder, RequestLocal.withThreadConfinedCaching.bufferSupplier
+        PrimitiveRef.ofLong(0L), metricsRecorder, BufferSupplier.create()
       )
     )
 
@@ -1528,7 +1528,7 @@ class LogValidatorTest {
       AppendOrigin.CLIENT,
       MetadataVersion.latest
     ).validateMessagesAndAssignOffsets(
-      PrimitiveRef.ofLong(offset), metricsRecorder, RequestLocal.withThreadConfinedCaching.bufferSupplier
+      PrimitiveRef.ofLong(offset), metricsRecorder, BufferSupplier.create()
     ))
   }
 

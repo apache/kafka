@@ -56,6 +56,6 @@ public class CompressedRecordBatchValidationBenchmark extends BaseRecordBatchBen
             TimestampType.CREATE_TIME, Long.MAX_VALUE, Long.MAX_VALUE, 0, AppendOrigin.CLIENT,
             MetadataVersion.latest()
         ).validateMessagesAndAssignOffsetsCompressed(PrimitiveRef.ofLong(startingOffset),
-            validatorMetricsRecorder, requestLocal.bufferSupplier());
+            validatorMetricsRecorder, bufferSupplier);
     }
 }

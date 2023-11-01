@@ -21,7 +21,7 @@ import java.util.Properties
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantReadWriteLock
-import kafka.server.{Defaults, ReplicaManager, RequestLocal}
+import kafka.server.{Defaults, ReplicaManager}
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils.{Logging, Pool}
 import kafka.utils.Implicits._
@@ -34,7 +34,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{FileRecords, MemoryRecords, MemoryRecordsBuilder, Record, SimpleRecord, TimestampType}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.TransactionResult
-import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.utils.{BufferSupplier, Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.util.Scheduler
@@ -287,7 +287,7 @@ class TransactionStateManager(brokerId: Int,
         origin = AppendOrigin.COORDINATOR,
         entriesPerPartition = Map(transactionPartition -> tombstoneRecords),
         removeFromCacheCallback,
-        requestLocal = RequestLocal.NoCaching)
+        bufferSupplier = BufferSupplier.NO_CACHING)
     }
   }
 
@@ -619,7 +619,7 @@ class TransactionStateManager(brokerId: Int,
                              newMetadata: TxnTransitMetadata,
                              responseCallback: Errors => Unit,
                              retryOnError: Errors => Boolean = _ => false,
-                             requestLocal: RequestLocal): Unit = {
+                             bufferSupplier: BufferSupplier): Unit = {
 
     // generate the message for this transaction metadata
     val keyBytes = TransactionLog.keyToBytes(transactionalId)
@@ -773,7 +773,7 @@ class TransactionStateManager(brokerId: Int,
                 origin = AppendOrigin.COORDINATOR,
                 recordsPerPartition,
                 updateCacheCallback,
-                requestLocal = requestLocal)
+                bufferSupplier = bufferSupplier)
 
               trace(s"Appending new metadata $newMetadata for transaction id $transactionalId with coordinator epoch $coordinatorEpoch to the local transaction log")
           }

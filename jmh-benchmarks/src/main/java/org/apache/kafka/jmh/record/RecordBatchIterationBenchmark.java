@@ -49,7 +49,7 @@ public class RecordBatchIterationBenchmark extends BaseRecordBatchBenchmark {
     @Benchmark
     public void measureIteratorForBatchWithSingleMessage(Blackhole bh) {
         for (RecordBatch batch : MemoryRecords.readableRecords(singleBatchBuffer.duplicate()).batches()) {
-            try (CloseableIterator<Record> iterator = batch.streamingIterator(requestLocal.bufferSupplier())) {
+            try (CloseableIterator<Record> iterator = batch.streamingIterator(bufferSupplier)) {
                 while (iterator.hasNext())
                     bh.consume(iterator.next());
             }
@@ -62,7 +62,7 @@ public class RecordBatchIterationBenchmark extends BaseRecordBatchBenchmark {
     public void measureStreamingIteratorForVariableBatchSize(Blackhole bh) {
         for (int i = 0; i < batchCount; ++i) {
             for (RecordBatch batch : MemoryRecords.readableRecords(batchBuffers[i].duplicate()).batches()) {
-                try (CloseableIterator<Record> iterator = batch.streamingIterator(requestLocal.bufferSupplier())) {
+                try (CloseableIterator<Record> iterator = batch.streamingIterator(bufferSupplier)) {
                     while (iterator.hasNext())
                         bh.consume(iterator.next());
                 }
@@ -76,7 +76,7 @@ public class RecordBatchIterationBenchmark extends BaseRecordBatchBenchmark {
     public void measureSkipIteratorForVariableBatchSize(Blackhole bh) {
         for (int i = 0; i < batchCount; ++i) {
             for (MutableRecordBatch batch : MemoryRecords.readableRecords(batchBuffers[i].duplicate()).batches()) {
-                try (CloseableIterator<Record> iterator = batch.skipKeyValueIterator(requestLocal.bufferSupplier())) {
+                try (CloseableIterator<Record> iterator = batch.skipKeyValueIterator(bufferSupplier)) {
                     while (iterator.hasNext())
                         bh.consume(iterator.next());
                 }
