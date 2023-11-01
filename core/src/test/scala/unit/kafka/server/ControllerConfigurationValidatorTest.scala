@@ -115,7 +115,7 @@ class ControllerConfigurationValidatorTest {
   }
 
   @Test
-  def testInvalidSubscriptionIdClientMetricsConfig(): Unit = {
+  def testInvalidSubscriptionNameClientMetricsConfig(): Unit = {
     val config = new TreeMap[String, String]()
     assertEquals("Subscription name can't be empty",
       assertThrows(classOf[InvalidRequestException], () => validator.validate(
@@ -126,12 +126,12 @@ class ControllerConfigurationValidatorTest {
   def testInvalidIntervalClientMetricsConfig(): Unit = {
     val config = new TreeMap[String, String]()
     config.put(ClientMetricsConfigs.PUSH_INTERVAL_MS, "10")
-    assertEquals("Invalid value for interval.ms, interval must be between 100 and 3600000 (1 hour)",
+    assertEquals("Invalid value 10 for interval.ms, interval must be between 100 and 3600000 (1 hour)",
       assertThrows(classOf[InvalidRequestException], () => validator.validate(
         new ConfigResource(CLIENT_METRICS, "subscription-1"), config)). getMessage())
 
     config.put(ClientMetricsConfigs.PUSH_INTERVAL_MS, "3600001")
-    assertEquals("Invalid value for interval.ms, interval must be between 100 and 3600000 (1 hour)",
+    assertEquals("Invalid value 3600001 for interval.ms, interval must be between 100 and 3600000 (1 hour)",
       assertThrows(classOf[InvalidRequestException], () => validator.validate(
         new ConfigResource(CLIENT_METRICS, "subscription-1"), config)). getMessage())
   }

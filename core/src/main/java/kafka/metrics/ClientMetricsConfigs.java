@@ -126,7 +126,9 @@ public class ClientMetricsConfigs {
         if (properties.containsKey(PUSH_INTERVAL_MS)) {
             int pushIntervalMs = Integer.parseInt(properties.getProperty(PUSH_INTERVAL_MS));
             if (pushIntervalMs < MIN_INTERVAL_MS || pushIntervalMs > MAX_INTERVAL_MS) {
-                throw new InvalidRequestException("Invalid value for interval.ms, interval must be between 100 and 3600000 (1 hour)");
+                String msg = String.format("Invalid value %s for %s, interval must be between 100 and 3600000 (1 hour)",
+                    pushIntervalMs, PUSH_INTERVAL_MS);
+                throw new InvalidRequestException(msg);
             }
         }
 
@@ -154,9 +156,14 @@ public class ClientMetricsConfigs {
         if (patterns != null) {
             patterns.forEach(pattern -> {
                 String[] nameValuePair = pattern.split("=");
-                if (nameValuePair.length == 2 && isValidParam(nameValuePair[0].trim()) &&
-                    isValidRegExPattern(nameValuePair[1].trim())) {
-                    patternsMap.put(nameValuePair[0].trim(), nameValuePair[1].trim());
+                if (nameValuePair.length != 2) {
+                    throw new InvalidConfigurationException("Illegal client matching pattern: " + pattern);
+                }
+
+                String param = nameValuePair[0].trim();
+                String patternValue = nameValuePair[1].trim();
+                if (isValidParam(param) && isValidRegExPattern(patternValue)) {
+                    patternsMap.put(param, patternValue);
                 } else {
                     throw new InvalidConfigurationException("Illegal client matching pattern: " + pattern);
                 }

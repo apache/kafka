@@ -572,8 +572,7 @@ class KafkaServer(
                                                            ConfigType.Client -> new ClientIdConfigHandler(quotaManagers),
                                                            ConfigType.User -> new UserConfigHandler(quotaManagers, credentialProvider),
                                                            ConfigType.Broker -> new BrokerConfigHandler(config, quotaManagers),
-                                                           ConfigType.Ip -> new IpConfigHandler(socketServer.connectionQuotas),
-                                                           ConfigType.ClientMetrics -> new ClientMetricsConfigHandler(clientMetricsManager))
+                                                           ConfigType.Ip -> new IpConfigHandler(socketServer.connectionQuotas))
 
         // Create the config manager. start listening to notifications
         dynamicConfigManager = new ZkConfigManager(zkClient, dynamicConfigHandlers)

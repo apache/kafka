@@ -4120,7 +4120,7 @@ public class KafkaAdminClientTest {
                     AlterConfigOp.OpType.APPEND);
 
             AlterConfigOp alterConfigOp3 = new AlterConfigOp(
-                    new ConfigEntry("compression.type", "gzip"),
+                    new ConfigEntry("interval.ms", "1000"),
                     AlterConfigOp.OpType.APPEND);
 
             final Map<ConfigResource, Collection<AlterConfigOp>> configs = new HashMap<>();

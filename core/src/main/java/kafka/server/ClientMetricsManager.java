@@ -19,12 +19,14 @@ package kafka.server;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.Closeable;
+import java.io.IOException;
 import java.util.Properties;
 
 /**
  * Handles client telemetry metrics requests/responses, subscriptions and instance information.
  */
-public class ClientMetricsManager {
+public class ClientMetricsManager implements Closeable {
 
     private static final Logger log = LoggerFactory.getLogger(ClientMetricsManager.class);
     private static final ClientMetricsManager INSTANCE = new ClientMetricsManager();
@@ -35,5 +37,10 @@ public class ClientMetricsManager {
 
     public void updateSubscription(String subscriptionName, Properties properties) {
         // TODO: Implement the update logic to manage subscriptions.
+    }
+
+    @Override
+    public void close() throws IOException {
+        // TODO: Implement the close logic to close the client metrics manager.
     }
 }

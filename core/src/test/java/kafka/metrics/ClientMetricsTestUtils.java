@@ -27,8 +27,8 @@ public class ClientMetricsTestUtils {
         "org.apache.kafka.client.producer.partition.queue.,org.apache.kafka.client.producer.partition.latency";
     public static final int DEFAULT_PUSH_INTERVAL_MS = 30 * 1000; // 30 seconds
     public static final List<String> DEFAULT_CLIENT_MATCH_PATTERNS = Collections.unmodifiableList(Arrays.asList(
-        ClientMetricsConfigs.CLIENT_SOFTWARE_NAME + "=Java",
-        ClientMetricsConfigs.CLIENT_SOFTWARE_VERSION + "=11.1.*"
+        ClientMetricsConfigs.CLIENT_SOFTWARE_NAME + "=apache-kafka-java",
+        ClientMetricsConfigs.CLIENT_SOFTWARE_VERSION + "=3.5.*"
     ));
 
     public static Properties getDefaultProperties() {

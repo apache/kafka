@@ -563,7 +563,7 @@ class KafkaApisTest {
       new Action(operation, new ResourcePattern(resourceType, Resource.CLUSTER_NAME, PatternType.LITERAL),
         1, true, true)
     )
-    // Verify that authorize is only called once
+
     when(authorizer.authorize(any[RequestContext], ArgumentMatchers.eq(expectedActions.asJava)))
       .thenReturn(Seq(AuthorizationResult.ALLOWED).asJava)
 
@@ -590,6 +590,7 @@ class KafkaApisTest {
       .handleDescribeConfigsRequest(request)
 
     val response = verifyNoThrottling[DescribeConfigsResponse](request)
+    // Verify that authorize is only called once
     verify(authorizer, times(1)).authorize(any(), any())
     val results = response.data().results()
     assertEquals(1, results.size())

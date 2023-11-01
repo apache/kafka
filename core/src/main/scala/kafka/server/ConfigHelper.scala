@@ -132,11 +132,11 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
                   .setIsSensitive(false).setReadOnly(false).setSynonyms(List.empty.asJava))
 
           case ConfigResource.Type.CLIENT_METRICS =>
-            val entityName = resource.resourceName
-            if (resource.resourceName == null || resource.resourceName.isEmpty) {
-              throw new InvalidRequestException("Client metrics subscription id must not be empty")
+            val subscriptionName = resource.resourceName
+            if (subscriptionName == null || subscriptionName.isEmpty) {
+              throw new InvalidRequestException("Client metrics subscription name must not be empty")
             } else {
-              val entityProps = configRepository.config(new ConfigResource(ConfigResource.Type.CLIENT_METRICS, entityName))
+              val entityProps = configRepository.config(new ConfigResource(ConfigResource.Type.CLIENT_METRICS, subscriptionName))
               val configEntries = new  ListBuffer[DescribeConfigsResponseData.DescribeConfigsResourceResult]()
               entityProps.forEach((name, value) => {
                 configEntries += new DescribeConfigsResponseData.DescribeConfigsResourceResult().setName(name.toString)
