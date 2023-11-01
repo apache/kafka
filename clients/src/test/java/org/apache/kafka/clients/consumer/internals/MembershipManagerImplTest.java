@@ -330,7 +330,7 @@ public class MembershipManagerImplTest {
 
         when(commitRequestManager.autoCommitEnabled()).thenReturn(false);
         doNothing().when(subscriptionState).markPendingRevocation(anySet());
-        when(subscriptionState.rebalanceListener()).thenReturn(null).thenReturn(null);
+        when(subscriptionState.rebalanceListener()).thenReturn(Optional.empty()).thenReturn(Optional.empty());
 
         receiveEmptyAssignment(membershipManager);
 
@@ -474,7 +474,7 @@ public class MembershipManagerImplTest {
     private CompletableFuture<Void> mockRevocationWithAutoCommitNoCallbacks() {
         when(commitRequestManager.autoCommitEnabled()).thenReturn(true);
         doNothing().when(subscriptionState).markPendingRevocation(anySet());
-        when(subscriptionState.rebalanceListener()).thenReturn(null).thenReturn(null);
+        when(subscriptionState.rebalanceListener()).thenReturn(Optional.empty()).thenReturn(Optional.empty());
         CompletableFuture<Void> commitResult = new CompletableFuture<>();
         when(commitRequestManager.maybeAutoCommitAllConsumed()).thenReturn(commitResult);
         return commitResult;
