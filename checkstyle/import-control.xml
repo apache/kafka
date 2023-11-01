@@ -323,8 +323,8 @@
     </subpackage>
 
     <subpackage name="other">
+      <allow pkg="org.apache.kafka.tools.reassign"/>
       <allow pkg="kafka.log" />
-      <allow pkg="kafka.zk" />
       <allow pkg="org.jfree"/>
       <allow pkg="javax.imageio" />
       <allow pkg="scala" />
