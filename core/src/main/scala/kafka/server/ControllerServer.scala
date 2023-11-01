@@ -333,7 +333,7 @@ class ControllerServer(
         DataPlaneAcceptor.ThreadPrefix,
         "controller")
 
-      clientMetricsManager = ClientMetricsManager.getInstance()
+      clientMetricsManager = ClientMetricsManager.instance()
 
       // Set up the metadata cache publisher.
       metadataPublishers.add(metadataCachePublisher)

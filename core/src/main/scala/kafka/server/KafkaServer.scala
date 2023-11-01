@@ -523,7 +523,7 @@ class KafkaServer(
           rlm.startup()
         }
 
-        clientMetricsManager = ClientMetricsManager.getInstance()
+        clientMetricsManager = ClientMetricsManager.instance()
 
         /* start processing requests */
         val zkSupport = ZkSupport(adminManager, kafkaController, zkClient, forwardingManager, metadataCache, brokerEpochManager)

@@ -31,7 +31,7 @@ public class ClientMetricsTestUtils {
         ClientMetricsConfigs.CLIENT_SOFTWARE_VERSION + "=3.5.*"
     ));
 
-    public static Properties getDefaultProperties() {
+    public static Properties defaultProperties() {
         Properties props = new Properties();
         props.put(ClientMetricsConfigs.SUBSCRIPTION_METRICS, DEFAULT_METRICS);
         props.put(ClientMetricsConfigs.PUSH_INTERVAL_MS, Integer.toString(DEFAULT_PUSH_INTERVAL_MS));

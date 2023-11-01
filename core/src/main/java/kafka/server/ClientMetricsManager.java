@@ -31,7 +31,7 @@ public class ClientMetricsManager implements Closeable {
     private static final Logger log = LoggerFactory.getLogger(ClientMetricsManager.class);
     private static final ClientMetricsManager INSTANCE = new ClientMetricsManager();
 
-    public static ClientMetricsManager getInstance() {
+    public static ClientMetricsManager instance() {
         return INSTANCE;
     }
 
