@@ -56,12 +56,12 @@ object KafkaRequestHandler {
   class AsynchronousCompletionCallback[T](val fun: (RequestLocal, T) => Unit)
 
   /**
-   * Wrap callback to schedule it on an abitrary request thread.
+   * Wrap callback to schedule it on an arbitrary request thread.
    * NOTE: this function must be originally called from a request thread.
    * @param asyncCompletionCallback a callback function to execute as the result of an asynchronous action completing
    * @param requestLocal The RequestLocal for the current request handler thread in case we need to call
    *                     the callback function without queueing the callback request
-   * @return Wrapped callback that would execute `asyncCompletionCallback` on an arbitrary request thread
+   * @return Wrapped callback that schedules `asyncCompletionCallback` on an arbitrary request thread
    */
   def wrap[T](asyncCompletionCallback: AsynchronousCompletionCallback[T], requestLocal: RequestLocal): T => Unit = {
     val requestChannel = threadRequestChannel.get()

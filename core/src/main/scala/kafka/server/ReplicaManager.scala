@@ -734,7 +734,6 @@ class ReplicaManager(val config: KafkaConfig,
                     transactionalId: String = null,
                     actionQueue: ActionQueue = this.actionQueue): Unit = {
     if (isValidRequiredAcks(requiredAcks)) {
-      val sTime = time.milliseconds
 
       val verificationGuards: mutable.Map[TopicPartition, VerificationGuard] = mutable.Map[TopicPartition, VerificationGuard]()
       val (verifiedEntriesPerPartition, notYetVerifiedEntriesPerPartition, errorsPerPartition) =
@@ -750,7 +749,7 @@ class ReplicaManager(val config: KafkaConfig,
 
       if (notYetVerifiedEntriesPerPartition.isEmpty || addPartitionsToTxnManager.isEmpty) {
         appendEntries(verifiedEntriesPerPartition, internalTopicsAllowed, origin, requiredAcks, verificationGuards.toMap,
-          errorsPerPartition, sTime, recordConversionStatsCallback, timeout, responseCallback, delayedProduceLock)(requestLocal)(Map.empty)
+          errorsPerPartition, recordConversionStatsCallback, timeout, responseCallback, delayedProduceLock)(requestLocal, Map.empty)
       } else {
         // For unverified entries, send a request to verify. When verified, the append process will proceed via the callback.
         // We verify above that all partitions use the same producer ID.
@@ -761,8 +760,18 @@ class ReplicaManager(val config: KafkaConfig,
           producerEpoch = batchInfo.producerEpoch,
           topicPartitions = notYetVerifiedEntriesPerPartition.keySet.toSeq,
           callback = KafkaRequestHandler.wrap(
-            new AsynchronousCompletionCallback[Map[TopicPartition, Errors]](appendEntries(entriesPerPartition, internalTopicsAllowed, origin, requiredAcks, verificationGuards.toMap,
-            errorsPerPartition, sTime, recordConversionStatsCallback, timeout, responseCallback, delayedProduceLock)(_)(_)),
+            new AsynchronousCompletionCallback[Map[TopicPartition, Errors]](appendEntries(
+              entriesPerPartition,
+              internalTopicsAllowed,
+              origin,
+              requiredAcks,
+              verificationGuards.toMap,
+              errorsPerPartition,
+              recordConversionStatsCallback,
+              timeout,
+              responseCallback,
+              delayedProduceLock
+            )),
             requestLocal)
         ))
       }
@@ -791,13 +800,12 @@ class ReplicaManager(val config: KafkaConfig,
                             requiredAcks: Short,
                             verificationGuards: Map[TopicPartition, VerificationGuard],
                             errorsPerPartition: Map[TopicPartition, Errors],
-                            sTime: Long,
                             recordConversionStatsCallback: Map[TopicPartition, RecordConversionStats] => Unit,
                             timeout: Long,
                             responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
                             delayedProduceLock: Option[Lock])
-                           (requestLocal: RequestLocal)
-                           (unverifiedEntries: Map[TopicPartition, Errors]): Unit = {
+                           (requestLocal: RequestLocal, unverifiedEntries: Map[TopicPartition, Errors]): Unit = {
+    val sTime = time.milliseconds
     val verifiedEntries =
       if (unverifiedEntries.isEmpty)
         allEntries
