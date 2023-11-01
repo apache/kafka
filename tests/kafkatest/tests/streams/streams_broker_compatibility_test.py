@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ducktape.mark import parametrize
+from ducktape.mark import matrix
 from ducktape.mark.resource import cluster
 from ducktape.tests.test import Test
 from ducktape.utils.util import wait_until
@@ -64,25 +64,12 @@ class StreamsBrokerCompatibility(Test):
 
 
     @cluster(num_nodes=4)
-    @parametrize(broker_version=str(LATEST_3_5))
-    @parametrize(broker_version=str(LATEST_3_4))
-    @parametrize(broker_version=str(LATEST_3_3))
-    @parametrize(broker_version=str(LATEST_3_2))
-    @parametrize(broker_version=str(LATEST_3_1))
-    @parametrize(broker_version=str(LATEST_3_0))
-    @parametrize(broker_version=str(LATEST_2_8))
-    @parametrize(broker_version=str(LATEST_2_7))
-    @parametrize(broker_version=str(LATEST_2_6))
-    @parametrize(broker_version=str(LATEST_2_5))
-    @parametrize(broker_version=str(LATEST_2_4))
-    @parametrize(broker_version=str(LATEST_2_3))
-    @parametrize(broker_version=str(LATEST_2_2))
-    @parametrize(broker_version=str(LATEST_2_1))
-    @parametrize(broker_version=str(LATEST_2_0))
-    @parametrize(broker_version=str(LATEST_1_1))
-    @parametrize(broker_version=str(LATEST_1_0))
-    @parametrize(broker_version=str(LATEST_0_11_0))
-    def test_compatible_brokers_eos_disabled(self, broker_version):
+    @matrix(
+        broker_version=[str(LATEST_3_5), str(LATEST_3_4), str(LATEST_3_3), str(LATEST_3_2), str(LATEST_3_1), str(LATEST_3_0), str(LATEST_2_8), str(LATEST_2_7), str(LATEST_2_6), str(LATEST_2_5),
+                        str(LATEST_2_4), str(LATEST_2_3), str(LATEST_2_2), str(LATEST_2_1), str(LATEST_2_0), str(LATEST_1_1), str(LATEST_1_0), str(LATEST_0_11_0)],
+        use_new_coordinator=[True, False]
+    )
+    def test_compatible_brokers_eos_disabled(self, broker_version, use_new_coordinator=False):
         self.kafka.set_version(KafkaVersion(broker_version))
         self.kafka.start()
 
@@ -99,25 +86,12 @@ class StreamsBrokerCompatibility(Test):
         self.kafka.stop()
 
     @cluster(num_nodes=4)
-    @parametrize(broker_version=str(LATEST_3_5))
-    @parametrize(broker_version=str(LATEST_3_4))
-    @parametrize(broker_version=str(LATEST_3_3))
-    @parametrize(broker_version=str(LATEST_3_2))
-    @parametrize(broker_version=str(LATEST_3_1))
-    @parametrize(broker_version=str(LATEST_3_0))
-    @parametrize(broker_version=str(LATEST_2_8))
-    @parametrize(broker_version=str(LATEST_2_7))
-    @parametrize(broker_version=str(LATEST_2_6))
-    @parametrize(broker_version=str(LATEST_2_5))
-    @parametrize(broker_version=str(LATEST_2_4))
-    @parametrize(broker_version=str(LATEST_2_3))
-    @parametrize(broker_version=str(LATEST_2_2))
-    @parametrize(broker_version=str(LATEST_2_1))
-    @parametrize(broker_version=str(LATEST_2_0))
-    @parametrize(broker_version=str(LATEST_1_1))
-    @parametrize(broker_version=str(LATEST_1_0))
-    @parametrize(broker_version=str(LATEST_0_11_0))
-    def test_compatible_brokers_eos_alpha_enabled(self, broker_version):
+    @matrix(
+        broker_version=[str(LATEST_3_5), str(LATEST_3_4), str(LATEST_3_3), str(LATEST_3_2), str(LATEST_3_1), str(LATEST_3_0), str(LATEST_2_8), str(LATEST_2_7), str(LATEST_2_6), str(LATEST_2_5),
+                        str(LATEST_2_4), str(LATEST_2_3), str(LATEST_2_2), str(LATEST_2_1), str(LATEST_2_0), str(LATEST_1_1), str(LATEST_1_0), str(LATEST_0_11_0)],
+        use_new_coordinator=[True, False]
+    )
+    def test_compatible_brokers_eos_alpha_enabled(self, broker_version, use_new_coordinator=False):
         self.kafka.set_version(KafkaVersion(broker_version))
         self.kafka.start()
 
@@ -134,17 +108,12 @@ class StreamsBrokerCompatibility(Test):
         self.kafka.stop()
 
     @cluster(num_nodes=4)
-    @parametrize(broker_version=str(LATEST_3_5))
-    @parametrize(broker_version=str(LATEST_3_4))
-    @parametrize(broker_version=str(LATEST_3_3))
-    @parametrize(broker_version=str(LATEST_3_2))
-    @parametrize(broker_version=str(LATEST_3_1))
-    @parametrize(broker_version=str(LATEST_3_0))
-    @parametrize(broker_version=str(LATEST_2_8))
-    @parametrize(broker_version=str(LATEST_2_7))
-    @parametrize(broker_version=str(LATEST_2_6))
-    @parametrize(broker_version=str(LATEST_2_5))
-    def test_compatible_brokers_eos_v2_enabled(self, broker_version):
+    @matrix(
+        broker_version=[str(LATEST_3_5), str(LATEST_3_4), str(LATEST_3_3), str(LATEST_3_2), str(LATEST_3_1), str(LATEST_3_0), 
+                        str(LATEST_2_8), str(LATEST_2_7), str(LATEST_2_6), str(LATEST_2_5)],
+        use_new_coordinator=[True, False]
+    )
+    def test_compatible_brokers_eos_v2_enabled(self, broker_version, use_new_coordinator=False):
         self.kafka.set_version(KafkaVersion(broker_version))
         self.kafka.start()
 
@@ -161,10 +130,11 @@ class StreamsBrokerCompatibility(Test):
         self.kafka.stop()
 
     @cluster(num_nodes=4)
-    @parametrize(broker_version=str(LATEST_0_10_2))
-    @parametrize(broker_version=str(LATEST_0_10_1))
-    @parametrize(broker_version=str(LATEST_0_10_0))
-    def test_fail_fast_on_incompatible_brokers(self, broker_version):
+    @matrix(
+        broker_version=[str(LATEST_0_10_2), str(LATEST_0_10_1), str(LATEST_0_10_0)],
+        use_new_coordinator=[True, False]
+    )
+    def test_fail_fast_on_incompatible_brokers(self, broker_version, use_new_coordinator=False):
         self.kafka.set_version(KafkaVersion(broker_version))
         self.kafka.start()
 
@@ -179,15 +149,12 @@ class StreamsBrokerCompatibility(Test):
         self.kafka.stop()
 
     @cluster(num_nodes=4)
-    @parametrize(broker_version=str(LATEST_2_4))
-    @parametrize(broker_version=str(LATEST_2_3))
-    @parametrize(broker_version=str(LATEST_2_2))
-    @parametrize(broker_version=str(LATEST_2_1))
-    @parametrize(broker_version=str(LATEST_2_0))
-    @parametrize(broker_version=str(LATEST_1_1))
-    @parametrize(broker_version=str(LATEST_1_0))
-    @parametrize(broker_version=str(LATEST_0_11_0))
-    def test_fail_fast_on_incompatible_brokers_if_eos_v2_enabled(self, broker_version):
+    @matrix(
+        broker_version=[str(LATEST_2_4), str(LATEST_2_3), str(LATEST_2_2), str(LATEST_2_1), 
+                        str(LATEST_2_0), str(LATEST_1_1), str(LATEST_1_0), str(LATEST_0_11_0)],
+        use_new_coordinator=[True, False]
+    )
+    def test_fail_fast_on_incompatible_brokers_if_eos_v2_enabled(self, broker_version, use_new_coordinator=False):
         self.kafka.set_version(KafkaVersion(broker_version))
         self.kafka.start()
 

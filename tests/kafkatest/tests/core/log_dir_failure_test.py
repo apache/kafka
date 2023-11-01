@@ -91,8 +91,8 @@ class LogDirFailureTest(ProduceConsumeValidateTest):
         return super(LogDirFailureTest, self).min_cluster_size() + self.num_producers * 2 + self.num_consumers * 2
 
     @cluster(num_nodes=9)
-    @matrix(bounce_broker=[False, True], broker_type=["leader", "follower"], security_protocol=["PLAINTEXT"])
-    def test_replication_with_disk_failure(self, bounce_broker, security_protocol, broker_type):
+    @matrix(bounce_broker=[False, True], broker_type=["leader", "follower"], security_protocol=["PLAINTEXT"], use_new_coordinator=[True,False])
+    def test_replication_with_disk_failure(self, bounce_broker, security_protocol, broker_type, use_new_coordinator=False):
         """Replication tests.
         These tests verify that replication provides simple durability guarantees by checking that data acked by
         brokers is still available for consumption in the face of various failure scenarios.
