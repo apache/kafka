@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.tools.other;
 
-import kafka.admin.ReassignPartitionsCommand;
 import kafka.log.UnifiedLog;
 import kafka.server.KafkaConfig;
 import kafka.server.KafkaServer;
@@ -25,7 +24,6 @@ import kafka.server.QuotaType;
 import kafka.utils.EmptyTestInfo;
 import kafka.utils.Exit;
 import kafka.utils.TestUtils;
-import kafka.zk.ReassignPartitionsZNode;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -38,6 +36,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.tools.reassign.ReassignPartitionsCommand;
 import org.apache.log4j.PropertyConfigurator;
 import org.jfree.chart.ChartFactory;
 import org.jfree.chart.ChartFrame;
@@ -56,7 +55,6 @@ import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.PrintWriter;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
@@ -219,14 +217,15 @@ public class ReplicationQuotasTestRig {
             }
 
             System.out.println("Generating Reassignment");
-            scala.collection.Map<TopicPartition, Seq<Object>> newAssignment = ReassignPartitionsCommand.generateAssignment(adminClient,
-                json(TOPIC_NAME), brokers.stream().map(Object::toString).collect(Collectors.joining(",")), true)._1;
+            Map<TopicPartition, List<Integer>> newAssignment = ReassignPartitionsCommand.generateAssignment(adminClient,
+                json(TOPIC_NAME), brokers.stream().map(Object::toString).collect(Collectors.joining(",")), true).v1;
 
             System.out.println("Starting Reassignment");
             long start = System.currentTimeMillis();
+
             ReassignPartitionsCommand.executeAssignment(adminClient, false,
-                new String(ReassignPartitionsZNode.encode(newAssignment), StandardCharsets.UTF_8),
-                config.throttle, -1, 10000, Time.SYSTEM);
+                ReassignPartitionsCommand.formatAsReassignmentJson(newAssignment, Collections.emptyMap()),
+                config.throttle, -1L, 10000L, Time.SYSTEM);
 
             //Await completion
             waitForReassignmentToComplete();
@@ -257,7 +256,7 @@ public class ReplicationQuotasTestRig {
             }
         }
 
-        void logOutput(ExperimentDef config, Map<Integer, Seq<Integer>> replicas, scala.collection.Map<TopicPartition, Seq<Object>> newAssignment) throws Exception {
+        void logOutput(ExperimentDef config, Map<Integer, Seq<Integer>> replicas, Map<TopicPartition, List<Integer>> newAssignment) throws Exception {
             List<TopicPartitionInfo> actual = adminClient.describeTopics(Collections.singleton(TOPIC_NAME))
                 .allTopicNames().get().get(TOPIC_NAME).partitions();
 

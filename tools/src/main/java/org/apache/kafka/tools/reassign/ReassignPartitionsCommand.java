@@ -549,7 +549,7 @@ public class ReassignPartitionsCommand {
      * @return                      A tuple containing the proposed assignment and the
      *                              current assignment.
      */
-    static Tuple2<Map<TopicPartition, List<Integer>>, Map<TopicPartition, List<Integer>>> generateAssignment(Admin adminClient,
+    public static Tuple2<Map<TopicPartition, List<Integer>>, Map<TopicPartition, List<Integer>>> generateAssignment(Admin adminClient,
                                                                                                              String reassignmentJson,
                                                                                                              String brokerListString,
                                                                                                              Boolean enableRackAwareness
@@ -722,7 +722,7 @@ public class ReassignPartitionsCommand {
      *                                    replica assignment to begin.
      * @param time                        The Time object to use.
      */
-    static void executeAssignment(Admin adminClient,
+    public static void executeAssignment(Admin adminClient,
                                   Boolean additional,
                                   String reassignmentJson,
                                   Long interBrokerThrottle,
@@ -1275,7 +1275,7 @@ public class ReassignPartitionsCommand {
         return new Tuple2<>(curReassigningParts, curMovingParts.keySet());
     }
 
-    private static String formatAsReassignmentJson(Map<TopicPartition, List<Integer>> partitionsToBeReassigned,
+    public static String formatAsReassignmentJson(Map<TopicPartition, List<Integer>> partitionsToBeReassigned,
                                                    Map<TopicPartitionReplica, String> replicaLogDirAssignment) throws JsonProcessingException {
         List<Map<String, Object>> partitions = new ArrayList<>();
         partitionsToBeReassigned.keySet().stream().sorted(ReassignPartitionsCommand::compareTopicPartitions).forEach(tp -> {
