@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.clients;
 
+import java.util.Map.Entry;
+import java.util.stream.Collectors;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.ClusterResourceListener;
 import org.apache.kafka.common.KafkaException;
@@ -29,6 +31,7 @@ import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.common.requests.MetadataResponse.PartitionMetadata;
 import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
@@ -208,7 +211,7 @@ public class Metadata implements Closeable {
 
     /**
      * Request an update for the partition metadata iff we have seen a newer leader epoch. This is called by the client
-     * any time it handles a response from the broker that includes leader epoch, except for UpdateMetadata which
+     * any time it handles a response from the broker that includes leader epoch, except for update via Metadata RPC which
      * follows a different code path ({@link #update}).
      *
      * @param topicPartition
@@ -348,6 +351,91 @@ public class Metadata implements Closeable {
         clusterResourceListeners.onUpdate(cache.clusterResource());
 
         log.debug("Updated cluster metadata updateVersion {} to {}", this.updateVersion, this.cache);
+    }
+
+    /**
+     * Updates the partition-leadership info in the metadata. Update is done by merging existing metadata with the input leader information and nodes.
+     * This is called whenever partition-leadership updates are returned in a response from broker(ex - ProduceResponse & FetchResponse).
+     * Note that the updates via Metadata RPC are handled separately in ({@link #update}).
+     * Both partitionLeader and leaderNodes override the existing metadata. Non-overlapping metadata is kept as it is.
+     * @param partitionLeaders map of new leadership information for partitions.
+     * @param leaderNodes a list of nodes for leaders in the above map.
+     * @return a set of partitions, for which leaders were updated.
+     */
+    public synchronized Set<TopicPartition> updatePartitionLeadership(Map<TopicPartition, LeaderIdAndEpoch> partitionLeaders, List<Node> leaderNodes) {
+        Map<Integer, Node> newNodes = leaderNodes.stream().collect(Collectors.toMap(Node::id, node -> node));
+        // Insert non-overlapping nodes from existing-nodes into new-nodes.
+        this.cache.cluster().nodes().stream().forEach(node -> newNodes.putIfAbsent(node.id(), node));
+
+        // Create partition-metadata for all updated partitions. Exclude updates for partitions -
+        // 1. for which the corresponding partition has newer leader in existing metadata.
+        // 2. for which corresponding leader's node is missing in the new-nodes.
+        // 3. for which the existing metadata doesn't know about the partition.
+        List<PartitionMetadata> updatePartitionMetadata = new ArrayList<>();
+        for (Entry<TopicPartition, Metadata.LeaderIdAndEpoch> partitionLeader: partitionLeaders.entrySet()) {
+            TopicPartition partition = partitionLeader.getKey();
+            Metadata.LeaderAndEpoch currentLeader = currentLeader(partition);
+            Metadata.LeaderIdAndEpoch newLeader = partitionLeader.getValue();
+            if (!newLeader.epoch.isPresent() || !newLeader.leaderId.isPresent()) {
+                log.debug("For {}, incoming leader information is incomplete {}", partition, newLeader);
+                continue;
+            }
+            if (currentLeader.epoch.isPresent() && newLeader.epoch.get() <= currentLeader.epoch.get()) {
+                log.debug("For {}, incoming leader({}) is not-newer than the one in the existing metadata {}, so ignoring.", partition, newLeader, currentLeader);
+                continue;
+            }
+            if (!newNodes.containsKey(newLeader.leaderId.get())) {
+                log.debug("For {}, incoming leader({}), the corresponding node information for node-id {} is missing, so ignoring.", partition, newLeader, newLeader.leaderId.get());
+                continue;
+            }
+            if (!this.cache.partitionMetadata(partition).isPresent()) {
+                log.debug("For {}, incoming leader({}), partition metadata is no longer cached, ignoring.", partition, newLeader);
+                continue;
+            }
+
+            MetadataResponse.PartitionMetadata existingMetadata = this.cache.partitionMetadata(partition).get();
+            MetadataResponse.PartitionMetadata updatedMetadata = new MetadataResponse.PartitionMetadata(
+                existingMetadata.error,
+                partition,
+                newLeader.leaderId,
+                newLeader.epoch,
+                existingMetadata.replicaIds,
+                existingMetadata.inSyncReplicaIds,
+                existingMetadata.offlineReplicaIds
+            );
+            updatePartitionMetadata.add(updatedMetadata);
+
+            lastSeenLeaderEpochs.put(partition, newLeader.epoch.get());
+        }
+
+        if (updatePartitionMetadata.isEmpty()) {
+            log.debug("No relevant metadata updates.");
+            return new HashSet<>();
+        }
+
+        Set<String> updatedTopics = updatePartitionMetadata.stream().map(MetadataResponse.PartitionMetadata::topic).collect(Collectors.toSet());
+
+        // Get topic-ids for updated topics from existing topic-ids.
+        Map<String, Uuid> existingTopicIds = this.cache.topicIds();
+        Map<String, Uuid> topicIdsForUpdatedTopics = updatedTopics.stream()
+            .filter(e -> existingTopicIds.containsKey(e))
+            .collect(Collectors.toMap(e -> e, e -> existingTopicIds.get(e)));
+
+        if (log.isDebugEnabled()) {
+            updatePartitionMetadata.forEach(
+                partMetadata -> log.debug("For {} updating leader information, updated metadata is {}.", partMetadata.topicPartition, partMetadata)
+            );
+        }
+
+        this.cache = cache.mergeWith(cache.clusterResource().clusterId(), newNodes,
+                    updatePartitionMetadata, Collections.emptySet(), Collections.emptySet(),
+                    Collections.emptySet(), cache.cluster().controller(), topicIdsForUpdatedTopics,
+                    (topic, isInternal) -> !updatedTopics.contains(topic));
+        clusterResourceListeners.onUpdate(cache.clusterResource());
+
+        return updatePartitionMetadata.stream()
+            .map(metadata -> metadata.topicPartition)
+            .collect(Collectors.toSet());
     }
 
     private void maybeSetMetadataError(Cluster cluster) {
@@ -704,6 +792,24 @@ public class Metadata implements Closeable {
                     "leader=" + leader +
                     ", epoch=" + epoch.map(Number::toString).orElse("absent") +
                     '}';
+        }
+    }
+
+    public static class LeaderIdAndEpoch {
+        public final Optional<Integer> leaderId;
+        public final Optional<Integer> epoch;
+
+        public LeaderIdAndEpoch(Optional<Integer> leaderId, Optional<Integer> epoch) {
+            this.leaderId = Objects.requireNonNull(leaderId);
+            this.epoch = Objects.requireNonNull(epoch);
+        }
+
+        @Override
+        public String toString() {
+            return "LeaderIdAndEpoch{" +
+                "leaderId=" + leaderId.map(Number::toString).orElse("absent") +
+                ", epoch=" + epoch.map(Number::toString).orElse("absent") +
+                '}';
         }
     }
 }
