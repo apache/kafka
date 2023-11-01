@@ -214,20 +214,19 @@ public class StandbyTaskTest {
 
     @Test
     public void shouldAlwaysCheckpointStateIfEnforced() {
-        doNothing().when(stateManager).flush();
-        doNothing().when(stateManager).checkpoint();
         when(stateManager.changelogOffsets()).thenReturn(Collections.emptyMap());
 
         task = createStandbyTask();
 
         task.initializeIfNeeded();
         task.maybeCheckpoint(true);
+
+        verify(stateManager).flush();
+        verify(stateManager).checkpoint();
     }
 
     @Test
     public void shouldOnlyCheckpointStateWithBigAdvanceIfNotEnforced() {
-        doNothing().when(stateManager).flush();
-        doNothing().when(stateManager).checkpoint();
         when(stateManager.changelogOffsets())
                 .thenReturn(Collections.singletonMap(partition, 50L))
                 .thenReturn(Collections.singletonMap(partition, 11000L))
@@ -242,13 +241,15 @@ public class StandbyTaskTest {
         assertEquals(Collections.singletonMap(partition, 11000L), task.offsetSnapshotSinceLastFlush);
         task.maybeCheckpoint(false);  // this should not checkpoint
         assertEquals(Collections.singletonMap(partition, 11000L), task.offsetSnapshotSinceLastFlush);
+
+        verify(stateManager).flush();
+        verify(stateManager).checkpoint();
     }
 
     @Test
     public void shouldFlushAndCheckpointStateManagerOnCommit() {
         when(stateManager.changelogOffsets()).thenReturn(Collections.emptyMap());
         doNothing().when(stateManager).flush();
-        doNothing().when(stateManager).checkpoint();
         when(stateManager.changelogOffsets())
                 .thenReturn(Collections.singletonMap(partition, 50L))
                 .thenReturn(Collections.singletonMap(partition, 11000L))
@@ -264,6 +265,8 @@ public class StandbyTaskTest {
 
         task.prepareCommit();
         task.postCommit(false);  // this should not checkpoint
+
+        verify(stateManager).checkpoint();
     }
 
     @Test
@@ -308,7 +311,6 @@ public class StandbyTaskTest {
     @Test
     public void shouldSuspendAndCommitBeforeCloseClean() {
         doNothing().when(stateManager).close();
-        doNothing().when(stateManager).checkpoint();
         when(stateManager.changelogOffsets())
                 .thenReturn(Collections.singletonMap(partition, 60L));
         final MetricName metricName = setupCloseTaskMetric();
@@ -324,6 +326,7 @@ public class StandbyTaskTest {
 
         final double expectedCloseTaskMetric = 1.0;
         verifyCloseTaskMetric(expectedCloseTaskMetric, streamsMetrics, metricName);
+        verify(stateManager).checkpoint();
     }
 
     @Test
@@ -486,8 +489,6 @@ public class StandbyTaskTest {
 
     @Test
     public void shouldPrepareRecycleSuspendedTask() {
-        doNothing().when(stateManager).recycle();
-
         task = createStandbyTask();
         assertThrows(IllegalStateException.class, () -> task.prepareRecycle()); // CREATED
 
@@ -501,6 +502,8 @@ public class StandbyTaskTest {
         // Currently, there are no metrics registered for standby tasks.
         // This is a regression test so that, if we add some, we will be sure to deregister them.
         assertThat(getTaskMetrics(), empty());
+
+        verify(stateManager).recycle();
     }
 
     @Test
