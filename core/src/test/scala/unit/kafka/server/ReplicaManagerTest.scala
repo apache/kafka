@@ -3127,7 +3127,7 @@ class ReplicaManagerTest {
     propsModifier.apply(props)
     val config = KafkaConfig.fromProps(props)
     val logProps = new Properties()
-    if (defaultTopicRemoteLogStorageEnable) {
+    if (enableRemoteStorage && defaultTopicRemoteLogStorageEnable) {
       logProps.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
     }
     val mockLog = setupMockLog(path1)
