@@ -16,27 +16,21 @@
  */
 package org.apache.kafka.common.errors;
 
+import org.apache.kafka.common.metadata.PartitionChangeRecord;
+import org.apache.kafka.common.metadata.PartitionRecord;
+
 /**
- * An exception that may indicate the client's metadata is out of date
+ * A record was encountered where the number of directories does not match the number of replicas.
  */
-public abstract class InvalidMetadataException extends RetriableException {
+public class InvalidReplicaDirectoriesException extends InvalidMetadataException {
 
     private static final long serialVersionUID = 1L;
 
-    protected InvalidMetadataException() {
-        super();
+    public InvalidReplicaDirectoriesException(PartitionRecord record) {
+        super("The lengths for replicas and directories do not match: " + record);
     }
 
-    protected InvalidMetadataException(String message) {
-        super(message);
+    public InvalidReplicaDirectoriesException(PartitionChangeRecord record) {
+        super("The lengths for replicas and directories do not match: " + record);
     }
-
-    protected InvalidMetadataException(String message, Throwable cause) {
-        super(message, cause);
-    }
-
-    protected InvalidMetadataException(Throwable cause) {
-        super(cause);
-    }
-
 }

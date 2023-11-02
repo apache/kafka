@@ -1793,7 +1793,7 @@ project(':storage') {
   task processMessages(type:JavaExec) {
     mainClass = "org.apache.kafka.message.MessageGenerator"
     classpath = configurations.generator
-    args = [ "-p", " org.apache.kafka.server.log.remote.metadata.storage.generated",
+    args = [ "-p", "org.apache.kafka.server.log.remote.metadata.storage.generated",
              "-o", "src/generated/java/org/apache/kafka/server/log/remote/metadata/storage/generated",
              "-i", "src/main/resources/message",
              "-m", "MessageDataGenerator", "JsonConverterGenerator",
