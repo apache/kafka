@@ -2022,6 +2022,9 @@ public class WorkerSinkTaskTest {
         // Revoked "TOPIC_PARTITION" and second re-balance with "TOPIC_PARTITION2"
         mockConsumer.rebalance(Collections.singleton(TOPIC_PARTITION2));
         assertSinkMetricValue("partition-count", 1);
+        // Closing the Worker Sink Task which will update the partition count as 0.
+        workerTask.close();
+        assertSinkMetricValue("partition-count", 0);
     }
 
     private void expectInitializeTask() {
