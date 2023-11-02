@@ -303,7 +303,7 @@ public class HeartbeatRequestManagerTest {
     }
 
     private void mockStableMember() {
-        membershipManager.transitionToJoinGroup();
+        membershipManager.transitionToJoining();
         // Heartbeat response without assignment to set the state to STABLE.
         ConsumerGroupHeartbeatResponse rs1 = new ConsumerGroupHeartbeatResponse(new ConsumerGroupHeartbeatResponseData()
                 .setHeartbeatIntervalMs(DEFAULT_HEARTBEAT_INTERVAL_MS)

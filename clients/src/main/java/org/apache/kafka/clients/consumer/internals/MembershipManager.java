@@ -97,7 +97,7 @@ public interface MembershipManager {
      * try to join the group on the next heartbeat request. This is expected to be invoked when
      * the user calls the subscribe API, or when the member wants to rejoin after getting fenced.
      */
-    void transitionToJoinGroup();
+    void transitionToJoining();
 
     /**
      * Transition the member to the FENCED state, where the member will release the assignment by

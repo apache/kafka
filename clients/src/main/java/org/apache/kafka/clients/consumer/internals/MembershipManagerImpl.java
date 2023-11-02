@@ -251,7 +251,7 @@ public class MembershipManagerImpl implements MembershipManager {
                         "after member got fenced. Member will rejoin the group anyways.", error);
             }
             subscriptions.assignFromSubscribed(Collections.emptySet());
-            transitionToJoinGroup();
+            transitionToJoining();
         });
     }
 
@@ -274,7 +274,7 @@ public class MembershipManagerImpl implements MembershipManager {
      * {@inheritDoc}
      */
     @Override
-    public void transitionToJoinGroup() {
+    public void transitionToJoining() {
         resetEpoch();
         transitionTo(MemberState.JOINING);
     }
@@ -410,7 +410,7 @@ public class MembershipManagerImpl implements MembershipManager {
                                 "will re-join with current subscription",
                         targetAssignment,
                         subscriptions.prettyString());
-                transitionToJoinGroup();
+                transitionToJoining();
                 return;
             }
 

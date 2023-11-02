@@ -87,7 +87,7 @@ public class MembershipManagerImplTest {
         MembershipManagerImpl manager = new MembershipManagerImpl(
                 GROUP_ID, subscriptionState, commitRequestManager, metadataRequestManager,
                 metadata, testBuilder.logContext);
-        manager.transitionToJoinGroup();
+        manager.transitionToJoining();
         return manager;
     }
 
@@ -96,7 +96,7 @@ public class MembershipManagerImplTest {
         MembershipManagerImpl manager = new MembershipManagerImpl(
                 GROUP_ID, groupInstanceId, serverAssignor, subscriptionState,
                 commitRequestManager, metadataRequestManager, metadata, testBuilder.logContext);
-        manager.transitionToJoinGroup();
+        manager.transitionToJoining();
         return manager;
     }
 
@@ -167,7 +167,7 @@ public class MembershipManagerImplTest {
                 GROUP_ID, subscriptionState, commitRequestManager, metadataRequestManager,
                 metadata, testBuilder.logContext);
         assertEquals(MemberState.NOT_IN_GROUP, membershipManager.state());
-        membershipManager.transitionToJoinGroup();
+        membershipManager.transitionToJoining();
 
         membershipManager.transitionToFailed();
         assertEquals(MemberState.FATAL, membershipManager.state());
