@@ -32,13 +32,16 @@ public class ControllerNode implements TestKitNode {
             return this;
         }
 
-        public ControllerNode build() {
+        public ControllerNode build(
+            String baseDirectory
+        ) {
             if (id == -1) {
                 throw new RuntimeException("You must set the node id");
             }
             if (metadataDirectory == null) {
                 metadataDirectory = String.format("controller_%d", id);
             }
+            metadataDirectory = TestKitNodes.absolutize(baseDirectory, metadataDirectory);
             return new ControllerNode(id, metadataDirectory);
         }
     }

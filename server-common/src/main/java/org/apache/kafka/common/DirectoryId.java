@@ -16,24 +16,29 @@
  */
 package org.apache.kafka.common;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 public class DirectoryId {
 
     /**
-     * A UUID that is used to identify new or unknown dir assignments.
+     * A Uuid that is used to identify new or unknown dir assignments.
      */
     public static final Uuid UNASSIGNED = new Uuid(0L, 0L);
 
     /**
-     * A UUID that is used to represent unspecified offline dirs.
+     * A Uuid that is used to represent unspecified offline dirs.
      */
     public static final Uuid LOST = new Uuid(0L, 1L);
 
     /**
-     * A UUID that is used to represent and unspecified log directory,
+     * A Uuid that is used to represent and unspecified log directory,
      * that is expected to have been previously selected to host an
      * associated replica. This contrasts with {@code UNASSIGNED_DIR},
      * which is associated with (typically new) replicas that may not
@@ -47,8 +52,8 @@ public class DirectoryId {
     public static final Set<Uuid> RESERVED;
 
     static {
-        HashSet<Uuid> reserved = new HashSet<>(Uuid.RESERVED);
-        // The first 100 UUIDs are reserved for future use.
+        HashSet<Uuid> reserved = new HashSet<>();
+        // The first 100 Uuids are reserved for future use.
         for (long i = 0L; i < 100L; i++) {
             reserved.add(new Uuid(0L, i));
         }
@@ -66,5 +71,60 @@ public class DirectoryId {
             uuid = Uuid.randomUuid();
         }
         return uuid;
+    }
+
+    /**
+     * Calculate the new directory information based on an existing replica assignment.
+     * Replicas for which there already is a directory ID keep the same directory.
+     * All other replicas get {@link #UNASSIGNED}.
+     * @param currentReplicas               The current replicas, represented by the broker IDs
+     * @param currentDirectories            The current directory information
+     * @param newReplicas                   The new replica list
+     * @return                              The new directory list
+     * @throws IllegalArgumentException     If currentReplicas and currentDirectories have different lengths,
+     *                                      or if there are duplicate broker IDs in the replica lists
+     */
+    public static List<Uuid> createDirectoriesFrom(int[] currentReplicas, Uuid[] currentDirectories, List<Integer> newReplicas) {
+        if (currentReplicas == null) currentReplicas = new int[0];
+        if (currentDirectories == null) currentDirectories = new Uuid[0];
+        Map<Integer, Uuid> assignments = createAssignmentMap(currentReplicas, currentDirectories);
+        List<Uuid> consolidated = new ArrayList<>(newReplicas.size());
+        for (int newReplica : newReplicas) {
+            Uuid newDirectory = assignments.getOrDefault(newReplica, UNASSIGNED);
+            consolidated.add(newDirectory);
+        }
+        return consolidated;
+    }
+
+    /**
+     * Build a mapping from replica to directory based on two lists of the same size and order.
+     * @param replicas                      The replicas, represented by the broker IDs
+     * @param directories                   The directory information
+     * @return                              A map, linking each replica to its assigned directory
+     * @throws IllegalArgumentException     If replicas and directories have different lengths,
+     *                                      or if there are duplicate broker IDs in the replica list
+     */
+    public static Map<Integer, Uuid> createAssignmentMap(int[] replicas, Uuid[] directories) {
+        if (replicas.length != directories.length) {
+            throw new IllegalArgumentException("The lengths for replicas and directories do not match.");
+        }
+        Map<Integer, Uuid> assignments = new HashMap<>();
+        for (int i = 0; i < replicas.length; i++) {
+            int brokerId = replicas[i];
+            Uuid directory = directories[i];
+            if (assignments.put(brokerId, directory) != null) {
+                throw new IllegalArgumentException("Duplicate broker ID in assignment");
+            }
+        }
+        return assignments;
+    }
+
+    /**
+     * Create an array with the specified number of entries set to {@link #UNASSIGNED}.
+     */
+    public static Uuid[] unassignedArray(int length) {
+        Uuid[] array = new Uuid[length];
+        Arrays.fill(array, UNASSIGNED);
+        return array;
     }
 }

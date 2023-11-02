@@ -159,7 +159,7 @@ class ControllerApisTest {
       controller,
       raftManager,
       new KafkaConfig(props),
-      MetaProperties("JgxuGe9URy-E-ceaL04lEw", nodeId = nodeId),
+      "JgxuGe9URy-E-ceaL04lEw",
       new ControllerRegistrationsPublisher(),
       new SimpleApiVersionManager(
         ListenerType.CONTROLLER,
@@ -1093,6 +1093,34 @@ class ControllerApisTest {
 
     val response = handleRequest[AllocateProducerIdsResponse](request, controllerApis)
     assertEquals(Errors.NOT_CONTROLLER, response.error)
+  }
+
+  @Test
+  def testAssignReplicasToDirsReturnsUnsupportedVersion(): Unit = {
+    val controller = mock(classOf[Controller])
+    val controllerApis = createControllerApis(None, controller)
+
+    val request =
+      new AssignReplicasToDirsRequest.Builder(
+        new AssignReplicasToDirsRequestData()
+          .setBrokerId(1)
+          .setBrokerEpoch(123L)
+          .setDirectories(util.Arrays.asList(
+            new AssignReplicasToDirsRequestData.DirectoryData()
+              .setId(Uuid.randomUuid())
+              .setTopics(util.Arrays.asList(
+                new AssignReplicasToDirsRequestData.TopicData()
+                  .setTopicId(Uuid.fromString("pcPTaiQfRXyZG88kO9k2aA"))
+                  .setPartitions(util.Arrays.asList(
+                    new AssignReplicasToDirsRequestData.PartitionData()
+                      .setPartitionIndex(8)
+                  ))
+              ))
+          ))).build()
+
+    val expectedResponse = new AssignReplicasToDirsResponseData().setErrorCode(Errors.UNSUPPORTED_VERSION.code)
+    val response = handleRequest[AssignReplicasToDirsResponse](request, controllerApis)
+    assertEquals(expectedResponse, response.data)
   }
 
   private def handleRequest[T <: AbstractResponse](

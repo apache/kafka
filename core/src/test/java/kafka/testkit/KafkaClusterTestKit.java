@@ -216,11 +216,9 @@ public class KafkaClusterTestKit implements AutoCloseable {
             ExecutorService executorService = null;
             ControllerQuorumVotersFutureManager connectFutureManager =
                 new ControllerQuorumVotersFutureManager(nodes.controllerNodes().size());
-            File baseDirectory = null;
+            File baseDirectory = new File(nodes.baseDirectory());
 
             try {
-                baseDirectory = TestUtils.tempDirectory();
-                nodes = nodes.copyWithAbsolutePaths(baseDirectory.getAbsolutePath());
                 executorService = Executors.newFixedThreadPool(numOfExecutorThreads,
                     ThreadUtils.createThreadFactory("kafka-cluster-test-kit-executor-%d", false));
                 for (ControllerNode node : nodes.controllerNodes().values()) {

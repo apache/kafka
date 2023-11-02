@@ -2690,7 +2690,8 @@ public class LegacyKafkaConsumerTest {
                 fetchConfig,
                 new Deserializers<>(keyDeserializer, deserializer),
                 metricsManager,
-                time);
+                time,
+                new ApiVersions());
         OffsetFetcher offsetFetcher = new OffsetFetcher(loggerFactory,
                 consumerClient,
                 metadata,

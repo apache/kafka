@@ -189,7 +189,7 @@ public class HeartbeatRequestManagerTest {
         when(membershipManager.shouldSendHeartbeat()).thenReturn(true);
         NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(1, result.unsentRequests.size());
-        result.unsentRequests.get(0).future().completeExceptionally(new KafkaException("fatal"));
+        result.unsentRequests.get(0).handler().onFailure(time.milliseconds(), new KafkaException("fatal"));
         verify(membershipManager).transitionToFailed();
         verify(backgroundEventHandler).add(any());
     }

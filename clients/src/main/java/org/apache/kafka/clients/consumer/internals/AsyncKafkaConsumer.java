@@ -109,7 +109,7 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  * This {@link Consumer} implementation uses an {@link ApplicationEventHandler event handler} to process
  * {@link ApplicationEvent application events} so that the network I/O can be processed in a dedicated
  * {@link ConsumerNetworkThread network thread}. Visit
- * <a href="https://cwiki.apache.org/confluence/display/KAFKA/Proposal%3A+Consumer+Threading+Model+Refactor">this document</a>
+ * <a href="https://cwiki.apache.org/confluence/display/KAFKA/Consumer+threading+refactor+design">this document</a>
  * for implementation detail.
  *
  * <p/>
