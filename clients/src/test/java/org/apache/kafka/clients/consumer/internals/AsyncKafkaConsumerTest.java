@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
+import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeApplicationEvent;
@@ -31,6 +32,8 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
+import org.apache.kafka.common.errors.NetworkException;
+import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.protocol.Errors;
@@ -40,6 +43,7 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.function.Executable;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.ArgumentMatchers;
@@ -226,6 +230,53 @@ public class AsyncKafkaConsumerTest {
         }
     }
 
+    @Test
+    public void testEnsureCommitSyncExecutedCommitAsyncCallbacks() {
+        MockCommitCallback callback = new MockCommitCallback();
+        CompletableFuture<Void> future = new CompletableFuture<>();
+        doReturn(future).when(consumer).commit(new HashMap<>(), false);
+        assertDoesNotThrow(() -> consumer.commitAsync(new HashMap<>(), callback));
+        future.completeExceptionally(new NetworkException("Test exception"));
+        assertMockCommitCallbackInvoked(() -> consumer.commitSync(),
+            callback,
+            Errors.NETWORK_EXCEPTION);
+    }
+
+    @Test
+    public void testEnsurePollExecutedCommitAsyncCallbacks() {
+        MockCommitCallback callback = new MockCommitCallback();
+        CompletableFuture<Void> future = new CompletableFuture<>();
+        consumer.assign(Collections.singleton(new TopicPartition("foo", 0)));
+        doReturn(future).when(consumer).commit(new HashMap<>(), false);
+        assertDoesNotThrow(() -> consumer.commitAsync(new HashMap<>(), callback));
+        future.complete(null);
+        assertMockCommitCallbackInvoked(() -> consumer.poll(Duration.ZERO),
+            callback,
+            null);
+    }
+
+    @Test
+    public void testEnsureShutdownExecutedCommitAsyncCallbacks() {
+        MockCommitCallback callback = new MockCommitCallback();
+        CompletableFuture<Void> future = new CompletableFuture<>();
+        doReturn(future).when(consumer).commit(new HashMap<>(), false);
+        assertDoesNotThrow(() -> consumer.commitAsync(new HashMap<>(), callback));
+        future.complete(null);
+        assertMockCommitCallbackInvoked(() -> consumer.close(Duration.ZERO),
+            callback,
+            null);
+    }
+
+    private void assertMockCommitCallbackInvoked(final Executable task, final MockCommitCallback callback,
+                                                 final Errors exception) {
+        assertDoesNotThrow(task);
+        assertEquals(1, callback.invoked);
+        if (callback.exception instanceof RetriableException)
+            assertEquals(callback.exception.getClass(), RetriableCommitFailedException.class);
+        else
+            assertNull(callback.exception);
+    }
+
     private static class MockCommitCallback implements OffsetCommitCallback {
         public int invoked = 0;
         public Exception exception = null;
@@ -233,7 +284,6 @@ public class AsyncKafkaConsumerTest {
 
         @Override
         public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception) {
-            System.out.println("invoke");
             invoked++;
             this.completionThread = Thread.currentThread().getName();
             this.exception = exception;

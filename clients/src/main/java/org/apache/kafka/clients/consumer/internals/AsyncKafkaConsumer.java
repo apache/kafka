@@ -1196,8 +1196,12 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         // Thread-safe queue to store callbacks
         private final BlockingQueue<OffsetCommitCallbackTask> callbackQueue = new LinkedBlockingQueue<>();
 
-        public void submit(OffsetCommitCallbackTask callback) {
-            callbackQueue.offer(callback);
+        public void submit(final OffsetCommitCallbackTask callback) {
+            try {
+                callbackQueue.offer(callback);
+            } catch (Exception e) {
+                log.error("Failed to enqueue OffsetCommitCallback", e);
+            }
         }
 
         public void executeCallbacks() {
