@@ -101,7 +101,7 @@ public class CommitRequestManager implements RequestManager {
         this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
         this.retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
         this.jitter = OptionalDouble.empty();
-        this.throwOnFetchStableOffsetUnsupported = config.getBoolean(InternalConsumerConfig.THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED);
+        this.throwOnFetchStableOffsetUnsupported = config.getBoolean("internal.throw.on.fetch.stable.offset.unsupported");
     }
 
     // Visible for testing
@@ -132,7 +132,7 @@ public class CommitRequestManager implements RequestManager {
         this.retryBackoffMs = retryBackoffMs;
         this.retryBackoffMaxMs = retryBackoffMaxMs;
         this.jitter = OptionalDouble.of(jitter);
-        this.throwOnFetchStableOffsetUnsupported = config.getBoolean(InternalConsumerConfig.THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED);
+        this.throwOnFetchStableOffsetUnsupported = config.getBoolean("internal.throw.on.fetch.stable.offset.unsupported");
     }
 
     /**
