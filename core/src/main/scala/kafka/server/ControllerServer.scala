@@ -138,7 +138,7 @@ class ControllerServer(
     true
   }
 
-  def clusterId: String = sharedServer.clusterId()
+  def clusterId: String = sharedServer.clusterId
 
   def startup(): Unit = {
     if (!maybeChangeStatus(SHUTDOWN, STARTING)) return
@@ -238,7 +238,7 @@ class ControllerServer(
 
         quorumControllerMetrics = new QuorumControllerMetrics(Optional.of(KafkaYammerMetrics.defaultRegistry), time, config.migrationEnabled)
 
-        new QuorumController.Builder(config.nodeId, sharedServer.metaProps.clusterId).
+        new QuorumController.Builder(config.nodeId, sharedServer.clusterId).
           setTime(time).
           setThreadNamePrefix(s"quorum-controller-${config.nodeId}-").
           setConfigSchema(configSchema).
