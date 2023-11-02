@@ -61,7 +61,7 @@ public class ElectionState {
     public boolean isLeader(int nodeId) {
         if (nodeId < 0)
             throw new IllegalArgumentException("Invalid negative nodeId: " + nodeId);
-        return leaderIdOpt.orElse(-1) == nodeId;
+        return leaderIdOrSentinel() == nodeId;
     }
 
     public boolean isVotedCandidate(int nodeId) {
@@ -92,6 +92,10 @@ public class ElectionState {
 
     public boolean hasVoted() {
         return votedIdOpt.isPresent();
+    }
+
+    public int leaderIdOrSentinel() {
+        return leaderIdOpt.orElse(-1);
     }
 
 

@@ -49,26 +49,26 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
     public static final String REMOTE_LOG_METADATA_INITIALIZATION_RETRY_INTERVAL_MS_PROP = "remote.log.metadata.initialization.retry.interval.ms";
 
     public static final int DEFAULT_REMOTE_LOG_METADATA_TOPIC_PARTITIONS = 50;
-    public static final long DEFAULT_REMOTE_LOG_METADATA_TOPIC_RETENTION_MILLIS = -1L;
+    public static final long DEFAULT_REMOTE_LOG_METADATA_TOPIC_RETENTION_MS = -1L;
     public static final short DEFAULT_REMOTE_LOG_METADATA_TOPIC_REPLICATION_FACTOR = 3;
     public static final long DEFAULT_REMOTE_LOG_METADATA_CONSUME_WAIT_MS = 2 * 60 * 1000L;
     public static final long DEFAULT_REMOTE_LOG_METADATA_INITIALIZATION_RETRY_MAX_TIMEOUT_MS = 2 * 60 * 1000L;
-    public static final long DEFAULT_REMOTE_LOG_METADATA_INITIALIZATION_RETRY_INTERVAL_MS = 5 * 1000L;
+    public static final long DEFAULT_REMOTE_LOG_METADATA_INITIALIZATION_RETRY_INTERVAL_MS = 100L;
 
-    public static final String REMOTE_LOG_METADATA_TOPIC_REPLICATION_FACTOR_DOC = "Replication factor of remote log metadata Topic.";
-    public static final String REMOTE_LOG_METADATA_TOPIC_PARTITIONS_DOC = "The number of partitions for remote log metadata Topic.";
-    public static final String REMOTE_LOG_METADATA_TOPIC_RETENTION_MS_DOC = "Remote log metadata topic log retention in milli seconds." +
+    public static final String REMOTE_LOG_METADATA_TOPIC_REPLICATION_FACTOR_DOC = "Replication factor of remote log metadata topic.";
+    public static final String REMOTE_LOG_METADATA_TOPIC_PARTITIONS_DOC = "The number of partitions for remote log metadata topic.";
+    public static final String REMOTE_LOG_METADATA_TOPIC_RETENTION_MS_DOC = "Retention of remote log metadata topic in milliseconds. " +
             "Default: -1, that means unlimited. Users can configure this value based on their use cases. " +
             "To avoid any data loss, this value should be more than the maximum retention period of any topic enabled with " +
             "tiered storage in the cluster.";
-    public static final String REMOTE_LOG_METADATA_CONSUME_WAIT_MS_DOC = "The amount of time in milli seconds to wait for the local consumer to " +
+    public static final String REMOTE_LOG_METADATA_CONSUME_WAIT_MS_DOC = "The amount of time in milliseconds to wait for the local consumer to " +
             "receive the published event.";
-    public static final String REMOTE_LOG_METADATA_INITIALIZATION_RETRY_INTERVAL_MS_DOC = "The retry interval in milli seconds for " +
-            " retrying RemoteLogMetadataManager resources initialization again.";
+    public static final String REMOTE_LOG_METADATA_INITIALIZATION_RETRY_INTERVAL_MS_DOC = "The retry interval in milliseconds for " +
+            "retrying RemoteLogMetadataManager resources initialization again.";
 
-    public static final String REMOTE_LOG_METADATA_INITIALIZATION_RETRY_MAX_TIMEOUT_MS_DOC = "The maximum amount of time in milli seconds " +
-            " for retrying RemoteLogMetadataManager resources initialization. When total retry intervals reach this timeout, initialization" +
-            " is considered as failed and broker starts shutting down.";
+    public static final String REMOTE_LOG_METADATA_INITIALIZATION_RETRY_MAX_TIMEOUT_MS_DOC = "The maximum amount of time in milliseconds " +
+            "for retrying RemoteLogMetadataManager resources initialization. When total retry intervals reach this timeout, initialization " +
+            "is considered as failed and broker starts shutting down.";
 
     public static final String REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX = "remote.log.metadata.common.client.";
     public static final String REMOTE_LOG_METADATA_PRODUCER_PREFIX = "remote.log.metadata.producer.";
@@ -84,7 +84,7 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
                       REMOTE_LOG_METADATA_TOPIC_REPLICATION_FACTOR_DOC)
               .define(REMOTE_LOG_METADATA_TOPIC_PARTITIONS_PROP, INT, DEFAULT_REMOTE_LOG_METADATA_TOPIC_PARTITIONS, atLeast(1), LOW,
                       REMOTE_LOG_METADATA_TOPIC_PARTITIONS_DOC)
-              .define(REMOTE_LOG_METADATA_TOPIC_RETENTION_MS_PROP, LONG, DEFAULT_REMOTE_LOG_METADATA_TOPIC_RETENTION_MILLIS, LOW,
+              .define(REMOTE_LOG_METADATA_TOPIC_RETENTION_MS_PROP, LONG, DEFAULT_REMOTE_LOG_METADATA_TOPIC_RETENTION_MS, LOW,
                       REMOTE_LOG_METADATA_TOPIC_RETENTION_MS_DOC)
               .define(REMOTE_LOG_METADATA_CONSUME_WAIT_MS_PROP, LONG, DEFAULT_REMOTE_LOG_METADATA_CONSUME_WAIT_MS, atLeast(0), LOW,
                       REMOTE_LOG_METADATA_CONSUME_WAIT_MS_DOC)
@@ -105,6 +105,7 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
     private final long initializationRetryMaxTimeoutMs;
     private final long initializationRetryIntervalMs;
 
+    private Map<String, Object> commonProps;
     private Map<String, Object> consumerProps;
     private Map<String, Object> producerProps;
 
@@ -149,6 +150,8 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
             }
         }
 
+        commonProps = new HashMap<>(commonClientConfigs);
+
         HashMap<String, Object> allProducerConfigs = new HashMap<>(commonClientConfigs);
         allProducerConfigs.putAll(producerOnlyConfigs);
         producerProps = createProducerProps(allProducerConfigs);
@@ -188,6 +191,10 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
 
     public String logDir() {
         return logDir;
+    }
+
+    public Map<String, Object> commonProperties() {
+        return commonProps;
     }
 
     public Map<String, Object> consumerProperties() {
@@ -232,8 +239,13 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
                 ", metadataTopicReplicationFactor=" + metadataTopicReplicationFactor +
                 ", initializationRetryMaxTimeoutMs=" + initializationRetryMaxTimeoutMs +
                 ", initializationRetryIntervalMs=" + initializationRetryIntervalMs +
+                ", commonProps=" + commonProps +
                 ", consumerProps=" + consumerProps +
                 ", producerProps=" + producerProps +
                 '}';
+    }
+
+    public static void main(String[] args) {
+        System.out.println(CONFIG.toHtml(4, config -> "remote_log_metadata_manager_" + config));
     }
 }

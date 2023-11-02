@@ -51,13 +51,27 @@ public class ControllerMetricsChangesTest {
         boolean fenced
     ) {
         return new BrokerRegistration(brokerId,
-                100L,
-                Uuid.fromString("Pxi6QwS2RFuN8VSKjqJZyQ"),
-                Collections.emptyList(),
-                Collections.emptyMap(),
-                Optional.empty(),
-                fenced,
-                false);
+            100L,
+            Uuid.fromString("Pxi6QwS2RFuN8VSKjqJZyQ"),
+            Collections.emptyList(),
+            Collections.emptyMap(),
+            Optional.empty(),
+            fenced,
+            false);
+    }
+
+    private static BrokerRegistration zkBrokerRegistration(
+        int brokerId
+    ) {
+        return new BrokerRegistration(brokerId,
+            100L,
+            Uuid.fromString("Pxi6QwS2RFuN8VSKjqJZyQ"),
+            Collections.emptyList(),
+            Collections.emptyMap(),
+            Optional.empty(),
+            false,
+            false,
+            true);
     }
 
     @Test
@@ -104,6 +118,20 @@ public class ControllerMetricsChangesTest {
     }
 
     @Test
+    public void testHandleZkBroker() {
+        ControllerMetricsChanges changes = new ControllerMetricsChanges();
+        changes.handleBrokerChange(null, zkBrokerRegistration(1));
+        assertEquals(1, changes.migratingZkBrokersChange());
+        changes.handleBrokerChange(null, zkBrokerRegistration(2));
+        changes.handleBrokerChange(null, zkBrokerRegistration(3));
+        assertEquals(3, changes.migratingZkBrokersChange());
+
+        changes.handleBrokerChange(zkBrokerRegistration(3), brokerRegistration(3, true));
+        changes.handleBrokerChange(brokerRegistration(3, true), brokerRegistration(3, false));
+        assertEquals(2, changes.migratingZkBrokersChange());
+    }
+
+    @Test
     public void testHandleDeletedTopic() {
         ControllerMetricsChanges changes = new ControllerMetricsChanges();
         Map<Integer, PartitionRegistration> partitions = new HashMap<>();
@@ -132,15 +160,15 @@ public class ControllerMetricsChangesTest {
     static {
         TOPIC_DELTA1 = new TopicDelta(new TopicImage("foo", FOO_ID, Collections.emptyMap()));
         TOPIC_DELTA1.replay((PartitionRecord) fakePartitionRegistration(NORMAL).
-                toRecord(FOO_ID, 0).message());
+                toRecord(FOO_ID, 0, (short) 0).message());
         TOPIC_DELTA1.replay((PartitionRecord) fakePartitionRegistration(NORMAL).
-                toRecord(FOO_ID, 1).message());
+                toRecord(FOO_ID, 1, (short) 0).message());
         TOPIC_DELTA1.replay((PartitionRecord) fakePartitionRegistration(NORMAL).
-                toRecord(FOO_ID, 2).message());
+                toRecord(FOO_ID, 2, (short) 0).message());
         TOPIC_DELTA1.replay((PartitionRecord) fakePartitionRegistration(NON_PREFERRED_LEADER).
-                toRecord(FOO_ID, 3).message());
+                toRecord(FOO_ID, 3, (short) 0).message());
         TOPIC_DELTA1.replay((PartitionRecord) fakePartitionRegistration(NON_PREFERRED_LEADER).
-                toRecord(FOO_ID, 4).message());
+                toRecord(FOO_ID, 4, (short) 0).message());
 
         TOPIC_DELTA2 = new TopicDelta(TOPIC_DELTA1.apply());
         TOPIC_DELTA2.replay(new PartitionChangeRecord().
@@ -148,7 +176,7 @@ public class ControllerMetricsChangesTest {
                 setTopicId(FOO_ID).
                 setLeader(1));
         TOPIC_DELTA2.replay((PartitionRecord) fakePartitionRegistration(NORMAL).
-                toRecord(FOO_ID, 5).message());
+                toRecord(FOO_ID, 5, (short) 0).message());
     }
 
     @Test

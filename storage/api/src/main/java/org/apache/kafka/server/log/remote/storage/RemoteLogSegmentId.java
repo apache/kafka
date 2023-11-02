@@ -33,6 +33,16 @@ public class RemoteLogSegmentId {
     private final TopicIdPartition topicIdPartition;
     private final Uuid id;
 
+    /**
+     * Creates a new {@link RemoteLogSegmentId} for the provided {@link TopicIdPartition} with a random Uuid.
+     *
+     * @param topicIdPartition TopicIdPartition of this remote log segment.
+     * @return generated RemoteLogSegmentId.
+     */
+    public static RemoteLogSegmentId generateNew(TopicIdPartition topicIdPartition) {
+        return new RemoteLogSegmentId(topicIdPartition, Uuid.randomUuid());
+    }
+
     public RemoteLogSegmentId(TopicIdPartition topicIdPartition, Uuid id) {
         this.topicIdPartition = Objects.requireNonNull(topicIdPartition, "topicIdPartition can not be null");
         this.id = Objects.requireNonNull(id, "id can not be null");

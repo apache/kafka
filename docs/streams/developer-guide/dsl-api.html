@@ -1333,7 +1333,7 @@ KTable&lt;Windowed&lt;String&gt;, Long&gt; sessionzedAggregatedStream = groupedS
 // Java 7 examples
 
 // Aggregating with time-based windowing (here: with 5-minute tumbling windows)
-KTable&lt;Windowed&lt;String&gt;, Long&gt; timeWindowedAggregatedStream = groupedStream..windowedBy(
+KTable&lt;Windowed&lt;String&gt;, Long&gt; timeWindowedAggregatedStream = groupedStream.windowedBy(
   TimeWindows.ofSizeWithNoGrace(Duration.ofMinutes(5)) /* time-based window */)
   .reduce(
     new Reducer&lt;Long&gt;() { /* adder */

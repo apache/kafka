@@ -91,7 +91,9 @@ class ControllerChannelManager(controllerEpoch: () => Int,
         case Some(stateInfo) =>
           stateInfo.messageQueue.put(QueueItem(request.apiKey, request, callback, time.milliseconds()))
         case None =>
-          warn(s"Not sending request $request to broker $brokerId, since it is offline.")
+          warn(s"Not sending request ${request.apiKey.name} with controllerId=${request.controllerId()}, " +
+            s"controllerEpoch=${request.controllerEpoch()}, brokerEpoch=${request.brokerEpoch()} " +
+            s"to broker $brokerId, since it is offline.")
       }
     }
   }

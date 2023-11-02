@@ -31,6 +31,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
 import java.util.Map;
+import java.util.Optional;
 
 public class RemoteLogMetadataCacheTest {
 
@@ -57,7 +58,7 @@ public class RemoteLogMetadataCacheTest {
                         -1L, BROKER_ID_0, time.milliseconds(), SEG_SIZE, Collections.singletonMap(0, 0L));
                 RemoteLogSegmentMetadata updatedMetadata = segmentMetadata
                         .createWithUpdates(new RemoteLogSegmentMetadataUpdate(segmentMetadata.remoteLogSegmentId(),
-                                time.milliseconds(), state, BROKER_ID_1));
+                                time.milliseconds(), Optional.empty(), state, BROKER_ID_1));
                 Assertions.assertThrows(IllegalArgumentException.class, () ->
                         cache.addCopyInProgressSegment(updatedMetadata));
             }
@@ -67,7 +68,9 @@ public class RemoteLogMetadataCacheTest {
         Assertions.assertThrows(RemoteResourceNotFoundException.class, () -> {
             RemoteLogSegmentId nonExistingId = new RemoteLogSegmentId(TP0, Uuid.randomUuid());
             cache.updateRemoteLogSegmentMetadata(new RemoteLogSegmentMetadataUpdate(nonExistingId,
-                    time.milliseconds(), RemoteLogSegmentState.DELETE_SEGMENT_STARTED, BROKER_ID_1));
+                    time.milliseconds(),
+                    Optional.empty(),
+                    RemoteLogSegmentState.DELETE_SEGMENT_STARTED, BROKER_ID_1));
         });
 
         // Check for invalid state transition.
@@ -75,7 +78,9 @@ public class RemoteLogMetadataCacheTest {
             RemoteLogSegmentMetadata segmentMetadata = createSegmentUpdateWithState(cache, Collections.singletonMap(0, 0L), 0,
                     100, RemoteLogSegmentState.COPY_SEGMENT_FINISHED);
             cache.updateRemoteLogSegmentMetadata(new RemoteLogSegmentMetadataUpdate(segmentMetadata.remoteLogSegmentId(),
-                    time.milliseconds(), RemoteLogSegmentState.DELETE_SEGMENT_FINISHED, BROKER_ID_1));
+                    time.milliseconds(),
+                    Optional.empty(),
+                    RemoteLogSegmentState.DELETE_SEGMENT_FINISHED, BROKER_ID_1));
         });
     }
 
@@ -90,8 +95,11 @@ public class RemoteLogMetadataCacheTest {
                                                                                 BROKER_ID_0, time.milliseconds(), SEG_SIZE, segmentLeaderEpochs);
         cache.addCopyInProgressSegment(segmentMetadata);
 
-        RemoteLogSegmentMetadataUpdate segMetadataUpdate = new RemoteLogSegmentMetadataUpdate(segmentId,
-                                                                                              time.milliseconds(), state, BROKER_ID_1);
+        RemoteLogSegmentMetadataUpdate segMetadataUpdate = new RemoteLogSegmentMetadataUpdate(
+                segmentId,
+                time.milliseconds(),
+                Optional.empty(),
+                state, BROKER_ID_1);
         cache.updateRemoteLogSegmentMetadata(segMetadataUpdate);
 
         return segmentMetadata.createWithUpdates(segMetadataUpdate);

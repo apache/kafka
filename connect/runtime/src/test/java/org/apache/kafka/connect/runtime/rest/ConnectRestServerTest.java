@@ -34,10 +34,13 @@ import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.connect.rest.ConnectRestExtension;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
+import org.apache.kafka.connect.runtime.rest.entities.LoggerLevel;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.junit.MockitoJUnitRunner;
 import org.slf4j.LoggerFactory;
 
 import javax.ws.rs.core.MediaType;
@@ -54,7 +57,6 @@ import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -62,6 +64,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class ConnectRestServerTest {
 
     private Herder herder;
@@ -244,15 +247,18 @@ public class ConnectRestServerTest {
     }
 
     @Test
-    public void testLoggersEndpointWithDefaults() throws IOException {
+    public void testLoggerEndpointWithDefaults() throws IOException {
         Map<String, String> configMap = new HashMap<>(baseServerProps());
+
+        final String logger = "a.b.c.s.W";
+        final String loggingLevel = "INFO";
+        final long lastModified = 789052637671L;
 
         doReturn(KAFKA_CLUSTER_ID).when(herder).kafkaClusterId();
         doReturn(plugins).when(herder).plugins();
         expectEmptyRestExtensions();
-
-        // create some loggers in the process
-        LoggerFactory.getLogger("a.b.c.s.W");
+        doReturn(Collections.emptyList()).when(herder).setWorkerLoggerLevel(logger, loggingLevel);
+        doReturn(Collections.singletonMap(logger, new LoggerLevel(loggingLevel, lastModified))).when(herder).allLoggerLevels();
 
         server = new ConnectRestServer(null, null, configMap);
         server.initializeServer();
@@ -262,14 +268,16 @@ public class ConnectRestServerTest {
 
         URI serverUrl = server.advertisedUrl();
 
-        executePut(serverUrl, "/admin/loggers/a.b.c.s.W", "{\"level\": \"INFO\"}");
+        executePut(serverUrl, "/admin/loggers/" + logger, "{\"level\": \"" + loggingLevel + "\"}");
 
         String responseStr = executeGet(serverUrl, "/admin/loggers");
-        Map<String, Map<String, ?>> loggers = mapper.readValue(responseStr, new TypeReference<Map<String, Map<String, ?>>>() {
-        });
-        assertNotNull("expected non null response for /admin/loggers" + prettyPrint(loggers), loggers);
-        assertTrue("expect at least 1 logger. instead found " + prettyPrint(loggers), loggers.size() >= 1);
-        assertEquals("expected to find logger a.b.c.s.W set to INFO level", loggers.get("a.b.c.s.W").get("level"), "INFO");
+
+        Map<String, Object> expectedLogger = new HashMap<>();
+        expectedLogger.put("level", loggingLevel);
+        expectedLogger.put("last_modified", lastModified);
+        Map<String, Map<String, Object>> expectedLoggers = Collections.singletonMap(logger, expectedLogger);
+        Map<String, Map<String, Object>> actualLoggers = mapper.readValue(responseStr, new TypeReference<Map<String, Map<String, Object>>>() { });
+        assertEquals(expectedLoggers, actualLoggers);
     }
 
     @Test

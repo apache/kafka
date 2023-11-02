@@ -18,6 +18,7 @@ package org.apache.kafka.coordinator.group.runtime;
 
 import org.apache.kafka.common.TopicPartition;
 
+import java.nio.ByteBuffer;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -26,7 +27,83 @@ import java.util.concurrent.CompletableFuture;
  *
  * @param <U> The type of the record.
  */
-public interface CoordinatorLoader<U> {
+public interface CoordinatorLoader<U> extends AutoCloseable {
+
+    /**
+     * UnknownRecordTypeException is thrown when the Deserializer encounters
+     * an unknown record type.
+     */
+    class UnknownRecordTypeException extends RuntimeException {
+        private final short unknownType;
+
+        public UnknownRecordTypeException(short unknownType) {
+            super(String.format("Found an unknown record type %d", unknownType));
+            this.unknownType = unknownType;
+        }
+
+        public short unknownType() {
+            return unknownType;
+        }
+    }
+
+    /**
+     * Object that is returned as part of the future from load(). Holds the partition load time and the
+     * end time.
+     */
+    class LoadSummary {
+        private final long startTimeMs;
+        private final long endTimeMs;
+        private final long numRecords;
+        private final long numBytes;
+
+        public LoadSummary(long startTimeMs, long endTimeMs, long numRecords, long numBytes) {
+            this.startTimeMs = startTimeMs;
+            this.endTimeMs = endTimeMs;
+            this.numRecords = numRecords;
+            this.numBytes = numBytes;
+        }
+
+        public long startTimeMs() {
+            return startTimeMs;
+        }
+
+        public long endTimeMs() {
+            return endTimeMs;
+        }
+
+        public long numRecords() {
+            return numRecords;
+        }
+
+        public long numBytes() {
+            return numBytes;
+        }
+
+        @Override
+        public String toString() {
+            return "LoadSummary(" +
+                "startTimeMs=" + startTimeMs +
+                ", endTimeMs=" + endTimeMs +
+                ", numRecords=" + numRecords +
+                ", numBytes=" + numBytes + ")";
+        }
+    }
+
+    /**
+     * Deserializer to translates bytes to T.
+     *
+     * @param <T> The record type.
+     */
+    interface Deserializer<T> {
+        /**
+         * Deserializes the key and the value.
+         *
+         * @param key   The key or null if not present.
+         * @param value The value or null if not present.
+         * @return The record.
+         */
+        T deserialize(ByteBuffer key, ByteBuffer value) throws RuntimeException;
+    }
 
     /**
      * Loads the coordinator by reading all the records from the TopicPartition
@@ -35,7 +112,7 @@ public interface CoordinatorLoader<U> {
      * @param tp            The TopicPartition to read from.
      * @param coordinator   The object to apply records to.
      */
-    CompletableFuture<Void> load(
+    CompletableFuture<LoadSummary> load(
         TopicPartition tp,
         CoordinatorPlayback<U> coordinator
     );

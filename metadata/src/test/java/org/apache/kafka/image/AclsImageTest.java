@@ -32,6 +32,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.apache.kafka.metadata.authorizer.StandardAclWithIdTest.TEST_ACLS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -73,31 +74,48 @@ public class AclsImageTest {
     }
 
     @Test
-    public void testEmptyImageRoundTrip() throws Throwable {
-        testToImageAndBack(AclsImage.EMPTY);
+    public void testEmptyImageRoundTrip() {
+        testToImage(AclsImage.EMPTY);
     }
 
     @Test
-    public void testImage1RoundTrip() throws Throwable {
-        testToImageAndBack(IMAGE1);
+    public void testImage1RoundTrip() {
+        testToImage(IMAGE1);
     }
 
     @Test
-    public void testApplyDelta1() throws Throwable {
+    public void testApplyDelta1() {
         assertEquals(IMAGE2, DELTA1.apply());
+        // check image1 + delta1 = image2, since records for image1 + delta1 might differ from records from image2
+        List<ApiMessageAndVersion> records = getImageRecords(IMAGE1);
+        records.addAll(DELTA1_RECORDS);
+        testToImage(IMAGE2, records);
     }
 
     @Test
-    public void testImage2RoundTrip() throws Throwable {
-        testToImageAndBack(IMAGE2);
+    public void testImage2RoundTrip() {
+        testToImage(IMAGE2);
     }
 
-    private void testToImageAndBack(AclsImage image) throws Throwable {
+    private static void testToImage(AclsImage image) {
+        testToImage(image, Optional.empty());
+    }
+
+    private static void testToImage(AclsImage image, Optional<List<ApiMessageAndVersion>> fromRecords) {
+        testToImage(image, fromRecords.orElseGet(() -> getImageRecords(image)));
+    }
+
+    private static void testToImage(AclsImage image, List<ApiMessageAndVersion> fromRecords) {
+        // test from empty image stopping each of the various intermediate images along the way
+        new RecordTestUtils.TestThroughAllIntermediateImagesLeadingToFinalImageHelper<>(
+            () -> AclsImage.EMPTY,
+            AclsDelta::new
+        ).test(image, fromRecords);
+    }
+
+    private static List<ApiMessageAndVersion> getImageRecords(AclsImage image) {
         RecordListWriter writer = new RecordListWriter();
         image.write(writer, new ImageWriterOptions.Builder().build());
-        AclsDelta delta = new AclsDelta(AclsImage.EMPTY);
-        RecordTestUtils.replayAll(delta, writer.records());
-        AclsImage nextImage = delta.apply();
-        assertEquals(image, nextImage);
+        return writer.records();
     }
 }

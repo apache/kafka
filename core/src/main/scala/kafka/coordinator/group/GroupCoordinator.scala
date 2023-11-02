@@ -894,6 +894,7 @@ private[group] class GroupCoordinator(
   }
 
   def handleTxnCommitOffsets(groupId: String,
+                             transactionalId: String,
                              producerId: Long,
                              producerEpoch: Short,
                              memberId: String,
@@ -908,7 +909,7 @@ private[group] class GroupCoordinator(
         val group = groupManager.getGroup(groupId).getOrElse {
           groupManager.addGroup(new GroupMetadata(groupId, Empty, time))
         }
-        doTxnCommitOffsets(group, memberId, groupInstanceId, generationId, producerId, producerEpoch,
+        doTxnCommitOffsets(group, transactionalId, memberId, groupInstanceId, generationId, producerId, producerEpoch,
           offsetMetadata, requestLocal, responseCallback)
     }
   }
@@ -951,6 +952,7 @@ private[group] class GroupCoordinator(
   }
 
   private def doTxnCommitOffsets(group: GroupMetadata,
+                                 transactionalId: String,
                                  memberId: String,
                                  groupInstanceId: Option[String],
                                  generationId: Int,
@@ -971,7 +973,7 @@ private[group] class GroupCoordinator(
       if (validationErrorOpt.isDefined) {
         responseCallback(offsetMetadata.map { case (k, _) => k -> validationErrorOpt.get })
       } else {
-        groupManager.storeOffsets(group, memberId, offsetMetadata, responseCallback, producerId,
+        groupManager.storeOffsets(group, memberId, offsetMetadata, responseCallback, transactionalId, producerId,
           producerEpoch, requestLocal)
       }
     }
