@@ -34,6 +34,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -65,12 +66,24 @@ public class ConsumerConfigTest {
 
     @Test
     public void testOverrideEnableAutoCommit() {
-        ConsumerConfig config = new ConsumerConfig(properties);
-//        boolean overrideEnableAutoCommit = InternalConsumerConfig.maybeOverrideEnableAutoCommit(config);
-        assertFalse(config.getBoolean(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG));
+        // Verify that our default properties (no 'enable.auto.commit' or 'group.id') are valid.
+        assertDoesNotThrow(() -> new ConsumerConfig(properties));
 
-        properties.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true");
+        // Verify that explicitly disabling 'enable.auto.commit' still works.
+        properties.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, Boolean.FALSE.toString());
+        assertDoesNotThrow(() -> new ConsumerConfig(properties));
+
+        // Verify that enabling 'enable.auto.commit' but without 'group.id' fails.
+        properties.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, Boolean.TRUE.toString());
         assertThrows(InvalidConfigurationException.class, () -> new ConsumerConfig(properties));
+
+        // Verify that then adding 'group.id' to the mix allows it to pass OK.
+        properties.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "test-group");
+        assertDoesNotThrow(() -> new ConsumerConfig(properties));
+
+        // Now remove the 'enable.auto.commit' flag and verify that it is set to true (the default).
+        properties.remove(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG);
+        assertEquals(true, new ConsumerConfig(properties).getBoolean(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG));
     }
 
     @Test
