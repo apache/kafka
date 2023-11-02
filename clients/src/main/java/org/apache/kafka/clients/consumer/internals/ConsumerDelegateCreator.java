@@ -36,9 +36,9 @@ import java.util.function.Supplier;
  *
  * The current logic for the {@code ConsumerCreator} inspects the incoming configuration and determines if
  * it is using the new KIP-848 consumer protocol or if it should fall back to the existing, legacy group protocol.
- * This is based on the presence and value of the {@code group.protocol} configuration value. If the value is present
- * and equals {@code consumer}, the {@link AsyncKafkaConsumer} will be returned. Otherwise, the
- * {@link LegacyKafkaConsumer} will be returned.
+ * This is based on the presence and value of the {@link ConsumerConfig#GROUP_PROTOCOL_CONFIG group.protocol}
+ * configuration. If the value is present and equal to &quot;{@code consumer}&quot;, the {@link AsyncKafkaConsumer}
+ * will be returned. Otherwise, the {@link LegacyKafkaConsumer} will be returned.
  *
  * <p/>
  *
@@ -51,78 +51,20 @@ public class ConsumerDelegateCreator {
     /**
      * This is it! This is the core logic. It's extremely rudimentary.
      */
-    private static boolean useNewConsumer(Map<?, ?> configs) {
-        Object groupProtocol = configs.get("group.protocol");
-
-        // Takes care of both the null and type checks.
-        if (!(groupProtocol instanceof String))
-            return false;
-
-        return ((String) groupProtocol).equalsIgnoreCase("consumer");
-    }
-
-    public <K, V> Consumer<K, V> create(Map<String, Object> configs) {
-        return createInternal(() -> {
-            if (useNewConsumer(configs)) {
-                return new AsyncKafkaConsumer<>(configs);
-            } else {
-                return new LegacyKafkaConsumer<>(configs);
-            }
-        });
-    }
-
-    public <K, V> Consumer<K, V> create(Properties properties) {
-        return createInternal(() -> {
-            if (useNewConsumer(properties)) {
-                return new AsyncKafkaConsumer<>(properties);
-            } else {
-                return new LegacyKafkaConsumer<>(properties);
-            }
-        });
-    }
-
-    public <K, V> Consumer<K, V> create(Properties properties,
-                                        Deserializer<K> keyDeserializer,
-                                        Deserializer<V> valueDeserializer) {
-        return createInternal(() -> {
-            if (useNewConsumer(properties)) {
-                return new AsyncKafkaConsumer<>(properties, keyDeserializer, valueDeserializer);
-            } else {
-                return new LegacyKafkaConsumer<>(properties, keyDeserializer, valueDeserializer);
-            }
-        });
-    }
-
-    public <K, V> Consumer<K, V> create(Map<String, Object> configs,
-                                        Deserializer<K> keyDeserializer,
-                                        Deserializer<V> valueDeserializer) {
-        return createInternal(() -> {
-            if (useNewConsumer(configs)) {
-                return new AsyncKafkaConsumer<>(configs, keyDeserializer, valueDeserializer);
-            } else {
-                return new LegacyKafkaConsumer<>(configs, keyDeserializer, valueDeserializer);
-            }
-        });
+    private static boolean useNewConsumer(ConsumerConfig config) {
+        String groupProtocol = config.getString(ConsumerConfig.GROUP_PROTOCOL_CONFIG);
+        return groupProtocol.equalsIgnoreCase("consumer");
     }
 
     public <K, V> Consumer<K, V> create(ConsumerConfig config,
                                         Deserializer<K> keyDeserializer,
                                         Deserializer<V> valueDeserializer) {
-        return createInternal(() -> {
-            if (useNewConsumer(config.values())) {
+        try {
+            if (useNewConsumer(config)) {
                 return new AsyncKafkaConsumer<>(config, keyDeserializer, valueDeserializer);
             } else {
                 return new LegacyKafkaConsumer<>(config, keyDeserializer, valueDeserializer);
             }
-        });
-    }
-
-    /**
-     * This is here to remove the exception handling boilerplate from every other {@code create} method.
-     */
-    private <K, V> Consumer<K, V> createInternal(Supplier<Consumer<K, V>> consumerSupplier) {
-        try {
-            return consumerSupplier.get();
         } catch (KafkaException e) {
             throw e;
         } catch (Throwable t) {

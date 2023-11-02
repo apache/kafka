@@ -36,6 +36,8 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.regex.Pattern;
 
+import static org.apache.kafka.common.utils.Utils.propsToMap;
+
 /**
  * A client that consumes records from a Kafka cluster.
  * <p>
@@ -530,7 +532,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @param configs The consumer configs
      */
     public KafkaConsumer(Map<String, Object> configs) {
-        delegate = CREATOR.create(configs);
+        this(configs, null, null);
     }
 
     /**
@@ -543,7 +545,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @param properties The consumer configuration properties
      */
     public KafkaConsumer(Properties properties) {
-        delegate = CREATOR.create(properties);
+        this(properties, null, null);
     }
 
     /**
@@ -563,7 +565,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     public KafkaConsumer(Properties properties,
                          Deserializer<K> keyDeserializer,
                          Deserializer<V> valueDeserializer) {
-        delegate = CREATOR.create(properties, keyDeserializer, valueDeserializer);
+        this(propsToMap(properties), keyDeserializer, valueDeserializer);
     }
 
     /**
@@ -582,7 +584,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     public KafkaConsumer(Map<String, Object> configs,
                          Deserializer<K> keyDeserializer,
                          Deserializer<V> valueDeserializer) {
-        delegate = CREATOR.create(configs, keyDeserializer, valueDeserializer);
+        this(new ConsumerConfig(ConsumerConfig.appendDeserializerToConfig(configs, keyDeserializer, valueDeserializer)),
+                keyDeserializer, valueDeserializer);
     }
 
     KafkaConsumer(ConsumerConfig config, Deserializer<K> keyDeserializer, Deserializer<V> valueDeserializer) {

@@ -79,7 +79,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalLong;
-import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
@@ -103,7 +102,6 @@ import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.refreshC
 import static org.apache.kafka.common.utils.Utils.closeQuietly;
 import static org.apache.kafka.common.utils.Utils.isBlank;
 import static org.apache.kafka.common.utils.Utils.join;
-import static org.apache.kafka.common.utils.Utils.propsToMap;
 
 /**
  * This {@link Consumer} implementation uses an {@link ApplicationEventHandler event handler} to process
@@ -152,38 +150,9 @@ public class AsyncKafkaConsumer<K, V> implements Consumer<K, V> {
     private boolean cachedSubscriptionHasAllFetchPositions;
     private final WakeupTrigger wakeupTrigger = new WakeupTrigger();
 
-    public AsyncKafkaConsumer(Map<String, Object> configs) {
-        this(configs, null, null);
-    }
-
-    public AsyncKafkaConsumer(Properties properties) {
-        this(properties, null, null);
-    }
-
-    public AsyncKafkaConsumer(final Properties properties,
-                              final Deserializer<K> keyDeserializer,
-                              final Deserializer<V> valueDeserializer) {
-        this(propsToMap(properties), keyDeserializer, valueDeserializer);
-    }
-
-    public AsyncKafkaConsumer(final Map<String, Object> configs,
-                              final Deserializer<K> keyDeserializer,
-                              final Deserializer<V> valueDeserializer) {
-        this(new ConsumerConfig(ConsumerConfig.appendDeserializerToConfig(configs, keyDeserializer, valueDeserializer)),
-                keyDeserializer,
-                valueDeserializer);
-    }
-
-    public AsyncKafkaConsumer(final ConsumerConfig config,
-                              final Deserializer<K> keyDeserializer,
-                              final Deserializer<V> valueDeserializer) {
-        this(Time.SYSTEM, config, keyDeserializer, valueDeserializer);
-    }
-
-    public AsyncKafkaConsumer(final Time time,
-                              final ConsumerConfig config,
-                              final Deserializer<K> keyDeserializer,
-                              final Deserializer<V> valueDeserializer) {
+    AsyncKafkaConsumer(final ConsumerConfig config,
+                       final Deserializer<K> keyDeserializer,
+                       final Deserializer<V> valueDeserializer) {
         try {
             GroupRebalanceConfig groupRebalanceConfig = new GroupRebalanceConfig(config,
                     GroupRebalanceConfig.ProtocolType.CONSUMER);
@@ -200,7 +169,7 @@ public class AsyncKafkaConsumer<K, V> implements Consumer<K, V> {
 
             log.debug("Initializing the Kafka consumer");
             this.defaultApiTimeoutMs = config.getInt(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
-            this.time = time;
+            this.time = Time.SYSTEM;
             this.metrics = createMetrics(config, time);
             this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
 

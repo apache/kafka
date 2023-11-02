@@ -70,7 +70,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalLong;
-import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -89,7 +88,6 @@ import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.configur
 import static org.apache.kafka.common.utils.Utils.closeQuietly;
 import static org.apache.kafka.common.utils.Utils.isBlank;
 import static org.apache.kafka.common.utils.Utils.join;
-import static org.apache.kafka.common.utils.Utils.propsToMap;
 import static org.apache.kafka.common.utils.Utils.swallow;
 
 /**
@@ -613,76 +611,7 @@ public class LegacyKafkaConsumer<K, V> implements Consumer<K, V> {
     // to keep from repeatedly scanning subscriptions in poll(), cache the result during metadata updates
     private boolean cachedSubscriptionHasAllFetchPositions;
 
-    /**
-     * A consumer is instantiated by providing a set of key-value pairs as configuration. Valid configuration strings
-     * are documented <a href="http://kafka.apache.org/documentation.html#consumerconfigs" >here</a>. Values can be
-     * either strings or objects of the appropriate type (for example a numeric configuration would accept either the
-     * string "42" or the integer 42).
-     * <p>
-     * Valid configuration strings are documented at {@link ConsumerConfig}.
-     * <p>
-     * Note: after creating a {@code LegacyKafkaConsumer} you must always {@link #close()} it to avoid resource leaks.
-     *
-     * @param configs The consumer configs
-     */
-    public LegacyKafkaConsumer(Map<String, Object> configs) {
-        this(configs, null, null);
-    }
-
-    /**
-     * A consumer is instantiated by providing a {@link Properties} object as configuration.
-     * <p>
-     * Valid configuration strings are documented at {@link ConsumerConfig}.
-     * <p>
-     * Note: after creating a {@code LegacyKafkaConsumer} you must always {@link #close()} it to avoid resource leaks.
-     *
-     * @param properties The consumer configuration properties
-     */
-    public LegacyKafkaConsumer(Properties properties) {
-        this(properties, null, null);
-    }
-
-    /**
-     * A consumer is instantiated by providing a {@link Properties} object as configuration, and a
-     * key and a value {@link Deserializer}.
-     * <p>
-     * Valid configuration strings are documented at {@link ConsumerConfig}.
-     * <p>
-     * Note: after creating a {@code LegacyKafkaConsumer} you must always {@link #close()} it to avoid resource leaks.
-     *
-     * @param properties The consumer configuration properties
-     * @param keyDeserializer The deserializer for key that implements {@link Deserializer}. The configure() method
-     *            won't be called in the consumer when the deserializer is passed in directly.
-     * @param valueDeserializer The deserializer for value that implements {@link Deserializer}. The configure() method
-     *            won't be called in the consumer when the deserializer is passed in directly.
-     */
-    public LegacyKafkaConsumer(Properties properties,
-                               Deserializer<K> keyDeserializer,
-                               Deserializer<V> valueDeserializer) {
-        this(propsToMap(properties), keyDeserializer, valueDeserializer);
-    }
-
-    /**
-     * A consumer is instantiated by providing a set of key-value pairs as configuration, and a key and a value {@link Deserializer}.
-     * <p>
-     * Valid configuration strings are documented at {@link ConsumerConfig}.
-     * <p>
-     * Note: after creating a {@code LegacyKafkaConsumer} you must always {@link #close()} it to avoid resource leaks.
-     *
-     * @param configs The consumer configs
-     * @param keyDeserializer The deserializer for key that implements {@link Deserializer}. The configure() method
-     *            won't be called in the consumer when the deserializer is passed in directly.
-     * @param valueDeserializer The deserializer for value that implements {@link Deserializer}. The configure() method
-     *            won't be called in the consumer when the deserializer is passed in directly.
-     */
-    public LegacyKafkaConsumer(Map<String, Object> configs,
-                               Deserializer<K> keyDeserializer,
-                               Deserializer<V> valueDeserializer) {
-        this(new ConsumerConfig(ConsumerConfig.appendDeserializerToConfig(configs, keyDeserializer, valueDeserializer)),
-                keyDeserializer, valueDeserializer);
-    }
-
-    public LegacyKafkaConsumer(ConsumerConfig config, Deserializer<K> keyDeserializer, Deserializer<V> valueDeserializer) {
+    LegacyKafkaConsumer(ConsumerConfig config, Deserializer<K> keyDeserializer, Deserializer<V> valueDeserializer) {
         try {
             GroupRebalanceConfig groupRebalanceConfig = new GroupRebalanceConfig(config,
                     GroupRebalanceConfig.ProtocolType.CONSUMER);

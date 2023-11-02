@@ -147,6 +147,7 @@ import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
 import static org.apache.kafka.clients.consumer.internals.LegacyKafkaConsumer.DEFAULT_REASON;
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
+import static org.apache.kafka.common.utils.Utils.propsToMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -226,7 +227,7 @@ public class LegacyKafkaConsumerTest {
         Properties props = new Properties();
         props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         props.setProperty(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, MockMetricsReporter.class.getName());
-        consumer = new LegacyKafkaConsumer<>(props, new StringDeserializer(), new StringDeserializer());
+        consumer = newConsumer(props, new StringDeserializer(), new StringDeserializer());
 
         MockMetricsReporter mockMetricsReporter = (MockMetricsReporter) consumer.metrics.reporters().get(0);
 
@@ -240,7 +241,7 @@ public class LegacyKafkaConsumerTest {
         Properties props = new Properties();
         props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         props.setProperty(ConsumerConfig.AUTO_INCLUDE_JMX_REPORTER_CONFIG, "false");
-        consumer = new LegacyKafkaConsumer<>(props, new StringDeserializer(), new StringDeserializer());
+        consumer = newConsumer(props, new StringDeserializer(), new StringDeserializer());
         assertTrue(consumer.metrics.reporters().isEmpty());
     }
 
@@ -249,7 +250,7 @@ public class LegacyKafkaConsumerTest {
         Properties props = new Properties();
         props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         props.setProperty(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, "org.apache.kafka.common.metrics.JmxReporter");
-        consumer = new LegacyKafkaConsumer<>(props, new StringDeserializer(), new StringDeserializer());
+        consumer = newConsumer(props, new StringDeserializer(), new StringDeserializer());
         assertEquals(1, consumer.metrics.reporters().size());
     }
 
@@ -346,7 +347,7 @@ public class LegacyKafkaConsumerTest {
         final int oldInitCount = MockMetricsReporter.INIT_COUNT.get();
         final int oldCloseCount = MockMetricsReporter.CLOSE_COUNT.get();
         try {
-            new LegacyKafkaConsumer<>(props, new ByteArrayDeserializer(), new ByteArrayDeserializer());
+            newConsumer(props, new ByteArrayDeserializer(), new ByteArrayDeserializer());
             fail("should have caught an exception and returned");
         } catch (KafkaException e) {
             assertEquals(oldInitCount + 1, MockMetricsReporter.INIT_COUNT.get());
@@ -361,7 +362,7 @@ public class LegacyKafkaConsumerTest {
         config.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         config.put(ConsumerConfig.SEND_BUFFER_CONFIG, Selectable.USE_DEFAULT_BUFFER_SIZE);
         config.put(ConsumerConfig.RECEIVE_BUFFER_CONFIG, Selectable.USE_DEFAULT_BUFFER_SIZE);
-        consumer = new LegacyKafkaConsumer<>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer());
+        consumer = newConsumer(config, new ByteArrayDeserializer(), new ByteArrayDeserializer());
     }
 
     @Test
@@ -370,7 +371,7 @@ public class LegacyKafkaConsumerTest {
         config.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         config.put(ConsumerConfig.SEND_BUFFER_CONFIG, -2);
         assertThrows(KafkaException.class,
-            () -> new LegacyKafkaConsumer<>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer()));
+            () -> newConsumer(config, new ByteArrayDeserializer(), new ByteArrayDeserializer()));
     }
 
     @Test
@@ -379,7 +380,7 @@ public class LegacyKafkaConsumerTest {
         config.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         config.put(ConsumerConfig.RECEIVE_BUFFER_CONFIG, -2);
         assertThrows(KafkaException.class,
-            () -> new LegacyKafkaConsumer<>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer()));
+            () -> newConsumer(config, new ByteArrayDeserializer(), new ByteArrayDeserializer()));
     }
 
     @Test
@@ -387,7 +388,7 @@ public class LegacyKafkaConsumerTest {
         Map<String, Object> config = new HashMap<>();
         config.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         config.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, "instance_id");
-        consumer = new LegacyKafkaConsumer<>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer());
+        consumer = newConsumer(config, new ByteArrayDeserializer(), new ByteArrayDeserializer());
     }
 
     @Test
@@ -450,7 +451,7 @@ public class LegacyKafkaConsumerTest {
         props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         props.setProperty(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, "");
         props.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupId);
-        consumer = newConsumer(props);
+        consumer = newConsumer(props, new ByteArrayDeserializer(), new ByteArrayDeserializer());
         assertThrows(IllegalStateException.class,
             () -> consumer.subscribe(singletonList(topic)));
     }
@@ -497,7 +498,7 @@ public class LegacyKafkaConsumerTest {
             props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
             props.setProperty(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, MockConsumerInterceptor.class.getName());
 
-            consumer = new LegacyKafkaConsumer<>(
+            consumer = newConsumer(
                     props, new StringDeserializer(), new StringDeserializer());
             assertEquals(1, MockConsumerInterceptor.INIT_COUNT.get());
             assertEquals(0, MockConsumerInterceptor.CLOSE_COUNT.get());
@@ -528,7 +529,7 @@ public class LegacyKafkaConsumerTest {
             MockConsumerInterceptor.setThrowOnConfigExceptionThreshold(targetInterceptor);
 
             assertThrows(KafkaException.class, () -> {
-                new LegacyKafkaConsumer<>(
+                newConsumer(
                         props, new StringDeserializer(), new StringDeserializer());
             });
 
@@ -565,7 +566,7 @@ public class LegacyKafkaConsumerTest {
         config.put(ConsumerConfig.SEND_BUFFER_CONFIG, Selectable.USE_DEFAULT_BUFFER_SIZE);
         config.put(ConsumerConfig.RECEIVE_BUFFER_CONFIG, Selectable.USE_DEFAULT_BUFFER_SIZE);
         config.put("client.id", "client-1");
-        consumer = new LegacyKafkaConsumer<>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer());
+        consumer = newConsumer(config, new ByteArrayDeserializer(), new ByteArrayDeserializer());
         MBeanServer server = ManagementFactory.getPlatformMBeanServer();
         MetricName testMetricName = consumer.metrics.metricName("test-metric",
                 "grp1", "test metric");
@@ -586,11 +587,28 @@ public class LegacyKafkaConsumerTest {
             props.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupId);
         enableAutoCommit.ifPresent(
             autoCommit -> props.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, autoCommit.toString()));
-        return newConsumer(props);
+        return newConsumer(props, new ByteArrayDeserializer(), new ByteArrayDeserializer());
     }
 
-    private LegacyKafkaConsumer<byte[], byte[]> newConsumer(Properties props) {
-        return new LegacyKafkaConsumer<>(props, new ByteArrayDeserializer(), new ByteArrayDeserializer());
+    private <K, V> LegacyKafkaConsumer<K, V> newConsumer(Map<String, Object> configs) {
+        return newConsumer(configs, null, null);
+    }
+
+    private <K, V> LegacyKafkaConsumer<K, V> newConsumer(Properties props) {
+        return newConsumer(props, null, null);
+    }
+
+    private <K, V> LegacyKafkaConsumer<K, V> newConsumer(Map<String, Object> configs,
+                                                         Deserializer<K> keyDeserializer,
+                                                         Deserializer<V> valueDeserializer) {
+        return new LegacyKafkaConsumer<>(new ConsumerConfig(ConsumerConfig.appendDeserializerToConfig(configs, keyDeserializer, valueDeserializer)),
+                keyDeserializer, valueDeserializer);
+    }
+
+    private <K, V> LegacyKafkaConsumer<K, V> newConsumer(Properties props,
+                                                         Deserializer<K> keyDeserializer,
+                                                         Deserializer<V> valueDeserializer) {
+        return newConsumer(propsToMap(props), keyDeserializer, valueDeserializer);
     }
 
     @Test
@@ -1719,12 +1737,12 @@ public class LegacyKafkaConsumerTest {
     public void testMetricConfigRecordingLevelInfo() {
         Properties props = new Properties();
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
-        LegacyKafkaConsumer<byte[], byte[]> consumer = new LegacyKafkaConsumer<>(props, new ByteArrayDeserializer(), new ByteArrayDeserializer());
+        LegacyKafkaConsumer<byte[], byte[]> consumer = newConsumer(props, new ByteArrayDeserializer(), new ByteArrayDeserializer());
         assertEquals(Sensor.RecordingLevel.INFO, consumer.metrics.config().recordLevel());
         consumer.close(Duration.ZERO);
 
         props.put(ConsumerConfig.METRICS_RECORDING_LEVEL_CONFIG, "DEBUG");
-        LegacyKafkaConsumer<byte[], byte[]> consumer2 = new LegacyKafkaConsumer<>(props, new ByteArrayDeserializer(), new ByteArrayDeserializer());
+        LegacyKafkaConsumer<byte[], byte[]> consumer2 = newConsumer(props, new ByteArrayDeserializer(), new ByteArrayDeserializer());
         assertEquals(Sensor.RecordingLevel.DEBUG, consumer2.metrics.config().recordLevel());
         consumer2.close(Duration.ZERO);
     }
@@ -2985,7 +3003,7 @@ public class LegacyKafkaConsumerTest {
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, DeserializerForClientId.class.getName());
         props.put(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, ConsumerInterceptorForClientId.class.getName());
 
-        consumer = new LegacyKafkaConsumer<>(props);
+        consumer = newConsumer(props);
         assertNotNull(consumer.getClientId());
         assertNotEquals(0, consumer.getClientId().length());
         assertEquals(3, CLIENT_IDS.size());
@@ -3013,7 +3031,7 @@ public class LegacyKafkaConsumerTest {
             Arrays.asList(RangeAssignor.class.getName(), ConsumerPartitionAssignorTest.TestConsumerPartitionAssignor.class.getName()));
 
         assertThrows(KafkaException.class,
-            () -> new LegacyKafkaConsumer<>(configs, new StringDeserializer(), new StringDeserializer()));
+            () -> newConsumer(configs, new StringDeserializer(), new StringDeserializer()));
     }
 
     @Test
