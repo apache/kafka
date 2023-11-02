@@ -73,7 +73,7 @@ class ControllerApis(
   val controller: Controller,
   val raftManager: RaftManager[ApiMessageAndVersion],
   val config: KafkaConfig,
-  val metaProperties: MetaProperties,
+  val clusterId: String,
   val registrationsPublisher: ControllerRegistrationsPublisher,
   val apiVersionManager: ApiVersionManager,
   val metadataCache: KRaftMetadataCache
@@ -1067,7 +1067,7 @@ class ControllerApis(
     val response = authHelper.computeDescribeClusterResponse(
       request,
       EndpointType.CONTROLLER,
-      metaProperties.clusterId,
+      clusterId,
       () => registrationsPublisher.describeClusterControllers(request.context.listenerName()),
       () => raftManager.leaderAndEpoch.leaderId().orElse(-1)
     )

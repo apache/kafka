@@ -159,7 +159,7 @@ class ControllerApisTest {
       controller,
       raftManager,
       new KafkaConfig(props),
-      MetaProperties("JgxuGe9URy-E-ceaL04lEw", nodeId = nodeId),
+      "JgxuGe9URy-E-ceaL04lEw",
       new ControllerRegistrationsPublisher(),
       new SimpleApiVersionManager(
         ListenerType.CONTROLLER,
