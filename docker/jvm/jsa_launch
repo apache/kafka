@@ -3,13 +3,34 @@
 KAFKA_CLUSTER_ID="$(opt/kafka/bin/kafka-storage.sh random-uuid)"
 opt/kafka/bin/kafka-storage.sh format -t $KAFKA_CLUSTER_ID -c opt/kafka/config/kraft/server.properties
 KAFKA_JVM_PERFORMANCE_OPTS="-XX:ArchiveClassesAtExit=kafka.jsa" opt/kafka/bin/kafka-server-start.sh opt/kafka/config/kraft/server.properties &
-PIDS=$!
 
-sleep 10
+check_timeout() {
+    if [ $TIMEOUT -eq 0 ]; then
+        echo "Server startup timed out"
+        exit 1
+    fi
+    echo "Check will timeout in $(( TIMEOUT-- )) seconds"
+    sleep 1
+}
+
+TIMEOUT=20
+while ! nc -z localhost 9092; do
+    check_timeout
+done
+
+opt/kafka/bin/kafka-topics.sh --create --topic test-topic --bootstrap-server localhost:9092
+[ $? -eq 0 ] || exit 1
+
 echo "test" | opt/kafka/bin/kafka-console-producer.sh --topic test-topic --bootstrap-server localhost:9092
-sleep 5
-echo $(opt/kafka/bin/kafka-console-consumer.sh --topic test-topic --from-beginning --bootstrap-server localhost:9092 --max-messages 1)
-sleep 5
+[ $? -eq 0 ] || exit 1
+
+opt/kafka/bin/kafka-console-consumer.sh --topic test-topic --from-beginning --bootstrap-server localhost:9092 --max-messages 1
+[ $? -eq 0 ] || exit 1
 
 opt/kafka/bin/kafka-server-stop.sh
-sleep 5
+
+TIMEOUT=20
+until [ -f /kafka.jsa ]
+do
+    check_timeout
+done

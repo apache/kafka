@@ -39,7 +39,7 @@ COPY jsa_launch /etc/kafka/docker/jsa_launch
 RUN set -eux ; \
     apk update ; \
     apk upgrade ; \
-    apk add --no-cache wget gcompat procps; \
+    apk add --no-cache wget gcompat procps netcat-openbsd; \
     mkdir opt/kafka; \
     wget -nv -O kafka.tgz "$KAFKA_URL"; \
     tar xfz kafka.tgz -C /opt/kafka --strip-components 1;
