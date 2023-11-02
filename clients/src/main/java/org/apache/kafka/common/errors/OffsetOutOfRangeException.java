@@ -28,8 +28,4 @@ public class OffsetOutOfRangeException extends InvalidOffsetException {
         super(message);
     }
 
-    public OffsetOutOfRangeException(String message, Throwable cause) {
-        super(message, cause);
-    }
-
 }

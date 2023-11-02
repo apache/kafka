@@ -23,7 +23,4 @@ public class FeatureUpdateFailedException extends ApiException {
         super(message);
     }
 
-    public FeatureUpdateFailedException(final String message, final Throwable cause) {
-        super(message, cause);
-    }
 }

@@ -23,7 +23,4 @@ public class FencedInstanceIdException extends ApiException {
         super(message);
     }
 
-    public FencedInstanceIdException(String message, Throwable cause) {
-        super(message, cause);
-    }
 }

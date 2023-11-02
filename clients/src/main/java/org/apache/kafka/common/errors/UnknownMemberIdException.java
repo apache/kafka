@@ -23,15 +23,8 @@ public class UnknownMemberIdException extends ApiException {
         super();
     }
 
-    public UnknownMemberIdException(String message, Throwable cause) {
-        super(message, cause);
-    }
-
     public UnknownMemberIdException(String message) {
         super(message);
     }
 
-    public UnknownMemberIdException(Throwable cause) {
-        super(cause);
-    }
 }

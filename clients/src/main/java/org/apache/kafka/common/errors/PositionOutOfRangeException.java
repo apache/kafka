@@ -24,8 +24,4 @@ public class PositionOutOfRangeException extends ApiException {
         super(s);
     }
 
-    public PositionOutOfRangeException(String message, Throwable cause) {
-        super(message, cause);
-    }
-
 }

@@ -22,8 +22,4 @@ public class InvalidUpdateVersionException extends ApiException {
         super(message);
     }
 
-    public InvalidUpdateVersionException(String message, Throwable throwable) {
-        super(message, throwable);
-    }
-
 }

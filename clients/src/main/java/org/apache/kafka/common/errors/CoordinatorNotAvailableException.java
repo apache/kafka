@@ -36,8 +36,4 @@ public class CoordinatorNotAvailableException extends RetriableException {
         super(message);
     }
 
-    public CoordinatorNotAvailableException(String message, Throwable cause) {
-        super(message, cause);
-    }
-
 }

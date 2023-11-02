@@ -26,8 +26,4 @@ public class UnsupportedByAuthenticationException extends ApiException {
         super(message);
     }
 
-    public UnsupportedByAuthenticationException(String message, Throwable cause) {
-        super(message, cause);
-    }
-
 }

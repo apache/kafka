@@ -24,7 +24,4 @@ public class ClusterAuthorizationException extends AuthorizationException {
         super(message);
     }
 
-    public ClusterAuthorizationException(String message, Throwable cause) {
-        super(message, cause);
-    }
 }

@@ -24,8 +24,4 @@ public class InvalidPrincipalTypeException extends ApiException {
         super(message);
     }
 
-    public InvalidPrincipalTypeException(String message, Throwable cause) {
-        super(message, cause);
-    }
-
 }

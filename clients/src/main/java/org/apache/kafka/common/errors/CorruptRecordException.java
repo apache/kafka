@@ -32,10 +32,6 @@ public class CorruptRecordException extends RetriableException {
         super(message);
     }
 
-    public CorruptRecordException(Throwable cause) {
-        super(cause);
-    }
-
     public CorruptRecordException(String message, Throwable cause) {
         super(message, cause);
     }

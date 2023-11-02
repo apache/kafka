@@ -25,7 +25,4 @@ public class PolicyViolationException extends ApiException {
         super(message);
     }
 
-    public PolicyViolationException(String message, Throwable cause) {
-        super(message, cause);
-    }
 }

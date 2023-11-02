@@ -24,7 +24,4 @@ public class MemberIdRequiredException extends ApiException {
         super(message);
     }
 
-    public MemberIdRequiredException(String message, Throwable cause) {
-        super(message, cause);
-    }
 }

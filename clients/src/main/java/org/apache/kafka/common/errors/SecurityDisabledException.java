@@ -26,7 +26,4 @@ public class SecurityDisabledException extends ApiException {
         super(message);
     }
 
-    public SecurityDisabledException(String message, Throwable cause) {
-        super(message, cause);
-    }
 }

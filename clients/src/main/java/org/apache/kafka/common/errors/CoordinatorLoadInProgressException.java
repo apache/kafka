@@ -32,8 +32,4 @@ public class CoordinatorLoadInProgressException extends RetriableException {
         super(message);
     }
 
-    public CoordinatorLoadInProgressException(String message, Throwable cause) {
-        super(message, cause);
-    }
-
 }

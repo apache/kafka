@@ -24,14 +24,6 @@ public class TransactionAbortedException extends ApiException {
 
     private final static long serialVersionUID = 1L;
 
-    public TransactionAbortedException(String message, Throwable cause) {
-        super(message, cause);
-    }
-
-    public TransactionAbortedException(String message) {
-        super(message);
-    }
-
     public TransactionAbortedException() {
         super("Failing batch since transaction was aborted");
     }

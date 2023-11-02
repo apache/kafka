@@ -27,11 +27,4 @@ public class LogDirNotFoundException extends ApiException {
         super(message);
     }
 
-    public LogDirNotFoundException(String message, Throwable cause) {
-        super(message, cause);
-    }
-
-    public LogDirNotFoundException(Throwable cause) {
-        super(cause);
-    }
 }

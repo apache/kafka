@@ -28,8 +28,4 @@ public class UnknownLeaderEpochException extends RetriableException {
         super(message);
     }
 
-    public UnknownLeaderEpochException(String message, Throwable cause) {
-        super(message, cause);
-    }
-
 }

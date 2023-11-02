@@ -24,8 +24,4 @@ public class BrokerNotAvailableException extends ApiException {
         super(message);
     }
 
-    public BrokerNotAvailableException(String message, Throwable cause) {
-        super(message, cause);
-    }
-
 }

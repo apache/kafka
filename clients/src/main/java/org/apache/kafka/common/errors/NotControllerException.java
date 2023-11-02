@@ -24,8 +24,4 @@ public class NotControllerException extends RetriableException {
         super(message);
     }
 
-    public NotControllerException(String message, Throwable cause) {
-        super(message, cause);
-    }
-
 }

@@ -24,8 +24,4 @@ public class DelegationTokenOwnerMismatchException extends ApiException {
         super(message);
     }
 
-    public DelegationTokenOwnerMismatchException(String message, Throwable cause) {
-        super(message, cause);
-    }
-
 }

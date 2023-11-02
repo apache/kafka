@@ -27,7 +27,4 @@ public class InvalidTimestampException extends ApiException {
         super(message);
     }
 
-    public InvalidTimestampException(String message, Throwable cause) {
-        super(message, cause);
-    }
 }

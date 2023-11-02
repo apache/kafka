@@ -24,7 +24,4 @@ public class TransactionCoordinatorFencedException extends ApiException {
         super(message);
     }
 
-    public TransactionCoordinatorFencedException(String message, Throwable cause) {
-        super(message, cause);
-    }
 }

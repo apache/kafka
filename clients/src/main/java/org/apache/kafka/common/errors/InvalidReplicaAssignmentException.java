@@ -24,8 +24,4 @@ public class InvalidReplicaAssignmentException extends ApiException {
         super(message);
     }
 
-    public InvalidReplicaAssignmentException(String message, Throwable cause) {
-        super(message, cause);
-    }
-
 }

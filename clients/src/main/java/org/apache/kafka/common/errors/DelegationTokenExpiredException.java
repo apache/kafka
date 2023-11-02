@@ -24,8 +24,4 @@ public class DelegationTokenExpiredException extends ApiException {
         super(message);
     }
 
-    public DelegationTokenExpiredException(String message, Throwable cause) {
-        super(message, cause);
-    }
-
 }

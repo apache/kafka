@@ -34,12 +34,4 @@ public class UnknownTopicOrPartitionException extends InvalidMetadataException {
         super(message);
     }
 
-    public UnknownTopicOrPartitionException(Throwable throwable) {
-        super(throwable);
-    }
-
-    public UnknownTopicOrPartitionException(String message, Throwable throwable) {
-        super(message, throwable);
-    }
-
 }

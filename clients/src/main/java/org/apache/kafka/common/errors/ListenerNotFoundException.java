@@ -31,8 +31,4 @@ public class ListenerNotFoundException extends InvalidMetadataException {
         super(message);
     }
 
-    public ListenerNotFoundException(String message, Throwable cause) {
-        super(message, cause);
-    }
-
 }

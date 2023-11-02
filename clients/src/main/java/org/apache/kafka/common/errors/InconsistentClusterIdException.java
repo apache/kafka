@@ -22,7 +22,4 @@ public class InconsistentClusterIdException extends ApiException {
         super(message);
     }
 
-    public InconsistentClusterIdException(String message, Throwable throwable) {
-        super(message, throwable);
-    }
 }

@@ -22,7 +22,4 @@ public class EligibleLeadersNotAvailableException extends InvalidMetadataExcepti
         super(message);
     }
 
-    public EligibleLeadersNotAvailableException(String message, Throwable cause) {
-        super(message, cause);
-    }
 }

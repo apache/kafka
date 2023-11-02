@@ -32,23 +32,8 @@ public class InvalidTopicException extends ApiException {
 
     private final Set<String> invalidTopics;
 
-    public InvalidTopicException() {
-        super();
-        invalidTopics = new HashSet<>();
-    }
-
-    public InvalidTopicException(String message, Throwable cause) {
-        super(message, cause);
-        invalidTopics = new HashSet<>();
-    }
-
     public InvalidTopicException(String message) {
         super(message);
-        invalidTopics = new HashSet<>();
-    }
-
-    public InvalidTopicException(Throwable cause) {
-        super(cause);
         invalidTopics = new HashSet<>();
     }
 

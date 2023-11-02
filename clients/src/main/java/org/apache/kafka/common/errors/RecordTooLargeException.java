@@ -32,16 +32,8 @@ public class RecordTooLargeException extends ApiException {
         super();
     }
 
-    public RecordTooLargeException(String message, Throwable cause) {
-        super(message, cause);
-    }
-
     public RecordTooLargeException(String message) {
         super(message);
-    }
-
-    public RecordTooLargeException(Throwable cause) {
-        super(cause);
     }
 
     public RecordTooLargeException(String message, Map<TopicPartition, Long> recordTooLargePartitions) {

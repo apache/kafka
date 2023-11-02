@@ -25,7 +25,4 @@ public class NoReassignmentInProgressException extends ApiException {
         super(message);
     }
 
-    public NoReassignmentInProgressException(String message, Throwable cause) {
-        super(message, cause);
-    }
 }

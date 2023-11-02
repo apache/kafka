@@ -24,8 +24,4 @@ public class InvalidFetchSizeException extends ApiException {
         super(message);
     }
 
-    public InvalidFetchSizeException(String message, Throwable cause) {
-        super(message, cause);
-    }
-
 }

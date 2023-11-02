@@ -26,15 +26,8 @@ public class NotEnoughReplicasException extends RetriableException {
         super();
     }
 
-    public NotEnoughReplicasException(String message, Throwable cause) {
-        super(message, cause);
-    }
-
     public NotEnoughReplicasException(String message) {
         super(message);
     }
 
-    public NotEnoughReplicasException(Throwable cause) {
-        super(cause);
-    }
 }

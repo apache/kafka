@@ -26,7 +26,4 @@ public class ReassignmentInProgressException extends ApiException {
         super(msg);
     }
 
-    public ReassignmentInProgressException(String msg, Throwable cause) {
-        super(msg, cause);
-    }
 }

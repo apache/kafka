@@ -22,7 +22,4 @@ public class PreferredLeaderNotAvailableException extends InvalidMetadataExcepti
         super(message);
     }
 
-    public PreferredLeaderNotAvailableException(String message, Throwable cause) {
-        super(message, cause);
-    }
 }

@@ -28,8 +28,4 @@ public class FencedLeaderEpochException extends InvalidMetadataException {
         super(message);
     }
 
-    public FencedLeaderEpochException(String message, Throwable cause) {
-        super(message, cause);
-    }
-
 }

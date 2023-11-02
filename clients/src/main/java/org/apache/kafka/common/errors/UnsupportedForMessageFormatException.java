@@ -27,8 +27,4 @@ public class UnsupportedForMessageFormatException extends ApiException {
         super(message);
     }
 
-    public UnsupportedForMessageFormatException(String message, Throwable cause) {
-        super(message, cause);
-    }
-
 }

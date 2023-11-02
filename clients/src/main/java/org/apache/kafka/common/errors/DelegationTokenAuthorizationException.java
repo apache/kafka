@@ -24,8 +24,4 @@ public class DelegationTokenAuthorizationException extends AuthorizationExceptio
         super(message);
     }
 
-    public DelegationTokenAuthorizationException(String message, Throwable cause) {
-        super(message, cause);
-    }
-
 }

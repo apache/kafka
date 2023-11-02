@@ -30,12 +30,4 @@ public class ReplicaNotAvailableException extends InvalidMetadataException {
         super(message);
     }
 
-    public ReplicaNotAvailableException(String message, Throwable cause) {
-        super(message, cause);
-    }
-
-    public ReplicaNotAvailableException(Throwable cause) {
-        super(cause);
-    }
-
 }

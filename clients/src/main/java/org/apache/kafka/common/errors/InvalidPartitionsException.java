@@ -24,8 +24,4 @@ public class InvalidPartitionsException extends ApiException {
         super(message);
     }
 
-    public InvalidPartitionsException(String message, Throwable cause) {
-        super(message, cause);
-    }
-
 }

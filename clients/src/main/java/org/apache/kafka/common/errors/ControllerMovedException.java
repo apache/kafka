@@ -24,8 +24,4 @@ public class ControllerMovedException extends ApiException {
         super(message);
     }
 
-    public ControllerMovedException(String message, Throwable cause) {
-        super(message, cause);
-    }
-
 }

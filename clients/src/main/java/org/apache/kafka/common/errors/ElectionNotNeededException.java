@@ -22,7 +22,4 @@ public class ElectionNotNeededException extends InvalidMetadataException {
         super(message);
     }
 
-    public ElectionNotNeededException(String message, Throwable cause) {
-        super(message, cause);
-    }
 }

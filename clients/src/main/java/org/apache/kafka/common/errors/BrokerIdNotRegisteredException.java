@@ -22,8 +22,4 @@ public class BrokerIdNotRegisteredException extends ApiException {
         super(message);
     }
 
-    public BrokerIdNotRegisteredException(String message, Throwable throwable) {
-        super(message, throwable);
-    }
-
 }

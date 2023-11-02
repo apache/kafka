@@ -24,8 +24,4 @@ public class SnapshotNotFoundException extends ApiException {
         super(s);
     }
 
-    public SnapshotNotFoundException(String message, Throwable cause) {
-        super(message, cause);
-    }
-
 }

@@ -23,15 +23,8 @@ public class RebalanceInProgressException extends ApiException {
         super();
     }
 
-    public RebalanceInProgressException(String message, Throwable cause) {
-        super(message, cause);
-    }
-
     public RebalanceInProgressException(String message) {
         super(message);
     }
 
-    public RebalanceInProgressException(Throwable cause) {
-        super(cause);
-    }
 }

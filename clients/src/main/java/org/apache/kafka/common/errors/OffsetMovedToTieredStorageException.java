@@ -24,8 +24,4 @@ public class OffsetMovedToTieredStorageException extends ApiException {
         super(message);
     }
 
-    public OffsetMovedToTieredStorageException(String message, Throwable cause) {
-        super(message, cause);
-    }
-
 }

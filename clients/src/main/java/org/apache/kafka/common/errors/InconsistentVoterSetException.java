@@ -24,8 +24,4 @@ public class InconsistentVoterSetException extends ApiException {
         super(s);
     }
 
-    public InconsistentVoterSetException(String message, Throwable cause) {
-        super(message, cause);
-    }
-
 }

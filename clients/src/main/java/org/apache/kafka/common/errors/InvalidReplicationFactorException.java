@@ -24,8 +24,4 @@ public class InvalidReplicationFactorException extends ApiException {
         super(message);
     }
 
-    public InvalidReplicationFactorException(String message, Throwable cause) {
-        super(message, cause);
-    }
-
 }

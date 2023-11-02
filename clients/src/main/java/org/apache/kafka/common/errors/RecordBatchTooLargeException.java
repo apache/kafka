@@ -27,16 +27,8 @@ public class RecordBatchTooLargeException extends ApiException {
         super();
     }
 
-    public RecordBatchTooLargeException(String message, Throwable cause) {
-        super(message, cause);
-    }
-
     public RecordBatchTooLargeException(String message) {
         super(message);
-    }
-
-    public RecordBatchTooLargeException(Throwable cause) {
-        super(cause);
     }
 
 }

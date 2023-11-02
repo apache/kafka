@@ -29,16 +29,8 @@ public class DisconnectException extends RetriableException {
         super();
     }
 
-    public DisconnectException(String message, Throwable cause) {
-        super(message, cause);
-    }
-
     public DisconnectException(String message) {
         super(message);
-    }
-
-    public DisconnectException(Throwable cause) {
-        super(cause);
     }
 
 }

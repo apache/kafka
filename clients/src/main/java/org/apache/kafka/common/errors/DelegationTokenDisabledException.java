@@ -24,8 +24,4 @@ public class DelegationTokenDisabledException extends ApiException {
         super(message);
     }
 
-    public DelegationTokenDisabledException(String message, Throwable cause) {
-        super(message, cause);
-    }
-
 }

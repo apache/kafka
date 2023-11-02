@@ -27,8 +27,4 @@ public class UnsupportedCompressionTypeException extends ApiException {
         super(message);
     }
 
-    public UnsupportedCompressionTypeException(String message, Throwable cause) {
-        super(message, cause);
-    }
-
 }

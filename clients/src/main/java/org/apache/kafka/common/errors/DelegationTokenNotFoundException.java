@@ -24,8 +24,4 @@ public class DelegationTokenNotFoundException extends ApiException {
         super(message);
     }
 
-    public DelegationTokenNotFoundException(String message, Throwable cause) {
-        super(message, cause);
-    }
-
 }

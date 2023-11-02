@@ -24,8 +24,4 @@ public class TopicExistsException extends ApiException {
         super(message);
     }
 
-    public TopicExistsException(String message, Throwable cause) {
-        super(message, cause);
-    }
-
 }

@@ -22,8 +22,4 @@ public class DuplicateBrokerRegistrationException extends ApiException {
         super(message);
     }
 
-    public DuplicateBrokerRegistrationException(String message, Throwable throwable) {
-        super(message, throwable);
-    }
-
 }

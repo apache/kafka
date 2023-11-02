@@ -24,8 +24,4 @@ public class StaleBrokerEpochException extends ApiException {
         super(message);
     }
 
-    public StaleBrokerEpochException(String message, Throwable cause) {
-        super(message, cause);
-    }
-
 }
