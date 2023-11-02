@@ -247,7 +247,7 @@ public class MembershipManagerImplTest {
     public void testReconcileNewPartitionsAssignedWhenNoPartitionOwned() {
         Uuid topicId = Uuid.randomUuid();
         String topicName = "topic1";
-        mockOwnedPartitionAndAssignmentReceived(topicId, topicName, Collections.emptySet());
+        mockOwnedPartitionAndAssignmentReceived(topicId, topicName, Collections.emptySet(), true);
 
         MembershipManagerImpl membershipManager = createMembershipManagerJoiningGroup();
         ConsumerGroupHeartbeatResponseData.Assignment targetAssignment = new ConsumerGroupHeartbeatResponseData.Assignment()
@@ -274,7 +274,8 @@ public class MembershipManagerImplTest {
         Uuid topicId = Uuid.randomUuid();
         String topicName = "topic1";
         TopicPartition ownedPartition = new TopicPartition(topicName, 0);
-        mockOwnedPartitionAndAssignmentReceived(topicId, topicName, Collections.singleton(ownedPartition));
+        mockOwnedPartitionAndAssignmentReceived(topicId, topicName,
+                Collections.singleton(ownedPartition), true);
 
         MembershipManagerImpl membershipManager = createMembershipManagerJoiningGroup();
         // New assignment received, adding partitions 1 and 2 to the previously owned partition 0.
@@ -383,7 +384,8 @@ public class MembershipManagerImplTest {
         Uuid topicId = Uuid.randomUuid();
         String topicName = "topic1";
         TopicPartition ownedPartition = new TopicPartition(topicName, 0);
-        mockOwnedPartitionAndAssignmentReceived(topicId, topicName, Collections.singleton(ownedPartition));
+        mockOwnedPartitionAndAssignmentReceived(topicId, topicName,
+                Collections.singleton(ownedPartition), true);
 
         MembershipManagerImpl membershipManager = createMembershipManagerJoiningGroup();
         // New assignment received, revoking partition 0, and assigning new partitions 1 and 2.
@@ -432,12 +434,10 @@ public class MembershipManagerImplTest {
     public void testReconcileNewPartitionsMetadataRequestSuccess() {
         Uuid topicId = Uuid.randomUuid();
         String topicName = "topic1";
-        when(subscriptionState.assignedPartitions()).thenReturn(Collections.emptySet());
+        mockOwnedPartitionAndAssignmentReceived(topicId, topicName, Collections.emptySet(), false);
         when(metadata.topicNames()).thenReturn(Collections.emptyMap());
         CompletableFuture<Map<Topic, List<PartitionInfo>>> metadataResult = new CompletableFuture<>();
         when(metadataRequestManager.requestTopicMetadata(any())).thenReturn(metadataResult);
-        when(subscriptionState.checkAssignmentMatchedSubscription(anyCollection())).thenReturn(true);
-        when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
 
         // Member received assignment to reconcile
         MembershipManagerImpl membershipManager = createMembershipManagerJoiningGroup();
@@ -485,6 +485,7 @@ public class MembershipManagerImplTest {
         TopicPartition ownedPartition = new TopicPartition(topicName, 0);
         when(subscriptionState.assignedPartitions()).thenReturn(Collections.singleton(ownedPartition));
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
+        when(subscriptionState.rebalanceListener()).thenReturn(Optional.empty()).thenReturn(Optional.empty());
     }
 
     private void testReconciliationOfRevokedPartitionsCompleted(MembershipManager membershipManager) {
@@ -498,11 +499,15 @@ public class MembershipManagerImplTest {
 
     private void mockOwnedPartitionAndAssignmentReceived(Uuid topicId,
                                                          String topicName,
-                                                         Set<TopicPartition> previouslyOwned) {
+                                                         Set<TopicPartition> previouslyOwned,
+                                                         boolean mockMetadata) {
         when(subscriptionState.assignedPartitions()).thenReturn(previouslyOwned);
-        when(metadata.topicNames()).thenReturn(Collections.singletonMap(topicId, topicName));
+        if (mockMetadata) {
+            when(metadata.topicNames()).thenReturn(Collections.singletonMap(topicId, topicName));
+        }
         when(subscriptionState.checkAssignmentMatchedSubscription(anyCollection())).thenReturn(true);
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
+        when(subscriptionState.rebalanceListener()).thenReturn(Optional.empty()).thenReturn(Optional.empty());
     }
 
     private void mockOwnedPartition() {
