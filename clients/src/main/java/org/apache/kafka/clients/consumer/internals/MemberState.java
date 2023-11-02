@@ -48,7 +48,7 @@ public enum MemberState {
      * Member has completed reconciling an assignment received, and stays in this state until the
      * next heartbeat request is sent out to acknowledge the assignment to the server.
      */
-    ACKNOWLEDGING_RECONCILED_ASSIGNMENT,
+    SENDING_ACK_FOR_RECONCILED_ASSIGNMENT,
 
     /**
      * Member is active in a group, sending heartbeats, and has processed all assignments received.
@@ -71,7 +71,7 @@ public enum MemberState {
      * for partitions revoked or lost), until the callback completes and a heartbeat request is
      * sent out to effectively leave the group (without waiting for a response).
      */
-    LEAVING_GROUP,
+    LEAVING,
 
     /**
      * Member has completed releasing its assignment, and stays in this state until the next
@@ -89,22 +89,22 @@ public enum MemberState {
      */
     static {
 
-        STABLE.previousValidStates = Arrays.asList(JOINING, ACKNOWLEDGING_RECONCILED_ASSIGNMENT);
+        STABLE.previousValidStates = Arrays.asList(JOINING, SENDING_ACK_FOR_RECONCILED_ASSIGNMENT);
 
         RECONCILING.previousValidStates = Arrays.asList(STABLE, JOINING);
 
-        ACKNOWLEDGING_RECONCILED_ASSIGNMENT.previousValidStates = Arrays.asList(RECONCILING);
+        SENDING_ACK_FOR_RECONCILED_ASSIGNMENT.previousValidStates = Arrays.asList(RECONCILING);
 
-        FATAL.previousValidStates = Arrays.asList(JOINING, STABLE, RECONCILING, ACKNOWLEDGING_RECONCILED_ASSIGNMENT);
+        FATAL.previousValidStates = Arrays.asList(JOINING, STABLE, RECONCILING, SENDING_ACK_FOR_RECONCILED_ASSIGNMENT);
 
-        FENCED.previousValidStates = Arrays.asList(JOINING, STABLE, RECONCILING, ACKNOWLEDGING_RECONCILED_ASSIGNMENT);
+        FENCED.previousValidStates = Arrays.asList(JOINING, STABLE, RECONCILING, SENDING_ACK_FOR_RECONCILED_ASSIGNMENT);
 
         JOINING.previousValidStates = Arrays.asList(FENCED, RECONCILING, NOT_IN_GROUP);
 
-        LEAVING_GROUP.previousValidStates = Arrays.asList(JOINING, STABLE, RECONCILING,
-                ACKNOWLEDGING_RECONCILED_ASSIGNMENT, NOT_IN_GROUP);
+        LEAVING.previousValidStates = Arrays.asList(JOINING, STABLE, RECONCILING,
+                SENDING_ACK_FOR_RECONCILED_ASSIGNMENT, NOT_IN_GROUP);
 
-        SENDING_LEAVE_REQUEST.previousValidStates = Arrays.asList(LEAVING_GROUP);
+        SENDING_LEAVE_REQUEST.previousValidStates = Arrays.asList(LEAVING);
     }
 
     private List<MemberState> previousValidStates;

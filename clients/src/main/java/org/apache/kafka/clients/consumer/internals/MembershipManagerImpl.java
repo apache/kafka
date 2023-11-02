@@ -284,7 +284,7 @@ public class MembershipManagerImpl implements MembershipManager {
      */
     @Override
     public CompletableFuture<Void> leaveGroup() {
-        transitionTo(MemberState.LEAVING_GROUP);
+        transitionTo(MemberState.LEAVING);
 
         CompletableFuture<Void> callbackResult = invokeOnPartitionsRevokedOrLostToReleaseAssignment();
         callbackResult.whenComplete((result, error) -> {
@@ -365,7 +365,7 @@ public class MembershipManagerImpl implements MembershipManager {
      */
     @Override
     public boolean shouldHeartbeatNow() {
-        return state() == MemberState.ACKNOWLEDGING_RECONCILED_ASSIGNMENT ||
+        return state() == MemberState.SENDING_ACK_FOR_RECONCILED_ASSIGNMENT ||
                 state() == MemberState.SENDING_LEAVE_REQUEST;
     }
 
@@ -374,7 +374,7 @@ public class MembershipManagerImpl implements MembershipManager {
      */
     @Override
     public void onHeartbeatRequestSent() {
-        if (state() == MemberState.ACKNOWLEDGING_RECONCILED_ASSIGNMENT) {
+        if (state() == MemberState.SENDING_ACK_FOR_RECONCILED_ASSIGNMENT) {
             transitionTo(MemberState.STABLE);
         } else if (state() == MemberState.SENDING_LEAVE_REQUEST) {
             transitionTo(MemberState.NOT_IN_GROUP);
@@ -468,12 +468,16 @@ public class MembershipManagerImpl implements MembershipManager {
 
             reconciliationResult.whenComplete((result, error) -> {
                 if (error != null) {
+                    // Leaving member in RECONCILING state after callbacks fail. The member
+                    // won't send the ack, and the expectation is that the broker will kick the
+                    // member out of the group after the rebalance timeout expires, leading to a
+                    // RECONCILING -> FENCED transition.
                     log.error("Reconciliation failed. ", error);
                 } else {
                     if (state == MemberState.RECONCILING) {
 
                         // Make assignment effective on the broker by transitioning to send acknowledge.
-                        transitionTo(MemberState.ACKNOWLEDGING_RECONCILED_ASSIGNMENT);
+                        transitionTo(MemberState.SENDING_ACK_FOR_RECONCILED_ASSIGNMENT);
 
                         // Make assignment effective on the member group manager
                         this.currentAssignment = assignedPartitions;

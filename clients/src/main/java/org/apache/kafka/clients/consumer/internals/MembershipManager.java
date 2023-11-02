@@ -70,7 +70,7 @@ public interface MembershipManager {
     /**
      * Update state when a heartbeat is sent out. This will transition out of the states that end
      * when a heartbeat request is sent, without waiting for a response (ex.
-     * {@link MemberState#ACKNOWLEDGING_RECONCILED_ASSIGNMENT} and
+     * {@link MemberState#SENDING_ACK_FOR_RECONCILED_ASSIGNMENT} and
      * {@link MemberState#SENDING_LEAVE_REQUEST}.
      */
     void onHeartbeatRequestSent();
@@ -115,7 +115,7 @@ public interface MembershipManager {
     void transitionToFailed();
 
     /**
-     * Release assignment and transition to {@link MemberState#LEAVING_GROUP} so that a heartbeat
+     * Release assignment and transition to {@link MemberState#LEAVING} so that a heartbeat
      * request is sent indicating the broker that the member wants to leave the group. This is
      * expected to be invoked when the user calls the unsubscribe API.
      *
@@ -131,8 +131,8 @@ public interface MembershipManager {
     boolean shouldHeartbeatNow();
 
     /**
-     * @return True if the member should not send heartbeat to the coordinator. This could be the
-     * case then the member is not in a group, or when it failed with a fatal error.
+     * @return True if the member should skip sending heartbeat to the coordinator. This could be
+     * the case then the member is not in a group, or when it failed with a fatal error.
      */
     boolean shouldSkipHeartbeat();
 }

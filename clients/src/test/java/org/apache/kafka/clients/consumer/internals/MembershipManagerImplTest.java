@@ -257,7 +257,7 @@ public class MembershipManagerImplTest {
         ConsumerGroupHeartbeatResponse heartbeatResponse = createConsumerGroupHeartbeatResponse(targetAssignment);
         membershipManager.onHeartbeatResponseReceived(heartbeatResponse.data());
 
-        assertEquals(MemberState.ACKNOWLEDGING_RECONCILED_ASSIGNMENT, membershipManager.state());
+        assertEquals(MemberState.SENDING_ACK_FOR_RECONCILED_ASSIGNMENT, membershipManager.state());
         Set<TopicPartition> assignedPartitions = new HashSet<>(Arrays.asList(
                 new TopicPartition(topicName, 0),
                 new TopicPartition(topicName, 1)));
@@ -286,7 +286,7 @@ public class MembershipManagerImplTest {
         ConsumerGroupHeartbeatResponse heartbeatResponse = createConsumerGroupHeartbeatResponse(targetAssignment);
         membershipManager.onHeartbeatResponseReceived(heartbeatResponse.data());
 
-        assertEquals(MemberState.ACKNOWLEDGING_RECONCILED_ASSIGNMENT, membershipManager.state());
+        assertEquals(MemberState.SENDING_ACK_FOR_RECONCILED_ASSIGNMENT, membershipManager.state());
         Set<TopicPartition> assignedPartitions = new HashSet<>(Arrays.asList(
                 ownedPartition,
                 new TopicPartition("topic1", 1),
@@ -396,7 +396,7 @@ public class MembershipManagerImplTest {
         ConsumerGroupHeartbeatResponse heartbeatResponse = createConsumerGroupHeartbeatResponse(targetAssignment);
         membershipManager.onHeartbeatResponseReceived(heartbeatResponse.data());
 
-        assertEquals(MemberState.ACKNOWLEDGING_RECONCILED_ASSIGNMENT, membershipManager.state());
+        assertEquals(MemberState.SENDING_ACK_FOR_RECONCILED_ASSIGNMENT, membershipManager.state());
         Set<TopicPartition> assignedPartitions = new HashSet<>(Arrays.asList(
                 ownedPartition,
                 new TopicPartition("topic1", 1),
@@ -460,7 +460,7 @@ public class MembershipManagerImplTest {
         metadataResult.complete(metadataResponse);
 
         // Member should complete reconciliation
-        assertEquals(MemberState.ACKNOWLEDGING_RECONCILED_ASSIGNMENT, membershipManager.state());
+        assertEquals(MemberState.SENDING_ACK_FOR_RECONCILED_ASSIGNMENT, membershipManager.state());
         Set<TopicPartition> assignedPartitions = new HashSet<>(Arrays.asList(
                 new TopicPartition(topicName, 0),
                 new TopicPartition(topicName, 1)));
@@ -488,7 +488,7 @@ public class MembershipManagerImplTest {
     }
 
     private void testReconciliationOfRevokedPartitionsCompleted(MembershipManager membershipManager) {
-        assertEquals(MemberState.ACKNOWLEDGING_RECONCILED_ASSIGNMENT, membershipManager.state());
+        assertEquals(MemberState.SENDING_ACK_FOR_RECONCILED_ASSIGNMENT, membershipManager.state());
         assertTrue(membershipManager.currentAssignment().isEmpty());
         assertFalse(membershipManager.targetAssignment().isPresent());
 

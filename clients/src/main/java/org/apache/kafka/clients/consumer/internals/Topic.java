@@ -66,8 +66,8 @@ public class Topic {
     @Override
     public int hashCode() {
         final int prime = 31;
-        int result = prime + topicId.hashCode();
-        result = prime * result + topicName.hashCode();
+        int result = prime + Objects.hashCode(topicId);
+        result = prime * result + Objects.hashCode(topicName);
         return result;
     }
 

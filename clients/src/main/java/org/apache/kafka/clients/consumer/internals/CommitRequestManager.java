@@ -267,10 +267,7 @@ public class CommitRequestManager implements RequestManager {
      * starting from now. If auto-commit is not enabled this will perform no action.
      */
     public void resetAutoCommitTimer() {
-        if (!autoCommitState.isPresent()) {
-            return;
-        }
-        autoCommitState.get().resetTimer();
+        autoCommitState.ifPresent(AutoCommitState::resetTimer);
     }
 
     private class OffsetCommitRequestState extends RequestState {
