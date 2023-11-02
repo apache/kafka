@@ -18,13 +18,10 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.serialization.Deserializer;
-
-import java.util.Map;
-import java.util.Properties;
-import java.util.function.Supplier;
 
 /**
  * {@code ConsumerDelegateCreator} implements a quasi-factory pattern to allow the caller to remain unaware of the
@@ -48,23 +45,17 @@ import java.util.function.Supplier;
  */
 public class ConsumerDelegateCreator {
 
-    /**
-     * This is it! This is the core logic. It's extremely rudimentary.
-     */
-    private static boolean useNewConsumer(ConsumerConfig config) {
-        String groupProtocol = config.getString(ConsumerConfig.GROUP_PROTOCOL_CONFIG);
-        return groupProtocol.equalsIgnoreCase("consumer");
-    }
-
     public <K, V> Consumer<K, V> create(ConsumerConfig config,
                                         Deserializer<K> keyDeserializer,
                                         Deserializer<V> valueDeserializer) {
+
         try {
-            if (useNewConsumer(config)) {
+            GroupProtocol groupProtocol = GroupProtocol.valueOf(config.getString(ConsumerConfig.GROUP_PROTOCOL_CONFIG));
+
+            if (groupProtocol == GroupProtocol.CONSUMER)
                 return new AsyncKafkaConsumer<>(config, keyDeserializer, valueDeserializer);
-            } else {
+            else
                 return new LegacyKafkaConsumer<>(config, keyDeserializer, valueDeserializer);
-            }
         } catch (KafkaException e) {
             throw e;
         } catch (Throwable t) {
