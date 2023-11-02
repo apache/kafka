@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-import org.apache.kafka.common.Topic;
+import org.apache.kafka.clients.consumer.internals.Topic;
 import org.apache.kafka.common.PartitionInfo;
 
 import java.util.List;

@@ -15,7 +15,9 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common;
+package org.apache.kafka.clients.consumer.internals;
+
+import org.apache.kafka.common.Uuid;
 
 import java.util.Objects;
 
