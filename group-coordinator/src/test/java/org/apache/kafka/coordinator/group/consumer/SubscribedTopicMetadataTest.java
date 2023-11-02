@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group.consumer;
 
 import org.apache.kafka.common.Uuid;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
@@ -34,7 +35,8 @@ public class SubscribedTopicMetadataTest {
     private Map<Uuid, TopicMetadata> topicMetadataMap;
     private SubscribedTopicMetadata subscribedTopicMetadata;
 
-    private void setup() {
+    @BeforeEach
+    public void setUp() {
         topicMetadataMap = new HashMap<>();
         for (int i = 0; i < 5; i++) {
             Uuid topicId = Uuid.randomUuid();
@@ -48,10 +50,8 @@ public class SubscribedTopicMetadataTest {
          subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadataMap);
     }
 
-
     @Test
     public void testAttribute() {
-        setup();
         assertEquals(topicMetadataMap, subscribedTopicMetadata.topicMetadata());
     }
 
@@ -59,9 +59,9 @@ public class SubscribedTopicMetadataTest {
     public void testTopicMetadataCannotBeNull() {
         assertThrows(NullPointerException.class, () -> new SubscribedTopicMetadata(null));
     }
+
     @Test
     public void testNumberOfPartitions() {
-        setup();
         Uuid topicId = Uuid.randomUuid();
 
         // Test -1 is returned when the topic Id doesn't exist.
@@ -72,9 +72,9 @@ public class SubscribedTopicMetadataTest {
         // Test that the correct number of partitions are returned for a given topic Id.
         assertEquals(3, subscribedTopicMetadata.numPartitions(topicId));
     }
+
     @Test
     public void testRacksForPartition() {
-        setup();
         Uuid topicId = Uuid.randomUuid();
 
         // Test that an empty set is returned for a non-existent topic Id.
@@ -100,7 +100,6 @@ public class SubscribedTopicMetadataTest {
 
     @Test
     public void testEquals() {
-        setup();
         assertEquals(new SubscribedTopicMetadata(topicMetadataMap), subscribedTopicMetadata);
 
         Map<Uuid, TopicMetadata> topicMetadataMap2 = new HashMap<>();

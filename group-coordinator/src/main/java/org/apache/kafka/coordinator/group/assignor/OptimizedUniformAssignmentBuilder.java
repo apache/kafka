@@ -139,6 +139,11 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
     protected GroupAssignment buildAssignment() throws PartitionAssignorException {
         int totalPartitionsCount = 0;
 
+        if (subscribedTopicIds.isEmpty()) {
+            LOG.debug("The subscription list is empty, returning an empty assignment");
+            return new GroupAssignment(Collections.emptyMap());
+        }
+
         for (Uuid topicId : subscribedTopicIds) {
             int partitionCount = subscribedTopicDescriber.numPartitions(topicId);
             if (partitionCount == -1) {
@@ -148,11 +153,6 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
             } else {
                 totalPartitionsCount += partitionCount;
             }
-        }
-
-        if (subscribedTopicIds.isEmpty()) {
-            LOG.debug("The subscription list is empty, returning an empty assignment");
-            return new GroupAssignment(Collections.emptyMap());
         }
 
         // The minimum required quota that each member needs to meet for a balanced assignment.
@@ -318,6 +318,8 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
     private void unassignedPartitionsRoundRobinAssignment() {
         Queue<String> roundRobinMembers = new LinkedList<>(potentiallyUnfilledMembers.keySet());
 
+        // Partitions are sorted to ensure an even topic wise distribution across members.
+        // This not only balances the load but also makes partition-to-member mapping more predictable.
         List<TopicIdPartition> sortedPartitionsList = unassignedPartitions.stream()
             .sorted(Comparator.comparing(TopicIdPartition::topicId).thenComparing(TopicIdPartition::partitionId))
             .collect(Collectors.toList());

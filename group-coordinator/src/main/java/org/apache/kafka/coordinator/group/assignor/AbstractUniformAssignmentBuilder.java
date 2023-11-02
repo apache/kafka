@@ -28,6 +28,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -78,8 +79,8 @@ public abstract class AbstractUniformAssignmentBuilder {
     /**
      * Constructs a set of {@code TopicIdPartition} including all the given topic Ids based on their partition counts.
      *
-     * @param topicIds                      The topic Ids.
-     * @param subscribedTopicDescriber      Utility to fetch the partition count for a given topic.
+     * @param topicIds                      Collection of topic Ids.
+     * @param subscribedTopicDescriber      Describer to fetch partition counts for topics.
      *
      * @return Set of {@code TopicIdPartition} including all the provided topic Ids.
      */
@@ -88,10 +89,29 @@ public abstract class AbstractUniformAssignmentBuilder {
         SubscribedTopicDescriber subscribedTopicDescriber
     ) {
         return topicIds.stream()
-            .flatMap(topic ->
-                IntStream.range(0, subscribedTopicDescriber.numPartitions(topic))
+            .flatMap(topic -> IntStream
+                .range(0, subscribedTopicDescriber.numPartitions(topic))
                 .mapToObj(i -> new TopicIdPartition(topic, i))
             ).collect(Collectors.toSet());
+    }
+
+    /**
+     * Processes partitions for the given topic Ids using the provided function.
+     *
+     * @param topicIds                   Collection of topic Ids.
+     * @param subscribedTopicDescriber   Describer to fetch partition counts for topics.
+     * @param func                       Function to apply on each {@code TopicIdPartition}.
+     */
+    protected static void processTopicIdPartitions(
+        Collection<Uuid> topicIds,
+        SubscribedTopicDescriber subscribedTopicDescriber,
+        Consumer<TopicIdPartition> func
+    ) {
+        topicIds.stream()
+            .flatMap(topic -> IntStream
+                .range(0, subscribedTopicDescriber.numPartitions(topic))
+                .mapToObj(i -> new TopicIdPartition(topic, i))
+            ).forEach(func);
     }
 
     /**
@@ -148,7 +168,7 @@ public abstract class AbstractUniformAssignmentBuilder {
             } else {
                 racksPerPartition = new HashMap<>();
                 allPartitionRacks = new HashSet<>();
-                topicIdPartitions(topicIds, subscribedTopicDescriber).forEach(tp -> {
+                processTopicIdPartitions(topicIds, subscribedTopicDescriber, tp -> {
                     Set<String> racks = subscribedTopicDescriber.racksForPartition(tp.topicId(), tp.partitionId());
                     racksPerPartition.put(tp, racks);
                     if (!racks.isEmpty()) allPartitionRacks.addAll(racks);
