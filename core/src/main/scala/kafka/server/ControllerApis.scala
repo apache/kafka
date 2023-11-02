@@ -128,6 +128,7 @@ class ControllerApis(
         case ApiKeys.UPDATE_FEATURES => handleUpdateFeatures(request)
         case ApiKeys.DESCRIBE_CLUSTER => handleDescribeCluster(request)
         case ApiKeys.CONTROLLER_REGISTRATION => handleControllerRegistration(request)
+        case ApiKeys.ASSIGN_REPLICAS_TO_DIRS => handleAssignReplicasToDirs(request)
         case _ => throw new ApiException(s"Unsupported ApiKey ${request.context.header.apiKey}")
       }
 
@@ -1072,6 +1073,15 @@ class ControllerApis(
     )
     requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
       new DescribeClusterResponse(response.setThrottleTimeMs(requestThrottleMs)))
+    CompletableFuture.completedFuture[Unit](())
+  }
+
+  def handleAssignReplicasToDirs(request: RequestChannel.Request): CompletableFuture[Unit] = {
+    val assignReplicasToDirsRequest = request.body[AssignReplicasToDirsRequest]
+
+    // TODO KAFKA-15426
+    requestHelper.sendMaybeThrottle(request,
+      assignReplicasToDirsRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
     CompletableFuture.completedFuture[Unit](())
   }
 }

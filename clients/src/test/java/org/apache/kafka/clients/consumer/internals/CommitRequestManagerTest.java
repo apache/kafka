@@ -19,13 +19,16 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.DisconnectException;
+import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.message.OffsetCommitResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
+import org.apache.kafka.common.requests.OffsetCommitResponse;
 import org.apache.kafka.common.requests.OffsetFetchRequest;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
 import org.apache.kafka.common.requests.RequestHeader;
@@ -39,6 +42,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -59,17 +63,24 @@ import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DE
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class CommitRequestManagerTest {
+
+    private long retryBackoffMs = 100;
+    private long retryBackoffMaxMs = 1000;
+    private Node mockedNode = new Node(1, "host1", 9092);
     private SubscriptionState subscriptionState;
     private GroupState groupState;
     private LogContext logContext;
     private MockTime time;
     private CoordinatorRequestManager coordinatorRequestManager;
     private Properties props;
-    private Node mockedNode = new Node(1, "host1", 9092);
 
     @BeforeEach
     public void setup() {
@@ -164,7 +175,7 @@ public class CommitRequestManagerTest {
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
         commitRequestManger.addOffsetCommitRequest(new HashMap<>());
         assertEquals(1, commitRequestManger.unsentOffsetCommitRequests().size());
-        commitRequestManger.poll(time.milliseconds());
+        assertEquals(1, commitRequestManger.poll(time.milliseconds()).unsentRequests.size());
         assertTrue(commitRequestManger.unsentOffsetCommitRequests().isEmpty());
         assertEmptyPendingRequests(commitRequestManger);
     }
@@ -177,7 +188,11 @@ public class CommitRequestManagerTest {
         List<CompletableFuture<ClientResponse>> futures = assertPoll(1, commitRequestManger);
         time.sleep(99);
         // complete the autocommit request (exceptionally)
-        futures.get(0).completeExceptionally(new KafkaException("test exception"));
+        futures.get(0).complete(mockOffsetCommitResponse(
+            "topic",
+            1,
+            (short) 1,
+            Errors.COORDINATOR_LOAD_IN_PROGRESS));
 
         // we can then autocommit again
         commitRequestManger.updateAutoCommitTimer(time.milliseconds());
@@ -201,7 +216,7 @@ public class CommitRequestManagerTest {
         assertEmptyPendingRequests(commitRequestManger);
 
         // complete the unsent request and re-poll
-        futures.get(0).complete(null);
+        futures.get(0).complete(buildOffsetCommitClientResponse(new OffsetCommitResponse(0, new HashMap<>()), Errors.NONE));
         assertPoll(1, commitRequestManger);
     }
 
@@ -211,7 +226,7 @@ public class CommitRequestManagerTest {
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
         Set<TopicPartition> partitions = new HashSet<>();
         partitions.add(new TopicPartition("t1", 0));
-        List<CompletableFuture<Map<TopicPartition, OffsetAndMetadata>>> futures = sendAndVerifyDuplicatedRequests(
+        List<CompletableFuture<Map<TopicPartition, OffsetAndMetadata>>> futures = sendAndVerifyDuplicatedOffsetFetchRequests(
                 commitRequestManger,
                 partitions,
                 2,
@@ -226,18 +241,18 @@ public class CommitRequestManagerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("exceptionSupplier")
+    @MethodSource("offsetFetchExceptionSupplier")
     public void testOffsetFetchRequest_ErroredRequests(final Errors error, final boolean isRetriable) {
         CommitRequestManager commitRequestManger = create(true, 100);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
 
         Set<TopicPartition> partitions = new HashSet<>();
         partitions.add(new TopicPartition("t1", 0));
-        List<CompletableFuture<Map<TopicPartition, OffsetAndMetadata>>> futures = sendAndVerifyDuplicatedRequests(
-                commitRequestManger,
-                partitions,
-                5,
-                error);
+        List<CompletableFuture<Map<TopicPartition, OffsetAndMetadata>>> futures = sendAndVerifyDuplicatedOffsetFetchRequests(
+            commitRequestManger,
+            partitions,
+            5,
+            error);
         // we only want to make sure to purge the outbound buffer for non-retriables, so retriable will be re-queued.
         if (isRetriable)
             testRetriable(commitRequestManger, futures);
@@ -245,6 +260,91 @@ public class CommitRequestManagerTest {
             testNonRetriable(futures);
             assertEmptyPendingRequests(commitRequestManger);
         }
+
+        assertCoordinatorDisconnect(error);
+    }
+
+    @ParameterizedTest
+    @MethodSource("offsetCommitExceptionSupplier")
+    public void testOffsetCommitRequest_ErroredRequests(final Errors error, final boolean isRetriable) {
+        CommitRequestManager commitRequestManger = create(true, 100);
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
+
+        Map<TopicPartition, OffsetAndMetadata> offsets = Collections.singletonMap(new TopicPartition("topic", 1),
+            new OffsetAndMetadata(0));
+
+        sendAndVerifyOffsetCommitRequests(commitRequestManger, offsets, error);
+
+        assertExceptionHandling(commitRequestManger, error);
+        assertCoordinatorDisconnect(error);
+    }
+
+    @Test
+    public void testEnsureBackoffRetryOnOffsetCommitRequestTimeout() {
+        CommitRequestManager commitRequestManger = create(true, 100);
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
+
+        Map<TopicPartition, OffsetAndMetadata> offsets = Collections.singletonMap(new TopicPartition("topic", 1),
+            new OffsetAndMetadata(0));
+
+        commitRequestManger.addOffsetCommitRequest(offsets);
+        NetworkClientDelegate.PollResult res = commitRequestManger.poll(time.milliseconds());
+        assertEquals(1, res.unsentRequests.size());
+        res.unsentRequests.get(0).handler().onFailure(time.milliseconds(), new TimeoutException());
+
+        assertTrue(commitRequestManger.pendingRequests.hasUnsentRequests());
+        assertEquals(1, commitRequestManger.unsentOffsetCommitRequests().size());
+        assertRetryBackOff(commitRequestManger, retryBackoffMs);
+    }
+
+    private void assertCoordinatorDisconnect(final Errors error) {
+        if (error.exception() instanceof DisconnectException) {
+            verify(coordinatorRequestManager).markCoordinatorUnknown(any(), any());
+        }
+    }
+
+    private void assertExceptionHandling(CommitRequestManager commitRequestManger, Errors errors) {
+        long remainBackoffMs = retryBackoffMs;
+        switch (errors) {
+            case NOT_COORDINATOR:
+            case COORDINATOR_NOT_AVAILABLE:
+            case REQUEST_TIMED_OUT:
+                verify(coordinatorRequestManager).markCoordinatorUnknown(any(), anyLong());
+                assertPollDoesNotReturn(commitRequestManger, remainBackoffMs);
+                break;
+            case UNKNOWN_TOPIC_OR_PARTITION:
+            case COORDINATOR_LOAD_IN_PROGRESS:
+                assertRetryBackOff(commitRequestManger, remainBackoffMs);
+                break;
+            case GROUP_AUTHORIZATION_FAILED:
+                // failed
+                break;
+            case TOPIC_AUTHORIZATION_FAILED:
+            case OFFSET_METADATA_TOO_LARGE:
+            case INVALID_COMMIT_OFFSET_SIZE:
+                assertPollDoesNotReturn(commitRequestManger, Long.MAX_VALUE);
+                break;
+            case FENCED_INSTANCE_ID:
+                // This is a fatal failure, so we should not retry
+                assertPollDoesNotReturn(commitRequestManger, Long.MAX_VALUE);
+                break;
+            default:
+                assertPollDoesNotReturn(commitRequestManger, Long.MAX_VALUE);
+        }
+    }
+
+    private void assertPollDoesNotReturn(CommitRequestManager commitRequestManager, long assertNextPollMs) {
+        NetworkClientDelegate.PollResult res = commitRequestManager.poll(time.milliseconds());
+        assertEquals(0, res.unsentRequests.size());
+        assertEquals(assertNextPollMs, res.timeUntilNextPollMs);
+    }
+
+    private void assertRetryBackOff(CommitRequestManager commitRequestManager, long retryBackoffMs) {
+        assertPollDoesNotReturn(commitRequestManager, retryBackoffMs);
+        time.sleep(retryBackoffMs - 1);
+        assertPollDoesNotReturn(commitRequestManager, 1);
+        time.sleep(1);
+        assertPoll(1, commitRequestManager);
     }
 
     private void testRetriable(final CommitRequestManager commitRequestManger,
@@ -261,13 +361,38 @@ public class CommitRequestManagerTest {
     }
 
     // Supplies (error, isRetriable)
-    private static Stream<Arguments> exceptionSupplier() {
+    private static Stream<Arguments> offsetCommitExceptionSupplier() {
         return Stream.of(
-                Arguments.of(Errors.NOT_COORDINATOR, true),
-                Arguments.of(Errors.COORDINATOR_LOAD_IN_PROGRESS, true),
-                Arguments.of(Errors.UNKNOWN_SERVER_ERROR, false),
-                Arguments.of(Errors.GROUP_AUTHORIZATION_FAILED, false),
-                Arguments.of(Errors.TOPIC_AUTHORIZATION_FAILED, false));
+            Arguments.of(Errors.NOT_COORDINATOR, true),
+            Arguments.of(Errors.COORDINATOR_LOAD_IN_PROGRESS, true),
+            Arguments.of(Errors.UNKNOWN_SERVER_ERROR, false),
+            Arguments.of(Errors.GROUP_AUTHORIZATION_FAILED, false),
+            Arguments.of(Errors.OFFSET_METADATA_TOO_LARGE, false),
+            Arguments.of(Errors.INVALID_COMMIT_OFFSET_SIZE, false),
+            Arguments.of(Errors.UNKNOWN_TOPIC_OR_PARTITION, true),
+            Arguments.of(Errors.COORDINATOR_NOT_AVAILABLE, true),
+            Arguments.of(Errors.NOT_COORDINATOR, true),
+            Arguments.of(Errors.REQUEST_TIMED_OUT, true),
+            Arguments.of(Errors.FENCED_INSTANCE_ID, false),
+            Arguments.of(Errors.TOPIC_AUTHORIZATION_FAILED, false));
+    }
+
+    // Supplies (error, isRetriable)
+    private static Stream<Arguments> offsetFetchExceptionSupplier() {
+        // fetchCommit is only retrying on a subset of RetriableErrors
+        return Stream.of(
+            Arguments.of(Errors.NOT_COORDINATOR, true),
+            Arguments.of(Errors.COORDINATOR_LOAD_IN_PROGRESS, true),
+            Arguments.of(Errors.UNKNOWN_SERVER_ERROR, false),
+            Arguments.of(Errors.GROUP_AUTHORIZATION_FAILED, false),
+            Arguments.of(Errors.OFFSET_METADATA_TOO_LARGE, false),
+            Arguments.of(Errors.INVALID_COMMIT_OFFSET_SIZE, false),
+            Arguments.of(Errors.UNKNOWN_TOPIC_OR_PARTITION, false),
+            Arguments.of(Errors.COORDINATOR_NOT_AVAILABLE, false),
+            Arguments.of(Errors.NOT_COORDINATOR, true),
+            Arguments.of(Errors.REQUEST_TIMED_OUT, false),
+            Arguments.of(Errors.FENCED_INSTANCE_ID, false),
+            Arguments.of(Errors.TOPIC_AUTHORIZATION_FAILED, false));
     }
 
     @ParameterizedTest
@@ -310,13 +435,13 @@ public class CommitRequestManagerTest {
     // Supplies (error, isRetriable)
     private static Stream<Arguments> partitionDataErrorSupplier() {
         return Stream.of(
-                Arguments.of(Errors.UNSTABLE_OFFSET_COMMIT, true),
-                Arguments.of(Errors.UNKNOWN_TOPIC_OR_PARTITION, false),
-                Arguments.of(Errors.TOPIC_AUTHORIZATION_FAILED, false),
-                Arguments.of(Errors.UNKNOWN_SERVER_ERROR, false));
+            Arguments.of(Errors.UNSTABLE_OFFSET_COMMIT, true),
+            Arguments.of(Errors.UNKNOWN_TOPIC_OR_PARTITION, false),
+            Arguments.of(Errors.TOPIC_AUTHORIZATION_FAILED, false),
+            Arguments.of(Errors.UNKNOWN_SERVER_ERROR, false));
     }
 
-    private List<CompletableFuture<Map<TopicPartition, OffsetAndMetadata>>> sendAndVerifyDuplicatedRequests(
+    private List<CompletableFuture<Map<TopicPartition, OffsetAndMetadata>>> sendAndVerifyDuplicatedOffsetFetchRequests(
             final CommitRequestManager commitRequestManger,
             final Set<TopicPartition> partitions,
             int numRequest,
@@ -334,6 +459,18 @@ public class CommitRequestManagerTest {
         res = commitRequestManger.poll(time.milliseconds());
         assertEquals(0, res.unsentRequests.size());
         return futures;
+    }
+
+    private void sendAndVerifyOffsetCommitRequests(
+        final CommitRequestManager commitRequestManger,
+        final Map<TopicPartition, OffsetAndMetadata> offsets,
+        final Errors error) {
+        commitRequestManger.addOffsetCommitRequest(offsets);
+        NetworkClientDelegate.PollResult res = commitRequestManger.poll(time.milliseconds());
+        assertEquals(1, res.unsentRequests.size());
+        res.unsentRequests.get(0).future().complete(mockOffsetCommitResponse("topic", 1, (short) 1, error));
+        res = commitRequestManger.poll(time.milliseconds());
+        assertEquals(0, res.unsentRequests.size());
     }
 
     private List<CompletableFuture<ClientResponse>> assertPoll(
@@ -360,13 +497,16 @@ public class CommitRequestManagerTest {
     private CommitRequestManager create(final boolean autoCommitEnabled, final long autoCommitInterval) {
         props.setProperty(AUTO_COMMIT_INTERVAL_MS_CONFIG, String.valueOf(autoCommitInterval));
         props.setProperty(ENABLE_AUTO_COMMIT_CONFIG, String.valueOf(autoCommitEnabled));
-        return new CommitRequestManager(
-                this.time,
-                this.logContext,
-                this.subscriptionState,
-                new ConsumerConfig(props),
-                this.coordinatorRequestManager,
-                this.groupState);
+        return spy(new CommitRequestManager(
+            this.time,
+            this.logContext,
+            this.subscriptionState,
+            new ConsumerConfig(props),
+            this.coordinatorRequestManager,
+            this.groupState,
+            retryBackoffMs,
+            retryBackoffMaxMs,
+            0));
     }
 
     private ClientResponse buildOffsetFetchClientResponse(
@@ -382,9 +522,51 @@ public class CommitRequestManagerTest {
         return buildOffsetFetchClientResponse(request, topicPartitionData, error);
     }
 
+    private ClientResponse buildOffsetCommitClientResponse(final OffsetCommitResponse commitResponse,
+                                                           final Errors error) {
+        OffsetCommitResponseData data = new OffsetCommitResponseData();
+        OffsetCommitResponse response = new OffsetCommitResponse(data);
+        short apiVersion = 1;
+        return new ClientResponse(
+            new RequestHeader(ApiKeys.OFFSET_COMMIT, apiVersion, "", 1),
+            null,
+            "-1",
+            time.milliseconds(),
+            time.milliseconds(),
+            false,
+            null,
+            null,
+            commitResponse
+        );
+    }
+
+    public ClientResponse mockOffsetCommitResponse(String topic, int partition, short apiKeyVersion, Errors error) {
+        OffsetCommitResponseData responseData = new OffsetCommitResponseData()
+            .setTopics(Arrays.asList(
+                new OffsetCommitResponseData.OffsetCommitResponseTopic()
+                    .setName(topic)
+                    .setPartitions(Collections.singletonList(
+                        new OffsetCommitResponseData.OffsetCommitResponsePartition()
+                            .setErrorCode(error.code())
+                            .setPartitionIndex(partition)))));
+        OffsetCommitResponse response = mock(OffsetCommitResponse.class);
+        when(response.data()).thenReturn(responseData);
+        return new ClientResponse(
+            new RequestHeader(ApiKeys.OFFSET_COMMIT, apiKeyVersion, "", 1),
+            null,
+            "-1",
+            time.milliseconds(),
+            time.milliseconds(),
+            false,
+            null,
+            null,
+            new OffsetCommitResponse(responseData)
+        );
+    }
+
     private ClientResponse buildOffsetFetchClientResponse(
             final NetworkClientDelegate.UnsentRequest request,
-            final HashMap<TopicPartition, OffsetFetchResponse.PartitionData> topicPartitionData,
+            final Map<TopicPartition, OffsetFetchResponse.PartitionData> topicPartitionData,
             final Errors error) {
         AbstractRequest abstractRequest = request.requestBuilder().build();
         assertTrue(abstractRequest instanceof OffsetFetchRequest);

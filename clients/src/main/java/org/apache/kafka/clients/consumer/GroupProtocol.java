@@ -14,29 +14,30 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.errors;
+package org.apache.kafka.clients.consumer;
 
-/**
- * An exception that may indicate the client's metadata is out of date
- */
-public abstract class InvalidMetadataException extends RetriableException {
+import java.util.Locale;
 
-    private static final long serialVersionUID = 1L;
+public enum GroupProtocol {
+    /** Generic group protocol.  */
+    GENERIC("GENERIC"),
 
-    protected InvalidMetadataException() {
-        super();
+    /** Consumer group protocol */
+    CONSUMER("CONSUMER");
+
+    /**
+     * String representation of the group protocol.
+     */
+    public final String name;
+
+    GroupProtocol(final String name) {
+        this.name = name;
     }
 
-    protected InvalidMetadataException(String message) {
-        super(message);
+    /**
+     * Case-insensitive group protocol lookup by string name.
+     */
+    public static GroupProtocol of(final String name) {
+        return GroupProtocol.valueOf(name.toUpperCase(Locale.ROOT));
     }
-
-    protected InvalidMetadataException(String message, Throwable cause) {
-        super(message, cause);
-    }
-
-    protected InvalidMetadataException(Throwable cause) {
-        super(cause);
-    }
-
 }
