@@ -71,7 +71,7 @@ import java.util.regex.Pattern;
 
 import static org.apache.kafka.connect.runtime.rest.RestServerConfig.ADMIN_LISTENERS_HTTPS_CONFIGS_PREFIX;
 import static org.apache.kafka.connect.runtime.rest.RestServerConfig.LISTENERS_HTTPS_CONFIGS_PREFIX;
-import static org.apache.kafka.connect.runtime.rest.RestServerConfig.SNI_HOST_CHECK;
+import static org.apache.kafka.connect.runtime.rest.RestServerConfig.SNI_HOST_CHECK_CONFIG;
 
 /**
  * Embedded server for the REST API that provides the control plane for Kafka Connect workers.
@@ -170,7 +170,8 @@ public abstract class RestServer {
             httpsConfig.setSecureScheme(HttpScheme.HTTPS.asString());
             httpsConfig.setSecurePort(port);
             httpsConfig.addCustomizer(
-                new SecureRequestCustomizer(Boolean.parseBoolean(String.valueOf(cfgMap.get(SNI_HOST_CHECK))))
+                new SecureRequestCustomizer(Boolean.parseBoolean(String.valueOf(
+                    cfgMap.getOrDefault(SNI_HOST_CHECK_CONFIG, Boolean.toString(true)))))
             );
 
             connector = new ServerConnector(
