@@ -232,6 +232,7 @@ subprojects {
   // We use the shadow plugin for the jmh-benchmarks module and the `-all` jar can get pretty large, so
   // don't publish it
   def shouldPublish = !project.name.equals('jmh-benchmarks')
+  def shouldPublishWithShadow = (['clients'].contains(project.name))
 
   if (shouldPublish) {
     apply plugin: 'maven-publish'
@@ -295,7 +296,12 @@ subprojects {
       }
       publications {
         mavenJava(MavenPublication) {
-          from components.java
+          if (!shouldPublishWithShadow) {
+            from components.java
+          } else {
+            apply plugin: 'com.github.johnrengelman.shadow'
+            project.shadow.component(mavenJava)
+          }
 
           afterEvaluate {
             ["srcJar", "javadocJar", "scaladocJar", "testJar", "testSrcJar"].forEach { taskName ->
@@ -1342,6 +1348,13 @@ project(':clients') {
     implementation libs.lz4
     implementation libs.snappy
     implementation libs.slf4jApi
+    implementation libs.opentelemetryProto
+
+    // libraries which should be added as runtime dependencies in generated pom.xml should be defined here:
+    shadow libs.zstd
+    shadow libs.lz4
+    shadow libs.snappy
+    shadow libs.slf4jApi
 
     compileOnly libs.jacksonDatabind // for SASL/OAUTHBEARER bearer token parsing
     compileOnly libs.jacksonJDK8Datatypes
@@ -1379,11 +1392,40 @@ project(':clients') {
     }
   }
 
-  jar {
+  shadowJar {
     dependsOn createVersionFile
-    from("$buildDir") {
-        include "kafka/$buildVersionFileName"
+    // archiveClassifier defines the classifier for the shadow jar, the default is 'all'.
+    // We don't want to use the default classifier because it will cause the shadow jar to
+    // overwrite the original jar. We also don't want to use the 'shadow' classifier because
+    // it will cause the shadow jar to be named kafka-clients-shadow.jar. We want to use the
+    // same name as the original jar, kafka-clients.jar.
+    archiveClassifier = null
+    // KIP-714: move shaded dependencies to a shaded location
+    relocate('io.opentelemetry.proto', 'org.apache.kafka.shaded.io.opentelemetry.proto')
+    relocate('com.google.protobuf', 'org.apache.kafka.shaded.com.google.protobuf')
+
+    // dependencies excluded from the final jar, since they are declared as runtime dependencies
+    dependencies {
+      exclude(dependency(libs.snappy))
+      exclude(dependency(libs.zstd))
+      exclude(dependency(libs.lz4))
+      exclude(dependency(libs.slf4jApi))
+      // exclude proto files from the jar
+      exclude "**/opentelemetry/proto/**/*.proto"
+      exclude "**/google/protobuf/*.proto"
     }
+
+    from("$buildDir") {
+      include "kafka/$buildVersionFileName"
+    }
+
+    from "$rootDir/LICENSE"
+    from "$rootDir/NOTICE"
+  }
+
+  jar {
+    enabled false
+    dependsOn 'shadowJar'
   }
 
   clean.doFirst {
