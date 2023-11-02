@@ -234,7 +234,8 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
         TestUtils.deleteTopicWithAdmin(
           admin = admin,
           topic = topic,
-          brokers = aliveBrokers)
+          brokers = aliveBrokers,
+          controllers = controllerServers)
       }
     } else {
       adminZkClient.deleteTopic(topic)

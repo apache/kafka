@@ -542,6 +542,7 @@ object TestUtils extends Logging {
     admin: Admin,
     topic: String,
     brokers: Seq[B],
+    controllers: Seq[ControllerServer]
   ): Unit = {
     try {
       admin.deleteTopics(Collections.singletonList(topic)).all().get()
@@ -551,6 +552,7 @@ object TestUtils extends Logging {
         // ignore
     }
     waitForAllPartitionsMetadata(brokers, topic, 0)
+    controllers.foreach(controller => ensureConsistentKRaftMetadata(brokers, controller))
   }
 
   /**

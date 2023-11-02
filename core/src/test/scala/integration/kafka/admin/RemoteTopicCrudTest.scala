@@ -290,7 +290,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
     topicConfig.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, "100")
     TestUtils.createTopicWithAdmin(createAdminClient(), testTopicName, brokers, controllerServers, numPartitions, brokerCount,
       topicConfig = topicConfig)
-    TestUtils.deleteTopicWithAdmin(createAdminClient(), testTopicName, brokers)
+    TestUtils.deleteTopicWithAdmin(createAdminClient(), testTopicName, brokers, controllerServers)
     assertThrowsException(classOf[UnknownTopicOrPartitionException],
       () => TestUtils.describeTopic(createAdminClient(), testTopicName), "Topic should be deleted")
     TestUtils.waitUntilTrue(() =>
