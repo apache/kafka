@@ -17,16 +17,18 @@
 package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.compress.KafkaLZ4BlockInputStream;
+import org.apache.kafka.common.compress.KafkaLZ4BlockOutputStream;
+import org.apache.kafka.common.compress.SnappyFactory;
+import org.apache.kafka.common.compress.ZstdFactory;
+import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.ByteBufferInputStream;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
+import org.apache.kafka.common.utils.ChunkedBytesStream;
 
-import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.lang.invoke.MethodHandle;
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.MethodType;
 import java.nio.ByteBuffer;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
@@ -35,7 +37,7 @@ import java.util.zip.GZIPOutputStream;
  * The compression type to use
  */
 public enum CompressionType {
-    NONE(0, "none", 1.0f) {
+    NONE((byte) 0, "none", 1.0f) {
         @Override
         public OutputStream wrapForOutput(ByteBufferOutputStream buffer, byte messageVersion) {
             return buffer;
@@ -47,7 +49,8 @@ public enum CompressionType {
         }
     },
 
-    GZIP(1, "gzip", 1.0f) {
+    // Shipped with the JDK
+    GZIP((byte) 1, "gzip", 1.0f) {
         @Override
         public OutputStream wrapForOutput(ByteBufferOutputStream buffer, byte messageVersion) {
             try {
@@ -63,38 +66,55 @@ public enum CompressionType {
         @Override
         public InputStream wrapForInput(ByteBuffer buffer, byte messageVersion, BufferSupplier decompressionBufferSupplier) {
             try {
-                // Set output buffer (uncompressed) to 16 KB (none by default) and input buffer (compressed) to
-                // 8 KB (0.5 KB by default) to ensure reasonable performance in cases where the caller reads a small
-                // number of bytes (potentially a single byte)
-                return new BufferedInputStream(new GZIPInputStream(new ByteBufferInputStream(buffer), 8 * 1024),
-                        16 * 1024);
+                // Set input buffer (compressed) to 8 KB (GZIPInputStream uses 0.5 KB by default) to ensure reasonable
+                // performance in cases where the caller reads a small number of bytes (potentially a single byte).
+                //
+                // Size of output buffer (uncompressed) is provided by decompressionOutputSize.
+                //
+                // ChunkedBytesStream is used to wrap the GZIPInputStream because the default implementation of
+                // GZIPInputStream does not use an intermediate buffer for decompression in chunks.
+                return new ChunkedBytesStream(new GZIPInputStream(new ByteBufferInputStream(buffer), 8 * 1024), decompressionBufferSupplier, decompressionOutputSize(), false);
             } catch (Exception e) {
                 throw new KafkaException(e);
             }
         }
+
+        @Override
+        public int decompressionOutputSize() {
+            // 16KB has been chosen based on legacy implementation introduced in https://github.com/apache/kafka/pull/6785
+            return 16 * 1024;
+        }
     },
 
-    SNAPPY(2, "snappy", 1.0f) {
+    // We should only load classes from a given compression library when we actually use said compression library. This
+    // is because compression libraries include native code for a set of platforms and we want to avoid errors
+    // in case the platform is not supported and the compression library is not actually used.
+    // To ensure this, we only reference compression library code from classes that are only invoked when actual usage
+    // happens.
+
+    SNAPPY((byte) 2, "snappy", 1.0f) {
         @Override
         public OutputStream wrapForOutput(ByteBufferOutputStream buffer, byte messageVersion) {
-            try {
-                return (OutputStream) SnappyConstructors.OUTPUT.invoke(buffer);
-            } catch (Throwable e) {
-                throw new KafkaException(e);
-            }
+            return SnappyFactory.wrapForOutput(buffer);
         }
 
         @Override
         public InputStream wrapForInput(ByteBuffer buffer, byte messageVersion, BufferSupplier decompressionBufferSupplier) {
-            try {
-                return (InputStream) SnappyConstructors.INPUT.invoke(new ByteBufferInputStream(buffer));
-            } catch (Throwable e) {
-                throw new KafkaException(e);
-            }
+            // SnappyInputStream uses default implementation of InputStream for skip. Default implementation of
+            // SnappyInputStream allocates a new skip buffer every time, hence, we prefer our own implementation.
+            return new ChunkedBytesStream(SnappyFactory.wrapForInput(buffer), decompressionBufferSupplier, decompressionOutputSize(), false);
+        }
+
+        @Override
+        public int decompressionOutputSize() {
+            // SnappyInputStream already uses an intermediate buffer internally. The size
+            // of this buffer is based on legacy implementation based on skipArray introduced in
+            // https://github.com/apache/kafka/pull/6785
+            return 2 * 1024; // 2KB
         }
     },
 
-    LZ4(3, "lz4", 1.0f) {
+    LZ4((byte) 3, "lz4", 1.0f) {
         @Override
         public OutputStream wrapForOutput(ByteBufferOutputStream buffer, byte messageVersion) {
             try {
@@ -107,39 +127,55 @@ public enum CompressionType {
         @Override
         public InputStream wrapForInput(ByteBuffer inputBuffer, byte messageVersion, BufferSupplier decompressionBufferSupplier) {
             try {
-                return new KafkaLZ4BlockInputStream(inputBuffer, decompressionBufferSupplier,
-                                                    messageVersion == RecordBatch.MAGIC_VALUE_V0);
+                return new ChunkedBytesStream(
+                    new KafkaLZ4BlockInputStream(inputBuffer, decompressionBufferSupplier, messageVersion == RecordBatch.MAGIC_VALUE_V0),
+                    decompressionBufferSupplier, decompressionOutputSize(), true);
             } catch (Throwable e) {
                 throw new KafkaException(e);
             }
         }
+
+        @Override
+        public int decompressionOutputSize() {
+            // KafkaLZ4BlockInputStream uses an internal intermediate buffer to store decompressed data. The size
+            // of this buffer is based on legacy implementation based on skipArray introduced in
+            // https://github.com/apache/kafka/pull/6785
+            return 2 * 1024; // 2KB
+        }
     },
 
-    ZSTD(4, "zstd", 1.0f) {
+    ZSTD((byte) 4, "zstd", 1.0f) {
         @Override
         public OutputStream wrapForOutput(ByteBufferOutputStream buffer, byte messageVersion) {
-            try {
-                return (OutputStream) ZstdConstructors.OUTPUT.invoke(buffer);
-            } catch (Throwable e) {
-                throw new KafkaException(e);
-            }
+            return ZstdFactory.wrapForOutput(buffer);
         }
 
         @Override
         public InputStream wrapForInput(ByteBuffer buffer, byte messageVersion, BufferSupplier decompressionBufferSupplier) {
-            try {
-                return (InputStream) ZstdConstructors.INPUT.invoke(new ByteBufferInputStream(buffer));
-            } catch (Throwable e) {
-                throw new KafkaException(e);
-            }
+            return new ChunkedBytesStream(ZstdFactory.wrapForInput(buffer, messageVersion, decompressionBufferSupplier), decompressionBufferSupplier, decompressionOutputSize(), false);
         }
+
+        /**
+         * Size of intermediate buffer which contains uncompressed data.
+         * This size should be <= ZSTD_BLOCKSIZE_MAX
+         * see: https://github.com/facebook/zstd/blob/189653a9c10c9f4224a5413a6d6a69dd01d7c3bd/lib/zstd.h#L854
+         */
+        @Override
+        public int decompressionOutputSize() {
+            // 16KB has been chosen based on legacy implementation introduced in https://github.com/apache/kafka/pull/6785
+            return 16 * 1024;
+        }
+
+
     };
 
-    public final int id;
+    // compression type is represented by two bits in the attributes field of the record batch header, so `byte` is
+    // large enough
+    public final byte id;
     public final String name;
     public final float rate;
 
-    CompressionType(int id, String name, float rate) {
+    CompressionType(byte id, String name, float rate) {
         this.id = id;
         this.name = name;
         this.rate = rate;
@@ -147,7 +183,7 @@ public enum CompressionType {
 
     /**
      * Wrap bufferStream with an OutputStream that will compress data with this CompressionType.
-     *
+     * <p>
      * Note: Unlike {@link #wrapForInput}, {@link #wrapForOutput} cannot take {@link ByteBuffer}s directly.
      * Currently, {@link MemoryRecordsBuilder#writeDefaultBatchHeader()} and {@link MemoryRecordsBuilder#writeLegacyCompressedWrapperHeader()}
      * write to the underlying buffer in the given {@link ByteBufferOutputStream} after the compressed data has been written.
@@ -165,6 +201,13 @@ public enum CompressionType {
      *                                    performance impact.
      */
     public abstract InputStream wrapForInput(ByteBuffer buffer, byte messageVersion, BufferSupplier decompressionBufferSupplier);
+
+    /**
+     * Recommended size of buffer for storing decompressed output.
+     */
+    public int decompressionOutputSize() {
+        throw new UnsupportedOperationException("Size of decompression buffer is not defined for this compression type=" + this.name);
+    }
 
     public static CompressionType forId(int id) {
         switch (id) {
@@ -198,35 +241,9 @@ public enum CompressionType {
             throw new IllegalArgumentException("Unknown compression name: " + name);
     }
 
-    // We should only have a runtime dependency on compression algorithms in case the native libraries don't support
-    // some platforms.
-    //
-    // For Snappy and Zstd, we dynamically load the classes and rely on the initialization-on-demand holder idiom to ensure
-    // they're only loaded if used.
-    //
-    // For LZ4 we are using org.apache.kafka classes, which should always be in the classpath, and would not trigger
-    // an error until KafkaLZ4BlockInputStream is initialized, which only happens if LZ4 is actually used.
-
-    private static class SnappyConstructors {
-        static final MethodHandle INPUT = findConstructor("org.xerial.snappy.SnappyInputStream",
-                MethodType.methodType(void.class, InputStream.class));
-        static final MethodHandle OUTPUT = findConstructor("org.xerial.snappy.SnappyOutputStream",
-                MethodType.methodType(void.class, OutputStream.class));
-    }
-
-    private static class ZstdConstructors {
-        static final MethodHandle INPUT = findConstructor("com.github.luben.zstd.ZstdInputStream",
-            MethodType.methodType(void.class, InputStream.class));
-        static final MethodHandle OUTPUT = findConstructor("com.github.luben.zstd.ZstdOutputStream",
-            MethodType.methodType(void.class, OutputStream.class));
-    }
-
-    private static MethodHandle findConstructor(String className, MethodType methodType) {
-        try {
-            return MethodHandles.publicLookup().findConstructor(Class.forName(className), methodType);
-        } catch (ReflectiveOperationException e) {
-            throw new RuntimeException(e);
-        }
+    @Override
+    public String toString() {
+        return name;
     }
 
 }

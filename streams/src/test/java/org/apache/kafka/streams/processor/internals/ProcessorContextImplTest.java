@@ -16,14 +16,23 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeader;
+import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.To;
+import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.SessionStore;
@@ -32,35 +41,62 @@ import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
+import org.apache.kafka.streams.state.internals.PositionSerde;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.Mock;
+import org.mockito.junit.MockitoJUnitRunner;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 
 import static java.util.Arrays.asList;
-import static org.easymock.EasyMock.anyLong;
-import static org.easymock.EasyMock.anyObject;
-import static org.easymock.EasyMock.anyString;
-import static org.easymock.EasyMock.expect;
-import static org.easymock.EasyMock.expectLastCall;
-import static org.easymock.EasyMock.mock;
-import static org.easymock.EasyMock.replay;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.streams.processor.internals.ProcessorContextImpl.BYTEARRAY_VALUE_SERIALIZER;
+import static org.apache.kafka.streams.processor.internals.ProcessorContextImpl.BYTES_KEY_SERIALIZER;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class ProcessorContextImplTest {
     private ProcessorContextImpl context;
 
+    private final StreamsConfig streamsConfig = streamsConfigMock();
+
+    @Mock
+    private RecordCollector recordCollector;
+    @Mock
+    private ProcessorStateManager stateManager;
+
     private static final String KEY = "key";
+    private static final Bytes KEY_BYTES = Bytes.wrap(KEY.getBytes());
     private static final long VALUE = 42L;
+    private static final byte[] VALUE_BYTES = String.valueOf(VALUE).getBytes();
+    private static final long TIMESTAMP = 21L;
+    private static final long STREAM_TIME = 50L;
     private static final ValueAndTimestamp<Long> VALUE_AND_TIMESTAMP = ValueAndTimestamp.make(42L, 21L);
     private static final String STORE_NAME = "underlying-store";
+    private static final String REGISTERED_STORE_NAME = "registered-store";
+    private static final TopicPartition CHANGELOG_PARTITION = new TopicPartition("store-changelog", 1);
 
     private boolean flushExecuted;
     private boolean putExecuted;
@@ -70,16 +106,23 @@ public class ProcessorContextImplTest {
     private boolean deleteExecuted;
     private boolean removeExecuted;
 
+    @Mock
     private KeyValueIterator<String, Long> rangeIter;
+    @Mock
     private KeyValueIterator<String, ValueAndTimestamp<Long>> timestampedRangeIter;
+    @Mock
     private KeyValueIterator<String, Long> allIter;
+    @Mock
     private KeyValueIterator<String, ValueAndTimestamp<Long>> timestampedAllIter;
+    @Mock
+    private WindowStoreIterator windowStoreIter;
 
     private final List<KeyValueIterator<Windowed<String>, Long>> iters = new ArrayList<>(7);
     private final List<KeyValueIterator<Windowed<String>, ValueAndTimestamp<Long>>> timestampedIters = new ArrayList<>(7);
-    private WindowStoreIterator windowStoreIter;
+
 
     @Before
+    @SuppressWarnings("unchecked")
     public void setup() {
         flushExecuted = false;
         putExecuted = false;
@@ -88,57 +131,65 @@ public class ProcessorContextImplTest {
         deleteExecuted = false;
         removeExecuted = false;
 
-        rangeIter = mock(KeyValueIterator.class);
-        timestampedRangeIter = mock(KeyValueIterator.class);
-        allIter = mock(KeyValueIterator.class);
-        timestampedAllIter = mock(KeyValueIterator.class);
-        windowStoreIter = mock(WindowStoreIterator.class);
-
         for (int i = 0; i < 7; i++) {
             iters.add(i, mock(KeyValueIterator.class));
             timestampedIters.add(i, mock(KeyValueIterator.class));
         }
 
-        final StreamsConfig streamsConfig = mock(StreamsConfig.class);
-        expect(streamsConfig.getString(StreamsConfig.APPLICATION_ID_CONFIG)).andReturn("add-id");
-        expect(streamsConfig.defaultValueSerde()).andReturn(Serdes.ByteArray());
-        expect(streamsConfig.defaultKeySerde()).andReturn(Serdes.ByteArray());
-        replay(streamsConfig);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
 
-        final ProcessorStateManager stateManager = mock(ProcessorStateManager.class);
-
-        expect(stateManager.getGlobalStore("GlobalKeyValueStore")).andReturn(keyValueStoreMock());
-        expect(stateManager.getGlobalStore("GlobalTimestampedKeyValueStore")).andReturn(timestampedKeyValueStoreMock());
-        expect(stateManager.getGlobalStore("GlobalWindowStore")).andReturn(windowStoreMock());
-        expect(stateManager.getGlobalStore("GlobalTimestampedWindowStore")).andReturn(timestampedWindowStoreMock());
-        expect(stateManager.getGlobalStore("GlobalSessionStore")).andReturn(sessionStoreMock());
-        expect(stateManager.getGlobalStore(anyString())).andReturn(null);
-
-        expect(stateManager.getStore("LocalKeyValueStore")).andReturn(keyValueStoreMock());
-        expect(stateManager.getStore("LocalTimestampedKeyValueStore")).andReturn(timestampedKeyValueStoreMock());
-        expect(stateManager.getStore("LocalWindowStore")).andReturn(windowStoreMock());
-        expect(stateManager.getStore("LocalTimestampedWindowStore")).andReturn(timestampedWindowStoreMock());
-        expect(stateManager.getStore("LocalSessionStore")).andReturn(sessionStoreMock());
-
-        replay(stateManager);
+        when(stateManager.getGlobalStore(anyString())).thenReturn(null);
+        when(stateManager.getGlobalStore("GlobalKeyValueStore")).thenAnswer(answer -> keyValueStoreMock());
+        when(stateManager.getGlobalStore("GlobalTimestampedKeyValueStore")).thenAnswer(answer -> timestampedKeyValueStoreMock());
+        when(stateManager.getGlobalStore("GlobalWindowStore")).thenAnswer(answer -> windowStoreMock());
+        when(stateManager.getGlobalStore("GlobalTimestampedWindowStore")).thenAnswer(answer -> timestampedWindowStoreMock());
+        when(stateManager.getGlobalStore("GlobalSessionStore")).thenAnswer(answer -> sessionStoreMock());
+        when(stateManager.getStore("LocalKeyValueStore")).thenAnswer(answer -> keyValueStoreMock());
+        when(stateManager.getStore("LocalTimestampedKeyValueStore")).thenAnswer(answer -> timestampedKeyValueStoreMock());
+        when(stateManager.getStore("LocalWindowStore")).thenAnswer(answer -> windowStoreMock());
+        when(stateManager.getStore("LocalTimestampedWindowStore")).thenAnswer(answer -> timestampedWindowStoreMock());
+        when(stateManager.getStore("LocalSessionStore")).thenAnswer(answer -> sessionStoreMock());
+        when(stateManager.registeredChangelogPartitionFor(REGISTERED_STORE_NAME)).thenReturn(CHANGELOG_PARTITION);
 
         context = new ProcessorContextImpl(
             mock(TaskId.class),
-            mock(StreamTask.class),
             streamsConfig,
-            mock(RecordCollector.class),
             stateManager,
             mock(StreamsMetricsImpl.class),
             mock(ThreadCache.class)
         );
 
-        context.setCurrentNode(new ProcessorNode<String, Long>("fake", null,
-            new HashSet<>(asList(
-                "LocalKeyValueStore",
-                "LocalTimestampedKeyValueStore",
-                "LocalWindowStore",
-                "LocalTimestampedWindowStore",
-                "LocalSessionStore"))));
+        final StreamTask task = mock(StreamTask.class);
+        when(task.streamTime()).thenReturn(STREAM_TIME);
+        context.transitionToActive(task, null, null);
+
+        context.setCurrentNode(
+            new ProcessorNode<>(
+                "fake",
+                (org.apache.kafka.streams.processor.api.Processor<String, Long, Object, Object>) null,
+                new HashSet<>(
+                    asList(
+                        "LocalKeyValueStore",
+                        "LocalTimestampedKeyValueStore",
+                        "LocalWindowStore",
+                        "LocalTimestampedWindowStore",
+                        "LocalSessionStore"
+                    )
+                )
+            )
+        );
+    }
+
+    private ProcessorContextImpl getStandbyContext() {
+        final ProcessorStateManager stateManager = mock(ProcessorStateManager.class);
+        when(stateManager.taskType()).thenReturn(TaskType.STANDBY);
+        return new ProcessorContextImpl(
+            mock(TaskId.class),
+            streamsConfig,
+            stateManager,
+            mock(StreamsMetricsImpl.class),
+            mock(ThreadCache.class)
+        );
     }
 
     @Test
@@ -178,14 +229,12 @@ public class ProcessorContextImplTest {
     }
 
     @Test
-    @SuppressWarnings("deprecation")
     public void globalWindowStoreShouldBeReadOnly() {
         doTest("GlobalWindowStore", (Consumer<WindowStore<String, Long>>) store -> {
             verifyStoreCannotBeInitializedOrClosed(store);
 
             checkThrowsUnsupportedOperation(store::flush, "flush()");
             checkThrowsUnsupportedOperation(() -> store.put("1", 1L, 1L), "put()");
-            checkThrowsUnsupportedOperation(() -> store.put("1", 1L), "put()");
 
             assertEquals(iters.get(0), store.fetchAll(0L, 0L));
             assertEquals(windowStoreIter, store.fetch(KEY, 0L, 1L));
@@ -195,16 +244,13 @@ public class ProcessorContextImplTest {
         });
     }
 
-
     @Test
-    @SuppressWarnings("deprecation")
     public void globalTimestampedWindowStoreShouldBeReadOnly() {
         doTest("GlobalTimestampedWindowStore", (Consumer<TimestampedWindowStore<String, Long>>) store -> {
             verifyStoreCannotBeInitializedOrClosed(store);
 
             checkThrowsUnsupportedOperation(store::flush, "flush()");
             checkThrowsUnsupportedOperation(() -> store.put("1", ValueAndTimestamp.make(1L, 1L), 1L), "put() [with timestamp]");
-            checkThrowsUnsupportedOperation(() -> store.put("1", ValueAndTimestamp.make(1L, 1L)), "put() [no timestamp]");
 
             assertEquals(timestampedIters.get(0), store.fetchAll(0L, 0L));
             assertEquals(windowStoreIter, store.fetch(KEY, 0L, 1L));
@@ -285,7 +331,6 @@ public class ProcessorContextImplTest {
     }
 
     @Test
-    @SuppressWarnings("deprecation")
     public void localWindowStoreShouldNotAllowInitOrClose() {
         doTest("LocalWindowStore", (Consumer<WindowStore<String, Long>>) store -> {
             verifyStoreCannotBeInitializedOrClosed(store);
@@ -293,7 +338,7 @@ public class ProcessorContextImplTest {
             store.flush();
             assertTrue(flushExecuted);
 
-            store.put("1", 1L);
+            store.put("1", 1L, 1L);
             assertTrue(putExecuted);
 
             assertEquals(iters.get(0), store.fetchAll(0L, 0L));
@@ -305,7 +350,6 @@ public class ProcessorContextImplTest {
     }
 
     @Test
-    @SuppressWarnings("deprecation")
     public void localTimestampedWindowStoreShouldNotAllowInitOrClose() {
         doTest("LocalTimestampedWindowStore", (Consumer<TimestampedWindowStore<String, Long>>) store -> {
             verifyStoreCannotBeInitializedOrClosed(store);
@@ -313,7 +357,7 @@ public class ProcessorContextImplTest {
             store.flush();
             assertTrue(flushExecuted);
 
-            store.put("1", ValueAndTimestamp.make(1L, 1L));
+            store.put("1", ValueAndTimestamp.make(1L, 1L), 1L);
             assertTrue(putExecuted);
 
             store.put("1", ValueAndTimestamp.make(1L, 1L), 1L);
@@ -348,44 +392,242 @@ public class ProcessorContextImplTest {
         });
     }
 
+    @Test
+    public void shouldNotSendRecordHeadersToChangelogTopic() {
+        final StreamTask task = mock(StreamTask.class);
+
+        context.transitionToActive(task, recordCollector, null);
+        context.logChange(REGISTERED_STORE_NAME, KEY_BYTES, VALUE_BYTES, TIMESTAMP, Position.emptyPosition());
+
+        verify(recordCollector).send(
+            CHANGELOG_PARTITION.topic(),
+            KEY_BYTES,
+            VALUE_BYTES,
+            null,
+            CHANGELOG_PARTITION.partition(),
+            TIMESTAMP,
+            BYTES_KEY_SERIALIZER,
+            BYTEARRAY_VALUE_SERIALIZER,
+            null,
+            null);
+    }
+
+    @Test
+    public void shouldSendRecordHeadersToChangelogTopicWhenConsistencyEnabled() {
+        final Position position = Position.emptyPosition();
+        final Headers headers = new RecordHeaders();
+        headers.add(ChangelogRecordDeserializationHelper.CHANGELOG_VERSION_HEADER_RECORD_CONSISTENCY);
+        headers.add(new RecordHeader(ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY,
+                PositionSerde.serialize(position).array()));
+
+        final StreamTask task = mock(StreamTask.class);
+
+        context = new ProcessorContextImpl(
+                mock(TaskId.class),
+                streamsConfigWithConsistencyMock(),
+                stateManager,
+                mock(StreamsMetricsImpl.class),
+                mock(ThreadCache.class)
+        );
+
+        context.transitionToActive(task, recordCollector, null);
+        context.logChange(REGISTERED_STORE_NAME, KEY_BYTES, VALUE_BYTES, TIMESTAMP, position);
+
+        verify(recordCollector).send(
+            CHANGELOG_PARTITION.topic(),
+            KEY_BYTES,
+            VALUE_BYTES,
+            headers,
+            CHANGELOG_PARTITION.partition(),
+            TIMESTAMP,
+            BYTES_KEY_SERIALIZER,
+            BYTEARRAY_VALUE_SERIALIZER,
+            null,
+            null);
+    }
+
+    @Test
+    public void shouldThrowUnsupportedOperationExceptionOnLogChange() {
+        context = getStandbyContext();
+        assertThrows(
+            UnsupportedOperationException.class,
+            () -> context.logChange("Store", Bytes.wrap("k".getBytes()), null, 0L, Position.emptyPosition())
+        );
+    }
+
+    @Test
+    public void shouldThrowUnsupportedOperationExceptionOnGetStateStore() {
+        context = getStandbyContext();
+        assertThrows(
+            UnsupportedOperationException.class,
+            () -> context.getStateStore("store")
+        );
+    }
+
+    @Test
+    public void shouldThrowUnsupportedOperationExceptionOnForward() {
+        context = getStandbyContext();
+        assertThrows(
+            UnsupportedOperationException.class,
+            () -> context.forward("key", "value")
+        );
+    }
+
+    @Test
+    public void shouldThrowUnsupportedOperationExceptionOnForwardWithTo() {
+        context = getStandbyContext();
+        assertThrows(
+            UnsupportedOperationException.class,
+            () -> context.forward("key", "value", To.child("child-name"))
+        );
+    }
+
+    @Test
+    public void shouldThrowUnsupportedOperationExceptionOnCommit() {
+        context = getStandbyContext();
+        assertThrows(
+            UnsupportedOperationException.class,
+            () -> context.commit()
+        );
+    }
+
+    @Test
+    public void shouldThrowUnsupportedOperationExceptionOnSchedule() {
+        context = getStandbyContext();
+        assertThrows(
+            UnsupportedOperationException.class,
+            () -> context.schedule(Duration.ofMillis(100L), PunctuationType.STREAM_TIME, t -> { })
+        );
+    }
+
+    @Test
+    public void shouldThrowUnsupportedOperationExceptionOnTopic() {
+        context = getStandbyContext();
+        assertThrows(
+            UnsupportedOperationException.class,
+            () -> context.topic()
+        );
+    }
+    @Test
+    public void shouldThrowUnsupportedOperationExceptionOnPartition() {
+        context = getStandbyContext();
+        assertThrows(
+            UnsupportedOperationException.class,
+            () -> context.partition()
+        );
+    }
+
+    @Test
+    public void shouldThrowUnsupportedOperationExceptionOnOffset() {
+        context = getStandbyContext();
+        assertThrows(
+            UnsupportedOperationException.class,
+            () -> context.offset()
+        );
+    }
+
+    @Test
+    public void shouldThrowUnsupportedOperationExceptionOnTimestamp() {
+        context = getStandbyContext();
+        assertThrows(
+            UnsupportedOperationException.class,
+            () -> context.timestamp()
+        );
+    }
+
+    @Test
+    public void shouldThrowUnsupportedOperationExceptionOnCurrentNode() {
+        context = getStandbyContext();
+        assertThrows(
+            UnsupportedOperationException.class,
+            () -> context.currentNode()
+        );
+    }
+
+    @Test
+    public void shouldThrowUnsupportedOperationExceptionOnSetRecordContext() {
+        context = getStandbyContext();
+        assertThrows(
+            UnsupportedOperationException.class,
+            () -> context.setRecordContext(mock(ProcessorRecordContext.class))
+        );
+    }
+
+    @Test
+    public void shouldThrowUnsupportedOperationExceptionOnRecordContext() {
+        context = getStandbyContext();
+        assertThrows(
+            UnsupportedOperationException.class,
+            () -> context.recordContext()
+        );
+    }
+
+    @Test
+    public void shouldMatchStreamTime() {
+        assertEquals(STREAM_TIME, context.currentStreamTimeMs());
+    }
+
+    @Test
+    public void shouldAddAndGetProcessorKeyValue() {
+        context.addProcessorMetadataKeyValue("key1", 100L);
+        final Long value = context.processorMetadataForKey("key1");
+        assertEquals(100L, value.longValue());
+
+        final Long noValue = context.processorMetadataForKey("nokey");
+        assertNull(noValue);
+    }
+
+    @Test
+    public void shouldSetAndGetProcessorMetaData() {
+        final ProcessorMetadata emptyMetadata = new ProcessorMetadata();
+        context.setProcessorMetadata(emptyMetadata);
+        assertEquals(emptyMetadata, context.getProcessorMetadata());
+
+        final ProcessorMetadata metadata = new ProcessorMetadata(
+            mkMap(
+                mkEntry("key1", 10L),
+                mkEntry("key2", 100L)
+            )
+        );
+
+        context.setProcessorMetadata(metadata);
+        assertEquals(10L, context.processorMetadataForKey("key1").longValue());
+        assertEquals(100L, context.processorMetadataForKey("key2").longValue());
+
+        assertThrows(NullPointerException.class, () -> context.setProcessorMetadata(null));
+    }
+
     @SuppressWarnings("unchecked")
     private KeyValueStore<String, Long> keyValueStoreMock() {
         final KeyValueStore<String, Long> keyValueStoreMock = mock(KeyValueStore.class);
 
         initStateStoreMock(keyValueStoreMock);
 
-        expect(keyValueStoreMock.get(KEY)).andReturn(VALUE);
-        expect(keyValueStoreMock.approximateNumEntries()).andReturn(VALUE);
+        when(keyValueStoreMock.get(KEY)).thenReturn(VALUE);
+        when(keyValueStoreMock.approximateNumEntries()).thenReturn(VALUE);
 
-        expect(keyValueStoreMock.range("one", "two")).andReturn(rangeIter);
-        expect(keyValueStoreMock.all()).andReturn(allIter);
+        when(keyValueStoreMock.range("one", "two")).thenReturn(rangeIter);
+        when(keyValueStoreMock.all()).thenReturn(allIter);
 
-
-        keyValueStoreMock.put(anyString(), anyLong());
-        expectLastCall().andAnswer(() -> {
+        doAnswer(answer -> {
             putExecuted = true;
             return null;
-        });
+        }).when(keyValueStoreMock).put(anyString(), anyLong());
 
-        keyValueStoreMock.putIfAbsent(anyString(), anyLong());
-        expectLastCall().andAnswer(() -> {
+        doAnswer(answer -> {
             putIfAbsentExecuted = true;
             return null;
-        });
+        }).when(keyValueStoreMock).putIfAbsent(anyString(), anyLong());
 
-        keyValueStoreMock.putAll(anyObject(List.class));
-        expectLastCall().andAnswer(() -> {
+        doAnswer(answer -> {
             putAllExecuted = true;
             return null;
-        });
+        }).when(keyValueStoreMock).putAll(any(List.class));
 
-        keyValueStoreMock.delete(anyString());
-        expectLastCall().andAnswer(() -> {
+        doAnswer(answer -> {
             deleteExecuted = true;
             return null;
-        });
-
-        replay(keyValueStoreMock);
+        }).when(keyValueStoreMock).delete(anyString());
 
         return keyValueStoreMock;
     }
@@ -396,90 +638,74 @@ public class ProcessorContextImplTest {
 
         initStateStoreMock(timestampedKeyValueStoreMock);
 
-        expect(timestampedKeyValueStoreMock.get(KEY)).andReturn(VALUE_AND_TIMESTAMP);
-        expect(timestampedKeyValueStoreMock.approximateNumEntries()).andReturn(VALUE);
+        when(timestampedKeyValueStoreMock.get(KEY)).thenReturn(VALUE_AND_TIMESTAMP);
+        when(timestampedKeyValueStoreMock.approximateNumEntries()).thenReturn(VALUE);
 
-        expect(timestampedKeyValueStoreMock.range("one", "two")).andReturn(timestampedRangeIter);
-        expect(timestampedKeyValueStoreMock.all()).andReturn(timestampedAllIter);
+        when(timestampedKeyValueStoreMock.range("one", "two")).thenReturn(timestampedRangeIter);
+        when(timestampedKeyValueStoreMock.all()).thenReturn(timestampedAllIter);
 
-
-        timestampedKeyValueStoreMock.put(anyString(), anyObject(ValueAndTimestamp.class));
-        expectLastCall().andAnswer(() -> {
+        doAnswer(answer -> {
             putExecuted = true;
             return null;
-        });
+        }).when(timestampedKeyValueStoreMock).put(anyString(), any(ValueAndTimestamp.class));
 
-        timestampedKeyValueStoreMock.putIfAbsent(anyString(), anyObject(ValueAndTimestamp.class));
-        expectLastCall().andAnswer(() -> {
+        doAnswer(answer -> {
             putIfAbsentExecuted = true;
             return null;
-        });
+        }).when(timestampedKeyValueStoreMock).putIfAbsent(anyString(), any(ValueAndTimestamp.class));
 
-        timestampedKeyValueStoreMock.putAll(anyObject(List.class));
-        expectLastCall().andAnswer(() -> {
+        doAnswer(answer -> {
             putAllExecuted = true;
             return null;
-        });
+        }).when(timestampedKeyValueStoreMock).putAll(any(List.class));
 
-        timestampedKeyValueStoreMock.delete(anyString());
-        expectLastCall().andAnswer(() -> {
+        doAnswer(answer -> {
             deleteExecuted = true;
             return null;
-        });
-
-        replay(timestampedKeyValueStoreMock);
+        }).when(timestampedKeyValueStoreMock).delete(anyString());
 
         return timestampedKeyValueStoreMock;
     }
 
-    @SuppressWarnings({"unchecked", "deprecation"})
+    @SuppressWarnings("unchecked")
     private WindowStore<String, Long> windowStoreMock() {
         final WindowStore<String, Long> windowStore = mock(WindowStore.class);
 
         initStateStoreMock(windowStore);
 
-        expect(windowStore.fetchAll(anyLong(), anyLong())).andReturn(iters.get(0));
-        expect(windowStore.fetch(anyString(), anyString(), anyLong(), anyLong())).andReturn(iters.get(1));
-        expect(windowStore.fetch(anyString(), anyLong(), anyLong())).andReturn(windowStoreIter);
-        expect(windowStore.fetch(anyString(), anyLong())).andReturn(VALUE);
-        expect(windowStore.all()).andReturn(iters.get(2));
+        when(windowStore.fetchAll(anyLong(), anyLong())).thenReturn(iters.get(0));
+        when(windowStore.fetch(anyString(), anyString(), anyLong(), anyLong())).thenReturn(iters.get(1));
+        when(windowStore.fetch(anyString(), anyLong(), anyLong())).thenReturn(windowStoreIter);
+        when(windowStore.fetch(anyString(), anyLong())).thenReturn(VALUE);
+        when(windowStore.all()).thenReturn(iters.get(2));
 
-        windowStore.put(anyString(), anyLong());
-        expectLastCall().andAnswer(() -> {
+        doAnswer(answer -> {
             putExecuted = true;
             return null;
-        });
-
-        replay(windowStore);
+        }).when(windowStore).put(anyString(), anyLong(), anyLong());
 
         return windowStore;
     }
 
-    @SuppressWarnings({"unchecked", "deprecation"})
+    @SuppressWarnings("unchecked")
     private TimestampedWindowStore<String, Long> timestampedWindowStoreMock() {
         final TimestampedWindowStore<String, Long> windowStore = mock(TimestampedWindowStore.class);
 
         initStateStoreMock(windowStore);
 
-        expect(windowStore.fetchAll(anyLong(), anyLong())).andReturn(timestampedIters.get(0));
-        expect(windowStore.fetch(anyString(), anyString(), anyLong(), anyLong())).andReturn(timestampedIters.get(1));
-        expect(windowStore.fetch(anyString(), anyLong(), anyLong())).andReturn(windowStoreIter);
-        expect(windowStore.fetch(anyString(), anyLong())).andReturn(VALUE_AND_TIMESTAMP);
-        expect(windowStore.all()).andReturn(timestampedIters.get(2));
+        when(windowStore.fetchAll(anyLong(), anyLong())).thenReturn(timestampedIters.get(0));
+        when(windowStore.fetch(anyString(), anyString(), anyLong(), anyLong())).thenReturn(timestampedIters.get(1));
+        when(windowStore.fetch(anyString(), anyLong(), anyLong())).thenReturn(windowStoreIter);
+        when(windowStore.fetch(anyString(), anyLong())).thenReturn(VALUE_AND_TIMESTAMP);
+        when(windowStore.all()).thenReturn(timestampedIters.get(2));
 
-        windowStore.put(anyString(), anyObject(ValueAndTimestamp.class));
-        expectLastCall().andAnswer(() -> {
+        doAnswer(answer -> {
             putExecuted = true;
             return null;
-        });
-
-        windowStore.put(anyString(), anyObject(ValueAndTimestamp.class), anyLong());
-        expectLastCall().andAnswer(() -> {
+        }).doAnswer(answer -> {
             putWithTimestampExecuted = true;
             return null;
-        });
-
-        replay(windowStore);
+        }).when(windowStore).put(anyString(), any(ValueAndTimestamp.class), anyLong());
 
         return windowStore;
     }
@@ -490,46 +716,59 @@ public class ProcessorContextImplTest {
 
         initStateStoreMock(sessionStore);
 
-        expect(sessionStore.findSessions(anyString(), anyLong(), anyLong())).andReturn(iters.get(3));
-        expect(sessionStore.findSessions(anyString(), anyString(), anyLong(), anyLong())).andReturn(iters.get(4));
-        expect(sessionStore.fetch(anyString())).andReturn(iters.get(5));
-        expect(sessionStore.fetch(anyString(), anyString())).andReturn(iters.get(6));
+        when(sessionStore.findSessions(anyString(), anyLong(), anyLong())).thenReturn(iters.get(3));
+        when(sessionStore.findSessions(anyString(), anyString(), anyLong(), anyLong())).thenReturn(iters.get(4));
+        when(sessionStore.fetch(anyString())).thenReturn(iters.get(5));
+        when(sessionStore.fetch(anyString(), anyString())).thenReturn(iters.get(6));
 
-        sessionStore.put(anyObject(Windowed.class), anyLong());
-        expectLastCall().andAnswer(() -> {
+        doAnswer(answer -> {
             putExecuted = true;
             return null;
-        });
+        }).when(sessionStore).put(any(), any());
 
-        sessionStore.remove(anyObject(Windowed.class));
-        expectLastCall().andAnswer(() -> {
+        doAnswer(answer -> {
             removeExecuted = true;
             return null;
-        });
-
-        replay(sessionStore);
+        }).when(sessionStore).remove(any());
 
         return sessionStore;
     }
 
-    private void initStateStoreMock(final StateStore stateStore) {
-        expect(stateStore.name()).andReturn(STORE_NAME);
-        expect(stateStore.persistent()).andReturn(true);
-        expect(stateStore.isOpen()).andReturn(true);
+    private StreamsConfig streamsConfigMock() {
+        final StreamsConfig streamsConfig = mock(StreamsConfig.class);
+        when(streamsConfig.originals()).thenReturn(Collections.emptyMap());
+        when(streamsConfig.values()).thenReturn(Collections.emptyMap());
+        when(streamsConfig.getString(StreamsConfig.APPLICATION_ID_CONFIG)).thenReturn("add-id");
+        return streamsConfig;
+    }
 
-        stateStore.flush();
-        expectLastCall().andAnswer(() -> {
+    private StreamsConfig streamsConfigWithConsistencyMock() {
+        final StreamsConfig streamsConfig = mock(StreamsConfig.class);
+
+        final Map<String, Object> myValues = new HashMap<>();
+        myValues.put(InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED, true);
+        when(streamsConfig.originals()).thenReturn(myValues);
+        when(streamsConfig.values()).thenReturn(Collections.emptyMap());
+        when(streamsConfig.getString(StreamsConfig.APPLICATION_ID_CONFIG)).thenReturn("add-id");
+        return streamsConfig;
+    }
+
+    private void initStateStoreMock(final StateStore stateStore) {
+        when(stateStore.name()).thenReturn(STORE_NAME);
+        when(stateStore.persistent()).thenReturn(true);
+        when(stateStore.isOpen()).thenReturn(true);
+
+        doAnswer(answer -> {
             flushExecuted = true;
             return null;
-        });
+        }).when(stateStore).flush();
     }
 
     private <T extends StateStore> void doTest(final String name, final Consumer<T> checker) {
-        final Processor processor = new Processor<String, Long>() {
+        @SuppressWarnings("deprecation") final org.apache.kafka.streams.processor.Processor<String, Long> processor = new org.apache.kafka.streams.processor.Processor<String, Long>() {
             @Override
-            @SuppressWarnings("unchecked")
             public void init(final ProcessorContext context) {
-                final T store = (T) context.getStateStore(name);
+                final T store = context.getStateStore(name);
                 checker.accept(store);
             }
 
@@ -552,7 +791,7 @@ public class ProcessorContextImplTest {
         assertTrue(store.persistent());
         assertTrue(store.isOpen());
 
-        checkThrowsUnsupportedOperation(() -> store.init(null, null), "init()");
+        checkThrowsUnsupportedOperation(() -> store.init((StateStoreContext) null, null), "init()");
         checkThrowsUnsupportedOperation(store::close, "close()");
     }
 

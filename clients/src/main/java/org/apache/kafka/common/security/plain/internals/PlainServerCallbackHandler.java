@@ -22,9 +22,9 @@ import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.security.plain.PlainAuthenticateCallback;
 import org.apache.kafka.common.security.plain.PlainLoginModule;
+import org.apache.kafka.common.utils.Utils;
 
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -65,7 +65,7 @@ public class PlainServerCallbackHandler implements AuthenticateCallbackHandler {
             String expectedPassword = JaasContext.configEntryOption(jaasConfigEntries,
                     JAAS_USER_PREFIX + username,
                     PlainLoginModule.class.getName());
-            return expectedPassword != null && Arrays.equals(password, expectedPassword.toCharArray());
+            return expectedPassword != null && Utils.isEqualConstantTime(password, expectedPassword.toCharArray());
         }
     }
 

@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.converters;
 
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.errors.DataException;
@@ -26,6 +27,7 @@ import org.junit.Test;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 
 public abstract class NumberConverterTest<T extends Number> {
     private static final String TOPIC = "topic";
@@ -71,29 +73,30 @@ public abstract class NumberConverterTest<T extends Number> {
         }
     }
 
-    @Test(expected = DataException.class)
+    @Test
     public void testDeserializingDataWithTooManyBytes() {
-        converter.toConnectData(TOPIC, new byte[10]);
+        assertThrows(DataException.class, () -> converter.toConnectData(TOPIC, new byte[10]));
     }
 
-    @Test(expected = DataException.class)
+    @Test
     public void testDeserializingHeaderWithTooManyBytes() {
-        converter.toConnectHeader(TOPIC, HEADER_NAME, new byte[10]);
+        assertThrows(DataException.class, () -> converter.toConnectHeader(TOPIC, HEADER_NAME, new byte[10]));
     }
 
-    @Test(expected = DataException.class)
+    @Test
     public void testSerializingIncorrectType() {
-        converter.fromConnectData(TOPIC, schema, "not a valid number");
+        assertThrows(DataException.class, () -> converter.fromConnectData(TOPIC, schema, "not a valid number"));
     }
 
-    @Test(expected = DataException.class)
+    @Test
     public void testSerializingIncorrectHeader() {
-        converter.fromConnectHeader(TOPIC, HEADER_NAME, schema, "not a valid number");
+        assertThrows(DataException.class,
+            () -> converter.fromConnectHeader(TOPIC, HEADER_NAME, schema, "not a valid number"));
     }
 
     @Test
     public void testNullToBytes() {
-        assertEquals(null, converter.fromConnectData(TOPIC, schema, null));
+        assertNull(converter.fromConnectData(TOPIC, schema, null));
     }
 
     @Test
@@ -101,5 +104,10 @@ public abstract class NumberConverterTest<T extends Number> {
         SchemaAndValue data = converter.toConnectData(TOPIC, null);
         assertEquals(schema(), data.schema());
         assertNull(data.value());
+    }
+
+    @Test
+    public void testInheritedVersionRetrievedFromAppInfoParser() {
+        assertEquals(AppInfoParser.getVersion(), converter.version());
     }
 }

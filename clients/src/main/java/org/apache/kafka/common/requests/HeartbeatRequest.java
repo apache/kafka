@@ -20,11 +20,10 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.HeartbeatRequestData;
 import org.apache.kafka.common.message.HeartbeatResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
-
 
 public class HeartbeatRequest extends AbstractRequest {
 
@@ -51,16 +50,11 @@ public class HeartbeatRequest extends AbstractRequest {
         }
     }
 
-    public final HeartbeatRequestData data;
+    private final HeartbeatRequestData data;
 
     private HeartbeatRequest(HeartbeatRequestData data, short version) {
         super(ApiKeys.HEARTBEAT, version);
         this.data = data;
-    }
-
-    public HeartbeatRequest(Struct struct, short version) {
-        super(ApiKeys.HEARTBEAT, version);
-        this.data = new HeartbeatRequestData(struct, version);
     }
 
     @Override
@@ -74,11 +68,11 @@ public class HeartbeatRequest extends AbstractRequest {
     }
 
     public static HeartbeatRequest parse(ByteBuffer buffer, short version) {
-        return new HeartbeatRequest(ApiKeys.HEARTBEAT.parseRequest(version, buffer), version);
+        return new HeartbeatRequest(new HeartbeatRequestData(new ByteBufferAccessor(buffer), version), version);
     }
 
     @Override
-    protected Struct toStruct() {
-        return data.toStruct(version());
+    public HeartbeatRequestData data() {
+        return data;
     }
 }

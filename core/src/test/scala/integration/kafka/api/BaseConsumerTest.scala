@@ -16,13 +16,17 @@
  */
 package kafka.api
 
-import org.apache.kafka.clients.consumer.ConsumerConfig
-import org.apache.kafka.common.PartitionInfo
+import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig}
+import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig}
+import org.apache.kafka.common.{ClusterResource, ClusterResourceListener, PartitionInfo}
 import org.apache.kafka.common.internals.Topic
-import org.junit.Test
-import org.junit.Assert._
+import org.apache.kafka.common.serialization.{Deserializer, Serializer}
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.Assertions._
 
-import scala.collection.JavaConverters._
+import java.util.Properties
+import java.util.concurrent.atomic.AtomicInteger
+import scala.jdk.CollectionConverters._
 import scala.collection.Seq
 
 /**
@@ -34,7 +38,8 @@ abstract class BaseConsumerTest extends AbstractConsumerTest {
   def testSimpleConsumption(): Unit = {
     val numRecords = 10000
     val producer = createProducer()
-    sendRecords(producer, numRecords, tp)
+    val startingTimestamp = System.currentTimeMillis()
+    sendRecords(producer, numRecords, tp, startingTimestamp = startingTimestamp)
 
     val consumer = createConsumer()
     assertEquals(0, consumer.assignment.size)
@@ -42,17 +47,40 @@ abstract class BaseConsumerTest extends AbstractConsumerTest {
     assertEquals(1, consumer.assignment.size)
 
     consumer.seek(tp, 0)
-    consumeAndVerifyRecords(consumer = consumer, numRecords = numRecords, startingOffset = 0)
+    consumeAndVerifyRecords(consumer = consumer, numRecords = numRecords, startingOffset = 0, startingTimestamp = startingTimestamp)
 
     // check async commit callbacks
     sendAndAwaitAsyncCommit(consumer)
   }
 
   @Test
+  def testClusterResourceListener(): Unit = {
+    val numRecords = 100
+    val producerProps = new Properties()
+    producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, classOf[BaseConsumerTest.TestClusterResourceListenerSerializer])
+    producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, classOf[BaseConsumerTest.TestClusterResourceListenerSerializer])
+
+    val producer: KafkaProducer[Array[Byte], Array[Byte]] = createProducer(keySerializer = null, valueSerializer = null, producerProps)
+    val startingTimestamp = System.currentTimeMillis()
+    sendRecords(producer, numRecords, tp, startingTimestamp = startingTimestamp)
+
+    val consumerProps = new Properties()
+    consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, classOf[BaseConsumerTest.TestClusterResourceListenerDeserializer])
+    consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, classOf[BaseConsumerTest.TestClusterResourceListenerDeserializer])
+    val consumer: Consumer[Array[Byte], Array[Byte]] = createConsumer(keyDeserializer = null, valueDeserializer = null, consumerProps)
+    consumer.subscribe(List(tp.topic()).asJava)
+    consumeAndVerifyRecords(consumer = consumer, numRecords = numRecords, startingOffset = 0, startingTimestamp = startingTimestamp)
+    assertNotEquals(0, BaseConsumerTest.updateProducerCount.get())
+    assertNotEquals(0, BaseConsumerTest.updateConsumerCount.get())
+  }
+
+  @Test
   def testCoordinatorFailover(): Unit = {
     val listener = new TestConsumerReassignmentListener()
     this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "5001")
-    this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "2000")
+    this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "1000")
+    // Use higher poll timeout to avoid consumer leaving the group due to timeout
+    this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "15000")
     val consumer = createConsumer()
 
     consumer.subscribe(List(topic).asJava, listener)
@@ -74,5 +102,23 @@ abstract class BaseConsumerTest extends AbstractConsumerTest {
 
     // the failover should not cause a rebalance
     ensureNoRebalance(consumer, listener)
+  }
+}
+
+object BaseConsumerTest {
+  val updateProducerCount = new AtomicInteger()
+  val updateConsumerCount = new AtomicInteger()
+
+  class TestClusterResourceListenerSerializer extends Serializer[Array[Byte]] with ClusterResourceListener {
+
+    override def onUpdate(clusterResource: ClusterResource): Unit = updateProducerCount.incrementAndGet();
+
+    override def serialize(topic: String, data: Array[Byte]): Array[Byte] = data
+  }
+
+  class TestClusterResourceListenerDeserializer extends Deserializer[Array[Byte]] with ClusterResourceListener {
+
+    override def onUpdate(clusterResource: ClusterResource): Unit = updateConsumerCount.incrementAndGet();
+    override def deserialize(topic: String, data: Array[Byte]): Array[Byte] = data
   }
 }

@@ -16,13 +16,17 @@
  */
 package org.apache.kafka.common.record;
 
+import org.apache.kafka.common.compress.KafkaLZ4BlockInputStream;
+import org.apache.kafka.common.compress.KafkaLZ4BlockOutputStream;
+import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
-import org.junit.Test;
+import org.apache.kafka.common.utils.ChunkedBytesStream;
+import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
 
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class CompressionTypeTest {
 
@@ -35,9 +39,8 @@ public class CompressionTypeTest {
 
         buffer.rewind();
 
-        KafkaLZ4BlockInputStream in = (KafkaLZ4BlockInputStream) CompressionType.LZ4.wrapForInput(
-                buffer, RecordBatch.MAGIC_VALUE_V0, BufferSupplier.NO_CACHING);
-        assertTrue(in.ignoreFlagDescriptorChecksum());
+        ChunkedBytesStream in = (ChunkedBytesStream) CompressionType.LZ4.wrapForInput(buffer, RecordBatch.MAGIC_VALUE_V0, BufferSupplier.NO_CACHING);
+        assertTrue(((KafkaLZ4BlockInputStream) in.sourceStream()).ignoreFlagDescriptorChecksum());
     }
 
     @Test
@@ -49,8 +52,7 @@ public class CompressionTypeTest {
 
         buffer.rewind();
 
-        KafkaLZ4BlockInputStream in = (KafkaLZ4BlockInputStream) CompressionType.LZ4.wrapForInput(
-                buffer, RecordBatch.MAGIC_VALUE_V1, BufferSupplier.create());
-        assertFalse(in.ignoreFlagDescriptorChecksum());
+        ChunkedBytesStream in = (ChunkedBytesStream) CompressionType.LZ4.wrapForInput(buffer, RecordBatch.MAGIC_VALUE_V1, BufferSupplier.create());
+        assertFalse(((KafkaLZ4BlockInputStream) in.sourceStream()).ignoreFlagDescriptorChecksum());
     }
 }

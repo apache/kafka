@@ -13,6 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from kafka import KafkaService
-from util import TopicPartition
-from config import KafkaConfig
+from .kafka import KafkaService
+from .util import TopicPartition
+from .config import KafkaConfig

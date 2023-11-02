@@ -18,8 +18,8 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.UpdateMetadataResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.Map;
@@ -29,11 +29,8 @@ public class UpdateMetadataResponse extends AbstractResponse {
     private final UpdateMetadataResponseData data;
 
     public UpdateMetadataResponse(UpdateMetadataResponseData data) {
+        super(ApiKeys.UPDATE_METADATA);
         this.data = data;
-    }
-
-    public UpdateMetadataResponse(Struct struct, short version) {
-        this(new UpdateMetadataResponseData(struct, version));
     }
 
     public Errors error() {
@@ -45,12 +42,23 @@ public class UpdateMetadataResponse extends AbstractResponse {
         return errorCounts(error());
     }
 
-    public static UpdateMetadataResponse parse(ByteBuffer buffer, short version) {
-        return new UpdateMetadataResponse(ApiKeys.UPDATE_METADATA.parseResponse(version, buffer), version);
+    @Override
+    public int throttleTimeMs() {
+        return DEFAULT_THROTTLE_TIME;
     }
 
     @Override
-    protected Struct toStruct(short version) {
-        return data.toStruct(version);
+    public void maybeSetThrottleTimeMs(int throttleTimeMs) {
+        // Not supported by the response schema
     }
+
+    public static UpdateMetadataResponse parse(ByteBuffer buffer, short version) {
+        return new UpdateMetadataResponse(new UpdateMetadataResponseData(new ByteBufferAccessor(buffer), version));
+    }
+
+    @Override
+    public UpdateMetadataResponseData data() {
+        return data;
+    }
+
 }

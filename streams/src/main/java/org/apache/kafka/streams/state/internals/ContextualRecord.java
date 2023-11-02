@@ -22,6 +22,8 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Objects;
 
+import static org.apache.kafka.common.utils.Utils.getNullableSizePrefixedArray;
+
 public class ContextualRecord {
     private final byte[] value;
     private final ProcessorRecordContext recordContext;
@@ -43,36 +45,10 @@ public class ContextualRecord {
         return (value == null ? 0 : value.length) + recordContext.residentMemorySizeEstimate();
     }
 
-    ByteBuffer serialize(final int endPadding) {
-        final byte[] serializedContext = recordContext.serialize();
-
-        final int sizeOfContext = serializedContext.length;
-        final int sizeOfValueLength = Integer.BYTES;
-        final int sizeOfValue = value == null ? 0 : value.length;
-        final ByteBuffer buffer = ByteBuffer.allocate(sizeOfContext + sizeOfValueLength + sizeOfValue + endPadding);
-
-        buffer.put(serializedContext);
-        if (value == null) {
-            buffer.putInt(-1);
-        } else {
-            buffer.putInt(value.length);
-            buffer.put(value);
-        }
-
-        return buffer;
-    }
-
     static ContextualRecord deserialize(final ByteBuffer buffer) {
         final ProcessorRecordContext context = ProcessorRecordContext.deserialize(buffer);
-
-        final int valueLength = buffer.getInt();
-        if (valueLength == -1) {
-            return new ContextualRecord(null, context);
-        } else {
-            final byte[] value = new byte[valueLength];
-            buffer.get(value);
-            return new ContextualRecord(value, context);
-        }
+        final byte[] value = getNullableSizePrefixedArray(buffer);
+        return new ContextualRecord(value, context);
     }
 
     @Override

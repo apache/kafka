@@ -108,7 +108,7 @@ public class OAuthBearerClientInitialResponse {
         this.tokenValue = Objects.requireNonNull(tokenValue, "token value must not be null");
         this.authorizationId = authorizationId == null ? "" : authorizationId;
         validateExtensions(extensions);
-        this.saslExtensions = extensions != null ? extensions : SaslExtensions.NO_SASL_EXTENSIONS;
+        this.saslExtensions = extensions != null ? extensions : SaslExtensions.empty();
     }
 
     /**

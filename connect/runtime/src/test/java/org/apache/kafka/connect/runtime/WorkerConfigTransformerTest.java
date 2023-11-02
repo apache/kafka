@@ -16,17 +16,13 @@
  */
 package org.apache.kafka.connect.runtime;
 
-import org.apache.kafka.common.config.ConfigChangeCallback;
 import org.apache.kafka.common.config.ConfigData;
 import org.apache.kafka.common.config.provider.ConfigProvider;
-import org.easymock.EasyMock;
-import static org.easymock.EasyMock.eq;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.powermock.api.easymock.PowerMock;
-import org.powermock.api.easymock.annotation.Mock;
-import org.powermock.modules.junit4.PowerMockRunner;
+import org.mockito.Mock;
+import org.mockito.junit.MockitoJUnitRunner;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -35,12 +31,15 @@ import java.util.Set;
 
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONFIG_RELOAD_ACTION_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONFIG_RELOAD_ACTION_NONE;
-import static org.easymock.EasyMock.notNull;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
-import static org.powermock.api.easymock.PowerMock.replayAll;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.notNull;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
-@RunWith(PowerMockRunner.class)
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class WorkerConfigTransformerTest {
 
     public static final String MY_KEY = "myKey";
@@ -53,64 +52,75 @@ public class WorkerConfigTransformerTest {
     public static final String TEST_RESULT_WITH_TTL = "testResultWithTTL";
     public static final String TEST_RESULT_WITH_LONGER_TTL = "testResultWithLongerTTL";
 
-    @Mock private Herder herder;
-    @Mock private Worker worker;
-    @Mock private HerderRequest requestId;
+    @Mock
+    private Herder herder;
+    @Mock
+    private Worker worker;
+    @Mock
+    private HerderRequest requestId;
     private WorkerConfigTransformer configTransformer;
 
     @Before
     public void setup() {
-        worker = PowerMock.createMock(Worker.class);
-        herder = PowerMock.createMock(Herder.class);
         configTransformer = new WorkerConfigTransformer(worker, Collections.singletonMap("test", new TestConfigProvider()));
     }
 
     @Test
     public void testReplaceVariable() {
+        // Execution
         Map<String, String> result = configTransformer.transform(MY_CONNECTOR, Collections.singletonMap(MY_KEY, "${test:testPath:testKey}"));
+
+        // Assertions
         assertEquals(TEST_RESULT, result.get(MY_KEY));
     }
 
     @Test
     public void testReplaceVariableWithTTL() {
-        EasyMock.expect(worker.herder()).andReturn(herder);
-
-        replayAll();
-
+        // Execution
         Map<String, String> props = new HashMap<>();
         props.put(MY_KEY, "${test:testPath:testKeyWithTTL}");
         props.put(CONFIG_RELOAD_ACTION_CONFIG, CONFIG_RELOAD_ACTION_NONE);
         Map<String, String> result = configTransformer.transform(MY_CONNECTOR, props);
+
+        // Assertions
+        assertEquals(TEST_RESULT_WITH_TTL, result.get(MY_KEY));
     }
 
     @Test
     public void testReplaceVariableWithTTLAndScheduleRestart() {
-        EasyMock.expect(worker.herder()).andReturn(herder);
-        EasyMock.expect(herder.restartConnector(eq(1L), eq(MY_CONNECTOR), notNull())).andReturn(requestId);
-        replayAll();
+        // Setup
+        when(worker.herder()).thenReturn(herder);
+        when(herder.restartConnector(eq(1L), eq(MY_CONNECTOR), notNull())).thenReturn(requestId);
 
+        // Execution
         Map<String, String> result = configTransformer.transform(MY_CONNECTOR, Collections.singletonMap(MY_KEY, "${test:testPath:testKeyWithTTL}"));
+
+        // Assertions
         assertEquals(TEST_RESULT_WITH_TTL, result.get(MY_KEY));
+        verify(herder).restartConnector(eq(1L), eq(MY_CONNECTOR), notNull());
     }
 
     @Test
     public void testReplaceVariableWithTTLFirstCancelThenScheduleRestart() {
-        EasyMock.expect(worker.herder()).andReturn(herder);
-        EasyMock.expect(herder.restartConnector(eq(1L), eq(MY_CONNECTOR), notNull())).andReturn(requestId);
+        // Setup
+        when(worker.herder()).thenReturn(herder);
+        when(herder.restartConnector(eq(1L), eq(MY_CONNECTOR), notNull())).thenReturn(requestId);
+        when(herder.restartConnector(eq(10L), eq(MY_CONNECTOR), notNull())).thenReturn(requestId);
 
-        EasyMock.expect(worker.herder()).andReturn(herder);
-        EasyMock.expectLastCall();
-        requestId.cancel();
-        EasyMock.expectLastCall();
-        EasyMock.expect(herder.restartConnector(eq(10L), eq(MY_CONNECTOR), notNull())).andReturn(requestId);
-
-        replayAll();
-
+        // Execution
         Map<String, String> result = configTransformer.transform(MY_CONNECTOR, Collections.singletonMap(MY_KEY, "${test:testPath:testKeyWithTTL}"));
-        assertEquals(TEST_RESULT_WITH_TTL, result.get(MY_KEY));
 
+        // Assertions
+        assertEquals(TEST_RESULT_WITH_TTL, result.get(MY_KEY));
+        verify(herder).restartConnector(eq(1L), eq(MY_CONNECTOR), notNull());
+
+        // Execution
         result = configTransformer.transform(MY_CONNECTOR, Collections.singletonMap(MY_KEY, "${test:testPath:testKeyWithLongerTTL}"));
+
+        // Assertions
         assertEquals(TEST_RESULT_WITH_LONGER_TTL, result.get(MY_KEY));
+        verify(requestId, times(1)).cancel();
+        verify(herder).restartConnector(eq(10L), eq(MY_CONNECTOR), notNull());
     }
 
     @Test
@@ -120,13 +130,16 @@ public class WorkerConfigTransformerTest {
 
     public static class TestConfigProvider implements ConfigProvider {
 
+        @Override
         public void configure(Map<String, ?> configs) {
         }
 
+        @Override
         public ConfigData get(String path) {
             return null;
         }
 
+        @Override
         public ConfigData get(String path, Set<String> keys) {
             if (path.equals(TEST_PATH)) {
                 if (keys.contains(TEST_KEY)) {
@@ -140,14 +153,7 @@ public class WorkerConfigTransformerTest {
             return new ConfigData(Collections.emptyMap());
         }
 
-        public void subscribe(String path, Set<String> keys, ConfigChangeCallback callback) {
-            throw new UnsupportedOperationException();
-        }
-
-        public void unsubscribe(String path, Set<String> keys) {
-            throw new UnsupportedOperationException();
-        }
-
+        @Override
         public void close() {
         }
     }

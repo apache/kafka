@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.mirror;
 
+import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.data.Schema;
@@ -38,7 +39,7 @@ public class MirrorHeartbeatTask extends SourceTask {
     @Override
     public void start(Map<String, String> props) {
         stopped = new CountDownLatch(1);
-        MirrorTaskConfig config = new MirrorTaskConfig(props);
+        MirrorHeartbeatConfig config = new MirrorHeartbeatConfig(props);
         sourceClusterAlias = config.sourceClusterAlias();
         targetClusterAlias = config.targetClusterAlias();
         heartbeatsTopic = config.heartbeatsTopic();
@@ -46,7 +47,7 @@ public class MirrorHeartbeatTask extends SourceTask {
     }
 
     @Override
-    public void commit() throws InterruptedException {
+    public void commit() {
         // nop
     }
 
@@ -57,7 +58,7 @@ public class MirrorHeartbeatTask extends SourceTask {
 
     @Override
     public String version() {
-        return "1";
+        return new MirrorHeartbeatConnector().version();
     }
 
     @Override
@@ -79,6 +80,6 @@ public class MirrorHeartbeatTask extends SourceTask {
     }
 
     @Override
-    public void commitRecord(SourceRecord record) {
+    public void commitRecord(SourceRecord record, RecordMetadata metadata) {
     }
 }

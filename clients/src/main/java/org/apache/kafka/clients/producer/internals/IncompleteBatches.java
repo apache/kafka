@@ -19,6 +19,7 @@ package org.apache.kafka.clients.producer.internals;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /*
  * A thread-safe helper class to hold batches that haven't been acknowledged yet (including those
@@ -48,6 +49,12 @@ class IncompleteBatches {
     public Iterable<ProducerBatch> copyAll() {
         synchronized (incomplete) {
             return new ArrayList<>(this.incomplete);
+        }
+    }
+
+    public Iterable<ProduceRequestResult> requestResults() {
+        synchronized (incomplete) {
+            return incomplete.stream().map(batch -> batch.produceFuture).collect(Collectors.toList());
         }
     }
 

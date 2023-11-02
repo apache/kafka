@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from BaseHTTPServer import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from collections import defaultdict, namedtuple
 import json
 from threading import Thread
@@ -94,13 +94,14 @@ class HttpMetricsCollector(object):
         super(HttpMetricsCollector, self).start_node(node)
 
     def stop(self):
-        super(HttpMetricsCollector, self).stop()
-
-        if self._http_metrics_thread:
-            self.logger.debug("Shutting down metrics httpd")
-            self._httpd.shutdown()
-            self._http_metrics_thread.join()
-            self.logger.debug("Finished shutting down metrics httpd")
+        try:
+            super(HttpMetricsCollector, self).stop()
+        finally:
+            if self._http_metrics_thread:
+                self.logger.debug("Shutting down metrics httpd")
+                self._httpd.shutdown()
+                self._http_metrics_thread.join()
+                self.logger.debug("Finished shutting down metrics httpd")
 
     def stop_node(self, node):
         super(HttpMetricsCollector, self).stop_node(node)
@@ -114,7 +115,7 @@ class HttpMetricsCollector(object):
         Get any collected metrics that match the specified parameters, yielding each as a tuple of
         (key, [<timestamp, value>, ...]) values.
         """
-        for k, values in self._http_metrics.iteritems():
+        for k, values in self._http_metrics.items():
             if ((host is None or host == k.host) and
                     (client_id is None or client_id == k.client_id) and
                     (name is None or name == k.name) and
@@ -154,7 +155,7 @@ class _MetricsReceiver(BaseHTTPRequestHandler):
             name = raw_metric['name']
             group = raw_metric['group']
             # Convert to tuple of pairs because dicts & lists are unhashable
-            tags = tuple([(k, v) for k, v in raw_metric['tags'].iteritems()]),
+            tags = tuple((k, v) for k, v in raw_metric['tags'].items()),
             value = raw_metric['value']
 
             key = MetricKey(host=host, client_id=client_id, name=name, group=group, tags=tags)
@@ -188,7 +189,7 @@ class _ReverseForwarder(object):
     def stop(self):
         self._stopping = True
         self._accept_thread.join(30)
-        if self._accept_thread.isAlive():
+        if self._accept_thread.is_alive():
             raise RuntimeError("Failed to stop reverse forwarder on %s", self._node)
         self._transport.cancel_port_forward('', self._remote_port)
 
@@ -215,12 +216,12 @@ class _ReverseForwarder(object):
             r, w, x = select([sock, chan], [], [])
             if sock in r:
                 data = sock.recv(1024)
-                if len(data) == 0:
+                if not data:
                     break
                 chan.send(data)
             if chan in r:
                 data = chan.recv(1024)
-                if len(data) == 0:
+                if not data:
                     break
                 sock.send(data)
         chan.close()

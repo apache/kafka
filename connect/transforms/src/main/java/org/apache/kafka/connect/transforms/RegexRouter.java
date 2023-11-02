@@ -17,15 +17,21 @@
 package org.apache.kafka.connect.transforms;
 
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.utils.AppInfoParser;
+import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.transforms.util.RegexValidator;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public class RegexRouter<R extends ConnectRecord<R>> implements Transformation<R> {
+public class RegexRouter<R extends ConnectRecord<R>> implements Transformation<R>, Versioned {
+
+    private static final Logger log = LoggerFactory.getLogger(RegexRouter.class);
 
     public static final String OVERVIEW_DOC = "Update the record topic using the configured regular expression and replacement string."
             + "<p/>Under the hood, the regex is compiled to a <code>java.util.regex.Pattern</code>. "
@@ -46,6 +52,11 @@ public class RegexRouter<R extends ConnectRecord<R>> implements Transformation<R
     private String replacement;
 
     @Override
+    public String version() {
+        return AppInfoParser.getVersion();
+    }
+
+    @Override
     public void configure(Map<String, ?> props) {
         final SimpleConfig config = new SimpleConfig(CONFIG_DEF, props);
         regex = Pattern.compile(config.getString(ConfigName.REGEX));
@@ -57,7 +68,10 @@ public class RegexRouter<R extends ConnectRecord<R>> implements Transformation<R
         final Matcher matcher = regex.matcher(record.topic());
         if (matcher.matches()) {
             final String topic = matcher.replaceFirst(replacement);
+            log.trace("Rerouting from topic '{}' to new topic '{}'", record.topic(), topic);
             return record.newRecord(topic, record.kafkaPartition(), record.keySchema(), record.key(), record.valueSchema(), record.value(), record.timestamp());
+        } else {
+            log.trace("Not rerouting topic '{}' as it does not match the configured regex", record.topic());
         }
         return record;
     }

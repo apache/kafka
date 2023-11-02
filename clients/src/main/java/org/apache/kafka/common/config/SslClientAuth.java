@@ -31,7 +31,7 @@ public enum SslClientAuth {
     NONE;
 
     public static final List<SslClientAuth> VALUES =
-        Collections.unmodifiableList(Arrays.asList(SslClientAuth.values()));
+            Collections.unmodifiableList(Arrays.asList(SslClientAuth.values()));
 
     public static SslClientAuth forConfig(String key) {
         if (key == null) {
@@ -44,5 +44,10 @@ public enum SslClientAuth {
             }
         }
         return null;
+    }
+
+    @Override
+    public String toString() {
+        return super.toString().toLowerCase(Locale.ROOT);
     }
 }

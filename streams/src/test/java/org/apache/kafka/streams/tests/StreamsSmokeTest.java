@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.tests;
 
+import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 
@@ -37,10 +38,11 @@ public class StreamsSmokeTest {
      *
      * @param args
      */
+    @SuppressWarnings("deprecation")
     public static void main(final String[] args) throws IOException {
         if (args.length < 2) {
             System.err.println("StreamsSmokeTest are expecting two parameters: propFile, command; but only see " + args.length + " parameter");
-            System.exit(1);
+            Exit.exit(1);
         }
 
         final String propFileName = args[0];
@@ -49,10 +51,27 @@ public class StreamsSmokeTest {
 
         final Properties streamsProperties = Utils.loadProps(propFileName);
         final String kafka = streamsProperties.getProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG);
+        final String processingGuarantee = streamsProperties.getProperty(StreamsConfig.PROCESSING_GUARANTEE_CONFIG);
 
         if (kafka == null) {
             System.err.println("No bootstrap kafka servers specified in " + StreamsConfig.BOOTSTRAP_SERVERS_CONFIG);
-            System.exit(1);
+            Exit.exit(1);
+        }
+
+        if ("process".equals(command)) {
+            if (!StreamsConfig.AT_LEAST_ONCE.equals(processingGuarantee) &&
+                !StreamsConfig.EXACTLY_ONCE.equals(processingGuarantee) &&
+                !StreamsConfig.EXACTLY_ONCE_BETA.equals(processingGuarantee) &&
+                !StreamsConfig.EXACTLY_ONCE_V2.equals(processingGuarantee)) {
+
+                System.err.println("processingGuarantee must be either " +
+                                       StreamsConfig.AT_LEAST_ONCE + ", " +
+                                       StreamsConfig.EXACTLY_ONCE + ", or " +
+                                       StreamsConfig.EXACTLY_ONCE_BETA + ", or " +
+                                       StreamsConfig.EXACTLY_ONCE_V2);
+
+                Exit.exit(1);
+            }
         }
 
         System.out.println("StreamsTest instance started (StreamsSmokeTest)");
@@ -63,25 +82,20 @@ public class StreamsSmokeTest {
         switch (command) {
             case "run":
                 // this starts the driver (data generation and result verification)
-                final int numKeys = 10;
-                final int maxRecordsPerKey = 500;
+                final int numKeys = 20;
+                final int maxRecordsPerKey = 1000;
                 if (disableAutoTerminate) {
                     generatePerpetually(kafka, numKeys, maxRecordsPerKey);
                 } else {
-                    // slow down data production to span 30 seconds so that system tests have time to
+                    // slow down data production so that system tests have time to
                     // do their bounces, etc.
                     final Map<String, Set<Integer>> allData =
-                        generate(kafka, numKeys, maxRecordsPerKey, Duration.ofSeconds(30));
+                        generate(kafka, numKeys, maxRecordsPerKey, Duration.ofSeconds(90));
                     SmokeTestDriver.verify(kafka, allData, maxRecordsPerKey);
                 }
                 break;
             case "process":
                 // this starts the stream processing app
-                new SmokeTestClient(UUID.randomUUID().toString()).start(streamsProperties);
-                break;
-            case "process-eos":
-                // this starts the stream processing app with EOS
-                streamsProperties.setProperty(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
                 new SmokeTestClient(UUID.randomUUID().toString()).start(streamsProperties);
                 break;
             case "close-deadlock-test":

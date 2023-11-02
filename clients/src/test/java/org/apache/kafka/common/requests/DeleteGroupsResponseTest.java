@@ -20,13 +20,14 @@ import org.apache.kafka.common.message.DeleteGroupsResponseData;
 import org.apache.kafka.common.message.DeleteGroupsResponseData.DeletableGroupResult;
 import org.apache.kafka.common.message.DeleteGroupsResponseData.DeletableGroupResultCollection;
 import org.apache.kafka.common.protocol.Errors;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class DeleteGroupsResponseTest {
 
@@ -67,9 +68,9 @@ public class DeleteGroupsResponseTest {
         assertEquals(expectedErrorCounts, deleteGroupsResponse.errorCounts());
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testGetErrorWithInvalidGroupId() {
-        deleteGroupsResponse.get("invalid-group-id");
+        assertThrows(IllegalArgumentException.class, () -> deleteGroupsResponse.get("invalid-group-id"));
     }
 
     @Test

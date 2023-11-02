@@ -16,18 +16,20 @@
  */
 package org.apache.kafka.streams.integration;
 
-import org.apache.kafka.streams.KafkaStreamsWrapper;
+import java.time.Duration;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.IntegrationTest;
-import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.junit.rules.Timeout;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
@@ -35,14 +37,17 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
-import static org.junit.Assert.assertTrue;
-
 /**
  * Tests all available joins of Kafka Streams DSL.
  */
 @Category({IntegrationTest.class})
 @RunWith(value = Parameterized.class)
 public class StreamTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
+
+    private static final String STORE_NAME = "table-store";
+
+    @Rule
+    public Timeout globalTimeout = Timeout.seconds(600);
     private KStream<Long, String> leftStream;
     private KTable<Long, String> rightTable;
 
@@ -57,39 +62,15 @@ public class StreamTableJoinIntegrationTest extends AbstractJoinIntegrationTest 
         appID = "stream-table-join-integration-test";
 
         builder = new StreamsBuilder();
-        rightTable = builder.table(INPUT_TOPIC_RIGHT);
-        leftStream = builder.stream(INPUT_TOPIC_LEFT);
-    }
-
-    @Test
-    public void testShouldAutoShutdownOnIncompleteMetadata() throws InterruptedException {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-incomplete");
-        STREAMS_CONFIG.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-
-        final KStream<Long, String> notExistStream = builder.stream(INPUT_TOPIC_LEFT + "-not-existed");
-
-        final KTable<Long, String> aggregatedTable = notExistStream.leftJoin(rightTable, valueJoiner)
-                .groupBy((key, value) -> key)
-                .reduce((value1, value2) -> value1 + value2);
-
-        // Write the (continuously updating) results to the output topic.
-        aggregatedTable.toStream().to(OUTPUT_TOPIC);
-
-        final KafkaStreamsWrapper streams = new KafkaStreamsWrapper(builder.build(), STREAMS_CONFIG);
-        final IntegrationTestUtils.StateListenerStub listener = new IntegrationTestUtils.StateListenerStub();
-        streams.setStreamThreadStateListener(listener);
-        streams.start();
-
-        TestUtils.waitForCondition(listener::transitToPendingShutdownSeen, "Did not seen thread state transited to PENDING_SHUTDOWN");
-
-        streams.close();
-        assertTrue(listener.transitToPendingShutdownSeen());
     }
 
     @Test
     public void testInner() {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner");
-        STREAMS_CONFIG.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "topology_driver:0000");
+
+        leftStream = builder.stream(INPUT_TOPIC_LEFT);
+        rightTable = builder.table(INPUT_TOPIC_RIGHT);
+        leftStream.join(rightTable, valueJoiner).to(OUTPUT_TOPIC);
 
         final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
             null,
@@ -106,17 +87,27 @@ public class StreamTableJoinIntegrationTest extends AbstractJoinIntegrationTest 
             null,
             null,
             null,
-            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-d", null,  15L))
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-d", null,  6L)),
+            null,
+            null,
+            null,
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "E-e", null,  15L)),
+            null,
+            null,
+            null,
+            null
         );
 
-        leftStream.join(rightTable, valueJoiner).to(OUTPUT_TOPIC);
-        runTestWithDriver(expectedResult);
+        runTestWithDriver(input, expectedResult);
     }
 
     @Test
     public void testLeft() {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-left");
-        STREAMS_CONFIG.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "topology_driver:0000");
+
+        leftStream = builder.stream(INPUT_TOPIC_LEFT);
+        rightTable = builder.table(INPUT_TOPIC_RIGHT);
+        leftStream.leftJoin(rightTable, valueJoiner).to(OUTPUT_TOPIC);
 
         final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
             null,
@@ -133,11 +124,93 @@ public class StreamTableJoinIntegrationTest extends AbstractJoinIntegrationTest 
             null,
             null,
             null,
-            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-d", null, 15L))
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-d", null, 6L)),
+            null,
+            null,
+            null,
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "E-e", null,  15L)),
+            null,
+            null,
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "F-null", null,  4L)),
+            null
         );
 
+        runTestWithDriver(input, expectedResult);
+    }
+
+    @Test
+    public void testInnerWithVersionedStore() {
+        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner");
+
+        leftStream = builder.stream(INPUT_TOPIC_LEFT);
+        rightTable = builder.table(INPUT_TOPIC_RIGHT, Materialized.as(
+            Stores.persistentVersionedKeyValueStore(STORE_NAME, Duration.ofMinutes(5))));
+        leftStream.join(rightTable, valueJoiner).to(OUTPUT_TOPIC);
+
+        final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
+            null,
+            null,
+            null,
+            null,
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a", null, 5L)),
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-b", null,  6L)),
+            null,
+            null,
+            null,
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "E-e", null,  15L)),
+            null,
+            null,
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "F-a", null,  4L)),
+            null
+        );
+
+        runTestWithDriver(input, expectedResult);
+    }
+
+    @Test
+    public void testLeftWithVersionedStore() {
+        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-left");
+
+        leftStream = builder.stream(INPUT_TOPIC_LEFT);
+        rightTable = builder.table(INPUT_TOPIC_RIGHT, Materialized.as(
+            Stores.persistentVersionedKeyValueStore(STORE_NAME, Duration.ofMinutes(5))));
         leftStream.leftJoin(rightTable, valueJoiner).to(OUTPUT_TOPIC);
 
-        runTestWithDriver(expectedResult);
+        final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
+            null,
+            null,
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-null", null, 3L)),
+            null,
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a", null, 5L)),
+            null,
+            null,
+            null,
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-null", null, 9L)),
+            null,
+            null,
+            null,
+            null,
+            null,
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-b", null, 6L)),
+            null,
+            null,
+            null,
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "E-e", null,  15L)),
+            null,
+            null,
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "F-a", null,  4L)),
+            null
+        );
+
+        runTestWithDriver(input, expectedResult);
     }
 }

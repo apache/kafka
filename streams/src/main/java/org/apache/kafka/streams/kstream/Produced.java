@@ -16,17 +16,18 @@
  */
 package org.apache.kafka.streams.kstream;
 
-import org.apache.kafka.clients.producer.internals.DefaultPartitioner;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.kstream.internals.WindowedSerializer;
 import org.apache.kafka.streams.kstream.internals.WindowedStreamPartitioner;
 import org.apache.kafka.streams.processor.StreamPartitioner;
+import org.apache.kafka.streams.processor.internals.DefaultStreamPartitioner;
 
 import java.util.Objects;
 
 /**
  * This class is used to provide the optional parameters when producing to new topics
- * using {@link KStream#through(String, Produced)} or {@link KStream#to(String, Produced)}.
+ * using {@link KStream#to(String, Produced)}.
+ *
  * @param <K> key type
  * @param <V> value type
  */
@@ -61,7 +62,6 @@ public class Produced<K, V> implements NamedOperation<Produced<K, V>> {
      * @param <K>           key type
      * @param <V>           value type
      * @return  A new {@link Produced} instance configured with keySerde and valueSerde
-     * @see KStream#through(String, Produced)
      * @see KStream#to(String, Produced)
      */
     public static <K, V> Produced<K, V> with(final Serde<K> keySerde,
@@ -75,12 +75,11 @@ public class Produced<K, V> implements NamedOperation<Produced<K, V>> {
      * @param valueSerde    Serde to use for serializing the value
      * @param partitioner   the function used to determine how records are distributed among partitions of the topic,
      *                      if not specified and {@code keySerde} provides a {@link WindowedSerializer} for the key
-     *                      {@link WindowedStreamPartitioner} will be used&mdash;otherwise {@link DefaultPartitioner}
+     *                      {@link WindowedStreamPartitioner} will be used&mdash;otherwise {@link DefaultStreamPartitioner}
      *                      will be used
      * @param <K>           key type
      * @param <V>           value type
      * @return  A new {@link Produced} instance configured with keySerde, valueSerde, and partitioner
-     * @see KStream#through(String, Produced)
      * @see KStream#to(String, Produced)
      */
     public static <K, V> Produced<K, V> with(final Serde<K> keySerde,
@@ -107,7 +106,6 @@ public class Produced<K, V> implements NamedOperation<Produced<K, V>> {
      * @param <K>           key type
      * @param <V>           value type
      * @return  A new {@link Produced} instance configured with keySerde
-     * @see KStream#through(String, Produced)
      * @see KStream#to(String, Produced)
      */
     public static <K, V> Produced<K, V> keySerde(final Serde<K> keySerde) {
@@ -120,7 +118,6 @@ public class Produced<K, V> implements NamedOperation<Produced<K, V>> {
      * @param <K>           key type
      * @param <V>           value type
      * @return  A new {@link Produced} instance configured with valueSerde
-     * @see KStream#through(String, Produced)
      * @see KStream#to(String, Produced)
      */
     public static <K, V> Produced<K, V> valueSerde(final Serde<V> valueSerde) {
@@ -131,11 +128,10 @@ public class Produced<K, V> implements NamedOperation<Produced<K, V>> {
      * Create a Produced instance with provided partitioner.
      * @param partitioner   the function used to determine how records are distributed among partitions of the topic,
      *                      if not specified and the key serde provides a {@link WindowedSerializer} for the key
-     *                      {@link WindowedStreamPartitioner} will be used&mdash;otherwise {@link DefaultPartitioner} will be used
+     *                      {@link WindowedStreamPartitioner} will be used&mdash;otherwise {@link DefaultStreamPartitioner} will be used
      * @param <K>           key type
      * @param <V>           value type
      * @return  A new {@link Produced} instance configured with partitioner
-     * @see KStream#through(String, Produced)
      * @see KStream#to(String, Produced)
      */
     public static <K, V> Produced<K, V> streamPartitioner(final StreamPartitioner<? super K, ? super V> partitioner) {
@@ -146,7 +142,7 @@ public class Produced<K, V> implements NamedOperation<Produced<K, V>> {
      * Produce records using the provided partitioner.
      * @param partitioner   the function used to determine how records are distributed among partitions of the topic,
      *                      if not specified and the key serde provides a {@link WindowedSerializer} for the key
-     *                      {@link WindowedStreamPartitioner} will be used&mdash;otherwise {@link DefaultPartitioner} wil be used
+     *                      {@link WindowedStreamPartitioner} will be used&mdash;otherwise {@link DefaultStreamPartitioner} will be used
      * @return this
      */
     public Produced<K, V> withStreamPartitioner(final StreamPartitioner<? super K, ? super V> partitioner) {

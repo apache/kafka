@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -25,17 +26,20 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.RetriableException;
+import org.apache.kafka.connect.integration.MonitorableSourceConnector;
 import org.apache.kafka.connect.json.JsonConverter;
-import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
 import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
+import org.apache.kafka.connect.runtime.errors.ErrorReporter;
 import org.apache.kafka.connect.runtime.errors.LogReporter;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.errors.ToleranceType;
+import org.apache.kafka.connect.runtime.errors.WorkerErrantRecordReporter;
 import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
@@ -44,48 +48,81 @@ import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
+import org.apache.kafka.connect.storage.ClusterConfigState;
+import org.apache.kafka.connect.storage.ConnectorOffsetBackingStore;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.storage.OffsetStorageReaderImpl;
 import org.apache.kafka.connect.storage.OffsetStorageWriter;
+import org.apache.kafka.connect.storage.StatusBackingStore;
+import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
 import org.apache.kafka.connect.util.ConnectorTaskId;
-import org.easymock.Capture;
-import org.easymock.EasyMock;
+import org.apache.kafka.connect.util.TopicAdmin;
+import org.apache.kafka.connect.util.TopicCreationGroup;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.powermock.api.easymock.PowerMock;
-import org.powermock.api.easymock.annotation.Mock;
-import org.powermock.core.classloader.annotations.PowerMockIgnore;
-import org.powermock.core.classloader.annotations.PrepareForTest;
-import org.powermock.modules.junit4.PowerMockRunner;
+import org.junit.runners.Parameterized;
+import org.mockito.Mock;
+import org.mockito.junit.MockitoJUnit;
+import org.mockito.junit.MockitoRule;
+import org.mockito.quality.Strictness;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.time.Duration;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.Executor;
 
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.utils.Time.SYSTEM;
+import static org.apache.kafka.connect.integration.MonitorableSourceConnector.TOPIC_CONFIG;
+import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
+import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG;
+import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
+import static org.apache.kafka.connect.runtime.ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG;
+import static org.apache.kafka.connect.runtime.SourceConnectorConfig.TOPIC_CREATION_GROUPS_CONFIG;
+import static org.apache.kafka.connect.runtime.TopicCreationConfig.DEFAULT_TOPIC_CREATION_PREFIX;
+import static org.apache.kafka.connect.runtime.TopicCreationConfig.INCLUDE_REGEX_CONFIG;
+import static org.apache.kafka.connect.runtime.TopicCreationConfig.PARTITIONS_CONFIG;
+import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_FACTOR_CONFIG;
+import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_CREATION_ENABLE_CONFIG;
 import static org.junit.Assert.assertEquals;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
-@RunWith(PowerMockRunner.class)
-@PrepareForTest({WorkerSinkTask.class, WorkerSourceTask.class})
-@PowerMockIgnore("javax.management.*")
+
+@RunWith(Parameterized.class)
 public class ErrorHandlingTaskTest {
+    @Rule
+    public MockitoRule rule = MockitoJUnit.rule().strictness(Strictness.STRICT_STUBS);
 
     private static final String TOPIC = "test";
     private static final int PARTITION1 = 12;
     private static final int PARTITION2 = 13;
     private static final long FIRST_OFFSET = 45;
 
-    @Mock Plugins plugins;
+    @Mock
+    Plugins plugins;
 
     private static final Map<String, String> TASK_PROPS = new HashMap<>();
 
@@ -110,8 +147,8 @@ public class ErrorHandlingTaskTest {
     @SuppressWarnings("unused")
     @Mock
     private SourceTask sourceTask;
-    private Capture<WorkerSinkTaskContext> sinkTaskContext = EasyMock.newCapture();
     private WorkerConfig workerConfig;
+    private SourceConnectorConfig sourceConfig;
     @Mock
     private PluginClassLoader pluginLoader;
     @SuppressWarnings("unused")
@@ -125,18 +162,36 @@ public class ErrorHandlingTaskTest {
     @SuppressWarnings("unused")
     @Mock
     private KafkaProducer<byte[], byte[]> producer;
+    @SuppressWarnings("unused")
+    @Mock private TopicAdmin admin;
 
     @Mock
     OffsetStorageReaderImpl offsetReader;
     @Mock
     OffsetStorageWriter offsetWriter;
-
-    private Capture<ConsumerRebalanceListener> rebalanceListener = EasyMock.newCapture();
+    @Mock
+    private ConnectorOffsetBackingStore offsetStore;
     @SuppressWarnings("unused")
     @Mock
     private TaskStatus.Listener statusListener;
+    @SuppressWarnings("unused")
+    @Mock private StatusBackingStore statusBackingStore;
+
+    @Mock
+    private WorkerErrantRecordReporter workerErrantRecordReporter;
 
     private ErrorHandlingMetrics errorHandlingMetrics;
+
+    private boolean enableTopicCreation;
+
+    @Parameterized.Parameters
+    public static Collection<Boolean> parameters() {
+        return Arrays.asList(false, true);
+    }
+
+    public ErrorHandlingTaskTest(boolean enableTopicCreation) {
+        this.enableTopicCreation = enableTopicCreation;
+    }
 
     @Before
     public void setup() {
@@ -145,14 +200,27 @@ public class ErrorHandlingTaskTest {
         Map<String, String> workerProps = new HashMap<>();
         workerProps.put("key.converter", "org.apache.kafka.connect.json.JsonConverter");
         workerProps.put("value.converter", "org.apache.kafka.connect.json.JsonConverter");
-        workerProps.put("internal.key.converter", "org.apache.kafka.connect.json.JsonConverter");
-        workerProps.put("internal.value.converter", "org.apache.kafka.connect.json.JsonConverter");
-        workerProps.put("internal.key.converter.schemas.enable", "false");
-        workerProps.put("internal.value.converter.schemas.enable", "false");
         workerProps.put("offset.storage.file.filename", "/tmp/connect.offsets");
-        pluginLoader = PowerMock.createMock(PluginClassLoader.class);
+        workerProps.put(TOPIC_CREATION_ENABLE_CONFIG, String.valueOf(enableTopicCreation));
         workerConfig = new StandaloneConfig(workerProps);
+        sourceConfig = new SourceConnectorConfig(plugins, sourceConnectorProps(TOPIC), true);
         errorHandlingMetrics = new ErrorHandlingMetrics(taskId, metrics);
+    }
+
+    private Map<String, String> sourceConnectorProps(String topic) {
+        // setup up props for the source connector
+        Map<String, String> props = new HashMap<>();
+        props.put("name", "foo-connector");
+        props.put(CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getSimpleName());
+        props.put(TASKS_MAX_CONFIG, String.valueOf(1));
+        props.put(TOPIC_CONFIG, topic);
+        props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
+        props.put(VALUE_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
+        props.put(TOPIC_CREATION_GROUPS_CONFIG, String.join(",", "foo", "bar"));
+        props.put(DEFAULT_TOPIC_CREATION_PREFIX + REPLICATION_FACTOR_CONFIG, String.valueOf(1));
+        props.put(DEFAULT_TOPIC_CREATION_PREFIX + PARTITIONS_CONFIG, String.valueOf(1));
+        props.put(SourceConnectorConfig.TOPIC_CREATION_PREFIX + "foo" + "." + INCLUDE_REGEX_CONFIG, topic);
+        return props;
     }
 
     @After
@@ -163,6 +231,61 @@ public class ErrorHandlingTaskTest {
     }
 
     @Test
+    public void testSinkTasksCloseErrorReporters() throws Exception {
+        ErrorReporter reporter = mock(ErrorReporter.class);
+
+        RetryWithToleranceOperator retryWithToleranceOperator = operator();
+
+        createSinkTask(initialState, retryWithToleranceOperator, singletonList(reporter));
+        workerSinkTask.initialize(TASK_CONFIG);
+        workerSinkTask.initializeAndStart();
+        workerSinkTask.close();
+        // verify if invocation happened exactly 1 time
+        verifyInitializeSink();
+        verify(reporter).close();
+        verify(sinkTask).stop();
+        verify(consumer).close();
+        verify(headerConverter).close();
+    }
+
+    @Test
+    public void testSourceTasksCloseErrorReporters() throws IOException {
+        ErrorReporter reporter = mock(ErrorReporter.class);
+
+        RetryWithToleranceOperator retryWithToleranceOperator = operator();
+
+        createSourceTask(initialState, retryWithToleranceOperator, singletonList(reporter));
+
+        workerSourceTask.initialize(TASK_CONFIG);
+        workerSourceTask.initializeAndStart();
+        workerSourceTask.close();
+        verifyCloseSource();
+        verify(reporter).close();
+    }
+
+    @Test
+    public void testCloseErrorReportersExceptionPropagation() throws IOException {
+        ErrorReporter reporterA = mock(ErrorReporter.class);
+        ErrorReporter reporterB = mock(ErrorReporter.class);
+
+        RetryWithToleranceOperator retryWithToleranceOperator = operator();
+
+        createSourceTask(initialState, retryWithToleranceOperator, Arrays.asList(reporterA, reporterB));
+
+        // Even though the reporters throw exceptions, they should both still be closed.
+        doThrow(new RuntimeException()).when(reporterA).close();
+        doThrow(new RuntimeException()).when(reporterB).close();
+
+        workerSourceTask.initialize(TASK_CONFIG);
+        workerSourceTask.initializeAndStart();
+        workerSourceTask.close();
+
+        verify(reporterA).close();
+        verify(reporterB).close();
+        verifyCloseSource();
+    }
+
+    @Test
     public void testErrorHandlingInSinkTasks() throws Exception {
         Map<String, String> reportProps = new HashMap<>();
         reportProps.put(ConnectorConfig.ERRORS_LOG_ENABLE_CONFIG, "true");
@@ -170,30 +293,29 @@ public class ErrorHandlingTaskTest {
         LogReporter reporter = new LogReporter(taskId, connConfig(reportProps), errorHandlingMetrics);
 
         RetryWithToleranceOperator retryWithToleranceOperator = operator();
-        retryWithToleranceOperator.metrics(errorHandlingMetrics);
-        retryWithToleranceOperator.reporters(singletonList(reporter));
-        createSinkTask(initialState, retryWithToleranceOperator);
-
-        expectInitializeTask();
+        createSinkTask(initialState, retryWithToleranceOperator, singletonList(reporter));
 
         // valid json
-        ConsumerRecord<byte[], byte[]> record1 = new ConsumerRecord<>(TOPIC, PARTITION1, FIRST_OFFSET, null, "{\"a\": 10}".getBytes());
+        ConsumerRecord<byte[], byte[]> record1 = new ConsumerRecord<>(
+                TOPIC, PARTITION1, FIRST_OFFSET,
+                null, "{\"a\": 10}".getBytes());
         // bad json
-        ConsumerRecord<byte[], byte[]> record2 = new ConsumerRecord<>(TOPIC, PARTITION2, FIRST_OFFSET, null, "{\"a\" 10}".getBytes());
+        ConsumerRecord<byte[], byte[]> record2 = new ConsumerRecord<>(
+                TOPIC, PARTITION2, FIRST_OFFSET,
+                null, "{\"a\" 10}".getBytes());
 
-        EasyMock.expect(consumer.poll(Duration.ofMillis(EasyMock.anyLong()))).andReturn(records(record1));
-        EasyMock.expect(consumer.poll(Duration.ofMillis(EasyMock.anyLong()))).andReturn(records(record2));
-
-        sinkTask.put(EasyMock.anyObject());
-        EasyMock.expectLastCall().times(2);
-
-        PowerMock.replayAll();
+        when(consumer.poll(any()))
+                .thenReturn(records(record1))
+                .thenReturn(records(record2));
 
         workerSinkTask.initialize(TASK_CONFIG);
         workerSinkTask.initializeAndStart();
         workerSinkTask.iteration();
 
         workerSinkTask.iteration();
+
+        verifyInitializeSink();
+        verify(sinkTask, times(2)).put(any());
 
         // two records were consumed from Kafka
         assertSinkMetricValue("sink-record-read-total", 2.0);
@@ -205,12 +327,12 @@ public class ErrorHandlingTaskTest {
         assertErrorHandlingMetricValue("total-record-failures", 3.0);
         // one record completely failed (converter issues), and thus was skipped
         assertErrorHandlingMetricValue("total-records-skipped", 1.0);
-
-        PowerMock.verifyAll();
     }
 
     private RetryWithToleranceOperator operator() {
-        return new RetryWithToleranceOperator(OPERATOR_RETRY_TIMEOUT_MILLIS, OPERATOR_RETRY_MAX_DELAY_MILLIS, OPERATOR_TOLERANCE_TYPE, SYSTEM);
+        return new RetryWithToleranceOperator(OPERATOR_RETRY_TIMEOUT_MILLIS,
+                OPERATOR_RETRY_MAX_DELAY_MILLIS, OPERATOR_TOLERANCE_TYPE,
+                SYSTEM, errorHandlingMetrics);
     }
 
     @Test
@@ -221,9 +343,7 @@ public class ErrorHandlingTaskTest {
         LogReporter reporter = new LogReporter(taskId, connConfig(reportProps), errorHandlingMetrics);
 
         RetryWithToleranceOperator retryWithToleranceOperator = operator();
-        retryWithToleranceOperator.metrics(errorHandlingMetrics);
-        retryWithToleranceOperator.reporters(singletonList(reporter));
-        createSourceTask(initialState, retryWithToleranceOperator);
+        createSourceTask(initialState, retryWithToleranceOperator, singletonList(reporter));
 
         // valid json
         Schema valSchema = SchemaBuilder.struct().field("val", Schema.INT32_SCHEMA).build();
@@ -232,29 +352,29 @@ public class ErrorHandlingTaskTest {
         Struct struct2 = new Struct(valSchema).put("val", 6789);
         SourceRecord record2 = new SourceRecord(emptyMap(), emptyMap(), TOPIC, PARTITION1, valSchema, struct2);
 
-        EasyMock.expect(workerSourceTask.isStopping()).andReturn(false);
-        EasyMock.expect(workerSourceTask.isStopping()).andReturn(false);
-        EasyMock.expect(workerSourceTask.isStopping()).andReturn(true);
+        when(workerSourceTask.isStopping())
+                .thenReturn(false)
+                .thenReturn(false)
+                .thenReturn(true);
 
-        EasyMock.expect(workerSourceTask.commitOffsets()).andReturn(true);
+        doReturn(true).when(workerSourceTask).commitOffsets();
 
-        offsetWriter.offset(EasyMock.anyObject(), EasyMock.anyObject());
-        EasyMock.expectLastCall().times(2);
-        sourceTask.initialize(EasyMock.anyObject());
-        EasyMock.expectLastCall();
+        when(sourceTask.poll())
+                .thenReturn(singletonList(record1))
+                .thenReturn(singletonList(record2));
 
-        sourceTask.start(EasyMock.anyObject());
-        EasyMock.expectLastCall();
-
-        EasyMock.expect(sourceTask.poll()).andReturn(singletonList(record1));
-        EasyMock.expect(sourceTask.poll()).andReturn(singletonList(record2));
-        EasyMock.expect(producer.send(EasyMock.anyObject(), EasyMock.anyObject())).andReturn(null).times(2);
-
-        PowerMock.replayAll();
+        expectTopicCreation(TOPIC);
 
         workerSourceTask.initialize(TASK_CONFIG);
+        workerSourceTask.initializeAndStart();
         workerSourceTask.execute();
-
+        verify(workerSourceTask, times(3)).isStopping();
+        verify(workerSourceTask).commitOffsets();
+        verify(offsetStore).start();
+        verify(sourceTask).initialize(any());
+        verify(sourceTask).start(any());
+        verify(sourceTask, times(2)).poll();
+        verify(producer, times(2)).send(any(), any());
         // two records were consumed from Kafka
         assertSourceMetricValue("source-record-poll-total", 2.0);
         // only one was written to the task
@@ -265,8 +385,6 @@ public class ErrorHandlingTaskTest {
         assertErrorHandlingMetricValue("total-record-failures", 4.0);
         // one record completely failed (converter issues), and thus was skipped
         assertErrorHandlingMetricValue("total-records-skipped", 0.0);
-
-        PowerMock.verifyAll();
     }
 
     private ConnectorConfig connConfig(Map<String, String> connProps) {
@@ -278,16 +396,14 @@ public class ErrorHandlingTaskTest {
     }
 
     @Test
-    public void testErrorHandlingInSourceTasksWthBadConverter() throws Exception {
+    public void testErrorHandlingInSourceTasksWithBadConverter() throws Exception {
         Map<String, String> reportProps = new HashMap<>();
         reportProps.put(ConnectorConfig.ERRORS_LOG_ENABLE_CONFIG, "true");
         reportProps.put(ConnectorConfig.ERRORS_LOG_INCLUDE_MESSAGES_CONFIG, "true");
         LogReporter reporter = new LogReporter(taskId, connConfig(reportProps), errorHandlingMetrics);
 
         RetryWithToleranceOperator retryWithToleranceOperator = operator();
-        retryWithToleranceOperator.metrics(errorHandlingMetrics);
-        retryWithToleranceOperator.reporters(singletonList(reporter));
-        createSourceTask(initialState, retryWithToleranceOperator, badConverter());
+        createSourceTask(initialState, retryWithToleranceOperator, singletonList(reporter), badConverter());
 
         // valid json
         Schema valSchema = SchemaBuilder.struct().field("val", Schema.INT32_SCHEMA).build();
@@ -296,29 +412,20 @@ public class ErrorHandlingTaskTest {
         Struct struct2 = new Struct(valSchema).put("val", 6789);
         SourceRecord record2 = new SourceRecord(emptyMap(), emptyMap(), TOPIC, PARTITION1, valSchema, struct2);
 
-        EasyMock.expect(workerSourceTask.isStopping()).andReturn(false);
-        EasyMock.expect(workerSourceTask.isStopping()).andReturn(false);
-        EasyMock.expect(workerSourceTask.isStopping()).andReturn(true);
+        when(workerSourceTask.isStopping())
+                .thenReturn(false)
+                .thenReturn(false)
+                .thenReturn(true);
 
-        EasyMock.expect(workerSourceTask.commitOffsets()).andReturn(true);
+        doReturn(true).when(workerSourceTask).commitOffsets();
 
-        offsetWriter.offset(EasyMock.anyObject(), EasyMock.anyObject());
-        EasyMock.expectLastCall().times(2);
-        sourceTask.initialize(EasyMock.anyObject());
-        EasyMock.expectLastCall();
-
-        sourceTask.start(EasyMock.anyObject());
-        EasyMock.expectLastCall();
-
-        EasyMock.expect(sourceTask.poll()).andReturn(singletonList(record1));
-        EasyMock.expect(sourceTask.poll()).andReturn(singletonList(record2));
-        EasyMock.expect(producer.send(EasyMock.anyObject(), EasyMock.anyObject())).andReturn(null).times(2);
-
-        PowerMock.replayAll();
-
+        when(sourceTask.poll())
+                .thenReturn(singletonList(record1))
+                .thenReturn(singletonList(record2));
+        expectTopicCreation(TOPIC);
         workerSourceTask.initialize(TASK_CONFIG);
+        workerSourceTask.initializeAndStart();
         workerSourceTask.execute();
-
         // two records were consumed from Kafka
         assertSourceMetricValue("source-record-poll-total", 2.0);
         // only one was written to the task
@@ -330,13 +437,26 @@ public class ErrorHandlingTaskTest {
         // one record completely failed (converter issues), and thus was skipped
         assertErrorHandlingMetricValue("total-records-skipped", 0.0);
 
-        PowerMock.verifyAll();
+        verify(workerSourceTask, times(3)).isStopping();
+        verify(workerSourceTask).commitOffsets();
+        verify(offsetStore).start();
+        verify(sourceTask).initialize(any());
+        verify(sourceTask).start(any());
+        verify(sourceTask, times(2)).poll();
+        verify(producer, times(2)).send(any(), any());
     }
 
     private void assertSinkMetricValue(String name, double expected) {
         ConnectMetrics.MetricGroup sinkTaskGroup = workerSinkTask.sinkTaskMetricsGroup().metricGroup();
         double measured = metrics.currentMetricValueAsDouble(sinkTaskGroup, name);
         assertEquals(expected, measured, 0.001d);
+    }
+
+    private void verifyInitializeSink() {
+        verify(sinkTask).start(TASK_PROPS);
+        verify(sinkTask).initialize(any(WorkerSinkTaskContext.class));
+        verify(consumer).subscribe(eq(singletonList(TOPIC)),
+                any(ConsumerRebalanceListener.class));
     }
 
     private void assertSourceMetricValue(String name, double expected) {
@@ -351,39 +471,52 @@ public class ErrorHandlingTaskTest {
         assertEquals(expected, measured, 0.001d);
     }
 
-    private void expectInitializeTask() throws Exception {
-        consumer.subscribe(EasyMock.eq(singletonList(TOPIC)), EasyMock.capture(rebalanceListener));
-        PowerMock.expectLastCall();
-
-        sinkTask.initialize(EasyMock.capture(sinkTaskContext));
-        PowerMock.expectLastCall();
-        sinkTask.start(TASK_PROPS);
-        PowerMock.expectLastCall();
+    private void verifyCloseSource() throws IOException {
+        verify(producer).close(any(Duration.class));
+        verify(admin).close(any(Duration.class));
+        verify(offsetReader).close();
+        verify(offsetStore).stop();
+        // headerConverter.close() can throw IOException
+        verify(headerConverter).close();
     }
 
-    private void createSinkTask(TargetState initialState, RetryWithToleranceOperator retryWithToleranceOperator) {
+    private void expectTopicCreation(String topic) {
+        if (enableTopicCreation) {
+            when(admin.describeTopics(topic)).thenReturn(Collections.emptyMap());
+            Set<String> created = Collections.singleton(topic);
+            Set<String> existing = Collections.emptySet();
+            TopicAdmin.TopicCreationResponse response = new TopicAdmin.TopicCreationResponse(created, existing);
+            when(admin.createOrFindTopics(any(NewTopic.class))).thenReturn(response);
+        }
+    }
+
+    private void createSinkTask(TargetState initialState, RetryWithToleranceOperator retryWithToleranceOperator,
+                                List<ErrorReporter> errorReporters) {
         JsonConverter converter = new JsonConverter();
         Map<String, Object> oo = workerConfig.originalsWithPrefix("value.converter.");
         oo.put("converter.type", "value");
         oo.put("schemas.enable", "false");
         converter.configure(oo);
 
-        TransformationChain<SinkRecord> sinkTransforms = new TransformationChain<>(singletonList(new FaultyPassthrough<SinkRecord>()), retryWithToleranceOperator);
+        TransformationChain<SinkRecord> sinkTransforms =
+                new TransformationChain<>(singletonList(new TransformationStage<>(new FaultyPassthrough<SinkRecord>())), retryWithToleranceOperator);
 
         workerSinkTask = new WorkerSinkTask(
             taskId, sinkTask, statusListener, initialState, workerConfig,
-            ClusterConfigState.EMPTY, metrics, converter, converter,
-            headerConverter, sinkTransforms, consumer, pluginLoader, time, retryWithToleranceOperator);
+            ClusterConfigState.EMPTY, metrics, converter, converter, errorHandlingMetrics,
+            headerConverter, sinkTransforms, consumer, pluginLoader, time,
+            retryWithToleranceOperator, workerErrantRecordReporter,
+                statusBackingStore, () -> errorReporters);
     }
 
-    private void createSourceTask(TargetState initialState, RetryWithToleranceOperator retryWithToleranceOperator) {
+    private void createSourceTask(TargetState initialState, RetryWithToleranceOperator retryWithToleranceOperator, List<ErrorReporter> errorReporters) {
         JsonConverter converter = new JsonConverter();
         Map<String, Object> oo = workerConfig.originalsWithPrefix("value.converter.");
         oo.put("converter.type", "value");
         oo.put("schemas.enable", "false");
         converter.configure(oo);
 
-        createSourceTask(initialState, retryWithToleranceOperator, converter);
+        createSourceTask(initialState, retryWithToleranceOperator, errorReporters, converter);
     }
 
     private Converter badConverter() {
@@ -395,14 +528,21 @@ public class ErrorHandlingTaskTest {
         return converter;
     }
 
-    private void createSourceTask(TargetState initialState, RetryWithToleranceOperator retryWithToleranceOperator, Converter converter) {
-        TransformationChain<SourceRecord> sourceTransforms = new TransformationChain<>(singletonList(new FaultyPassthrough<SourceRecord>()), retryWithToleranceOperator);
+    private void createSourceTask(TargetState initialState, RetryWithToleranceOperator retryWithToleranceOperator,
+                                  List<ErrorReporter> errorReporters, Converter converter) {
+        TransformationChain<SourceRecord> sourceTransforms = new TransformationChain<>(singletonList(
+                new TransformationStage<>(new FaultyPassthrough<SourceRecord>())), retryWithToleranceOperator);
 
-        workerSourceTask = PowerMock.createPartialMock(
-                WorkerSourceTask.class, new String[]{"commitOffsets", "isStopping"},
-                taskId, sourceTask, statusListener, initialState, converter, converter, headerConverter, sourceTransforms,
-                producer, offsetReader, offsetWriter, workerConfig,
-                ClusterConfigState.EMPTY, metrics, pluginLoader, time, retryWithToleranceOperator);
+        workerSourceTask = spy(new WorkerSourceTask(
+            taskId, sourceTask, statusListener, initialState, converter,
+                converter, errorHandlingMetrics, headerConverter,
+                sourceTransforms, producer, admin,
+                TopicCreationGroup.configuredGroups(sourceConfig),
+                offsetReader, offsetWriter, offsetStore, workerConfig,
+                ClusterConfigState.EMPTY, metrics, pluginLoader, time,
+                retryWithToleranceOperator,
+                statusBackingStore, (Executor) Runnable::run, () -> errorReporters));
+
     }
 
     private ConsumerRecords<byte[], byte[]> records(ConsumerRecord<byte[], byte[]> record) {
@@ -413,7 +553,8 @@ public class ErrorHandlingTaskTest {
     private abstract static class TestSinkTask extends SinkTask {
     }
 
-    static class FaultyConverter extends JsonConverter {
+    // Public to allow plugin discovery to complete without errors
+    public static class FaultyConverter extends JsonConverter implements Versioned {
         private static final Logger log = LoggerFactory.getLogger(FaultyConverter.class);
         private int invocations = 0;
 
@@ -430,9 +571,15 @@ public class ErrorHandlingTaskTest {
                 throw new RetriableException("Bad invocations " + invocations + " for mod 3");
             }
         }
+
+        @Override
+        public String version() {
+            return "1.0";
+        }
     }
 
-    static class FaultyPassthrough<R extends ConnectRecord<R>> implements Transformation<R> {
+    // Public to allow plugin discovery to complete without errors
+    public static class FaultyPassthrough<R extends ConnectRecord<R>> implements Transformation<R>, Versioned {
 
         private static final Logger log = LoggerFactory.getLogger(FaultyPassthrough.class);
 
@@ -456,6 +603,11 @@ public class ErrorHandlingTaskTest {
                 log.debug("Failing record: {} at invocations={}", record, invocations);
                 throw new RetriableException("Bad invocations " + invocations + " for mod " + mod);
             }
+        }
+
+        @Override
+        public String version() {
+            return "1.0";
         }
 
         @Override

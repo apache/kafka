@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from performance import PerformanceService, throughput, latency, compute_aggregate_throughput
-from end_to_end_latency import EndToEndLatencyService
-from producer_performance import ProducerPerformanceService
-from consumer_performance import ConsumerPerformanceService
+from .performance import PerformanceService, throughput, latency, compute_aggregate_throughput
+from .end_to_end_latency import EndToEndLatencyService
+from .producer_performance import ProducerPerformanceService
+from .consumer_performance import ConsumerPerformanceService

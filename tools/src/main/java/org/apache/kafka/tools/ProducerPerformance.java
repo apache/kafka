@@ -19,6 +19,7 @@ package org.apache.kafka.tools;
 import static net.sourceforge.argparse4j.impl.Arguments.store;
 import static net.sourceforge.argparse4j.impl.Arguments.storeTrue;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -26,8 +27,8 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
-import java.util.Random;
 import java.util.Arrays;
+import java.util.SplittableRandom;
 
 import net.sourceforge.argparse4j.inf.MutuallyExclusiveGroup;
 import org.apache.kafka.clients.producer.Callback;
@@ -41,11 +42,17 @@ import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import net.sourceforge.argparse4j.inf.Namespace;
 import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.server.util.ThroughputThrottler;
 import org.apache.kafka.common.utils.Utils;
 
 public class ProducerPerformance {
 
     public static void main(String[] args) throws Exception {
+        ProducerPerformance perf = new ProducerPerformance();
+        perf.start(args);
+    }
+    
+    void start(String[] args) throws IOException {
         ArgumentParser parser = argParser();
 
         try {
@@ -71,55 +78,24 @@ public class ProducerPerformance {
                 throw new ArgumentParserException("Either --producer-props or --producer.config must be specified.", parser);
             }
 
-            List<byte[]> payloadByteList = new ArrayList<>();
-            if (payloadFilePath != null) {
-                Path path = Paths.get(payloadFilePath);
-                System.out.println("Reading payloads from: " + path.toAbsolutePath());
-                if (Files.notExists(path) || Files.size(path) == 0)  {
-                    throw new  IllegalArgumentException("File does not exist or empty file provided.");
-                }
+            List<byte[]> payloadByteList = readPayloadFile(payloadFilePath, payloadDelimiter);
 
-                String[] payloadList = new String(Files.readAllBytes(path), "UTF-8").split(payloadDelimiter);
+            Properties props = readProps(producerProps, producerConfig, transactionalId, transactionsEnabled);
 
-                System.out.println("Number of messages read: " + payloadList.length);
-
-                for (String payload : payloadList) {
-                    payloadByteList.add(payload.getBytes(StandardCharsets.UTF_8));
-                }
-            }
-
-            Properties props = new Properties();
-            if (producerConfig != null) {
-                props.putAll(Utils.loadProps(producerConfig));
-            }
-            if (producerProps != null)
-                for (String prop : producerProps) {
-                    String[] pieces = prop.split("=");
-                    if (pieces.length != 2)
-                        throw new IllegalArgumentException("Invalid property: " + prop);
-                    props.put(pieces[0], pieces[1]);
-                }
-
-            props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
-            props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
-            if (transactionsEnabled)
-                props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId);
-
-            KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(props);
+            KafkaProducer<byte[], byte[]> producer = createKafkaProducer(props);
 
             if (transactionsEnabled)
                 producer.initTransactions();
 
             /* setup perf test */
             byte[] payload = null;
-            Random random = new Random(0);
             if (recordSize != null) {
                 payload = new byte[recordSize];
-                for (int i = 0; i < payload.length; ++i)
-                    payload[i] = (byte) (random.nextInt(26) + 65);
             }
+            // not threadsafe, do not share with other threads
+            SplittableRandom random = new SplittableRandom(0);
             ProducerRecord<byte[], byte[]> record;
-            Stats stats = new Stats(numRecords, 5000);
+            stats = new Stats(numRecords, 5000);
             long startMs = System.currentTimeMillis();
 
             ThroughputThrottler throttler = new ThroughputThrottler(throughput, startMs);
@@ -127,19 +103,18 @@ public class ProducerPerformance {
             int currentTransactionSize = 0;
             long transactionStartTime = 0;
             for (long i = 0; i < numRecords; i++) {
+
+                payload = generateRandomPayload(recordSize, payloadByteList, payload, random);
+
                 if (transactionsEnabled && currentTransactionSize == 0) {
                     producer.beginTransaction();
                     transactionStartTime = System.currentTimeMillis();
                 }
 
-
-                if (payloadFilePath != null) {
-                    payload = payloadByteList.get(random.nextInt(payloadByteList.size()));
-                }
                 record = new ProducerRecord<>(topicName, payload);
 
                 long sendStartMs = System.currentTimeMillis();
-                Callback cb = stats.nextCompletion(sendStartMs, payload.length, stats);
+                cb = new PerfCallback(sendStartMs, payload.length, stats);
                 producer.send(record, cb);
 
                 currentTransactionSize++;
@@ -186,8 +161,72 @@ public class ProducerPerformance {
 
     }
 
+    KafkaProducer<byte[], byte[]> createKafkaProducer(Properties props) {
+        return new KafkaProducer<>(props);
+    }
+
+    Callback cb;
+
+    Stats stats;
+
+    static byte[] generateRandomPayload(Integer recordSize, List<byte[]> payloadByteList, byte[] payload,
+            SplittableRandom random) {
+        if (!payloadByteList.isEmpty()) {
+            payload = payloadByteList.get(random.nextInt(payloadByteList.size()));
+        } else if (recordSize != null) {
+            for (int j = 0; j < payload.length; ++j)
+                payload[j] = (byte) (random.nextInt(26) + 65);
+        } else {
+            throw new IllegalArgumentException("no payload File Path or record Size provided");
+        }
+        return payload;
+    }
+    
+    static Properties readProps(List<String> producerProps, String producerConfig, String transactionalId,
+            boolean transactionsEnabled) throws IOException {
+        Properties props = new Properties();
+        if (producerConfig != null) {
+            props.putAll(Utils.loadProps(producerConfig));
+        }
+        if (producerProps != null)
+            for (String prop : producerProps) {
+                String[] pieces = prop.split("=");
+                if (pieces.length != 2)
+                    throw new IllegalArgumentException("Invalid property: " + prop);
+                props.put(pieces[0], pieces[1]);
+            }
+
+        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
+        if (transactionsEnabled) props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId);
+        if (props.getProperty(ProducerConfig.CLIENT_ID_CONFIG) == null) {
+            props.put(ProducerConfig.CLIENT_ID_CONFIG, "perf-producer-client");
+        }
+        return props;
+    }
+
+    static List<byte[]> readPayloadFile(String payloadFilePath, String payloadDelimiter) throws IOException {
+        List<byte[]> payloadByteList = new ArrayList<>();
+        if (payloadFilePath != null) {
+            Path path = Paths.get(payloadFilePath);
+            System.out.println("Reading payloads from: " + path.toAbsolutePath());
+            if (Files.notExists(path) || Files.size(path) == 0)  {
+                throw new IllegalArgumentException("File does not exist or empty file provided.");
+            }
+
+            String[] payloadList = new String(Files.readAllBytes(path), StandardCharsets.UTF_8).split(payloadDelimiter);
+
+            System.out.println("Number of messages read: " + payloadList.length);
+
+            for (String payload : payloadList) {
+                payloadByteList.add(payload.getBytes(StandardCharsets.UTF_8));
+            }
+        }
+        return payloadByteList;
+    }
+
     /** Get the command-line argument parser. */
-    private static ArgumentParser argParser() {
+    static ArgumentParser argParser() {
         ArgumentParser parser = ArgumentParsers
                 .newArgumentParser("producer-performance")
                 .defaultHelp(true)
@@ -295,12 +334,13 @@ public class ProducerPerformance {
         return parser;
     }
 
-    private static class Stats {
+    // Visible for testing
+    static class Stats {
         private long start;
         private long windowStart;
         private int[] latencies;
-        private int sampling;
-        private int iteration;
+        private long sampling;
+        private long iteration;
         private int index;
         private long count;
         private long bytes;
@@ -316,11 +356,10 @@ public class ProducerPerformance {
             this.start = System.currentTimeMillis();
             this.windowStart = System.currentTimeMillis();
             this.iteration = 0;
-            this.sampling = (int) (numRecords / Math.min(numRecords, 500000));
+            this.sampling = numRecords / Math.min(numRecords, 500000);
             this.latencies = new int[(int) (numRecords / this.sampling) + 1];
             this.index = 0;
             this.maxLatency = 0;
-            this.totalLatency = 0;
             this.windowCount = 0;
             this.windowMaxLatency = 0;
             this.windowTotalLatency = 0;
@@ -329,7 +368,7 @@ public class ProducerPerformance {
             this.reportingInterval = reportingInterval;
         }
 
-        public void record(int iter, int latency, int bytes, long time) {
+        public void record(int latency, int bytes, long time) {
             this.count++;
             this.bytes += bytes;
             this.totalLatency += latency;
@@ -338,7 +377,7 @@ public class ProducerPerformance {
             this.windowBytes += bytes;
             this.windowTotalLatency += latency;
             this.windowMaxLatency = Math.max(windowMaxLatency, latency);
-            if (iter % this.sampling == 0) {
+            if (this.iteration % this.sampling == 0) {
                 this.latencies[index] = latency;
                 this.index++;
             }
@@ -349,16 +388,30 @@ public class ProducerPerformance {
             }
         }
 
-        public Callback nextCompletion(long start, int bytes, Stats stats) {
-            Callback cb = new PerfCallback(this.iteration, start, bytes, stats);
-            this.iteration++;
-            return cb;
+        public long totalCount() {
+            return this.count;
+        }
+
+        public long currentWindowCount() {
+            return this.windowCount;
+        }
+
+        public long iteration() {
+            return this.iteration;
+        }
+
+        public long bytes() {
+            return this.bytes;
+        }
+
+        public int index() {
+            return this.index;
         }
 
         public void printWindow() {
-            long ellapsed = System.currentTimeMillis() - windowStart;
-            double recsPerSec = 1000.0 * windowCount / (double) ellapsed;
-            double mbPerSec = 1000.0 * this.windowBytes / (double) ellapsed / (1024.0 * 1024.0);
+            long elapsed = System.currentTimeMillis() - windowStart;
+            double recsPerSec = 1000.0 * windowCount / (double) elapsed;
+            double mbPerSec = 1000.0 * this.windowBytes / (double) elapsed / (1024.0 * 1024.0);
             System.out.printf("%d records sent, %.1f records/sec (%.2f MB/sec), %.1f ms avg latency, %.1f ms max latency.%n",
                               windowCount,
                               recsPerSec,
@@ -404,23 +457,26 @@ public class ProducerPerformance {
         }
     }
 
-    private static final class PerfCallback implements Callback {
+    static final class PerfCallback implements Callback {
         private final long start;
-        private final int iteration;
         private final int bytes;
         private final Stats stats;
 
-        public PerfCallback(int iter, long start, int bytes, Stats stats) {
+        public PerfCallback(long start, int bytes, Stats stats) {
             this.start = start;
             this.stats = stats;
-            this.iteration = iter;
             this.bytes = bytes;
         }
 
         public void onCompletion(RecordMetadata metadata, Exception exception) {
             long now = System.currentTimeMillis();
             int latency = (int) (now - start);
-            this.stats.record(iteration, latency, bytes, now);
+            // It will only be counted when the sending is successful, otherwise the number of sent records may be
+            // magically printed when the sending fails.
+            if (exception == null) {
+                this.stats.record(latency, bytes, now);
+                this.stats.iteration++;
+            }
             if (exception != null)
                 exception.printStackTrace();
         }

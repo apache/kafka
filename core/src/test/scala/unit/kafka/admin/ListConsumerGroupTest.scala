@@ -17,31 +17,118 @@
 package kafka.admin
 
 import joptsimple.OptionException
-import org.junit.Test
+import org.junit.jupiter.api.Assertions._
 import kafka.utils.TestUtils
+import org.apache.kafka.common.ConsumerGroupState
+import org.apache.kafka.clients.admin.ConsumerGroupListing
+import java.util.Optional
+
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 class ListConsumerGroupTest extends ConsumerGroupCommandTest {
 
-  @Test
-  def testListConsumerGroups(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testListConsumerGroups(quorum: String): Unit = {
     val simpleGroup = "simple-group"
     addSimpleGroupExecutor(group = simpleGroup)
     addConsumerGroupExecutor(numConsumers = 1)
 
-    val cgcArgs = Array("--bootstrap-server", brokerList, "--list")
+    val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--list")
     val service = getConsumerGroupService(cgcArgs)
 
     val expectedGroups = Set(group, simpleGroup)
     var foundGroups = Set.empty[String]
     TestUtils.waitUntilTrue(() => {
-      foundGroups = service.listGroups().toSet
+      foundGroups = service.listConsumerGroups().toSet
       expectedGroups == foundGroups
     }, s"Expected --list to show groups $expectedGroups, but found $foundGroups.")
   }
 
-  @Test(expected = classOf[OptionException])
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
   def testListWithUnrecognizedNewConsumerOption(): Unit = {
-    val cgcArgs = Array("--new-consumer", "--bootstrap-server", brokerList, "--list")
-    getConsumerGroupService(cgcArgs)
+    val cgcArgs = Array("--new-consumer", "--bootstrap-server", bootstrapServers(), "--list")
+    assertThrows(classOf[OptionException], () => getConsumerGroupService(cgcArgs))
   }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testListConsumerGroupsWithStates(): Unit = {
+    val simpleGroup = "simple-group"
+    addSimpleGroupExecutor(group = simpleGroup)
+    addConsumerGroupExecutor(numConsumers = 1)
+
+    val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--list", "--state")
+    val service = getConsumerGroupService(cgcArgs)
+
+    val expectedListing = Set(
+      new ConsumerGroupListing(simpleGroup, true, Optional.of(ConsumerGroupState.EMPTY)),
+      new ConsumerGroupListing(group, false, Optional.of(ConsumerGroupState.STABLE)))
+
+    var foundListing = Set.empty[ConsumerGroupListing]
+    TestUtils.waitUntilTrue(() => {
+      foundListing = service.listConsumerGroupsWithState(ConsumerGroupState.values.toSet).toSet
+      expectedListing == foundListing
+    }, s"Expected to show groups $expectedListing, but found $foundListing")
+
+    val expectedListingStable = Set(
+      new ConsumerGroupListing(group, false, Optional.of(ConsumerGroupState.STABLE)))
+
+    foundListing = Set.empty[ConsumerGroupListing]
+    TestUtils.waitUntilTrue(() => {
+      foundListing = service.listConsumerGroupsWithState(Set(ConsumerGroupState.STABLE)).toSet
+      expectedListingStable == foundListing
+    }, s"Expected to show groups $expectedListingStable, but found $foundListing")
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testConsumerGroupStatesFromString(quorum: String): Unit = {
+    var result = ConsumerGroupCommand.consumerGroupStatesFromString("Stable")
+    assertEquals(Set(ConsumerGroupState.STABLE), result)
+
+    result = ConsumerGroupCommand.consumerGroupStatesFromString("Stable, PreparingRebalance")
+    assertEquals(Set(ConsumerGroupState.STABLE, ConsumerGroupState.PREPARING_REBALANCE), result)
+
+    result = ConsumerGroupCommand.consumerGroupStatesFromString("Dead,CompletingRebalance,")
+    assertEquals(Set(ConsumerGroupState.DEAD, ConsumerGroupState.COMPLETING_REBALANCE), result)
+
+    assertThrows(classOf[IllegalArgumentException], () => ConsumerGroupCommand.consumerGroupStatesFromString("bad, wrong"))
+
+    assertThrows(classOf[IllegalArgumentException], () => ConsumerGroupCommand.consumerGroupStatesFromString("stable"))
+
+    assertThrows(classOf[IllegalArgumentException], () => ConsumerGroupCommand.consumerGroupStatesFromString("  bad, Stable"))
+
+    assertThrows(classOf[IllegalArgumentException], () => ConsumerGroupCommand.consumerGroupStatesFromString("   ,   ,"))
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testListGroupCommand(quorum: String): Unit = {
+    val simpleGroup = "simple-group"
+    addSimpleGroupExecutor(group = simpleGroup)
+    addConsumerGroupExecutor(numConsumers = 1)
+    var out = ""
+
+    var cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--list")
+    TestUtils.waitUntilTrue(() => {
+      out = TestUtils.grabConsoleOutput(ConsumerGroupCommand.main(cgcArgs))
+      !out.contains("STATE") && out.contains(simpleGroup) && out.contains(group)
+    }, s"Expected to find $simpleGroup, $group and no header, but found $out")
+
+    cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--list", "--state")
+    TestUtils.waitUntilTrue(() => {
+      out = TestUtils.grabConsoleOutput(ConsumerGroupCommand.main(cgcArgs))
+      out.contains("STATE") && out.contains(simpleGroup) && out.contains(group)
+    }, s"Expected to find $simpleGroup, $group and the header, but found $out")
+
+    cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--list", "--state", "Stable")
+    TestUtils.waitUntilTrue(() => {
+      out = TestUtils.grabConsoleOutput(ConsumerGroupCommand.main(cgcArgs))
+      out.contains("STATE") && out.contains(group) && out.contains("Stable")
+    }, s"Expected to find $group in state Stable and the header, but found $out")
+  }
+
 }

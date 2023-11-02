@@ -16,7 +16,17 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.streams.processor.ConnectedStoreProvider;
+
+import java.util.function.Supplier;
+
 /**
+ * A {@code ValueTransformerWithKeySupplier} interface which can create one or more {@link ValueTransformerWithKey} instances.
+ * <p>
+ * The supplier should always generate a new instance each time {@link ValueTransformerWithKeySupplier#get()} gets called. Creating
+ * a single {@link ValueTransformerWithKey} object and returning the same object reference in {@link ValueTransformerWithKeySupplier#get()} would be
+ * a violation of the supplier pattern and leads to runtime exceptions.
+ *
  * @param <K>  key type
  * @param <V>  value type
  * @param <VR> transformed value type
@@ -28,6 +38,17 @@ package org.apache.kafka.streams.kstream;
  * @see TransformerSupplier
  * @see KStream#transform(TransformerSupplier, String...)
  */
-public interface ValueTransformerWithKeySupplier<K, V, VR> {
+public interface ValueTransformerWithKeySupplier<K, V, VR> extends ConnectedStoreProvider, Supplier<ValueTransformerWithKey<K, V, VR>> {
+
+    /**
+     * Return a newly constructed {@link ValueTransformerWithKey} instance.
+     * The supplier should always generate a new instance each time {@link  ValueTransformerWithKeySupplier#get()} gets called.
+     * <p>
+     * Creating a single {@link ValueTransformerWithKey} object and returning the same object reference in {@link ValueTransformerWithKeySupplier#get()}
+     * is a violation of the supplier pattern and leads to runtime exceptions.
+     *
+     * @return  a new {@link ValueTransformerWithKey} instance
+     * @return  a newly constructed {@link ValueTransformerWithKey} instance
+     */
     ValueTransformerWithKey<K, V, VR> get();
 }

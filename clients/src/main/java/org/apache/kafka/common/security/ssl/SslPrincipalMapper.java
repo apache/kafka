@@ -140,7 +140,7 @@ public class SslPrincipalMapper {
 
             if (toLowerCase && result != null) {
                 result = result.toLowerCase(Locale.ENGLISH);
-            } else if (toUpperCase & result != null) {
+            } else if (toUpperCase && result != null) {
                 result = result.toUpperCase(Locale.ENGLISH);
             }
 
@@ -163,8 +163,7 @@ public class SslPrincipalMapper {
                 if (backRefNum.startsWith("0")) {
                     continue;
                 }
-                final int originalBackRefIndex = Integer.parseInt(backRefNum);
-                int backRefIndex = originalBackRefIndex;
+                int backRefIndex = Integer.parseInt(backRefNum);
 
 
                 // if we have a replacement value like $123, and we have less than 123 capturing groups, then

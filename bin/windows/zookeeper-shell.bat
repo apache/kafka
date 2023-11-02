@@ -15,8 +15,8 @@ rem See the License for the specific language governing permissions and
 rem limitations under the License.
 
 IF [%1] EQU [] (
-	echo USAGE: %0 zookeeper_host:port[/path] [args...]
+	echo USAGE: %0 zookeeper_host:port[/path] [-zk-tls-config-file file] [args...]
 	EXIT /B 1
 )
 
-"%~dp0kafka-run-class.bat" org.apache.zookeeper.ZooKeeperMain -server %*
+"%~dp0kafka-run-class.bat" org.apache.zookeeper.ZooKeeperMainWithTlsSupportForKafka -server %*

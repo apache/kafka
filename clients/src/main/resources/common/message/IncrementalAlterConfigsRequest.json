@@ -16,6 +16,7 @@
 {
   "apiKey": 44,
   "type": "request",
+  "listeners": ["zkBroker", "broker", "controller"],
   "name": "IncrementalAlterConfigsRequest",
   // Version 1 is the first flexible version.
   "validVersions": "0-1",

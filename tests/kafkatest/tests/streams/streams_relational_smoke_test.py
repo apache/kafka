@@ -17,12 +17,13 @@
 from ducktape.mark import matrix
 from ducktape.mark.resource import cluster
 from ducktape.utils.util import wait_until
+from kafkatest.services.kafka import quorum
 from kafkatest.services.streams import StreamsTestBaseService
 from kafkatest.tests.kafka_test import KafkaTest
 
 
 class StreamsRelationalSmokeTestService(StreamsTestBaseService):
-    def __init__(self, test_context, kafka, mode, nodeId):
+    def __init__(self, test_context, kafka, mode, nodeId, processing_guarantee):
         super(StreamsRelationalSmokeTestService, self).__init__(
             test_context,
             kafka,
@@ -31,18 +32,20 @@ class StreamsRelationalSmokeTestService(StreamsTestBaseService):
         )
         self.mode = mode
         self.nodeId = nodeId
+        self.processing_guarantee = processing_guarantee
         self.log4j_template = 'log4j_template.properties'
 
     def start_cmd(self, node):
         return "( export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%(log4j)s\"; " \
                "INCLUDE_TEST_JARS=true %(kafka_run_class)s org.apache.kafka.streams.tests.RelationalSmokeTest " \
-               " %(mode)s %(kafka)s %(nodeId)s %(state_dir)s" \
+               " %(mode)s %(kafka)s %(nodeId)s %(processing_guarantee)s %(state_dir)s" \
                " & echo $! >&3 ) 1>> %(stdout)s 2>> %(stderr)s 3> %(pidfile)s" % {
                    "log4j": self.LOG4J_CONFIG_FILE,
                    "kafka_run_class": self.path.script("kafka-run-class.sh", node),
                    "mode": self.mode,
-                   "nodeId": self.nodeId,
                    "kafka": self.kafka.bootstrap_servers(),
+                   "nodeId": self.nodeId,
+                   "processing_guarantee": self.processing_guarantee,
                    "state_dir": self.PERSISTENT_ROOT,
                    "stdout": self.STDOUT_FILE,
                    "stderr": self.STDERR_FILE,
@@ -57,7 +60,7 @@ class StreamsRelationalSmokeTestService(StreamsTestBaseService):
         self.logger.info("Starting process on " + str(node.account))
         node.account.ssh(self.start_cmd(node))
 
-        if len(self.pids(node)) == 0:
+        if not self.pids(node):
             raise RuntimeError("No process ids recorded")
 
     def await_command(self, command):
@@ -82,14 +85,16 @@ class StreamsRelationalSmokeTest(KafkaTest):
         self.test_context = test_context
 
     @cluster(num_nodes=8)
-    @matrix(crash=[False, True])
-    def test_streams(self, crash):
-        driver = StreamsRelationalSmokeTestService(self.test_context, self.kafka, "driver", "ignored")
+    @matrix(crash=[False, True],
+            processing_guarantee=['exactly_once', 'exactly_once_v2'],
+            metadata_quorum=[quorum.isolated_kraft])
+    def test_streams(self, crash, processing_guarantee, metadata_quorum):
+        driver = StreamsRelationalSmokeTestService(self.test_context, self.kafka, "driver", "ignored", "ignored")
 
-        LOG_FILE = driver.LOG_FILE  # this is the same for all instaces of the service, so we can just declare a "constant"
+        LOG_FILE = driver.LOG_FILE  # this is the same for all instances of the service, so we can just declare a "constant"
 
-        processor1 = StreamsRelationalSmokeTestService(self.test_context, self.kafka, "application", "processor1")
-        processor2 = StreamsRelationalSmokeTestService(self.test_context, self.kafka, "application", "processor2")
+        processor1 = StreamsRelationalSmokeTestService(self.test_context, self.kafka, "application", "processor1", processing_guarantee)
+        processor2 = StreamsRelationalSmokeTestService(self.test_context, self.kafka, "application", "processor2", processing_guarantee)
 
         processor1.start()
         processor2.start()
@@ -104,7 +109,7 @@ class StreamsRelationalSmokeTest(KafkaTest):
 
         processor1.stop_nodes(not crash)
 
-        processor3 = StreamsRelationalSmokeTestService(self.test_context, self.kafka, "application", "processor3")
+        processor3 = StreamsRelationalSmokeTestService(self.test_context, self.kafka, "application", "processor3", processing_guarantee)
         processor3.start()
         processor3.await_command("grep -q 'Streams has started' %s" % LOG_FILE)
 

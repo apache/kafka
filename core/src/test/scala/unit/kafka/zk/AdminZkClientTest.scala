@@ -17,35 +17,37 @@
 package kafka.admin
 
 import java.util
-import java.util.Properties
-
+import java.util.{Optional, Properties}
 import kafka.controller.ReplicaAssignment
-import kafka.log._
 import kafka.server.DynamicConfig.Broker._
 import kafka.server.KafkaConfig._
-import kafka.server.{ConfigType, KafkaConfig, KafkaServer}
+import kafka.server.{ConfigType, KafkaConfig, KafkaServer, QuorumTestHarness}
 import kafka.utils.CoreUtils._
 import kafka.utils.TestUtils._
 import kafka.utils.{Logging, TestUtils}
-import kafka.zk.{AdminZkClient, KafkaZkClient, ZooKeeperTestHarness}
+import kafka.zk.{AdminZkClient, ConfigEntityTypeZNode, KafkaZkClient}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.TopicConfig
+import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.common.errors.{InvalidReplicaAssignmentException, InvalidTopicException, TopicExistsException}
 import org.apache.kafka.common.metrics.Quota
+import org.apache.kafka.server.common.AdminOperationException
+import org.apache.kafka.storage.internals.log.LogConfig
 import org.apache.kafka.test.{TestUtils => JTestUtils}
-import org.easymock.EasyMock
-import org.junit.Assert._
-import org.junit.{After, Test}
-import org.scalatest.Assertions.intercept
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, Test}
+import org.mockito.Mockito.{mock, when}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.{Map, Seq, immutable}
 
-class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
+class AdminZkClientTest extends QuorumTestHarness with Logging with RackAwareTest {
 
+  private val producerByteRate = "1024"
+  private val ipConnectionRate = "10"
   var servers: Seq[KafkaServer] = Seq()
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     TestUtils.shutdownServers(servers)
     super.tearDown()
@@ -59,36 +61,26 @@ class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAware
     val topicConfig = new Properties()
 
     // duplicate brokers
-    intercept[InvalidReplicaAssignmentException] {
-      adminZkClient.createTopicWithAssignment("test", topicConfig, Map(0->Seq(0,0)))
-    }
+    assertThrows(classOf[InvalidReplicaAssignmentException], () => adminZkClient.createTopicWithAssignment("test", topicConfig, Map(0->Seq(0,0))))
 
     // inconsistent replication factor
-    intercept[InvalidReplicaAssignmentException] {
-      adminZkClient.createTopicWithAssignment("test", topicConfig, Map(0->Seq(0,1), 1->Seq(0)))
-    }
+    assertThrows(classOf[InvalidReplicaAssignmentException], () => adminZkClient.createTopicWithAssignment("test", topicConfig, Map(0->Seq(0,1), 1->Seq(0))))
 
     // partitions should be 0-based
-    intercept[InvalidReplicaAssignmentException] {
-      adminZkClient.createTopicWithAssignment("test", topicConfig, Map(1->Seq(1,2), 2->Seq(1,2)))
-    }
+    assertThrows(classOf[InvalidReplicaAssignmentException], () => adminZkClient.createTopicWithAssignment("test", topicConfig, Map(1->Seq(1,2), 2->Seq(1,2))))
 
     // partitions should be 0-based and consecutive
-    intercept[InvalidReplicaAssignmentException] {
-      adminZkClient.createTopicWithAssignment("test", topicConfig, Map(0->Seq(1,2), 0->Seq(1,2), 3->Seq(1,2)))
-    }
+    assertThrows(classOf[InvalidReplicaAssignmentException], () => adminZkClient.createTopicWithAssignment("test", topicConfig, Map(0->Seq(1,2), 0->Seq(1,2), 3->Seq(1,2))))
 
     // partitions should be 0-based and consecutive
-    intercept[InvalidReplicaAssignmentException] {
-      adminZkClient.createTopicWithAssignment("test", topicConfig, Map(-1->Seq(1,2), 1->Seq(1,2), 2->Seq(1,2), 4->Seq(1,2)))
-    }
+    assertThrows(classOf[InvalidReplicaAssignmentException], () => adminZkClient.createTopicWithAssignment("test", topicConfig, Map(-1->Seq(1,2), 1->Seq(1,2), 2->Seq(1,2), 4->Seq(1,2))))
 
     // good assignment
     val assignment = Map(0 -> List(0, 1, 2),
                          1 -> List(1, 2, 3))
     adminZkClient.createTopicWithAssignment("test", topicConfig, assignment)
     val found = zkClient.getPartitionAssignmentForTopics(Set("test"))
-    assertEquals(assignment.mapValues(ReplicaAssignment(_, List(), List())).toMap, found("test"))
+    assertEquals(assignment.map { case (k, v) => k -> ReplicaAssignment(v, List(), List()) }, found("test"))
   }
 
   @Test
@@ -133,10 +125,8 @@ class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAware
     for(i <- 0 until actualReplicaMap.size)
       assertEquals(expectedReplicaAssignment.get(i).get, actualReplicaMap(i))
 
-    intercept[TopicExistsException] {
-      // shouldn't be able to create a topic that already exists
-      adminZkClient.createTopicWithAssignment(topic, topicConfig, expectedReplicaAssignment)
-    }
+    // shouldn't be able to create a topic that already exists
+    assertThrows(classOf[TopicExistsException], () => adminZkClient.createTopicWithAssignment(topic, topicConfig, expectedReplicaAssignment))
   }
 
   @Test
@@ -147,10 +137,19 @@ class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAware
     // create the topic
     adminZkClient.createTopic(topic, 3, 1)
 
-    intercept[InvalidTopicException] {
-      // shouldn't be able to create a topic that collides
-      adminZkClient.createTopic(collidingTopic, 3, 1)
-    }
+    // shouldn't be able to create a topic that collides
+    assertThrows(classOf[InvalidTopicException], () => adminZkClient.createTopic(collidingTopic, 3, 1))
+  }
+
+  @Test
+  def testMarkedDeletionTopicCreation(): Unit = {
+    val zkMock: KafkaZkClient = mock(classOf[KafkaZkClient])
+    val topicPartition = new TopicPartition("test", 0)
+    val topic = topicPartition.topic
+    when(zkMock.isTopicMarkedForDeletion(topic)).thenReturn(true)
+    val adminZkClient = new AdminZkClient(zkMock)
+
+    assertThrows(classOf[TopicExistsException], () => adminZkClient.validateTopicCreate(topic, Map.empty, new Properties))
   }
 
   @Test
@@ -158,15 +157,12 @@ class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAware
     val topic = "test.topic"
 
     // simulate the ZK interactions that can happen when a topic is concurrently created by multiple processes
-    val zkMock: KafkaZkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
-    EasyMock.expect(zkMock.topicExists(topic)).andReturn(false)
-    EasyMock.expect(zkMock.getAllTopicsInCluster).andReturn(Set("some.topic", topic, "some.other.topic"))
-    EasyMock.replay(zkMock)
+    val zkMock: KafkaZkClient = mock(classOf[KafkaZkClient])
+    when(zkMock.topicExists(topic)).thenReturn(false)
+    when(zkMock.getAllTopicsInCluster(false)).thenReturn(Set("some.topic", topic, "some.other.topic"))
     val adminZkClient = new AdminZkClient(zkMock)
 
-    intercept[TopicExistsException] {
-      adminZkClient.validateTopicCreate(topic, Map.empty, new Properties)
-    }
+    assertThrows(classOf[TopicExistsException], () => adminZkClient.validateTopicCreate(topic, Map.empty, new Properties))
   }
 
   @Test
@@ -181,14 +177,13 @@ class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAware
       val (_, partitionAssignment) = zkClient.getPartitionAssignmentForTopics(Set(topic)).head
       assertEquals(3, partitionAssignment.size)
       partitionAssignment.foreach { case (partition, partitionReplicaAssignment) =>
-        assertEquals(s"Unexpected replication factor for $partition",
-          1, partitionReplicaAssignment.replicas.size)
+        assertEquals(1, partitionReplicaAssignment.replicas.size, s"Unexpected replication factor for $partition")
       }
       val savedProps = zkClient.getEntityConfigs(ConfigType.Topic, topic)
       assertEquals(props, savedProps)
     }
 
-    TestUtils.assertConcurrent("Concurrent topic creation failed", Seq(() => createTopic, () => createTopic),
+    TestUtils.assertConcurrent("Concurrent topic creation failed", Seq(() => createTopic(), () => createTopic()),
       JTestUtils.DEFAULT_MAX_WAIT_MS.toInt)
   }
 
@@ -205,10 +200,10 @@ class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAware
 
     def makeConfig(messageSize: Int, retentionMs: Long, throttledLeaders: String, throttledFollowers: String) = {
       val props = new Properties()
-      props.setProperty(LogConfig.MaxMessageBytesProp, messageSize.toString)
-      props.setProperty(LogConfig.RetentionMsProp, retentionMs.toString)
-      props.setProperty(LogConfig.LeaderReplicationThrottledReplicasProp, throttledLeaders)
-      props.setProperty(LogConfig.FollowerReplicationThrottledReplicasProp, throttledFollowers)
+      props.setProperty(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, messageSize.toString)
+      props.setProperty(TopicConfig.RETENTION_MS_CONFIG, retentionMs.toString)
+      props.setProperty(LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, throttledLeaders)
+      props.setProperty(LogConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, throttledFollowers)
       props
     }
 
@@ -227,8 +222,8 @@ class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAware
           assertTrue(log.isDefined)
           assertEquals(retentionMs, log.get.config.retentionMs)
           assertEquals(messageSize, log.get.config.maxMessageSize)
-          checkList(log.get.config.LeaderReplicationThrottledReplicas, throttledLeaders)
-          checkList(log.get.config.FollowerReplicationThrottledReplicas, throttledFollowers)
+          checkList(log.get.config.leaderReplicationThrottledReplicas, throttledLeaders)
+          checkList(log.get.config.followerReplicationThrottledReplicas, throttledFollowers)
           assertEquals(quotaManagerIsThrottled, server.quotaManagers.leader.isThrottled(tp))
         }
       }
@@ -258,15 +253,15 @@ class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAware
 
     //Now delete the config
     adminZkClient.changeTopicConfig(topic, new Properties)
-    checkConfig(Defaults.MaxMessageSize, Defaults.RetentionMs, "", "", quotaManagerIsThrottled = false)
+    checkConfig(LogConfig.DEFAULT_MAX_MESSAGE_BYTES, LogConfig.DEFAULT_RETENTION_MS, "", "", quotaManagerIsThrottled = false)
 
     //Add config back
     adminZkClient.changeTopicConfig(topic, makeConfig(maxMessageSize, retentionMs, "0:0,1:0,2:0", "0:1,1:1,2:1"))
     checkConfig(maxMessageSize, retentionMs, "0:0,1:0,2:0", "0:1,1:1,2:1", quotaManagerIsThrottled = true)
 
     //Now ensure updating to "" removes the throttled replica list also
-    adminZkClient.changeTopicConfig(topic, propsWith((LogConfig.FollowerReplicationThrottledReplicasProp, ""), (LogConfig.LeaderReplicationThrottledReplicasProp, "")))
-    checkConfig(Defaults.MaxMessageSize, Defaults.RetentionMs, "", "",  quotaManagerIsThrottled = false)
+    adminZkClient.changeTopicConfig(topic, propsWith((LogConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, ""), (LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, "")))
+    checkConfig(LogConfig.DEFAULT_MAX_MESSAGE_BYTES, LogConfig.DEFAULT_RETENTION_MS, "", "",  quotaManagerIsThrottled = false)
   }
 
   @Test
@@ -277,8 +272,8 @@ class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAware
     def checkConfig(limit: Long): Unit = {
       retry(10000) {
         for (server <- servers) {
-          assertEquals("Leader Quota Manager was not updated", limit, server.quotaManagers.leader.upperBound)
-          assertEquals("Follower Quota Manager was not updated", limit, server.quotaManagers.follower.upperBound)
+          assertEquals(limit, server.quotaManagers.leader.upperBound, "Leader Quota Manager was not updated")
+          assertEquals(limit, server.quotaManagers.follower.upperBound, "Follower Quota Manager was not updated")
         }
       }
     }
@@ -325,7 +320,7 @@ class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAware
     zkClient.setOrCreateEntityConfigs(ConfigType.Client, clientId, props)
 
     val configInZk: Map[String, Properties] = adminZkClient.fetchAllEntityConfigs(ConfigType.Client)
-    assertEquals("Must have 1 overridden client config", 1, configInZk.size)
+    assertEquals(1, configInZk.size, "Must have 1 overridden client config")
     assertEquals(props, configInZk(clientId))
 
     // Test that the existing clientId overrides are read
@@ -341,28 +336,91 @@ class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAware
     val brokerList = 0 to 5
     val rackInfo = Map(0 -> "rack1", 1 -> "rack2", 2 -> "rack2", 3 -> "rack1", 5 -> "rack3")
     val brokerMetadatas = toBrokerMetadata(rackInfo, brokersWithoutRack = brokerList.filterNot(rackInfo.keySet))
-    TestUtils.createBrokersInZk(brokerMetadatas, zkClient)
+    TestUtils.createBrokersInZk(brokerMetadatas.asScala.toSeq, zkClient)
 
     val processedMetadatas1 = adminZkClient.getBrokerMetadatas(RackAwareMode.Disabled)
     assertEquals(brokerList, processedMetadatas1.map(_.id))
-    assertEquals(List.fill(brokerList.size)(None), processedMetadatas1.map(_.rack))
+    assertEquals(List.fill(brokerList.size)(Optional.empty()), processedMetadatas1.map(_.rack))
 
     val processedMetadatas2 = adminZkClient.getBrokerMetadatas(RackAwareMode.Safe)
     assertEquals(brokerList, processedMetadatas2.map(_.id))
-    assertEquals(List.fill(brokerList.size)(None), processedMetadatas2.map(_.rack))
+    assertEquals(List.fill(brokerList.size)(Optional.empty()), processedMetadatas2.map(_.rack))
 
-    intercept[AdminOperationException] {
-      adminZkClient.getBrokerMetadatas(RackAwareMode.Enforced)
-    }
+    assertThrows(classOf[AdminOperationException], () => adminZkClient.getBrokerMetadatas(RackAwareMode.Enforced))
 
     val partialList = List(0, 1, 2, 3, 5)
     val processedMetadatas3 = adminZkClient.getBrokerMetadatas(RackAwareMode.Enforced, Some(partialList))
     assertEquals(partialList, processedMetadatas3.map(_.id))
-    assertEquals(partialList.map(rackInfo), processedMetadatas3.flatMap(_.rack))
+    assertEquals(partialList.map(rackInfo), processedMetadatas3.map(_.rack.get()))
 
     val numPartitions = 3
     adminZkClient.createTopic("foo", numPartitions, 2, rackAwareMode = RackAwareMode.Safe)
     val assignment = zkClient.getReplicaAssignmentForTopics(Set("foo"))
     assertEquals(numPartitions, assignment.size)
+  }
+
+  @Test
+  def testChangeUserOrUserClientIdConfigWithUserAndClientId(): Unit = {
+    val config = new Properties()
+    config.put(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, producerByteRate)
+    adminZkClient.changeUserOrUserClientIdConfig("user01/clients/client01", config, isUserClientId = true)
+    var props = zkClient.getEntityConfigs(ConfigType.User, "user01/clients/client01")
+    assertEquals(producerByteRate, props.getProperty(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG))
+
+    // Children of clients and user01 should all be empty, so user01 should be deleted
+    adminZkClient.changeUserOrUserClientIdConfig("user01/clients/client01", new Properties(), isUserClientId = true)
+    var users = zkClient.getChildren(ConfigEntityTypeZNode.path(ConfigType.User))
+    assert(users.isEmpty)
+
+    adminZkClient.changeUserOrUserClientIdConfig("user01", config)
+    props = zkClient.getEntityConfigs(ConfigType.User, "user01")
+    assertEquals(producerByteRate, props.getProperty(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG))
+    adminZkClient.changeUserOrUserClientIdConfig("user01/clients/client01", config, isUserClientId = true)
+    props = zkClient.getEntityConfigs(ConfigType.User, "user01/clients/client01")
+    assertEquals(producerByteRate, props.getProperty(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG))
+
+    // Children of clients are empty but configs of user01 are not empty, so clients should be deleted, but user01 should not
+    adminZkClient.changeUserOrUserClientIdConfig("user01/clients/client01", new Properties(), isUserClientId = true)
+    users = zkClient.getChildren(ConfigEntityTypeZNode.path(ConfigType.User))
+    assert(users == Seq("user01"))
+  }
+
+  @Test
+  def testChangeUserOrUserClientIdConfigWithUser(): Unit = {
+    val config = new Properties()
+    config.put(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, producerByteRate)
+    adminZkClient.changeUserOrUserClientIdConfig("user01", config)
+    val props = zkClient.getEntityConfigs(ConfigType.User, "user01")
+    assertEquals(producerByteRate, props.getProperty(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG))
+
+    adminZkClient.changeUserOrUserClientIdConfig("user01", new Properties())
+    val users = zkClient.getChildren(ConfigEntityTypeZNode.path(ConfigType.User))
+    assert(users.isEmpty)
+  }
+
+  @Test
+  def testChangeClientIdConfig(): Unit = {
+    val config = new Properties()
+    config.put(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, producerByteRate)
+    adminZkClient.changeClientIdConfig("client01", config)
+    val props = zkClient.getEntityConfigs(ConfigType.Client, "client01")
+    assertEquals(producerByteRate, props.getProperty(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG))
+
+    adminZkClient.changeClientIdConfig("client01", new Properties())
+    val users = zkClient.getChildren(ConfigEntityTypeZNode.path(ConfigType.Client))
+    assert(users.isEmpty)
+  }
+
+  @Test
+  def testChangeIpConfig(): Unit = {
+    val config = new Properties()
+    config.put(QuotaConfigs.IP_CONNECTION_RATE_OVERRIDE_CONFIG, ipConnectionRate)
+    adminZkClient.changeIpConfig("127.0.0.1", config)
+    val props = zkClient.getEntityConfigs(ConfigType.Ip, "127.0.0.1")
+    assertEquals(ipConnectionRate, props.getProperty(QuotaConfigs.IP_CONNECTION_RATE_OVERRIDE_CONFIG))
+
+    adminZkClient.changeIpConfig("127.0.0.1", new Properties())
+    val users = zkClient.getChildren(ConfigEntityTypeZNode.path(ConfigType.Ip))
+    assert(users.isEmpty)
   }
 }

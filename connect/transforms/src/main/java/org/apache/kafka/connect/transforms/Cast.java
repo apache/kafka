@@ -22,6 +22,9 @@ import org.apache.kafka.common.cache.LRUCache;
 import org.apache.kafka.common.cache.SynchronizedCache;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.utils.AppInfoParser;
+import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.ConnectSchema;
 import org.apache.kafka.connect.data.Date;
@@ -39,6 +42,8 @@ import org.apache.kafka.connect.transforms.util.SimpleConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.nio.ByteBuffer;
+import java.util.Base64;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
@@ -49,14 +54,15 @@ import java.util.Set;
 import static org.apache.kafka.connect.transforms.util.Requirements.requireMap;
 import static org.apache.kafka.connect.transforms.util.Requirements.requireStruct;
 
-public abstract class Cast<R extends ConnectRecord<R>> implements Transformation<R> {
+public abstract class Cast<R extends ConnectRecord<R>> implements Transformation<R>, Versioned {
     private static final Logger log = LoggerFactory.getLogger(Cast.class);
 
     // TODO: Currently we only support top-level field casting. Ideally we could use a dotted notation in the spec to
     // allow casting nested fields.
     public static final String OVERVIEW_DOC =
             "Cast fields or the entire key or value to a specific type, e.g. to force an integer field to a smaller "
-                    + "width. Only simple primitive types are supported -- integers, floats, boolean, and string. "
+                    + "width. Cast from integers, floats, boolean and string to any other type, "
+                    + "and cast binary to string (base64 encoded)."
                     + "<p/>Use the concrete transformation type designed for the record key (<code>" + Key.class.getName() + "</code>) "
                     + "or value (<code>" + Value.class.getName() + "</code>).";
 
@@ -82,7 +88,7 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
             ConfigDef.Importance.HIGH,
             "List of fields and the type to cast them to of the form field1:type,field2:type to cast fields of "
                     + "Maps or Structs. A single type to cast the entire value. Valid types are int8, int16, int32, "
-                    + "int64, float32, float64, boolean, and string.");
+                    + "int64, float32, float64, boolean, and string. Note that binary fields can only be cast to string.");
 
     private static final String PURPOSE = "cast types";
 
@@ -107,15 +113,24 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
     private Cache<Schema, Schema> schemaUpdateCache;
 
     @Override
+    public String version() {
+        return AppInfoParser.getVersion();
+    }
+
+    @Override
     public void configure(Map<String, ?> props) {
         final SimpleConfig config = new SimpleConfig(CONFIG_DEF, props);
         casts = parseFieldTypes(config.getList(SPEC_CONFIG));
         wholeValueCastType = casts.get(WHOLE_VALUE_CAST);
-        schemaUpdateCache = new SynchronizedCache<>(new LRUCache<Schema, Schema>(16));
+        schemaUpdateCache = new SynchronizedCache<>(new LRUCache<>(16));
     }
 
     @Override
     public R apply(R record) {
+        if (operatingValue(record) == null) {
+            return record;
+        }
+
         if (operatingSchema(record) == null) {
             return applySchemaless(record);
         } else {
@@ -276,7 +291,7 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
                 case STRING:
                     return castToString(value);
                 default:
-                    throw new DataException(targetType.toString() + " is not supported in the Cast transformation.");
+                    throw new DataException(targetType + " is not supported in the Cast transformation.");
             }
         } catch (NumberFormatException e) {
             throw new DataException("Value (" + value.toString() + ") was out of range for requested data type", e);
@@ -364,6 +379,12 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
         if (value instanceof java.util.Date) {
             java.util.Date dateValue = (java.util.Date) value;
             return Values.dateFormatFor(dateValue).format(dateValue);
+        } else if (value instanceof ByteBuffer) {
+            ByteBuffer byteBuffer = (ByteBuffer) value;
+            return Base64.getEncoder().encodeToString(Utils.readBytes(byteBuffer));
+        } else if (value instanceof byte[]) {
+            byte[] rawBytes = (byte[]) value;
+            return Base64.getEncoder().encodeToString(rawBytes);
         } else {
             return value.toString();
         }

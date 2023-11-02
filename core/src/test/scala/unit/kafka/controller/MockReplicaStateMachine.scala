@@ -17,10 +17,22 @@
 package kafka.controller
 
 import scala.collection.Seq
+import scala.collection.mutable
 
 class MockReplicaStateMachine(controllerContext: ControllerContext) extends ReplicaStateMachine(controllerContext) {
+  val stateChangesByTargetState = mutable.Map.empty[ReplicaState, Int].withDefaultValue(0)
+
+  def stateChangesCalls(targetState: ReplicaState): Int = {
+    stateChangesByTargetState(targetState)
+  }
+
+  def clear(): Unit = {
+    stateChangesByTargetState.clear()
+  }
 
   override def handleStateChanges(replicas: Seq[PartitionAndReplica], targetState: ReplicaState): Unit = {
+    stateChangesByTargetState(targetState) = stateChangesByTargetState(targetState) + 1
+
     replicas.foreach(replica => controllerContext.putReplicaStateIfNotExists(replica, NonExistentReplica))
     val (validReplicas, invalidReplicas) = controllerContext.checkValidReplicaStateChange(replicas, targetState)
     if (invalidReplicas.nonEmpty) {

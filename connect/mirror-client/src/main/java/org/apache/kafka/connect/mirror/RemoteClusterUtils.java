@@ -25,10 +25,8 @@ import java.util.Set;
 import java.util.concurrent.TimeoutException;
 import java.time.Duration;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
- 
-/** Convenience methods for multi-cluster environments. Wraps MirrorClient (@see MirrorClient).
+
+/** Convenience methods for multi-cluster environments. Wraps {@link MirrorClient}
  *  <p>
  *  Properties passed to these methods are used to construct internal Admin and Consumer clients.
  *  Sub-configs like "admin.xyz" are also supported. For example:
@@ -42,7 +40,6 @@ import org.slf4j.LoggerFactory;
  *  </p>
  */
 public final class RemoteClusterUtils {
-    private static final Logger log = LoggerFactory.getLogger(RemoteClusterUtils.class);
 
     // utility class
     private RemoteClusterUtils() {}
@@ -82,7 +79,7 @@ public final class RemoteClusterUtils {
 
     /** Translate a remote consumer group's offsets into corresponding local offsets. Topics are automatically
      *  renamed according to the ReplicationPolicy.
-     *  @param properties @see MirrorClientConfig
+     *  @param properties {@link MirrorClientConfig} properties to instantiate a {@link MirrorClient}
      *  @param consumerGroupId group ID of remote consumer group
      *  @param remoteClusterAlias alias of remote cluster
      *  @param timeout timeout

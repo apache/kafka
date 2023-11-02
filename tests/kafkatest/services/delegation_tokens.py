@@ -92,10 +92,16 @@ KafkaClient {
         for line in output_iter:
             output += line
 
-        tokenid, hmac, owner, renewers, issuedate, expirydate, maxdate = output.split()
+        parts = output.split()
+        try:
+            tokenid, hmac, owner, requester, renewers, issuedate, expirydate, maxdate = parts
+        except ValueError:
+            raise ValueError("Could not parse %s, got parts %s" % (output, parts))
+
         return {"tokenid" : tokenid,
                 "hmac" : hmac,
                 "owner" : owner,
+                "requester": requester,
                 "renewers" : renewers,
                 "issuedate" : issuedate,
                 "expirydate" :expirydate,

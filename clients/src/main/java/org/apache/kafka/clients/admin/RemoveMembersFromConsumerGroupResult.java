@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
@@ -51,9 +52,21 @@ public class RemoveMembersFromConsumerGroupResult {
             if (throwable != null) {
                 result.completeExceptionally(throwable);
             } else {
-                for (MemberToRemove memberToRemove : memberInfos) {
-                    if (maybeCompleteExceptionally(memberErrors, memberToRemove.toMemberIdentity(), result)) {
-                        return;
+                if (removeAll()) {
+                    for (Map.Entry<MemberIdentity, Errors> entry: memberErrors.entrySet()) {
+                        Exception exception = entry.getValue().exception();
+                        if (exception != null) {
+                            Throwable ex = new KafkaException("Encounter exception when trying to remove: "
+                                    + entry.getKey(), exception);
+                            result.completeExceptionally(ex);
+                            return;
+                        }
+                    }
+                } else {
+                    for (MemberToRemove memberToRemove : memberInfos) {
+                        if (maybeCompleteExceptionally(memberErrors, memberToRemove.toMemberIdentity(), result)) {
+                            return;
+                        }
                     }
                 }
                 result.complete(null);
@@ -66,6 +79,9 @@ public class RemoveMembersFromConsumerGroupResult {
      * Returns the selected member future.
      */
     public KafkaFuture<Void> memberResult(MemberToRemove member) {
+        if (removeAll()) {
+            throw new IllegalArgumentException("The method: memberResult is not applicable in 'removeAll' mode");
+        }
         if (!memberInfos.contains(member)) {
             throw new IllegalArgumentException("Member " + member + " was not included in the original request");
         }
@@ -92,5 +108,9 @@ public class RemoveMembersFromConsumerGroupResult {
         } else {
             return false;
         }
+    }
+
+    private boolean removeAll() {
+        return memberInfos.isEmpty();
     }
 }

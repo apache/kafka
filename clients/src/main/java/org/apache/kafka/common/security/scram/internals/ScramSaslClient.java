@@ -18,6 +18,7 @@ package org.apache.kafka.common.security.scram.internals;
 
 import java.nio.charset.StandardCharsets;
 import java.security.InvalidKeyException;
+import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 import java.util.Collection;
@@ -112,7 +113,7 @@ public class ScramSaslClient implements SaslClient {
                     }
 
                     String username = nameCallback.getName();
-                    String saslName = formatter.saslName(username);
+                    String saslName = ScramFormatter.saslName(username);
                     Map<String, String> extensions = extensionsCallback.extensions();
                     this.clientFirstMessage = new ScramMessages.ClientFirstMessage(saslName, clientNonce, extensions);
                     setState(State.RECEIVE_SERVER_FIRST_MESSAGE);
@@ -188,7 +189,7 @@ public class ScramSaslClient implements SaslClient {
 
     private ClientFinalMessage handleServerFirstMessage(char[] password) throws SaslException {
         try {
-            byte[] passwordBytes = formatter.normalize(new String(password));
+            byte[] passwordBytes = ScramFormatter.normalize(new String(password));
             this.saltedPassword = formatter.hi(passwordBytes, serverFirstMessage.salt(), serverFirstMessage.iterations());
 
             ClientFinalMessage clientFinalMessage = new ClientFinalMessage("n,,".getBytes(StandardCharsets.UTF_8), serverFirstMessage.nonce());
@@ -204,7 +205,7 @@ public class ScramSaslClient implements SaslClient {
         try {
             byte[] serverKey = formatter.serverKey(saltedPassword);
             byte[] serverSignature = formatter.serverSignature(serverKey, clientFirstMessage, serverFirstMessage, clientFinalMessage);
-            if (!Arrays.equals(signature, serverSignature))
+            if (!MessageDigest.isEqual(signature, serverSignature))
                 throw new SaslException("Invalid server signature in server final message");
         } catch (InvalidKeyException e) {
             throw new SaslException("Sasl server signature verification failed", e);
@@ -241,7 +242,7 @@ public class ScramSaslClient implements SaslClient {
         @Override
         public String[] getMechanismNames(Map<String, ?> props) {
             Collection<String> mechanisms = ScramMechanism.mechanismNames();
-            return mechanisms.toArray(new String[mechanisms.size()]);
+            return mechanisms.toArray(new String[0]);
         }
     }
 }

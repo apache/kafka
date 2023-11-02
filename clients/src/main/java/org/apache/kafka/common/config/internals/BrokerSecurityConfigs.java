@@ -36,13 +36,14 @@ public class BrokerSecurityConfigs {
     public static final String SASL_SERVER_CALLBACK_HANDLER_CLASS = "sasl.server.callback.handler.class";
     public static final String SSL_PRINCIPAL_MAPPING_RULES_CONFIG = "ssl.principal.mapping.rules";
     public static final String CONNECTIONS_MAX_REAUTH_MS = "connections.max.reauth.ms";
+    public static final int DEFAULT_SASL_SERVER_MAX_RECEIVE_SIZE = 524288;
+    public static final String SASL_SERVER_MAX_RECEIVE_SIZE_CONFIG = "sasl.server.max.receive.size";
 
     public static final String PRINCIPAL_BUILDER_CLASS_DOC = "The fully qualified name of a class that implements the " +
             "KafkaPrincipalBuilder interface, which is used to build the KafkaPrincipal object used during " +
-            "authorization. This config also supports the deprecated PrincipalBuilder interface which was previously " +
-            "used for client authentication over SSL. If no principal builder is defined, the default behavior depends " +
-            "on the security protocol in use. For SSL authentication,  the principal will be derived using the" +
-            " rules defined by <code>" + SSL_PRINCIPAL_MAPPING_RULES_CONFIG + "</code> applied on the distinguished " +
+            "authorization. If no principal builder is defined, the default behavior depends " +
+            "on the security protocol in use. For SSL authentication,  the principal will be derived using the " +
+            "rules defined by <code>" + SSL_PRINCIPAL_MAPPING_RULES_CONFIG + "</code> applied on the distinguished " +
             "name from the client certificate if one is provided; otherwise, if client authentication is not required, " +
             "the principal name will be ANONYMOUS. For SASL authentication, the principal will be derived using the " +
             "rules defined by <code>" + SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES_CONFIG + "</code> if GSSAPI is in use, " +
@@ -60,19 +61,18 @@ public class BrokerSecurityConfigs {
     public static final String SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES_DOC = "A list of rules for mapping from principal " +
             "names to short names (typically operating system usernames). The rules are evaluated in order and the " +
             "first rule that matches a principal name is used to map it to a short name. Any later rules in the list are " +
-            "ignored. By default, principal names of the form {username}/{hostname}@{REALM} are mapped to {username}. " +
-            "For more details on the format please see <a href=\"#security_authz\"> security authorization and acls</a>. " +
-            "Note that this configuration is ignored if an extension of KafkaPrincipalBuilder is provided by the " +
-            "<code>" + PRINCIPAL_BUILDER_CLASS_CONFIG + "</code> configuration.";
+            "ignored. By default, principal names of the form <code>{username}/{hostname}@{REALM}</code> are mapped " +
+            "to <code>{username}</code>. For more details on the format please see <a href=\"#security_authz\"> " +
+            "security authorization and acls</a>. Note that this configuration is ignored if an extension of " +
+            "<code>KafkaPrincipalBuilder</code> is provided by the <code>" + PRINCIPAL_BUILDER_CLASS_CONFIG + "</code> configuration.";
     public static final List<String> DEFAULT_SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES = Collections.singletonList("DEFAULT");
 
     public static final String SSL_CLIENT_AUTH_DOC = "Configures kafka broker to request client authentication."
             + " The following settings are common: "
             + " <ul>"
-            + " <li><code>ssl.client.auth=required</code> If set to required"
-            + " client authentication is required."
+            + " <li><code>ssl.client.auth=required</code> If set to required client authentication is required."
             + " <li><code>ssl.client.auth=requested</code> This means client authentication is optional."
-            + " unlike requested , if this option is set client can choose not to provide authentication information about itself"
+            + " unlike required, if this option is set client can choose not to provide authentication information about itself"
             + " <li><code>ssl.client.auth=none</code> This means client authentication is not needed."
             + "</ul>";
 
@@ -91,4 +91,8 @@ public class BrokerSecurityConfigs {
             + "The broker will disconnect any such connection that is not re-authenticated within the session lifetime and that is then subsequently "
             + "used for any purpose other than re-authentication. Configuration names can optionally be prefixed with listener prefix and SASL "
             + "mechanism name in lower-case. For example, listener.name.sasl_ssl.oauthbearer.connections.max.reauth.ms=3600000";
+
+    public static final String SASL_SERVER_MAX_RECEIVE_SIZE_DOC = "The maximum receive size allowed before and during initial SASL authentication." +
+            " Default receive size is 512KB. GSSAPI limits requests to 64K, but we allow upto 512KB by default for custom SASL mechanisms. In practice," +
+            " PLAIN, SCRAM and OAUTH mechanisms can use much smaller limits.";
 }

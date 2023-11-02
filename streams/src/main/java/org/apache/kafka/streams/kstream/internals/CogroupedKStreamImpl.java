@@ -16,10 +16,6 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.CogroupedKStream;
@@ -30,11 +26,18 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.kstream.SessionWindowedCogroupedKStream;
 import org.apache.kafka.streams.kstream.SessionWindows;
+import org.apache.kafka.streams.kstream.SlidingWindows;
 import org.apache.kafka.streams.kstream.TimeWindowedCogroupedKStream;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windows;
-import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
+import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
 import org.apache.kafka.streams.state.KeyValueStore;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import org.apache.kafka.streams.state.VersionedBytesStoreSupplier;
 
 public class CogroupedKStreamImpl<K, VOut> extends AbstractStream<K, VOut> implements CogroupedKStream<K, VOut> {
 
@@ -45,10 +48,10 @@ public class CogroupedKStreamImpl<K, VOut> extends AbstractStream<K, VOut> imple
     final private CogroupedStreamAggregateBuilder<K, VOut> aggregateBuilder;
 
     CogroupedKStreamImpl(final String name,
-                         final Set<String> sourceNodes,
-                         final StreamsGraphNode streamsGraphNode,
+                         final Set<String> subTopologySourceNodes,
+                         final GraphNode graphNode,
                          final InternalStreamsBuilder builder) {
-        super(name, null, null, sourceNodes, streamsGraphNode, builder);
+        super(name, null, null, subTopologySourceNodes, graphNode, builder);
         groupPatterns = new LinkedHashMap<>();
         aggregateBuilder = new CogroupedStreamAggregateBuilder<>(builder);
     }
@@ -97,13 +100,26 @@ public class CogroupedKStreamImpl<K, VOut> extends AbstractStream<K, VOut> imple
     public <W extends Window> TimeWindowedCogroupedKStream<K, VOut> windowedBy(final Windows<W> windows) {
         Objects.requireNonNull(windows, "windows can't be null");
         return new TimeWindowedCogroupedKStreamImpl<>(
-                windows,
-                builder,
-                sourceNodes,
-                name,
-                aggregateBuilder,
-                streamsGraphNode,
-                groupPatterns);
+            windows,
+            builder,
+            subTopologySourceNodes,
+            name,
+            aggregateBuilder,
+            graphNode,
+            groupPatterns);
+    }
+
+    @Override
+    public TimeWindowedCogroupedKStream<K, VOut> windowedBy(final SlidingWindows slidingWindows) {
+        Objects.requireNonNull(slidingWindows, "slidingWindows can't be null");
+        return new SlidingWindowedCogroupedKStreamImpl<>(
+            slidingWindows,
+            builder,
+            subTopologySourceNodes,
+            name,
+            aggregateBuilder,
+            graphNode,
+            groupPatterns);
     }
 
     @Override
@@ -111,10 +127,10 @@ public class CogroupedKStreamImpl<K, VOut> extends AbstractStream<K, VOut> imple
         Objects.requireNonNull(sessionWindows, "sessionWindows can't be null");
         return new SessionWindowedCogroupedKStreamImpl<>(sessionWindows,
             builder,
-            sourceNodes,
+            subTopologySourceNodes,
             name,
             aggregateBuilder,
-            streamsGraphNode,
+            graphNode,
             groupPatterns);
     }
 
@@ -125,12 +141,10 @@ public class CogroupedKStreamImpl<K, VOut> extends AbstractStream<K, VOut> imple
             groupPatterns,
             initializer,
             named,
-            new TimestampedKeyValueStoreMaterializer<>(materializedInternal).materialize(),
+            new KeyValueStoreMaterializer<>(materializedInternal).materialize(),
             materializedInternal.keySerde(),
             materializedInternal.valueSerde(),
             materializedInternal.queryableStoreName(),
-            null,
-            null,
-            null);
+            materializedInternal.storeSupplier() instanceof VersionedBytesStoreSupplier);
     }
 }

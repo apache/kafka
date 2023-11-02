@@ -19,6 +19,8 @@ package org.apache.kafka.clients.admin;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
+import java.util.Map;
+
 /**
  * Options for {@link AdminClient#listOffsets(Map)}.
  *

@@ -16,10 +16,10 @@
  */
 package org.apache.kafka.connect.storage;
 
+import org.apache.kafka.connect.runtime.RestartRequest;
 import org.apache.kafka.connect.runtime.SessionKey;
 import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.runtime.WorkerConfigTransformer;
-import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 
 import java.util.Collections;
@@ -30,9 +30,13 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * An implementation of ConfigBackingStore that stores Kafka Connect connector configurations in-memory (i.e. configs
+ * aren't persisted and will be wiped if the worker is restarted).
+ */
 public class MemoryConfigBackingStore implements ConfigBackingStore {
 
-    private Map<String, ConnectorState> connectors = new HashMap<>();
+    private final Map<String, ConnectorState> connectors = new HashMap<>();
     private UpdateListener updateListener;
     private WorkerConfigTransformer configTransformer;
 
@@ -74,8 +78,12 @@ public class MemoryConfigBackingStore implements ConfigBackingStore {
                 connectorConfigs,
                 connectorTargetStates,
                 taskConfigs,
-                Collections.<String>emptySet(),
-                configTransformer);
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptySet(),
+                Collections.emptySet(),
+                configTransformer
+        );
     }
 
     @Override
@@ -139,14 +147,30 @@ public class MemoryConfigBackingStore implements ConfigBackingStore {
         if (connectorState == null)
             throw new IllegalArgumentException("No connector `" + connector + "` configured");
 
+        TargetState prevState = connectorState.targetState;
         connectorState.targetState = state;
 
-        if (updateListener != null)
+        if (updateListener != null && !state.equals(prevState))
             updateListener.onConnectorTargetStateChange(connector);
     }
 
     @Override
     public void putSessionKey(SessionKey sessionKey) {
+        // no-op
+    }
+
+    @Override
+    public void putRestartRequest(RestartRequest restartRequest) {
+        // no-op
+    }
+
+    @Override
+    public void putTaskCountRecord(String connector, int taskCount) {
+        // no-op
+    }
+
+    @Override
+    public void putLoggerLevel(String namespace, String level) {
         // no-op
     }
 

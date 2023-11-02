@@ -18,90 +18,110 @@ package org.apache.kafka.streams.kstream;
 
 import org.junit.Test;
 
+import java.time.Duration;
+
 import static java.time.Duration.ofMillis;
 import static org.apache.kafka.streams.EqualityCheck.verifyEquality;
 import static org.apache.kafka.streams.EqualityCheck.verifyInEquality;
+import static org.apache.kafka.streams.kstream.Windows.DEPRECATED_DEFAULT_24_HR_GRACE_PERIOD;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.fail;
 
-@SuppressWarnings("deprecation")
 public class SessionWindowsTest {
+
+    private static final long ANY_SIZE = 123L;
+    private static final long ANY_OTHER_SIZE = 456L; // should be larger than anySize
+    private static final long ANY_GRACE = 1024L;
 
     @Test
     public void shouldSetWindowGap() {
         final long anyGap = 42L;
-        assertEquals(anyGap, SessionWindows.with(ofMillis(anyGap)).inactivityGap());
-    }
 
-    @Test
-    public void shouldSetWindowGraceTime() {
-        final long anyRetentionTime = 42L;
-        assertEquals(anyRetentionTime, SessionWindows.with(ofMillis(1)).grace(ofMillis(anyRetentionTime)).gracePeriodMs());
+        assertEquals(anyGap, SessionWindows.ofInactivityGapWithNoGrace(ofMillis(anyGap)).inactivityGap());
+        assertEquals(anyGap, SessionWindows.ofInactivityGapAndGrace(ofMillis(anyGap), ofMillis(ANY_GRACE)).inactivityGap());
     }
-
 
     @Test
     public void gracePeriodShouldEnforceBoundaries() {
-        SessionWindows.with(ofMillis(3L)).grace(ofMillis(0));
+        SessionWindows.ofInactivityGapAndGrace(ofMillis(3L), ofMillis(0));
 
         try {
-            SessionWindows.with(ofMillis(3L)).grace(ofMillis(-1L));
+            SessionWindows.ofInactivityGapAndGrace(ofMillis(3L), ofMillis(-1L));
             fail("should not accept negatives");
         } catch (final IllegalArgumentException e) {
             //expected
         }
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
+    public void noGraceAPIShouldNotSetGracePeriod() {
+        assertEquals(0L, SessionWindows.ofInactivityGapWithNoGrace(ofMillis(3L)).gracePeriodMs());
+        assertEquals(0L, SessionWindows.ofInactivityGapWithNoGrace(ofMillis(ANY_SIZE)).gracePeriodMs());
+        assertEquals(0L, SessionWindows.ofInactivityGapWithNoGrace(ofMillis(ANY_OTHER_SIZE)).gracePeriodMs());
+    }
+
+    @Test
+    public void withGraceAPIShouldSetGracePeriod() {
+        assertEquals(ANY_GRACE, SessionWindows.ofInactivityGapAndGrace(ofMillis(3L), ofMillis(ANY_GRACE)).gracePeriodMs());
+        assertEquals(ANY_GRACE, SessionWindows.ofInactivityGapAndGrace(ofMillis(ANY_SIZE), ofMillis(ANY_GRACE)).gracePeriodMs());
+        assertEquals(ANY_GRACE, SessionWindows.ofInactivityGapAndGrace(ofMillis(ANY_OTHER_SIZE), ofMillis(ANY_GRACE)).gracePeriodMs());
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void oldAPIShouldSetDefaultGracePeriod() {
+        assertEquals(Duration.ofDays(1).toMillis(), DEPRECATED_DEFAULT_24_HR_GRACE_PERIOD);
+        assertEquals(DEPRECATED_DEFAULT_24_HR_GRACE_PERIOD - 3L, SessionWindows.with(ofMillis(3L)).gracePeriodMs());
+        assertEquals(0L, SessionWindows.with(ofMillis(DEPRECATED_DEFAULT_24_HR_GRACE_PERIOD)).gracePeriodMs());
+        assertEquals(0L, SessionWindows.with(ofMillis(DEPRECATED_DEFAULT_24_HR_GRACE_PERIOD + 1L)).gracePeriodMs());
+    }
+
+    @Test
     public void windowSizeMustNotBeNegative() {
-        SessionWindows.with(ofMillis(-1));
+        assertThrows(IllegalArgumentException.class, () -> SessionWindows.ofInactivityGapWithNoGrace(ofMillis(-1)));
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void windowSizeMustNotBeZero() {
-        SessionWindows.with(ofMillis(0));
+        assertThrows(IllegalArgumentException.class, () -> SessionWindows.ofInactivityGapWithNoGrace(ofMillis(0)));
     }
 
-    @SuppressWarnings("deprecation") // specifically testing deprecated apis
+    @SuppressWarnings("deprecation")
     @Test
-    public void retentionTimeShouldBeGapIfGapIsLargerThanDefaultRetentionTime() {
-        final long windowGap = 2 * SessionWindows.with(ofMillis(1)).maintainMs();
-        assertEquals(windowGap, SessionWindows.with(ofMillis(windowGap)).maintainMs());
-    }
-
-    @Deprecated
-    @Test
-    public void retentionTimeMustNotBeNegative() {
-        final SessionWindows windowSpec = SessionWindows.with(ofMillis(42));
-        try {
-            windowSpec.until(41);
-            fail("should not accept retention time smaller than gap");
-        } catch (final IllegalArgumentException e) {
-            // expected
-        }
+    public void graceShouldNotCalledAfterGraceSet() {
+        assertThrows(IllegalStateException.class, () -> SessionWindows.ofInactivityGapAndGrace(ofMillis(10), ofMillis(10)).grace(ofMillis(10)));
+        assertThrows(IllegalStateException.class, () -> SessionWindows.ofInactivityGapWithNoGrace(ofMillis(10)).grace(ofMillis(10)));
     }
 
     @Test
     public void equalsAndHashcodeShouldBeValidForPositiveCases() {
-        verifyEquality(SessionWindows.with(ofMillis(1)), SessionWindows.with(ofMillis(1)));
+        verifyEquality(
+            SessionWindows.ofInactivityGapWithNoGrace(ofMillis(1)),
+            SessionWindows.ofInactivityGapWithNoGrace(ofMillis(1))
+        );
 
-        verifyEquality(SessionWindows.with(ofMillis(1)).grace(ofMillis(6)), SessionWindows.with(ofMillis(1)).grace(ofMillis(6)));
-
-        verifyEquality(SessionWindows.with(ofMillis(1)).grace(ofMillis(7)), SessionWindows.with(ofMillis(1)).grace(ofMillis(7)));
-
-        verifyEquality(SessionWindows.with(ofMillis(1)).grace(ofMillis(6)).grace(ofMillis(7)), SessionWindows.with(ofMillis(1)).grace(ofMillis(6)).grace(ofMillis(7)));
+        verifyEquality(
+            SessionWindows.ofInactivityGapAndGrace(ofMillis(1), ofMillis(11)),
+            SessionWindows.ofInactivityGapAndGrace(ofMillis(1), ofMillis(11))
+        );
     }
 
     @Test
     public void equalsAndHashcodeShouldBeValidForNegativeCases() {
-        verifyInEquality(SessionWindows.with(ofMillis(9)), SessionWindows.with(ofMillis(1)));
+        verifyInEquality(
+            SessionWindows.ofInactivityGapWithNoGrace(ofMillis(9)),
+            SessionWindows.ofInactivityGapWithNoGrace(ofMillis(1))
+        );
 
-        verifyInEquality(SessionWindows.with(ofMillis(1)).grace(ofMillis(9)), SessionWindows.with(ofMillis(1)).grace(ofMillis(6)));
+        verifyInEquality(
+            SessionWindows.ofInactivityGapAndGrace(ofMillis(9), ofMillis(9)),
+            SessionWindows.ofInactivityGapAndGrace(ofMillis(1), ofMillis(9))
+        );
 
-        verifyInEquality(SessionWindows.with(ofMillis(1)).grace(ofMillis(9)), SessionWindows.with(ofMillis(1)).grace(ofMillis(7)));
-
-        verifyInEquality(SessionWindows.with(ofMillis(2)).grace(ofMillis(6)).grace(ofMillis(7)), SessionWindows.with(ofMillis(1)).grace(ofMillis(6)));
-
-        verifyInEquality(SessionWindows.with(ofMillis(1)).grace(ofMillis(0)).grace(ofMillis(7)), SessionWindows.with(ofMillis(1)).grace(ofMillis(6)));
+        verifyInEquality(
+            SessionWindows.ofInactivityGapAndGrace(ofMillis(1), ofMillis(9)),
+            SessionWindows.ofInactivityGapAndGrace(ofMillis(1), ofMillis(6))
+        );
     }
 }

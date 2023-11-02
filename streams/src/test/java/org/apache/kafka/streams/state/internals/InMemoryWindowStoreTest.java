@@ -16,18 +16,13 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import static java.time.Duration.ofMillis;
-import static org.apache.kafka.streams.state.internals.WindowKeySchema.toStoreKeyBinary;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-
-import java.util.LinkedList;
-import java.util.List;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
+import org.apache.kafka.streams.query.Position;
+import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.Stores;
@@ -35,16 +30,26 @@ import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.junit.Test;
 
-public class InMemoryWindowStoreTest extends WindowBytesStoreTest {
+import java.util.LinkedList;
+import java.util.List;
+
+import static java.time.Duration.ofMillis;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.streams.state.internals.WindowKeySchema.toStoreKeyBinary;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+
+public class InMemoryWindowStoreTest extends AbstractWindowBytesStoreTest {
 
     private final static String STORE_NAME = "InMemoryWindowStore";
 
     @Override
     <K, V> WindowStore<K, V> buildWindowStore(final long retentionPeriod,
-        final long windowSize,
-        final boolean retainDuplicates,
-        final Serde<K> keySerde,
-        final Serde<V> valueSerde) {
+                                              final long windowSize,
+                                              final boolean retainDuplicates,
+                                              final Serde<K> keySerde,
+                                              final Serde<V> valueSerde) {
         return Stores.windowStoreBuilder(
             Stores.inMemoryWindowStore(
                 STORE_NAME,
@@ -56,16 +61,7 @@ public class InMemoryWindowStoreTest extends WindowBytesStoreTest {
             .build();
     }
 
-    @Override
-    String getMetricsScope() {
-        return new InMemoryWindowBytesStoreSupplier(null, 0, 0, false).metricsScope();
-    }
-
-    @Override
-    void setClassLoggerToDebug() {
-        LogCaptureAppender.setClassLoggerToDebug(InMemoryWindowStore.class);
-    }
-
+    @SuppressWarnings("unchecked")
     @Test
     public void shouldRestore() {
         // should be empty initially
@@ -84,13 +80,14 @@ public class InMemoryWindowStoreTest extends WindowBytesStoreTest {
             serdes.rawValue("three")));
 
         context.restore(STORE_NAME, restorableEntries);
-        final KeyValueIterator<Windowed<Integer>, String> iterator = windowStore
-            .fetchAll(0L, 2 * WINDOW_SIZE);
+        try (final KeyValueIterator<Windowed<Integer>, String> iterator = windowStore
+            .fetchAll(0L, 2 * WINDOW_SIZE)) {
 
-        assertEquals(windowedPair(1, "one", 0L), iterator.next());
-        assertEquals(windowedPair(2, "two", WINDOW_SIZE), iterator.next());
-        assertEquals(windowedPair(3, "three", 2 * WINDOW_SIZE), iterator.next());
-        assertFalse(iterator.hasNext());
+            assertEquals(windowedPair(1, "one", 0L), iterator.next());
+            assertEquals(windowedPair(2, "two", WINDOW_SIZE), iterator.next());
+            assertEquals(windowedPair(3, "three", 2 * WINDOW_SIZE), iterator.next());
+            assertFalse(iterator.hasNext());
+        }
     }
 
     @Test
@@ -125,37 +122,30 @@ public class InMemoryWindowStoreTest extends WindowBytesStoreTest {
     }
 
     @Test
-    @SuppressWarnings("deprecation")
     public void testExpiration() {
 
         long currentTime = 0;
-        setCurrentTime(currentTime);
-        windowStore.put(1, "one");
+        windowStore.put(1, "one", currentTime);
 
         currentTime += RETENTION_PERIOD / 4;
-        setCurrentTime(currentTime);
-        windowStore.put(1, "two");
+        windowStore.put(1, "two", currentTime);
 
         currentTime += RETENTION_PERIOD / 4;
-        setCurrentTime(currentTime);
-        windowStore.put(1, "three");
+        windowStore.put(1, "three", currentTime);
 
         currentTime += RETENTION_PERIOD / 4;
-        setCurrentTime(currentTime);
-        windowStore.put(1, "four");
+        windowStore.put(1, "four", currentTime);
 
         // increase current time to the full RETENTION_PERIOD to expire first record
         currentTime = currentTime + RETENTION_PERIOD / 4;
-        setCurrentTime(currentTime);
-        windowStore.put(1, "five");
+        windowStore.put(1, "five", currentTime);
 
         KeyValueIterator<Windowed<Integer>, String> iterator = windowStore
             .fetchAll(0L, currentTime);
 
         // effect of this put (expires next oldest record, adds new one) should not be reflected in the already fetched results
         currentTime = currentTime + RETENTION_PERIOD / 4;
-        setCurrentTime(currentTime);
-        windowStore.put(1, "six");
+        windowStore.put(1, "six", currentTime);
 
         // should only have middle 4 values, as (only) the first record was expired at the time of the fetch
         // and the last was inserted after the fetch
@@ -174,5 +164,25 @@ public class InMemoryWindowStoreTest extends WindowBytesStoreTest {
         assertEquals(windowedPair(1, "six", 5 * (RETENTION_PERIOD / 4)), iterator.next());
         assertFalse(iterator.hasNext());
     }
-    
+
+    @Test
+    public void shouldMatchPositionAfterPut() {
+        final MeteredWindowStore<Integer, String> meteredSessionStore = (MeteredWindowStore<Integer, String>) windowStore;
+        final ChangeLoggingWindowBytesStore changeLoggingSessionBytesStore = (ChangeLoggingWindowBytesStore) meteredSessionStore.wrapped();
+        final InMemoryWindowStore inMemoryWindowStore = (InMemoryWindowStore) changeLoggingSessionBytesStore.wrapped();
+
+        context.setRecordContext(new ProcessorRecordContext(0, 1, 0, "", new RecordHeaders()));
+        windowStore.put(0, "0", SEGMENT_INTERVAL);
+        context.setRecordContext(new ProcessorRecordContext(0, 2, 0, "", new RecordHeaders()));
+        windowStore.put(1, "1", SEGMENT_INTERVAL);
+        context.setRecordContext(new ProcessorRecordContext(0, 3, 0, "", new RecordHeaders()));
+        windowStore.put(2, "2", SEGMENT_INTERVAL);
+        context.setRecordContext(new ProcessorRecordContext(0, 4, 0, "", new RecordHeaders()));
+        windowStore.put(3, "3", SEGMENT_INTERVAL);
+
+        final Position expected = Position.fromMap(mkMap(mkEntry("", mkMap(mkEntry(0, 4L)))));
+        final Position actual = inMemoryWindowStore.getPosition();
+        assertEquals(expected, actual);
+    }
+
 }

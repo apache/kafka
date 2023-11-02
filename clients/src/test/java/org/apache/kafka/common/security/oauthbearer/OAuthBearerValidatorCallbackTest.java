@@ -16,14 +16,14 @@
  */
 package org.apache.kafka.common.security.oauthbearer;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertSame;
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 
 import java.util.Collections;
 import java.util.Set;
-
-import org.junit.Test;
 
 public class OAuthBearerValidatorCallbackTest {
     private static final OAuthBearerToken TOKEN = new OAuthBearerToken() {

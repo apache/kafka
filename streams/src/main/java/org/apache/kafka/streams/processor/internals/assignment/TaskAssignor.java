@@ -16,6 +16,20 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
-public interface TaskAssignor<C, T extends Comparable<T>> {
-    void assign(int numStandbyReplicas);
+import org.apache.kafka.streams.processor.TaskId;
+
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
+
+public interface TaskAssignor {
+    /**
+     * @return whether the generated assignment requires a followup probing rebalance to satisfy all conditions
+     */
+    boolean assign(final Map<UUID, ClientState> clients,
+                   final Set<TaskId> allTaskIds,
+                   final Set<TaskId> statefulTaskIds,
+                   final RackAwareTaskAssignor rackAwareTaskAssignor,
+                   final AssignmentConfigs configs);
 }

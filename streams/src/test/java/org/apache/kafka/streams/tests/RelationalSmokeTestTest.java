@@ -18,11 +18,14 @@ package org.apache.kafka.streams.tests;
 
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.test.TestUtils;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.Timeout;
 
 import java.util.Map;
 import java.util.TreeMap;
@@ -31,6 +34,10 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 
 public class RelationalSmokeTestTest extends SmokeTestUtil {
+
+    @Rule
+    public Timeout globalTimeout = Timeout.seconds(600);
+
     @Test
     public void verifySmokeTestLogic() {
         try (final TopologyTestDriver driver =
@@ -39,6 +46,7 @@ public class RelationalSmokeTestTest extends SmokeTestUtil {
                                             "nothing:0",
                                             "test",
                                             "test",
+                                            StreamsConfig.AT_LEAST_ONCE,
                                             TestUtils.tempDirectory().getAbsolutePath()
                                         ))) {
 

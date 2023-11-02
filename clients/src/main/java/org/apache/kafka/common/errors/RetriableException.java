@@ -17,7 +17,7 @@
 package org.apache.kafka.common.errors;
 
 /**
- * A retryable exception is a transient exception that if retried may succeed.
+ * A retriable exception is a transient exception that if retried may succeed.
  */
 public abstract class RetriableException extends ApiException {
 

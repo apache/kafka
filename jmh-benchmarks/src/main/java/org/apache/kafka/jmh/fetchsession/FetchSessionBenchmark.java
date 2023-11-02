@@ -19,8 +19,11 @@ package org.apache.kafka.jmh.fetchsession;
 
 import org.apache.kafka.clients.FetchSessionHandler;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.TopicIdPartition;
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.message.FetchResponseData;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.utils.LogContext;
@@ -38,6 +41,7 @@ import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Warmup;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -55,7 +59,7 @@ public class FetchSessionBenchmark {
     @Param(value = {"10", "100", "1000"})
     private int partitionCount;
 
-    @Param(value = {"0", "10", "100", "1000"})
+    @Param(value = {"0", "10", "100"})
     private int updatedPercentage;
 
     @Param(value = {"false", "true"})
@@ -63,38 +67,39 @@ public class FetchSessionBenchmark {
 
     private LinkedHashMap<TopicPartition, FetchRequest.PartitionData> fetches;
     private FetchSessionHandler handler;
+    private Map<String, Uuid> topicIds;
 
     @Setup(Level.Trial)
     public void setUp() {
         fetches = new LinkedHashMap<>();
         handler = new FetchSessionHandler(LOG_CONTEXT, 1);
+        topicIds = new HashMap<>();
         FetchSessionHandler.Builder builder = handler.newBuilder();
 
-        LinkedHashMap<TopicPartition, FetchResponse.PartitionData<MemoryRecords>> respMap = new LinkedHashMap<>();
+        Uuid id = Uuid.randomUuid();
+        topicIds.put("foo", id);
+
+        LinkedHashMap<TopicIdPartition, FetchResponseData.PartitionData> respMap = new LinkedHashMap<>();
         for (int i = 0; i < partitionCount; i++) {
             TopicPartition tp = new TopicPartition("foo", i);
-            FetchRequest.PartitionData partitionData = new FetchRequest.PartitionData(0, 0, 200,
-                    Optional.empty());
+            FetchRequest.PartitionData partitionData = new FetchRequest.PartitionData(id, 0, 0, 200, Optional.empty());
             fetches.put(tp, partitionData);
             builder.add(tp, partitionData);
-            respMap.put(tp, new FetchResponse.PartitionData<>(
-                    Errors.NONE,
-                    0L,
-                    0L,
-                    0,
-                    null,
-                    null));
+            respMap.put(new TopicIdPartition(id, tp), new FetchResponseData.PartitionData()
+                            .setPartitionIndex(tp.partition())
+                            .setLastStableOffset(0)
+                            .setLogStartOffset(0));
         }
         builder.build();
         // build and handle an initial response so that the next fetch will be incremental
-        handler.handleResponse(new FetchResponse<>(Errors.NONE, respMap, 0, 1));
+        handler.handleResponse(FetchResponse.of(Errors.NONE, 0, 1, respMap), ApiKeys.FETCH.latestVersion());
 
         int counter = 0;
         for (TopicPartition topicPartition: new ArrayList<>(fetches.keySet())) {
             if (updatedPercentage != 0 && counter % (100 / updatedPercentage) == 0) {
                 // reorder in fetch session, and update log start offset
                 fetches.remove(topicPartition);
-                fetches.put(topicPartition, new FetchRequest.PartitionData(50, 40, 200,
+                fetches.put(topicPartition, new FetchRequest.PartitionData(id, 50, 40, 200,
                         Optional.empty()));
             }
             counter++;
@@ -111,7 +116,8 @@ public class FetchSessionBenchmark {
             builder = handler.newBuilder();
 
         for (Map.Entry<TopicPartition, FetchRequest.PartitionData> entry: fetches.entrySet()) {
-            builder.add(entry.getKey(), entry.getValue());
+            TopicPartition topicPartition = entry.getKey();
+            builder.add(topicPartition, entry.getValue());
         }
 
         builder.build();

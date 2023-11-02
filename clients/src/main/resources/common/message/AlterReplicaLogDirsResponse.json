@@ -18,8 +18,9 @@
   "type": "response",
   "name": "AlterReplicaLogDirsResponse",
   // Starting in version 1, on quota violation brokers send out responses before throttling.
-  "validVersions": "0-1",
-  "flexibleVersions": "none",
+  // Version 2 enables flexible versions.
+  "validVersions": "0-2",
+  "flexibleVersions": "2+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",
       "about": "Duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },

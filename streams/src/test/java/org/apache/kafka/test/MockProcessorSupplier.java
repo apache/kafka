@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.test;
 
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.PunctuationType;
 
 import java.util.ArrayList;
@@ -25,7 +23,8 @@ import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 
-public class MockProcessorSupplier<K, V> implements ProcessorSupplier<K, V> {
+@SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
+public class MockProcessorSupplier<K, V> implements org.apache.kafka.streams.processor.ProcessorSupplier<K, V> {
 
     private final long scheduleInterval;
     private final PunctuationType punctuationType;
@@ -45,9 +44,14 @@ public class MockProcessorSupplier<K, V> implements ProcessorSupplier<K, V> {
     }
 
     @Override
-    public Processor<K, V> get() {
+    public org.apache.kafka.streams.processor.Processor<K, V> get() {
         final MockProcessor<K, V> processor = new MockProcessor<>(punctuationType, scheduleInterval);
-        processors.add(processor);
+
+        // to keep tests simple, ignore calls from ApiUtils.checkSupplier
+        if (!StreamsTestUtils.isCheckSupplierCall()) {
+            processors.add(processor);
+        }
+
         return processor;
     }
 

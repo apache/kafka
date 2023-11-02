@@ -43,9 +43,6 @@ import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.ValueJoiner;
-import org.hamcrest.Description;
-import org.hamcrest.Matcher;
-import org.hamcrest.StringDescription;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -68,10 +65,6 @@ import static java.util.stream.Collectors.toList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.CoreMatchers.startsWith;
-import static org.hamcrest.Matchers.greaterThan;
-import static org.hamcrest.Matchers.hasKey;
 
 /**
  * This test builds on a basic relational data caricature:
@@ -145,10 +138,10 @@ public class RelationalSmokeTest extends SmokeTestUtil {
 
                 final ByteBuffer buffer =
                     ByteBuffer.allocate(length)
-                              .putInt(data.getKey())
-                              .putLong(data.getTimestamp())
-                              .putInt(serialText.length)
-                              .put(serialText);
+                        .putInt(data.getKey())
+                        .putLong(data.getTimestamp())
+                        .putInt(serialText.length)
+                        .put(serialText);
 
                 return Serdes.ByteBuffer().serializer().serialize(topic, buffer);
             }
@@ -235,11 +228,11 @@ public class RelationalSmokeTest extends SmokeTestUtil {
 
                 final ByteBuffer buffer =
                     ByteBuffer.allocate(length)
-                              .putInt(data.key)
-                              .putLong(data.timestamp)
-                              .putInt(serialText.length)
-                              .put(serialText)
-                              .putInt(data.articleId);
+                        .putInt(data.key)
+                        .putLong(data.timestamp)
+                        .putInt(serialText.length)
+                        .put(serialText)
+                        .putInt(data.articleId);
 
                 return Serdes.ByteBuffer().serializer().serialize(topic, buffer);
             }
@@ -285,7 +278,6 @@ public class RelationalSmokeTest extends SmokeTestUtil {
         private final Comment[] comments;
 
         private DataSet(final Article[] articles, final Comment[] comments) {
-
             this.articles = articles;
             this.comments = comments;
         }
@@ -471,8 +463,8 @@ public class RelationalSmokeTest extends SmokeTestUtil {
                 final int length = serializedArticle.length + Long.BYTES;
                 final ByteBuffer buffer =
                     ByteBuffer.allocate(length)
-                              .put(serializedArticle)
-                              .putLong(data.getCommentCount());
+                        .put(serializedArticle)
+                        .putLong(data.getCommentCount());
                 return Serdes.ByteBuffer().serializer().serialize(topic, buffer);
             }
         }
@@ -547,9 +539,9 @@ public class RelationalSmokeTest extends SmokeTestUtil {
                 final int length = serializedComment.length + Integer.BYTES + serializedPrefix.length;
                 final ByteBuffer buffer =
                     ByteBuffer.allocate(length)
-                              .put(serializedComment)
-                              .putInt(serializedPrefix.length)
-                              .put(serializedPrefix);
+                        .put(serializedComment)
+                        .putInt(serializedPrefix.length)
+                        .put(serializedPrefix);
                 return Serdes.ByteBuffer().serializer().serialize(topic, buffer);
             }
         }
@@ -613,14 +605,18 @@ public class RelationalSmokeTest extends SmokeTestUtil {
 
 
             final KTable<Integer, Long> commentCounts =
-                comments.groupBy((key, value) -> new KeyValue<>(value.getArticleId(), (short) 1),
-                                 Grouped.with(Serdes.Integer(), Serdes.Short()))
-                        .count();
+                comments.groupBy(
+                    (key, value) -> new KeyValue<>(value.getArticleId(), (short) 1),
+                    Grouped.with(Serdes.Integer(), Serdes.Short())
+                )
+                .count();
 
             articles
-                .leftJoin(commentCounts,
-                          AugmentedArticle.joiner(),
-                          Materialized.with(null, new AugmentedArticle.AugmentedArticleSerde()))
+                .leftJoin(
+                    commentCounts,
+                    AugmentedArticle.joiner(),
+                    Materialized.with(null, new AugmentedArticle.AugmentedArticleSerde())
+                )
                 .toStream()
                 .to(ARTICLE_RESULT_SINK);
 
@@ -628,8 +624,8 @@ public class RelationalSmokeTest extends SmokeTestUtil {
                           Comment::getArticleId,
                           AugmentedComment.joiner(),
                           Materialized.with(null, new AugmentedComment.AugmentedCommentSerde()))
-                    .toStream()
-                    .to(COMMENT_RESULT_SINK);
+                .toStream()
+                .to(COMMENT_RESULT_SINK);
 
             return streamsBuilder.build();
         }
@@ -637,26 +633,30 @@ public class RelationalSmokeTest extends SmokeTestUtil {
         public static Properties getConfig(final String broker,
                                            final String application,
                                            final String id,
+                                           final String processingGuarantee,
                                            final String stateDir) {
-            return mkProperties(
-                mkMap(
-                    mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, broker),
-                    mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, application),
-                    mkEntry(StreamsConfig.CLIENT_ID_CONFIG, id),
-                    mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE),
-                    mkEntry(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, "1000"),
-                    mkEntry(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest"),
-                    mkEntry(StreamsConfig.STATE_DIR_CONFIG, stateDir)
-                )
-            );
+            final Properties properties =
+                mkProperties(
+                    mkMap(
+                        mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, broker),
+                        mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, application),
+                        mkEntry(StreamsConfig.CLIENT_ID_CONFIG, id),
+                        mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, processingGuarantee),
+                        mkEntry(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest"),
+                        mkEntry(StreamsConfig.STATE_DIR_CONFIG, stateDir)
+                    )
+                );
+            properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000L);
+            return properties;
         }
 
         public static KafkaStreams startSync(final String broker,
                                              final String application,
                                              final String id,
+                                             final String processingGuarantee,
                                              final String stateDir) throws InterruptedException {
             final KafkaStreams kafkaStreams =
-                new KafkaStreams(getTopology(), getConfig(broker, application, id, stateDir));
+                new KafkaStreams(getTopology(), getConfig(broker, application, id, processingGuarantee, stateDir));
             final CountDownLatch startUpLatch = new CountDownLatch(1);
             kafkaStreams.setStateListener((newState, oldState) -> {
                 if (oldState == KafkaStreams.State.REBALANCING && newState == KafkaStreams.State.RUNNING) {
@@ -703,7 +703,8 @@ public class RelationalSmokeTest extends SmokeTestUtil {
                         Stream.concat(
                             articlePartitions.stream().map(p -> new TopicPartition(p.topic(), p.partition())),
                             augmentedArticlePartitions.stream().map(p -> new TopicPartition(p.topic(), p.partition()))
-                        ), Stream.concat(
+                        ), 
+                        Stream.concat(
                             commentPartitions.stream().map(p -> new TopicPartition(p.topic(), p.partition())),
                             augmentedCommentPartitions.stream().map(p -> new TopicPartition(p.topic(), p.partition()))
                         )
@@ -804,20 +805,13 @@ public class RelationalSmokeTest extends SmokeTestUtil {
             }
         }
 
-        public static <T> void assertThat(final AtomicBoolean pass,
-                                          final StringBuilder failures,
-                                          final String message,
-                                          final T actual,
-                                          final Matcher<? super T> matcher) {
-            if (!matcher.matches(actual)) {
+        public static void assertThat(final AtomicBoolean pass,
+                                      final StringBuilder failures,
+                                      final String message,
+                                      final boolean passed) {
+            if (!passed) {
                 if (failures != null) {
-                    final Description description = new StringDescription(failures);
-                    description.appendText("\n" + message)
-                               .appendText("\nExpected: ")
-                               .appendDescriptionOf(matcher)
-                               .appendText("\n     but: ");
-                    matcher.describeMismatch(actual, description);
-                    description.appendText("\n");
+                    failures.append("\n").append(message);
                 }
                 pass.set(false);
             }
@@ -831,64 +825,78 @@ public class RelationalSmokeTest extends SmokeTestUtil {
             final AtomicBoolean pass = new AtomicBoolean(true);
             final StringBuilder report = logResults ? new StringBuilder() : null;
 
-            assertThat(pass, report, "one article", consumedArticles.size(), greaterThan(0));
-            assertThat(pass, report, "one comment", consumedComments.size(), greaterThan(0));
-
             assertThat(
                 pass,
                 report,
-                "article size",
-                consumedAugmentedArticles.size(),
-                is(consumedArticles.size())
+                "Expected 1 article, got " + consumedArticles.size(),
+                consumedArticles.size() > 0
             );
             assertThat(
                 pass,
                 report,
-                "comment size",
-                consumedAugmentedComments.size(),
-                is(consumedComments.size())
+                "Expected 1 comment, got " + consumedComments.size(),
+                consumedComments.size() > 0
+            );
+
+            assertThat(
+                pass,
+                report,
+                "Mismatched article size between augmented articles (size "
+                    + consumedAugmentedArticles.size() +
+                    ") and consumed articles (size "
+                    + consumedArticles.size() + ")",
+                consumedAugmentedArticles.size() == consumedArticles.size()
+            );
+            assertThat(
+                pass,
+                report,
+                "Mismatched comments size between augmented comments (size "
+                    + consumedAugmentedComments.size() +
+                    ") and consumed comments (size " +
+                    consumedComments.size() + ")", 
+                consumedAugmentedComments.size() == consumedComments.size()
             );
 
             final Map<Integer, Long> commentCounts = new TreeMap<>();
 
             for (final RelationalSmokeTest.AugmentedComment augmentedComment : consumedAugmentedComments.values()) {
                 final int key = augmentedComment.getKey();
-                assertThat(pass,
-                           report,
-                           "comment missing, but found in augmentedComment: " + key,
-                           consumedComments,
-                           hasKey(key));
+                assertThat(
+                    pass,
+                    report,
+                    "comment missing, but found in augmentedComment: " + key,
+                    consumedComments.containsKey(key)
+                );
 
                 final Comment comment = consumedComments.get(key);
                 if (comment != null) {
                     assertThat(
                         pass,
                         report,
-                        "comment articleId [" + comment.getArticleId() + "] didn't match " +
-                            "augmentedComment articleId [" + augmentedComment.getArticleId() + "]",
-                        comment.getArticleId(),
-                        is(augmentedComment.getArticleId())
+                        "comment missing, but found in augmentedComment: " + key,
+                        consumedComments.containsKey(key)
                     );
                 }
-                commentCounts.put(augmentedComment.getArticleId(),
-                                  commentCounts.getOrDefault(augmentedComment.getArticleId(), 0L) + 1);
+                commentCounts.put(
+                    augmentedComment.getArticleId(),
+                    commentCounts.getOrDefault(augmentedComment.getArticleId(), 0L) + 1
+                );
 
                 assertThat(
                     pass,
                     report,
                     "augmentedArticle [" + augmentedComment.getArticleId() + "] " +
                         "missing for augmentedComment [" + augmentedComment.getKey() + "]",
-                    consumedAugmentedArticles,
-                    hasKey(augmentedComment.getArticleId())
+                    consumedAugmentedArticles.containsKey(augmentedComment.getArticleId())
                 );
-                final AugmentedArticle augmentedArticle = consumedAugmentedArticles.get(augmentedComment.getArticleId());
+                final AugmentedArticle augmentedArticle =
+                        consumedAugmentedArticles.get(augmentedComment.getArticleId());
                 if (augmentedArticle != null) {
                     assertThat(
                         pass,
                         report,
                         "articlePrefix didn't match augmentedArticle: " + augmentedArticle.getText(),
-                        augmentedArticle.getText(),
-                        startsWith(augmentedComment.getArticlePrefix())
+                        augmentedArticle.getText().startsWith(augmentedComment.getArticlePrefix())
                     );
                 }
 
@@ -896,8 +904,7 @@ public class RelationalSmokeTest extends SmokeTestUtil {
                     pass,
                     report,
                     "article " + augmentedComment.getArticleId() + " missing from consumedArticles",
-                    consumedArticles,
-                    hasKey(augmentedComment.getArticleId())
+                    consumedArticles.containsKey(augmentedComment.getArticleId())
                 );
                 final Article article = consumedArticles.get(augmentedComment.getArticleId());
                 if (article != null) {
@@ -905,8 +912,7 @@ public class RelationalSmokeTest extends SmokeTestUtil {
                         pass,
                         report,
                         "articlePrefix didn't match article: " + article.getText(),
-                        article.getText(),
-                        startsWith(augmentedComment.getArticlePrefix())
+                        article.getText().startsWith(augmentedComment.getArticlePrefix())
                     );
                 }
             }
@@ -917,8 +923,7 @@ public class RelationalSmokeTest extends SmokeTestUtil {
                     pass,
                     report,
                     "article " + augmentedArticle.getKey() + " comment count mismatch",
-                    augmentedArticle.getCommentCount(),
-                    is(commentCounts.getOrDefault(augmentedArticle.getKey(), 0L))
+                    augmentedArticle.getCommentCount() == commentCounts.getOrDefault(augmentedArticle.getKey(), 0L)
                 );
             }
 
@@ -983,8 +988,9 @@ public class RelationalSmokeTest extends SmokeTestUtil {
                 }
                 case "application": {
                     final String nodeId = args[2];
-                    final String stateDir = args[3];
-                    App.startSync(kafka, UUID.randomUUID().toString(), nodeId, stateDir);
+                    final String processingGuarantee = args[3];
+                    final String stateDir = args[4];
+                    App.startSync(kafka, UUID.randomUUID().toString(), nodeId, processingGuarantee, stateDir);
                     break;
                 }
                 default:

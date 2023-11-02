@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import java.util.function.BiFunction;
+import java.util.function.Function;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -26,32 +28,46 @@ class WindowStoreIteratorWrapper {
 
     private final KeyValueIterator<Bytes, byte[]> bytesIterator;
     private final long windowSize;
+    private final Function<byte[], Long> timestampExtractor;
+    private final BiFunction<byte[], Long, Windowed<Bytes>> windowConstructor;
 
     WindowStoreIteratorWrapper(final KeyValueIterator<Bytes, byte[]> bytesIterator,
                                final long windowSize) {
+        this(bytesIterator, windowSize, WindowKeySchema::extractStoreTimestamp, WindowKeySchema::fromStoreBytesKey);
+    }
+
+    WindowStoreIteratorWrapper(final KeyValueIterator<Bytes, byte[]> bytesIterator,
+                               final long windowSize,
+                               final Function<byte[], Long> timestampExtractor,
+                               final BiFunction<byte[], Long, Windowed<Bytes>> windowConstructor) {
         this.bytesIterator = bytesIterator;
         this.windowSize = windowSize;
+        this.timestampExtractor = timestampExtractor;
+        this.windowConstructor = windowConstructor;
     }
 
     public WindowStoreIterator<byte[]> valuesIterator() {
-        return new WrappedWindowStoreIterator(bytesIterator);
+        return new WrappedWindowStoreIterator(bytesIterator, timestampExtractor);
     }
 
     public KeyValueIterator<Windowed<Bytes>, byte[]> keyValueIterator() {
-        return new WrappedKeyValueIterator(bytesIterator, windowSize);
+        return new WrappedKeyValueIterator(bytesIterator, windowSize, windowConstructor);
     }
 
     private static class WrappedWindowStoreIterator implements WindowStoreIterator<byte[]> {
         final KeyValueIterator<Bytes, byte[]> bytesIterator;
+        final Function<byte[], Long> timestampExtractor;
 
         WrappedWindowStoreIterator(
-            final KeyValueIterator<Bytes, byte[]> bytesIterator) {
+            final KeyValueIterator<Bytes, byte[]> bytesIterator,
+            final Function<byte[], Long> timestampExtractor) {
             this.bytesIterator = bytesIterator;
+            this.timestampExtractor = timestampExtractor;
         }
 
         @Override
         public Long peekNextKey() {
-            return WindowKeySchema.extractStoreTimestamp(bytesIterator.peekNextKey().get());
+            return timestampExtractor.apply(bytesIterator.peekNextKey().get());
         }
 
         @Override
@@ -62,7 +78,7 @@ class WindowStoreIteratorWrapper {
         @Override
         public KeyValue<Long, byte[]> next() {
             final KeyValue<Bytes, byte[]> next = bytesIterator.next();
-            final long timestamp = WindowKeySchema.extractStoreTimestamp(next.key.get());
+            final long timestamp = timestampExtractor.apply(next.key.get());
             return KeyValue.pair(timestamp, next.value);
         }
 
@@ -75,17 +91,20 @@ class WindowStoreIteratorWrapper {
     private static class WrappedKeyValueIterator implements KeyValueIterator<Windowed<Bytes>, byte[]> {
         final KeyValueIterator<Bytes, byte[]> bytesIterator;
         final long windowSize;
+        final BiFunction<byte[], Long, Windowed<Bytes>> windowConstructor;
 
         WrappedKeyValueIterator(final KeyValueIterator<Bytes, byte[]> bytesIterator,
-                                final long windowSize) {
+                                final long windowSize,
+                                final BiFunction<byte[], Long, Windowed<Bytes>> windowConstructor) {
             this.bytesIterator = bytesIterator;
             this.windowSize = windowSize;
+            this.windowConstructor = windowConstructor;
         }
 
         @Override
         public Windowed<Bytes> peekNextKey() {
             final byte[] nextKey = bytesIterator.peekNextKey().get();
-            return WindowKeySchema.fromStoreBytesKey(nextKey, windowSize);
+            return windowConstructor.apply(nextKey, windowSize);
         }
 
         @Override
@@ -96,7 +115,7 @@ class WindowStoreIteratorWrapper {
         @Override
         public KeyValue<Windowed<Bytes>, byte[]> next() {
             final KeyValue<Bytes, byte[]> next = bytesIterator.next();
-            return KeyValue.pair(WindowKeySchema.fromStoreBytesKey(next.key.get(), windowSize), next.value);
+            return KeyValue.pair(windowConstructor.apply(next.key.get(), windowSize), next.value);
         }
 
         @Override

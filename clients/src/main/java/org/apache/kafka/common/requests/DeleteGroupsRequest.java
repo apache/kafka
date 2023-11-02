@@ -18,13 +18,12 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.DeleteGroupsRequestData;
 import org.apache.kafka.common.message.DeleteGroupsResponseData;
-import org.apache.kafka.common.message.DeleteGroupsResponseData.DeletableGroupResult;
-import org.apache.kafka.common.message.DeleteGroupsResponseData.DeletableGroupResultCollection;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
+import java.util.List;
 
 public class DeleteGroupsRequest extends AbstractRequest {
     public static class Builder extends AbstractRequest.Builder<DeleteGroupsRequest> {
@@ -46,41 +45,41 @@ public class DeleteGroupsRequest extends AbstractRequest {
         }
     }
 
-    public final DeleteGroupsRequestData data;
+    private final DeleteGroupsRequestData data;
 
     public DeleteGroupsRequest(DeleteGroupsRequestData data, short version) {
         super(ApiKeys.DELETE_GROUPS, version);
         this.data = data;
     }
 
-    public DeleteGroupsRequest(Struct struct, short version) {
-        super(ApiKeys.DELETE_GROUPS, version);
-        this.data = new DeleteGroupsRequestData(struct, version);
-    }
-
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-        Errors error = Errors.forException(e);
-        DeletableGroupResultCollection groupResults = new DeletableGroupResultCollection();
-        for (String groupId : data.groupsNames()) {
-            groupResults.add(new DeletableGroupResult()
-                                 .setGroupId(groupId)
-                                 .setErrorCode(error.code()));
-        }
-
-        return new DeleteGroupsResponse(
-            new DeleteGroupsResponseData()
-                .setResults(groupResults)
-                .setThrottleTimeMs(throttleTimeMs)
+        return new DeleteGroupsResponse(new DeleteGroupsResponseData()
+            .setResults(getErrorResultCollection(data.groupsNames(), Errors.forException(e)))
+            .setThrottleTimeMs(throttleTimeMs)
         );
     }
 
     public static DeleteGroupsRequest parse(ByteBuffer buffer, short version) {
-        return new DeleteGroupsRequest(ApiKeys.DELETE_GROUPS.parseRequest(version, buffer), version);
+        return new DeleteGroupsRequest(new DeleteGroupsRequestData(new ByteBufferAccessor(buffer), version), version);
     }
 
     @Override
-    protected Struct toStruct() {
-        return data.toStruct(version());
+    public DeleteGroupsRequestData data() {
+        return data;
+    }
+
+    public static DeleteGroupsResponseData.DeletableGroupResultCollection getErrorResultCollection(
+        List<String> groupIds,
+        Errors error
+    ) {
+        DeleteGroupsResponseData.DeletableGroupResultCollection resultCollection =
+            new DeleteGroupsResponseData.DeletableGroupResultCollection();
+        groupIds.forEach(groupId -> resultCollection.add(
+            new DeleteGroupsResponseData.DeletableGroupResult()
+                .setGroupId(groupId)
+                .setErrorCode(error.code())
+        ));
+        return resultCollection;
     }
 }

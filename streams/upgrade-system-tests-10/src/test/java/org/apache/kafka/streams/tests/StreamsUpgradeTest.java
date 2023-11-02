@@ -33,7 +33,7 @@ public class StreamsUpgradeTest {
     @SuppressWarnings("unchecked")
     public static void main(final String[] args) throws Exception {
         if (args.length < 1) {
-            System.err.println("StreamsUpgradeTest requires one argument (properties-file) but  provided none");
+            System.err.println("StreamsUpgradeTest requires one argument (properties-file) but provided none");
         }
         final String propFileName = args[0];
 
@@ -49,7 +49,7 @@ public class StreamsUpgradeTest {
 
         final Properties config = new Properties();
         config.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "StreamsUpgradeTest");
-        config.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000);
+        config.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000L);
         config.putAll(streamsProperties);
 
         final KafkaStreams streams = new KafkaStreams(builder.build(), config);

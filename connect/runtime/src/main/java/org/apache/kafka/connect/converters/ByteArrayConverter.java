@@ -18,6 +18,8 @@
 package org.apache.kafka.connect.converters;
 
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.utils.AppInfoParser;
+import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.errors.DataException;
@@ -29,13 +31,16 @@ import java.util.Map;
 
 /**
  * Pass-through converter for raw byte data.
- *
- * This implementation currently does nothing with the topic names or header names.
+ * <p>
+ * This implementation currently does nothing with the topic names or header keys.
  */
-public class ByteArrayConverter implements Converter, HeaderConverter {
+public class ByteArrayConverter implements Converter, HeaderConverter, Versioned {
 
     private static final ConfigDef CONFIG_DEF = ConverterConfig.newConfigDef();
-
+    @Override
+    public String version() {
+        return AppInfoParser.getVersion();
+    }
     @Override
     public ConfigDef config() {
         return CONFIG_DEF;

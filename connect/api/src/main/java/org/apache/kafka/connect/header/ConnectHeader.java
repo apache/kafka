@@ -36,7 +36,6 @@ class ConnectHeader implements Header {
         Objects.requireNonNull(key, "Null header keys are not permitted");
         this.key = key;
         this.schemaAndValue = schemaAndValue != null ? schemaAndValue : NULL_SCHEMA_AND_VALUE;
-        assert this.schemaAndValue != null;
     }
 
     @Override

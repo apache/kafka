@@ -16,10 +16,18 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 import org.apache.kafka.test.TestUtils;
+import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.junit.MockitoJUnitRunner;
 
 import java.io.File;
 import java.util.HashSet;
@@ -28,19 +36,27 @@ import java.util.Set;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG;
-import static org.easymock.EasyMock.expect;
-import static org.easymock.EasyMock.mock;
-import static org.easymock.EasyMock.replay;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.not;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class KeyValueSegmentTest {
 
     private final RocksDBMetricsRecorder metricsRecorder =
-        new RocksDBMetricsRecorder("metrics-scope", "thread-id", "store-name");
+        new RocksDBMetricsRecorder("metrics-scope", "store-name");
+
+    @Before
+    public void setUp() {
+        metricsRecorder.init(
+            new StreamsMetricsImpl(new Metrics(), "test-client", StreamsConfig.METRICS_LATEST, new MockTime()),
+            new TaskId(0, 0)
+        );
+    }
 
     @Test
     public void shouldDeleteStateDirectoryOnDestroy() throws Exception {
@@ -49,11 +65,10 @@ public class KeyValueSegmentTest {
         final File directory = new File(directoryPath);
 
         final ProcessorContext mockContext = mock(ProcessorContext.class);
-        expect(mockContext.appConfigs()).andReturn(mkMap(mkEntry(METRICS_RECORDING_LEVEL_CONFIG, "INFO")));
-        expect(mockContext.stateDir()).andReturn(directory);
-        replay(mockContext);
+        when(mockContext.appConfigs()).thenReturn(mkMap(mkEntry(METRICS_RECORDING_LEVEL_CONFIG, "INFO")));
+        when(mockContext.stateDir()).thenReturn(directory);
 
-        segment.openDB(mockContext);
+        segment.openDB(mockContext.appConfigs(), mockContext.stateDir());
 
         assertTrue(new File(directoryPath, "window").exists());
         assertTrue(new File(directoryPath + File.separator + "window", "segment").exists());
@@ -61,6 +76,8 @@ public class KeyValueSegmentTest {
         segment.destroy();
         assertFalse(new File(directoryPath + File.separator + "window", "segment").exists());
         assertTrue(new File(directoryPath, "window").exists());
+
+        segment.close();
     }
 
     @Test
@@ -75,6 +92,8 @@ public class KeyValueSegmentTest {
         assertThat(segment, not(equalTo(segmentDifferentId)));
         assertThat(segment, not(equalTo(null)));
         assertThat(segment, not(equalTo("anyName")));
+
+        segment.close();
     }
 
     @Test
@@ -88,6 +107,8 @@ public class KeyValueSegmentTest {
         assertTrue(set.add(segment));
         assertFalse(set.add(segmentSameId));
         assertTrue(set.add(segmentDifferentId));
+
+        segment.close();
     }
 
     @Test
@@ -103,5 +124,9 @@ public class KeyValueSegmentTest {
         assertThat(segment3.compareTo(segment1), equalTo(-1));
         assertThat(segment2.compareTo(segment3), equalTo(1));
         assertThat(segment3.compareTo(segment2), equalTo(-1));
+
+        segment1.close();
+        segment2.close();
+        segment3.close();
     }
 }

@@ -40,7 +40,7 @@ public class KStreamBranchTest {
     private final String topicName = "topic";
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "deprecation"}) // Old PAPI. Needs to be migrated.
     @Test
     public void testKStreamBranch() {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -60,8 +60,8 @@ public class KStreamBranchTest {
         assertEquals(3, branches.length);
 
         final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
-        for (int i = 0; i < branches.length; i++) {
-            branches[i].process(supplier);
+        for (final KStream<Integer, String> branch : branches) {
+            branch.process(supplier);
         }
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
@@ -72,12 +72,12 @@ public class KStreamBranchTest {
         }
 
         final List<MockProcessor<Integer, String>> processors = supplier.capturedProcessors(3);
-        assertEquals(3, processors.get(0).processed.size());
-        assertEquals(1, processors.get(1).processed.size());
-        assertEquals(2, processors.get(2).processed.size());
+        assertEquals(3, processors.get(0).processed().size());
+        assertEquals(1, processors.get(1).processed().size());
+        assertEquals(2, processors.get(2).processed().size());
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "deprecation"})
     @Test
     public void testTypeVariance() {
         final Predicate<Number, Object> positive = (key, value) -> key.doubleValue() > 0;

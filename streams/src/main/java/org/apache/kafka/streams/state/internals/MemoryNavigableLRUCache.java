@@ -16,15 +16,21 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.query.PositionBound;
+import org.apache.kafka.streams.query.Query;
+import org.apache.kafka.streams.query.QueryConfig;
+import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Iterator;
 import java.util.Map;
+import java.util.Objects;
 import java.util.TreeMap;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class MemoryNavigableLRUCache extends MemoryLRUCache {
 
@@ -36,35 +42,97 @@ public class MemoryNavigableLRUCache extends MemoryLRUCache {
 
     @Override
     public KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to) {
-
-        if (from.compareTo(to) > 0) {
-            LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. "
-                + "This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
-                "Note that the built-in numerical serdes do not follow this for negative numbers");
+        if (Objects.nonNull(from) && Objects.nonNull(to) && from.compareTo(to) > 0) {
+            LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. " +
+                    "This may be due to range arguments set in the wrong order, " +
+                    "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
+                    "Note that the built-in numerical serdes do not follow this for negative numbers");
             return KeyValueIterators.emptyIterator();
+        } else {
+            final TreeMap<Bytes, byte[]> treeMap = toTreeMap();
+            final Iterator<Bytes> keys = getIterator(treeMap, from, to, true);
+            return new DelegatingPeekingKeyValueIterator<>(name(),
+                    new MemoryNavigableLRUCache.CacheIterator(keys, treeMap));
         }
+    }
+
+    @Override
+    public KeyValueIterator<Bytes, byte[]> reverseRange(final Bytes from, final Bytes to) {
+        if (Objects.nonNull(from) && Objects.nonNull(to) && from.compareTo(to) > 0) {
+            LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. " +
+                    "This may be due to range arguments set in the wrong order, " +
+                    "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
+                    "Note that the built-in numerical serdes do not follow this for negative numbers");
+            return KeyValueIterators.emptyIterator();
+        } else {
+            final TreeMap<Bytes, byte[]> treeMap = toTreeMap();
+            final Iterator<Bytes> keys = getIterator(treeMap, from, to, false);
+            return new DelegatingPeekingKeyValueIterator<>(name(),
+                    new MemoryNavigableLRUCache.CacheIterator(keys, treeMap));
+        }
+    }
+
+    private Iterator<Bytes> getIterator(final TreeMap<Bytes, byte[]> treeMap, final Bytes from, final Bytes to, final boolean forward) {
+        if (from == null && to == null) {
+            return forward ? treeMap.navigableKeySet().iterator() : treeMap.navigableKeySet().descendingIterator();
+        } else if (from == null) {
+            return forward ? treeMap.navigableKeySet().headSet(to, true).iterator() : treeMap.navigableKeySet().headSet(to, true).descendingIterator();
+        } else if (to == null) {
+            return forward ? treeMap.navigableKeySet().tailSet(from, true).iterator() : treeMap.navigableKeySet().tailSet(from, true).descendingIterator();
+        } else {
+            return forward ? treeMap.navigableKeySet().subSet(from, true, to, true).iterator() : treeMap.navigableKeySet().subSet(from, true, to, true).descendingIterator();
+        }
+    }
+
+    @Override
+    public <PS extends Serializer<P>, P> KeyValueIterator<Bytes, byte[]> prefixScan(final P prefix, final PS prefixKeySerializer) {
+
+        final Bytes from = Bytes.wrap(prefixKeySerializer.serialize(null, prefix));
+        final Bytes to = Bytes.increment(from);
 
         final TreeMap<Bytes, byte[]> treeMap = toTreeMap();
-        return new DelegatingPeekingKeyValueIterator<>(name(),
-            new MemoryNavigableLRUCache.CacheIterator(treeMap.navigableKeySet()
-                .subSet(from, true, to, true).iterator(), treeMap));
+
+        return new DelegatingPeekingKeyValueIterator<>(
+            name(),
+            new MemoryNavigableLRUCache.CacheIterator(treeMap.subMap(from, true, to, false).keySet().iterator(), treeMap)
+        );
     }
 
     @Override
     public  KeyValueIterator<Bytes, byte[]> all() {
-        final TreeMap<Bytes, byte[]> treeMap = toTreeMap();
-        return new MemoryNavigableLRUCache.CacheIterator(treeMap.navigableKeySet().iterator(), treeMap);
+        return range(null, null);
+    }
+
+    @Override
+    public  KeyValueIterator<Bytes, byte[]> reverseAll() {
+        return reverseRange(null, null);
     }
 
     private synchronized TreeMap<Bytes, byte[]> toTreeMap() {
         return new TreeMap<>(this.map);
     }
 
+    @Override
+    @SuppressWarnings("unchecked")
+    public <R> QueryResult<R> query(
+        final Query<R> query,
+        final PositionBound positionBound,
+        final QueryConfig config) {
+
+        return StoreQueryUtils.handleBasicQueries(
+            query,
+            positionBound,
+            config,
+            this,
+            getPosition(),
+            context
+        );
+    }
+
 
     private static class CacheIterator implements KeyValueIterator<Bytes, byte[]> {
         private final Iterator<Bytes> keys;
         private final Map<Bytes, byte[]> entries;
-        private Bytes lastKey;
 
         private CacheIterator(final Iterator<Bytes> keys, final Map<Bytes, byte[]> entries) {
             this.keys = keys;
@@ -78,7 +146,7 @@ public class MemoryNavigableLRUCache extends MemoryLRUCache {
 
         @Override
         public KeyValue<Bytes, byte[]> next() {
-            lastKey = keys.next();
+            final Bytes lastKey = keys.next();
             return new KeyValue<>(lastKey, entries.get(lastKey));
         }
 

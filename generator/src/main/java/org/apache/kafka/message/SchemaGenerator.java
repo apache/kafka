@@ -81,15 +81,17 @@ final class SchemaGenerator {
 
     void generateSchemas(MessageSpec message) throws Exception {
         this.messageFlexibleVersions = message.flexibleVersions();
-        // Generate schemas for inline structures
-        generateSchemas(message.generatedClassName(), message.struct(),
-            message.struct().versions());
 
-        // Generate schemas for common structures
+        // First generate schemas for common structures so that they are
+        // available when we generate the inline structures
         for (Iterator<StructSpec> iter = structRegistry.commonStructs(); iter.hasNext(); ) {
             StructSpec struct = iter.next();
-            generateSchemas(struct.name(), struct, struct.versions());
+            generateSchemas(struct.name(), struct, message.struct().versions());
         }
+
+        // Generate schemas for inline structures
+        generateSchemas(message.dataClassName(), message.struct(),
+            message.struct().versions());
     }
 
     void generateSchemas(String className, StructSpec struct,
@@ -242,6 +244,18 @@ final class SchemaGenerator {
                 throw new RuntimeException("Type " + type + " cannot be nullable.");
             }
             return "Type.INT16";
+        } else if (type instanceof FieldType.Uint16FieldType) {
+            headerGenerator.addImport(MessageGenerator.TYPE_CLASS);
+            if (nullable) {
+                throw new RuntimeException("Type " + type + " cannot be nullable.");
+            }
+            return "Type.UINT16";
+        } else if (type instanceof FieldType.Uint32FieldType) {
+            headerGenerator.addImport(MessageGenerator.TYPE_CLASS);
+            if (nullable) {
+                throw new RuntimeException("Type " + type + " cannot be nullable.");
+            }
+            return "Type.UNSIGNED_INT32";
         } else if (type instanceof FieldType.Int32FieldType) {
             headerGenerator.addImport(MessageGenerator.TYPE_CLASS);
             if (nullable) {
@@ -260,6 +274,12 @@ final class SchemaGenerator {
                 throw new RuntimeException("Type " + type + " cannot be nullable.");
             }
             return "Type.UUID";
+        } else if (type instanceof FieldType.Float64FieldType) {
+            headerGenerator.addImport(MessageGenerator.TYPE_CLASS);
+            if (nullable) {
+                throw new RuntimeException("Type " + type + " cannot be nullable.");
+            }
+            return "Type.FLOAT64";
         } else if (type instanceof FieldType.StringFieldType) {
             headerGenerator.addImport(MessageGenerator.TYPE_CLASS);
             if (fieldFlexibleVersions.contains(version)) {
@@ -273,6 +293,13 @@ final class SchemaGenerator {
                 return nullable ? "Type.COMPACT_NULLABLE_BYTES" : "Type.COMPACT_BYTES";
             } else {
                 return nullable ? "Type.NULLABLE_BYTES" : "Type.BYTES";
+            }
+        } else if (type.isRecords()) {
+            headerGenerator.addImport(MessageGenerator.TYPE_CLASS);
+            if (fieldFlexibleVersions.contains(version)) {
+                return "Type.COMPACT_RECORDS";
+            } else {
+                return "Type.RECORDS";
             }
         } else if (type.isArray()) {
             if (fieldFlexibleVersions.contains(version)) {
@@ -290,10 +317,7 @@ final class SchemaGenerator {
                         fieldTypeToSchemaType(arrayType.elementType(), false, version, fieldFlexibleVersions, false));
             }
         } else if (type.isStruct()) {
-            if (nullable) {
-                throw new RuntimeException("Type " + type + " cannot be nullable.");
-            }
-            return String.format("%s.SCHEMA_%d", type.toString(),
+            return String.format("%s.SCHEMA_%d", type,
                 floorVersion(type.toString(), version));
         } else {
             throw new RuntimeException("Unsupported type " + type);
@@ -341,6 +365,10 @@ final class SchemaGenerator {
         }
         buffer.decrementIndent();
         buffer.printf("};%n");
+        buffer.printf("%n");
+
+        buffer.printf("public static final short LOWEST_SUPPORTED_VERSION = %d;%n", versions.lowest());
+        buffer.printf("public static final short HIGHEST_SUPPORTED_VERSION = %d;%n", versions.highest());
         buffer.printf("%n");
     }
 }

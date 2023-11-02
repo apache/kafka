@@ -158,8 +158,7 @@ final class InFlightRequests {
 
     private Boolean hasExpiredRequest(long now, Deque<NetworkClient.InFlightRequest> deque) {
         for (NetworkClient.InFlightRequest request : deque) {
-            long timeSinceSend = Math.max(0, now - request.sendTimeMs);
-            if (timeSinceSend > request.requestTimeoutMs)
+            if (request.timeElapsedSinceSendMs(now) > request.requestTimeoutMs)
                 return true;
         }
         return false;

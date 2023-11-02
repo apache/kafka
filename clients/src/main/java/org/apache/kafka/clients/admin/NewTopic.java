@@ -21,20 +21,19 @@ import java.util.Optional;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableReplicaAssignment;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreateableTopicConfig;
+import org.apache.kafka.common.requests.CreateTopicsRequest;
 
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Map.Entry;
 
 /**
  * A new topic to be created via {@link Admin#createTopics(Collection)}.
  */
 public class NewTopic {
-
-    private static final int NO_PARTITIONS = -1;
-    private static final short NO_REPLICATION_FACTOR = -1;
 
     private final String name;
     private final Optional<Integer> numPartitions;
@@ -86,14 +85,14 @@ public class NewTopic {
      * The number of partitions for the new topic or -1 if a replica assignment has been specified.
      */
     public int numPartitions() {
-        return numPartitions.orElse(NO_PARTITIONS);
+        return numPartitions.orElse(CreateTopicsRequest.NO_NUM_PARTITIONS);
     }
 
     /**
      * The replication factor for the new topic or -1 if a replica assignment has been specified.
      */
     public short replicationFactor() {
-        return replicationFactor.orElse(NO_REPLICATION_FACTOR);
+        return replicationFactor.orElse(CreateTopicsRequest.NO_REPLICATION_FACTOR);
     }
 
     /**
@@ -125,8 +124,8 @@ public class NewTopic {
     CreatableTopic convertToCreatableTopic() {
         CreatableTopic creatableTopic = new CreatableTopic().
             setName(name).
-            setNumPartitions(numPartitions.orElse(NO_PARTITIONS)).
-            setReplicationFactor(replicationFactor.orElse(NO_REPLICATION_FACTOR));
+            setNumPartitions(numPartitions.orElse(CreateTopicsRequest.NO_NUM_PARTITIONS)).
+            setReplicationFactor(replicationFactor.orElse(CreateTopicsRequest.NO_REPLICATION_FACTOR));
         if (replicasAssignments != null) {
             for (Entry<Integer, List<Integer>> entry : replicasAssignments.entrySet()) {
                 creatableTopic.assignments().add(
@@ -156,5 +155,22 @@ public class NewTopic {
                 append(", configs=").append(configs).
                 append(")");
         return bld.toString();
+    }
+
+    @Override
+    public boolean equals(final Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        final NewTopic that = (NewTopic) o;
+        return Objects.equals(name, that.name) &&
+            Objects.equals(numPartitions, that.numPartitions) &&
+            Objects.equals(replicationFactor, that.replicationFactor) &&
+            Objects.equals(replicasAssignments, that.replicasAssignments) &&
+            Objects.equals(configs, that.configs);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(name, numPartitions, replicationFactor, replicasAssignments, configs);
     }
 }

@@ -17,18 +17,16 @@
 
 package org.apache.kafka.message;
 
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.Timeout;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.fail;
 
+@Timeout(120)
 public class MessageGeneratorTest {
-    @Rule
-    final public Timeout globalTimeout = Timeout.millis(120000);
 
     @Test
     public void testCapitalizeFirst() throws Exception {
@@ -68,5 +66,11 @@ public class MessageGeneratorTest {
             fail("expected exception");
         } catch (RuntimeException e) {
         }
+    }
+
+    @Test
+    public void testConstants() {
+        assertEquals(MessageGenerator.UNSIGNED_SHORT_MAX, 0xFFFF);
+        assertEquals(MessageGenerator.UNSIGNED_INT_MAX, 0xFFFFFFFFL);
     }
 }

@@ -16,17 +16,17 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.errors.MissingSourceTopicException;
+import org.apache.kafka.streams.errors.TaskAssignmentException;
 import org.apache.kafka.streams.processor.internals.StreamThread.State;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.slf4j.Logger;
+
+import java.util.Collection;
 
 public class StreamsRebalanceListener implements ConsumerRebalanceListener {
 
@@ -34,130 +34,87 @@ public class StreamsRebalanceListener implements ConsumerRebalanceListener {
     private final TaskManager taskManager;
     private final StreamThread streamThread;
     private final Logger log;
+    private final AtomicInteger assignmentErrorCode;
 
     StreamsRebalanceListener(final Time time,
                              final TaskManager taskManager,
                              final StreamThread streamThread,
-                             final Logger log) {
+                             final Logger log,
+                             final AtomicInteger assignmentErrorCode) {
         this.time = time;
         this.taskManager = taskManager;
         this.streamThread = streamThread;
         this.log = log;
+        this.assignmentErrorCode = assignmentErrorCode;
     }
 
     @Override
-    public void onPartitionsAssigned(final Collection<TopicPartition> assignedPartitions) {
-        log.debug("Current state {}: assigned partitions {} at the end of consumer rebalance.\n" +
-                "\tpreviously assigned active tasks: {}\n" +
-                "\tpreviously assigned standby tasks: {}\n",
-            streamThread.state(),
-            assignedPartitions,
-            taskManager.previousActiveTaskIds(),
-            taskManager.previousStandbyTaskIds());
-
-        if (streamThread.getAssignmentErrorCode() == AssignorError.INCOMPLETE_SOURCE_TOPIC_METADATA.code()) {
-            log.error("Received error code {} - shutdown", streamThread.getAssignmentErrorCode());
-            streamThread.shutdown();
+    public void onPartitionsAssigned(final Collection<TopicPartition> partitions) {
+        // NB: all task management is already handled by:
+        // org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor.onAssignment
+        if (assignmentErrorCode.get() == AssignorError.INCOMPLETE_SOURCE_TOPIC_METADATA.code()) {
+            log.error("Received error code {}", AssignorError.INCOMPLETE_SOURCE_TOPIC_METADATA);
+            taskManager.handleRebalanceComplete();
+            throw new MissingSourceTopicException("One or more source topics were missing during rebalance");
+        } else if (assignmentErrorCode.get() == AssignorError.VERSION_PROBING.code()) {
+            log.info("Received version probing code {}", AssignorError.VERSION_PROBING);
+        }  else if (assignmentErrorCode.get() == AssignorError.ASSIGNMENT_ERROR.code()) {
+            log.error("Received error code {}", AssignorError.ASSIGNMENT_ERROR);
+            taskManager.handleRebalanceComplete();
+            throw new TaskAssignmentException("Hit an unexpected exception during task assignment phase of rebalance");
+        } else if (assignmentErrorCode.get() == AssignorError.SHUTDOWN_REQUESTED.code()) {
+            log.error("A Kafka Streams client in this Kafka Streams application is requesting to shutdown the application");
+            taskManager.handleRebalanceComplete();
+            streamThread.shutdownToError();
             return;
+        } else if (assignmentErrorCode.get() != AssignorError.NONE.code()) {
+            log.error("Received unknown error code {}", assignmentErrorCode.get());
+            throw new TaskAssignmentException("Hit an unrecognized exception during rebalance");
         }
 
-        final long start = time.milliseconds();
-        List<TopicPartition> revokedStandbyPartitions = null;
-
-        try {
-            if (streamThread.setState(State.PARTITIONS_ASSIGNED) == null) {
-                log.debug(
-                    "Skipping task creation in rebalance because we are already in {} state.",
-                    streamThread.state());
-            } else {
-                // Close non-reassigned tasks before initializing new ones as we may have suspended active
-                // tasks that become standbys or vice versa
-                revokedStandbyPartitions = taskManager.closeRevokedStandbyTasks();
-                taskManager.closeRevokedSuspendedTasks();
-                taskManager.createTasks(assignedPartitions);
-            }
-        } catch (final Throwable t) {
-            log.error(
-                "Error caught during partition assignment, " +
-                    "will abort the current process and re-throw at the end of rebalance", t);
-            streamThread.setRebalanceException(t);
-        } finally {
-            if (revokedStandbyPartitions != null) {
-                streamThread.clearStandbyRecords(revokedStandbyPartitions);
-            }
-            log.info("partition assignment took {} ms.\n" +
-                    "\tcurrently assigned active tasks: {}\n" +
-                    "\tcurrently assigned standby tasks: {}\n" +
-                    "\trevoked active tasks: {}\n" +
-                    "\trevoked standby tasks: {}\n",
-                time.milliseconds() - start,
-                taskManager.activeTaskIds(),
-                taskManager.standbyTaskIds(),
-                taskManager.revokedActiveTaskIds(),
-                taskManager.revokedStandbyTaskIds());
-        }
+        streamThread.setState(State.PARTITIONS_ASSIGNED);
+        streamThread.setPartitionAssignedTime(time.milliseconds());
+        taskManager.handleRebalanceComplete();
     }
 
     @Override
-    public void onPartitionsRevoked(final Collection<TopicPartition> revokedPartitions) {
+    public void onPartitionsRevoked(final Collection<TopicPartition> partitions) {
         log.debug("Current state {}: revoked partitions {} because of consumer rebalance.\n" +
-                "\tcurrently assigned active tasks: {}\n" +
-                "\tcurrently assigned standby tasks: {}\n",
-            streamThread.state(),
-            revokedPartitions,
-            taskManager.activeTaskIds(),
-            taskManager.standbyTaskIds());
+                      "\tcurrently assigned active tasks: {}\n" +
+                      "\tcurrently assigned standby tasks: {}\n",
+                  streamThread.state(),
+                  partitions,
+                  taskManager.activeTaskIds(),
+                  taskManager.standbyTaskIds());
 
-        Set<TaskId> suspendedTasks = new HashSet<>();
-        if (streamThread.setState(State.PARTITIONS_REVOKED) != null && !revokedPartitions.isEmpty()) {
+        // We need to still invoke handleRevocation if the thread has been told to shut down, but we shouldn't ever
+        // transition away from PENDING_SHUTDOWN once it's been initiated (to anything other than DEAD)
+        if ((streamThread.setState(State.PARTITIONS_REVOKED) != null || streamThread.state() == State.PENDING_SHUTDOWN) && !partitions.isEmpty()) {
             final long start = time.milliseconds();
             try {
-                // suspend only the active tasks, reassigned standby tasks will be closed in onPartitionsAssigned
-                suspendedTasks = taskManager.suspendActiveTasksAndState(revokedPartitions);
-            } catch (final Throwable t) {
-                log.error(
-                    "Error caught during partition revocation, " +
-                        "will abort the current process and re-throw at the end of rebalance: ",
-                    t
-                );
-                streamThread.setRebalanceException(t);
+                taskManager.handleRevocation(partitions);
             } finally {
-                log.info("partition revocation took {} ms.\n" +
-                        "\tcurrent suspended active tasks: {}\n",
-                    time.milliseconds() - start,
-                    suspendedTasks);
+                log.info("partition revocation took {} ms.", time.milliseconds() - start);
             }
         }
     }
 
     @Override
-    public void onPartitionsLost(final Collection<TopicPartition> lostPartitions) {
+    public void onPartitionsLost(final Collection<TopicPartition> partitions) {
         log.info("at state {}: partitions {} lost due to missed rebalance.\n" +
-                "\tlost active tasks: {}\n" +
-                "\tlost assigned standby tasks: {}\n",
-            streamThread.state(),
-            lostPartitions,
-            taskManager.activeTaskIds(),
-            taskManager.standbyTaskIds());
+                     "\tlost active tasks: {}\n" +
+                     "\tlost assigned standby tasks: {}\n",
+                 streamThread.state(),
+                 partitions,
+                 taskManager.activeTaskIds(),
+                 taskManager.standbyTaskIds());
 
-        Set<TaskId> lostTasks = new HashSet<>();
         final long start = time.milliseconds();
         try {
             // close all active tasks as lost but don't try to commit offsets as we no longer own them
-            lostTasks = taskManager.closeLostTasks();
-        } catch (final Throwable t) {
-            log.error(
-                "Error caught during partitions lost, " +
-                    "will abort the current process and re-throw at the end of rebalance: ",
-                t
-            );
-            streamThread.setRebalanceException(t);
+            taskManager.handleLostAll();
         } finally {
-            log.info("partitions lost took {} ms.\n" +
-                    "\tclosed lost active tasks: {}\n",
-                time.milliseconds() - start,
-                lostTasks);
+            log.info("partitions lost took {} ms.", time.milliseconds() - start);
         }
     }
-
 }

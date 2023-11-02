@@ -18,9 +18,26 @@
 package org.apache.kafka.message;
 
 /**
- * Creates an if statement based on whether or not a particular field is null.
+ * For versions of a field that are nullable, IsNullCondition creates a null check.
  */
 public final class IsNullConditional {
+    interface ConditionalGenerator {
+        String generate(String name, boolean negated);
+    }
+
+    private static class PrimitiveConditionalGenerator implements ConditionalGenerator {
+        final static PrimitiveConditionalGenerator INSTANCE = new PrimitiveConditionalGenerator();
+
+        @Override
+        public String generate(String name, boolean negated) {
+            if (negated) {
+                return String.format("%s != null", name);
+            } else {
+                return String.format("%s == null", name);
+            }
+        }
+    }
+
     static IsNullConditional forName(String name) {
         return new IsNullConditional(name);
     }
@@ -35,8 +52,9 @@ public final class IsNullConditional {
     private Versions nullableVersions = Versions.ALL;
     private Versions possibleVersions = Versions.ALL;
     private Runnable ifNull = null;
-    private Runnable ifNotNull = null;
+    private Runnable ifShouldNotBeNull = null;
     private boolean alwaysEmitBlockScope = false;
+    private ConditionalGenerator conditionalGenerator = PrimitiveConditionalGenerator.INSTANCE;
 
     private IsNullConditional(String name) {
         this.name = name;
@@ -57,8 +75,8 @@ public final class IsNullConditional {
         return this;
     }
 
-    IsNullConditional ifNotNull(Runnable ifNotNull) {
-        this.ifNotNull = ifNotNull;
+    IsNullConditional ifShouldNotBeNull(Runnable ifShouldNotBeNull) {
+        this.ifShouldNotBeNull = ifShouldNotBeNull;
         return this;
     }
 
@@ -67,14 +85,19 @@ public final class IsNullConditional {
         return this;
     }
 
+    IsNullConditional conditionalGenerator(ConditionalGenerator conditionalGenerator) {
+        this.conditionalGenerator = conditionalGenerator;
+        return this;
+    }
+
     void generate(CodeBuffer buffer) {
         if (nullableVersions.intersect(possibleVersions).empty()) {
-            if (ifNotNull != null) {
+            if (ifShouldNotBeNull != null) {
                 if (alwaysEmitBlockScope) {
                     buffer.printf("{%n");
                     buffer.incrementIndent();
                 }
-                ifNotNull.run();
+                ifShouldNotBeNull.run();
                 if (alwaysEmitBlockScope) {
                     buffer.decrementIndent();
                     buffer.printf("}%n");
@@ -82,21 +105,21 @@ public final class IsNullConditional {
             }
         } else {
             if (ifNull != null) {
-                buffer.printf("if (%s == null) {%n", name);
+                buffer.printf("if (%s) {%n", conditionalGenerator.generate(name, false));
                 buffer.incrementIndent();
                 ifNull.run();
                 buffer.decrementIndent();
-                if (ifNotNull != null) {
+                if (ifShouldNotBeNull != null) {
                     buffer.printf("} else {%n");
                     buffer.incrementIndent();
-                    ifNotNull.run();
+                    ifShouldNotBeNull.run();
                     buffer.decrementIndent();
                 }
                 buffer.printf("}%n");
-            } else if (ifNotNull != null) {
-                buffer.printf("if (%s != null) {%n", name);
+            } else if (ifShouldNotBeNull != null) {
+                buffer.printf("if (%s) {%n", conditionalGenerator.generate(name, true));
                 buffer.incrementIndent();
-                ifNotNull.run();
+                ifShouldNotBeNull.run();
                 buffer.decrementIndent();
                 buffer.printf("}%n");
             }

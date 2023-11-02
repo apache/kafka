@@ -16,11 +16,12 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.connect.runtime.rest.ConnectRestServer;
 import org.apache.kafka.connect.runtime.rest.RestServer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.net.URI;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -32,13 +33,13 @@ public class Connect {
     private static final Logger log = LoggerFactory.getLogger(Connect.class);
 
     private final Herder herder;
-    private final RestServer rest;
+    private final ConnectRestServer rest;
     private final CountDownLatch startLatch = new CountDownLatch(1);
     private final CountDownLatch stopLatch = new CountDownLatch(1);
     private final AtomicBoolean shutdown = new AtomicBoolean(false);
     private final ShutdownHook shutdownHook;
 
-    public Connect(Herder herder, RestServer rest) {
+    public Connect(Herder herder, ConnectRestServer rest) {
         log.debug("Kafka Connect instance created");
         this.herder = herder;
         this.rest = rest;
@@ -48,7 +49,7 @@ public class Connect {
     public void start() {
         try {
             log.info("Kafka Connect starting");
-            Runtime.getRuntime().addShutdownHook(shutdownHook);
+            Exit.addShutdownHook("connect-shutdown-hook", shutdownHook);
 
             herder.start();
             rest.initializeResources(herder);
@@ -83,13 +84,13 @@ public class Connect {
         }
     }
 
-    // Visible for testing
-    public URI restUrl() {
-        return rest.serverUrl();
+    public boolean isRunning() {
+        return herder.isRunning();
     }
 
-    public URI adminUrl() {
-        return rest.adminUrl();
+    // Visible for testing
+    public RestServer rest() {
+        return rest;
     }
 
     private class ShutdownHook extends Thread {

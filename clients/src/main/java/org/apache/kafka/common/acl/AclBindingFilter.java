@@ -18,8 +18,6 @@
 package org.apache.kafka.common.acl;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
-import org.apache.kafka.common.resource.PatternType;
-import org.apache.kafka.common.resource.ResourceFilter;
 import org.apache.kafka.common.resource.ResourcePatternFilter;
 
 import java.util.Objects;
@@ -48,18 +46,6 @@ public class AclBindingFilter {
     public AclBindingFilter(ResourcePatternFilter patternFilter, AccessControlEntryFilter entryFilter) {
         this.patternFilter = Objects.requireNonNull(patternFilter, "patternFilter");
         this.entryFilter = Objects.requireNonNull(entryFilter, "entryFilter");
-    }
-
-    /**
-     * Create an instance of this filter with the provided parameters.
-     *
-     * @param resourceFilter non-null resource filter
-     * @param entryFilter non-null access control entry filter
-     * @deprecated Since 2.0. Use {@link #AclBindingFilter(ResourcePatternFilter, AccessControlEntryFilter)}
-     */
-    @Deprecated
-    public AclBindingFilter(ResourceFilter resourceFilter, AccessControlEntryFilter entryFilter) {
-        this(new ResourcePatternFilter(resourceFilter.resourceType(), resourceFilter.name(), PatternType.LITERAL), entryFilter);
     }
 
     /**

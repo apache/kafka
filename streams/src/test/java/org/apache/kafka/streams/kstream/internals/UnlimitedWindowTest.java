@@ -18,6 +18,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.junit.Test;
 
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 public class UnlimitedWindowTest {
@@ -33,8 +34,8 @@ public class UnlimitedWindowTest {
         assertTrue(window.overlap(new UnlimitedWindow(start + 1)));
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void cannotCompareUnlimitedWindowWithDifferentWindowType() {
-        window.overlap(sessionWindow);
+        assertThrows(IllegalArgumentException.class, () -> window.overlap(sessionWindow));
     }
 }

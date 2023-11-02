@@ -22,16 +22,16 @@ import kafka.server.QuotaType._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.{MetricConfig, Metrics, Quota}
 import org.apache.kafka.common.utils.MockTime
-import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
-import org.junit.{After, Test}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
+import org.junit.jupiter.api.{AfterEach, Test}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 class ReplicationQuotaManagerTest {
   private val time = new MockTime
   private val metrics = new Metrics(new MetricConfig(), Collections.emptyList(), time)
 
-  @After
+  @AfterEach
   def tearDown(): Unit = {
     metrics.close()
   }

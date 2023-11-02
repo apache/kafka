@@ -25,6 +25,7 @@ import org.junit.Test;
 import java.util.NoSuchElementException;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 public class DelegatingPeekingKeyValueIteratorTest {
@@ -77,18 +78,20 @@ public class DelegatingPeekingKeyValueIteratorTest {
         peekingIterator.close();
     }
 
-    @Test(expected = NoSuchElementException.class)
+    @Test
     public void shouldThrowNoSuchElementWhenNoMoreItemsLeftAndNextCalled() {
-        final DelegatingPeekingKeyValueIterator<String, String> peekingIterator = new DelegatingPeekingKeyValueIterator<>(name, store.all());
-        peekingIterator.next();
-        peekingIterator.close();
+        try (final DelegatingPeekingKeyValueIterator<String, String> peekingIterator =
+            new DelegatingPeekingKeyValueIterator<>(name, store.all())) {
+            assertThrows(NoSuchElementException.class, peekingIterator::next);
+        }
     }
 
-    @Test(expected = NoSuchElementException.class)
+    @Test
     public void shouldThrowNoSuchElementWhenNoMoreItemsLeftAndPeekNextCalled() {
-        final DelegatingPeekingKeyValueIterator<String, String> peekingIterator = new DelegatingPeekingKeyValueIterator<>(name, store.all());
-        peekingIterator.peekNextKey();
-        peekingIterator.close();
+        try (final DelegatingPeekingKeyValueIterator<String, String> peekingIterator =
+            new DelegatingPeekingKeyValueIterator<>(name, store.all())) {
+            assertThrows(NoSuchElementException.class, peekingIterator::peekNextKey);
+        }
     }
 
 

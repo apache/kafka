@@ -16,6 +16,7 @@
 {
   "apiKey": 19,
   "type": "request",
+  "listeners": ["zkBroker", "broker", "controller"],
   "name": "CreateTopicsRequest",
   // Version 1 adds validateOnly.
   //
@@ -23,7 +24,12 @@
   //
   // Version 5 is the first flexible version.
   // Version 5 also returns topic configs in the response (KIP-525).
-  "validVersions": "0-5",
+  //
+  // Version 6 is identical to version 5 but may return a THROTTLING_QUOTA_EXCEEDED error
+  // in the response if the topics creation is throttled (KIP-599).
+  //
+  // Version 7 is the same as version 6.
+  "validVersions": "0-7",
   "flexibleVersions": "5+",
   "fields": [
     { "name": "Topics", "type": "[]CreatableTopic", "versions": "0+",

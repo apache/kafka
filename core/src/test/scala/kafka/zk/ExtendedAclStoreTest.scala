@@ -17,20 +17,21 @@
 
 package kafka.zk
 
-import kafka.security.auth.{Resource, Topic}
 import org.apache.kafka.common.resource.PatternType.{LITERAL, PREFIXED}
-import org.junit.Assert.assertEquals
-import org.junit.Test
+import org.apache.kafka.common.resource.ResourcePattern
+import org.apache.kafka.common.resource.ResourceType.TOPIC
+import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
+import org.junit.jupiter.api.Test
 
 class ExtendedAclStoreTest {
-  private val literalResource = Resource(Topic, "some-topic", LITERAL)
-  private val prefixedResource = Resource(Topic, "some-topic", PREFIXED)
+  private val literalResource = new ResourcePattern(TOPIC, "some-topic", LITERAL)
+  private val prefixedResource = new ResourcePattern(TOPIC, "some-topic", PREFIXED)
   private val store = new ExtendedAclStore(PREFIXED)
 
   @Test
   def shouldHaveCorrectPaths(): Unit = {
     assertEquals("/kafka-acl-extended/prefixed", store.aclPath)
-    assertEquals("/kafka-acl-extended/prefixed/Topic", store.path(Topic))
+    assertEquals("/kafka-acl-extended/prefixed/Topic", store.path(TOPIC))
     assertEquals("/kafka-acl-extended-changes", store.changeStore.aclChangePath)
   }
 
@@ -39,14 +40,14 @@ class ExtendedAclStoreTest {
     assertEquals(PREFIXED, store.patternType)
   }
 
-  @Test(expected = classOf[IllegalArgumentException])
+  @Test
   def shouldThrowIfConstructedWithLiteral(): Unit = {
-    new ExtendedAclStore(LITERAL)
+    assertThrows(classOf[IllegalArgumentException], () => new ExtendedAclStore(LITERAL))
   }
 
-  @Test(expected = classOf[IllegalArgumentException])
+  @Test
   def shouldThrowFromEncodeOnLiteral(): Unit = {
-    store.changeStore.createChangeNode(literalResource)
+    assertThrows(classOf[IllegalArgumentException], () => store.changeStore.createChangeNode(literalResource))
   }
 
   @Test

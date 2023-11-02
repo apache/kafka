@@ -28,7 +28,7 @@ from jira import JIRA
 import itertools, sys
 
 if len(sys.argv) < 2:
-    print >>sys.stderr, "Usage: release_notes.py <version>"
+    print("Usage: release_notes.py <version>", file=sys.stderr)
     sys.exit(1)
 
 version = sys.argv[1]
@@ -44,7 +44,7 @@ def get_issues(jira, query, **kwargs):
     results = []
     startAt = 0
     new_results = None
-    while new_results == None or len(new_results) == MAX_RESULTS:
+    while new_results is None or len(new_results) == MAX_RESULTS:
         new_results = jira.search_issues(query, startAt=startAt, maxResults=MAX_RESULTS, **kwargs)
         results += new_results
         startAt += len(new_results)
@@ -58,7 +58,7 @@ if __name__ == "__main__":
     apache = JIRA(JIRA_BASE_URL)
     issues = get_issues(apache, 'project=KAFKA and fixVersion=%s' % version)
     if not issues:
-        print >>sys.stderr, "Didn't find any issues for the target fix version"
+        print("Didn't find any issues for the target fix version", file=sys.stderr)
         sys.exit(1)
 
     # Some resolutions, including a lack of resolution, indicate that the bug hasn't actually been addressed and we shouldn't even be able to create a release until they are fixed
@@ -78,11 +78,11 @@ if __name__ == "__main__":
                               ]
     unresolved_issues = [issue for issue in issues if issue.fields.resolution in UNRESOLVED_RESOLUTIONS or issue.fields.resolution.name in UNRESOLVED_RESOLUTIONS]
     if unresolved_issues:
-        print >>sys.stderr, "The release is not completed since unresolved issues or improperly resolved issues were found still tagged with this release as the fix version:"
+        print("The release is not completed since unresolved issues or improperly resolved issues were found still tagged with this release as the fix version:", file=sys.stderr)
         for issue in unresolved_issues:
-            print >>sys.stderr, "Unresolved issue: %15s %20s %s" % (issue.key, issue.fields.resolution, issue_link(issue))
-        print >>sys.stderr
-        print >>sys.stderr, "Note that for some resolutions, you should simply remove the fix version as they have not been truly fixed in this release."
+            print("Unresolved issue: %15s %20s %s" % (issue.key, issue.fields.resolution, issue_link(issue)), file=sys.stderr)
+        print("", file=sys.stderr)
+        print("Note that for some resolutions, you should simply remove the fix version as they have not been truly fixed in this release.", file=sys.stderr)
         sys.exit(1)
 
     # Get list of (issue type, [issues]) sorted by the issue ID type, with each subset of issues sorted by their key so they
@@ -93,11 +93,12 @@ if __name__ == "__main__":
             return -2
         if issue.fields.issuetype.name == 'Improvement':
             return -1
-        return issue.fields.issuetype.id
+        return int(issue.fields.issuetype.id)
+
     by_group = [(k,sorted(g, key=lambda issue: issue.id)) for k,g in itertools.groupby(sorted(issues, key=issue_type_key), lambda issue: issue.fields.issuetype.name)]
 
-    print "<h1>Release Notes - Kafka - Version %s</h1>" % version
-    print """<p>Below is a summary of the JIRA issues addressed in the %(version)s release of Kafka. For full documentation of the
+    print("<h1>Release Notes - Kafka - Version %s</h1>" % version)
+    print("""<p>Below is a summary of the JIRA issues addressed in the %(version)s release of Kafka. For full documentation of the
     release, a guide to get started, and information about the project, see the <a href="https://kafka.apache.org/">Kafka
     project site</a>.</p>
 
@@ -107,10 +108,10 @@ if __name__ == "__main__":
     changes, performance changes, and any other changes that might impact your production deployment of Kafka.</p>
 
     <p>The documentation for the most recent release can be found at
-    <a href="https://kafka.apache.org/documentation.html">https://kafka.apache.org/documentation.html</a>.</p>""" % { 'version': version, 'minor': minor_version_dotless }
+    <a href="https://kafka.apache.org/documentation.html">https://kafka.apache.org/documentation.html</a>.</p>""" % { 'version': version, 'minor': minor_version_dotless })
     for itype, issues in by_group:
-        print "<h2>%s</h2>" % itype
-        print "<ul>"
+        print("<h2>%s</h2>" % itype)
+        print("<ul>")
         for issue in issues:
-            print '<li>[<a href="%(link)s">%(key)s</a>] - %(summary)s</li>' % {'key': issue.key, 'link': issue_link(issue), 'summary': issue.fields.summary}
-        print "</ul>"
+            print('<li>[<a href="%(link)s">%(key)s</a>] - %(summary)s</li>' % {'key': issue.key, 'link': issue_link(issue), 'summary': issue.fields.summary})
+        print("</ul>")

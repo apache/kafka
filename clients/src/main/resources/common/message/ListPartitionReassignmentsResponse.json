@@ -34,11 +34,11 @@
         "about": "The ongoing reassignments for each partition.", "fields": [
         { "name": "PartitionIndex", "type": "int32", "versions": "0+",
           "about": "The index of the partition." },
-        { "name": "Replicas", "type": "[]int32", "versions": "0+",
+        { "name": "Replicas", "type": "[]int32", "versions": "0+", "entityType": "brokerId",
           "about": "The current replica set." },
-        { "name": "AddingReplicas", "type": "[]int32", "versions": "0+",
+        { "name": "AddingReplicas", "type": "[]int32", "versions": "0+", "entityType": "brokerId",
           "about": "The set of replicas we are currently adding." },
-        { "name": "RemovingReplicas", "type": "[]int32", "versions": "0+",
+        { "name": "RemovingReplicas", "type": "[]int32", "versions": "0+", "entityType": "brokerId",
           "about": "The set of replicas we are currently removing." }
       ]}
     ]}

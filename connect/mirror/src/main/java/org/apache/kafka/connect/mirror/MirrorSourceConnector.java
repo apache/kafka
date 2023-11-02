@@ -16,9 +16,20 @@
  */
 package org.apache.kafka.connect.mirror;
 
+import java.util.HashMap;
+import java.util.Locale;
+import java.util.Map.Entry;
+
+import java.util.concurrent.atomic.AtomicReference;
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.common.IsolationLevel;
+import org.apache.kafka.common.config.ConfigValue;
+import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.connect.connector.Task;
+import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.source.ExactlyOnceSupport;
 import org.apache.kafka.connect.source.SourceConnector;
-import org.apache.kafka.connect.util.ConnectorUtils;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.acl.AclBinding;
@@ -33,8 +44,10 @@ import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InvalidPartitionsException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.ConfigEntry;
@@ -44,20 +57,30 @@ import org.apache.kafka.clients.admin.CreateTopicsOptions;
 
 import java.util.Map;
 import java.util.List;
+import java.util.ArrayList;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.HashSet;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 import java.util.concurrent.ExecutionException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import static org.apache.kafka.connect.mirror.MirrorSourceConfig.SYNC_TOPIC_ACLS_ENABLED;
+import static org.apache.kafka.connect.mirror.MirrorUtils.SOURCE_CLUSTER_KEY;
+import static org.apache.kafka.connect.mirror.MirrorUtils.TOPIC_KEY;
+
 /** Replicate data, configuration, and ACLs between clusters.
  *
- *  @see MirrorConnectorConfig for supported config properties.
+ *  @see MirrorSourceConfig for supported config properties.
  */
 public class MirrorSourceConnector extends SourceConnector {
 
@@ -65,22 +88,33 @@ public class MirrorSourceConnector extends SourceConnector {
     private static final ResourcePatternFilter ANY_TOPIC = new ResourcePatternFilter(ResourceType.TOPIC,
         null, PatternType.ANY);
     private static final AclBindingFilter ANY_TOPIC_ACL = new AclBindingFilter(ANY_TOPIC, AccessControlEntryFilter.ANY);
+    private static final String READ_COMMITTED = IsolationLevel.READ_COMMITTED.toString().toLowerCase(Locale.ROOT);
+    private static final String EXACTLY_ONCE_SUPPORT_CONFIG = "exactly.once.support";
 
     private Scheduler scheduler;
-    private MirrorConnectorConfig config;
+    private MirrorSourceConfig config;
     private SourceAndTarget sourceAndTarget;
     private String connectorName;
     private TopicFilter topicFilter;
     private ConfigPropertyFilter configPropertyFilter;
-    private List<TopicPartition> knownTopicPartitions = Collections.emptyList();
-    private Set<String> knownTargetTopics = Collections.emptySet();
+    private List<TopicPartition> knownSourceTopicPartitions = Collections.emptyList();
+    private List<TopicPartition> knownTargetTopicPartitions = Collections.emptyList();
     private ReplicationPolicy replicationPolicy;
     private int replicationFactor;
-    private AdminClient sourceAdminClient;
-    private AdminClient targetAdminClient;
+    private Admin sourceAdminClient;
+    private Admin targetAdminClient;
+    private Admin offsetSyncsAdminClient;
+    private volatile boolean useIncrementalAlterConfigs;
+    private AtomicBoolean noAclAuthorizer = new AtomicBoolean(false);
 
     public MirrorSourceConnector() {
         // nop
+    }
+
+    // visible for testing
+    MirrorSourceConnector(List<TopicPartition> knownSourceTopicPartitions, MirrorSourceConfig config) {
+        this.knownSourceTopicPartitions = knownSourceTopicPartitions;
+        this.config = config;
     }
 
     // visible for testing
@@ -90,12 +124,30 @@ public class MirrorSourceConnector extends SourceConnector {
         this.replicationPolicy = replicationPolicy;
         this.topicFilter = topicFilter;
         this.configPropertyFilter = configPropertyFilter;
-    } 
+    }
+
+    // visible for testing the deprecated setting "use.incremental.alter.configs"
+    // this constructor should be removed when the deprecated setting is removed in Kafka 4.0
+    MirrorSourceConnector(SourceAndTarget sourceAndTarget, ReplicationPolicy replicationPolicy,
+                          MirrorSourceConfig config, ConfigPropertyFilter configPropertyFilter, Admin targetAdmin) {
+        this.sourceAndTarget = sourceAndTarget;
+        this.replicationPolicy = replicationPolicy;
+        this.configPropertyFilter = configPropertyFilter;
+        this.config = config;
+        this.useIncrementalAlterConfigs = !config.useIncrementalAlterConfigs().equals(MirrorSourceConfig.NEVER_USE_INCREMENTAL_ALTER_CONFIGS);
+        this.targetAdminClient = targetAdmin;                      
+    }
+        
+    // visible for testing
+    MirrorSourceConnector(Admin sourceAdminClient, Admin targetAdminClient) {
+        this.sourceAdminClient = sourceAdminClient;
+        this.targetAdminClient = targetAdminClient;
+    }
 
     @Override
     public void start(Map<String, String> props) {
         long start = System.currentTimeMillis();
-        config = new MirrorConnectorConfig(props);
+        config = new MirrorSourceConfig(props);
         if (!config.enabled()) {
             return;
         }
@@ -105,19 +157,21 @@ public class MirrorSourceConnector extends SourceConnector {
         configPropertyFilter = config.configPropertyFilter();
         replicationPolicy = config.replicationPolicy();
         replicationFactor = config.replicationFactor();
-        sourceAdminClient = AdminClient.create(config.sourceAdminConfig());
-        targetAdminClient = AdminClient.create(config.targetAdminConfig());
-        scheduler = new Scheduler(MirrorSourceConnector.class, config.adminTimeout());
+        sourceAdminClient = config.forwardingAdmin(config.sourceAdminConfig("replication-source-admin"));
+        targetAdminClient = config.forwardingAdmin(config.targetAdminConfig("replication-target-admin"));
+        useIncrementalAlterConfigs =  !config.useIncrementalAlterConfigs().equals(MirrorSourceConfig.NEVER_USE_INCREMENTAL_ALTER_CONFIGS);
+        offsetSyncsAdminClient = config.forwardingAdmin(config.offsetSyncsTopicAdminConfig());
+        scheduler = new Scheduler(getClass(), config.entityLabel(), config.adminTimeout());
         scheduler.execute(this::createOffsetSyncsTopic, "creating upstream offset-syncs topic");
         scheduler.execute(this::loadTopicPartitions, "loading initial set of topic-partitions");
-        scheduler.execute(this::createTopicPartitions, "creating downstream topic-partitions");
+        scheduler.execute(this::computeAndCreateTopicPartitions, "creating downstream topic-partitions");
         scheduler.execute(this::refreshKnownTargetTopics, "refreshing known target topics");
         scheduler.scheduleRepeating(this::syncTopicAcls, config.syncTopicAclsInterval(), "syncing topic ACLs");
         scheduler.scheduleRepeating(this::syncTopicConfigs, config.syncTopicConfigsInterval(),
             "syncing topic configs");
         scheduler.scheduleRepeatingDelayed(this::refreshTopicPartitions, config.refreshTopicsInterval(),
             "refreshing topics");
-        log.info("Started {} with {} topic-partitions.", connectorName, knownTopicPartitions.size());
+        log.info("Started {} with {} topic-partitions.", connectorName, knownSourceTopicPartitions.size());
         log.info("Starting {} took {} ms.", connectorName, System.currentTimeMillis() - start);
     }
 
@@ -132,6 +186,7 @@ public class MirrorSourceConnector extends SourceConnector {
         Utils.closeQuietly(configPropertyFilter, "config property filter");
         Utils.closeQuietly(sourceAdminClient, "source admin client");
         Utils.closeQuietly(targetAdminClient, "target admin client");
+        Utils.closeQuietly(offsetSyncsAdminClient, "offset syncs admin client");
         log.info("Stopping {} took {} ms.", connectorName, System.currentTimeMillis() - start);
     }
 
@@ -141,160 +196,372 @@ public class MirrorSourceConnector extends SourceConnector {
     }
 
     // divide topic-partitions among tasks
+    // since each mirrored topic has different traffic and number of partitions, to balance the load
+    // across all mirrormaker instances (workers), 'roundrobin' helps to evenly assign all
+    // topic-partition to the tasks, then the tasks are further distributed to workers.
+    // For example, 3 tasks to mirror 3 topics with 8, 2 and 2 partitions respectively.
+    // 't1' denotes 'task 1', 't0p5' denotes 'topic 0, partition 5'
+    // t1 -> [t0p0, t0p3, t0p6, t1p1]
+    // t2 -> [t0p1, t0p4, t0p7, t2p0]
+    // t3 -> [t0p2, t0p5, t1p0, t2p1]
     @Override
     public List<Map<String, String>> taskConfigs(int maxTasks) {
-        if (!config.enabled() || knownTopicPartitions.isEmpty()) {
+        if (!config.enabled() || knownSourceTopicPartitions.isEmpty()) {
             return Collections.emptyList();
         }
-        int numTasks = Math.min(maxTasks, knownTopicPartitions.size());
-        return ConnectorUtils.groupPartitions(knownTopicPartitions, numTasks).stream()
-            .map(config::taskConfigForTopicPartitions)
-            .collect(Collectors.toList());
+        int numTasks = Math.min(maxTasks, knownSourceTopicPartitions.size());
+        List<List<TopicPartition>> roundRobinByTask = new ArrayList<>(numTasks);
+        for (int i = 0; i < numTasks; i++) {
+            roundRobinByTask.add(new ArrayList<>());
+        }
+        int count = 0;
+        for (TopicPartition partition : knownSourceTopicPartitions) {
+            int index = count % numTasks;
+            roundRobinByTask.get(index).add(partition);
+            count++;
+        }
+        return IntStream.range(0, numTasks)
+                .mapToObj(i -> config.taskConfigForTopicPartitions(roundRobinByTask.get(i), i))
+                .collect(Collectors.toList());
     }
 
     @Override
     public ConfigDef config() {
-        return MirrorConnectorConfig.CONNECTOR_CONFIG_DEF;
+        return MirrorSourceConfig.CONNECTOR_CONFIG_DEF;
+    }
+
+    @Override
+    public org.apache.kafka.common.config.Config validate(Map<String, String> props) {
+        List<ConfigValue> configValues = super.validate(props).configValues();
+        if ("required".equals(props.get(EXACTLY_ONCE_SUPPORT_CONFIG))) {
+            if (!consumerUsesReadCommitted(props)) {
+                ConfigValue exactlyOnceSupport = configValues.stream()
+                        .filter(cv -> EXACTLY_ONCE_SUPPORT_CONFIG.equals(cv.name()))
+                        .findAny()
+                        .orElseGet(() -> {
+                            ConfigValue result = new ConfigValue(EXACTLY_ONCE_SUPPORT_CONFIG);
+                            configValues.add(result);
+                            return result;
+                        });
+                // The Connect framework will already generate an error for this property if we return ExactlyOnceSupport.UNSUPPORTED
+                // from our exactlyOnceSupport method, but it will be fairly generic
+                // We add a second error message here to give users more insight into why this specific connector can't support exactly-once
+                // guarantees with the given configuration
+                exactlyOnceSupport.addErrorMessage(
+                        "MirrorSourceConnector can only provide exactly-once guarantees when its source consumer is configured with "
+                                + ConsumerConfig.ISOLATION_LEVEL_CONFIG + " set to '" + READ_COMMITTED + "'; "
+                                + "otherwise, records from aborted and uncommitted transactions will be replicated from the "
+                                + "source cluster to the target cluster."
+                );
+            }
+        }
+        return new org.apache.kafka.common.config.Config(configValues);
     }
 
     @Override
     public String version() {
-        return "1";
+        return AppInfoParser.getVersion();
     }
 
-    private List<TopicPartition> findTopicPartitions()
+    @Override
+    public ExactlyOnceSupport exactlyOnceSupport(Map<String, String> props) {
+        return consumerUsesReadCommitted(props)
+                ? ExactlyOnceSupport.SUPPORTED
+                : ExactlyOnceSupport.UNSUPPORTED;
+    }
+
+    @Override
+    public boolean alterOffsets(Map<String, String> connectorConfig, Map<Map<String, ?>, Map<String, ?>> offsets) {
+        for (Map.Entry<Map<String, ?>, Map<String, ?>> offsetEntry : offsets.entrySet()) {
+            Map<String, ?> sourceOffset = offsetEntry.getValue();
+            if (sourceOffset == null) {
+                // We allow tombstones for anything; if there's garbage in the offsets for the connector, we don't
+                // want to prevent users from being able to clean it up using the REST API
+                continue;
+            }
+
+            Map<String, ?> sourcePartition = offsetEntry.getKey();
+            if (sourcePartition == null) {
+                throw new ConnectException("Source partitions may not be null");
+            }
+
+            MirrorUtils.validateSourcePartitionString(sourcePartition, SOURCE_CLUSTER_KEY);
+            MirrorUtils.validateSourcePartitionString(sourcePartition, TOPIC_KEY);
+            MirrorUtils.validateSourcePartitionPartition(sourcePartition);
+
+            MirrorUtils.validateSourceOffset(sourcePartition, sourceOffset, false);
+        }
+
+        // We never commit offsets with our source consumer, so no additional effort is required beyond just validating
+        // the format of the user-supplied offsets
+        return true;
+    }
+
+    private boolean consumerUsesReadCommitted(Map<String, String> props) {
+        Object consumerIsolationLevel = MirrorSourceConfig.sourceConsumerConfig(props)
+                .get(ConsumerConfig.ISOLATION_LEVEL_CONFIG);
+        return Objects.equals(READ_COMMITTED, consumerIsolationLevel);
+    }
+
+    // visible for testing
+    List<TopicPartition> findSourceTopicPartitions()
             throws InterruptedException, ExecutionException {
         Set<String> topics = listTopics(sourceAdminClient).stream()
             .filter(this::shouldReplicateTopic)
             .collect(Collectors.toSet());
-        return describeTopics(topics).stream()
+        return describeTopics(sourceAdminClient, topics).stream()
             .flatMap(MirrorSourceConnector::expandTopicDescription)
             .collect(Collectors.toList());
     }
 
-    private void refreshTopicPartitions()
+    // visible for testing
+    List<TopicPartition> findTargetTopicPartitions()
             throws InterruptedException, ExecutionException {
-        List<TopicPartition> topicPartitions = findTopicPartitions();
-        Set<TopicPartition> newTopicPartitions = new HashSet<>();
-        newTopicPartitions.addAll(topicPartitions);
-        newTopicPartitions.removeAll(knownTopicPartitions);
-        Set<TopicPartition> deadTopicPartitions = new HashSet<>();
-        deadTopicPartitions.addAll(knownTopicPartitions);
-        deadTopicPartitions.removeAll(topicPartitions);
-        if (!newTopicPartitions.isEmpty() || !deadTopicPartitions.isEmpty()) {
-            log.info("Found {} topic-partitions on {}. {} are new. {} were removed. Previously had {}.",
-                    topicPartitions.size(), sourceAndTarget.source(), newTopicPartitions.size(), 
-                    deadTopicPartitions.size(), knownTopicPartitions.size());
-            log.trace("Found new topic-partitions: {}", newTopicPartitions);
-            knownTopicPartitions = topicPartitions;
-            knownTargetTopics = findExistingTargetTopics(); 
-            createTopicPartitions();
+        Set<String> topics = listTopics(targetAdminClient).stream()
+            .filter(t -> sourceAndTarget.source().equals(replicationPolicy.topicSource(t)))
+            .filter(t -> !t.equals(config.checkpointsTopic()))
+            .collect(Collectors.toSet());
+        return describeTopics(targetAdminClient, topics).stream()
+                .flatMap(MirrorSourceConnector::expandTopicDescription)
+                .collect(Collectors.toList());
+    }
+
+    // visible for testing
+    void refreshTopicPartitions()
+            throws InterruptedException, ExecutionException {
+
+        List<TopicPartition> sourceTopicPartitions = findSourceTopicPartitions();
+        List<TopicPartition> targetTopicPartitions = findTargetTopicPartitions();
+
+        Set<TopicPartition> sourceTopicPartitionsSet = new HashSet<>(sourceTopicPartitions);
+        Set<TopicPartition> knownSourceTopicPartitionsSet = new HashSet<>(knownSourceTopicPartitions);
+
+        Set<TopicPartition> upstreamTargetTopicPartitions = targetTopicPartitions.stream()
+                .map(x -> new TopicPartition(replicationPolicy.upstreamTopic(x.topic()), x.partition()))
+                .collect(Collectors.toSet());
+
+        Set<TopicPartition> missingInTarget = new HashSet<>(sourceTopicPartitions);
+        missingInTarget.removeAll(upstreamTargetTopicPartitions);
+
+        knownTargetTopicPartitions = targetTopicPartitions;
+
+        // Detect if topic-partitions were added or deleted from the source cluster
+        // or if topic-partitions are missing from the target cluster
+        if (!knownSourceTopicPartitionsSet.equals(sourceTopicPartitionsSet) || !missingInTarget.isEmpty()) {
+
+            Set<TopicPartition> newTopicPartitions = new HashSet<>(sourceTopicPartitions);
+            newTopicPartitions.removeAll(knownSourceTopicPartitionsSet);
+
+            Set<TopicPartition> deletedTopicPartitions = knownSourceTopicPartitionsSet;
+            deletedTopicPartitions.removeAll(sourceTopicPartitionsSet);
+
+            log.info("Found {} new topic-partitions on {}. " +
+                     "Found {} deleted topic-partitions on {}. " +
+                     "Found {} topic-partitions missing on {}.",
+                     newTopicPartitions.size(), sourceAndTarget.source(),
+                     deletedTopicPartitions.size(), sourceAndTarget.source(),
+                     missingInTarget.size(), sourceAndTarget.target());
+
+            log.trace("Found new topic-partitions on {}: {}", sourceAndTarget.source(), newTopicPartitions);
+            log.trace("Found deleted topic-partitions on {}: {}", sourceAndTarget.source(), deletedTopicPartitions);
+            log.trace("Found missing topic-partitions on {}: {}", sourceAndTarget.target(), missingInTarget);
+
+            knownSourceTopicPartitions = sourceTopicPartitions;
+            computeAndCreateTopicPartitions();
             context.requestTaskReconfiguration();
         }
     }
 
     private void loadTopicPartitions()
             throws InterruptedException, ExecutionException {
-        knownTopicPartitions = findTopicPartitions();
-        knownTargetTopics = findExistingTargetTopics(); 
+        knownSourceTopicPartitions = findSourceTopicPartitions();
+        knownTargetTopicPartitions = findTargetTopicPartitions();
     }
 
     private void refreshKnownTargetTopics()
             throws InterruptedException, ExecutionException {
-        knownTargetTopics = findExistingTargetTopics();
-    }
-
-    private Set<String> findExistingTargetTopics()
-            throws InterruptedException, ExecutionException {
-        return listTopics(targetAdminClient).stream()
-            .filter(x -> sourceAndTarget.source().equals(replicationPolicy.topicSource(x)))
-            .collect(Collectors.toSet());
+        knownTargetTopicPartitions = findTargetTopicPartitions();
     }
 
     private Set<String> topicsBeingReplicated() {
-        return knownTopicPartitions.stream()
-            .map(x -> x.topic())
+        Set<String> knownTargetTopics = toTopics(knownTargetTopicPartitions);
+        return knownSourceTopicPartitions.stream()
+            .map(TopicPartition::topic)
             .distinct()
             .filter(x -> knownTargetTopics.contains(formatRemoteTopic(x)))
             .collect(Collectors.toSet());
     }
 
-    private void syncTopicAcls()
+    private Set<String> toTopics(Collection<TopicPartition> tps) {
+        return tps.stream()
+                .map(TopicPartition::topic)
+                .collect(Collectors.toSet());
+    }
+
+    // Visible for testing
+    void syncTopicAcls()
             throws InterruptedException, ExecutionException {
-        List<AclBinding> bindings = listTopicAclBindings().stream()
+        Optional<Collection<AclBinding>> rawBindings = listTopicAclBindings();
+        if (!rawBindings.isPresent())
+            return;
+        List<AclBinding> filteredBindings = rawBindings.get().stream()
             .filter(x -> x.pattern().resourceType() == ResourceType.TOPIC)
             .filter(x -> x.pattern().patternType() == PatternType.LITERAL)
             .filter(this::shouldReplicateAcl)
             .filter(x -> shouldReplicateTopic(x.pattern().name()))
             .map(this::targetAclBinding)
             .collect(Collectors.toList());
-        updateTopicAcls(bindings);
+        updateTopicAcls(filteredBindings);
     }
 
-    private void syncTopicConfigs()
+    // visible for testing
+    void syncTopicConfigs()
             throws InterruptedException, ExecutionException {
+        boolean incremental = useIncrementalAlterConfigs;
         Map<String, Config> sourceConfigs = describeTopicConfigs(topicsBeingReplicated());
         Map<String, Config> targetConfigs = sourceConfigs.entrySet().stream()
-            .collect(Collectors.toMap(x -> formatRemoteTopic(x.getKey()), x -> targetConfig(x.getValue())));
-        updateTopicConfigs(targetConfigs);
+            .collect(Collectors.toMap(x -> formatRemoteTopic(x.getKey()), x -> targetConfig(x.getValue(), incremental)));
+        if (incremental) {
+            incrementalAlterConfigs(targetConfigs);
+        } else {
+            deprecatedAlterConfigs(targetConfigs);
+        }
     }
 
     private void createOffsetSyncsTopic() {
-        MirrorUtils.createSinglePartitionCompactedTopic(config.offsetSyncsTopic(), config.offsetSyncsTopicReplicationFactor(), config.sourceAdminConfig());
+        MirrorUtils.createSinglePartitionCompactedTopic(
+                config.offsetSyncsTopic(),
+                config.offsetSyncsTopicReplicationFactor(),
+                offsetSyncsAdminClient
+        );
     }
 
-    private void createTopicPartitions()
-            throws InterruptedException, ExecutionException {
-        Map<String, Long> partitionCounts = knownTopicPartitions.stream()
-            .collect(Collectors.groupingBy(x -> x.topic(), Collectors.counting())).entrySet().stream()
-            .collect(Collectors.toMap(x -> formatRemoteTopic(x.getKey()), x -> x.getValue()));
-        List<NewTopic> newTopics = partitionCounts.entrySet().stream()
-            .filter(x -> !knownTargetTopics.contains(x.getKey()))
-            .map(x -> new NewTopic(x.getKey(), x.getValue().intValue(), (short) replicationFactor))
-            .collect(Collectors.toList());
-        Map<String, NewPartitions> newPartitions = partitionCounts.entrySet().stream()
-            .filter(x -> knownTargetTopics.contains(x.getKey()))
-            .collect(Collectors.toMap(x -> x.getKey(), x -> NewPartitions.increaseTo(x.getValue().intValue())));
-        targetAdminClient.createTopics(newTopics, new CreateTopicsOptions()).values().forEach((k, v) -> v.whenComplete((x, e) -> {
+    void computeAndCreateTopicPartitions() throws ExecutionException, InterruptedException {
+        // get source and target topics with respective partition counts
+        Map<String, Long> sourceTopicToPartitionCounts = knownSourceTopicPartitions.stream()
+                .collect(Collectors.groupingBy(TopicPartition::topic, Collectors.counting())).entrySet().stream()
+                .collect(Collectors.toMap(Entry::getKey, Entry::getValue));
+        Map<String, Long> targetTopicToPartitionCounts = knownTargetTopicPartitions.stream()
+                .collect(Collectors.groupingBy(TopicPartition::topic, Collectors.counting())).entrySet().stream()
+                .collect(Collectors.toMap(Entry::getKey, Entry::getValue));
+
+        Set<String> knownSourceTopics = sourceTopicToPartitionCounts.keySet();
+        Set<String> knownTargetTopics = targetTopicToPartitionCounts.keySet();
+        Map<String, String> sourceToRemoteTopics = knownSourceTopics.stream()
+                .collect(Collectors.toMap(Function.identity(), this::formatRemoteTopic));
+
+        // compute existing and new source topics
+        Map<Boolean, Set<String>> partitionedSourceTopics = knownSourceTopics.stream()
+                .collect(Collectors.partitioningBy(sourceTopic -> knownTargetTopics.contains(sourceToRemoteTopics.get(sourceTopic)),
+                        Collectors.toSet()));
+        Set<String> existingSourceTopics = partitionedSourceTopics.get(true);
+        Set<String> newSourceTopics = partitionedSourceTopics.get(false);
+
+        // create new topics
+        if (!newSourceTopics.isEmpty())
+            createNewTopics(newSourceTopics, sourceTopicToPartitionCounts);
+
+        // compute topics with new partitions
+        Map<String, Long> sourceTopicsWithNewPartitions = existingSourceTopics.stream()
+                .filter(sourceTopic -> {
+                    String targetTopic = sourceToRemoteTopics.get(sourceTopic);
+                    return sourceTopicToPartitionCounts.get(sourceTopic) > targetTopicToPartitionCounts.get(targetTopic);
+                })
+                .collect(Collectors.toMap(Function.identity(), sourceTopicToPartitionCounts::get));
+
+        // create new partitions
+        if (!sourceTopicsWithNewPartitions.isEmpty()) {
+            Map<String, NewPartitions> newTargetPartitions = sourceTopicsWithNewPartitions.entrySet().stream()
+                    .collect(Collectors.toMap(sourceTopicAndPartitionCount -> sourceToRemoteTopics.get(sourceTopicAndPartitionCount.getKey()),
+                        sourceTopicAndPartitionCount -> NewPartitions.increaseTo(sourceTopicAndPartitionCount.getValue().intValue())));
+            createNewPartitions(newTargetPartitions);
+        }
+    }
+
+    // visible for testing
+    void createNewTopics(Set<String> newSourceTopics, Map<String, Long> sourceTopicToPartitionCounts)
+            throws ExecutionException, InterruptedException {
+        Map<String, Config> sourceTopicToConfig = describeTopicConfigs(newSourceTopics);
+        Map<String, NewTopic> newTopics = newSourceTopics.stream()
+                .map(sourceTopic -> {
+                    String remoteTopic = formatRemoteTopic(sourceTopic);
+                    int partitionCount = sourceTopicToPartitionCounts.get(sourceTopic).intValue();
+                    Map<String, String> configs = configToMap(targetConfig(sourceTopicToConfig.get(sourceTopic), false));
+                    return new NewTopic(remoteTopic, partitionCount, (short) replicationFactor)
+                            .configs(configs);
+                })
+                .collect(Collectors.toMap(NewTopic::name, Function.identity()));
+        createNewTopics(newTopics);
+    }
+
+    // visible for testing
+    void createNewTopics(Map<String, NewTopic> newTopics) {
+        targetAdminClient.createTopics(newTopics.values(), new CreateTopicsOptions()).values().forEach((k, v) -> v.whenComplete((x, e) -> {
             if (e != null) {
                 log.warn("Could not create topic {}.", k, e);
             } else {
-                log.info("Created remote topic {} with {} partitions.", k, partitionCounts.get(k));
+                log.info("Created remote topic {} with {} partitions.", k, newTopics.get(k).numPartitions());
             }
         }));
+    }
+
+    void createNewPartitions(Map<String, NewPartitions> newPartitions) {
         targetAdminClient.createPartitions(newPartitions).values().forEach((k, v) -> v.whenComplete((x, e) -> {
             if (e instanceof InvalidPartitionsException) {
                 // swallow, this is normal
             } else if (e != null) {
                 log.warn("Could not create topic-partitions for {}.", k, e);
             } else {
-                log.info("Increased size of {} to {} partitions.", k, partitionCounts.get(k));
+                log.info("Increased size of {} to {} partitions.", k, newPartitions.get(k).totalCount());
             }
         }));
     }
 
-    private Set<String> listTopics(AdminClient adminClient)
+    private Set<String> listTopics(Admin adminClient)
             throws InterruptedException, ExecutionException {
         return adminClient.listTopics().names().get();
     }
 
-    private Collection<AclBinding> listTopicAclBindings()
+    private Optional<Collection<AclBinding>> listTopicAclBindings()
             throws InterruptedException, ExecutionException {
-        return sourceAdminClient.describeAcls(ANY_TOPIC_ACL).values().get();
+        Collection<AclBinding> bindings;
+        try {
+            bindings = sourceAdminClient.describeAcls(ANY_TOPIC_ACL).values().get();
+        } catch (ExecutionException e) {
+            if (e.getCause() instanceof SecurityDisabledException) {
+                if (noAclAuthorizer.compareAndSet(false, true)) {
+                    log.info(
+                            "No ACL authorizer is configured on the source Kafka cluster, so no topic ACL syncing will take place. "
+                                    + "Consider disabling topic ACL syncing by setting " + SYNC_TOPIC_ACLS_ENABLED + " to 'false'."
+                    );
+                } else {
+                    log.debug("Source-side ACL authorizer still not found; skipping topic ACL sync");
+                }
+                return Optional.empty();
+            } else {
+                throw e;
+            }
+        }
+        return Optional.of(bindings);
     }
 
-    private Collection<TopicDescription> describeTopics(Collection<String> topics)
+    private static Collection<TopicDescription> describeTopics(Admin adminClient, Collection<String> topics)
             throws InterruptedException, ExecutionException {
-        return sourceAdminClient.describeTopics(topics).all().get().values();
+        return adminClient.describeTopics(topics).allTopicNames().get().values();
     }
 
-    @SuppressWarnings("deprecation")
+    static Map<String, String> configToMap(Config config) {
+        return config.entries().stream()
+                .collect(Collectors.toMap(ConfigEntry::name, ConfigEntry::value));
+    }
+
+    // visible for testing
     // use deprecated alterConfigs API for broker compatibility back to 0.11.0
-    private void updateTopicConfigs(Map<String, Config> topicConfigs)
-            throws InterruptedException, ExecutionException {
+    @SuppressWarnings("deprecation")
+    void deprecatedAlterConfigs(Map<String, Config> topicConfigs) {
         Map<ConfigResource, Config> configs = topicConfigs.entrySet().stream()
             .collect(Collectors.toMap(x ->
-                new ConfigResource(ConfigResource.Type.TOPIC, x.getKey()), x -> x.getValue()));
+                new ConfigResource(ConfigResource.Type.TOPIC, x.getKey()), Entry::getValue));
         log.trace("Syncing configs for {} topics.", configs.size());
         targetAdminClient.alterConfigs(configs).values().forEach((k, v) -> v.whenComplete((x, e) -> {
             if (e != null) {
@@ -303,8 +570,47 @@ public class MirrorSourceConnector extends SourceConnector {
         }));
     }
 
-    private void updateTopicAcls(List<AclBinding> bindings)
-            throws InterruptedException, ExecutionException {
+    // visible for testing
+    void incrementalAlterConfigs(Map<String, Config> topicConfigs) {
+        Map<ConfigResource, Collection<AlterConfigOp>> configOps = new HashMap<>();
+        for (Map.Entry<String, Config> topicConfig : topicConfigs.entrySet()) {
+            Collection<AlterConfigOp> ops = new ArrayList<>();
+            ConfigResource configResource = new ConfigResource(ConfigResource.Type.TOPIC, topicConfig.getKey());
+            for (ConfigEntry config : topicConfig.getValue().entries()) {
+                if (config.isDefault() && !shouldReplicateSourceDefault(config.name())) {
+                    ops.add(new AlterConfigOp(config, AlterConfigOp.OpType.DELETE));
+                } else {
+                    ops.add(new AlterConfigOp(config, AlterConfigOp.OpType.SET));
+                }
+            }
+            configOps.put(configResource, ops);
+        }
+        log.trace("Syncing configs for {} topics.", configOps.size());
+        AtomicReference<Boolean> encounteredError = new AtomicReference<>(false);
+        targetAdminClient.incrementalAlterConfigs(configOps).values().forEach((k, v) -> v.whenComplete((x, e) -> {
+            if (e != null) {
+                if (config.useIncrementalAlterConfigs().equals(MirrorSourceConfig.REQUEST_INCREMENTAL_ALTER_CONFIGS)
+                        && e instanceof UnsupportedVersionException && !encounteredError.get()) {
+                    //Fallback logic
+                    log.warn("The target cluster {} is not compatible with IncrementalAlterConfigs API. "
+                            + "Therefore using deprecated AlterConfigs API for syncing configs for topic {}",
+                            sourceAndTarget.target(), k.name(), e);
+                    encounteredError.set(true);
+                    useIncrementalAlterConfigs = false;
+                } else if (config.useIncrementalAlterConfigs().equals(MirrorSourceConfig.REQUIRE_INCREMENTAL_ALTER_CONFIGS)
+                        && e instanceof UnsupportedVersionException && !encounteredError.get()) {
+                    log.error("Failed to sync configs for topic {} on cluster {} with IncrementalAlterConfigs API", k.name(), sourceAndTarget.target(), e);
+                    encounteredError.set(true);
+                    context.raiseError(new ConnectException("use.incremental.alter.configs was set to \"required\", but the target cluster '"
+                            + sourceAndTarget.target() + "' is not compatible with IncrementalAlterConfigs API", e));
+                } else {
+                    log.warn("Could not alter configuration of topic {}.", k.name(), e);
+                }
+            }
+        }));
+    }
+
+    private void updateTopicAcls(List<AclBinding> bindings) {
         log.trace("Syncing {} topic ACL bindings.", bindings.size());
         targetAdminClient.createAcls(bindings).values().forEach((k, v) -> v.whenComplete((x, e) -> {
             if (e != null) {
@@ -319,18 +625,22 @@ public class MirrorSourceConnector extends SourceConnector {
             .map(x -> new TopicPartition(topic, x.partition()));
     }
 
-    private Map<String, Config> describeTopicConfigs(Set<String> topics)
+    Map<String, Config> describeTopicConfigs(Set<String> topics)
             throws InterruptedException, ExecutionException {
         Set<ConfigResource> resources = topics.stream()
             .map(x -> new ConfigResource(ConfigResource.Type.TOPIC, x))
             .collect(Collectors.toSet());
         return sourceAdminClient.describeConfigs(resources).all().get().entrySet().stream()
-            .collect(Collectors.toMap(x -> x.getKey().name(), x -> x.getValue()));
+            .collect(Collectors.toMap(x -> x.getKey().name(), Entry::getValue));
     }
 
-    Config targetConfig(Config sourceConfig) {
+    Config targetConfig(Config sourceConfig, boolean incremental) {
+        // If using incrementalAlterConfigs API, sync the default property with either SET or DELETE action determined by ConfigPropertyFilter::shouldReplicateSourceDefault later.
+        // If not using incrementalAlterConfigs API, sync the default property only if ConfigPropertyFilter::shouldReplicateSourceDefault returns true.
+        // If ConfigPropertyFilter::shouldReplicateConfigProperty returns false, do not sync the property at all.
         List<ConfigEntry> entries = sourceConfig.entries().stream()
-            .filter(x -> !x.isDefault() && !x.isReadOnly() && !x.isSensitive())
+            .filter(x -> incremental || (x.isDefault() && shouldReplicateSourceDefault(x.name())) || !x.isDefault())
+            .filter(x -> !x.isReadOnly() && !x.isSensitive())
             .filter(x -> x.source() != ConfigEntry.ConfigSource.STATIC_BROKER_CONFIG)
             .filter(x -> shouldReplicateTopicConfigurationProperty(x.name()))
             .collect(Collectors.toList());
@@ -354,7 +664,7 @@ public class MirrorSourceConnector extends SourceConnector {
     }
 
     boolean shouldReplicateTopic(String topic) {
-        return (topicFilter.shouldReplicateTopic(topic) || isHeartbeatTopic(topic))
+        return (topicFilter.shouldReplicateTopic(topic) || replicationPolicy.isHeartbeatsTopic(topic))
             && !replicationPolicy.isInternalTopic(topic) && !isCycle(topic);
     }
 
@@ -367,6 +677,10 @@ public class MirrorSourceConnector extends SourceConnector {
         return configPropertyFilter.shouldReplicateConfigProperty(property);
     }
 
+    boolean shouldReplicateSourceDefault(String property) {
+        return configPropertyFilter.shouldReplicateSourceDefault(property);
+    }
+
     // Recurse upstream to detect cycles, i.e. whether this topic is already on the target cluster
     boolean isCycle(String topic) {
         String source = replicationPolicy.topicSource(topic);
@@ -375,13 +689,13 @@ public class MirrorSourceConnector extends SourceConnector {
         } else if (source.equals(sourceAndTarget.target())) {
             return true;
         } else {
-            return isCycle(replicationPolicy.upstreamTopic(topic));
+            String upstreamTopic = replicationPolicy.upstreamTopic(topic);
+            if (upstreamTopic == null || upstreamTopic.equals(topic)) {
+                // Extra check for IdentityReplicationPolicy and similar impls that don't prevent cycles.
+                return false;
+            }
+            return isCycle(upstreamTopic);
         }
-    }
-
-    // e.g. heartbeats, us-west.heartbeats
-    boolean isHeartbeatTopic(String topic) {
-        return MirrorClientConfig.HEARTBEATS_TOPIC.equals(replicationPolicy.originalTopic(topic));
     }
 
     String formatRemoteTopic(String topic) {

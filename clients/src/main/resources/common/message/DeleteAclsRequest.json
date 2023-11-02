@@ -16,10 +16,13 @@
 {
   "apiKey": 31,
   "type": "request",
+  "listeners": ["zkBroker", "broker", "controller"],
   "name": "DeleteAclsRequest",
   // Version 1 adds the pattern type.
-  "validVersions": "0-1",
-  "flexibleVersions": "none",
+  // Version 2 enables flexible versions.
+  // Version 3 adds the user resource type.
+  "validVersions": "0-3",
+  "flexibleVersions": "2+",
   "fields": [
     { "name": "Filters", "type": "[]DeleteAclsFilter", "versions": "0+",
       "about": "The filters to use when deleting ACLs.", "fields": [

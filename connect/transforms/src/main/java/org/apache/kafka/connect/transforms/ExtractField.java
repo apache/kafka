@@ -17,7 +17,10 @@
 package org.apache.kafka.connect.transforms;
 
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.utils.AppInfoParser;
+import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.ConnectRecord;
+import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
@@ -27,7 +30,7 @@ import java.util.Map;
 import static org.apache.kafka.connect.transforms.util.Requirements.requireMapOrNull;
 import static org.apache.kafka.connect.transforms.util.Requirements.requireStructOrNull;
 
-public abstract class ExtractField<R extends ConnectRecord<R>> implements Transformation<R> {
+public abstract class ExtractField<R extends ConnectRecord<R>> implements Transformation<R>, Versioned {
 
     public static final String OVERVIEW_DOC =
             "Extract the specified field from a Struct when schema present, or a Map in the case of schemaless data. "
@@ -45,6 +48,11 @@ public abstract class ExtractField<R extends ConnectRecord<R>> implements Transf
     private String fieldName;
 
     @Override
+    public String version() {
+        return AppInfoParser.getVersion();
+    }
+
+    @Override
     public void configure(Map<String, ?> props) {
         final SimpleConfig config = new SimpleConfig(CONFIG_DEF, props);
         fieldName = config.getString(FIELD_CONFIG);
@@ -58,7 +66,13 @@ public abstract class ExtractField<R extends ConnectRecord<R>> implements Transf
             return newRecord(record, null, value == null ? null : value.get(fieldName));
         } else {
             final Struct value = requireStructOrNull(operatingValue(record), PURPOSE);
-            return newRecord(record, schema.field(fieldName).schema(), value == null ? null : value.get(fieldName));
+            Field field = schema.field(fieldName);
+
+            if (field == null) {
+                throw new IllegalArgumentException("Unknown field: " + fieldName);
+            }
+
+            return newRecord(record, field.schema(), value == null ? null : value.get(fieldName));
         }
     }
 

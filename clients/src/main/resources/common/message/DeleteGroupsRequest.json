@@ -16,6 +16,7 @@
 {
   "apiKey": 42,
   "type": "request",
+  "listeners": ["zkBroker", "broker"],
   "name": "DeleteGroupsRequest",
   // Version 1 is the same as version 0.
   //

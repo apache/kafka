@@ -27,7 +27,7 @@ import org.apache.kafka.streams.KeyValue;
  * @param <V> value type
  * @see KStream#filter(Predicate)
  * @see KStream#filterNot(Predicate)
- * @see KStream#branch(Predicate[])
+ * @see BranchedKStream#branch(Predicate)
  * @see KTable#filter(Predicate)
  * @see KTable#filterNot(Predicate)
  */

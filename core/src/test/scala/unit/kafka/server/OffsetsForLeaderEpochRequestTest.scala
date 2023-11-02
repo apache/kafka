@@ -20,12 +20,16 @@ import java.util.Optional
 
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition
+import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopic
+import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopicCollection
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.{OffsetsForLeaderEpochRequest, OffsetsForLeaderEpochResponse}
-import org.junit.Assert._
-import org.junit.Test
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 class OffsetsForLeaderEpochRequestTest extends BaseRequestTest {
 
@@ -33,8 +37,8 @@ class OffsetsForLeaderEpochRequestTest extends BaseRequestTest {
   def testOffsetsForLeaderEpochErrorCodes(): Unit = {
     val topic = "topic"
     val partition = new TopicPartition(topic, 0)
+    val epochs = offsetForLeaderTopicCollectionFor(partition, 0, RecordBatch.NO_PARTITION_LEADER_EPOCH)
 
-    val epochs = Map(partition -> new OffsetsForLeaderEpochRequest.PartitionData(Optional.empty[Integer], 0)).asJava
     val request = OffsetsForLeaderEpochRequest.Builder.forFollower(
       ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion, epochs, 1).build()
 
@@ -48,8 +52,8 @@ class OffsetsForLeaderEpochRequestTest extends BaseRequestTest {
     val follower = replicas.find(_ != leader).get
     val nonReplica = servers.map(_.config.brokerId).find(!replicas.contains(_)).get
 
-    assertResponseError(Errors.NOT_LEADER_FOR_PARTITION, follower, request)
-    assertResponseError(Errors.NOT_LEADER_FOR_PARTITION, nonReplica, request)
+    assertResponseError(Errors.NOT_LEADER_OR_FOLLOWER, follower, request)
+    assertResponseError(Errors.NOT_LEADER_OR_FOLLOWER, nonReplica, request)
   }
 
   @Test
@@ -60,8 +64,8 @@ class OffsetsForLeaderEpochRequestTest extends BaseRequestTest {
     val firstLeaderId = partitionToLeader(topicPartition.partition)
 
     def assertResponseErrorForEpoch(error: Errors, brokerId: Int, currentLeaderEpoch: Optional[Integer]): Unit = {
-      val epochs = Map(topicPartition -> new OffsetsForLeaderEpochRequest.PartitionData(
-        currentLeaderEpoch, 0)).asJava
+      val epochs = offsetForLeaderTopicCollectionFor(topicPartition, 0,
+        currentLeaderEpoch.orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH))
       val request = OffsetsForLeaderEpochRequest.Builder.forFollower(
         ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion, epochs, 1).build()
       assertResponseError(error, brokerId, request)
@@ -81,17 +85,37 @@ class OffsetsForLeaderEpochRequestTest extends BaseRequestTest {
 
     // Check follower error codes
     val followerId = TestUtils.findFollowerId(topicPartition, servers)
-    assertResponseErrorForEpoch(Errors.NOT_LEADER_FOR_PARTITION, followerId, Optional.empty())
-    assertResponseErrorForEpoch(Errors.NOT_LEADER_FOR_PARTITION, followerId, Optional.of(secondLeaderEpoch))
+    assertResponseErrorForEpoch(Errors.NOT_LEADER_OR_FOLLOWER, followerId, Optional.empty())
+    assertResponseErrorForEpoch(Errors.NOT_LEADER_OR_FOLLOWER, followerId, Optional.of(secondLeaderEpoch))
     assertResponseErrorForEpoch(Errors.UNKNOWN_LEADER_EPOCH, followerId, Optional.of(secondLeaderEpoch + 1))
     assertResponseErrorForEpoch(Errors.FENCED_LEADER_EPOCH, followerId, Optional.of(secondLeaderEpoch - 1))
   }
 
+  private def offsetForLeaderTopicCollectionFor(
+    topicPartition: TopicPartition,
+    leaderEpoch: Int,
+    currentLeaderEpoch: Int
+  ): OffsetForLeaderTopicCollection = {
+    new OffsetForLeaderTopicCollection(List(
+      new OffsetForLeaderTopic()
+        .setTopic(topicPartition.topic)
+        .setPartitions(List(
+          new OffsetForLeaderPartition()
+            .setPartition(topicPartition.partition)
+            .setLeaderEpoch(leaderEpoch)
+            .setCurrentLeaderEpoch(currentLeaderEpoch)
+        ).asJava)).iterator.asJava)
+  }
+
   private def assertResponseError(error: Errors, brokerId: Int, request: OffsetsForLeaderEpochRequest): Unit = {
     val response = sendRequest(brokerId, request)
-    assertEquals(request.epochsByTopicPartition.size, response.responses.size)
-    response.responses.asScala.values.foreach { partitionData =>
-      assertEquals(error, partitionData.error)
+    assertEquals(request.data.topics.size, response.data.topics.size)
+    response.data.topics.asScala.foreach { offsetForLeaderTopic =>
+      assertEquals(request.data.topics.find(offsetForLeaderTopic.topic).partitions.size,
+        offsetForLeaderTopic.partitions.size)
+      offsetForLeaderTopic.partitions.asScala.foreach { offsetForLeaderPartition =>
+        assertEquals(error.code(), offsetForLeaderPartition.errorCode())
+      }
     }
   }
 

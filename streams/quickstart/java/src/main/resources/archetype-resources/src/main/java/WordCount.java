@@ -36,12 +36,12 @@ import java.util.concurrent.CountDownLatch;
 /**
  * In this example, we implement a simple WordCount program using the high-level Streams DSL
  * that reads from a source topic "streams-plaintext-input", where the values of messages represent lines of text,
- * split each text line into words and then compute the word occurence histogram, write the continuous updated histogram
+ * split each text line into words and then compute the word occurrence histogram, write the continuous updated histogram
  * into a topic "streams-wordcount-output" where each record is an updated count of a single word.
  */
 public class WordCount {
 
-    public static void main(String[] args) throws Exception {
+    public static void main(String[] args) {
         Properties props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "streams-wordcount");
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");

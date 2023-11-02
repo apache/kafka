@@ -16,18 +16,21 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.DeleteTopicsRequestData;
 import org.apache.kafka.common.message.DeleteTopicsResponseData;
 import org.apache.kafka.common.message.DeleteTopicsResponseData.DeletableTopicResult;
+import org.apache.kafka.common.message.DeleteTopicsRequestData.DeleteTopicState;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.stream.Collectors;
 
 public class DeleteTopicsRequest extends AbstractRequest {
-
-    private DeleteTopicsRequestData data;
-    private final short version;
 
     public static class Builder extends AbstractRequest.Builder<DeleteTopicsRequest> {
         private DeleteTopicsRequestData data;
@@ -39,7 +42,18 @@ public class DeleteTopicsRequest extends AbstractRequest {
 
         @Override
         public DeleteTopicsRequest build(short version) {
+            if (version >= 6 && !data.topicNames().isEmpty()) {
+                data.setTopics(groupByTopic(data.topicNames()));
+            }
             return new DeleteTopicsRequest(data, version);
+        }
+        
+        private List<DeleteTopicState> groupByTopic(List<String> topics) {
+            List<DeleteTopicState> topicStates = new ArrayList<>();
+            for (String topic : topics) {
+                topicStates.add(new DeleteTopicState().setName(topic));
+            }
+            return topicStates;
         }
 
         @Override
@@ -48,23 +62,14 @@ public class DeleteTopicsRequest extends AbstractRequest {
         }
     }
 
+    private DeleteTopicsRequestData data;
+
     private DeleteTopicsRequest(DeleteTopicsRequestData data, short version) {
         super(ApiKeys.DELETE_TOPICS, version);
         this.data = data;
-        this.version = version;
-    }
-
-    public DeleteTopicsRequest(Struct struct, short version) {
-        super(ApiKeys.DELETE_TOPICS, version);
-        this.data = new DeleteTopicsRequestData(struct, version);
-        this.version = version;
     }
 
     @Override
-    protected Struct toStruct() {
-        return data.toStruct(version);
-    }
-
     public DeleteTopicsRequestData data() {
         return data;
     }
@@ -72,20 +77,45 @@ public class DeleteTopicsRequest extends AbstractRequest {
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         DeleteTopicsResponseData response = new DeleteTopicsResponseData();
-        if (version >= 1) {
+        if (version() >= 1) {
             response.setThrottleTimeMs(throttleTimeMs);
         }
         ApiError apiError = ApiError.fromThrowable(e);
-        for (String topic : data.topicNames()) {
+        for (DeleteTopicState topic : topics()) {
             response.responses().add(new DeletableTopicResult()
-                    .setName(topic)
+                    .setName(topic.name())
+                    .setTopicId(topic.topicId())
                     .setErrorCode(apiError.error().code()));
         }
         return new DeleteTopicsResponse(response);
     }
+    
+    public List<String> topicNames() {
+        if (version() >= 6)
+            return data.topics().stream().map(topic -> topic.name()).collect(Collectors.toList());
+        return data.topicNames(); 
+    }
+
+    public int numberOfTopics() {
+        if (version() >= 6)
+            return data.topics().size();
+        return data.topicNames().size();
+    }
+    
+    public List<Uuid> topicIds() {
+        if (version() >= 6)
+            return data.topics().stream().map(topic -> topic.topicId()).collect(Collectors.toList());
+        return Collections.emptyList();
+    }
+    
+    public List<DeleteTopicState> topics() {
+        if (version() >= 6)
+            return data.topics();
+        return data.topicNames().stream().map(name -> new DeleteTopicState().setName(name)).collect(Collectors.toList()); 
+    }
 
     public static DeleteTopicsRequest parse(ByteBuffer buffer, short version) {
-        return new DeleteTopicsRequest(ApiKeys.DELETE_TOPICS.parseRequest(version, buffer), version);
+        return new DeleteTopicsRequest(new DeleteTopicsRequestData(new ByteBufferAccessor(buffer), version), version);
     }
 
 }

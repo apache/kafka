@@ -1,7 +1,4 @@
 /*
- * Copyright (C) 2018 Lightbend Inc. <https://www.lightbend.com>
- * Copyright (C) 2017-2018 Alexis Seigneurin.
- *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -21,9 +18,13 @@ package org.apache.kafka.streams.scala
 
 import java.util
 
-import org.apache.kafka.common.serialization.{Deserializer, Serde, Serializer, Serdes => JSerdes}
+import org.apache.kafka.common.serialization.{Deserializer, Serde, Serdes => JSerdes, Serializer}
 import org.apache.kafka.streams.kstream.WindowedSerdes
 
+@deprecated(
+  "Use org.apache.kafka.streams.scala.serialization.Serdes. For WindowedSerdes.TimeWindowedSerde, use explicit constructors.",
+  "2.7.0"
+)
 object Serdes {
   implicit def String: Serde[String] = JSerdes.String()
   implicit def Long: Serde[Long] = JSerdes.Long().asInstanceOf[Serde[Long]]
@@ -36,6 +37,7 @@ object Serdes {
   implicit def JavaDouble: Serde[java.lang.Double] = JSerdes.Double()
   implicit def Integer: Serde[Int] = JSerdes.Integer().asInstanceOf[Serde[Int]]
   implicit def JavaInteger: Serde[java.lang.Integer] = JSerdes.Integer()
+  implicit def UUID: Serde[util.UUID] = JSerdes.UUID()
 
   implicit def timeWindowedSerde[T](implicit tSerde: Serde[T]): WindowedSerdes.TimeWindowedSerde[T] =
     new WindowedSerdes.TimeWindowedSerde[T](tSerde)
@@ -57,8 +59,10 @@ object Serdes {
       }
     )
 
-  def fromFn[T >: Null](serializer: (String, T) => Array[Byte],
-                        deserializer: (String, Array[Byte]) => Option[T]): Serde[T] =
+  def fromFn[T >: Null](
+    serializer: (String, T) => Array[Byte],
+    deserializer: (String, Array[Byte]) => Option[T]
+  ): Serde[T] =
     JSerdes.serdeFrom(
       new Serializer[T] {
         override def serialize(topic: String, data: T): Array[Byte] = serializer(topic, data)

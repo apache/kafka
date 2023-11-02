@@ -28,6 +28,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
+import java.util.Optional;
 
 public class MockRestoreConsumer<K, V> extends MockConsumer<byte[], byte[]> {
     private final Serializer<K> keySerializer;
@@ -40,6 +41,7 @@ public class MockRestoreConsumer<K, V> extends MockConsumer<byte[], byte[]> {
 
     private ArrayList<ConsumerRecord<byte[], byte[]>> recordBuffer = new ArrayList<>();
 
+    @SuppressWarnings("this-escape")
     public MockRestoreConsumer(final Serializer<K> keySerializer, final Serializer<V> valueSerializer) {
         super(OffsetResetStrategy.EARLIEST);
 
@@ -60,10 +62,10 @@ public class MockRestoreConsumer<K, V> extends MockConsumer<byte[], byte[]> {
     public void bufferRecord(final ConsumerRecord<K, V> record) {
         recordBuffer.add(
             new ConsumerRecord<>(record.topic(), record.partition(), record.offset(), record.timestamp(),
-                                 record.timestampType(), 0L, 0, 0,
+                                 record.timestampType(), 0, 0,
                                  keySerializer.serialize(record.topic(), record.headers(), record.key()),
                                  valueSerializer.serialize(record.topic(), record.headers(), record.value()),
-                                 record.headers()));
+                                 record.headers(), Optional.empty()));
         endOffset = record.offset();
 
         super.updateEndOffsets(Collections.singletonMap(assignedPartition, endOffset));
@@ -121,7 +123,7 @@ public class MockRestoreConsumer<K, V> extends MockConsumer<byte[], byte[]> {
             throw new IllegalArgumentException("RestoreConsumer: offset should not be negative");
 
         if (seekOffset >= 0)
-            throw new IllegalStateException("RestoreConsumer: offset already seeked");
+            throw new IllegalStateException("RestoreConsumer: offset already sought");
 
         seekOffset = offset;
         currentOffset = offset;

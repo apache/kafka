@@ -17,8 +17,12 @@
 package org.apache.kafka.common.serialization;
 
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.utils.Utils;
 
 import java.io.UnsupportedEncodingException;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
 /**
@@ -26,7 +30,7 @@ import java.util.Map;
  *  value.deserializer.encoding or deserializer.encoding. The first two take precedence over the last.
  */
 public class StringDeserializer implements Deserializer<String> {
-    private String encoding = "UTF8";
+    private String encoding = StandardCharsets.UTF_8.name();
 
     @Override
     public void configure(Map<String, ?> configs, boolean isKey) {
@@ -47,6 +51,22 @@ public class StringDeserializer implements Deserializer<String> {
                 return new String(data, encoding);
         } catch (UnsupportedEncodingException e) {
             throw new SerializationException("Error when deserializing byte[] to string due to unsupported encoding " + encoding);
+        }
+    }
+
+    @Override
+    public String deserialize(String topic, Headers headers, ByteBuffer data) {
+        if (data == null) {
+            return null;
+        }
+
+        try {
+            if (data.hasArray()) {
+                return new String(data.array(), data.position() + data.arrayOffset(), data.remaining(), encoding);
+            }
+            return new String(Utils.toArray(data), encoding);
+        } catch (UnsupportedEncodingException e) {
+            throw new SerializationException("Error when deserializing ByteBuffer to string due to unsupported encoding " + encoding);
         }
     }
 }

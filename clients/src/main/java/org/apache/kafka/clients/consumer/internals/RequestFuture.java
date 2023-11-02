@@ -18,13 +18,15 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.utils.Timer;
+
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * Result of an asynchronous request from {@link ConsumerNetworkClient}. Use {@link ConsumerNetworkClient#poll(long)}
+ * Result of an asynchronous request from {@link ConsumerNetworkClient}. Use {@link ConsumerNetworkClient#poll(Timer)}
  * (and variants) to finish a request future. Use {@link #isDone()} to check if the future is complete, and
  * {@link #succeeded()} to check if the request completed successfully. Typical usage might look like this:
  *

@@ -17,13 +17,14 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.DescribeGroupsRequestData;
+import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
-
-import static org.apache.kafka.common.requests.AbstractResponse.DEFAULT_THROTTLE_TIME;
+import java.util.List;
+import java.util.stream.Collectors;
 
 public class DescribeGroupsRequest extends AbstractRequest {
     public static class Builder extends AbstractRequest.Builder<DescribeGroupsRequest> {
@@ -46,39 +47,46 @@ public class DescribeGroupsRequest extends AbstractRequest {
     }
 
     private final DescribeGroupsRequestData data;
-    private final short version;
 
     private DescribeGroupsRequest(DescribeGroupsRequestData data, short version) {
         super(ApiKeys.DESCRIBE_GROUPS, version);
         this.data = data;
-        this.version = version;
     }
 
-    public DescribeGroupsRequest(Struct struct, short version) {
-        super(ApiKeys.DESCRIBE_GROUPS, version);
-        this.data = new DescribeGroupsRequestData(struct, version);
-        this.version = version;
-    }
-
+    @Override
     public DescribeGroupsRequestData data() {
         return data;
     }
 
     @Override
-    protected Struct toStruct() {
-        return data.toStruct(version);
-    }
-
-    @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-        if (version == 0) {
-            return DescribeGroupsResponse.fromError(DEFAULT_THROTTLE_TIME, Errors.forException(e), data.groups());
-        } else {
-            return DescribeGroupsResponse.fromError(throttleTimeMs, Errors.forException(e), data.groups());
+        Errors error = Errors.forException(e);
+        DescribeGroupsResponseData describeGroupsResponseData = new DescribeGroupsResponseData();
+
+        data.groups().forEach(groupId ->
+            describeGroupsResponseData.groups().add(DescribeGroupsResponse.groupError(groupId, error))
+        );
+
+        if (version() >= 1) {
+            describeGroupsResponseData.setThrottleTimeMs(throttleTimeMs);
         }
+
+        return new DescribeGroupsResponse(describeGroupsResponseData);
     }
 
     public static DescribeGroupsRequest parse(ByteBuffer buffer, short version) {
-        return new DescribeGroupsRequest(ApiKeys.DESCRIBE_GROUPS.parseRequest(version, buffer), version);
+        return new DescribeGroupsRequest(new DescribeGroupsRequestData(new ByteBufferAccessor(buffer), version), version);
+    }
+
+    public static List<DescribeGroupsResponseData.DescribedGroup> getErrorDescribedGroupList(
+        List<String> groupIds,
+        Errors error
+    ) {
+        return groupIds.stream()
+            .map(groupId -> new DescribeGroupsResponseData.DescribedGroup()
+                .setGroupId(groupId)
+                .setErrorCode(error.code())
+            )
+            .collect(Collectors.toList());
     }
 }

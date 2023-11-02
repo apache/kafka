@@ -31,18 +31,16 @@ import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.util.ConnectorTaskId;
-import org.easymock.EasyMock;
-import org.easymock.Mock;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.powermock.api.easymock.PowerMock;
-import org.powermock.core.classloader.annotations.PowerMockIgnore;
-import org.powermock.modules.junit4.PowerMockRunner;
+import org.mockito.Mock;
+import org.mockito.junit.MockitoJUnitRunner;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
 
 import static java.util.Collections.emptyMap;
@@ -57,13 +55,17 @@ import static org.apache.kafka.connect.runtime.errors.DeadLetterQueueReporter.ER
 import static org.apache.kafka.connect.runtime.errors.DeadLetterQueueReporter.ERROR_HEADER_ORIG_TOPIC;
 import static org.apache.kafka.connect.runtime.errors.DeadLetterQueueReporter.ERROR_HEADER_STAGE;
 import static org.apache.kafka.connect.runtime.errors.DeadLetterQueueReporter.ERROR_HEADER_TASK_ID;
-import static org.easymock.EasyMock.replay;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
+import static org.mockito.Mockito.when;
 
-@RunWith(PowerMockRunner.class)
-@PowerMockIgnore("javax.management.*")
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class ErrorReporterTest {
 
     private static final String TOPIC = "test-topic";
@@ -95,9 +97,9 @@ public class ErrorReporterTest {
         }
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void initializeDLQWithNullMetrics() {
-        new DeadLetterQueueReporter(producer, config(emptyMap()), TASK_ID, null);
+        assertThrows(NullPointerException.class, () -> new DeadLetterQueueReporter(producer, config(emptyMap()), TASK_ID, null));
     }
 
     @Test
@@ -107,12 +109,10 @@ public class ErrorReporterTest {
 
         ProcessingContext context = processingContext();
 
-        EasyMock.expect(producer.send(EasyMock.anyObject(), EasyMock.anyObject())).andThrow(new RuntimeException());
-        replay(producer);
-
-        // since topic name is empty, this method should be a NOOP.
-        // if it attempts to log to the DLQ via the producer, the send mock will throw a RuntimeException.
+        // since topic name is empty, this method should be a NOOP and producer.send() should
+        // not be called.
         deadLetterQueueReporter.report(context);
+        verifyNoMoreInteractions(producer);
     }
 
     @Test
@@ -122,12 +122,11 @@ public class ErrorReporterTest {
 
         ProcessingContext context = processingContext();
 
-        EasyMock.expect(producer.send(EasyMock.anyObject(), EasyMock.anyObject())).andReturn(metadata);
-        replay(producer);
+        when(producer.send(any(), any())).thenReturn(metadata);
 
         deadLetterQueueReporter.report(context);
 
-        PowerMock.verifyAll();
+        verify(producer, times(1)).send(any(), any());
     }
 
     @Test
@@ -137,13 +136,21 @@ public class ErrorReporterTest {
 
         ProcessingContext context = processingContext();
 
-        EasyMock.expect(producer.send(EasyMock.anyObject(), EasyMock.anyObject())).andReturn(metadata).times(2);
-        replay(producer);
+        when(producer.send(any(), any())).thenReturn(metadata);
 
         deadLetterQueueReporter.report(context);
         deadLetterQueueReporter.report(context);
 
-        PowerMock.verifyAll();
+        verify(producer, times(2)).send(any(), any());
+    }
+
+    @Test
+    public void testCloseDLQ() {
+        DeadLetterQueueReporter deadLetterQueueReporter = new DeadLetterQueueReporter(
+            producer, config(singletonMap(SinkConnectorConfig.DLQ_TOPIC_NAME_CONFIG, DLQ_TOPIC)), TASK_ID, errorHandlingMetrics);
+
+        deadLetterQueueReporter.close();
+        verify(producer).close();
     }
 
     @Test
@@ -195,6 +202,25 @@ public class ErrorReporterTest {
         assertEquals("Error encountered in task job-0. Executing stage 'KEY_CONVERTER' with class " +
                 "'org.apache.kafka.connect.json.JsonConverter', where consumed record is {topic='test-topic', " +
                 "partition=5, offset=100}.", msg);
+    }
+
+    @Test
+    public void testLogReportAndReturnFuture() {
+        Map<String, String> props = new HashMap<>();
+        props.put(ConnectorConfig.ERRORS_LOG_ENABLE_CONFIG, "true");
+        props.put(ConnectorConfig.ERRORS_LOG_INCLUDE_MESSAGES_CONFIG, "true");
+
+        LogReporter logReporter = new LogReporter(TASK_ID, config(props), errorHandlingMetrics);
+
+        ProcessingContext context = processingContext();
+
+        String msg = logReporter.message(context);
+        assertEquals("Error encountered in task job-0. Executing stage 'KEY_CONVERTER' with class " +
+            "'org.apache.kafka.connect.json.JsonConverter', where consumed record is {topic='test-topic', " +
+            "partition=5, offset=100}.", msg);
+
+        Future<RecordMetadata> future = logReporter.report(context);
+        assertTrue(future instanceof CompletableFuture);
     }
 
     @Test

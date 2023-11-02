@@ -17,7 +17,7 @@
 
 package kafka.coordinator.group
 
-import kafka.server.{DelayedOperation, DelayedOperationPurgatory, GroupKey}
+import kafka.server.{DelayedOperationPurgatory, GroupJoinKey}
 
 import scala.math.{max, min}
 
@@ -31,13 +31,24 @@ import scala.math.{max, min}
  * the group are marked as failed, and complete this operation to proceed rebalance with
  * the rest of the group.
  */
-private[group] class DelayedJoin(coordinator: GroupCoordinator,
-                                 group: GroupMetadata,
-                                 rebalanceTimeout: Long) extends DelayedOperation(rebalanceTimeout, Some(group.lock)) {
-
+private[group] class DelayedJoin(
+  coordinator: GroupCoordinator,
+  group: GroupMetadata,
+  rebalanceTimeout: Long
+) extends DelayedRebalance(
+  rebalanceTimeout,
+  group.lock
+) {
   override def tryComplete(): Boolean = coordinator.tryCompleteJoin(group, forceComplete _)
-  override def onExpiration() = coordinator.onExpireJoin()
-  override def onComplete() = coordinator.onCompleteJoin(group)
+
+  override def onExpiration(): Unit = {
+    // try to complete delayed actions introduced by coordinator.onCompleteJoin
+    tryToCompleteDelayedAction()
+  }
+  override def onComplete(): Unit = coordinator.onCompleteJoin(group)
+
+  // TODO: remove this ugly chain after we move the action queue to handler thread
+  private def tryToCompleteDelayedAction(): Unit = coordinator.groupManager.replicaManager.tryCompleteActions()
 }
 
 /**
@@ -48,13 +59,18 @@ private[group] class DelayedJoin(coordinator: GroupCoordinator,
   * before the rebalance timeout. If both are true we then schedule a further delay. Otherwise we complete the
   * rebalance.
   */
-private[group] class InitialDelayedJoin(coordinator: GroupCoordinator,
-                                        purgatory: DelayedOperationPurgatory[DelayedJoin],
-                                        group: GroupMetadata,
-                                        configuredRebalanceDelay: Int,
-                                        delayMs: Int,
-                                        remainingMs: Int) extends DelayedJoin(coordinator, group, delayMs) {
-
+private[group] class InitialDelayedJoin(
+  coordinator: GroupCoordinator,
+  purgatory: DelayedOperationPurgatory[DelayedRebalance],
+  group: GroupMetadata,
+  configuredRebalanceDelay: Int,
+  delayMs: Int,
+  remainingMs: Int
+) extends DelayedJoin(
+  coordinator,
+  group,
+  delayMs
+) {
   override def tryComplete(): Boolean = false
 
   override def onComplete(): Unit = {
@@ -69,7 +85,7 @@ private[group] class InitialDelayedJoin(coordinator: GroupCoordinator,
           configuredRebalanceDelay,
           delay,
           remaining
-        ), Seq(GroupKey(group.groupId)))
+        ), Seq(GroupJoinKey(group.groupId)))
       } else
         super.onComplete()
     }

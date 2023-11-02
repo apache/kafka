@@ -16,23 +16,25 @@
  */
 package org.apache.kafka.connect.transforms;
 
+import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.sink.SinkRecord;
-import org.junit.After;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
 import java.util.Map;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class ExtractFieldTest {
     private final ExtractField<SinkRecord> xform = new ExtractField.Key<>();
 
-    @After
+    @AfterEach
     public void teardown() {
         xform.close();
     }
@@ -84,6 +86,38 @@ public class ExtractFieldTest {
 
         assertEquals(Schema.INT32_SCHEMA, transformedRecord.keySchema());
         assertNull(transformedRecord.key());
+    }
+
+    @Test
+    public void nonExistentFieldSchemalessShouldReturnNull() {
+        xform.configure(Collections.singletonMap("field", "nonexistent"));
+
+        final SinkRecord record = new SinkRecord("test", 0, null, Collections.singletonMap("magic", 42), null, null, 0);
+        final SinkRecord transformedRecord = xform.apply(record);
+
+        assertNull(transformedRecord.keySchema());
+        assertNull(transformedRecord.key());
+    }
+
+    @Test
+    public void nonExistentFieldWithSchemaShouldFail() {
+        xform.configure(Collections.singletonMap("field", "nonexistent"));
+
+        final Schema keySchema = SchemaBuilder.struct().field("magic", Schema.INT32_SCHEMA).build();
+        final Struct key = new Struct(keySchema).put("magic", 42);
+        final SinkRecord record = new SinkRecord("test", 0, keySchema, key, null, null, 0);
+
+        try {
+            xform.apply(record);
+            fail("Expected exception wasn't raised");
+        } catch (IllegalArgumentException iae) {
+            assertEquals("Unknown field: nonexistent", iae.getMessage());
+        }
+    }
+
+    @Test
+    public void testExtractFieldVersionRetrievedFromAppInfoParser() {
+        assertEquals(AppInfoParser.getVersion(), xform.version());
     }
 
 }

@@ -26,12 +26,6 @@ import org.apache.kafka.streams.state.internals.WindowKeySchema;
 
 import java.util.Map;
 
-/**
- *  The inner serde class can be specified by setting the property
- *  {@link StreamsConfig#DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS} or
- *  {@link StreamsConfig#DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS}
- *  if the no-arg constructor is called and hence it is not passed during initialization.
- */
 public class TimeWindowedSerializer<T> implements WindowedSerializer<T> {
 
     private Serializer<T> inner;
@@ -47,16 +41,29 @@ public class TimeWindowedSerializer<T> implements WindowedSerializer<T> {
     @SuppressWarnings("unchecked")
     @Override
     public void configure(final Map<String, ?> configs, final boolean isKey) {
-        if (inner == null) {
-            final String propertyName = isKey ? StreamsConfig.DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS : StreamsConfig.DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS;
-            final String value = (String) configs.get(propertyName);
+        final String windowedInnerClassSerdeConfig = (String) configs.get(StreamsConfig.WINDOWED_INNER_CLASS_SERDE);
+        Serde<T> windowInnerClassSerde = null;
+        if (windowedInnerClassSerdeConfig != null) {
             try {
-                inner = Utils.newInstance(value, Serde.class).serializer();
-                inner.configure(configs, isKey);
+                windowInnerClassSerde = Utils.newInstance(windowedInnerClassSerdeConfig, Serde.class);
             } catch (final ClassNotFoundException e) {
-                throw new ConfigException(propertyName, value, "Serde class " + value + " could not be found.");
+                throw new ConfigException(StreamsConfig.WINDOWED_INNER_CLASS_SERDE, windowedInnerClassSerdeConfig,
+                    "Serde class " + windowedInnerClassSerdeConfig + " could not be found.");
             }
         }
+
+        if (inner != null && windowedInnerClassSerdeConfig != null) {
+            if (!inner.getClass().getName().equals(windowInnerClassSerde.serializer().getClass().getName())) {
+                throw new IllegalArgumentException("Inner class serializer set using constructor "
+                    + "(" + inner.getClass().getName() + ")" +
+                    " is different from the one set in windowed.inner.class.serde config " +
+                    "(" + windowInnerClassSerde.serializer().getClass().getName() + ").");
+            }
+        } else if (inner == null && windowedInnerClassSerdeConfig == null) {
+            throw new IllegalArgumentException("Inner class serializer should be set either via constructor " +
+                "or via the windowed.inner.class.serde config");
+        } else if (inner == null)
+            inner = windowInnerClassSerde.serializer();
     }
 
     @Override

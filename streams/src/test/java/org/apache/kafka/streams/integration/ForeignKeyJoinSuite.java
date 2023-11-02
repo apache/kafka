@@ -17,8 +17,9 @@
 package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.common.utils.BytesTest;
+import org.apache.kafka.streams.kstream.internals.KTableKTableForeignKeyJoinScenarioTest;
 import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.CombinedKeySchemaTest;
-import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionResolverJoinProcessorSupplierTest;
+import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.ResponseJoinProcessorSupplierTest;
 import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionResponseWrapperSerdeTest;
 import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapperSerdeTest;
 import org.junit.runner.RunWith;
@@ -39,10 +40,11 @@ import org.junit.runners.Suite;
     KTableKTableForeignKeyInnerJoinMultiIntegrationTest.class,
     KTableKTableForeignKeyJoinIntegrationTest.class,
     KTableKTableForeignKeyJoinMaterializationIntegrationTest.class,
+    KTableKTableForeignKeyJoinScenarioTest.class,
     CombinedKeySchemaTest.class,
     SubscriptionWrapperSerdeTest.class,
     SubscriptionResponseWrapperSerdeTest.class,
-    SubscriptionResolverJoinProcessorSupplierTest.class
+    ResponseJoinProcessorSupplierTest.class
 })
 public class ForeignKeyJoinSuite {
 }

@@ -43,9 +43,9 @@ object Produced {
    * @tparam V          value type
    * @param partitioner the function used to determine how records are distributed among partitions of the topic,
    *                    if not specified and `keySerde` provides a
-   *                    [[org.apache.kafka.streams.kstream.internals.WindowedSerializer]] for the key
-   *                    [[org.apache.kafka.streams.kstream.internals.WindowedStreamPartitioner]] will be
-   *                    used&mdash;otherwise [[org.apache.kafka.clients.producer.internals.DefaultPartitioner]]
+   *                    `org.apache.kafka.streams.kstream.internals.WindowedSerializer` for the key
+   *                    `org.apache.kafka.streams.kstream.internals.WindowedStreamPartitioner` will be
+   *                    used&mdash;otherwise `org.apache.kafka.clients.producer.internals.DefaultPartitioner`
    *                    will be used
    * @param keySerde    Serde to use for serializing the key
    * @param valueSerde  Serde to use for serializing the value
@@ -53,7 +53,8 @@ object Produced {
    * @see KStream#through(String, Produced)
    * @see KStream#to(String, Produced)
    */
-  def `with`[K, V](partitioner: StreamPartitioner[K, V])(implicit keySerde: Serde[K],
-                                                         valueSerde: Serde[V]): ProducedJ[K, V] =
+  def `with`[K, V](
+    partitioner: StreamPartitioner[K, V]
+  )(implicit keySerde: Serde[K], valueSerde: Serde[V]): ProducedJ[K, V] =
     ProducedJ.`with`(keySerde, valueSerde, partitioner)
 }

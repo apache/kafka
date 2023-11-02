@@ -22,11 +22,14 @@ import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.tests.StreamsUpgradeTest;
 import org.apache.kafka.test.IntegrationTest;
+import org.junit.AfterClass;
 import org.junit.BeforeClass;
-import org.junit.ClassRule;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.junit.rules.Timeout;
 
+import java.io.IOException;
 import java.time.Duration;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
@@ -36,17 +39,27 @@ import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
+
+import static org.apache.kafka.test.TestUtils.retryOnExceptionWithTimeout;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 
 @Category(IntegrationTest.class)
 public class StreamsUpgradeTestIntegrationTest {
-    @ClassRule
+    @Rule
+    public Timeout globalTimeout = Timeout.seconds(600);
+
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(3);
 
     @BeforeClass
-    public static void setup() {
+    public static void startCluster() throws IOException {
+        CLUSTER.start();
         IntegrationTestUtils.cleanStateBeforeTest(CLUSTER, 1, "data");
+    }
+
+    @AfterClass
+    public static void closeCluster() {
+        CLUSTER.stop();
     }
 
     @Test
@@ -87,9 +100,9 @@ public class StreamsUpgradeTestIntegrationTest {
         final AtomicInteger usedVersion6 = new AtomicInteger();
         final KafkaStreams kafkaStreams6 = buildFutureStreams(usedVersion6);
         startSync(kafkaStreams6);
-        assertThat(usedVersion6.get(), is(LATEST_SUPPORTED_VERSION + 1));
-        assertThat(usedVersion5.get(), is(LATEST_SUPPORTED_VERSION + 1));
-        assertThat(usedVersion4.get(), is(LATEST_SUPPORTED_VERSION + 1));
+        retryOnExceptionWithTimeout(() -> assertThat(usedVersion6.get(), is(LATEST_SUPPORTED_VERSION + 1)));
+        retryOnExceptionWithTimeout(() -> assertThat(usedVersion5.get(), is(LATEST_SUPPORTED_VERSION + 1)));
+        retryOnExceptionWithTimeout(() -> assertThat(usedVersion4.get(), is(LATEST_SUPPORTED_VERSION + 1)));
 
         kafkaStreams4.close(Duration.ZERO);
         kafkaStreams5.close(Duration.ZERO);
@@ -99,14 +112,14 @@ public class StreamsUpgradeTestIntegrationTest {
         kafkaStreams6.close();
     }
 
-    public static KafkaStreams buildFutureStreams(final AtomicInteger usedVersion4) {
+    private static KafkaStreams buildFutureStreams(final AtomicInteger usedVersion4) {
         final Properties properties = new Properties();
         properties.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         properties.put("test.future.metadata", usedVersion4);
         return StreamsUpgradeTest.buildStreams(properties);
     }
 
-    public static void startSync(final KafkaStreams... kafkaStreams) throws InterruptedException {
+    private static void startSync(final KafkaStreams... kafkaStreams) throws InterruptedException {
         final CountDownLatch latch = new CountDownLatch(kafkaStreams.length);
         for (final KafkaStreams streams : kafkaStreams) {
             streams.setStateListener((newState, oldState) -> {

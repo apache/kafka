@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.common.security.auth;
 
-import org.apache.kafka.common.utils.SecurityUtils;
-
 import java.security.Principal;
 
 import static java.util.Objects.requireNonNull;
@@ -51,21 +49,13 @@ public class KafkaPrincipal implements Principal {
     private volatile boolean tokenAuthenticated;
 
     public KafkaPrincipal(String principalType, String name) {
-        this.principalType = requireNonNull(principalType, "Principal type cannot be null");
-        this.name = requireNonNull(name, "Principal name cannot be null");
+        this(principalType, name, false);
     }
 
-    /**
-     * Parse a {@link KafkaPrincipal} instance from a string. This method cannot be used for {@link KafkaPrincipal}
-     * extensions.
-     *
-     * @param str The input string formatted as "{principalType}:{principalName}"
-     * @return The parsed {@link KafkaPrincipal} instance
-     * @deprecated As of 1.0.0. This method will be removed in a future major release.
-     */
-    @Deprecated
-    public static KafkaPrincipal fromString(String str) {
-        return SecurityUtils.parseKafkaPrincipal(str);
+    public KafkaPrincipal(String principalType, String name, boolean tokenAuthenticated) {
+        this.principalType = requireNonNull(principalType, "Principal type cannot be null");
+        this.name = requireNonNull(name, "Principal name cannot be null");
+        this.tokenAuthenticated = tokenAuthenticated;
     }
 
     @Override

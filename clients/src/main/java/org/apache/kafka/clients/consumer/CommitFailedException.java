@@ -28,6 +28,10 @@ public class CommitFailedException extends KafkaException {
 
     private static final long serialVersionUID = 1L;
 
+    public CommitFailedException(final String message) {
+        super(message);
+    }
+
     public CommitFailedException() {
         super("Commit cannot be completed since the group has already " +
                 "rebalanced and assigned the partitions to another member. This means that the time " +

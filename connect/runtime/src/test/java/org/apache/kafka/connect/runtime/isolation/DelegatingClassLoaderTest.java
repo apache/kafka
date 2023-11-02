@@ -14,51 +14,105 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.connect.runtime.isolation;
 
-import java.util.Collections;
+import org.apache.kafka.connect.sink.SinkConnector;
+import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.junit.MockitoJUnitRunner;
 
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertFalse;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.util.Collections;
+import java.util.SortedSet;
+import java.util.TreeSet;
+
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class DelegatingClassLoaderTest {
 
-    @Test
-    public void testWhiteListedManifestResources() {
-        assertTrue(
-            DelegatingClassLoader.serviceLoaderManifestForPlugin("META-INF/services/org.apache.kafka.connect.rest.ConnectRestExtension"));
-        assertTrue(
-            DelegatingClassLoader.serviceLoaderManifestForPlugin("META-INF/services/org.apache.kafka.common.config.provider.ConfigProvider"));
-    }
+    public PluginClassLoader parent;
+    public PluginClassLoader pluginLoader;
+    public DelegatingClassLoader classLoader;
+    public PluginDesc<SinkConnector> pluginDesc;
+    public PluginScanResult scanResult;
 
-    @Test
-    public void testOtherResources() {
-        assertFalse(
-            DelegatingClassLoader.serviceLoaderManifestForPlugin("META-INF/services/org.apache.kafka.connect.transforms.Transformation"));
-        assertFalse(DelegatingClassLoader.serviceLoaderManifestForPlugin("resource/version.properties"));
-    }
+    // Arbitrary values, their contents is not meaningful.
+    public static final String ARBITRARY = "arbitrary";
+    public static final Class<?> ARBITRARY_CLASS = org.mockito.Mockito.class;
+    public static final URL ARBITRARY_URL;
 
-    @Test(expected = ClassNotFoundException.class)
-    public void testLoadingUnloadedPluginClass() throws ClassNotFoundException {
-        TestPlugins.assertAvailable();
-        DelegatingClassLoader classLoader = new DelegatingClassLoader(Collections.emptyList());
-        classLoader.initLoaders();
-        for (String pluginClassName : TestPlugins.pluginClasses()) {
-            classLoader.loadClass(pluginClassName);
+    static {
+        try {
+            ARBITRARY_URL = new URL("jar:file://" + ARBITRARY + "!/" + ARBITRARY);
+        } catch (MalformedURLException e) {
+            throw new RuntimeException(e);
         }
     }
 
+    @Before
+    @SuppressWarnings({"unchecked"})
+    public void setUp() {
+        parent = mock(PluginClassLoader.class);
+        pluginLoader = mock(PluginClassLoader.class);
+        classLoader = new DelegatingClassLoader(parent);
+        SortedSet<PluginDesc<SinkConnector>> sinkConnectors = new TreeSet<>();
+        // Lie to the DCL that this arbitrary class is a connector, since all real connector classes we have access to
+        // are forced to be non-isolated by PluginUtils.shouldLoadInIsolation.
+        when(pluginLoader.location()).thenReturn("some-location");
+        pluginDesc = new PluginDesc<>((Class<? extends SinkConnector>) ARBITRARY_CLASS, null, PluginType.SINK, pluginLoader);
+        assertTrue(PluginUtils.shouldLoadInIsolation(pluginDesc.className()));
+        sinkConnectors.add(pluginDesc);
+        scanResult = new PluginScanResult(
+                sinkConnectors,
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet()
+        );
+    }
+
     @Test
-    public void testLoadingPluginClass() throws ClassNotFoundException {
-        TestPlugins.assertAvailable();
-        DelegatingClassLoader classLoader = new DelegatingClassLoader(TestPlugins.pluginPath());
-        classLoader.initLoaders();
-        for (String pluginClassName : TestPlugins.pluginClasses()) {
-            assertNotNull(classLoader.loadClass(pluginClassName));
-            assertNotNull(classLoader.pluginClassLoader(pluginClassName));
-        }
+    public void testEmptyConnectorLoader() {
+        assertSame(classLoader, classLoader.connectorLoader(ARBITRARY));
+    }
+
+    @Test
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public void testEmptyLoadClass() throws ClassNotFoundException {
+        when(parent.loadClass(ARBITRARY, false)).thenReturn((Class) ARBITRARY_CLASS);
+        assertSame(ARBITRARY_CLASS, classLoader.loadClass(ARBITRARY, false));
+    }
+
+    @Test
+    public void testEmptyGetResource() {
+        when(parent.getResource(ARBITRARY)).thenReturn(ARBITRARY_URL);
+        assertSame(ARBITRARY_URL, classLoader.getResource(ARBITRARY));
+    }
+
+    @Test
+    public void testInitializedConnectorLoader() {
+        classLoader.installDiscoveredPlugins(scanResult);
+        assertSame(pluginLoader, classLoader.connectorLoader(PluginUtils.prunedName(pluginDesc)));
+        assertSame(pluginLoader, classLoader.connectorLoader(PluginUtils.simpleName(pluginDesc)));
+        assertSame(pluginLoader, classLoader.connectorLoader(pluginDesc.className()));
+    }
+
+    @Test
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public void testInitializedLoadClass() throws ClassNotFoundException {
+        classLoader.installDiscoveredPlugins(scanResult);
+        String className = pluginDesc.className();
+        when(pluginLoader.loadClass(className, false)).thenReturn((Class) ARBITRARY_CLASS);
+        assertSame(ARBITRARY_CLASS, classLoader.loadClass(className, false));
     }
 }

@@ -27,6 +27,6 @@ public interface ConnectClusterDetails {
      * Get the cluster ID of the Kafka cluster backing this Connect cluster.
      * 
      * @return the cluster ID of the Kafka cluster backing this Connect cluster
-     **/
+     */
     String kafkaClusterId();
 }

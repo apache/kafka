@@ -17,6 +17,7 @@
 package org.apache.kafka.common.network;
 
 import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.common.security.ssl.DefaultSslEngineFactory;
 import org.apache.kafka.common.security.ssl.SslFactory;
 
 import javax.net.ssl.SSLContext;
@@ -50,7 +51,7 @@ class EchoServer extends Thread {
             case SSL:
                 this.sslFactory = new SslFactory(Mode.SERVER);
                 this.sslFactory.configure(configs);
-                SSLContext sslContext = this.sslFactory.sslEngineBuilder().sslContext();
+                SSLContext sslContext = ((DefaultSslEngineFactory) this.sslFactory.sslEngineFactory()).sslContext();
                 this.serverSocket = sslContext.getServerSocketFactory().createServerSocket(0);
                 break;
             case PLAINTEXT:
@@ -61,8 +62,8 @@ class EchoServer extends Thread {
                 throw new IllegalArgumentException("Unsupported securityProtocol " + securityProtocol);
         }
         this.port = this.serverSocket.getLocalPort();
-        this.threads = Collections.synchronizedList(new ArrayList<Thread>());
-        this.sockets = Collections.synchronizedList(new ArrayList<Socket>());
+        this.threads = Collections.synchronizedList(new ArrayList<>());
+        this.sockets = Collections.synchronizedList(new ArrayList<>());
     }
 
     public void renegotiate() {
@@ -79,35 +80,32 @@ class EchoServer extends Thread {
                         break;
                     }
                     sockets.add(socket);
-                    Thread thread = new Thread() {
-                        @Override
-                        public void run() {
-                            try {
-                                DataInputStream input = new DataInputStream(socket.getInputStream());
-                                DataOutputStream output = new DataOutputStream(socket.getOutputStream());
-                                while (socket.isConnected() && !socket.isClosed()) {
-                                    int size = input.readInt();
-                                    if (renegotiate.get()) {
-                                        renegotiate.set(false);
-                                        ((SSLSocket) socket).startHandshake();
-                                    }
-                                    byte[] bytes = new byte[size];
-                                    input.readFully(bytes);
-                                    output.writeInt(size);
-                                    output.write(bytes);
-                                    output.flush();
+                    Thread thread = new Thread(() -> {
+                        try {
+                            DataInputStream input = new DataInputStream(socket.getInputStream());
+                            DataOutputStream output = new DataOutputStream(socket.getOutputStream());
+                            while (socket.isConnected() && !socket.isClosed()) {
+                                int size = input.readInt();
+                                if (renegotiate.get()) {
+                                    renegotiate.set(false);
+                                    ((SSLSocket) socket).startHandshake();
                                 }
+                                byte[] bytes = new byte[size];
+                                input.readFully(bytes);
+                                output.writeInt(size);
+                                output.write(bytes);
+                                output.flush();
+                            }
+                        } catch (IOException e) {
+                            // ignore
+                        } finally {
+                            try {
+                                socket.close();
                             } catch (IOException e) {
                                 // ignore
-                            } finally {
-                                try {
-                                    socket.close();
-                                } catch (IOException e) {
-                                    // ignore
-                                }
                             }
                         }
-                    };
+                    });
                     thread.start();
                     threads.add(thread);
                 }
