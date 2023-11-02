@@ -118,7 +118,7 @@ class EdgeCaseRequestTest extends KafkaServerTestHarness {
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("kraft"))
+  @ValueSource(strings = Array("zk", "kraft"))
   def testProduceRequestWithNullClientId(quorum: String): Unit = {
     val topic = "topic"
     val topicPartition = new TopicPartition(topic, 0)
