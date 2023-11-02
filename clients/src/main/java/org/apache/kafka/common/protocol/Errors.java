@@ -79,6 +79,7 @@ import org.apache.kafka.common.errors.NetworkException;
 import org.apache.kafka.common.errors.NoReassignmentInProgressException;
 import org.apache.kafka.common.errors.NotControllerException;
 import org.apache.kafka.common.errors.NotCoordinatorException;
+import org.apache.kafka.common.errors.NotEnoughPreferredControllersException;
 import org.apache.kafka.common.errors.NotEnoughReplicasAfterAppendException;
 import org.apache.kafka.common.errors.NotEnoughReplicasException;
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
@@ -371,7 +372,8 @@ public enum Errors {
     LI_OFFSET_MOVED_TO_TIERED_STORAGE and OFFSET_MOVED_TO_TIERED_STORAGE in the same way for a while, and then remove
     LI_OFFSET_MOVED_TO_TIERED_STORAGE and fully move to using OFFSET_MOVED_TO_TIERED_STORAGE.
      */
-    LI_OFFSET_MOVED_TO_TIERED_STORAGE(1107, "The requested offset is moved to tiered storage.", OffsetMovedToTieredStorageException::new);
+    LI_OFFSET_MOVED_TO_TIERED_STORAGE(1107, "The requested offset is moved to tiered storage.", OffsetMovedToTieredStorageException::new),
+    NOT_ENOUGH_PREFERRED_CONTROLLERS(2000, "Not enough live preferred controllers", NotEnoughPreferredControllersException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 

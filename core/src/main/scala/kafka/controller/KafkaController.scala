@@ -35,7 +35,7 @@ import kafka.zookeeper.{StateChangeHandler, ZNodeChangeHandler, ZNodeChildChange
 import org.apache.kafka.common.ElectionType
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.errors.{BrokerNotAvailableException, ControllerMovedException, NotEnoughReplicasException, PolicyViolationException, StaleBrokerEpochException}
+import org.apache.kafka.common.errors.{BrokerNotAvailableException, ControllerMovedException, NotEnoughPreferredControllersException, NotEnoughReplicasException, PolicyViolationException, StaleBrokerEpochException}
 import org.apache.kafka.common.message.{AllocateProducerIdsRequestData, AllocateProducerIdsResponseData, AlterIsrRequestData, AlterIsrResponseData, UpdateFeaturesRequestData}
 import org.apache.kafka.common.feature.{Features, FinalizedVersionRange}
 import org.apache.kafka.common.metrics.Metrics
@@ -1733,14 +1733,29 @@ class KafkaController(val config: KafkaConfig,
       else brokerEpoch
 
     val shouldSkipShutdownSafetyCheck = controllerContext.skipShutdownSafetyCheck.getOrElse(id, -1L) >= actualBrokerEpoch
-    if (config.controlledShutdownSafetyCheckEnable && !safeToShutdown(id, actualBrokerEpoch)) {
-      if (shouldSkipShutdownSafetyCheck) {
-        info(s"Controlled shutdown safety check has been skipped for broker $id (broker epoch $actualBrokerEpoch). Allowing shutdown even though it is not safe to do so.")
-      } else {
-        info(s"Controlled shutdown safety has prevented broker $id (broker epoch $actualBrokerEpoch) from shutting down.")
-        throw new NotEnoughReplicasException(
-          s"Broker id $id cannot initiate shutdown without an impact on topic availability.")
+    var passedAllShutdown: Boolean = true // For logging purpose
+    if (controllerContext.getLivePreferredControllerIds.size <= config.liMinPreferredControllerCount
+        // Only check if this broker affects live preferred controller set so that for non-preferred-controller clusters it doesn't get blocked
+        && controllerContext.getLivePreferredControllerIds.contains(id)) {
+      passedAllShutdown = false
+      if (!shouldSkipShutdownSafetyCheck) {
+        info(s"Live preferred controller check has prevented broker $id (broker epoch $actualBrokerEpoch) from shutting down.")
+        throw new NotEnoughPreferredControllersException(s"Broker id $id cannot initiate shutdown without an impact on preferred controller availability.")
       }
+    }
+
+    // This is not an else if, in case in some sense that preferred controller still got scheduled with replicas.
+    // While it should be guaranteed on external component like cruise-control, Kafka itself should be defensive on this.
+    if (config.controlledShutdownSafetyCheckEnable && !safeToShutdown(id, actualBrokerEpoch)) {
+      passedAllShutdown = false
+      if (!shouldSkipShutdownSafetyCheck) {
+        info(s"Controlled shutdown safety has prevented broker $id (broker epoch $actualBrokerEpoch) from shutting down.")
+        throw new NotEnoughReplicasException(s"Broker id $id cannot initiate shutdown without an impact on topic availability.")
+      }
+    }
+
+    if (!passedAllShutdown && shouldSkipShutdownSafetyCheck) {
+      info(s"Controlled shutdown safety check has been skipped for broker $id (broker epoch $actualBrokerEpoch). Allowing shutdown even though it is not safe to do so.")
     }
 
     zkClient.recordBrokerShutdown(id, brokerEpoch, controllerContext.epochZkVersion)

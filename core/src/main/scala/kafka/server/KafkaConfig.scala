@@ -82,6 +82,7 @@ object Defaults {
   val MetadataSnapshotMaxNewRecordBytes = 20 * 1024 * 1024
   val ProducerBatchDecompressionEnable = true
   val PreferredController = false
+  val LiMinPreferredControllerCount = 0
   val AllowPreferredControllerFallback = true
   val MissingPerTopicConfig = "-1"
 
@@ -451,6 +452,7 @@ object KafkaConfig {
   val HeapDumpTimeoutProp = "heap.dump.timeout"
   val ProducerBatchDecompressionEnableProp = "producer.batch.decompression.enable"
   val PreferredControllerProp = "preferred.controller"
+  val LiMinPreferredControllerCountProp = "li.min.preferred.controller.count"
   val LiAsyncFetcherEnableProp = "li.async.fetcher.enable"
   val LiCombinedControlRequestEnableProp = "li.combined.control.request.enable"
   val LiUpdateMetadataDelayMsProp = "li.update.metadata.delay.ms"
@@ -802,6 +804,7 @@ object KafkaConfig {
   val HeapDumpTimeoutDoc = "The max amount of time (in millis) to wait for heap dump to complete before halting regardless"
   val ProducerBatchDecompressionEnableDoc = "Decompress batch sent by producer to perform verification of individual records inside the batch"
   val PreferredControllerDoc = "Specifies whether the broker is a dedicated controller node. If set to true, the broker is a preferred controller node."
+  val LiMinPreferredControllerCountDoc = s"Specifies the desired count of minimum preferred controller. It will refuse to shutdown a broker if taking it down brings alive preferred controller below the threshold."
   val LiAsyncFetcherEnableDoc = "Specifies whether the event-based async fetcher should be used."
   val LiCombinedControlRequestEnableDoc = "Specifies whether the controller should use the LiCombinedControlRequest."
   val LiUpdateMetadataDelayMsDoc = "Specifies how long a UpdateMetadata request with partitions should be delayed before its processing can start. This config is purely for testing the LiCombinedControl feature and should not be enabled in a production environment."
@@ -1258,6 +1261,7 @@ object KafkaConfig {
       .define(HeapDumpTimeoutProp, LONG, Defaults.HeapDumpTimeout, LOW, HeapDumpTimeoutDoc)
       .define(ProducerBatchDecompressionEnableProp, BOOLEAN, Defaults.ProducerBatchDecompressionEnable, LOW, ProducerBatchDecompressionEnableDoc)
       .define(PreferredControllerProp, BOOLEAN, Defaults.PreferredController, HIGH, PreferredControllerDoc)
+      .define(LiMinPreferredControllerCountProp, INT, Defaults.LiMinPreferredControllerCount, atLeast(0), HIGH, LiMinPreferredControllerCountDoc)
       .define(LiAsyncFetcherEnableProp, BOOLEAN, Defaults.LiAsyncFetcherEnabled, HIGH, LiAsyncFetcherEnableDoc)
       .define(LiCombinedControlRequestEnableProp, BOOLEAN, Defaults.LiCombinedControlRequestEnabled, HIGH, LiCombinedControlRequestEnableDoc)
       .define(LiUpdateMetadataDelayMsProp, LONG, Defaults.LiUpdateMetadataDelayMs, atLeast(0), LOW, LiUpdateMetadataDelayMsDoc)
@@ -1808,6 +1812,7 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   val producerBatchDecompressionEnable = getBoolean(KafkaConfig.ProducerBatchDecompressionEnableProp)
 
   var preferredController = getBoolean(KafkaConfig.PreferredControllerProp)
+  var liMinPreferredControllerCount = getInt(KafkaConfig.LiMinPreferredControllerCountProp)
   def allowPreferredControllerFallback: Boolean = getBoolean(KafkaConfig.AllowPreferredControllerFallbackProp)
 
   val liAsyncFetcherEnable = getBoolean(KafkaConfig.LiAsyncFetcherEnableProp)
