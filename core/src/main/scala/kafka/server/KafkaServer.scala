@@ -201,8 +201,6 @@ class KafkaServer(
 
   def brokerEpochSupplier(): Long = Option(brokerEpochManager).map(_.get()).getOrElse(-1)
 
-  var clientMetricsManager: ClientMetricsManager = _
-
   /**
    * Start up API for bringing up a single instance of the Kafka server.
    * Instantiates the LogManager, the SocketServer and the request handlers - KafkaRequestHandlers
@@ -523,8 +521,6 @@ class KafkaServer(
           rlm.startup()
         }
 
-        clientMetricsManager = ClientMetricsManager.instance()
-
         /* start processing requests */
         val zkSupport = ZkSupport(adminManager, kafkaController, zkClient, forwardingManager, metadataCache, brokerEpochManager)
 
@@ -548,7 +544,7 @@ class KafkaServer(
           time = time,
           tokenManager = tokenManager,
           apiVersionManager = apiVersionManager,
-          clientMetricsManager = clientMetricsManager)
+          clientMetricsManager = None)
 
         dataPlaneRequestProcessor = createKafkaApis(socketServer.dataPlaneRequestChannel)
 

@@ -63,7 +63,7 @@ public class KafkaApisBuilder {
     private Time time = Time.SYSTEM;
     private DelegationTokenManager tokenManager = null;
     private ApiVersionManager apiVersionManager = null;
-    private ClientMetricsManager clientMetricsManager = null;
+    private Optional<ClientMetricsManager> clientMetricsManager = Optional.empty();
 
     public KafkaApisBuilder setRequestChannel(RequestChannel requestChannel) {
         this.requestChannel = requestChannel;
@@ -160,7 +160,7 @@ public class KafkaApisBuilder {
         return this;
     }
 
-    public KafkaApisBuilder setClientMetricsManager(ClientMetricsManager clientMetricsManager) {
+    public KafkaApisBuilder setClientMetricsManager(Optional<ClientMetricsManager> clientMetricsManager) {
         this.clientMetricsManager = clientMetricsManager;
         return this;
     }
@@ -201,6 +201,6 @@ public class KafkaApisBuilder {
                              time,
                              tokenManager,
                              apiVersionManager,
-                             clientMetricsManager);
+                             OptionConverters.toScala(clientMetricsManager));
     }
 }
