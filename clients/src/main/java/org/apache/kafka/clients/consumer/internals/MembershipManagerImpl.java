@@ -134,6 +134,20 @@ public class MembershipManagerImpl implements MembershipManager {
      */
     private final TopicMetadataRequestManager metadataRequestManager;
 
+    /**
+     * Epoch that a member (not static) must include a heartbeat request to indicate that it wants
+     * to leave the group. This is considered as a definitive leave.
+     */
+    public static final int LEAVE_GROUP_EPOCH = -1;
+
+    /**
+     * Epoch that a static member (member with group instance id) must include a heartbeat request
+     * to indicate that it wants to leave the group. This will be considered as a potentially
+     * temporary leave.
+     */
+    public static final int LEAVE_GROUP_EPOCH_FOR_STATIC_MEMBER = -2;
+
+
     public MembershipManagerImpl(String groupId,
                                  SubscriptionState subscriptions,
                                  CommitRequestManager commitRequestManager,
@@ -259,12 +273,12 @@ public class MembershipManagerImpl implements MembershipManager {
      * {@inheritDoc}
      */
     @Override
-    public void transitionToFailed() {
+    public void transitionToFatal() {
         log.error("Member {} transitioned to {} state", memberId, MemberState.FATAL);
 
         // Update epoch to indicate that the member is not in the group anymore, so that the
         // onPartitionsLost is called to release assignment.
-        memberEpoch = -1;
+        memberEpoch = LEAVE_GROUP_EPOCH;
         invokeOnPartitionsRevokedOrLostToReleaseAssignment();
 
         transitionTo(MemberState.FATAL);
@@ -357,7 +371,7 @@ public class MembershipManagerImpl implements MembershipManager {
      * leave the group. Should be -2 if this is a static member, or -1 in any other case.
      */
     private int leaveGroupEpoch() {
-        return groupInstanceId.isPresent() ? -2 : -1;
+        return groupInstanceId.isPresent() ? LEAVE_GROUP_EPOCH_FOR_STATIC_MEMBER : LEAVE_GROUP_EPOCH;
     }
 
     /**
@@ -716,7 +730,7 @@ public class MembershipManagerImpl implements MembershipManager {
             log.info("Member {} accepted new target assignment {} to reconcile", memberId, newTargetAssignment);
             targetAssignment = Optional.of(newTargetAssignment);
         } else {
-            transitionToFailed();
+            transitionToFatal();
             throw new IllegalStateException("Cannot set new target assignment because a " +
                     "previous one pending to be reconciled already exists.");
         }
@@ -753,9 +767,9 @@ public class MembershipManagerImpl implements MembershipManager {
 
     /**
      * @return Assignment that the member received from the server but hasn't completely processed
-     * yet.
+     * yet. Visible for testing.
      */
-    public Optional<ConsumerGroupHeartbeatResponseData.Assignment> targetAssignment() {
+    Optional<ConsumerGroupHeartbeatResponseData.Assignment> targetAssignment() {
         return targetAssignment;
     }
 }

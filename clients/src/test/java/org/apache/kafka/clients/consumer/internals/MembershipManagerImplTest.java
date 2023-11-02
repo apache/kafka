@@ -157,7 +157,7 @@ public class MembershipManagerImplTest {
         assertEquals(MEMBER_ID, membershipManager.memberId());
         assertEquals(MEMBER_EPOCH, membershipManager.memberEpoch());
 
-        membershipManager.transitionToFailed();
+        membershipManager.transitionToFatal();
         assertEquals(MemberState.FATAL, membershipManager.state());
     }
 
@@ -169,7 +169,7 @@ public class MembershipManagerImplTest {
         assertEquals(MemberState.NOT_IN_GROUP, membershipManager.state());
         membershipManager.transitionToJoining();
 
-        membershipManager.transitionToFailed();
+        membershipManager.transitionToFatal();
         assertEquals(MemberState.FATAL, membershipManager.state());
     }
 
@@ -325,7 +325,7 @@ public class MembershipManagerImplTest {
 
     @Test
     public void testReconcilePartitionsRevokedNoAutoCommitNoCallbacks() {
-        MembershipManager membershipManager = createMemberInStableState();
+        MembershipManagerImpl membershipManager = createMemberInStableState();
         mockOwnedPartition();
 
         when(commitRequestManager.autoCommitEnabled()).thenReturn(false);
@@ -339,7 +339,7 @@ public class MembershipManagerImplTest {
 
     @Test
     public void testReconcilePartitionsRevokedWithSuccessfulAutoCommitNoCallbacks() {
-        MembershipManager membershipManager = createMemberInStableState();
+        MembershipManagerImpl membershipManager = createMemberInStableState();
         mockOwnedPartition();
 
         CompletableFuture<Void> commitResult = mockRevocationWithAutoCommitNoCallbacks();
@@ -359,7 +359,7 @@ public class MembershipManagerImplTest {
 
     @Test
     public void testReconcilePartitionsRevokedWithFailedAutoCommitCompletesRevocationAnyway() {
-        MembershipManager membershipManager = createMemberInStableState();
+        MembershipManagerImpl membershipManager = createMemberInStableState();
         mockOwnedPartition();
 
         CompletableFuture<Void> commitResult = mockRevocationWithAutoCommitNoCallbacks();
@@ -421,7 +421,7 @@ public class MembershipManagerImplTest {
         assertEquals(MemberState.RECONCILING, membershipManager.state());
 
         // Member received fatal error while reconciling
-        membershipManager.transitionToFailed();
+        membershipManager.transitionToFatal();
 
         // Complete commit request
         commitResult.complete(null);
@@ -487,7 +487,7 @@ public class MembershipManagerImplTest {
         when(subscriptionState.rebalanceListener()).thenReturn(Optional.empty()).thenReturn(Optional.empty());
     }
 
-    private void testReconciliationOfRevokedPartitionsCompleted(MembershipManager membershipManager) {
+    private void testReconciliationOfRevokedPartitionsCompleted(MembershipManagerImpl membershipManager) {
         assertEquals(MemberState.SENDING_ACK_FOR_RECONCILED_ASSIGNMENT, membershipManager.state());
         assertTrue(membershipManager.currentAssignment().isEmpty());
         assertFalse(membershipManager.targetAssignment().isPresent());
@@ -524,8 +524,8 @@ public class MembershipManagerImplTest {
         return membershipManager;
     }
 
-    private MembershipManager createMemberInStableState() {
-        MembershipManager membershipManager = createMembershipManagerJoiningGroup();
+    private MembershipManagerImpl createMemberInStableState() {
+        MembershipManagerImpl membershipManager = createMembershipManagerJoiningGroup();
         ConsumerGroupHeartbeatResponse heartbeatResponse = createConsumerGroupHeartbeatResponse(null);
         membershipManager.onHeartbeatResponseReceived(heartbeatResponse.data());
         assertEquals(MemberState.STABLE, membershipManager.state());
@@ -585,7 +585,7 @@ public class MembershipManagerImplTest {
 
     private void testStateUpdateOnFatalFailure(MembershipManager membershipManager) {
         String initialMemberId = membershipManager.memberId();
-        membershipManager.transitionToFailed();
+        membershipManager.transitionToFatal();
         assertEquals(MemberState.FATAL, membershipManager.state());
         // Should keep member id and reset epoch to -1 to indicate member not in the group
         assertEquals(initialMemberId, membershipManager.memberId());

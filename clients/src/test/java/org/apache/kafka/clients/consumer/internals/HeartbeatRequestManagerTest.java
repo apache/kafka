@@ -155,7 +155,7 @@ public class HeartbeatRequestManagerTest {
         assertEquals(DEFAULT_HEARTBEAT_INTERVAL_MS - 100, result.timeUntilNextPollMs);
 
         // Member in state where it should not send Heartbeat anymore
-        membershipManager.transitionToFailed();
+        membershipManager.transitionToFatal();
         result = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(Long.MAX_VALUE, result.timeUntilNextPollMs);
     }
@@ -205,7 +205,7 @@ public class HeartbeatRequestManagerTest {
         NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(1, result.unsentRequests.size());
         result.unsentRequests.get(0).handler().onFailure(time.milliseconds(), new KafkaException("fatal"));
-        verify(membershipManager).transitionToFailed();
+        verify(membershipManager).transitionToFatal();
         verify(backgroundEventHandler).add(any());
     }
 
@@ -314,7 +314,7 @@ public class HeartbeatRequestManagerTest {
     }
 
     private void ensureFatalError() {
-        verify(membershipManager).transitionToFailed();
+        verify(membershipManager).transitionToFatal();
         verify(backgroundEventHandler).add(any());
         ensureHeartbeatStopped();
     }

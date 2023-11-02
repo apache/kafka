@@ -87,12 +87,6 @@ public interface MembershipManager {
     Set<TopicPartition> currentAssignment();
 
     /**
-     * @return Assignment that the member received from the server but hasn't finished processing
-     * yet.
-     */
-    Optional<ConsumerGroupHeartbeatResponseData.Assignment> targetAssignment();
-
-    /**
      * Transition to the {@link MemberState#JOINING} state, indicating that the member will
      * try to join the group on the next heartbeat request. This is expected to be invoked when
      * the user calls the subscribe API, or when the member wants to rejoin after getting fenced.
@@ -112,7 +106,7 @@ public interface MembershipManager {
      * invoked when un-recoverable errors occur (ex. when the heartbeat returns a non-retriable
      * error)
      */
-    void transitionToFailed();
+    void transitionToFatal();
 
     /**
      * Release assignment and transition to {@link MemberState#LEAVING} so that a heartbeat

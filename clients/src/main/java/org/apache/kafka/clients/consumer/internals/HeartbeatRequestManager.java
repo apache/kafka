@@ -309,7 +309,7 @@ public class HeartbeatRequestManager implements RequestManager {
 
     private void handleFatalFailure(Throwable error) {
         backgroundEventHandler.add(new ErrorBackgroundEvent(error));
-        membershipManager.transitionToFailed();
+        membershipManager.transitionToFatal();
     }
 
     /**
