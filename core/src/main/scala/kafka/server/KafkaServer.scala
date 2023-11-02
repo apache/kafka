@@ -106,6 +106,16 @@ class KafkaServer(
     this(config, time, threadNamePrefix, enableForwarding = false, actions = actions)
   }
 
+  // Visible for testing from mario for backwards compatibility.
+  @deprecated
+  def this(
+    config: KafkaConfig,
+    time: Time,
+    threadNamePrefix: Option[String],
+    kafkaMetricsReporters: Seq[KafkaMetricsReporter]) {
+    this(config, time, threadNamePrefix, enableForwarding = false, actions = NoOpKafkaActions)
+  }
+
   private val startupComplete = new AtomicBoolean(false)
   private val isShuttingDown = new AtomicBoolean(false)
   private val isStartingUp = new AtomicBoolean(false)
