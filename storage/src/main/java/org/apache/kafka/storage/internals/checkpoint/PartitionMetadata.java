@@ -15,24 +15,28 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.server.telemetry;
+package org.apache.kafka.storage.internals.checkpoint;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
-import org.apache.kafka.common.metrics.MetricsReporter;
+import org.apache.kafka.common.Uuid;
 
-/**
- * A {@link MetricsReporter} may implement this interface to indicate support for collecting client
- * telemetry on the server side.
- */
-@InterfaceStability.Evolving
-public interface ClientTelemetry {
+public class PartitionMetadata {
+    private final int version;
+    private final Uuid topicId;
 
-    /**
-     * Called by the broker to fetch instance of {@link ClientTelemetryReceiver}.
-     * <p>
-     * This instance may be cached by the broker.
-     *
-     * @return broker side instance of {@link ClientTelemetryReceiver}.
-     */
-    ClientTelemetryReceiver clientReceiver();
+    public PartitionMetadata(int version, Uuid topicId) {
+        this.version = version;
+        this.topicId = topicId;
+    }
+
+    public int version() {
+        return version;
+    }
+
+    public Uuid topicId() {
+        return topicId;
+    }
+
+    public String encode() {
+        return "version: " + version + "\ntopic_id: " + topicId;
+    }
 }
