@@ -311,7 +311,7 @@ public class KafkaMetricsCollectorTest {
     public void testCollectFilter() {
         metrics.addMetric(metricName, (config, now) -> 100.0);
 
-        emitter.reconfigurePredicate(k -> !k.key().getName().endsWith(".count"));
+        emitter.reconfigurePredicate(k -> !k.key().name().endsWith(".count"));
         collector.collect(emitter);
         List<SinglePointMetric> result = emitter.emittedMetrics();
 
@@ -335,13 +335,13 @@ public class KafkaMetricsCollectorTest {
         assertEquals(3, result.size());
 
         emitter.reset();
-        emitter.reconfigurePredicate(k -> k.key().getName().endsWith(".count"));
+        emitter.reconfigurePredicate(k -> k.key().name().endsWith(".count"));
         collector.collect(emitter);
         result = emitter.emittedMetrics();
         assertEquals(1, result.size());
 
         emitter.reset();
-        emitter.reconfigurePredicate(k -> k.key().getName().contains("name"));
+        emitter.reconfigurePredicate(k -> k.key().name().contains("name"));
         collector.collect(emitter);
         result = emitter.emittedMetrics();
         assertEquals(2, result.size());
@@ -372,7 +372,7 @@ public class KafkaMetricsCollectorTest {
         assertEquals(6, result.size());
 
         emitter.reset();
-        emitter.reconfigurePredicate(k -> !k.key().getName().endsWith(".count"));
+        emitter.reconfigurePredicate(k -> !k.key().name().endsWith(".count"));
         collector.collect(emitter);
         result = emitter.emittedMetrics();
 
@@ -380,7 +380,7 @@ public class KafkaMetricsCollectorTest {
         assertEquals(5, result.size());
 
         emitter.reset();
-        emitter.reconfigurePredicate(k -> !k.key().getName().endsWith(".nonmeasurable"));
+        emitter.reconfigurePredicate(k -> !k.key().name().endsWith(".nonmeasurable"));
         collector.collect(emitter);
         result = emitter.emittedMetrics();
 
@@ -388,7 +388,7 @@ public class KafkaMetricsCollectorTest {
         assertEquals(5, result.size());
 
         emitter.reset();
-        emitter.reconfigurePredicate(k -> !k.key().getName().endsWith(".delta"));
+        emitter.reconfigurePredicate(k -> !k.key().name().endsWith(".delta"));
         collector.collect(emitter);
         result = emitter.emittedMetrics();
 

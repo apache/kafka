@@ -198,7 +198,7 @@ public class KafkaMetricsCollector implements MetricsCollector {
             metricValue = metric.metricValue();
         } catch (Exception e) {
             // If an exception occurs when retrieving value, log warning and continue to process the rest of metrics
-            log.warn("Failed to retrieve metric value {}", metricKey.getName(), e);
+            log.warn("Failed to retrieve metric value {}", metricKey.name(), e);
             return;
         }
 
@@ -220,7 +220,7 @@ public class KafkaMetricsCollector implements MetricsCollector {
                 collectGauge(metricKey, value, metricsEmitter);
             } else {
                 // skip non-measurable metrics
-                log.debug("Skipping non-measurable gauge metric {}", metricKey.getName());
+                log.debug("Skipping non-measurable gauge metric {}", metricKey.name());
             }
         }
     }

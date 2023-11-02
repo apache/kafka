@@ -100,7 +100,7 @@ public class SinglePointMetric implements MetricKeyable {
         boolean monotonic, NumberDataPoint.Builder point) {
         point.addAllAttributes(asAttributes(metricKey.tags()));
 
-        Metric.Builder metric = Metric.newBuilder().setName(metricKey.getName());
+        Metric.Builder metric = Metric.newBuilder().setName(metricKey.name());
         metric
             .getSumBuilder()
             .setAggregationTemporality(aggregationTemporality)
@@ -112,7 +112,7 @@ public class SinglePointMetric implements MetricKeyable {
     private static SinglePointMetric gauge(MetricKey metricKey, NumberDataPoint.Builder point) {
         point.addAllAttributes(asAttributes(metricKey.tags()));
 
-        Metric.Builder metric = Metric.newBuilder().setName(metricKey.getName());
+        Metric.Builder metric = Metric.newBuilder().setName(metricKey.name());
         metric.getGaugeBuilder().addDataPoints(point);
         return create(metricKey, metric);
     }
