@@ -67,8 +67,8 @@ public class DirectoryId {
      * @return     true only if the directory ID is reserved.
      */
     public static boolean reserved(Uuid uuid) {
-        return (uuid.getMostSignificantBits() == 0 &&
-            uuid.getLeastSignificantBits() < 100);
+        return uuid.getMostSignificantBits() == 0 &&
+            uuid.getLeastSignificantBits() < 100;
     }
 
     /**
