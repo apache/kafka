@@ -76,6 +76,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
 
+import static org.apache.kafka.clients.consumer.ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_JMX_PREFIX;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP_PREFIX;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.DEFAULT_CLOSE_TIMEOUT_MS;
@@ -620,7 +621,7 @@ public class LegacyKafkaConsumer<K, V> implements Consumer<K, V> {
             this.clientId = config.getString(CommonClientConfigs.CLIENT_ID_CONFIG);
             LogContext logContext = createLogContext(config, groupRebalanceConfig);
             this.log = logContext.logger(getClass());
-            boolean enableAutoCommit = ConsumerUtils.maybeOverrideEnableAutoCommit(config);
+            boolean enableAutoCommit = config.getBoolean(ENABLE_AUTO_COMMIT_CONFIG);
             groupId.ifPresent(groupIdStr -> {
                 if (groupIdStr.isEmpty()) {
                     log.warn("Support for using the empty group id by consumers is deprecated and will be removed in the next major release.");
@@ -669,7 +670,7 @@ public class LegacyKafkaConsumer<K, V> implements Consumer<K, V> {
             // no coordinator will be constructed for the default (null) group id
             if (!groupId.isPresent()) {
                 config.ignore(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG);
-                config.ignore(ConsumerUtils.THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED);
+                config.ignore("internal.throw.on.fetch.stable.offset.unsupported");
                 this.coordinator = null;
             } else {
                 this.coordinator = new ConsumerCoordinator(groupRebalanceConfig,
@@ -684,7 +685,7 @@ public class LegacyKafkaConsumer<K, V> implements Consumer<K, V> {
                         enableAutoCommit,
                         config.getInt(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG),
                         this.interceptors,
-                        config.getBoolean(ConsumerUtils.THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED),
+                        config.getBoolean("internal.throw.on.fetch.stable.offset.unsupported"),
                         config.getString(ConsumerConfig.CLIENT_RACK_CONFIG));
             }
             this.fetcher = new Fetcher<>(

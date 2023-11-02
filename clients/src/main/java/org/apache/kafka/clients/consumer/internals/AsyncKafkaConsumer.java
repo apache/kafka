@@ -231,7 +231,7 @@ public class AsyncKafkaConsumer<K, V> implements Consumer<K, V> {
             // no coordinator will be constructed for the default (null) group id
             if (!groupId.isPresent()) {
                 config.ignore(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG);
-                config.ignore(ConsumerUtils.THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED);
+                config.ignore("internal.throw.on.fetch.stable.offset.unsupported");
             }
 
             // The FetchCollector is only used on the application thread.

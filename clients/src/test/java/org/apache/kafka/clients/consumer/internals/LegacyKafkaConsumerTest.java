@@ -1673,8 +1673,8 @@ public class LegacyKafkaConsumerTest {
         try {
             newConsumer(null, Optional.of(Boolean.TRUE));
             fail("Expected an InvalidConfigurationException");
-        } catch (KafkaException e) {
-            assertEquals(InvalidConfigurationException.class, e.getCause().getClass());
+        } catch (InvalidConfigurationException e) {
+            // OK, expected
         }
 
         try {
