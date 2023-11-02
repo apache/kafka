@@ -13,22 +13,18 @@ check_timeout() {
     sleep 1
 }
 
-TIMEOUT=20
-while ! nc -z localhost 9092; do
-    check_timeout
-done
-
 opt/kafka/bin/kafka-topics.sh --create --topic test-topic --bootstrap-server localhost:9092
 [ $? -eq 0 ] || exit 1
 
 echo "test" | opt/kafka/bin/kafka-console-producer.sh --topic test-topic --bootstrap-server localhost:9092
 [ $? -eq 0 ] || exit 1
 
-opt/kafka/bin/kafka-console-consumer.sh --topic test-topic --from-beginning --bootstrap-server localhost:9092 --max-messages 1
+opt/kafka/bin/kafka-console-consumer.sh --topic test-topic --from-beginning --bootstrap-server localhost:9092 --max-messages 1 --timeout-ms 20000
 [ $? -eq 0 ] || exit 1
 
 opt/kafka/bin/kafka-server-stop.sh
 
+# Wait until jsa file is generated
 TIMEOUT=20
 until [ -f /kafka.jsa ]
 do
