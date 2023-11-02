@@ -17,6 +17,7 @@
 package kafka.api
 
 import kafka.utils.TestUtils.waitUntilTrue
+import org.apache.kafka.clients.consumer.{ConsumerConfig, GroupProtocol}
 import org.junit.jupiter.api.Assertions.{assertNotNull, assertNull, assertTrue}
 import org.junit.jupiter.api.Test
 
@@ -30,7 +31,7 @@ class BaseAsyncConsumerTest extends AbstractConsumerTest {
   @Test
   def testCommitAsync(): Unit = {
     val props = new Properties();
-    props.setProperty("group.protocol", "consumer");
+    props.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name());
     val consumer = createConsumer(configOverrides = props)
     val producer = createProducer()
     val numRecords = 10000
@@ -53,7 +54,7 @@ class BaseAsyncConsumerTest extends AbstractConsumerTest {
   @Test
   def testCommitSync(): Unit = {
     val props = new Properties();
-    props.setProperty("group.protocol", "consumer");
+    props.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name());
     val consumer = createConsumer(configOverrides = props)
     val producer = createProducer()
     val numRecords = 10000
