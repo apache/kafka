@@ -9,6 +9,7 @@ on:
         options: 
           - "jvm"
       kafka_url:
+        description: Kafka url to be used to build the docker image
         required: true
 
 jobs:
