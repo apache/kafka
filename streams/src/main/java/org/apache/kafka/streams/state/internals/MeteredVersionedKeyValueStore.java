@@ -214,7 +214,7 @@ public class MeteredVersionedKeyValueStore<K, V>
         }
 
         @SuppressWarnings("unchecked")
-        protected <R> QueryResult<R> runVersionedKeyQuery(final Query<R> query,
+        private <R> QueryResult<R> runVersionedKeyQuery(final Query<R> query,
                                                           final PositionBound positionBound,
                                                           final QueryConfig config) {
             final QueryResult<R> result;
@@ -225,7 +225,7 @@ public class MeteredVersionedKeyValueStore<K, V>
             }
             final QueryResult<VersionedRecord<byte[]>> rawResult =
                 wrapped().query(rawKeyQuery, positionBound, config);
-            if (rawResult.isSuccess()) {
+            if (rawResult.isSuccess() && rawResult.getResult() != null) {
                 final VersionedRecord<V> versionedRecord = StoreQueryUtils.deserializeVersionedRecord(plainValueSerdes, rawResult.getResult());
                 final QueryResult<VersionedRecord<V>> typedQueryResult =
                     InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, versionedRecord);

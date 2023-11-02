@@ -350,29 +350,25 @@ public final class StoreQueryUtils {
         if (store instanceof VersionedKeyValueStore) {
             final VersionedKeyValueStore<Bytes, byte[]> versionedKeyValueStore =
                 (VersionedKeyValueStore<Bytes, byte[]>) store;
-            if (query instanceof VersionedKeyQuery) {
-                final VersionedKeyQuery<Bytes, byte[]> rawKeyQuery =
-                    (VersionedKeyQuery<Bytes, byte[]>) query;
-                try {
-                    final VersionedRecord<byte[]> bytes;
-                    if (((VersionedKeyQuery<?, ?>) query).asOfTimestamp().isPresent()) {
-                        bytes = versionedKeyValueStore.get(rawKeyQuery.key(),
-                            ((VersionedKeyQuery<?, ?>) query).asOfTimestamp().get().toEpochMilli());
-                    } else {
-                        bytes = versionedKeyValueStore.get(rawKeyQuery.key());
-                    }
-                    return (QueryResult<R>) QueryResult.forResult(bytes);
-                } catch (final Exception e) {
-                    final String message = parseStoreException(e, store, query);
-                    return QueryResult.forFailure(
-                        FailureReason.STORE_EXCEPTION,
-                        message
-                    );
+            final VersionedKeyQuery<Bytes, byte[]> rawKeyQuery =
+                (VersionedKeyQuery<Bytes, byte[]>) query;
+            try {
+                final VersionedRecord<byte[]> bytes;
+                if (((VersionedKeyQuery<?, ?>) query).asOfTimestamp().isPresent()) {
+                    bytes = versionedKeyValueStore.get(rawKeyQuery.key(),
+                        ((VersionedKeyQuery<?, ?>) query).asOfTimestamp().get().toEpochMilli());
+                } else {
+                    bytes = versionedKeyValueStore.get(rawKeyQuery.key());
                 }
-            } else {
-                // Here is preserved for VersionedMultiTimestampedKeyQuery
-                return QueryResult.forUnknownQueryType(query, store);
+                return (QueryResult<R>) QueryResult.forResult(bytes);
+            } catch (final Exception e) {
+                final String message = parseStoreException(e, store, query);
+                return QueryResult.forFailure(
+                    FailureReason.STORE_EXCEPTION,
+                    message
+                );
             }
+
         } else {
             return QueryResult.forUnknownQueryType(query, store);
         }

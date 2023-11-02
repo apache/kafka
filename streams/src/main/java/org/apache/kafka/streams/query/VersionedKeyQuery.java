@@ -35,17 +35,17 @@ public final class VersionedKeyQuery<K, V> implements Query<VersionedRecord<V>> 
     private final Optional<Instant> asOfTimestamp;
 
     private VersionedKeyQuery(final K key, final Optional<Instant> asOfTimestamp) {
-        this.key = Objects.requireNonNull(key);
+        this.key = key;
         this.asOfTimestamp = asOfTimestamp;
     }
 
     /**
      * Creates a query that will retrieve the record from a versioned state store identified by {@code key} if it exists
      * (or {@code null} otherwise).
-     * <P>
+     * <p>
      * While the query by default returns the latest value of the specified {@code key}, setting
      * the {@code asOfTimestamp} (by calling the {@link #asOf(Instant)} method), makes the query
-     * to return the value associated to the specified {@code asOfTimestamp}
+     * to return the value associated to the specified {@code asOfTimestamp}.
      *
      * @param key The key to retrieve
      * @param <K> The type of the key
@@ -53,6 +53,7 @@ public final class VersionedKeyQuery<K, V> implements Query<VersionedRecord<V>> 
      * @throws NullPointerException if {@code key} is null
      */
     public static <K, V> VersionedKeyQuery<K, V> withKey(final K key) {
+        Objects.requireNonNull(key, "Key can not be null.");
         return new VersionedKeyQuery<>(key, Optional.empty());
     }
 
@@ -60,7 +61,7 @@ public final class VersionedKeyQuery<K, V> implements Query<VersionedRecord<V>> 
      * Specifies the timestamp for the key query. The key query returns the record's version for the specified timestamp.
      * (To be more precise: The key query returns the record with the greatest timestamp &lt;= asOfTimestamp)
      *
-     * @param asOfTimestamp The timestamp bound of the query. This bound is inclusive.
+     * @param asOfTimestamp The timestamp of the query.
      * @throws NullPointerException if {@code asOfTimestamp} is null
      */
     public VersionedKeyQuery<K, V> asOf(final Instant asOfTimestamp) {
@@ -70,15 +71,15 @@ public final class VersionedKeyQuery<K, V> implements Query<VersionedRecord<V>> 
 
     /**
      * The key that was specified for this query.
-     * @return The specified {@code key} of the query
+     * @return The specified {@code key} of the query.
      */
     public K key() {
         return key;
     }
 
     /**
-     * The timestamp of the query, if specified
-     * @return The specified {@code asOfTimestamp} of the query
+     * The timestamp of the query, if specified.
+     * @return The specified {@code asOfTimestamp} of the query.
      */
     public Optional<Instant> asOfTimestamp() {
         return asOfTimestamp;

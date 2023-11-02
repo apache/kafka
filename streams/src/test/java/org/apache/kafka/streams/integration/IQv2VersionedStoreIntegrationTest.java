@@ -16,19 +16,16 @@
  */
 package org.apache.kafka.streams.integration;
 
+import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.is;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Collections;
+import java.util.Optional;
 import java.util.Properties;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeoutException;
-import java.util.function.Function;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -53,8 +50,6 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 @Category({IntegrationTest.class})
 public class IQv2VersionedStoreIntegrationTest {
@@ -62,35 +57,32 @@ public class IQv2VersionedStoreIntegrationTest {
     private static final String INPUT_TOPIC_NAME = "input-topic";
     private static final String STORE_NAME = "versioned-store";
     private static final Duration HISTORY_RETENTION = Duration.ofDays(1);
-    private static final Instant RECORD_TIMESTAMP = Instant.now();
-    private static final Long RECORD_TIMESTAMP_LONG = RECORD_TIMESTAMP.toEpochMilli();
-
-
-    private static final Logger LOG = LoggerFactory.getLogger(IQv2VersionedStoreIntegrationTest.class);
+    private static final Instant BASE_TIMESTAMP = Instant.parse("2023-01-01T10:00:00.00Z");
+    private static final Long RECORD_TIMESTAMP_OLD = BASE_TIMESTAMP.toEpochMilli();
+    private static final Long RECORD_TIMESTAMP_NEW = RECORD_TIMESTAMP_OLD + 100;
+    private static final int RECORD_KEY = 2;
+    private static final int RECORD_VALUE_OLD = 2;
+    private static final int RECORD_VALUE_NEW = 3;
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS,
         Utils.mkProperties(Collections.singletonMap("auto.create.topics.enable", "true")));
-    private StreamsBuilder builder;
     private KafkaStreams kafkaStreams;
 
-    public IQv2VersionedStoreIntegrationTest(){}
-
     @BeforeClass
-    public static void before()
-        throws InterruptedException, IOException, ExecutionException, TimeoutException {
+    public static void before() throws Exception {
         CLUSTER.start();
         final Properties producerProps = new Properties();
         producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class);
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class);
-        Thread.sleep(10000);
         final KafkaProducer<Integer, Integer> producer = new KafkaProducer<>(producerProps);
-        producer.send(new ProducerRecord<>(INPUT_TOPIC_NAME, 0, RECORD_TIMESTAMP_LONG, 2, 2)).get();
+        producer.send(new ProducerRecord<>(INPUT_TOPIC_NAME, 0, RECORD_TIMESTAMP_OLD, RECORD_KEY, RECORD_VALUE_OLD)).get();
+        producer.send(new ProducerRecord<>(INPUT_TOPIC_NAME, 0, RECORD_TIMESTAMP_NEW, RECORD_KEY, RECORD_VALUE_NEW)).get();
     }
 
     @Before
     public void beforeTest() throws InterruptedException {
-        builder = new StreamsBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
         builder.table(INPUT_TOPIC_NAME,
             Materialized.as(Stores.persistentVersionedKeyValueStore(STORE_NAME, HISTORY_RETENTION)));
         final Properties configs = new Properties();
@@ -100,7 +92,7 @@ public class IQv2VersionedStoreIntegrationTest {
         configs.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.IntegerSerde.class.getName());
         kafkaStreams = new KafkaStreams(builder.build(), configs);
         kafkaStreams.start();
-        Thread.sleep(10000);
+        Thread.sleep(2000);
     }
 
     @After
@@ -118,81 +110,52 @@ public class IQv2VersionedStoreIntegrationTest {
 
     @Test
     public void verifyStore() {
-        try {
-            final Function<VersionedRecord<Integer>, Integer> valueExtractor =
-                VersionedRecord :: value;
-            final Function<VersionedRecord<Integer>, Long> timestampExtractor =
-                VersionedRecord :: timestamp;
-            shouldHandleVersionedKeyQuery(2, valueExtractor, 2);
-            shouldHandleVersionedKeyQueryWithTS(2, valueExtractor, 2, timestampExtractor, RECORD_TIMESTAMP_LONG);
-            shouldThrowNPEWithNullKey();
-
-        } catch (final AssertionError e) {
-            LOG.error("Failed assertion", e);
-            throw e;
-        }
+        // retrieve the latest value
+        shouldHandleVersionedKeyQuery(RECORD_KEY, Optional.empty(), RECORD_VALUE_NEW, RECORD_TIMESTAMP_NEW);
+        shouldHandleVersionedKeyQuery(RECORD_KEY, Optional.of(Instant.now()), RECORD_VALUE_NEW, RECORD_TIMESTAMP_NEW);
+        shouldHandleVersionedKeyQuery(RECORD_KEY, Optional.of(Instant.ofEpochMilli(RECORD_TIMESTAMP_NEW)), RECORD_VALUE_NEW, RECORD_TIMESTAMP_NEW);
+        // retrieve the old value
+        shouldHandleVersionedKeyQuery(RECORD_KEY, Optional.of(Instant.ofEpochMilli(RECORD_TIMESTAMP_OLD)), RECORD_VALUE_OLD, RECORD_TIMESTAMP_OLD);
+        // there is no record for the provided timestamp
+        shouldVerifyGetNull(RECORD_KEY, Instant.ofEpochMilli(RECORD_TIMESTAMP_OLD - 50));
+        // there is no record with this key
+        shouldVerifyGetNull(3, Instant.now());
     }
 
-    public void shouldHandleVersionedKeyQuery(
-        final Integer key,
-        final Function<VersionedRecord<Integer>, Integer> valueExtactor,
-        final Integer expectedValue) {
-        final VersionedKeyQuery<Integer, Integer> query = VersionedKeyQuery.withKey(key);
-        final StateQueryRequest<VersionedRecord<Integer>> request = StateQueryRequest.inStore(
-            STORE_NAME).withQuery(query);
-        final StateQueryResult<VersionedRecord<Integer>> result = kafkaStreams.query(request);
-        final QueryResult<VersionedRecord<Integer>> queryResult = result.getOnlyPartitionResult();
-        final boolean failure = queryResult.isFailure();
-        if (failure) {
-            throw new AssertionError(queryResult.toString());
-        }
-        assertThat(queryResult.isSuccess(), is(true));
+    private void shouldHandleVersionedKeyQuery(final Integer key,
+                                               final Optional<Instant> queryTimestamp,
+                                               final Integer expectedValue,
+                                               final Long expectedTimestamp) {
 
-        assertThrows(IllegalArgumentException.class, queryResult::getFailureReason);
-        assertThrows(
-            IllegalArgumentException.class,
-            queryResult::getFailureMessage
-        );
-
-        final VersionedRecord<Integer> result1 = queryResult.getResult();
-        final Integer integer = valueExtactor.apply(result1);
-        assertThat(integer, is(expectedValue));
-        assertThat(queryResult.getExecutionInfo(), is(empty()));
-    }
-
-    public void shouldHandleVersionedKeyQueryWithTS(
-        final Integer key,
-        final Function<VersionedRecord<Integer>, Integer> valueExtactor,
-        final Integer expectedValue,
-        final Function<VersionedRecord<Integer>, Long> timestampExtactor,
-        final Long expectedTimestamp) {
         VersionedKeyQuery<Integer, Integer> query = VersionedKeyQuery.withKey(key);
-        query = query.asOf(Instant.now());
-        final StateQueryRequest<VersionedRecord<Integer>> request = StateQueryRequest.inStore(
-            STORE_NAME).withQuery(query);
+        if (queryTimestamp.isPresent()) {
+            query = query.asOf(queryTimestamp.get());
+        }
+        final StateQueryRequest<VersionedRecord<Integer>> request = StateQueryRequest.inStore(STORE_NAME).withQuery(query);
         final StateQueryResult<VersionedRecord<Integer>> result = kafkaStreams.query(request);
+
+        if (result.getOnlyPartitionResult() == null) {
+            throw new AssertionError("The query returned null.");
+        }
         final QueryResult<VersionedRecord<Integer>> queryResult = result.getOnlyPartitionResult();
-        final boolean failure = queryResult.isFailure();
-        if (failure) {
+        if (queryResult.isFailure()) {
             throw new AssertionError(queryResult.toString());
         }
+        if (queryResult.getResult() == null) {
+            throw new AssertionError("The query returned null.");
+        }
+
         assertThat(queryResult.isSuccess(), is(true));
-
-        assertThrows(IllegalArgumentException.class, queryResult::getFailureReason);
-        assertThrows(
-            IllegalArgumentException.class,
-            queryResult::getFailureMessage
-        );
-
         final VersionedRecord<Integer> result1 = queryResult.getResult();
-        final Integer value = valueExtactor.apply(result1);
-        final Long timestamp = timestampExtactor.apply(result1);
-        assertThat(value, is(expectedValue));
-        assertThat(timestamp, is(expectedTimestamp));
-        assertThat(queryResult.getExecutionInfo(), is(empty()));
-    }
+        assertThat(result1.value(), is(expectedValue));
+        assertThat(result1.timestamp(), is(expectedTimestamp));
+        assertThat(queryResult.getExecutionInfo(), is(empty()));    }
 
-    public void shouldThrowNPEWithNullKey() {
-        assertThrows(NullPointerException.class, () -> VersionedKeyQuery.withKey(null));
+    private void shouldVerifyGetNull(final Integer key, final Instant queryTimestamp) {
+        VersionedKeyQuery<Integer, Integer> query = VersionedKeyQuery.withKey(key);
+        query = query.asOf(queryTimestamp);
+        final StateQueryRequest<VersionedRecord<Integer>> request = StateQueryRequest.inStore(STORE_NAME).withQuery(query);
+        final StateQueryResult<VersionedRecord<Integer>> result = kafkaStreams.query(request);
+        assertThat(result.getOnlyPartitionResult(), nullValue());
     }
 }
