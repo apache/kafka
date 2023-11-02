@@ -769,7 +769,7 @@ class ReplicaManager(val config: KafkaConfig,
                     entriesPerPartition: Map[TopicPartition, MemoryRecords],
                     responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
                     delayedProduceLock: Option[Lock] = None,
-                    recordConversionStatsCallback: Map[TopicPartition, RecordConversionStats] => Unit = _ => (),
+                    recordConversionStatsCallback: Map[TopicPartition, RecordValidationStats] => Unit = _ => (),
                     requestLocal: RequestLocal = RequestLocal.NoCaching,
                     transactionalId: String = null,
                     actionQueue: ActionQueue = this.actionQueue): Unit = {
@@ -855,7 +855,7 @@ class ReplicaManager(val config: KafkaConfig,
           }
         }
 
-        recordConversionStatsCallback(localProduceResults.map { case (k, v) => k -> v.info.recordConversionStats })
+        recordConversionStatsCallback(localProduceResults.map { case (k, v) => k -> v.info.recordValidationStats })
 
         if (delayedProduceRequestRequired(requiredAcks, allEntries, allResults)) {
           // create delayed produce operation
