@@ -15,11 +15,9 @@
 
 import unittest
 import subprocess
-import time
 from HTMLTestRunner import HTMLTestRunner
 import constants
 import argparse
-import socket
 
 class DockerSanityTest(unittest.TestCase):
     IMAGE="apache/kafka"
@@ -72,27 +70,10 @@ class DockerSanityTest(unittest.TestCase):
         command.extend(consumer_config)
         message = subprocess.check_output(["bash", "-c", " ".join(command)], timeout=constants.CLIENT_TIMEOUT)
         return message.decode("utf-8").strip()
-    
-    def wait_for_port(self, host, port, open, timeout):
-        start_time = time.perf_counter()
-        while time.perf_counter() - start_time < timeout:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            status = sock.connect_ex((host, port))
-            sock.close()
-            if (open and status == 0) or (not open and status != 0):
-                return
-            else:
-                time.sleep(1)
-        raise TimeoutError("Timed out while waiting for the port", host, port)
 
     def ssl_flow(self):
         print(f"Running {constants.SSL_FLOW_TESTS}")
         errors = []
-        try:
-            self.wait_for_port('localhost', 9093, True, constants.CLIENT_TIMEOUT)
-        except e:
-            errors.append(str(e))
-            return errors
         try:
             self.assertTrue(self.create_topic(constants.SSL_TOPIC, ["--bootstrap-server", "localhost:9093", "--command-config", constants.SSL_CLIENT_CONFIG]))
         except AssertionError as e:
@@ -126,11 +107,6 @@ class DockerSanityTest(unittest.TestCase):
     def broker_restart_flow(self):
         print(f"Running {constants.BROKER_RESTART_TESTS}")
         errors = []
-        try:
-            self.wait_for_port('localhost', 9092, True, constants.CLIENT_TIMEOUT)
-        except e:
-            errors.append(str(e))
-            return errors
         
         try:
             self.assertTrue(self.create_topic(constants.BROKER_RESTART_TEST_TOPIC, ["--bootstrap-server", "localhost:9092"]))
@@ -143,18 +119,9 @@ class DockerSanityTest(unittest.TestCase):
 
         print("Stopping Container")
         self.stopImage()
-        try:
-            self.wait_for_port('localhost', 9092, False, constants.CLIENT_TIMEOUT)
-        except e:
-            errors.append(str(e))
-            return errors
         print("Resuming Image")
         self.resumeImage()
-        try:
-            self.wait_for_port('localhost', 9092, True, constants.CLIENT_TIMEOUT)
-        except e:
-            errors.append(str(e))
-            return errors
+
         consumer_config = ["--bootstrap-server", "localhost:9092", "--property", "auto.offset.reset=earliest"]
         message = self.consume_message(constants.BROKER_RESTART_TEST_TOPIC, consumer_config)
         try:
