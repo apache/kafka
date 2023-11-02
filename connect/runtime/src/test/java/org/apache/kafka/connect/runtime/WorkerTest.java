@@ -42,6 +42,7 @@ import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.stats.Avg;
+import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.connector.Connector;
@@ -119,6 +120,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.admin.AdminClientConfig.RETRY_BACKOFF_MS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.ISOLATION_LEVEL_CONFIG;
@@ -128,6 +130,7 @@ import static org.apache.kafka.connect.json.JsonConverterConfig.SCHEMAS_ENABLE_C
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLIENT_ADMIN_OVERRIDES_PREFIX;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX;
+import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.DEFAULT_TOPIC_CREATION_PREFIX;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.PARTITIONS_CONFIG;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_FACTOR_CONFIG;
@@ -2467,6 +2470,98 @@ public class WorkerTest {
 
         verify(admin, timeout(1000)).close();
         verifyKafkaClusterId();
+    }
+
+    @Test
+    public void testConnectorGeneratesTooManyTasks() throws Exception {
+        mockKafkaClusterId();
+
+        String connectorClass = SampleSourceConnector.class.getName();
+        connectorProps.put(CONNECTOR_CLASS_CONFIG, connectorClass);
+        mockConnectorIsolation(connectorClass, sourceConnector);
+
+        mockExecutorRealSubmit(WorkerConnector.class);
+
+        // Use doReturn().when() syntax due to when().thenReturn() not being able to return wildcard generic types
+        doReturn(SampleSourceConnector.SampleSourceTask.class).when(sourceConnector).taskClass();
+
+        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, allConnectorClientConfigOverridePolicy);
+        worker.start();
+
+        FutureCallback<TargetState> onFirstStart = new FutureCallback<>();
+        worker.startConnector(CONNECTOR_ID, connectorProps, ctx, connectorStatusListener, TargetState.STARTED, onFirstStart);
+        // Wait for the connector to actually start
+        assertEquals(TargetState.STARTED, onFirstStart.get(1000, TimeUnit.MILLISECONDS));
+
+        Map<String, String> taskConfig = new HashMap<>();
+
+        // No warnings or exceptions when a connector generates an empty list of task configs
+        when(sourceConnector.taskConfigs(1)).thenReturn(Arrays.asList());
+        try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(Worker.class)) {
+            connectorProps.put(TASKS_MAX_CONFIG, "1");
+            List<Map<String, String>> taskConfigs = worker.connectorTaskConfigs(CONNECTOR_ID, new ConnectorConfig(plugins, connectorProps));
+            assertEquals(0, taskConfigs.size());
+            assertTrue(logCaptureAppender.getEvents().stream().noneMatch(e -> e.getLevel().equals("WARN")));
+        }
+
+        // No warnings or exceptions when a connector generates the maximum permitted number of task configs
+        when(sourceConnector.taskConfigs(1)).thenReturn(Arrays.asList(taskConfig));
+        when(sourceConnector.taskConfigs(2)).thenReturn(Arrays.asList(taskConfig, taskConfig));
+        when(sourceConnector.taskConfigs(3)).thenReturn(Arrays.asList(taskConfig, taskConfig, taskConfig));
+        try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(Worker.class)) {
+            connectorProps.put(TASKS_MAX_CONFIG, "1");
+            List<Map<String, String>> taskConfigs = worker.connectorTaskConfigs(CONNECTOR_ID, new ConnectorConfig(plugins, connectorProps));
+            assertEquals(1, taskConfigs.size());
+
+            connectorProps.put(TASKS_MAX_CONFIG, "2");
+            taskConfigs = worker.connectorTaskConfigs(CONNECTOR_ID, new ConnectorConfig(plugins, connectorProps));
+            assertEquals(2, taskConfigs.size());
+
+            connectorProps.put(TASKS_MAX_CONFIG, "3");
+            taskConfigs = worker.connectorTaskConfigs(CONNECTOR_ID, new ConnectorConfig(plugins, connectorProps));
+            assertEquals(3, taskConfigs.size());
+
+            assertTrue(logCaptureAppender.getEvents().stream().noneMatch(e -> e.getLevel().equals("WARN")));
+        }
+
+        // Warning when a connector generates too many task configs
+        List<Map<String, String>> tooManyTaskConfigs = Arrays.asList(taskConfig, taskConfig, taskConfig, taskConfig);
+        when(sourceConnector.taskConfigs(1)).thenReturn(tooManyTaskConfigs);
+        when(sourceConnector.taskConfigs(2)).thenReturn(tooManyTaskConfigs);
+        when(sourceConnector.taskConfigs(3)).thenReturn(tooManyTaskConfigs);
+        try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(Worker.class)) {
+            connectorProps.put(TASKS_MAX_CONFIG, "1");
+            List<Map<String, String>> taskConfigs = worker.connectorTaskConfigs(CONNECTOR_ID, new ConnectorConfig(plugins, connectorProps));
+            assertEquals(tooManyTaskConfigs.size(), taskConfigs.size());
+
+            connectorProps.put(TASKS_MAX_CONFIG, "2");
+            taskConfigs = worker.connectorTaskConfigs(CONNECTOR_ID, new ConnectorConfig(plugins, connectorProps));
+            assertEquals(tooManyTaskConfigs.size(), taskConfigs.size());
+
+            connectorProps.put(TASKS_MAX_CONFIG, "3");
+            taskConfigs = worker.connectorTaskConfigs(CONNECTOR_ID, new ConnectorConfig(plugins, connectorProps));
+            assertEquals(tooManyTaskConfigs.size(), taskConfigs.size());
+
+            List<String> warningMessages = logCaptureAppender.getEvents().stream()
+                    .filter(e -> e.getLevel().equals("WARN"))
+                    .map(LogCaptureAppender.Event::getMessage)
+                    .collect(Collectors.toList());
+
+            assertEquals(3, warningMessages.size());
+            for (int i = 1; i <= 3; i++) {
+                String warningMessage = warningMessages.get(i - 1);
+                String expectedPrefix = "The connector " + CONNECTOR_ID
+                        + " has generated "
+                        + tooManyTaskConfigs.size() + " tasks, which is greater than "
+                        + i;
+                assertTrue(
+                        "Warning message '" + warningMessage + "' did not start with the expected prefix '" + expectedPrefix + "'",
+                        warningMessage.startsWith(expectedPrefix)
+                );
+            }
+        }
+
+        worker.stop();
     }
 
     private void assertStatusMetrics(long expected, String metricName) {

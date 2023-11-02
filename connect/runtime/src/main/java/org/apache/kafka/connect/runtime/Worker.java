@@ -391,7 +391,21 @@ public class Worker {
             Connector connector = workerConnector.connector();
             try (LoaderSwap loaderSwap = plugins.withClassLoader(workerConnector.loader())) {
                 String taskClassName = connector.taskClass().getName();
-                for (Map<String, String> taskProps : connector.taskConfigs(maxTasks)) {
+                List<Map<String, String>> taskConfigs = connector.taskConfigs(maxTasks);
+                if (taskConfigs.size() > maxTasks) {
+                    log.warn(
+                            "The connector {} has generated {} tasks, which is greater than {}, "
+                                    + "the maximum number of tasks it is configured to create. "
+                                    + "This behavior should be considered a bug and may be disallowed "
+                                    + "in future releases of Kafka Connect. Please report this to the "
+                                    + "maintainers of the connector and request that they adjust their "
+                                    + "connector's taskConfigs() method to respect the maxTasks parameter.",
+                            connName,
+                            taskConfigs.size(),
+                            maxTasks
+                    );
+                }
+                for (Map<String, String> taskProps : taskConfigs) {
                     // Ensure we don't modify the connector's copy of the config
                     Map<String, String> taskConfig = new HashMap<>(taskProps);
                     taskConfig.put(TaskConfig.TASK_CLASS_CONFIG, taskClassName);
