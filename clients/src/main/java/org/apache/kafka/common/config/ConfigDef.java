@@ -450,7 +450,16 @@ public class ConfigDef {
      * @return this
      */
     public ConfigDef withClientSslSupport() {
-        SslConfigs.addClientSslSupport(this);
+        SslConfigs.addClientSslSupport(this, "");
+        return this;
+    }
+
+    /**
+     * Add standard SSL client configuration options.
+     * @return this
+     */
+    public ConfigDef withClientSslSupport(String prefix) {
+        SslConfigs.addClientSslSupport(this, prefix);
         return this;
     }
 

@@ -16,22 +16,9 @@
  */
 package org.apache.kafka.connect.runtime.rest;
 
-import javax.net.ssl.SSLEngine;
-import javax.servlet.DispatcherType;
-import javax.ws.rs.core.UriBuilder;
-import java.io.IOException;
-import java.net.URI;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.EnumSet;
-import java.util.List;
-import java.util.Locale;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import com.fasterxml.jackson.jaxrs.json.JacksonJsonProvider;
 import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.security.auth.SslEngineFactory;
+import org.apache.kafka.common.network.Mode;
 import org.apache.kafka.common.security.ssl.SslFactory;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -43,9 +30,13 @@ import org.apache.kafka.connect.runtime.health.ConnectClusterDetailsImpl;
 import org.apache.kafka.connect.runtime.health.ConnectClusterStateImpl;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectExceptionMapper;
 import org.apache.kafka.connect.runtime.rest.resources.ConnectResource;
+import org.eclipse.jetty.http.HttpScheme;
 import org.eclipse.jetty.server.Connector;
 import org.eclipse.jetty.server.CustomRequestLog;
 import org.eclipse.jetty.server.Handler;
+import org.eclipse.jetty.server.HttpConfiguration;
+import org.eclipse.jetty.server.HttpConnectionFactory;
+import org.eclipse.jetty.server.SecureRequestCustomizer;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.ServerConnector;
 import org.eclipse.jetty.server.Slf4jRequestLogWriter;
@@ -62,6 +53,25 @@ import org.glassfish.jersey.server.ServerProperties;
 import org.glassfish.jersey.servlet.ServletContainer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import javax.net.ssl.SSLEngine;
+import javax.servlet.DispatcherType;
+import javax.ws.rs.core.UriBuilder;
+import java.io.IOException;
+import java.net.URI;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.EnumSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import static org.apache.kafka.connect.runtime.rest.RestServerConfig.ADMIN_LISTENERS_HTTPS_CONFIGS_PREFIX;
+import static org.apache.kafka.connect.runtime.rest.RestServerConfig.LISTENERS_HTTPS_CONFIGS_PREFIX;
+import static org.apache.kafka.connect.runtime.rest.RestServerConfig.SNI_HOST_CHECK;
 
 /**
  * Embedded server for the REST API that provides the control plane for Kafka Connect workers.
@@ -150,11 +160,25 @@ public abstract class RestServer {
         ServerConnector connector;
 
         if (PROTOCOL_HTTPS.equals(protocol)) {
-            SslEngineFactory sslEngineFactory = SslFactory.instantiateSslEngineFactory(
-                config.valuesWithPrefixOverride(isAdmin ? RestServerConfig.ADMIN_LISTENERS_HTTPS_CONFIGS_PREFIX : "listeners.https.")
+            SslFactory sslFactory = new SslFactory(Mode.SERVER);
+            String prefix = isAdmin ? ADMIN_LISTENERS_HTTPS_CONFIGS_PREFIX : LISTENERS_HTTPS_CONFIGS_PREFIX;
+
+            Map<String, Object> cfgMap = config.configsWithPrefix(prefix);
+            sslFactory.configure(cfgMap);
+
+            HttpConfiguration httpsConfig = new HttpConfiguration();
+            httpsConfig.setSecureScheme(HttpScheme.HTTPS.asString());
+            httpsConfig.setSecurePort(port);
+            httpsConfig.addCustomizer(
+                new SecureRequestCustomizer(Boolean.parseBoolean(String.valueOf(cfgMap.get(SNI_HOST_CHECK))))
             );
 
-            connector = new ServerConnector(jettyServer, new SslContextFactoryImpl(sslEngineFactory));
+            connector = new ServerConnector(
+                jettyServer,
+                new SslContextFactoryServerAdapter(sslFactory),
+                new HttpConnectionFactory(httpsConfig)
+            );
+
             if (!isAdmin) {
                 connector.setName(String.format("%s_%s%d", PROTOCOL_HTTPS, hostname, port));
             }
@@ -520,19 +544,26 @@ public abstract class RestServer {
         context.addFilter(headerFilterHolder, "/*", EnumSet.of(DispatcherType.REQUEST));
     }
 
-    private static class SslContextFactoryImpl extends SslContextFactory.Server {
-        private final SslEngineFactory sslEngineFactory;
+    private static class SslContextFactoryServerAdapter extends SslContextFactory.Server {
+        private final SslFactory sslFactory;
 
-        SslContextFactoryImpl(SslEngineFactory sslEngineFactory) {
-            this.sslEngineFactory = sslEngineFactory;
+        public SslContextFactoryServerAdapter(SslFactory sslFactory) {
+            this.sslFactory = sslFactory;
         }
 
         @Override public SSLEngine newSSLEngine() {
-            return sslEngineFactory.createServerSslEngine(null, -1);
+            return sslFactory.createSslEngine(null, -1);
         }
 
         @Override public SSLEngine newSSLEngine(String host, int port) {
-            return sslEngineFactory.createServerSslEngine(host, port);
+            return sslFactory.createSslEngine(host, port);
+        }
+
+        @Override
+        protected void doStop() throws Exception {
+            super.doStop();
+
+            sslFactory.close();
         }
     }
 }

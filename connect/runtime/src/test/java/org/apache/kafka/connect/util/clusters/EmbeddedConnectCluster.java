@@ -60,6 +60,7 @@ public class EmbeddedConnectCluster extends EmbeddedConnect {
     private final int numInitialWorkers;
     private final String workerNamePrefix;
     private final AtomicInteger nextWorkerId = new AtomicInteger(0);
+    private final boolean ssl;
 
     private EmbeddedConnectCluster(
             int numBrokers,
@@ -68,7 +69,8 @@ public class EmbeddedConnectCluster extends EmbeddedConnect {
             Map<String, String> clientProps,
             Map<String, String> workerProps,
             String name,
-            int numWorkers
+            int numWorkers,
+            boolean ssl
     ) {
         super(numBrokers, brokerProps, maskExitProcedures, clientProps);
         this.workerProps = workerProps;
@@ -77,6 +79,7 @@ public class EmbeddedConnectCluster extends EmbeddedConnect {
         this.numInitialWorkers = numWorkers;
         // leaving non-configurable for now
         this.workerNamePrefix = DEFAULT_WORKER_NAME_PREFIX;
+        this.ssl = ssl;
     }
 
     /**
@@ -145,7 +148,7 @@ public class EmbeddedConnectCluster extends EmbeddedConnect {
 
         workerProps.put(BOOTSTRAP_SERVERS_CONFIG, kafka().bootstrapServers());
         // use a random available port
-        workerProps.put(LISTENERS_CONFIG, "HTTP://" + REST_HOST_NAME + ":0");
+        workerProps.put(LISTENERS_CONFIG, (ssl ? "HTTPS://" : "HTTP://") + REST_HOST_NAME + ":0");
 
         String internalTopicsReplFactor = String.valueOf(numBrokers);
         workerProps.putIfAbsent(GROUP_ID_CONFIG, "connect-integration-test-" + connectClusterName);
@@ -214,7 +217,8 @@ public class EmbeddedConnectCluster extends EmbeddedConnect {
                 Properties brokerProps,
                 boolean maskExitProcedures,
                 Map<String, String> clientProps,
-                Map<String, String> workerProps
+                Map<String, String> workerProps,
+                boolean ssl
         ) {
             return new EmbeddedConnectCluster(
                     numBrokers,
@@ -223,7 +227,8 @@ public class EmbeddedConnectCluster extends EmbeddedConnect {
                     clientProps,
                     workerProps,
                     name,
-                    numWorkers
+                    numWorkers,
+                    ssl
             );
         }
     }

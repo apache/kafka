@@ -298,6 +298,8 @@ public class MirrorMakerConfig extends AbstractConfig {
                         in(Utils.enumOptions(SecurityProtocol.class)),
                         Importance.MEDIUM,
                         CommonClientConfigs.SECURITY_PROTOCOL_DOC)
+                .withClientSslSupport(RestServerConfig.LISTENERS_HTTPS_CONFIGS_PREFIX)
+                .withClientSslSupport(RestServerConfig.ADMIN_LISTENERS_HTTPS_CONFIGS_PREFIX)
                 .withClientSslSupport()
                 .withClientSaslSupport();
         RestServerConfig.addInternalConfig(result);

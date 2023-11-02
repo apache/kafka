@@ -86,7 +86,6 @@ public abstract class RestServerConfig extends AbstractConfig {
             " The supported protocols are HTTP and HTTPS." +
             " An empty or blank string will disable this feature." +
             " The default behavior is to use the regular listener (specified by the 'listeners' property).";
-    public static final String ADMIN_LISTENERS_HTTPS_CONFIGS_PREFIX = "admin.listeners.https.";
 
     public static final String REST_EXTENSION_CLASSES_CONFIG = "rest.extension.classes";
     private static final String REST_EXTENSION_CLASSES_DOC =
@@ -94,6 +93,10 @@ public abstract class RestServerConfig extends AbstractConfig {
                     + "in the order specified. Implementing the interface  "
                     + "<code>ConnectRestExtension</code> allows you to inject into Connect's REST API user defined resources like filters. "
                     + "Typically used to add custom capability like logging, security, etc. ";
+
+    public static final String LISTENERS_HTTPS_CONFIGS_PREFIX = "listeners.https.";
+    public static final String ADMIN_LISTENERS_HTTPS_CONFIGS_PREFIX = "admin." + LISTENERS_HTTPS_CONFIGS_PREFIX;
+    public static final String SNI_HOST_CHECK = "sni.host.check";
 
     // Visible for testing
     static final String RESPONSE_HTTP_HEADERS_CONFIG = "response.http.headers.config";
@@ -210,7 +213,9 @@ public abstract class RestServerConfig extends AbstractConfig {
                         SslClientAuth.NONE.toString(),
                         in(Utils.enumOptions(SslClientAuth.class)),
                         ConfigDef.Importance.LOW,
-                        BrokerSecurityConfigs.SSL_CLIENT_AUTH_DOC);
+                        BrokerSecurityConfigs.SSL_CLIENT_AUTH_DOC)
+                .withClientSslSupport(LISTENERS_HTTPS_CONFIGS_PREFIX)
+                .withClientSslSupport(ADMIN_LISTENERS_HTTPS_CONFIGS_PREFIX);
     }
 
     public static RestServerConfig forPublic(Integer rebalanceTimeoutMs, Map<?, ?> props) {

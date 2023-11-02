@@ -51,7 +51,6 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
@@ -80,7 +79,7 @@ public class RestClientTest {
 
     private static RestClient.HttpResponse<TestDTO> httpRequest(HttpClient httpClient, String requestSignatureAlgorithm, boolean https) {
         RestClient client = spy(new RestClient(null));
-        doReturn(httpClient).when(client).httpClient(any());
+        doReturn(httpClient).when(client).httpClient(https);
         String protocol = https ? "https" : "http";
         String url = protocol + "://localhost:1234/api/endpoint";
         return client.httpRequest(

@@ -16,17 +16,6 @@
  */
 package org.apache.kafka.connect.integration;
 
-import javax.net.ssl.SSLEngine;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.security.KeyPair;
-import java.security.KeyStore;
-import java.security.cert.X509Certificate;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Set;
 import org.apache.http.HttpStatus;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
@@ -34,7 +23,6 @@ import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
-import org.apache.kafka.common.security.auth.SslEngineFactory;
 import org.apache.kafka.common.security.ssl.DefaultSslEngineFactory;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.test.IntegrationTest;
@@ -45,6 +33,17 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
+import javax.net.ssl.SSLEngine;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.security.KeyPair;
+import java.security.cert.X509Certificate;
+import java.util.HashMap;
+import java.util.Map;
+
+import static org.apache.kafka.connect.runtime.rest.RestServerConfig.LISTENERS_HTTPS_CONFIGS_PREFIX;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -58,6 +57,8 @@ public class SslRestIntegrationTest {
     private static final Path KEYSTORE_CLI = Paths.get("keystore.cli.jks");
     private static final Path TRUSTSTORE = Paths.get("truststore.jks");
     private static final Password PASSWORD = new Password("changeIt");
+    private static final String TEST_SSL_FACTORY_PARAM_CONFIG = "my.test.ssl.param";
+    private static final String TEST_SSL_FACTORY_PARAM_VALUE = "testVal";
 
     private EmbeddedConnectCluster connect;
 
@@ -72,30 +73,15 @@ public class SslRestIntegrationTest {
     }
 
     @Test
-    public void testDefaultSslFactory() throws Exception {
-        // build a Connect cluster backed by Kafka and Zk
-        connect = new EmbeddedConnectCluster.Builder()
-            .name("connect-cluster")
-            .numWorkers(1)
-            .numBrokers(1)
-            .ssl()
-            .workerProps(sslConfig("listeners.https.", KEYSTORE_REST.toString()))
-            .build();
-
-        // start the clusters
-        connect.start();
-
-        try (CloseableHttpClient httpClient = testSslClient()) {
-            CloseableHttpResponse response = httpClient.execute(new HttpGet(connect.endpointForResource("")));
-            assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
-        }
-    }
-
-    @Test
     public void testCustomSslFactory() throws Exception {
         // build a Connect cluster backed by Kafka and Zk
-        Map<String, String> config = sslConfig("listeners.https.", KEYSTORE_REST.toString());
-        config.put("listeners.https." + SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, MyTestSslEngineFactory.class.getName());
+        Map<String, String> config = sslConfig(LISTENERS_HTTPS_CONFIGS_PREFIX, KEYSTORE_REST.toString());
+        config.put(LISTENERS_HTTPS_CONFIGS_PREFIX + SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, MyTestSslEngineFactory.class.getName());
+        config.put(LISTENERS_HTTPS_CONFIGS_PREFIX + TEST_SSL_FACTORY_PARAM_CONFIG, TEST_SSL_FACTORY_PARAM_VALUE);
+
+        // Set invalid value to unprefixed property to check that listeners SSL  properties values
+        // aren't mixed with kafka client SSL properties.
+        config.put(SslConfigs.SSL_PROTOCOL_CONFIG, "invalid");
 
         connect = new EmbeddedConnectCluster.Builder()
             .name("connect-cluster")
@@ -114,6 +100,7 @@ public class SslRestIntegrationTest {
         }
 
         assertTrue(MyTestSslEngineFactory.engineCreatedCnt > 0);
+        assertEquals(TEST_SSL_FACTORY_PARAM_VALUE, MyTestSslEngineFactory.paramValue);
     }
 
     @After
@@ -149,6 +136,7 @@ public class SslRestIntegrationTest {
 
         return HttpClients.custom()
             .setSSLContext(sslEngineFactory.sslContext())
+            .setSSLHostnameVerifier((hostname, session) -> true)
             .build();
     }
 
@@ -157,7 +145,7 @@ public class SslRestIntegrationTest {
 
         KeyPair keyPairRest = TestSslUtils.generateKeyPair("RSA");
         X509Certificate certRest = TestSslUtils.generateCertificate(
-            "CN=localhost,OU=Unknown,O=Test,L=Unknown,ST=Unknown,C=Unknown",
+            "CN=rest-srv,OU=Unknown,O=Test,L=Unknown,ST=Unknown,C=Unknown",
             keyPairRest,
             365,
             "SHA256withRSA"
@@ -165,7 +153,7 @@ public class SslRestIntegrationTest {
 
         KeyPair keyPairCli = TestSslUtils.generateKeyPair("RSA");
         X509Certificate certCli = TestSslUtils.generateCertificate(
-            "CN=localhost,OU=Unknown,O=Test,L=Unknown,ST=Unknown,C=Unknown",
+            "CN=rest-cli,OU=Unknown,O=Test,L=Unknown,ST=Unknown,C=Unknown",
             keyPairRest,
             365,
             "SHA256withRSA"
@@ -188,58 +176,23 @@ public class SslRestIntegrationTest {
         Files.deleteIfExists(TRUSTSTORE);
     }
 
-    public static final class MyTestSslEngineFactory implements SslEngineFactory {
+    public static class MyTestSslEngineFactory extends DefaultSslEngineFactory {
 
         public static int engineCreatedCnt = 0;
-        public boolean closed = false;
-
-        DefaultSslEngineFactory defaultSslEngineFactory = new DefaultSslEngineFactory();
+        public static Object paramValue;
 
         public MyTestSslEngineFactory() {
             engineCreatedCnt = 0;
         }
 
-        @Override
-        public SSLEngine createClientSslEngine(String peerHost, int peerPort, String endpointIdentification) {
-            return defaultSslEngineFactory.createClientSslEngine(peerHost, peerPort, endpointIdentification);
-        }
-
-        @Override
-        public SSLEngine createServerSslEngine(String peerHost, int peerPort) {
+        @Override public SSLEngine createServerSslEngine(String peerHost, int peerPort) {
             engineCreatedCnt++;
-            return defaultSslEngineFactory.createServerSslEngine(peerHost, peerPort);
+            return super.createServerSslEngine(peerHost, peerPort);
         }
 
-        @Override
-        public boolean shouldBeRebuilt(Map<String, Object> nextConfigs) {
-            return defaultSslEngineFactory.shouldBeRebuilt(nextConfigs);
+        @Override public void configure(Map<String, ?> configs) {
+            paramValue = configs.get(TEST_SSL_FACTORY_PARAM_CONFIG);
+            super.configure(configs);
         }
-
-        @Override
-        public Set<String> reconfigurableConfigs() {
-            return defaultSslEngineFactory.reconfigurableConfigs();
-        }
-
-        @Override
-        public KeyStore keystore() {
-            return defaultSslEngineFactory.keystore();
-        }
-
-        @Override
-        public KeyStore truststore() {
-            return defaultSslEngineFactory.truststore();
-        }
-
-        @Override
-        public void close() throws IOException {
-            defaultSslEngineFactory.close();
-            closed = true;
-        }
-
-        @Override
-        public void configure(Map<String, ?> configs) {
-            defaultSslEngineFactory.configure(configs);
-        }
-
     }
 }

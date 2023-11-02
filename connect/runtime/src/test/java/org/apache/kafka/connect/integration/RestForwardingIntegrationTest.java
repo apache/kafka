@@ -27,6 +27,7 @@ import org.apache.http.impl.client.HttpClients;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.network.Mode;
+import org.apache.kafka.common.security.ssl.DefaultSslEngineFactory;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.WorkerConfig;
@@ -39,12 +40,10 @@ import org.apache.kafka.connect.runtime.rest.RestClient;
 import org.apache.kafka.connect.runtime.rest.RestServerConfig;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorType;
-import org.apache.kafka.connect.runtime.rest.util.SSLUtils;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestSslUtils;
 import org.apache.kafka.test.TestUtils;
-import org.eclipse.jetty.util.ssl.SslContextFactory;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -54,7 +53,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnitRunner;
 
-import javax.net.ssl.SSLContext;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
@@ -67,6 +65,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static org.apache.kafka.connect.runtime.rest.RestServerConfig.LISTENERS_HTTPS_CONFIGS_PREFIX;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
@@ -88,7 +87,7 @@ public class RestForwardingIntegrationTest {
     @Mock
     private Herder leaderHerder;
 
-    private SslContextFactory factory;
+    private DefaultSslEngineFactory factory;
     private CloseableHttpClient httpClient;
     private Collection<CloseableHttpResponse> responses;
 
@@ -110,7 +109,7 @@ public class RestForwardingIntegrationTest {
                 httpClient,
                 followerServer != null ? followerServer::stop : null,
                 leaderServer != null ? leaderServer::stop : null,
-                factory != null ? factory::stop : null
+                factory != null ? factory::close : null
         );
         if (firstException.get() != null) {
             throw new RuntimeException("Unable to cleanly close resources", firstException.get());
@@ -172,12 +171,11 @@ public class RestForwardingIntegrationTest {
         leaderServer.initializeResources(leaderHerder);
 
         // External client setup
-        factory = SSLUtils.createClientSideSslContextFactory(followerConfig);
-        factory.start();
-        SSLContext ssl = factory.getSslContext();
+        factory = new DefaultSslEngineFactory();
+        factory.configure(followerConfig.valuesWithPrefixOverride("listeners.https."));
         httpClient = HttpClients.custom()
-                .setSSLContext(ssl)
-                .build();
+            .setSSLContext(factory.sslContext())
+            .build();
 
         // Follower will forward to the leader
         URI leaderUrl = leaderServer.advertisedUrl();
@@ -227,11 +225,11 @@ public class RestForwardingIntegrationTest {
         if (dualListener || advertiseSSL) {
             for (String k : sslConfig.keySet()) {
                 if (sslConfig.get(k) instanceof Password) {
-                    workerProps.put(k, ((Password) sslConfig.get(k)).value());
+                    workerProps.put(LISTENERS_HTTPS_CONFIGS_PREFIX + k, ((Password) sslConfig.get(k)).value());
                 } else if (sslConfig.get(k) instanceof List) {
-                    workerProps.put(k, String.join(",", (List<String>) sslConfig.get(k)));
+                    workerProps.put(LISTENERS_HTTPS_CONFIGS_PREFIX + k, String.join(",", (List<String>) sslConfig.get(k)));
                 } else {
-                    workerProps.put(k, sslConfig.get(k).toString());
+                    workerProps.put(LISTENERS_HTTPS_CONFIGS_PREFIX + k, sslConfig.get(k).toString());
                 }
             }
         }

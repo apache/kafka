@@ -19,11 +19,12 @@ package org.apache.kafka.connect.runtime.rest;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.kafka.connect.runtime.distributed.Crypto;
 import org.apache.kafka.common.config.AbstractConfig;
+import org.apache.kafka.common.network.Mode;
+import org.apache.kafka.common.security.ssl.SslFactory;
+import org.apache.kafka.connect.runtime.distributed.Crypto;
 import org.apache.kafka.connect.runtime.rest.entities.ErrorMessage;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
-import org.apache.kafka.connect.runtime.rest.util.SSLUtils;
 import org.eclipse.jetty.client.HttpClient;
 import org.eclipse.jetty.client.api.ContentResponse;
 import org.eclipse.jetty.client.api.Request;
@@ -36,6 +37,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.crypto.SecretKey;
+import javax.net.ssl.SSLEngine;
 import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.Response;
 import java.io.IOException;
@@ -44,6 +46,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
+
+import static org.apache.kafka.connect.runtime.rest.RestServerConfig.LISTENERS_HTTPS_CONFIGS_PREFIX;
 
 /**
  * Client for outbound REST requests to other members of a Connect cluster
@@ -60,8 +64,18 @@ public class RestClient {
     }
 
     // VisibleForTesting
-    HttpClient httpClient(SslContextFactory sslContextFactory) {
-        return sslContextFactory != null ? new HttpClient(sslContextFactory) : new HttpClient();
+    HttpClient httpClient(boolean isSsl) {
+        SslContextFactory.Client sslCliFactory = null;
+
+        if (isSsl) {
+            SslFactory sslFactory = new SslFactory(Mode.CLIENT);
+
+            Map<String, Object> cfgMap = config.configsWithPrefix(LISTENERS_HTTPS_CONFIGS_PREFIX);
+            sslFactory.configure(cfgMap);
+            sslCliFactory = new SslContextFactoryClientAdapter(sslFactory);
+        }
+
+        return new HttpClient(sslCliFactory);
     }
 
     /**
@@ -99,10 +113,7 @@ public class RestClient {
                                                   TypeReference<T> responseFormat,
                                                   SecretKey sessionKey, String requestSignatureAlgorithm) {
         // Only try to load SSL configs if we have to (see KAFKA-14816)
-        SslContextFactory sslContextFactory = url.startsWith("https://")
-                ? SSLUtils.createClientSideSslContextFactory(config)
-                : null;
-        HttpClient client = httpClient(sslContextFactory);
+        HttpClient client = httpClient(url.startsWith("https://"));
         client.setFollowRedirects(false);
 
         try {
@@ -236,6 +247,29 @@ public class RestClient {
 
         public T body() {
             return body;
+        }
+    }
+
+    public static class SslContextFactoryClientAdapter extends SslContextFactory.Client {
+        private final SslFactory sslFactory;
+
+        SslContextFactoryClientAdapter(SslFactory sslFactory) {
+            this.sslFactory = sslFactory;
+        }
+
+        @Override public SSLEngine newSSLEngine() {
+            return sslFactory.createSslEngine(null, -1);
+        }
+
+        @Override public SSLEngine newSSLEngine(String host, int port) {
+            return sslFactory.createSslEngine(host, port);
+        }
+
+        @Override
+        protected void doStop() throws Exception {
+            super.doStop();
+
+            sslFactory.close();
         }
     }
 }
