@@ -362,10 +362,19 @@ class Partition(val topicPartition: TopicPartition,
     leaderLogIfLocal.exists { partitionState.isr.size < effectiveMinIsr(_) } && isLeader
   }
 
+/**
+ * When setting the min ISR, there is no restriction on it. Even if the value does not make sense to be larger than
+ * the replication factor. In case there are such setting, the effective min ISR of min(replication factor, min ISR)
+ * is returned here.
+ */
   private def effectiveMinIsr(leaderLog: UnifiedLog): Int = {
       leaderLog.config.minInSyncReplicas.min(remoteReplicasMap.size + 1)
   }
 
+  /**
+   * Returns whether the partition ISR size is equals to the effective min ISR. For more info about this min ISR, refer to
+   * the effectiveMinIsr().
+   */
   def isAtMinIsr: Boolean = leaderLogIfLocal.exists { partitionState.isr.size == effectiveMinIsr(_) }
 
   def isReassigning: Boolean = assignmentState.isInstanceOf[OngoingReassignmentState]
@@ -1113,7 +1122,7 @@ class Partition(val topicPartition: TopicPartition,
    */
   private def maybeIncrementLeaderHW(leaderLog: UnifiedLog, currentTimeMs: Long = time.milliseconds): Boolean = {
     if (isUnderMinIsr) {
-      trace(s"Skip checking whether HWM can advance because partition is under min ISR(ISR=${partitionState.isr}")
+      trace(s"Not increasing HWM because partition is under min ISR(ISR=${partitionState.isr}")
       return false
     }
     // maybeIncrementLeaderHW is in the hot path, the following code is written to
