@@ -48,7 +48,6 @@ import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
-import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
@@ -63,7 +62,6 @@ import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.jupiter.api.Assertions;
 import org.junit.runner.RunWith;
 import org.powermock.api.easymock.PowerMock;
 import org.powermock.api.easymock.annotation.Mock;
@@ -165,7 +163,6 @@ public class WorkerSinkTaskTest {
     private StatusBackingStore statusBackingStore;
     @Mock
     private KafkaConsumer<byte[], byte[]> consumer;
-    private Consumer<byte[], byte[]> mockConsumer;
     @Mock
     private ErrorHandlingMetrics errorHandlingMetrics;
     private Capture<ConsumerRebalanceListener> rebalanceListener = EasyMock.newCapture();
@@ -2006,77 +2003,25 @@ public class WorkerSinkTaskTest {
 
     @Test
     public void testPartitionCountInCaseOfPartitionRevocation() {
-        mockConsumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
+        MockConsumer<byte[], byte[]> mockConsumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
         // Setting up Worker Sink Task to check metrics
         workerTask = new WorkerSinkTask(
                 taskId, sinkTask, statusListener, TargetState.PAUSED, workerConfig, ClusterConfigState.EMPTY, metrics,
                 keyConverter, valueConverter, errorHandlingMetrics, headerConverter,
                 transformationChain, mockConsumer, pluginLoader, time,
                 RetryWithToleranceOperatorTest.NOOP_OPERATOR, null, statusBackingStore, Collections::emptyList);
-        // Subscribing to Topic = "test" with "MockHandleRebalance"
-        mockConsumer.subscribe(asList(TOPIC), new MockHandleRebalancePass());
-        // Initial Rebalance to assign INITIAL_ASSIGNMENT which is "TOPIC_PARTITION" and "TOPIC_PARTITION2"
-        ((MockConsumer<byte[], byte[]>) mockConsumer).rebalance(INITIAL_ASSIGNMENT);
+        mockConsumer.updateBeginningOffsets(new HashMap<TopicPartition, Long>() {{
+                put(TOPIC_PARTITION, 0 * 1L);
+                put(TOPIC_PARTITION2, 0 * 1L);
+            }});
+        workerTask.initialize(TASK_CONFIG);
+        workerTask.initializeAndStart();
+        // Initial Re-balance to assign INITIAL_ASSIGNMENT which is "TOPIC_PARTITION" and "TOPIC_PARTITION2"
+        mockConsumer.rebalance(INITIAL_ASSIGNMENT);
         assertSinkMetricValue("partition-count", 2);
-        // Revoked "TOPIC_PARTITION" and second rebalnce with "TOPIC_PARTITION2"
-        ((MockConsumer<byte[], byte[]>) mockConsumer).rebalance(Collections.singleton(TOPIC_PARTITION2));
+        // Revoked "TOPIC_PARTITION" and second re-balance with "TOPIC_PARTITION2"
+        mockConsumer.rebalance(Collections.singleton(TOPIC_PARTITION2));
         assertSinkMetricValue("partition-count", 1);
-    }
-
-    @Test
-    public void testPartitionCountInCaseOfPartitionRevocationFail() {
-        mockConsumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
-        // Setting up Worker Sink Task to check metrics
-        workerTask = new WorkerSinkTask(
-                taskId, sinkTask, statusListener, TargetState.PAUSED, workerConfig, ClusterConfigState.EMPTY, metrics,
-                keyConverter, valueConverter, errorHandlingMetrics, headerConverter,
-                transformationChain, mockConsumer, pluginLoader, time,
-                RetryWithToleranceOperatorTest.NOOP_OPERATOR, null, statusBackingStore, Collections::emptyList);
-        // Subscribing to Topic = "test" with "MockHandleRebalance"
-        mockConsumer.subscribe(asList(TOPIC), new MockHandleRebalanceFail());
-        // Initial Rebalance to assign INITIAL_ASSIGNMENT which is "TOPIC_PARTITION" and "TOPIC_PARTITION2"
-        ((MockConsumer<byte[], byte[]>) mockConsumer).rebalance(INITIAL_ASSIGNMENT);
-        assertSinkMetricValue("partition-count", 2);
-        // Revoked "TOPIC_PARTITION" and second rebalnce with "TOPIC_PARTITION2"
-        ((MockConsumer<byte[], byte[]>) mockConsumer).rebalance(Collections.singleton(TOPIC_PARTITION2));
-        Assertions.assertThrows(AssertionError.class,
-                () -> assertSinkMetricValue("partition-count", 1));
-    }
-
-    /*
-    Correct Order to Call the updatePartitionCount
-     */
-    private class MockHandleRebalancePass implements ConsumerRebalanceListener {
-        @Override
-        public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-            workerTask.sinkTaskMetricsGroup().recordPartitionCount(mockConsumer.assignment().size());
-            if (partitions.isEmpty()) {
-                return;
-            }
-            // Not doing anything as the objective is to test only Partition Count
-        }
-        @Override
-        public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
-            // Not doing anything as we do not updatePartitionCount here.
-        }
-    }
-    /*
-    Existing flow which calls updatePartitionCount before updation of Subscription.
-     */
-    private class MockHandleRebalanceFail implements ConsumerRebalanceListener {
-        @Override
-        public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-            if (partitions.isEmpty()) {
-                return;
-            }
-            // Not doing anything as the objective is to test only Partition Count
-            workerTask.sinkTaskMetricsGroup().recordPartitionCount(mockConsumer.assignment().size());
-        }
-        @Override
-        public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
-            // Not doing anything as we do not updatePartitionCount here.
-            workerTask.sinkTaskMetricsGroup().recordPartitionCount(mockConsumer.assignment().size());
-        }
     }
 
     private void expectInitializeTask() {
