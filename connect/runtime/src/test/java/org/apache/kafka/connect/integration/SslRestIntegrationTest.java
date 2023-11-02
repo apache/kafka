@@ -21,6 +21,7 @@ import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
+import org.apache.http.util.EntityUtils;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.security.ssl.DefaultSslEngineFactory;
@@ -96,7 +97,8 @@ public class SslRestIntegrationTest {
 
         try (CloseableHttpClient httpClient = testSslClient()) {
             CloseableHttpResponse response = httpClient.execute(new HttpGet(connect.endpointForResource("")));
-            assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
+            assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode(),
+                response + EntityUtils.toString(response.getEntity()));
         }
 
         assertTrue(MyTestSslEngineFactory.engineCreatedCnt > 0);

@@ -30,13 +30,9 @@ import org.apache.kafka.connect.runtime.health.ConnectClusterDetailsImpl;
 import org.apache.kafka.connect.runtime.health.ConnectClusterStateImpl;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectExceptionMapper;
 import org.apache.kafka.connect.runtime.rest.resources.ConnectResource;
-import org.eclipse.jetty.http.HttpScheme;
 import org.eclipse.jetty.server.Connector;
 import org.eclipse.jetty.server.CustomRequestLog;
 import org.eclipse.jetty.server.Handler;
-import org.eclipse.jetty.server.HttpConfiguration;
-import org.eclipse.jetty.server.HttpConnectionFactory;
-import org.eclipse.jetty.server.SecureRequestCustomizer;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.ServerConnector;
 import org.eclipse.jetty.server.Slf4jRequestLogWriter;
@@ -71,7 +67,6 @@ import java.util.regex.Pattern;
 
 import static org.apache.kafka.connect.runtime.rest.RestServerConfig.ADMIN_LISTENERS_HTTPS_CONFIGS_PREFIX;
 import static org.apache.kafka.connect.runtime.rest.RestServerConfig.LISTENERS_HTTPS_CONFIGS_PREFIX;
-import static org.apache.kafka.connect.runtime.rest.RestServerConfig.SNI_HOST_CHECK_CONFIG;
 
 /**
  * Embedded server for the REST API that provides the control plane for Kafka Connect workers.
@@ -166,19 +161,7 @@ public abstract class RestServer {
             Map<String, Object> cfgMap = config.configsWithPrefix(prefix);
             sslFactory.configure(cfgMap);
 
-            HttpConfiguration httpsConfig = new HttpConfiguration();
-            httpsConfig.setSecureScheme(HttpScheme.HTTPS.asString());
-            httpsConfig.setSecurePort(port);
-            httpsConfig.addCustomizer(
-                new SecureRequestCustomizer(Boolean.parseBoolean(String.valueOf(
-                    cfgMap.getOrDefault(SNI_HOST_CHECK_CONFIG, Boolean.toString(true)))))
-            );
-
-            connector = new ServerConnector(
-                jettyServer,
-                new SslContextFactoryServerAdapter(sslFactory),
-                new HttpConnectionFactory(httpsConfig)
-            );
+            connector = new ServerConnector(jettyServer, new SslContextFactoryServerAdapter(sslFactory));
 
             if (!isAdmin) {
                 connector.setName(String.format("%s_%s%d", PROTOCOL_HTTPS, hostname, port));

@@ -96,8 +96,6 @@ public abstract class RestServerConfig extends AbstractConfig {
 
     public static final String LISTENERS_HTTPS_CONFIGS_PREFIX = "listeners.https.";
     public static final String ADMIN_LISTENERS_HTTPS_CONFIGS_PREFIX = "admin." + LISTENERS_HTTPS_CONFIGS_PREFIX;
-    public static final String SNI_HOST_CHECK_CONFIG = "sni.host.check";
-    private static final String SNI_HOST_CHECK_DOC = "SNI host name must match. ";
 
     // Visible for testing
     static final String RESPONSE_HTTP_HEADERS_CONFIG = "response.http.headers.config";
@@ -215,18 +213,6 @@ public abstract class RestServerConfig extends AbstractConfig {
                         in(Utils.enumOptions(SslClientAuth.class)),
                         ConfigDef.Importance.LOW,
                         BrokerSecurityConfigs.SSL_CLIENT_AUTH_DOC
-                ).define(
-                        LISTENERS_HTTPS_CONFIGS_PREFIX + RestServerConfig.SNI_HOST_CHECK_CONFIG,
-                        ConfigDef.Type.BOOLEAN,
-                        true,
-                        ConfigDef.Importance.LOW,
-                        RestServerConfig.SNI_HOST_CHECK_DOC
-                ).define(
-                ADMIN_LISTENERS_HTTPS_CONFIGS_PREFIX + RestServerConfig.SNI_HOST_CHECK_CONFIG,
-                    ConfigDef.Type.BOOLEAN,
-                    true,
-                    ConfigDef.Importance.LOW,
-                    RestServerConfig.SNI_HOST_CHECK_DOC
                 ).withClientSslSupport(LISTENERS_HTTPS_CONFIGS_PREFIX)
                 .withClientSslSupport(ADMIN_LISTENERS_HTTPS_CONFIGS_PREFIX);
     }
