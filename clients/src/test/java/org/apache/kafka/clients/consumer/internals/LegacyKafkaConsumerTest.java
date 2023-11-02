@@ -2600,45 +2600,45 @@ public class LegacyKafkaConsumerTest {
     }
 
     private LegacyKafkaConsumer<String, String> newConsumer(Time time,
-                                                      KafkaClient client,
-                                                      SubscriptionState subscription,
-                                                      ConsumerMetadata metadata,
-                                                      ConsumerPartitionAssignor assignor,
-                                                      boolean autoCommitEnabled,
-                                                      Optional<String> groupInstanceId) {
+                                                            KafkaClient client,
+                                                            SubscriptionState subscription,
+                                                            ConsumerMetadata metadata,
+                                                            ConsumerPartitionAssignor assignor,
+                                                            boolean autoCommitEnabled,
+                                                            Optional<String> groupInstanceId) {
         return newConsumer(time, client, subscription, metadata, assignor, autoCommitEnabled, groupId, groupInstanceId, false);
     }
 
     private LegacyKafkaConsumer<String, String> newConsumerNoAutoCommit(Time time,
-                                                                  KafkaClient client,
-                                                                  SubscriptionState subscription,
-                                                                  ConsumerMetadata metadata) {
+                                                                        KafkaClient client,
+                                                                        SubscriptionState subscription,
+                                                                        ConsumerMetadata metadata) {
         return newConsumer(time, client, subscription, metadata, new RangeAssignor(), false, groupId, groupInstanceId, false);
     }
 
     private LegacyKafkaConsumer<String, String> newConsumer(Time time,
-                                                      KafkaClient client,
-                                                      SubscriptionState subscription,
-                                                      ConsumerMetadata metadata,
-                                                      ConsumerPartitionAssignor assignor,
-                                                      boolean autoCommitEnabled,
-                                                      String groupId,
-                                                      Optional<String> groupInstanceId,
-                                                      boolean throwOnStableOffsetNotSupported) {
+                                                            KafkaClient client,
+                                                            SubscriptionState subscription,
+                                                            ConsumerMetadata metadata,
+                                                            ConsumerPartitionAssignor assignor,
+                                                            boolean autoCommitEnabled,
+                                                            String groupId,
+                                                            Optional<String> groupInstanceId,
+                                                            boolean throwOnStableOffsetNotSupported) {
         return newConsumer(time, client, subscription, metadata, assignor, autoCommitEnabled, groupId, groupInstanceId,
-        Optional.of(new StringDeserializer()), throwOnStableOffsetNotSupported);
+                Optional.of(new StringDeserializer()), throwOnStableOffsetNotSupported);
     }
 
     private LegacyKafkaConsumer<String, String> newConsumer(Time time,
-                                                      KafkaClient client,
-                                                      SubscriptionState subscription,
-                                                      ConsumerMetadata metadata,
-                                                      ConsumerPartitionAssignor assignor,
-                                                      boolean autoCommitEnabled,
-                                                      String groupId,
-                                                      Optional<String> groupInstanceId,
-                                                      Optional<Deserializer<String>> valueDeserializer,
-                                                      boolean throwOnStableOffsetNotSupported) {
+                                                            KafkaClient client,
+                                                            SubscriptionState subscription,
+                                                            ConsumerMetadata metadata,
+                                                            ConsumerPartitionAssignor assignor,
+                                                            boolean autoCommitEnabled,
+                                                            String groupId,
+                                                            Optional<String> groupInstanceId,
+                                                            Optional<Deserializer<String>> valueDeserializer,
+                                                            boolean throwOnStableOffsetNotSupported) {
         String clientId = "mock-consumer";
         String metricGroupPrefix = "consumer";
         long retryBackoffMs = 100;
