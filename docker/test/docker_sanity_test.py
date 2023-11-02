@@ -19,8 +19,9 @@ import time
 from HTMLTestRunner import HTMLTestRunner
 import constants
 import argparse
+import socket
 
-class DockerSanityTestCommon(unittest.TestCase):
+class DockerSanityTest(unittest.TestCase):
     CONTAINER_NAME="broker"
     IMAGE="apache/kafka"
     
@@ -158,7 +159,7 @@ class DockerSanityTestCommon(unittest.TestCase):
         
         self.assertEqual(total_errors, [])
 
-class DockerSanityTestKraftMode(DockerSanityTestCommon):
+class DockerSanityTestKraftMode(DockerSanityTest):
     def setUp(self) -> None:
         self.startCompose(constants.KRAFT_COMPOSE)
     def tearDown(self) -> None:
@@ -172,11 +173,11 @@ if __name__ == "__main__":
     parser.add_argument("mode", default="all")
     args = parser.parse_args()
 
-    DockerSanityTestCommon.IMAGE = args.image
+    DockerSanityTest.IMAGE = args.image
 
     test_classes_to_run = []
-    if args.mode in ("all", "jvm"):
-        test_classes_to_run.extend([DockerSanityTestKraftMode])
+    if args.mode == "jvm":
+        test_classes_to_run = [DockerSanityTestKraftMode]
     
     loader = unittest.TestLoader()
     suites_list = []
@@ -184,7 +185,7 @@ if __name__ == "__main__":
         suite = loader.loadTestsFromTestCase(test_class)
         suites_list.append(suite)
     big_suite = unittest.TestSuite(suites_list)
-    outfile = open(f"report.html", "w")
+    outfile = open(f"report_{args.mode}.html", "w")
     runner = HTMLTestRunner.HTMLTestRunner(
                 stream=outfile,
                 title='Test Report',
