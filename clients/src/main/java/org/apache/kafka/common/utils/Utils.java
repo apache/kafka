@@ -1021,13 +1021,13 @@ public final class Utils {
     }
 
     /**
-     * Flushes dirty file quietly, logs warning when exception happens.
+     * Flushes dirty file with swallowing {@link NoSuchFileException}
      */
-    public static void flushFileQuietly(Path path, String name) {
+    public static void flushFileIfExists(Path path) throws IOException {
         try (FileChannel fileChannel = FileChannel.open(path, StandardOpenOption.READ)) {
             fileChannel.force(true);
-        } catch (IOException e) {
-            log.warn("Failed to flush {} at path {}", name, path, e);
+        } catch (NoSuchFileException e) {
+            log.warn("Failed to flush file {}", path, e);
         }
     }
 
@@ -1508,7 +1508,7 @@ public final class Utils {
      * Checks if a string is null, empty or whitespace only.
      * @param str a string to be checked
      * @return true if the string is null, empty or whitespace only; otherwise, return false.
-     */    
+     */
     public static boolean isBlank(String str) {
         return str == null || str.trim().isEmpty();
     }

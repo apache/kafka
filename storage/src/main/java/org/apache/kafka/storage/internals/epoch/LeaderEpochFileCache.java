@@ -151,11 +151,6 @@ public class LeaderEpochFileCache {
         return removedEpochs;
     }
 
-    public LeaderEpochFileCache cloneWithLeaderEpochCheckpoint(LeaderEpochCheckpoint leaderEpochCheckpoint) {
-        flushTo(leaderEpochCheckpoint, true);
-        return new LeaderEpochFileCache(this.topicPartition, leaderEpochCheckpoint);
-    }
-
     public boolean nonEmpty() {
         lock.readLock().lock();
         try {
