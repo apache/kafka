@@ -387,11 +387,10 @@ class KafkaServer(
             isZkBroker = true)
 
           // If the ZK broker is in migration mode, start up a RaftManager to learn about the new KRaft controller
-          val kraftMetaProps = MetaProperties(zkMetaProperties.clusterId, zkMetaProperties.brokerId)
           val controllerQuorumVotersFuture = CompletableFuture.completedFuture(
             RaftConfig.parseVoterConnections(config.quorumVoters))
           val raftManager = new KafkaRaftManager[ApiMessageAndVersion](
-            kraftMetaProps,
+            clusterId,
             config,
             new MetadataRecordSerde,
             KafkaRaftServer.MetadataPartition,
@@ -436,7 +435,7 @@ class KafkaServer(
           lifecycleManager.start(
             () => listener.highestOffset,
             brokerToQuorumChannelManager,
-            kraftMetaProps.clusterId,
+            clusterId,
             networkListeners,
             ibpAsFeature,
             OptionalLong.empty()
