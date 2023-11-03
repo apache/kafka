@@ -77,12 +77,9 @@ public class Materialized<K, V, S extends StateStore> {
                 case StreamsConfig.IN_MEMORY:
                     return StoreType.IN_MEMORY;
                 case StreamsConfig.ROCKS_DB:
-                default:
-                    // for backwards compatibility, we ignore invalid store
-                    // types as this is how the code was originally, consider
-                    // cleaning this up and throwing an exception for invalid
-                    // store types
                     return StoreType.ROCKS_DB;
+                default:
+                    throw new IllegalStateException("Unexpected storeType: " + storeType);
             }
         }
     }
