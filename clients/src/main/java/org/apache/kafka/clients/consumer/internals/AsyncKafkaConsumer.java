@@ -1188,9 +1188,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     /**
-     * Utility class that helps the application thread to invoke user registered callbacks such as
-     * {@link OffsetCommitCallback}.  This is achieved by having the background thread to register a runnable to the
-     * invoker upon the future completion, and execute the callbacks when user polls the consumer.
+     * Utility class that helps the application thread to invoke user registered {@link OffsetCommitCallback}. This is
+     * achieved by having the background thread to register a {@link OffsetCommitCallbackTask} to the invoker upon the
+     * future completion, and execute the callbacks when user polls/commits/closes the consumer.
      */
     private class OffsetCommitCallbackInvoker {
         // Thread-safe queue to store callbacks
