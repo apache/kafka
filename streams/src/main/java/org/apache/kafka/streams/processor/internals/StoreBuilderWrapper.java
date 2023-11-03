@@ -26,6 +26,12 @@ import org.apache.kafka.streams.state.internals.TimestampedWindowStoreBuilder;
 import org.apache.kafka.streams.state.internals.VersionedKeyValueStoreBuilder;
 import org.apache.kafka.streams.state.internals.WindowStoreBuilder;
 
+/**
+ * An implementation of {@link StoreFactory} which wraps an instantiated
+ * {@link StoreBuilder}. This should be used in situations where the user
+ * directly builds and supplies the topology with a {@code StoreBuilder}
+ * instead of providing a {@link org.apache.kafka.streams.state.StoreSupplier}.
+ */
 public class StoreBuilderWrapper implements StoreFactory {
 
     private final StoreBuilder<?> builder;

@@ -45,7 +45,8 @@ public class KeyValueStoreMaterializer<K, V> implements StoreFactory {
     private final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materialized;
     private final Set<String> connectedProcessorNames = new HashSet<>();
 
-    private Materialized.StoreType defaultStoreType = Materialized.StoreType.ROCKS_DB;
+    private Materialized.StoreType defaultStoreType
+            = Materialized.StoreType.parse(StreamsConfig.DEFAULT_DSL_STORE_DEFAULT);
 
     public KeyValueStoreMaterializer(
             final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materialized

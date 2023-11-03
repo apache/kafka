@@ -33,8 +33,7 @@ import org.apache.kafka.streams.processor.StateStore;
  *
  *     <li>{@link org.apache.kafka.streams.state.StoreSupplier} is used by the
  *     DSL to provide preconfigured state stores as well as type-safe stores
- *     (e.g. {@link org.apache.kafka.streams.state.KeyValueBytesStoreSupplier}.
- *     Before passing the {@code StoreSupplier} into the </li>
+ *     (e.g. {@link org.apache.kafka.streams.state.KeyValueBytesStoreSupplier}.</li>
  *
  *     <li>{@link StoreFactory} (this class) is internal and not exposed to
  *     the users. It allows the above store specifications to be wrapped in
