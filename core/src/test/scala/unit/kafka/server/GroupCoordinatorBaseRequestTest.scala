@@ -46,7 +46,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
 
   private def controllerServers(): Seq[ControllerServer] = {
     if (cluster.isKRaftTest) {
-      cluster.asInstanceOf[RaftClusterInstance].controllers().collect(Collectors.toList[ControllerServer]).asScala.toSeq
+      cluster.asInstanceOf[RaftClusterInstance].controllerServers().asScala.toSeq
     } else {
       Seq.empty
     }
@@ -56,7 +56,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     TestUtils.createOffsetsTopicWithAdmin(
       admin = cluster.createAdminClient(),
       brokers = brokers(),
-      controllerServers()
+      controllers = controllerServers()
     )
   }
 
