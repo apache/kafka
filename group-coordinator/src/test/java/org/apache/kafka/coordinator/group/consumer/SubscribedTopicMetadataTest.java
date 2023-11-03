@@ -47,7 +47,7 @@ public class SubscribedTopicMetadataTest {
                 new TopicMetadata(topicId, topicName, 5, partitionRacks)
             );
         }
-         subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadataMap);
+        subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadataMap);
     }
 
     @Test
