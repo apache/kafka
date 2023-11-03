@@ -698,9 +698,10 @@ public class ConsumerConfig extends AbstractConfig {
 
     private void maybeOverrideEnableAutoCommit(Map<String, Object> configs) {
         Optional<String> groupId = Optional.ofNullable(getString(CommonClientConfigs.GROUP_ID_CONFIG));
-        boolean enableAutoCommit = values().containsKey(ENABLE_AUTO_COMMIT_CONFIG) ? getBoolean(ENABLE_AUTO_COMMIT_CONFIG) : false;
+        Map<String, Object> originals = originals();
+        boolean enableAutoCommit = originals.containsKey(ENABLE_AUTO_COMMIT_CONFIG) ? getBoolean(ENABLE_AUTO_COMMIT_CONFIG) : false;
         if (!groupId.isPresent()) { // overwrite in case of default group id where the config is not explicitly provided
-            if (!originals().containsKey(ENABLE_AUTO_COMMIT_CONFIG)) {
+            if (!originals.containsKey(ENABLE_AUTO_COMMIT_CONFIG)) {
                 configs.put(ENABLE_AUTO_COMMIT_CONFIG, false);
             } else if (enableAutoCommit) {
                 throw new InvalidConfigurationException(ENABLE_AUTO_COMMIT_CONFIG + " cannot be set to true when default group id (null) is used.");
