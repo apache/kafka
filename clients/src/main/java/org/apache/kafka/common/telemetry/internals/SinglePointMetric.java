@@ -24,7 +24,6 @@ import io.opentelemetry.proto.metrics.v1.NumberDataPoint;
 
 import java.time.Instant;
 import java.util.Map;
-import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
 /**
