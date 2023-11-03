@@ -128,6 +128,34 @@ public class HeartbeatRequestManagerTest {
     }
 
     @ParameterizedTest
+    @ApiKeyVersionsSource(apiKey = ApiKeys.CONSUMER_GROUP_HEARTBEAT)
+    public void testFirstHeartbeatIncludesRequiredInfoToJoinGroupAndGetAssignments(short version) {
+        resetWithZeroHeartbeatInterval(Optional.of(DEFAULT_GROUP_INSTANCE_ID));
+        String topic = "topic1";
+        subscriptions.subscribe(Collections.singleton(topic), Optional.empty());
+        heartbeatRequestManager.onSubscriptionUpdated();
+
+        // Create a ConsumerHeartbeatRequest and verify the payload
+        NetworkClientDelegate.PollResult pollResult = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(1, pollResult.unsentRequests.size());
+        NetworkClientDelegate.UnsentRequest request = pollResult.unsentRequests.get(0);
+        assertTrue(request.requestBuilder() instanceof ConsumerGroupHeartbeatRequest.Builder);
+
+        ConsumerGroupHeartbeatRequest heartbeatRequest =
+                (ConsumerGroupHeartbeatRequest) request.requestBuilder().build(version);
+
+        // Should include epoch 0 to join and no member ID.
+        assertTrue(heartbeatRequest.data().memberId().isEmpty());
+        assertEquals(0, heartbeatRequest.data().memberEpoch());
+
+        // Should include subscription and group basic info to start getting assignments.
+        assertEquals(Collections.singletonList(topic), heartbeatRequest.data().subscribedTopicNames());
+        assertEquals(DEFAULT_MAX_POLL_INTERVAL_MS, heartbeatRequest.data().rebalanceTimeoutMs());
+        assertEquals(DEFAULT_GROUP_ID, heartbeatRequest.data().groupId());
+        assertEquals(DEFAULT_GROUP_INSTANCE_ID, heartbeatRequest.data().instanceId());
+    }
+
+    @ParameterizedTest
     @ValueSource(booleans = {true, false})
     public void testSkippingHeartbeat(final boolean shouldSkipHeartbeat) {
         // The initial heartbeatInterval is set to 0

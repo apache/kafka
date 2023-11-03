@@ -218,8 +218,11 @@ public class HeartbeatRequestManager implements RequestManager {
         ConsumerGroupHeartbeatRequestData data = new ConsumerGroupHeartbeatRequestData()
             .setGroupId(membershipManager.groupId())
             .setMemberEpoch(membershipManager.memberEpoch())
-            .setMemberId(membershipManager.memberId())
             .setRebalanceTimeoutMs(rebalanceTimeoutMs);
+
+        if (membershipManager.memberId() != null) {
+            data.setMemberId(membershipManager.memberId());
+        }
 
         membershipManager.groupInstanceId().ifPresent(data::setInstanceId);
 
