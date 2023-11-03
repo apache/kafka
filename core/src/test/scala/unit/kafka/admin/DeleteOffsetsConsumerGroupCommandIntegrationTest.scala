@@ -20,7 +20,8 @@ package kafka.admin
 import java.util.Properties
 
 import kafka.server.Defaults
-import kafka.utils.{TestInfoUtils, TestUtils}
+import kafka.utils.TestUtils
+import kafka.utils.TestInfoUtils
 import org.apache.kafka.clients.consumer.Consumer
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.consumer.KafkaConsumer
