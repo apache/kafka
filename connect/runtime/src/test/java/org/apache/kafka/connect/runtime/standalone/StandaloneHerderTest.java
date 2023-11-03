@@ -210,7 +210,6 @@ public class StandaloneHerderTest {
         // No new connector is created
 
         herder.putConnectorConfig(CONNECTOR_NAME, config, false, createCallback);
-        verify(loaderSwap).close();
         Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(1000L, TimeUnit.SECONDS);
         assertEquals(createdInfo(SourceSink.SOURCE), connectorInfo.result());
 
@@ -850,9 +849,6 @@ public class StandaloneHerderTest {
         // herder.stop() should stop any running connectors and tasks even if destroyConnector was not invoked
         expectStop();
 
-        statusBackingStore.put(new TaskStatus(new ConnectorTaskId(CONNECTOR_NAME, 0), AbstractStatus.State.DESTROYED, WORKER_ID, 0));
-        statusBackingStore.stop();
-        worker.stop();
 
         FutureCallback<Void> stopCallback = new FutureCallback<>();
         FutureCallback<List<TaskInfo>> taskConfigsCallback = new FutureCallback<>();
@@ -869,8 +865,9 @@ public class StandaloneHerderTest {
 
         herder.stop();
         assertTrue(noneConnectorClientConfigOverridePolicy.isClosed());
-        verify(worker, atLeastOnce()).stop();
-        verify(statusBackingStore, atLeastOnce()).stop();
+        verify(worker).stop();
+        verify(statusBackingStore).put(new TaskStatus(new ConnectorTaskId(CONNECTOR_NAME, 0), AbstractStatus.State.DESTROYED, WORKER_ID, 0));
+        verify(statusBackingStore).stop();
     }
 
     @Test
@@ -1099,7 +1096,6 @@ public class StandaloneHerderTest {
 
         for (Map<String, String> config : configs)
             when(connectorMock.validate(config)).thenReturn(new Config(Collections.emptyList()));
-        loaderSwap.close();
     }
 
     // We need to use a real class here due to some issue with mocking java.lang.Class
