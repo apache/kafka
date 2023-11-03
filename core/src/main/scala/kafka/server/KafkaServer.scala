@@ -61,6 +61,7 @@ import org.apache.zookeeper.client.ZKClientConfig
 
 import java.io.{File, IOException}
 import java.net.{InetAddress, SocketTimeoutException}
+import java.util.OptionalLong
 import java.util.concurrent._
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import scala.collection.{Map, Seq}
@@ -386,11 +387,10 @@ class KafkaServer(
             isZkBroker = true)
 
           // If the ZK broker is in migration mode, start up a RaftManager to learn about the new KRaft controller
-          val kraftMetaProps = MetaProperties(zkMetaProperties.clusterId, zkMetaProperties.brokerId)
           val controllerQuorumVotersFuture = CompletableFuture.completedFuture(
             RaftConfig.parseVoterConnections(config.quorumVoters))
           val raftManager = new KafkaRaftManager[ApiMessageAndVersion](
-            kraftMetaProps,
+            clusterId,
             config,
             new MetadataRecordSerde,
             KafkaRaftServer.MetadataPartition,
@@ -435,10 +435,10 @@ class KafkaServer(
           lifecycleManager.start(
             () => listener.highestOffset,
             brokerToQuorumChannelManager,
-            kraftMetaProps.clusterId,
+            clusterId,
             networkListeners,
             ibpAsFeature,
-            -1
+            OptionalLong.empty()
           )
           logger.debug("Start RaftManager")
         }

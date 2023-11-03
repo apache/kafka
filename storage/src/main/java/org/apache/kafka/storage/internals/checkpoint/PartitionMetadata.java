@@ -14,19 +14,29 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
-import org.apache.kafka.common.TopicPartition;
+package org.apache.kafka.storage.internals.checkpoint;
 
-import java.util.Collection;
+import org.apache.kafka.common.Uuid;
 
-public class NoOpConsumerRebalanceListener implements ConsumerRebalanceListener {
+public class PartitionMetadata {
+    private final int version;
+    private final Uuid topicId;
 
-    @Override
-    public void onPartitionsAssigned(Collection<TopicPartition> partitions) {}
+    public PartitionMetadata(int version, Uuid topicId) {
+        this.version = version;
+        this.topicId = topicId;
+    }
 
-    @Override
-    public void onPartitionsRevoked(Collection<TopicPartition> partitions) {}
+    public int version() {
+        return version;
+    }
 
+    public Uuid topicId() {
+        return topicId;
+    }
+
+    public String encode() {
+        return "version: " + version + "\ntopic_id: " + topicId;
+    }
 }

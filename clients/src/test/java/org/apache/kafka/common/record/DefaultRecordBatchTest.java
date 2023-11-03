@@ -35,8 +35,6 @@ import org.junit.jupiter.params.provider.MethodSource;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
-import java.security.NoSuchAlgorithmException;
-import java.security.SecureRandom;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
@@ -63,15 +61,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class DefaultRecordBatchTest {
-    private static final Random RANDOM;
-
-    static {
-        try {
-            RANDOM = SecureRandom.getInstanceStrong();
-        } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException(e);
-        }
-    }
+    // We avoid SecureRandom.getInstanceStrong() here because it reads from /dev/random and blocks on Linux. Since these
+    // tests don't require cryptographically strong random data, we avoid a CSPRNG (SecureRandom) altogether.
+    private static final Random RANDOM = new Random(20231025);
 
     @Test
     public void testWriteEmptyHeader() {
@@ -405,7 +397,7 @@ public class DefaultRecordBatchTest {
 
     @ParameterizedTest
     @EnumSource(value = CompressionType.class)
-    public void testSkipKeyValueIteratorCorrectness(CompressionType compressionType) throws NoSuchAlgorithmException {
+    public void testSkipKeyValueIteratorCorrectness(CompressionType compressionType) {
         Header[] headers = {new RecordHeader("k1", "v1".getBytes()), new RecordHeader("k2", null)};
         byte[] largeRecordValue = new byte[200 * 1024]; // 200KB
         RANDOM.nextBytes(largeRecordValue);
@@ -477,7 +469,7 @@ public class DefaultRecordBatchTest {
             verify(bufferSupplier, times(expectedNumBufferAllocations)).release(any(ByteBuffer.class));
         }
     }
-    private static Stream<Arguments> testBufferReuseInSkipKeyValueIterator() throws NoSuchAlgorithmException {
+    private static Stream<Arguments> testBufferReuseInSkipKeyValueIterator() {
         byte[] smallRecordValue = "1".getBytes();
         byte[] largeRecordValue = new byte[512 * 1024]; // 512KB
         RANDOM.nextBytes(largeRecordValue);
@@ -541,7 +533,7 @@ public class DefaultRecordBatchTest {
         }
     }
 
-    private static Stream<Arguments> testZstdJniForSkipKeyValueIterator() throws NoSuchAlgorithmException {
+    private static Stream<Arguments> testZstdJniForSkipKeyValueIterator() {
         byte[] smallRecordValue = "1".getBytes();
         byte[] largeRecordValue = new byte[40 * 1024]; // 40KB
         RANDOM.nextBytes(largeRecordValue);

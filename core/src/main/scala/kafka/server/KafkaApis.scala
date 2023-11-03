@@ -1462,6 +1462,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         new OffsetFetchResponseData.OffsetFetchResponseGroup()
           .setGroupId(offsetFetchRequest.groupId)
           .setErrorCode(Errors.forException(exception).code)
+      } else if (offsetFetchResponse.errorCode() != Errors.NONE.code) {
+        offsetFetchResponse
       } else {
         // Clients are not allowed to see offsets for topics that are not authorized for Describe.
         val (authorizedOffsets, _) = authHelper.partitionSeqByAuthorized(
@@ -1501,6 +1503,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         new OffsetFetchResponseData.OffsetFetchResponseGroup()
           .setGroupId(offsetFetchRequest.groupId)
           .setErrorCode(Errors.forException(exception).code)
+      } else if (offsetFetchResponse.errorCode() != Errors.NONE.code) {
+        offsetFetchResponse
       } else {
         val topics = new util.ArrayList[OffsetFetchResponseData.OffsetFetchResponseTopics](
           offsetFetchResponse.topics.size + unauthorizedTopics.size

@@ -350,6 +350,11 @@ class Tasks implements TasksRegistry {
     }
 
     @Override
+    public synchronized Collection<TaskId> activeTaskIds() {
+        return Collections.unmodifiableCollection(activeTasksPerId.keySet());
+    }
+
+    @Override
     public synchronized Collection<Task> activeTasks() {
         return Collections.unmodifiableCollection(activeTasksPerId.values());
     }

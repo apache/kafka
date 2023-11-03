@@ -14,49 +14,35 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.consumer.internals.events;
+package org.apache.kafka.tools.reassign;
 
 import java.util.Objects;
 
-/**
- * The event is a no-op, but is intentionally left here for demonstration and test purposes.
- */
-public class NoopApplicationEvent extends ApplicationEvent {
+public final class Tuple2<V1, V2> {
+    public final V1 v1;
 
-    private final String message;
+    public final V2 v2;
 
-    public NoopApplicationEvent(final String message) {
-        super(Type.NOOP);
-        this.message = Objects.requireNonNull(message);
-    }
-
-    public String message() {
-        return message;
+    public Tuple2(V1 v1, V2 v2) {
+        this.v1 = v1;
+        this.v2 = v2;
     }
 
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-        if (!super.equals(o)) return false;
-
-        NoopApplicationEvent that = (NoopApplicationEvent) o;
-
-        return message.equals(that.message);
+        Tuple2<?, ?> tuple = (Tuple2<?, ?>) o;
+        return Objects.equals(v1, tuple.v1) && Objects.equals(v2, tuple.v2);
     }
 
     @Override
     public int hashCode() {
-        int result = super.hashCode();
-        result = 31 * result + message.hashCode();
-        return result;
+        return Objects.hash(v1, v2);
     }
 
     @Override
     public String toString() {
-        return "NoopApplicationEvent{" +
-                toStringBase() +
-                ",message='" + message + '\'' +
-                '}';
+        return "Tuple2{v1=" + v1 + ", v2=" + v2 + '}';
     }
 }

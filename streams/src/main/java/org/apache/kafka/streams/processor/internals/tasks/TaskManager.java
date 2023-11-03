@@ -118,7 +118,7 @@ public interface TaskManager {
      *
      * @return A map from task ID to the exception that occurred.
      */
-    Map<TaskId, StreamsException> drainUncaughtExceptions();
+    Map<TaskId, RuntimeException> drainUncaughtExceptions();
 
     /**
      * Can be used to check if a specific task has an uncaught exception.
