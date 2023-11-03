@@ -280,25 +280,6 @@ public class AbstractConfig {
     }
 
     /**
-     * Gets all config settings with the given prefix.
-     *
-     * @param prefix the prefix to use as a filter
-     * @return a Map containing the settings with the prefix
-     */
-    public Map<String, Object> configsWithPrefix(String prefix) {
-        Map<String, Object> result = new RecordingMap<>(prefix, false);
-        result.putAll(originalsWithPrefix(prefix));
-
-        for (Map.Entry<String, ?> entry : values.entrySet()) {
-            if (entry.getKey().startsWith(prefix) && entry.getKey().length() > prefix.length()) {
-                result.put(entry.getKey().substring(prefix.length()), entry.getValue());
-            }
-        }
-
-        return result;
-    }
-
-    /**
      * Put all keys that do not start with {@code prefix} and their parsed values in the result map and then
      * put all the remaining keys with the prefix stripped and their parsed values in the result map.
      * <p>

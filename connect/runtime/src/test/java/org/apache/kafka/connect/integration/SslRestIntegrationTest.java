@@ -23,8 +23,10 @@ import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.util.EntityUtils;
 import org.apache.kafka.common.config.SslConfigs;
+import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.security.ssl.DefaultSslEngineFactory;
+import org.apache.kafka.connect.runtime.rest.RestServerConfig;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestSslUtils;
@@ -44,6 +46,7 @@ import java.security.cert.X509Certificate;
 import java.util.HashMap;
 import java.util.Map;
 
+import static org.apache.kafka.common.config.SslConfigs.sslConfigWithPrefix;
 import static org.apache.kafka.connect.runtime.rest.RestServerConfig.LISTENERS_HTTPS_CONFIGS_PREFIX;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -71,6 +74,26 @@ public class SslRestIntegrationTest {
     @AfterClass
     public static void cleanup() throws IOException {
         deleteKeystores();
+    }
+
+    @Test
+    public void testSslConfigForRestServer() {
+        Map<String, Object> mapDefaultParent = new HashMap<>();
+        Map<String, Object> mapWithCustom = new HashMap<>();
+
+        mapDefaultParent.put(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, "locationParent");
+        mapWithCustom.put(LISTENERS_HTTPS_CONFIGS_PREFIX + SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, "locationRest");
+        mapWithCustom.put(LISTENERS_HTTPS_CONFIGS_PREFIX + "custom.ssl.props", "custom");
+
+        RestServerConfig cfgWithCustom = RestServerConfig.forInternal(mapWithCustom);
+        RestServerConfig cfgDefaultParent = RestServerConfig.forInternal(mapDefaultParent);
+
+        checkSslConfigDefaults(sslConfigWithPrefix(cfgWithCustom, LISTENERS_HTTPS_CONFIGS_PREFIX));
+        checkSslConfigDefaults(sslConfigWithPrefix(cfgDefaultParent, LISTENERS_HTTPS_CONFIGS_PREFIX));
+
+        assertEquals("locationParent", sslConfigWithPrefix(cfgDefaultParent, LISTENERS_HTTPS_CONFIGS_PREFIX).get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG));
+        assertEquals("locationRest", sslConfigWithPrefix(cfgWithCustom, LISTENERS_HTTPS_CONFIGS_PREFIX).get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG));
+        assertEquals("custom", sslConfigWithPrefix(cfgWithCustom, LISTENERS_HTTPS_CONFIGS_PREFIX).get("custom.ssl.props"));
     }
 
     @Test
@@ -108,7 +131,10 @@ public class SslRestIntegrationTest {
     @After
     public void close() {
         // stop all Connect, Kafka and Zk threads.
-        connect.stop();
+        if (connect != null) {
+            connect.stop();
+            connect = null;
+        }
     }
 
     private static Map<String, String> sslConfig(String prefix, String keystore) {
@@ -176,6 +202,13 @@ public class SslRestIntegrationTest {
         Files.deleteIfExists(KEYSTORE_REST);
         Files.deleteIfExists(KEYSTORE_CLI);
         Files.deleteIfExists(TRUSTSTORE);
+    }
+
+    private static void checkSslConfigDefaults(Map<String, Object> cfg) {
+        SslConfigs.RECONFIGURABLE_CONFIGS.forEach(k -> assertTrue(cfg.containsKey(k), k));
+        SslConfigs.NON_RECONFIGURABLE_CONFIGS.stream()
+            .filter(k -> !k.equals(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG)) // has not ConfigDef
+            .forEach(k -> assertTrue(cfg.containsKey(k), k));
     }
 
     public static class MyTestSslEngineFactory extends DefaultSslEngineFactory {

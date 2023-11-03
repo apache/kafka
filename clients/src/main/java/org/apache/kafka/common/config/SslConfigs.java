@@ -23,6 +23,7 @@ import org.apache.kafka.common.utils.Utils;
 
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.TrustManagerFactory;
+import java.util.Map;
 import java.util.Set;
 
 public class SslConfigs {
@@ -184,4 +185,27 @@ public class SslConfigs {
             SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG,
             SslConfigs.SSL_SECURE_RANDOM_IMPLEMENTATION_CONFIG,
             SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG);
+
+    private final static ConfigDef BASE_SSL_DEF = new ConfigDef();
+
+    static {
+        addClientSslSupport(BASE_SSL_DEF);
+    }
+
+    public static Map<String, Object> sslConfigWithPrefix(AbstractConfig cfg, String prefix) {
+        Map<String, Object> res = BASE_SSL_DEF.defaultValues();
+
+        res.putAll(cfg.valuesWithPrefixAllOrNothing(prefix));
+
+        for (Map.Entry<String, ?> entry : cfg.originalsWithPrefix(prefix).entrySet()) {
+            ConfigDef.ConfigKey configKey = BASE_SSL_DEF.configKeys().get(entry.getKey());
+
+            if (configKey != null)
+                res.put(entry.getKey(), BASE_SSL_DEF.parseValue(configKey, entry.getValue(), true));
+            else
+                res.put(entry.getKey(), entry.getValue());
+        }
+
+        return res;
+    }
 }

@@ -18,6 +18,7 @@ package org.apache.kafka.connect.runtime.rest;
 
 import com.fasterxml.jackson.jaxrs.json.JacksonJsonProvider;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.network.Mode;
 import org.apache.kafka.common.security.ssl.SslFactory;
 import org.apache.kafka.common.utils.Utils;
@@ -158,7 +159,7 @@ public abstract class RestServer {
             SslFactory sslFactory = new SslFactory(Mode.SERVER);
             String prefix = isAdmin ? ADMIN_LISTENERS_HTTPS_CONFIGS_PREFIX : LISTENERS_HTTPS_CONFIGS_PREFIX;
 
-            Map<String, Object> cfgMap = config.configsWithPrefix(prefix);
+            Map<String, Object> cfgMap = SslConfigs.sslConfigWithPrefix(config, prefix);
             sslFactory.configure(cfgMap);
 
             connector = new ServerConnector(jettyServer, new SslContextFactoryServerAdapter(sslFactory));

@@ -20,6 +20,7 @@ package org.apache.kafka.connect.runtime.rest;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.common.config.AbstractConfig;
+import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.network.Mode;
 import org.apache.kafka.common.security.ssl.SslFactory;
 import org.apache.kafka.connect.runtime.distributed.Crypto;
@@ -70,7 +71,7 @@ public class RestClient {
         if (isSsl) {
             SslFactory sslFactory = new SslFactory(Mode.CLIENT);
 
-            Map<String, Object> cfgMap = config.configsWithPrefix(LISTENERS_HTTPS_CONFIGS_PREFIX);
+            Map<String, Object> cfgMap = SslConfigs.sslConfigWithPrefix(config, LISTENERS_HTTPS_CONFIGS_PREFIX);
             sslFactory.configure(cfgMap);
             sslCliFactory = new SslContextFactoryClientAdapter(sslFactory);
         }
