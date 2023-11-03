@@ -135,15 +135,21 @@ public class MembershipManagerImpl implements MembershipManager {
     private final TopicMetadataRequestManager metadataRequestManager;
 
     /**
-     * Epoch that a member (not static) must include a heartbeat request to indicate that it wants
-     * to leave the group. This is considered as a definitive leave.
+     * Epoch that a member must include a heartbeat request to indicate that it want to join or
+     * re-join a group.
+     */
+    public static final int JOIN_GROUP_EPOCH = 0;
+
+    /**
+     * Epoch that a member (not static) must include in a heartbeat request to indicate that it
+     * wants to leave the group. This is considered as a definitive leave.
      */
     public static final int LEAVE_GROUP_EPOCH = -1;
 
     /**
-     * Epoch that a static member (member with group instance id) must include a heartbeat request
-     * to indicate that it wants to leave the group. This will be considered as a potentially
-     * temporary leave.
+     * Epoch that a static member (member with group instance id) must include in a heartbeat
+     * request to indicate that it wants to leave the group. This will be considered as a
+     * potentially temporary leave.
      */
     public static final int LEAVE_GROUP_EPOCH_FOR_STATIC_MEMBER = -2;
 
@@ -737,7 +743,7 @@ public class MembershipManagerImpl implements MembershipManager {
     }
 
     private void resetEpoch() {
-        this.memberEpoch = 0;
+        this.memberEpoch = JOIN_GROUP_EPOCH;
     }
 
     /**
