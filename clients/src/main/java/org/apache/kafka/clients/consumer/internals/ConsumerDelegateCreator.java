@@ -48,7 +48,6 @@ public class ConsumerDelegateCreator {
     public <K, V> Consumer<K, V> create(ConsumerConfig config,
                                         Deserializer<K> keyDeserializer,
                                         Deserializer<V> valueDeserializer) {
-
         try {
             GroupProtocol groupProtocol = GroupProtocol.valueOf(config.getString(ConsumerConfig.GROUP_PROTOCOL_CONFIG));
 
