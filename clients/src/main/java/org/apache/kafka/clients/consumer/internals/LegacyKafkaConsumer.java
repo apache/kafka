@@ -20,9 +20,9 @@ import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.GroupRebalanceConfig;
+import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.consumer.CommitFailedException;
-import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.ConsumerInterceptor;
@@ -67,7 +67,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
@@ -76,6 +75,8 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
 
+import static org.apache.kafka.clients.consumer.ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.CLIENT_RACK_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_JMX_PREFIX;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP_PREFIX;
@@ -573,15 +574,13 @@ import static org.apache.kafka.common.utils.Utils.swallow;
  * group protocol (from KIP-848) introduces allows users continue using the legacy "generic" group protocol.
  * This class should not be invoked directly; users should instead create a {@link KafkaConsumer} as before.
  */
-public class LegacyKafkaConsumer<K, V> implements Consumer<K, V> {
+public class LegacyKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     private static final long NO_CURRENT_THREAD = -1L;
     public static final String DEFAULT_REASON = "rebalance enforced by user";
 
-    // Visible for testing
-    final Metrics metrics;
-    final KafkaConsumerMetrics kafkaConsumerMetrics;
-
+    private final Metrics metrics;
+    private final KafkaConsumerMetrics kafkaConsumerMetrics;
     private Logger log;
     private final String clientId;
     private final Optional<String> groupId;
@@ -599,7 +598,7 @@ public class LegacyKafkaConsumer<K, V> implements Consumer<K, V> {
     private final ConsumerMetadata metadata;
     private final long retryBackoffMs;
     private final long retryBackoffMaxMs;
-    private final long requestTimeoutMs;
+    private final int requestTimeoutMs;
     private final int defaultApiTimeoutMs;
     private volatile boolean closed = false;
     private final List<ConsumerPartitionAssignor> assignors;
@@ -731,46 +730,129 @@ public class LegacyKafkaConsumer<K, V> implements Consumer<K, V> {
 
     // visible for testing
     LegacyKafkaConsumer(LogContext logContext,
-                        String clientId,
-                        ConsumerCoordinator coordinator,
+                        Time time,
+                        ConsumerConfig config,
                         Deserializer<K> keyDeserializer,
                         Deserializer<V> valueDeserializer,
-                        Fetcher<K, V> fetcher,
-                        OffsetFetcher offsetFetcher,
-                        TopicMetadataFetcher topicMetadataFetcher,
-                        ConsumerInterceptors<K, V> interceptors,
-                        Time time,
-                        ConsumerNetworkClient client,
-                        Metrics metrics,
+                        KafkaClient client,
                         SubscriptionState subscriptions,
                         ConsumerMetadata metadata,
-                        long retryBackoffMs,
-                        long retryBackoffMaxMs,
-                        long requestTimeoutMs,
-                        int defaultApiTimeoutMs,
-                        List<ConsumerPartitionAssignor> assignors,
-                        String groupId) {
+                        List<ConsumerPartitionAssignor> assignors) {
         this.log = logContext.logger(getClass());
-        this.clientId = clientId;
-        this.coordinator = coordinator;
-        this.deserializers = new Deserializers<>(keyDeserializer, valueDeserializer);
-        this.fetcher = fetcher;
-        this.offsetFetcher = offsetFetcher;
-        this.topicMetadataFetcher = topicMetadataFetcher;
-        this.isolationLevel = IsolationLevel.READ_UNCOMMITTED;
-        this.interceptors = Objects.requireNonNull(interceptors);
         this.time = time;
-        this.client = client;
-        this.metrics = metrics;
         this.subscriptions = subscriptions;
         this.metadata = metadata;
-        this.retryBackoffMs = retryBackoffMs;
-        this.retryBackoffMaxMs = retryBackoffMaxMs;
-        this.requestTimeoutMs = requestTimeoutMs;
-        this.defaultApiTimeoutMs = defaultApiTimeoutMs;
+        this.metrics = new Metrics(time);
+        this.clientId = config.getString(ConsumerConfig.CLIENT_ID_CONFIG);
+        this.groupId = Optional.ofNullable(config.getString(ConsumerConfig.GROUP_ID_CONFIG));
+        this.deserializers = new Deserializers<>(keyDeserializer, valueDeserializer);
+        this.isolationLevel = ConsumerUtils.configuredIsolationLevel(config);
+        this.defaultApiTimeoutMs = config.getInt(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
         this.assignors = assignors;
-        this.groupId = Optional.ofNullable(groupId);
-        this.kafkaConsumerMetrics = new KafkaConsumerMetrics(metrics, "consumer");
+        this.kafkaConsumerMetrics = new KafkaConsumerMetrics(metrics, CONSUMER_METRIC_GROUP_PREFIX);
+        this.interceptors = new ConsumerInterceptors<>(Collections.emptyList());
+        this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
+        this.retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
+        this.requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
+
+        int sessionTimeoutMs = config.getInt(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG);
+        int rebalanceTimeoutMs = config.getInt(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG);
+        int heartbeatIntervalMs = config.getInt(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG);
+        boolean enableAutoCommit = config.getBoolean(ENABLE_AUTO_COMMIT_CONFIG);
+        boolean throwOnStableOffsetNotSupported = config.getBoolean(THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED);
+        int autoCommitIntervalMs = config.getInt(AUTO_COMMIT_INTERVAL_MS_CONFIG);
+        String rackId = config.getString(CLIENT_RACK_CONFIG);
+        Optional<String> groupInstanceId = Optional.ofNullable(config.getString(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG));
+
+        this.client = new ConsumerNetworkClient(
+            logContext,
+            client,
+            metadata,
+            time,
+            retryBackoffMs,
+            requestTimeoutMs,
+            heartbeatIntervalMs
+        );
+
+        if (groupId.isPresent()) {
+            GroupRebalanceConfig rebalanceConfig = new GroupRebalanceConfig(
+                sessionTimeoutMs,
+                rebalanceTimeoutMs,
+                heartbeatIntervalMs,
+                groupId.get(),
+                groupInstanceId,
+                retryBackoffMs,
+                retryBackoffMaxMs,
+                true
+            );
+            this.coordinator = new ConsumerCoordinator(
+                rebalanceConfig,
+                logContext,
+                this.client,
+                assignors,
+                metadata,
+                subscriptions,
+                metrics,
+                CONSUMER_METRIC_GROUP_PREFIX,
+                time,
+                enableAutoCommit,
+                autoCommitIntervalMs,
+                interceptors,
+                throwOnStableOffsetNotSupported,
+                rackId
+            );
+        } else {
+            this.coordinator = null;
+        }
+
+        int maxBytes = config.getInt(ConsumerConfig.FETCH_MAX_BYTES_CONFIG);
+        int maxWaitMs = config.getInt(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG);
+        int minBytes = config.getInt(ConsumerConfig.FETCH_MIN_BYTES_CONFIG);
+        int fetchSize = config.getInt(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG);
+        int maxPollRecords = config.getInt(ConsumerConfig.MAX_POLL_RECORDS_CONFIG);
+        boolean checkCrcs = config.getBoolean(ConsumerConfig.CHECK_CRCS_CONFIG);
+
+        ConsumerMetrics metricsRegistry = new ConsumerMetrics(CONSUMER_METRIC_GROUP_PREFIX);
+        FetchMetricsManager metricsManager = new FetchMetricsManager(metrics, metricsRegistry.fetcherMetrics);
+        ApiVersions apiVersions = new ApiVersions();
+        FetchConfig fetchConfig = new FetchConfig(
+                minBytes,
+                maxBytes,
+                maxWaitMs,
+                fetchSize,
+                maxPollRecords,
+                checkCrcs,
+                rackId,
+                isolationLevel
+        );
+        this.fetcher = new Fetcher<>(
+            logContext,
+            this.client,
+            metadata,
+            subscriptions,
+            fetchConfig,
+            deserializers,
+            metricsManager,
+            time,
+            apiVersions
+        );
+        this.offsetFetcher = new OffsetFetcher(
+            logContext,
+            this.client,
+            metadata,
+            subscriptions,
+            time,
+            retryBackoffMs,
+            requestTimeoutMs,
+            isolationLevel,
+            apiVersions
+        );
+        this.topicMetadataFetcher = new TopicMetadataFetcher(
+            logContext,
+            this.client,
+            retryBackoffMs,
+            retryBackoffMaxMs
+        );
     }
 
     /**
@@ -2545,11 +2627,23 @@ public class LegacyKafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     // Functions below are for testing only
-    String getClientId() {
+    @Override
+    public String getClientId() {
         return clientId;
     }
 
-    boolean updateAssignmentMetadataIfNeeded(final Timer timer) {
+    @Override
+    public Metrics metricsInternal() {
+        return metrics;
+    }
+
+    @Override
+    public KafkaConsumerMetrics kafkaConsumerMetrics() {
+        return kafkaConsumerMetrics;
+    }
+
+    @Override
+    public boolean updateAssignmentMetadataIfNeeded(final Timer timer) {
         return updateAssignmentMetadataIfNeeded(timer, true);
     }
 }

@@ -16,7 +16,12 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import org.apache.kafka.clients.KafkaClient;
+import org.apache.kafka.clients.consumer.internals.ConsumerDelegate;
 import org.apache.kafka.clients.consumer.internals.ConsumerDelegateCreator;
+import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
+import org.apache.kafka.clients.consumer.internals.KafkaConsumerMetrics;
+import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
@@ -24,7 +29,11 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InterruptException;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Timer;
 
 import java.time.Duration;
 import java.util.Collection;
@@ -517,7 +526,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     private final static ConsumerDelegateCreator CREATOR = new ConsumerDelegateCreator();
 
-    private final Consumer<K, V> delegate;
+    private final ConsumerDelegate<K, V> delegate;
 
     /**
      * A consumer is instantiated by providing a set of key-value pairs as configuration. Valid configuration strings
@@ -590,6 +599,28 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     KafkaConsumer(ConsumerConfig config, Deserializer<K> keyDeserializer, Deserializer<V> valueDeserializer) {
         delegate = CREATOR.create(config, keyDeserializer, valueDeserializer);
+    }
+
+    KafkaConsumer(LogContext logContext,
+                  Time time,
+                  ConsumerConfig config,
+                  Deserializer<K> keyDeserializer,
+                  Deserializer<V> valueDeserializer,
+                  KafkaClient client,
+                  SubscriptionState subscriptions,
+                  ConsumerMetadata metadata,
+                  List<ConsumerPartitionAssignor> assignors) {
+        delegate = CREATOR.create(
+            logContext,
+            time,
+            config,
+            keyDeserializer,
+            valueDeserializer,
+            client,
+            subscriptions,
+            metadata,
+            assignors
+        );
     }
 
     /**
@@ -1755,5 +1786,22 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     @Override
     public void wakeup() {
         delegate.wakeup();
+    }
+
+    // Functions below are for testing only
+    String getClientId() {
+        return delegate.getClientId();
+    }
+
+    Metrics metricsInternal() {
+        return delegate.metricsInternal();
+    }
+
+    KafkaConsumerMetrics kafkaConsumerMetrics() {
+        return delegate.kafkaConsumerMetrics();
+    }
+
+    boolean updateAssignmentMetadataIfNeeded(final Timer timer) {
+        return delegate.updateAssignmentMetadataIfNeeded(timer);
     }
 }

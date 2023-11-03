@@ -20,6 +20,7 @@ import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.GroupRebalanceConfig;
+import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -117,7 +118,7 @@ import static org.apache.kafka.common.utils.Utils.join;
  * This class should not be invoked directly; users should instead create a {@link KafkaConsumer} as before.
  * This consumer implements the new consumer group protocol and is intended to be the default in coming releases.
  */
-public class AsyncKafkaConsumer<K, V> implements Consumer<K, V> {
+public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     private final ApplicationEventHandler applicationEventHandler;
     private final Time time;
@@ -143,7 +144,7 @@ public class AsyncKafkaConsumer<K, V> implements Consumer<K, V> {
     private final ConsumerMetadata metadata;
     private final Metrics metrics;
     private final long retryBackoffMs;
-    private final long defaultApiTimeoutMs;
+    private final int defaultApiTimeoutMs;
     private volatile boolean closed = false;
     private final List<ConsumerPartitionAssignor> assignors;
 
@@ -294,6 +295,83 @@ public class AsyncKafkaConsumer<K, V> implements Consumer<K, V> {
         this.applicationEventHandler = applicationEventHandler;
         this.assignors = assignors;
         this.kafkaConsumerMetrics = new KafkaConsumerMetrics(metrics, "consumer");
+    }
+
+    AsyncKafkaConsumer(LogContext logContext,
+                       Time time,
+                       ConsumerConfig config,
+                       Deserializer<K> keyDeserializer,
+                       Deserializer<V> valueDeserializer,
+                       KafkaClient client,
+                       SubscriptionState subscriptions,
+                       ConsumerMetadata metadata,
+                       List<ConsumerPartitionAssignor> assignors) {
+        this.log = logContext.logger(getClass());
+        this.subscriptions = subscriptions;
+        this.clientId = config.getString(ConsumerConfig.CLIENT_ID_CONFIG);
+        this.fetchBuffer = new FetchBuffer(logContext);
+        this.isolationLevel = IsolationLevel.READ_UNCOMMITTED;
+        this.interceptors = new ConsumerInterceptors<>(Collections.emptyList());
+        this.time = time;
+        this.metrics = new Metrics(time);
+        this.groupId = Optional.ofNullable(config.getString(ConsumerConfig.GROUP_ID_CONFIG));
+        this.metadata = metadata;
+        this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
+        this.defaultApiTimeoutMs = config.getInt(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
+        this.deserializers = new Deserializers<>(keyDeserializer, valueDeserializer);
+        this.assignors = assignors;
+
+        ConsumerMetrics metricsRegistry = new ConsumerMetrics(CONSUMER_METRIC_GROUP_PREFIX);
+        FetchMetricsManager fetchMetricsManager = new FetchMetricsManager(metrics, metricsRegistry.fetcherMetrics);
+        this.fetchCollector = new FetchCollector<>(logContext,
+                metadata,
+                subscriptions,
+                new FetchConfig(config),
+                deserializers,
+                fetchMetricsManager,
+                time);
+        this.kafkaConsumerMetrics = new KafkaConsumerMetrics(metrics, "consumer");
+
+        GroupRebalanceConfig groupRebalanceConfig = new GroupRebalanceConfig(
+            config,
+            GroupRebalanceConfig.ProtocolType.CONSUMER
+        );
+
+        BlockingQueue<ApplicationEvent> applicationEventQueue = new LinkedBlockingQueue<>();
+        BlockingQueue<BackgroundEvent> backgroundEventQueue = new LinkedBlockingQueue<>();
+        this.backgroundEventProcessor = new BackgroundEventProcessor(logContext, backgroundEventQueue);
+        ApiVersions apiVersions = new ApiVersions();
+        Supplier<NetworkClientDelegate> networkClientDelegateSupplier = () -> new NetworkClientDelegate(
+            time,
+            config,
+            logContext,
+            client
+        );
+        Supplier<RequestManagers> requestManagersSupplier = RequestManagers.supplier(
+            time,
+            logContext,
+            backgroundEventQueue,
+            metadata,
+            subscriptions,
+            fetchBuffer,
+            config,
+            groupRebalanceConfig,
+            apiVersions,
+            fetchMetricsManager,
+            networkClientDelegateSupplier
+        );
+        Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(
+                logContext,
+                metadata,
+                applicationEventQueue,
+                requestManagersSupplier
+        );
+        this.applicationEventHandler = new ApplicationEventHandler(logContext,
+                time,
+                applicationEventQueue,
+                applicationEventProcessorSupplier,
+                networkClientDelegateSupplier,
+                requestManagersSupplier);
     }
 
     /**
@@ -983,7 +1061,8 @@ public class AsyncKafkaConsumer<K, V> implements Consumer<K, V> {
         }
     }
 
-    boolean updateAssignmentMetadataIfNeeded(Timer timer) {
+    @Override
+    public boolean updateAssignmentMetadataIfNeeded(Timer timer) {
         backgroundEventProcessor.process();
 
         // Keeping this updateAssignmentMetadataIfNeeded wrapping up the updateFetchPositions as
@@ -1061,4 +1140,18 @@ public class AsyncKafkaConsumer<K, V> implements Consumer<K, V> {
         }
     }
 
+    @Override
+    public String getClientId() {
+        return clientId;
+    }
+
+    @Override
+    public Metrics metricsInternal() {
+        return metrics;
+    }
+
+    @Override
+    public KafkaConsumerMetrics kafkaConsumerMetrics() {
+        return kafkaConsumerMetrics;
+    }
 }

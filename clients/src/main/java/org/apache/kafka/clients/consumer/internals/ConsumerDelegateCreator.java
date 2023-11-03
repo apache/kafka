@@ -16,12 +16,19 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Time;
+
+import java.util.List;
+import java.util.Locale;
 
 /**
  * {@code ConsumerDelegateCreator} implements a quasi-factory pattern to allow the caller to remain unaware of the
@@ -45,16 +52,59 @@ import org.apache.kafka.common.serialization.Deserializer;
  */
 public class ConsumerDelegateCreator {
 
-    public <K, V> Consumer<K, V> create(ConsumerConfig config,
-                                        Deserializer<K> keyDeserializer,
-                                        Deserializer<V> valueDeserializer) {
+    public <K, V> ConsumerDelegate<K, V> create(ConsumerConfig config,
+                                                Deserializer<K> keyDeserializer,
+                                                Deserializer<V> valueDeserializer) {
         try {
-            GroupProtocol groupProtocol = GroupProtocol.valueOf(config.getString(ConsumerConfig.GROUP_PROTOCOL_CONFIG));
+            GroupProtocol groupProtocol = GroupProtocol.valueOf(config.getString(ConsumerConfig.GROUP_PROTOCOL_CONFIG).toUpperCase(Locale.ROOT));
 
             if (groupProtocol == GroupProtocol.CONSUMER)
                 return new AsyncKafkaConsumer<>(config, keyDeserializer, valueDeserializer);
             else
                 return new LegacyKafkaConsumer<>(config, keyDeserializer, valueDeserializer);
+        } catch (KafkaException e) {
+            throw e;
+        } catch (Throwable t) {
+            throw new KafkaException("Failed to construct Kafka consumer", t);
+        }
+    }
+
+    public <K, V> ConsumerDelegate<K, V> create(LogContext logContext,
+                                                Time time,
+                                                ConsumerConfig config,
+                                                Deserializer<K> keyDeserializer,
+                                                Deserializer<V> valueDeserializer,
+                                                KafkaClient client,
+                                                SubscriptionState subscriptions,
+                                                ConsumerMetadata metadata,
+                                                List<ConsumerPartitionAssignor> assignors) {
+        try {
+            GroupProtocol groupProtocol = GroupProtocol.valueOf(config.getString(ConsumerConfig.GROUP_PROTOCOL_CONFIG).toUpperCase(Locale.ROOT));
+
+            if (groupProtocol == GroupProtocol.CONSUMER)
+                return new AsyncKafkaConsumer<>(
+                    logContext,
+                    time,
+                    config,
+                    keyDeserializer,
+                    valueDeserializer,
+                    client,
+                    subscriptions,
+                    metadata,
+                    assignors
+                );
+            else
+                return new LegacyKafkaConsumer<>(
+                    logContext,
+                    time,
+                    config,
+                    keyDeserializer,
+                    valueDeserializer,
+                    client,
+                    subscriptions,
+                    metadata,
+                    assignors
+                );
         } catch (KafkaException e) {
             throw e;
         } catch (Throwable t) {
