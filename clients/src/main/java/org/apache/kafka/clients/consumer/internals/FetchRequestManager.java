@@ -21,7 +21,9 @@ import java.util.Map;
 import java.util.function.BiConsumer;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
+import java.util.Optional;
 
+import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.FetchSessionHandler;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult;
@@ -47,8 +49,9 @@ public class FetchRequestManager extends AbstractFetch implements RequestManager
                         final FetchConfig fetchConfig,
                         final FetchBuffer fetchBuffer,
                         final FetchMetricsManager metricsManager,
-                        final NetworkClientDelegate networkClientDelegate) {
-        super(logContext, metadata, subscriptions, fetchConfig, fetchBuffer, metricsManager, time);
+                        final NetworkClientDelegate networkClientDelegate,
+                        final ApiVersions apiVersions) {
+        super(logContext, metadata, subscriptions, fetchConfig, fetchBuffer, metricsManager, time, apiVersions);
         this.networkClientDelegate = networkClientDelegate;
     }
 
@@ -109,7 +112,7 @@ public class FetchRequestManager extends AbstractFetch implements RequestManager
                     successHandler.handle(fetchTarget, data, clientResponse);
             };
 
-            return new UnsentRequest(request, fetchTarget, responseHandler);
+            return new UnsentRequest(request, Optional.of(fetchTarget)).whenComplete(responseHandler);
         }).collect(Collectors.toList());
 
         return new PollResult(requests);

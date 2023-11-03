@@ -1893,7 +1893,7 @@ KStream&lt;String, String&gt; joined = left.leftJoin(right,
                                             join output records.</p>
                                             <blockquote>
                                                 <div><ul class="simple">
-                                                    <li>Input records with a <code class="docutils literal"><span class="pre">null</span></code> key or a <code class="docutils literal"><span class="pre">null</span></code> value are ignored and do not trigger the join.</li>
+                                                    <li>Input records with a <code class="docutils literal"><span class="pre">null</span></code> value are ignored and do not trigger the join.</li>
                                                 </ul>
                                                 </div></blockquote>
                                         </li>
@@ -1954,7 +1954,7 @@ KStream&lt;String, String&gt; joined = left.outerJoin(right,
                                             join output records.</p>
                                             <blockquote>
                                                 <div><ul class="simple">
-                                                    <li>Input records with a <code class="docutils literal"><span class="pre">null</span></code> key or a <code class="docutils literal"><span class="pre">null</span></code> value are ignored and do not trigger the join.</li>
+                                                    <li>Input records with a <code class="docutils literal"><span class="pre">null</span></code> value are ignored and do not trigger the join.</li>
                                                 </ul>
                                                 </div></blockquote>
                                         </li>
@@ -2894,7 +2894,7 @@ KStream&lt;String, String&gt; joined = left.leftJoin(right,
                                             <blockquote>
                                                 <div><ul class="simple">
                                                     <li>Only input records for the left side (stream) trigger the join.  Input records for the right side (table) update only the internal right-side join state.</li>
-                                                    <li>Input records for the stream with a <code class="docutils literal"><span class="pre">null</span></code> key or a <code class="docutils literal"><span class="pre">null</span></code> value are ignored and do not trigger the join.</li>
+                                                    <li>Input records for the stream with a <code class="docutils literal"><span class="pre">null</span></code> value are ignored and do not trigger the join.</li>
                                                     <li>Input records for the table with a <code class="docutils literal"><span class="pre">null</span></code> value are interpreted as <em>tombstones</em> for the corresponding key, which indicate the deletion of the key from the table.
                                                         Tombstones do not trigger the join.</li>
                                                 </ul>
@@ -3165,7 +3165,7 @@ KStream&lt;String, String&gt; joined = left.leftJoin(right,
                                             <blockquote>
                                                 <div><ul class="simple">
                                                     <li>Only input records for the left side (stream) trigger the join.  Input records for the right side (table) update only the internal right-side join state.</li>
-                                                    <li>Input records for the stream with a <code class="docutils literal"><span class="pre">null</span></code> key or a <code class="docutils literal"><span class="pre">null</span></code> value are ignored and do not trigger the join.</li>
+                                                    <li>Input records for the stream with a <code class="docutils literal"><span class="pre">null</span></code> value are ignored and do not trigger the join.</li>
                                                     <li>Input records for the table with a <code class="docutils literal"><span class="pre">null</span></code> value are interpreted as <em>tombstones</em>, which indicate the deletion of a record key from the table.  Tombstones do not trigger the
                                                         join.</li>
                                                 </ul>

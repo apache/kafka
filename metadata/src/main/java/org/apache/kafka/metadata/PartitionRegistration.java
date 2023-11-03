@@ -17,15 +17,19 @@
 
 package org.apache.kafka.metadata;
 
+import org.apache.kafka.common.DirectoryId;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.InvalidReplicaDirectoriesException;
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
+import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.slf4j.Logger;
 
 import java.util.Arrays;
+import java.util.List;
 import java.util.Objects;
 
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER;
@@ -39,6 +43,7 @@ public class PartitionRegistration {
      */
     static public class Builder {
         private int[] replicas;
+        private Uuid[] directories;
         private int[] isr;
         private int[] removingReplicas = Replicas.NONE;
         private int[] addingReplicas = Replicas.NONE;
@@ -51,6 +56,11 @@ public class PartitionRegistration {
 
         public Builder setReplicas(int[] replicas) {
             this.replicas = replicas;
+            return this;
+        }
+
+        public Builder setDirectories(Uuid[] directories) {
+            this.directories = directories;
             return this;
         }
 
@@ -102,6 +112,8 @@ public class PartitionRegistration {
         public PartitionRegistration build() {
             if (replicas == null) {
                 throw new IllegalStateException("You must set replicas.");
+            } else if (directories != null && directories.length != replicas.length) {
+                throw new IllegalStateException("The lengths for replicas and directories do not match.");
             } else if (isr == null) {
                 throw new IllegalStateException("You must set isr.");
             } else if (removingReplicas == null) {
@@ -124,6 +136,7 @@ public class PartitionRegistration {
 
             return new PartitionRegistration(
                 replicas,
+                directories,
                 isr,
                 removingReplicas,
                 addingReplicas,
@@ -138,6 +151,7 @@ public class PartitionRegistration {
     }
 
     public final int[] replicas;
+    public final Uuid[] directories;
     public final int[] isr;
     public final int[] removingReplicas;
     public final int[] addingReplicas;
@@ -152,8 +166,23 @@ public class PartitionRegistration {
         return newLeader == NO_LEADER || Replicas.contains(isr, newLeader);
     }
 
+    private static List<Uuid> checkDirectories(PartitionRecord record) {
+        if (record.directories() != null && !record.directories().isEmpty() && record.replicas().size() != record.directories().size()) {
+            throw new InvalidReplicaDirectoriesException(record);
+        }
+        return record.directories();
+    }
+
+    private static List<Uuid> checkDirectories(PartitionChangeRecord record) {
+        if (record.replicas() != null && record.directories() != null && !record.directories().isEmpty() && record.replicas().size() != record.directories().size()) {
+            throw new InvalidReplicaDirectoriesException(record);
+        }
+        return record.directories();
+    }
+
     public PartitionRegistration(PartitionRecord record) {
         this(Replicas.toArray(record.replicas()),
+            Uuid.toArray(checkDirectories(record)),
             Replicas.toArray(record.isr()),
             Replicas.toArray(record.removingReplicas()),
             Replicas.toArray(record.addingReplicas()),
@@ -165,10 +194,11 @@ public class PartitionRegistration {
             Replicas.toArray(record.lastKnownELR()));
     }
 
-    private PartitionRegistration(int[] replicas, int[] isr, int[] removingReplicas,
+    private PartitionRegistration(int[] replicas, Uuid[] directories, int[] isr, int[] removingReplicas,
                                  int[] addingReplicas, int leader, LeaderRecoveryState leaderRecoveryState,
                                  int leaderEpoch, int partitionEpoch, int[] elr, int[] lastKnownElr) {
         this.replicas = replicas;
+        this.directories = directories != null && directories.length > 0 ? directories : DirectoryId.unassignedArray(replicas.length);
         this.isr = isr;
         this.removingReplicas = removingReplicas;
         this.addingReplicas = addingReplicas;
@@ -185,6 +215,8 @@ public class PartitionRegistration {
     public PartitionRegistration merge(PartitionChangeRecord record) {
         int[] newReplicas = (record.replicas() == null) ?
             replicas : Replicas.toArray(record.replicas());
+        Uuid[] newDirectories = (record.directories() == null) ?
+                directories : Uuid.toArray(checkDirectories(record));
         int[] newIsr = (record.isr() == null) ? isr : Replicas.toArray(record.isr());
         int[] newRemovingReplicas = (record.removingReplicas() == null) ?
             removingReplicas : Replicas.toArray(record.removingReplicas());
@@ -206,6 +238,7 @@ public class PartitionRegistration {
         int[] newElr = (record.eligibleLeaderReplicas() == null) ? elr : Replicas.toArray(record.eligibleLeaderReplicas());
         int[] newLastKnownElr = (record.lastKnownELR() == null) ? lastKnownElr : Replicas.toArray(record.lastKnownELR());
         return new PartitionRegistration(newReplicas,
+            newDirectories,
             newIsr,
             newRemovingReplicas,
             newAddingReplicas,
@@ -224,6 +257,12 @@ public class PartitionRegistration {
             builder.append(prefix).append("replicas: ").
                 append(Arrays.toString(prev.replicas)).
                 append(" -> ").append(Arrays.toString(replicas));
+            prefix = ", ";
+        }
+        if (!Arrays.equals(directories, prev.directories)) {
+            builder.append(prefix).append("directories: ").
+                    append(Arrays.toString(prev.directories)).
+                    append(" -> ").append(Arrays.toString(directories));
             prefix = ", ";
         }
         if (!Arrays.equals(isr, prev.isr)) {
@@ -298,7 +337,7 @@ public class PartitionRegistration {
         return replicas.length == 0 ? LeaderConstants.NO_LEADER : replicas[0];
     }
 
-    public ApiMessageAndVersion toRecord(Uuid topicId, int partitionId, short version) {
+    public ApiMessageAndVersion toRecord(Uuid topicId, int partitionId, ImageWriterOptions options) {
         PartitionRecord record = new PartitionRecord().
             setPartitionId(partitionId).
             setTopicId(topicId).
@@ -310,11 +349,21 @@ public class PartitionRegistration {
             setLeaderRecoveryState(leaderRecoveryState.value()).
             setLeaderEpoch(leaderEpoch).
             setPartitionEpoch(partitionEpoch);
-        if (version > 0) {
+        if (options.metadataVersion().isElrSupported()) {
             record.setEligibleLeaderReplicas(Replicas.toList(elr)).
                 setLastKnownELR(Replicas.toList(lastKnownElr));
         }
-        return new ApiMessageAndVersion(record, version);
+        if (options.metadataVersion().isDirectoryAssignmentSupported()) {
+            record.setDirectories(Uuid.toList(directories));
+        } else {
+            for (int i = 0; i < directories.length; i++) {
+                if (!DirectoryId.UNASSIGNED.equals(directories[i])) {
+                    options.handleLoss("the directory assignment state of one or more replicas");
+                    break;
+                }
+            }
+        }
+        return new ApiMessageAndVersion(record, options.metadataVersion().partitionRecordVersion());
     }
 
     public LeaderAndIsrPartitionState toLeaderAndIsrPartitionState(TopicPartition tp,

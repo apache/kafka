@@ -77,6 +77,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AlterPartitionRequest;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.metadata.BrokerRegistrationFencingChange;
@@ -791,7 +792,9 @@ public class ReplicationControlManager {
         for (Entry<Integer, PartitionRegistration> partEntry : newParts.entrySet()) {
             int partitionIndex = partEntry.getKey();
             PartitionRegistration info = partEntry.getValue();
-            records.add(info.toRecord(topicId, partitionIndex, featureControl.metadataVersion().partitionRecordVersion()));
+            records.add(info.toRecord(topicId, partitionIndex, new ImageWriterOptions.Builder().
+                    setMetadataVersion(featureControl.metadataVersion()).
+                    build()));
         }
         return ApiError.NONE;
     }
@@ -1697,7 +1700,9 @@ public class ReplicationControlManager {
                         " time(s): All brokers are currently fenced or in controlled shutdown.");
             }
             records.add(buildPartitionRegistration(replicas, isr)
-                .toRecord(topicId, partitionId, featureControl.metadataVersion().partitionRecordVersion()));
+                .toRecord(topicId, partitionId, new ImageWriterOptions.Builder().
+                        setMetadataVersion(featureControl.metadataVersion()).
+                        build()));
             partitionId++;
         }
     }

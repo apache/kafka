@@ -110,6 +110,8 @@ class SharedServer(
   @volatile var snapshotGenerator: SnapshotGenerator = _
   @volatile var metadataLoaderMetrics: MetadataLoaderMetrics = _
 
+  def clusterId(): String = metaProps.clusterId
+
   def isUsed(): Boolean = synchronized {
     usedByController || usedByBroker
   }
@@ -248,7 +250,7 @@ class SharedServer(
           controllerServerMetrics = new ControllerMetadataMetrics(Optional.of(KafkaYammerMetrics.defaultRegistry()))
         }
         val _raftManager = new KafkaRaftManager[ApiMessageAndVersion](
-          metaProps,
+          clusterId(),
           sharedServerConfig,
           new MetadataRecordSerde,
           KafkaRaftServer.MetadataPartition,
