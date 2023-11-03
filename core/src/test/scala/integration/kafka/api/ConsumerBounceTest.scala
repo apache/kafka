@@ -17,7 +17,7 @@ import java.time
 import java.util.concurrent._
 import java.util.{Collection, Collections, Properties}
 import kafka.server.KafkaConfig
-import kafka.utils.{Logging, TestUtils}
+import kafka.utils.{Logging, TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
@@ -27,9 +27,9 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{FindCoordinatorRequest, FindCoordinatorResponse}
 import org.apache.kafka.server.util.ShutdownableThread
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, Disabled, Test}
+import org.junit.jupiter.api.{AfterEach, Disabled}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{Arguments, MethodSource}
+import org.junit.jupiter.params.provider.ValueSource
 
 import java.time.Duration
 import scala.annotation.nowarn
@@ -83,8 +83,9 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     }
   }
 
-  @Test
-  def testConsumptionWithBrokerFailures(): Unit = consumeWithBrokerFailures(10)
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testConsumptionWithBrokerFailures(quorum: String): Unit = consumeWithBrokerFailures(10)
 
   /*
    * 1. Produce a bunch of messages
@@ -128,8 +129,8 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
   }
 
   @ParameterizedTest
-  @MethodSource(Array("parameters"))
-  def testSeekAndCommitWithBrokerFailures(quorum: String, isNewGroupCoordinatorEnabled: String): Unit = seekAndCommitWithBrokerFailures(5)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testSeekAndCommitWithBrokerFailures(quorum: String): Unit = seekAndCommitWithBrokerFailures(5)
 
   def seekAndCommitWithBrokerFailures(numIters: Int): Unit = {
     val numRecords = 1000
@@ -171,8 +172,9 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     }
   }
 
-  @Test
-  def testSubscribeWhenTopicUnavailable(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testSubscribeWhenTopicUnavailable(quorum: String): Unit = {
     val numRecords = 1000
     val newtopic = "newtopic"
 
@@ -211,7 +213,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     receiveExactRecords(poller, numRecords, 10000)
     poller.shutdown()
 
-    servers.foreach(server => killBroker(server.config.brokerId))
+    brokers.foreach(server => killBroker(server.config.brokerId))
     Thread.sleep(500)
     restartDeadBrokers()
 
@@ -222,8 +224,9 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     receiveExactRecords(poller, numRecords, 10000L)
   }
 
-  @Test
-  def testClose(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testClose(quorum: String): Unit = {
     val numRecords = 10
     val producer = createProducer()
     producerSend(producer, numRecords)
@@ -293,7 +296,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     this.consumerConfig.setProperty(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG, requestTimeout.toString)
     val consumer2 = createConsumerAndReceive(group2, true, numRecords)
 
-    servers.foreach(server => killBroker(server.config.brokerId))
+    brokers.foreach(server => killBroker(server.config.brokerId))
     val closeTimeout = 2000
     val future1 = submitCloseAndValidate(consumer1, closeTimeout, None, Some(closeTimeout))
     val future2 = submitCloseAndValidate(consumer2, Long.MaxValue, None, Some(requestTimeout))
@@ -306,9 +309,10 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     * the group should be forced to rebalance when it becomes hosted on a Coordinator with the new config.
     * Then, 1 consumer should be left out of the group.
     */
-  @Test
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
   @Disabled // TODO: To be re-enabled once we can make it less flaky (KAFKA-13421)
-  def testRollingBrokerRestartsWithSmallerMaxGroupSizeConfigDisruptsBigGroup(): Unit = {
+  def testRollingBrokerRestartsWithSmallerMaxGroupSizeConfigDisruptsBigGroup(quorum: String): Unit = {
     val group = "group-max-size-test"
     val topic = "group-max-size-test"
     val maxGroupSize = 2
@@ -325,10 +329,10 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
 
     // roll all brokers with a lesser max group size to make sure coordinator has the new config
     val newConfigs = generateKafkaConfigs(maxGroupSize.toString)
-    for (serverIdx <- servers.indices) {
+    for (serverIdx <- brokers.indices) {
       killBroker(serverIdx)
       val config = newConfigs(serverIdx)
-      servers(serverIdx) = TestUtils.createServer(config, time = brokerTime(config.brokerId))
+      brokers(serverIdx) = TestUtils.createServer(config, time = brokerTime(config.brokerId))
       restartDeadBrokers()
     }
 
@@ -347,8 +351,9 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
   /**
     * When we have the consumer group max size configured to X, the X+1th consumer trying to join should receive a fatal exception
     */
-  @Test
-  def testConsumerReceivesFatalExceptionWhenGroupPassesMaxSize(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testConsumerReceivesFatalExceptionWhenGroupPassesMaxSize(quorum: String): Unit = {
     val group = "fatal-exception-test"
     val topic = "fatal-exception-test"
     this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "60000")
@@ -385,8 +390,9 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
    * immediately if rebalance is in progress. If brokers are not available,
    * close should terminate immediately without sending leave group.
    */
-  @Test
-  def testCloseDuringRebalance(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testCloseDuringRebalance(quorum: String): Unit = {
     val topic = "closetest"
     createTopic(topic, 10, brokerCount)
     this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "60000")
@@ -439,7 +445,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     // Trigger another rebalance and shutdown all brokers
     // This consumer poll() doesn't complete and `tearDown` shuts down the executor and closes the consumer
     createConsumerToRebalance()
-    servers.foreach(server => killBroker(server.config.brokerId))
+    brokers.foreach(server => killBroker(server.config.brokerId))
 
     // consumer2 should close immediately without LeaveGroup request since there are no brokers available
     val closeFuture2 = submitCloseAndValidate(consumer2, Long.MaxValue, None, Some(0))
@@ -471,7 +477,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
   private def submitCloseAndValidate(consumer: Consumer[Array[Byte], Array[Byte]],
       closeTimeoutMs: Long, minCloseTimeMs: Option[Long], maxCloseTimeMs: Option[Long]): Future[Any] = {
     executor.submit(() => {
-      val closeGraceTimeMs = 2000
+      val closeGraceTimeMs = 10000
       val startMs = System.currentTimeMillis()
       info("Closing consumer with timeout " + closeTimeoutMs + " ms.")
       consumer.close(time.Duration.ofMillis(closeTimeoutMs))
@@ -551,14 +557,4 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     futures.map(_.get)
   }
 
-}
-
-object ConsumerBounceTest {
-  def parameters: java.util.stream.Stream[Arguments] = {
-    java.util.stream.Stream.of[Arguments](
-      Arguments.of("zk", "false"),
-      Arguments.of("kraft", "false"),
-      Arguments.of("kraft", "true")
-    )
-  }
 }

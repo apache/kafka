@@ -54,16 +54,6 @@ object TestInfoUtils {
   final val TestWithParameterizedQuorumName = "{displayName}.quorum={0}"
 
   def isNewGroupCoordinatorEnabled(testInfo: TestInfo): Boolean = {
-    if (testInfo.getDisplayName().contains("isNewGroupCoordinatorEnabled=")) {
-      if (testInfo.getDisplayName().contains("isNewGroupCoordinatorEnabled=true")) {
-        true
-      } else if (testInfo.getDisplayName().contains("isNewGroupCoordinatorEnabled=false")) {
-        false
-      } else {
-        throw new RuntimeException(s"Unknown quorum value")
-      }
-    } else {
-      false
-    }
+    testInfo.getDisplayName().contains("kraft+kip848")
   }
 }
