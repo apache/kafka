@@ -156,6 +156,29 @@ public class ConfigDef {
     }
 
     /**
+     * Define a new configuration
+     * @param name              the name of the config parameter
+     * @param type              the type of the config
+     * @param defaultValue      the default value to use if this config isn't present
+     * @param validator         the validator to use in checking the correctness of the config
+     * @param importance        the importance of this config
+     * @param documentation     the documentation string for the config
+     * @param group             the group this config belongs to
+     * @param orderInGroup      the order of this config in the group
+     * @param width             the width of the config
+     * @param displayName       the name suitable for display
+     * @param dependents        the configurations that are dependents of this configuration
+     * @param recommender       the recommender provides valid values given the parent configuration values
+     * @param overwrittenValue  the overwritten value of this configuration
+     * @return This ConfigDef so you can chain calls
+     */
+    public ConfigDef define(String name, Type type, Object defaultValue, Validator validator, Importance importance, String documentation,
+                            String group, int orderInGroup, Width width, String displayName, List<String> dependents, Recommender recommender,
+                            Object overwrittenValue) {
+        return define(new ConfigKey(name, type, defaultValue, validator, importance, documentation, group, orderInGroup, width, displayName, dependents, recommender, false, overwrittenValue));
+    }
+
+    /**
      * Define a new configuration with no custom recommender
      * @param name          the name of the config parameter
      * @param type          the type of the config
@@ -387,6 +410,21 @@ public class ConfigDef {
      */
     public ConfigDef define(String name, Type type, Object defaultValue, Importance importance, String documentation) {
         return define(name, type, defaultValue, null, importance, documentation);
+    }
+
+    /**
+     * Define a new configuration with no special validation logic
+     * @param name             The name of the config parameter
+     * @param type             The type of the config
+     * @param defaultValue     The default value to use if this config isn't present
+     * @param overwrittenValue The overwritten value to use if this config is overwritten
+     * @param importance       The importance of this config: is this something you will likely need to change.
+     * @param documentation    The documentation string for the config
+     * @return This ConfigDef so you can chain calls
+     */
+    public ConfigDef define(String name, Type type, Object defaultValue, Object overwrittenValue, Importance importance, String documentation) {
+        return define(name, type, defaultValue, null, importance, documentation, null, -1, Width.NONE,
+                name, Collections.emptyList(), null, overwrittenValue);
     }
 
     /**
@@ -1216,6 +1254,7 @@ public class ConfigDef {
         public final List<String> dependents;
         public final Recommender recommender;
         public final boolean internalConfig;
+        public final Object overwrittenValue;
 
         public ConfigKey(String name, Type type, Object defaultValue, Validator validator,
                          Importance importance, String documentation, String group,
@@ -1238,6 +1277,31 @@ public class ConfigDef {
             this.displayName = displayName;
             this.recommender = recommender;
             this.internalConfig = internalConfig;
+            this.overwrittenValue = null;
+        }
+
+        public ConfigKey(String name, Type type, Object defaultValue, Validator validator,
+                         Importance importance, String documentation, String group,
+                         int orderInGroup, Width width, String displayName,
+                         List<String> dependents, Recommender recommender,
+                         boolean internalConfig, Object overwrittenValue) {
+            this.name = name;
+            this.type = type;
+            boolean hasDefault = !NO_DEFAULT_VALUE.equals(defaultValue);
+            this.defaultValue = hasDefault ? parseType(name, defaultValue, type) : NO_DEFAULT_VALUE;
+            this.validator = validator;
+            this.importance = importance;
+            if (this.validator != null && hasDefault)
+                this.validator.ensureValid(name, this.defaultValue);
+            this.documentation = documentation;
+            this.dependents = dependents;
+            this.group = group;
+            this.orderInGroup = orderInGroup;
+            this.width = width;
+            this.displayName = displayName;
+            this.recommender = recommender;
+            this.internalConfig = internalConfig;
+            this.overwrittenValue = parseType(name, overwrittenValue, type);
         }
 
         public boolean hasDefault() {
@@ -1265,6 +1329,8 @@ public class ConfigDef {
                 if (key.hasDefault()) {
                     if (key.defaultValue == null)
                         return "null";
+                    if (key.overwrittenValue != null)
+                        return convertToString(key.overwrittenValue, key.type);
                     String defaultValueStr = convertToString(key.defaultValue, key.type);
                     if (defaultValueStr.isEmpty())
                         return "\"\"";
