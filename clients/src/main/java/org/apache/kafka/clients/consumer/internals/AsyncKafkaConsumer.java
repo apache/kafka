@@ -261,6 +261,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         }
     }
 
+    // Visible for testing
     AsyncKafkaConsumer(LogContext logContext,
                        String clientId,
                        Deserializers<K, V> deserializers,
@@ -297,6 +298,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         this.kafkaConsumerMetrics = new KafkaConsumerMetrics(metrics, "consumer");
     }
 
+    // Visible for testing
     AsyncKafkaConsumer(LogContext logContext,
                        Time time,
                        ConsumerConfig config,
