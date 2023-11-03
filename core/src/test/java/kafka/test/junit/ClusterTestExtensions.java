@@ -74,7 +74,7 @@ import java.util.stream.Stream;
  * will generate two invocations of "someTest" (since ClusterType.Both was given). For each invocation, the test class
  * SomeIntegrationTest will be instantiated, lifecycle methods (before/after) will be run, and "someTest" will be invoked.
  *
- **/
+ */
 public class ClusterTestExtensions implements TestTemplateInvocationContextProvider {
     @Override
     public boolean supportsTestTemplate(ExtensionContext context) {

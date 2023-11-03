@@ -243,6 +243,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.DESCRIBE_QUORUM => forwardToControllerOrFail(request)
         case ApiKeys.CONSUMER_GROUP_HEARTBEAT => handleConsumerGroupHeartbeat(request).exceptionally(handleError)
         case ApiKeys.CONSUMER_GROUP_DESCRIBE => handleConsumerGroupDescribe(request).exceptionally(handleError)
+        case ApiKeys.GET_TELEMETRY_SUBSCRIPTIONS => handleGetTelemetrySubscriptionsRequest(request)
+        case ApiKeys.PUSH_TELEMETRY => handlePushTelemetryRequest(request)
         case _ => throw new IllegalStateException(s"No handler for request api key ${request.header.apiKey}")
       }
     } catch {
@@ -1459,6 +1461,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         new OffsetFetchResponseData.OffsetFetchResponseGroup()
           .setGroupId(offsetFetchRequest.groupId)
           .setErrorCode(Errors.forException(exception).code)
+      } else if (offsetFetchResponse.errorCode() != Errors.NONE.code) {
+        offsetFetchResponse
       } else {
         // Clients are not allowed to see offsets for topics that are not authorized for Describe.
         val (authorizedOffsets, _) = authHelper.partitionSeqByAuthorized(
@@ -1498,6 +1502,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         new OffsetFetchResponseData.OffsetFetchResponseGroup()
           .setGroupId(offsetFetchRequest.groupId)
           .setErrorCode(Errors.forException(exception).code)
+      } else if (offsetFetchResponse.errorCode() != Errors.NONE.code) {
+        offsetFetchResponse
       } else {
         val topics = new util.ArrayList[OffsetFetchResponseData.OffsetFetchResponseTopics](
           offsetFetchResponse.topics.size + unauthorizedTopics.size
@@ -3687,6 +3693,18 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   def handleConsumerGroupDescribe(request: RequestChannel.Request): CompletableFuture[Unit] = {
     requestHelper.sendMaybeThrottle(request, request.body[ConsumerGroupDescribeRequest].getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+    CompletableFuture.completedFuture[Unit](())
+  }
+
+  // Just a place holder for now.
+  def handleGetTelemetrySubscriptionsRequest(request: RequestChannel.Request): Unit = {
+    requestHelper.sendMaybeThrottle(request, request.body[GetTelemetrySubscriptionsRequest].getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+    CompletableFuture.completedFuture[Unit](())
+  }
+
+  // Just a place holder for now.
+  def handlePushTelemetryRequest(request: RequestChannel.Request): Unit = {
+    requestHelper.sendMaybeThrottle(request, request.body[PushTelemetryRequest].getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
     CompletableFuture.completedFuture[Unit](())
   }
 

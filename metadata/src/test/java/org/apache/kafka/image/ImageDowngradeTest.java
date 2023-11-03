@@ -22,6 +22,7 @@ import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
+import org.apache.kafka.common.metadata.ZkMigrationStateRecord;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.image.writer.RecordListWriter;
 import org.apache.kafka.image.writer.UnwritableMetadataException;
@@ -33,10 +34,13 @@ import org.junit.jupiter.api.Timeout;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.when;
 
 
 @Timeout(value = 40)
@@ -124,6 +128,31 @@ public class ImageDowngradeTest {
                             setFenced(false), (short) 0),
                         TEST_RECORDS.get(0),
                         TEST_RECORDS.get(1)));
+    }
+
+    @Test
+    void testDirectoryAssignmentState() {
+        MetadataVersion outputMetadataVersion = MetadataVersion.IBP_3_7_IV0;
+        MetadataVersion inputMetadataVersion = spy(outputMetadataVersion); // TODO replace with actual MV after bump for KIP-858
+        when(inputMetadataVersion.isDirectoryAssignmentSupported()).thenReturn(true);
+        PartitionRecord testPartitionRecord = (PartitionRecord) TEST_RECORDS.get(1).message();
+        writeWithExpectedLosses(outputMetadataVersion,
+                Collections.singletonList("the directory assignment state of one or more replicas"),
+                Arrays.asList(
+                        metadataVersionRecord(inputMetadataVersion),
+                        TEST_RECORDS.get(0),
+                        new ApiMessageAndVersion(
+                                testPartitionRecord.duplicate().setDirectories(Arrays.asList(
+                                        Uuid.fromString("c7QfSi6xSIGQVh3Qd5RJxA"),
+                                        Uuid.fromString("rWaCHejCRRiptDMvW5Xw0g"))),
+                                (short) 2)),
+                Arrays.asList(
+                        metadataVersionRecord(outputMetadataVersion),
+                        new ApiMessageAndVersion(new ZkMigrationStateRecord(), (short) 0),
+                        TEST_RECORDS.get(0),
+                        new ApiMessageAndVersion(
+                                testPartitionRecord.duplicate().setDirectories(Collections.emptyList()),
+                                (short) 0)));
     }
 
     private static void writeWithExpectedLosses(

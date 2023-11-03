@@ -201,7 +201,7 @@ public final class KafkaEventQueue implements EventQueue {
             }
         }
 
-        private void handleEvents() throws InterruptedException {
+        private void handleEvents() {
             Throwable toDeliver = null;
             EventContext toRun = null;
             boolean wasInterrupted = false;

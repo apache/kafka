@@ -1269,7 +1269,7 @@ class DefaultStateUpdaterTest {
     }
 
     @Test
-    public void shouldAddFailedTasksToQueueWhenRestoreThrowsTaskCorruptedException() throws Exception {
+    public void shouldHandleTaskCorruptedExceptionAndAddFailedTasksToQueue() throws Exception {
         final StreamTask task1 = statefulTask(TASK_0_0, mkSet(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
         final StandbyTask task2 = standbyTask(TASK_0_2, mkSet(TOPIC_PARTITION_B_0)).inState(State.RUNNING).build();
         final StreamTask task3 = statefulTask(TASK_1_0, mkSet(TOPIC_PARTITION_C_0)).inState(State.RESTORING).build();
@@ -1293,6 +1293,8 @@ class DefaultStateUpdaterTest {
         verifyRestoredActiveTasks();
         verifyRemovedTasks();
         verify(changelogReader).unregister(mkSet(TOPIC_PARTITION_A_0, TOPIC_PARTITION_B_0));
+        verify(task1).markChangelogAsCorrupted(mkSet(TOPIC_PARTITION_A_0));
+        verify(task2).markChangelogAsCorrupted(mkSet(TOPIC_PARTITION_B_0));
     }
 
     @Test

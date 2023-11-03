@@ -204,7 +204,7 @@ public class MirrorConnectorsIntegrationBaseTest {
                 .brokerProps(primaryBrokerProps)
                 .workerProps(primaryWorkerProps)
                 .maskExitProcedures(false)
-                .clientConfigs(additionalPrimaryClusterClientsConfigs)
+                .clientProps(additionalPrimaryClusterClientsConfigs)
                 .build();
 
         backup = new EmbeddedConnectCluster.Builder()
@@ -214,7 +214,7 @@ public class MirrorConnectorsIntegrationBaseTest {
                 .brokerProps(backupBrokerProps)
                 .workerProps(backupWorkerProps)
                 .maskExitProcedures(false)
-                .clientConfigs(additionalBackupClusterClientsConfigs)
+                .clientProps(additionalBackupClusterClientsConfigs)
                 .build();
         
         primary.start();

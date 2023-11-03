@@ -91,7 +91,7 @@ public class SubscriptionStateTest {
         assertTrue(state.assignedPartitions().isEmpty());
         assertEquals(0, state.numAssignedPartitions());
 
-        state.subscribe(singleton(topic1), rebalanceListener);
+        state.subscribe(singleton(topic1), Optional.of(rebalanceListener));
         // assigned partitions should remain unchanged
         assertTrue(state.assignedPartitions().isEmpty());
         assertEquals(0, state.numAssignedPartitions());
@@ -102,7 +102,7 @@ public class SubscriptionStateTest {
         assertEquals(singleton(t1p0), state.assignedPartitions());
         assertEquals(1, state.numAssignedPartitions());
 
-        state.subscribe(singleton(topic), rebalanceListener);
+        state.subscribe(singleton(topic), Optional.of(rebalanceListener));
         // assigned partitions should remain unchanged
         assertEquals(singleton(t1p0), state.assignedPartitions());
         assertEquals(1, state.numAssignedPartitions());
@@ -115,7 +115,7 @@ public class SubscriptionStateTest {
 
     @Test
     public void testGroupSubscribe() {
-        state.subscribe(singleton(topic1), rebalanceListener);
+        state.subscribe(singleton(topic1), Optional.of(rebalanceListener));
         assertEquals(singleton(topic1), state.metadataTopics());
 
         assertFalse(state.groupSubscribe(singleton(topic1)));
@@ -128,7 +128,7 @@ public class SubscriptionStateTest {
         assertFalse(state.groupSubscribe(singleton(topic1)));
         assertEquals(singleton(topic1), state.metadataTopics());
 
-        state.subscribe(singleton("anotherTopic"), rebalanceListener);
+        state.subscribe(singleton("anotherTopic"), Optional.of(rebalanceListener));
         assertEquals(Utils.mkSet(topic1, "anotherTopic"), state.metadataTopics());
 
         assertFalse(state.groupSubscribe(singleton("anotherTopic")));
@@ -137,7 +137,7 @@ public class SubscriptionStateTest {
 
     @Test
     public void partitionAssignmentChangeOnPatternSubscription() {
-        state.subscribe(Pattern.compile(".*"), rebalanceListener);
+        state.subscribe(Pattern.compile(".*"), Optional.of(rebalanceListener));
         // assigned partitions should remain unchanged
         assertTrue(state.assignedPartitions().isEmpty());
         assertEquals(0, state.numAssignedPartitions());
@@ -163,7 +163,7 @@ public class SubscriptionStateTest {
         assertEquals(1, state.numAssignedPartitions());
         assertEquals(singleton(topic), state.subscription());
 
-        state.subscribe(Pattern.compile(".*t"), rebalanceListener);
+        state.subscribe(Pattern.compile(".*t"), Optional.of(rebalanceListener));
         // assigned partitions should remain unchanged
         assertEquals(singleton(t1p0), state.assignedPartitions());
         assertEquals(1, state.numAssignedPartitions());
@@ -200,7 +200,7 @@ public class SubscriptionStateTest {
         assertEquals(Collections.emptySet(), state.assignedPartitions());
 
         Set<TopicPartition> autoAssignment = Utils.mkSet(t1p0);
-        state.subscribe(singleton(topic1), rebalanceListener);
+        state.subscribe(singleton(topic1), Optional.of(rebalanceListener));
         assertTrue(state.checkAssignmentMatchedSubscription(autoAssignment));
         state.assignFromSubscribed(autoAssignment);
         assertEquals(3, state.assignmentId());
@@ -225,7 +225,7 @@ public class SubscriptionStateTest {
 
     @Test
     public void topicSubscription() {
-        state.subscribe(singleton(topic), rebalanceListener);
+        state.subscribe(singleton(topic), Optional.of(rebalanceListener));
         assertEquals(1, state.subscription().size());
         assertTrue(state.assignedPartitions().isEmpty());
         assertEquals(0, state.numAssignedPartitions());
@@ -268,7 +268,7 @@ public class SubscriptionStateTest {
 
     @Test
     public void invalidPositionUpdate() {
-        state.subscribe(singleton(topic), rebalanceListener);
+        state.subscribe(singleton(topic), Optional.of(rebalanceListener));
         assertTrue(state.checkAssignmentMatchedSubscription(singleton(tp0)));
         state.assignFromSubscribed(singleton(tp0));
 
@@ -278,13 +278,13 @@ public class SubscriptionStateTest {
 
     @Test
     public void cantAssignPartitionForUnsubscribedTopics() {
-        state.subscribe(singleton(topic), rebalanceListener);
+        state.subscribe(singleton(topic), Optional.of(rebalanceListener));
         assertFalse(state.checkAssignmentMatchedSubscription(Collections.singletonList(t1p0)));
     }
 
     @Test
     public void cantAssignPartitionForUnmatchedPattern() {
-        state.subscribe(Pattern.compile(".*t"), rebalanceListener);
+        state.subscribe(Pattern.compile(".*t"), Optional.of(rebalanceListener));
         state.subscribeFromPattern(Collections.singleton(topic));
         assertFalse(state.checkAssignmentMatchedSubscription(Collections.singletonList(t1p0)));
     }
@@ -297,31 +297,31 @@ public class SubscriptionStateTest {
 
     @Test
     public void cantSubscribeTopicAndPattern() {
-        state.subscribe(singleton(topic), rebalanceListener);
-        assertThrows(IllegalStateException.class, () -> state.subscribe(Pattern.compile(".*"), rebalanceListener));
+        state.subscribe(singleton(topic), Optional.of(rebalanceListener));
+        assertThrows(IllegalStateException.class, () -> state.subscribe(Pattern.compile(".*"), Optional.of(rebalanceListener)));
     }
 
     @Test
     public void cantSubscribePartitionAndPattern() {
         state.assignFromUser(singleton(tp0));
-        assertThrows(IllegalStateException.class, () -> state.subscribe(Pattern.compile(".*"), rebalanceListener));
+        assertThrows(IllegalStateException.class, () -> state.subscribe(Pattern.compile(".*"), Optional.of(rebalanceListener)));
     }
 
     @Test
     public void cantSubscribePatternAndTopic() {
-        state.subscribe(Pattern.compile(".*"), rebalanceListener);
-        assertThrows(IllegalStateException.class, () -> state.subscribe(singleton(topic), rebalanceListener));
+        state.subscribe(Pattern.compile(".*"), Optional.of(rebalanceListener));
+        assertThrows(IllegalStateException.class, () -> state.subscribe(singleton(topic), Optional.of(rebalanceListener)));
     }
 
     @Test
     public void cantSubscribePatternAndPartition() {
-        state.subscribe(Pattern.compile(".*"), rebalanceListener);
+        state.subscribe(Pattern.compile(".*"), Optional.of(rebalanceListener));
         assertThrows(IllegalStateException.class, () -> state.assignFromUser(singleton(tp0)));
     }
 
     @Test
     public void patternSubscription() {
-        state.subscribe(Pattern.compile(".*"), rebalanceListener);
+        state.subscribe(Pattern.compile(".*"), Optional.of(rebalanceListener));
         state.subscribeFromPattern(new HashSet<>(Arrays.asList(topic, topic1)));
         assertEquals(2, state.subscription().size(), "Expected subscribed topics count is incorrect");
     }
@@ -330,13 +330,13 @@ public class SubscriptionStateTest {
     public void unsubscribeUserAssignment() {
         state.assignFromUser(new HashSet<>(Arrays.asList(tp0, tp1)));
         state.unsubscribe();
-        state.subscribe(singleton(topic), rebalanceListener);
+        state.subscribe(singleton(topic), Optional.of(rebalanceListener));
         assertEquals(singleton(topic), state.subscription());
     }
 
     @Test
     public void unsubscribeUserSubscribe() {
-        state.subscribe(singleton(topic), rebalanceListener);
+        state.subscribe(singleton(topic), Optional.of(rebalanceListener));
         state.unsubscribe();
         state.assignFromUser(singleton(tp0));
         assertEquals(singleton(tp0), state.assignedPartitions());
@@ -345,7 +345,7 @@ public class SubscriptionStateTest {
 
     @Test
     public void unsubscription() {
-        state.subscribe(Pattern.compile(".*"), rebalanceListener);
+        state.subscribe(Pattern.compile(".*"), Optional.of(rebalanceListener));
         state.subscribeFromPattern(new HashSet<>(Arrays.asList(topic, topic1)));
         assertTrue(state.checkAssignmentMatchedSubscription(singleton(tp1)));
         state.assignFromSubscribed(singleton(tp1));
