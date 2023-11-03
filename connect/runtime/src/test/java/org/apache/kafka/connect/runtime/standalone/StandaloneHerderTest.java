@@ -188,7 +188,6 @@ public class StandaloneHerderTest {
 
         ConfigValue validatedValue = new ConfigValue("foo.bar");
         when(connectorMock.validate(config)).thenReturn(new Config(singletonList(validatedValue)));
-        loaderSwap.close();
 
         herder.putConnectorConfig(CONNECTOR_NAME, config, false, createCallback);
 
@@ -196,6 +195,7 @@ public class StandaloneHerderTest {
         if (BadRequestException.class != exception.getCause().getClass()) {
             throw new AssertionError(exception.getCause());
         }
+        verify(loaderSwap).close();
     }
 
     @Test
