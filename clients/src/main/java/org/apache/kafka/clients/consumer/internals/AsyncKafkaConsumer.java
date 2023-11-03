@@ -260,22 +260,22 @@ public class AsyncKafkaConsumer<K, V> implements Consumer<K, V> {
         }
     }
 
-    public AsyncKafkaConsumer(LogContext logContext,
-                              String clientId,
-                              Deserializers<K, V> deserializers,
-                              FetchBuffer fetchBuffer,
-                              FetchCollector<K, V> fetchCollector,
-                              ConsumerInterceptors<K, V> interceptors,
-                              Time time,
-                              ApplicationEventHandler applicationEventHandler,
-                              BlockingQueue<BackgroundEvent> backgroundEventQueue,
-                              Metrics metrics,
-                              SubscriptionState subscriptions,
-                              ConsumerMetadata metadata,
-                              long retryBackoffMs,
-                              int defaultApiTimeoutMs,
-                              List<ConsumerPartitionAssignor> assignors,
-                              String groupId) {
+    AsyncKafkaConsumer(LogContext logContext,
+                       String clientId,
+                       Deserializers<K, V> deserializers,
+                       FetchBuffer fetchBuffer,
+                       FetchCollector<K, V> fetchCollector,
+                       ConsumerInterceptors<K, V> interceptors,
+                       Time time,
+                       ApplicationEventHandler applicationEventHandler,
+                       BlockingQueue<BackgroundEvent> backgroundEventQueue,
+                       Metrics metrics,
+                       SubscriptionState subscriptions,
+                       ConsumerMetadata metadata,
+                       long retryBackoffMs,
+                       int defaultApiTimeoutMs,
+                       List<ConsumerPartitionAssignor> assignors,
+                       String groupId) {
         this.log = logContext.logger(getClass());
         this.subscriptions = subscriptions;
         this.clientId = clientId;
