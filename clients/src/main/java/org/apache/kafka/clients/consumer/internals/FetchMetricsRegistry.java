@@ -57,11 +57,11 @@ public class FetchMetricsRegistry {
     public MetricNameTemplate partitionPreferredReadReplica;
 
     public FetchMetricsRegistry() {
-        this(new HashSet<String>(), "");
+        this(new HashSet<>(), "");
     }
 
     public FetchMetricsRegistry(String metricGrpPrefix) {
-        this(new HashSet<String>(), metricGrpPrefix);
+        this(new HashSet<>(), metricGrpPrefix);
     }
 
     public FetchMetricsRegistry(Set<String> tags, String metricGrpPrefix) {

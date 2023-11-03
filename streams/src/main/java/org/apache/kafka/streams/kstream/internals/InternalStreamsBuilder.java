@@ -28,7 +28,9 @@ import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.internals.graph.BaseRepartitionNode;
 import org.apache.kafka.streams.kstream.internals.graph.GlobalStoreNode;
+import org.apache.kafka.streams.kstream.internals.graph.NodesWithRelaxedNullKeyJoinDownstream;
 import org.apache.kafka.streams.kstream.internals.graph.OptimizableRepartitionNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
 import org.apache.kafka.streams.kstream.internals.graph.StateStoreNode;
@@ -351,7 +353,22 @@ public class InternalStreamsBuilder implements InternalNameProvider {
             LOG.debug("Optimizing the Kafka Streams graph for self-joins");
             rewriteSingleStoreSelfJoin(root, new IdentityHashMap<>());
         }
+        LOG.debug("Optimizing the Kafka Streams graph for null-key records");
+        rewriteRepartitionNodes();
     }
+
+    private void rewriteRepartitionNodes() {
+        final Set<BaseRepartitionNode<?, ?>> nodes = new NodesWithRelaxedNullKeyJoinDownstream(root).find();
+        for (final BaseRepartitionNode<?, ?> partitionNode : nodes) {
+            if (partitionNode.getProcessorParameters() != null) {
+                partitionNode.setProcessorParameters(new ProcessorParameters<>(
+                    new KStreamFilter<>((k, v) -> k != null, false),
+                    partitionNode.getProcessorParameters().processorName()
+                ));
+            }
+        }
+    }
+
 
     private void mergeDuplicateSourceNodes() {
         final Map<String, StreamSourceNode<?, ?>> topicsToSourceNodes = new HashMap<>();

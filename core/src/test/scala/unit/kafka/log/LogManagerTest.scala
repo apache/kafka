@@ -36,10 +36,11 @@ import org.mockito.Mockito.{doAnswer, doNothing, mock, never, spy, times, verify
 import java.io._
 import java.nio.file.Files
 import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap, Future}
-import java.util.{Collections, Properties}
+import java.util.{Collections, OptionalLong, Properties}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.log.{FetchDataInfo, FetchIsolation, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig, RemoteIndexCache}
+import org.apache.kafka.storage.internals.checkpoint.CleanShutdownFileHandler
 
 import scala.collection.{Map, mutable}
 import scala.collection.mutable.ArrayBuffer
@@ -131,7 +132,7 @@ class LogManagerTest {
 
       assertFalse(Files.exists(new File(logDir1, CleanShutdownFileHandler.CLEAN_SHUTDOWN_FILE_NAME).toPath))
       assertTrue(Files.exists(new File(logDir2, CleanShutdownFileHandler.CLEAN_SHUTDOWN_FILE_NAME).toPath))
-      assertEquals(-1L, logManagerForTest.get.readBrokerEpochFromCleanShutdownFiles())
+      assertEquals(OptionalLong.empty(), logManagerForTest.get.readBrokerEpochFromCleanShutdownFiles())
     } finally {
       logManagerForTest.foreach(manager => manager.liveLogDirs.foreach(Utils.delete))
     }
@@ -159,7 +160,7 @@ class LogManagerTest {
 
       assertTrue(Files.exists(new File(logDir1, CleanShutdownFileHandler.CLEAN_SHUTDOWN_FILE_NAME).toPath))
       assertTrue(Files.exists(new File(logDir2, CleanShutdownFileHandler.CLEAN_SHUTDOWN_FILE_NAME).toPath))
-      assertEquals(3L, logManagerForTest.get.readBrokerEpochFromCleanShutdownFiles())
+      assertEquals(OptionalLong.of(3L), logManagerForTest.get.readBrokerEpochFromCleanShutdownFiles())
     } finally {
       logManagerForTest.foreach(manager => manager.liveLogDirs.foreach(Utils.delete))
     }
