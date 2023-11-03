@@ -26,6 +26,7 @@ import java.util.Set;
 import java.util.function.IntPredicate;
 import java.util.stream.Collectors;
 
+import org.apache.kafka.common.DirectoryId;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.AlterPartitionRequestData.BrokerState;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
@@ -54,6 +55,7 @@ public class PartitionChangeBuilder {
         if (record.removingReplicas() != null) return false;
         if (record.addingReplicas() != null) return false;
         if (record.leaderRecoveryState() != LeaderRecoveryState.NO_CHANGE) return false;
+        if (record.directories() != null) return false;
         return true;
     }
 
@@ -382,6 +384,9 @@ public class PartitionChangeBuilder {
 
     private void setAssignmentChanges(PartitionChangeRecord record) {
         if (!targetReplicas.isEmpty() && !targetReplicas.equals(Replicas.toList(partition.replicas))) {
+            if (metadataVersion.isDirectoryAssignmentSupported()) {
+                record.setDirectories(DirectoryId.createDirectoriesFrom(partition.replicas, partition.directories, targetReplicas));
+            }
             record.setReplicas(targetReplicas);
         }
         if (!targetRemoving.equals(Replicas.toList(partition.removingReplicas))) {

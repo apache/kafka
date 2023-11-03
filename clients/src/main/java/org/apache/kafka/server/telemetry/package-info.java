@@ -14,19 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.consumer.internals;
-
-import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
-import org.apache.kafka.common.TopicPartition;
-
-import java.util.Collection;
-
-public class NoOpConsumerRebalanceListener implements ConsumerRebalanceListener {
-
-    @Override
-    public void onPartitionsAssigned(Collection<TopicPartition> partitions) {}
-
-    @Override
-    public void onPartitionsRevoked(Collection<TopicPartition> partitions) {}
-
-}
+/**
+ * Provides pluggable interface for capturing client telemetry metrics.
+ */
+package org.apache.kafka.server.telemetry;

@@ -30,6 +30,8 @@ import org.apache.kafka.metadata.{BrokerState, VersionRange}
 import org.apache.kafka.queue.EventQueue.DeadlineFunction
 import org.apache.kafka.common.utils.{ExponentialBackoff, LogContext, Time}
 import org.apache.kafka.queue.{EventQueue, KafkaEventQueue}
+
+import java.util.OptionalLong
 import scala.jdk.CollectionConverters._
 
 
@@ -188,9 +190,9 @@ class BrokerLifecycleManager(
   private var _channelManager: NodeToControllerChannelManager = _
 
   /**
-   * The broker epoch from the previous run, or -1 if the epoch is not able to be found.
+   * The broker epoch from the previous run, or empty if the epoch is not found.
    */
-  @volatile private var previousBrokerEpoch: Long = -1L
+  @volatile private var previousBrokerEpoch: OptionalLong = OptionalLong.empty()
 
   /**
    * The event queue.
@@ -216,7 +218,7 @@ class BrokerLifecycleManager(
             clusterId: String,
             advertisedListeners: ListenerCollection,
             supportedFeatures: util.Map[String, VersionRange],
-            previousBrokerEpoch: Long): Unit = {
+            previousBrokerEpoch: OptionalLong): Unit = {
     this.previousBrokerEpoch = previousBrokerEpoch
     eventQueue.append(new StartupEvent(highestMetadataOffsetProvider,
       channelManager, clusterId, advertisedListeners, supportedFeatures))
@@ -322,7 +324,7 @@ class BrokerLifecycleManager(
         setIncarnationId(incarnationId).
         setListeners(_advertisedListeners).
         setRack(rack.orNull).
-        setPreviousBrokerEpoch(previousBrokerEpoch)
+        setPreviousBrokerEpoch(previousBrokerEpoch.orElse(-1L))
     if (isDebugEnabled) {
       debug(s"Sending broker registration $data")
     }

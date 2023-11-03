@@ -365,9 +365,6 @@ public class RemoteLogManager implements Closeable {
         for (StopPartition stopPartition: stopPartitions) {
             TopicPartition tp = stopPartition.topicPartition();
             try {
-                // We are assuming that if the topic exists in topicIdByPartitionMap then it has active archival
-                // otherwise not. Ideally, `stopPartitions` should not be called for internal and non-tiered-storage
-                // topics. See KAFKA-15432 for more details.
                 if (topicIdByPartitionMap.containsKey(tp)) {
                     TopicIdPartition tpId = new TopicIdPartition(topicIdByPartitionMap.get(tp), tp);
                     RLMTaskWithFuture task = leaderOrFollowerTasks.remove(tpId);
@@ -379,6 +376,8 @@ public class RemoteLogManager implements Closeable {
                         LOGGER.info("Deleting the remote log segments task for partition: {}", tpId);
                         deleteRemoteLogPartition(tpId);
                     }
+                } else {
+                    LOGGER.warn("StopPartition call is not expected for partition: {}", tp);
                 }
             } catch (Exception ex) {
                 errorHandler.accept(tp, ex);

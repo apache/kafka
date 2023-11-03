@@ -610,8 +610,12 @@ object LocalLog extends Logging {
   /** a directory that is used for future partition */
   private[log] val FutureDirSuffix = "-future"
 
+  /** a directory that is used for stray partition */
+  private[log] val StrayDirSuffix = "-stray"
+
   private[log] val DeleteDirPattern = Pattern.compile(s"^(\\S+)-(\\S+)\\.(\\S+)$DeleteDirSuffix")
   private[log] val FutureDirPattern = Pattern.compile(s"^(\\S+)-(\\S+)\\.(\\S+)$FutureDirSuffix")
+  private[log] val StrayDirPattern = Pattern.compile(s"^(\\S+)-(\\S+)\\.(\\S+)$StrayDirSuffix")
 
   private[log] val UnknownOffset = -1L
 
@@ -622,10 +626,17 @@ object LocalLog extends Logging {
    * from exceeding 255 characters.
    */
   private[log] def logDeleteDirName(topicPartition: TopicPartition): String = {
-    val uniqueId = java.util.UUID.randomUUID.toString.replaceAll("-", "")
-    val suffix = s"-${topicPartition.partition()}.$uniqueId$DeleteDirSuffix"
-    val prefixLength = Math.min(topicPartition.topic().size, 255 - suffix.size)
-    s"${topicPartition.topic().substring(0, prefixLength)}$suffix"
+    logDirNameWithSuffixCappedLength(topicPartition, DeleteDirSuffix)
+  }
+
+  /**
+   * Return a directory name to rename the log directory to for stray partition deletion.
+   * The name will be in the following format: "topic-partitionId.uniqueId-stray".
+   * If the topic name is too long, it will be truncated to prevent the total name
+   * from exceeding 255 characters.
+   */
+  private[log] def logStrayDirName(topicPartition: TopicPartition): String = {
+    logDirNameWithSuffixCappedLength(topicPartition, StrayDirSuffix)
   }
 
   /**
@@ -634,6 +645,18 @@ object LocalLog extends Logging {
    */
   private[log] def logFutureDirName(topicPartition: TopicPartition): String = {
     logDirNameWithSuffix(topicPartition, FutureDirSuffix)
+  }
+
+  /**
+   * Return a new directory name in the following format: "${topic}-${partitionId}.${uniqueId}${suffix}".
+   * If the topic name is too long, it will be truncated to prevent the total name
+   * from exceeding 255 characters.
+   */
+  private[log] def logDirNameWithSuffixCappedLength(topicPartition: TopicPartition, suffix: String): String = {
+    val uniqueId = java.util.UUID.randomUUID.toString.replaceAll("-", "")
+    val fullSuffix = s"-${topicPartition.partition()}.$uniqueId$suffix"
+    val prefixLength = Math.min(topicPartition.topic().size, 255 - fullSuffix.size)
+    s"${topicPartition.topic().substring(0, prefixLength)}$fullSuffix"
   }
 
   private[log] def logDirNameWithSuffix(topicPartition: TopicPartition, suffix: String): String = {
@@ -666,11 +689,13 @@ object LocalLog extends Logging {
     if (dirName == null || dirName.isEmpty || !dirName.contains('-'))
       throw exception(dir)
     if (dirName.endsWith(DeleteDirSuffix) && !DeleteDirPattern.matcher(dirName).matches ||
-      dirName.endsWith(FutureDirSuffix) && !FutureDirPattern.matcher(dirName).matches)
+      dirName.endsWith(FutureDirSuffix) && !FutureDirPattern.matcher(dirName).matches ||
+      dirName.endsWith(StrayDirSuffix) && !StrayDirPattern.matcher(dirName).matches)
       throw exception(dir)
 
     val name: String =
-      if (dirName.endsWith(DeleteDirSuffix) || dirName.endsWith(FutureDirSuffix)) dirName.substring(0, dirName.lastIndexOf('.'))
+      if (dirName.endsWith(DeleteDirSuffix) || dirName.endsWith(FutureDirSuffix) || dirName.endsWith(StrayDirSuffix))
+        dirName.substring(0, dirName.lastIndexOf('.'))
       else dirName
 
     val index = name.lastIndexOf('-')
