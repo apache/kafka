@@ -430,9 +430,8 @@ public class ClientCompatibilityTest {
                 () -> log.info("offsetsForTime = {}", offsetsForTime.result));
             // Whether or not offsetsForTimes works, beginningOffsets and endOffsets
             // should work.
-            Map<TopicPartition, Long> beginningOffsets = consumer.beginningOffsets(timestampsToSearch.keySet());
-            Map<TopicPartition, Long> endingOffsets = consumer.endOffsets(timestampsToSearch.keySet());
-            log.trace("beginningOffsets: {}, endingOffsets: {}", beginningOffsets, endingOffsets);
+            consumer.beginningOffsets(timestampsToSearch.keySet());
+            consumer.endOffsets(timestampsToSearch.keySet());
 
             consumer.assign(topicPartitions);
             consumer.seekToBeginning(topicPartitions);
