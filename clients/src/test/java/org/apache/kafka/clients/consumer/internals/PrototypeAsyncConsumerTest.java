@@ -26,6 +26,8 @@ import org.apache.kafka.clients.consumer.internals.events.ListOffsetsApplication
 import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
 import org.apache.kafka.clients.consumer.internals.events.OffsetFetchApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ResetPositionsApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.SubscriptionChangeApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.UnsubscribeApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ValidatePositionsApplicationEvent;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
@@ -38,6 +40,7 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
 import org.mockito.MockedConstruction;
 import org.mockito.stubbing.Answer;
@@ -46,6 +49,7 @@ import java.time.Duration;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -54,6 +58,7 @@ import java.util.concurrent.Future;
 import java.util.stream.Collectors;
 
 import static java.util.Collections.singleton;
+import static java.util.Collections.singletonList;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -368,6 +373,53 @@ public class PrototypeAsyncConsumerTest {
         // Create consumer without group id so committed offsets are not used for updating positions
         resetWithEmptyGroupId();
         testUpdateFetchPositionsWithFetchCommittedOffsetsTimeout(false);
+    }
+
+    @Test
+    public void testSubscribeGeneratesEvent() {
+        String topic = "topic1";
+        consumer.subscribe(singletonList(topic));
+        assertEquals(singleton(topic), consumer.subscription());
+        assertTrue(consumer.assignment().isEmpty());
+        verify(applicationEventHandler).add(ArgumentMatchers.isA(SubscriptionChangeApplicationEvent.class));
+    }
+
+    @Test
+    public void testUnsubscribeGeneratesUnsubscribeEvent() {
+        consumer.unsubscribe();
+
+        // Verify the unsubscribe event was generated and mock its completion.
+        final ArgumentCaptor<UnsubscribeApplicationEvent> captor = ArgumentCaptor.forClass(UnsubscribeApplicationEvent.class);
+        verify(applicationEventHandler).add(captor.capture());
+        UnsubscribeApplicationEvent unsubscribeApplicationEvent = captor.getValue();
+        unsubscribeApplicationEvent.future().complete(null);
+
+        assertTrue(consumer.subscription().isEmpty());
+        assertTrue(consumer.assignment().isEmpty());
+    }
+
+    @Test
+    public void testSubscribeToEmptyListActsAsUnsubscribe() {
+        consumer.subscribe(Collections.emptyList());
+        assertTrue(consumer.subscription().isEmpty());
+        assertTrue(consumer.assignment().isEmpty());
+        verify(applicationEventHandler).add(ArgumentMatchers.isA(UnsubscribeApplicationEvent.class));
+    }
+
+    @Test
+    public void testSubscribeToNullTopicCollection() {
+        assertThrows(IllegalArgumentException.class, () -> consumer.subscribe((List<String>) null));
+    }
+
+    @Test
+    public void testSubscriptionOnNullTopic() {
+        assertThrows(IllegalArgumentException.class, () -> consumer.subscribe(singletonList(null)));
+    }
+
+    @Test
+    public void testSubscriptionOnEmptyTopic() {
+        String emptyTopic = "  ";
+        assertThrows(IllegalArgumentException.class, () -> consumer.subscribe(singletonList(emptyTopic)));
     }
 
     private void testUpdateFetchPositionsWithFetchCommittedOffsetsTimeout(boolean committedOffsetsEnabled) {

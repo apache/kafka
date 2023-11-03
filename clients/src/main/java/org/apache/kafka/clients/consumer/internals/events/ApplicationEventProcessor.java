@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
+import org.apache.kafka.clients.consumer.internals.HeartbeatRequestManager;
 import org.apache.kafka.clients.consumer.internals.Topic;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.internals.CachedSupplier;
@@ -105,6 +106,14 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
                 processValidatePositionsEvent();
                 return;
 
+            case SUBSCRIPTION_CHANGE:
+                processSubscriptionChangeEvent();
+                return;
+
+            case UNSUBSCRIBE:
+                processUnsubscribeEvent((UnsubscribeApplicationEvent) event);
+                return;
+
             default:
                 log.warn("Application event type " + event.type() + " was not expected");
         }
@@ -165,6 +174,38 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
                 requestManagers.offsetsRequestManager.fetchOffsets(event.timestampsToSearch(),
                         event.requireTimestamps());
         event.chain(future);
+    }
+
+    /**
+     * Process event that indicates that the subscription state changed. This will make the
+     * consumer join the group if it is not part of it yet, or send the updated subscription if
+     * it is already a member.
+     */
+    private void processSubscriptionChangeEvent() {
+        if (!requestManagers.heartbeatRequestManager.isPresent()) {
+            throw new RuntimeException("Heartbeat request manager not present when processing a " +
+                    "subscribe event");
+        }
+        HeartbeatRequestManager heartbeatManager = requestManagers.heartbeatRequestManager.get();
+        heartbeatManager.onSubscriptionUpdated();
+    }
+
+    /**
+     * Process event indicating that the consumer unsubscribed from all topics. This will make
+     * the consumer release its assignment and send a request to leave the group.
+     *
+     * @param event Unsubscribe event containing a future that will complete when the callback
+     *              execution for releasing the assignment completes, and the request to leave
+     *              the group is sent out.
+     */
+    private void processUnsubscribeEvent(UnsubscribeApplicationEvent event) {
+        if (!requestManagers.heartbeatRequestManager.isPresent()) {
+            throw new RuntimeException("Heartbeat request manager not present when processing an " +
+                    "unsubscribe event");
+        }
+        HeartbeatRequestManager heartbeatManager = requestManagers.heartbeatRequestManager.get();
+        CompletableFuture<Void> result = heartbeatManager.onUnsubscribe();
+        event.chain(result);
     }
 
     private void processResetPositionsEvent() {

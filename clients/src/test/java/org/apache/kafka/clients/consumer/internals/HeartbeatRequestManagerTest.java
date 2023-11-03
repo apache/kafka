@@ -34,6 +34,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -43,6 +44,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_GROUP_ID;
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_GROUP_INSTANCE_ID;
@@ -50,6 +52,7 @@ import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DE
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_MAX_POLL_INTERVAL_MS;
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_RETRY_BACKOFF_MS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -302,8 +305,38 @@ public class HeartbeatRequestManagerTest {
         }
     }
 
+    @ParameterizedTest
+    @EnumSource(MemberState.class)
+    public void testOnSubscriptionUpdatedTransitionsToJoiningOnlyIfNotInGroup(MemberState state) {
+        when(membershipManager.state()).thenReturn(state);
+        heartbeatRequestManager.onSubscriptionUpdated();
+        if (state == MemberState.NOT_IN_GROUP) {
+            verify(membershipManager).transitionToJoining();
+        } else {
+            verify(membershipManager, never()).transitionToJoining();
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(MemberState.class)
+    public void testOnUnsubscribe(MemberState state) {
+        when(membershipManager.state()).thenReturn(state);
+        CompletableFuture<Void> result = heartbeatRequestManager.onUnsubscribe();
+        List<MemberState> noOpStates = Arrays.asList(MemberState.NOT_IN_GROUP, MemberState.FATAL);
+
+        if (noOpStates.contains(state)) {
+            // Should complete without leave group
+            verify(membershipManager, never()).leaveGroup();
+            assertTrue(result.isDone());
+            assertFalse(result.isCompletedExceptionally());
+        } else {
+            // Should trigger leave group
+            verify(membershipManager).leaveGroup();
+        }
+    }
+
     private void mockStableMember() {
-        membershipManager.transitionToJoining();
+        heartbeatRequestManager.onSubscriptionUpdated();
         // Heartbeat response without assignment to set the state to STABLE.
         ConsumerGroupHeartbeatResponse rs1 = new ConsumerGroupHeartbeatResponse(new ConsumerGroupHeartbeatResponseData()
                 .setHeartbeatIntervalMs(DEFAULT_HEARTBEAT_INTERVAL_MS)

@@ -44,6 +44,8 @@ import org.apache.kafka.clients.consumer.internals.events.ListOffsetsApplication
 import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
 import org.apache.kafka.clients.consumer.internals.events.OffsetFetchApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ResetPositionsApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.SubscriptionChangeApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.UnsubscribeApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ValidatePositionsApplicationEvent;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.IsolationLevel;
@@ -843,9 +845,15 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     @Override
     public void unsubscribe() {
         fetchBuffer.retainAll(Collections.emptySet());
-        // TODO: send leave group event to release assignment and send HB to leave. The event
-        //  should end up triggering the membershipManager.leaveGroup()
-        subscriptions.unsubscribe();
+        UnsubscribeApplicationEvent unsubscribeApplicationEvent = new UnsubscribeApplicationEvent();
+        applicationEventHandler.add(unsubscribeApplicationEvent);
+        unsubscribeApplicationEvent.future().whenComplete((result, error) -> {
+            if (error != null) {
+                // Callback failed - Keeping same exception message thrown by the legacy consumer
+                throw new KafkaException("User rebalance callback throws an error", error);
+            }
+            subscriptions.unsubscribe();
+        });
     }
 
     @Override
@@ -1095,6 +1103,10 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
             log.info("Subscribed to topic(s): {}", join(topics, ", "));
             if (subscriptions.subscribe(new HashSet<>(topics), listener))
                 metadata.requestUpdateForNewTopics();
+
+            // Trigger subscribe event to effectively join the group if not already part of it,
+            // or just send the new subscription to the broker.
+            applicationEventHandler.add(new SubscriptionChangeApplicationEvent());
         }
     }
 
