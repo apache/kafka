@@ -50,36 +50,32 @@ object KafkaRequestHandler {
   }
 
   /**
-   * A callback method that expected to be executed once in an arbitrary request handler thread after an asynchronous action completes.
-   * The RequestLocal passed in must belong to the request handler thread that is executing the callback.
-   */
-  class AsynchronousCompletionCallback[T](val fun: (RequestLocal, T) => Unit)
-
-  /**
-   * Wrap callback to schedule it on an arbitrary request thread.
+   * Execute or create a callback to be asynchronously scheduled on an arbitrary request thread
    * NOTE: this function must be originally called from a request thread.
-   * @param asyncCompletionCallback a callback function to execute as the result of an asynchronous action completing
-   * @param requestLocal The RequestLocal for the current request handler thread in case we need to call
-   *                     the callback function without queueing the callback request
+   * @param asyncCompletionCallback A callback method that is expected to be executed once in an arbitrary request
+   *                                handler thread after an asynchronous action completes. The RequestLocal passed in
+   *                                must belong to the request handler thread that is executing the callback.
+   * @param requestLocal The RequestLocal for the current request handler thread in case we need to execute the callback
+   *                     function immediately without queueing the callback request
    * @return Wrapped callback that schedules `asyncCompletionCallback` on an arbitrary request thread
    */
-  def wrap[T](asyncCompletionCallback: AsynchronousCompletionCallback[T], requestLocal: RequestLocal): T => Unit = {
+  def executeOrRegisterAsyncCallback[T](asyncCompletionCallback: (RequestLocal, T) => Unit, requestLocal: RequestLocal): T => Unit = {
     val requestChannel = threadRequestChannel.get()
     val currentRequest = threadCurrentRequest.get()
     if (requestChannel == null || currentRequest == null) {
       if (!bypassThreadCheck)
         throw new IllegalStateException("Attempted to reschedule to request handler thread from non-request handler thread.")
-      T => asyncCompletionCallback.fun(requestLocal, T)
+      T => asyncCompletionCallback(requestLocal, T)
     } else {
       T => {
         if (threadCurrentRequest.get() == currentRequest) {
           // If the callback is actually executed on the same request thread, we can directly execute
           // it without re-scheduling it.
-          asyncCompletionCallback.fun(requestLocal, T)
+          asyncCompletionCallback(requestLocal, T)
         } else {
           // The requestChannel and request are captured in this lambda, so when it's executed on the callback thread
           // we can re-schedule the original callback on a request thread and update the metrics accordingly.
-          requestChannel.sendCallbackRequest(RequestChannel.CallbackRequest(newRequestLocal => asyncCompletionCallback.fun(newRequestLocal, T), currentRequest))
+          requestChannel.sendCallbackRequest(RequestChannel.CallbackRequest(newRequestLocal => asyncCompletionCallback(newRequestLocal, T), currentRequest))
         }
       }
     }
