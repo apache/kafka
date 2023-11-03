@@ -108,10 +108,7 @@ public class Graph<V extends Comparable<V>> {
 
         @Override
         public int compare(final V o1, final V o2) {
-            if (o1 == null) {
-                return -1;
-            }
-            if (o2 == null) {
+            if (o1 == null || o2 == null) {
                 return -1;
             }
             return o1.compareTo(o2);
@@ -238,7 +235,7 @@ public class Graph<V extends Comparable<V>> {
 
     private void removeDummySourceNode(final Graph<V> residualGraph) {
         if (!residualGraph.isResidualGraph) {
-            throw new IllegalStateException("Graph should be residual graph to add dummy source node");
+            throw new IllegalStateException("Graph should be residual graph to remove dummy source node");
         }
         residualGraph.adjList.remove(null);
         residualGraph.nodes.remove(null);
