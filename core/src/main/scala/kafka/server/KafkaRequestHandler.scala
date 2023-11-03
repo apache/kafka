@@ -50,16 +50,18 @@ object KafkaRequestHandler {
   }
 
   /**
-   * Execute or create a callback to be asynchronously scheduled on an arbitrary request thread
+   * Creates a wrapped callback to be executed synchronously on the calling request thread or asynchronously
+   * on an arbitrary request thread.
    * NOTE: this function must be originally called from a request thread.
-   * @param asyncCompletionCallback A callback method that is expected to be executed once in an arbitrary request
-   *                                handler thread after an asynchronous action completes. The RequestLocal passed in
-   *                                must belong to the request handler thread that is executing the callback.
+   * @param asyncCompletionCallback A callback method that we intend to call from the current thread or in another
+   *                                thread after an asynchronous action completes. The RequestLocal passed in must
+   *                                belong to the request handler thread that is executing the callback.
    * @param requestLocal The RequestLocal for the current request handler thread in case we need to execute the callback
-   *                     function immediately without queueing the callback request
-   * @return Wrapped callback that schedules `asyncCompletionCallback` on an arbitrary request thread
+   *                     function synchronously from the calling thread.
+   * @return Wrapped callback will either immediately execute `asyncCompletionCallback` or schedule it on an arbitrary request thread
+   *         depending on where it is called
    */
-  def executeOrRegisterAsyncCallback[T](asyncCompletionCallback: (RequestLocal, T) => Unit, requestLocal: RequestLocal): T => Unit = {
+  def wrapAsyncCallback[T](asyncCompletionCallback: (RequestLocal, T) => Unit, requestLocal: RequestLocal): T => Unit = {
     val requestChannel = threadRequestChannel.get()
     val currentRequest = threadCurrentRequest.get()
     if (requestChannel == null || currentRequest == null) {

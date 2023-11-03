@@ -758,7 +758,7 @@ class ReplicaManager(val config: KafkaConfig,
           producerId = batchInfo.producerId,
           producerEpoch = batchInfo.producerEpoch,
           topicPartitions = notYetVerifiedEntriesPerPartition.keySet.toSeq,
-          callback = KafkaRequestHandler.executeOrRegisterAsyncCallback(
+          callback = KafkaRequestHandler.wrapAsyncCallback(
             appendEntries(
               entriesPerPartition,
               internalTopicsAllowed,

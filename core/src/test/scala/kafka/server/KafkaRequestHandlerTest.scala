@@ -57,7 +57,7 @@ class KafkaRequestHandlerTest {
       when(apiHandler.handle(ArgumentMatchers.eq(request), any())).thenAnswer { _ =>
         time.sleep(2)
         // Prepare the callback.
-        val callback = KafkaRequestHandler.executeOrRegisterAsyncCallback(
+        val callback = KafkaRequestHandler.wrapAsyncCallback(
           (reqLocal: RequestLocal, ms: Int) => {
             time.sleep(ms)
             handler.stop()
@@ -96,7 +96,7 @@ class KafkaRequestHandlerTest {
     when(apiHandler.handle(ArgumentMatchers.eq(request), any())).thenAnswer { _ =>
       handledCount = handledCount + 1
       // Prepare the callback.
-      val callback = KafkaRequestHandler.executeOrRegisterAsyncCallback(
+      val callback = KafkaRequestHandler.wrapAsyncCallback(
         (reqLocal: RequestLocal, ms: Int) => {
           handler.stop()
         },
@@ -132,7 +132,7 @@ class KafkaRequestHandlerTest {
 
     when(apiHandler.handle(ArgumentMatchers.eq(request), any())).thenAnswer { _ =>
       // Prepare the callback.
-      val callback = KafkaRequestHandler.executeOrRegisterAsyncCallback(
+      val callback = KafkaRequestHandler.wrapAsyncCallback(
         (reqLocal: RequestLocal, ms: Int) => {
           reqLocal.bufferSupplier.close()
           handledCount = handledCount + 1
@@ -167,7 +167,7 @@ class KafkaRequestHandlerTest {
 
     when(apiHandler.handle(ArgumentMatchers.eq(request), any())).thenAnswer { _ =>
       // Prepare the callback.
-      val callback = KafkaRequestHandler.executeOrRegisterAsyncCallback(
+      val callback = KafkaRequestHandler.wrapAsyncCallback(
         (reqLocal: RequestLocal, ms: Int) => {
           reqLocal.bufferSupplier.close()
           handledCount = handledCount + 1
