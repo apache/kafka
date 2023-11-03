@@ -820,9 +820,9 @@ public class StreamsConfig extends AbstractConfig {
             .define(STATE_DIR_CONFIG,
                     Type.STRING,
                     System.getProperty("java.io.tmpdir") + File.separator + "kafka-streams",
-                    System.getProperty("kafka.streams.state.dir"),
                     Importance.HIGH,
-                    STATE_DIR_DOC)
+                    STATE_DIR_DOC,
+                    "${java.io.tmpdir}")
 
             // MEDIUM
 
