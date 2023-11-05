@@ -159,7 +159,7 @@ public class HeartbeatRequestManager implements RequestManager {
         }
 
         sendUpdatedSubscription = true;
-        if (membershipManager.state() == MemberState.NOT_IN_GROUP) {
+        if (membershipManager.state() == MemberState.UNSUBSCRIBED) {
             membershipManager.transitionToJoining();
         }
     }
@@ -174,7 +174,7 @@ public class HeartbeatRequestManager implements RequestManager {
      */
     public CompletableFuture<Void> onUnsubscribe() {
         boolean notInGroup =
-                membershipManager.state() == MemberState.NOT_IN_GROUP ||
+                membershipManager.state() == MemberState.UNSUBSCRIBED ||
                         membershipManager.state() == MemberState.FATAL;
         if (notInGroup) {
             return CompletableFuture.completedFuture(null);

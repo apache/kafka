@@ -160,7 +160,7 @@ public class MembershipManagerImplTest {
         MembershipManagerImpl membershipManager = new MembershipManagerImpl(
                 GROUP_ID, subscriptionState, commitRequestManager, metadata,
                 testBuilder.logContext);
-        assertEquals(MemberState.NOT_IN_GROUP, membershipManager.state());
+        assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
         membershipManager.transitionToJoining();
 
         membershipManager.transitionToFatal();
@@ -251,7 +251,7 @@ public class MembershipManagerImplTest {
         ConsumerGroupHeartbeatResponse heartbeatResponse = createConsumerGroupHeartbeatResponse(targetAssignment);
         membershipManager.onHeartbeatResponseReceived(heartbeatResponse.data());
 
-        assertEquals(MemberState.SENDING_ACK_FOR_RECONCILED_ASSIGNMENT, membershipManager.state());
+        assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
         Set<TopicPartition> assignedPartitions = new HashSet<>(Arrays.asList(
                 new TopicPartition(topicName, 0),
                 new TopicPartition(topicName, 1)));
@@ -280,7 +280,7 @@ public class MembershipManagerImplTest {
         ConsumerGroupHeartbeatResponse heartbeatResponse = createConsumerGroupHeartbeatResponse(targetAssignment);
         membershipManager.onHeartbeatResponseReceived(heartbeatResponse.data());
 
-        assertEquals(MemberState.SENDING_ACK_FOR_RECONCILED_ASSIGNMENT, membershipManager.state());
+        assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
         Set<TopicPartition> assignedPartitions = new HashSet<>(Arrays.asList(
                 ownedPartition,
                 new TopicPartition("topic1", 1),
@@ -364,7 +364,7 @@ public class MembershipManagerImplTest {
         ConsumerGroupHeartbeatResponse heartbeatResponse = createConsumerGroupHeartbeatResponse(targetAssignment);
         membershipManager.onHeartbeatResponseReceived(heartbeatResponse.data());
 
-        assertEquals(MemberState.SENDING_ACK_FOR_RECONCILED_ASSIGNMENT, membershipManager.state());
+        assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
         Set<TopicPartition> assignedPartitions = new HashSet<>(Arrays.asList(
                 new TopicPartition("topic1", 1),
                 new TopicPartition("topic1", 2)));
@@ -419,7 +419,7 @@ public class MembershipManagerImplTest {
         membershipManager.onUpdate(null);
 
         // Member should complete reconciliation
-        assertEquals(MemberState.SENDING_ACK_FOR_RECONCILED_ASSIGNMENT, membershipManager.state());
+        assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
         Set<TopicPartition> assignedPartitions = new HashSet<>(Arrays.asList(
                 new TopicPartition(topicName, 0),
                 new TopicPartition(topicName, 1)));
@@ -447,7 +447,7 @@ public class MembershipManagerImplTest {
         membershipManager.onHeartbeatResponseReceived(heartbeatResponse.data());
 
         // Member should complete reconciliation
-        assertEquals(MemberState.SENDING_ACK_FOR_RECONCILED_ASSIGNMENT, membershipManager.state());
+        assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
         Set<TopicPartition> assignedPartitions = new HashSet<>(Arrays.asList(
                 new TopicPartition(topicName, 0),
                 new TopicPartition(topicName, 1)));
@@ -519,7 +519,7 @@ public class MembershipManagerImplTest {
 
     private void testRevocationCompleted(MembershipManagerImpl membershipManager,
                                          Set<TopicPartition> expectedCurrentAssignment) {
-        assertEquals(MemberState.SENDING_ACK_FOR_RECONCILED_ASSIGNMENT, membershipManager.state());
+        assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
         assertEquals(expectedCurrentAssignment, membershipManager.currentAssignment());
         assertFalse(membershipManager.targetAssignment().isPresent());
 
@@ -609,7 +609,7 @@ public class MembershipManagerImplTest {
         assertEquals(MEMBER_ID, membershipManager.memberId());
         assertEquals(-1, membershipManager.memberEpoch());
         assertTrue(membershipManager.currentAssignment().isEmpty());
-        assertEquals(MemberState.SENDING_LEAVE_REQUEST, membershipManager.state());
+        assertEquals(MemberState.LEAVING, membershipManager.state());
         verify(subscriptionState).assignFromSubscribed(Collections.emptySet());
     }
 

@@ -84,7 +84,7 @@ public class MetadataCache {
         this.controller = controller;
         this.topicIds = Collections.unmodifiableMap(topicIds);
         this.topicNames = Collections.unmodifiableMap(
-                topicIds.entrySet().stream().collect(Collectors.toMap(Map.Entry::getValue, Map.Entry::getKey))
+            topicIds.entrySet().stream().collect(Collectors.toMap(Map.Entry::getValue, Map.Entry::getKey))
         );
 
         this.metadataByPartition = new HashMap<>(partitions.size());

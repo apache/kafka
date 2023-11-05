@@ -24,11 +24,12 @@ import java.util.List;
 public enum MemberState {
 
     /**
-     * Member is not part of the group. This could be the case when it has never joined (no call
-     * has been made to the subscribe API), or when the member intentionally leaves the group
-     * after a call to the unsubscribe API.
+     * Member has a group id, but it is not subscribed to any topic to receive automatic
+     * assignments. This will be the state when the member has never subscribed, or when it has
+     * unsubscribed from all topics. While in this state the member can commit offsets but won't
+     * be an active member ofRe the consumer group (no heartbeats).
      */
-    NOT_IN_GROUP,
+    UNSUBSCRIBED,
 
     /**
      * Member is attempting to join a consumer group. This could be the case when joining for the
@@ -48,7 +49,7 @@ public enum MemberState {
      * Member has completed reconciling an assignment received, and stays in this state until the
      * next heartbeat request is sent out to acknowledge the assignment to the server.
      */
-    SENDING_ACK_FOR_RECONCILED_ASSIGNMENT,
+    ACKNOWLEDGING,
 
     /**
      * Member is active in a group, sending heartbeats, and has processed all assignments received.
@@ -66,18 +67,17 @@ public enum MemberState {
     FENCED,
 
     /**
-     * The member transitions to this state when it is leaving the group after a call to
-     * unsubscribe. It stays in this state while releasing its assignment (calling user's callback
-     * for partitions revoked or lost), until the callback completes and a heartbeat request is
-     * sent out to effectively leave the group (without waiting for a response).
+     * The member transitions to this state after a call to unsubscribe, to start taking actions
+     * before actually leaving the group. These actions involve committing offsets if needed and
+     * releasing its assignment (calling user's callback for partitions revoked or lost).
      */
-    LEAVING,
+    PREPARE_LEAVING,
 
     /**
      * Member has completed releasing its assignment, and stays in this state until the next
-     * heartbeat request is sent out to leave the group.
+     * heartbeat request is sent out to effectively leave the group.
      */
-    SENDING_LEAVE_REQUEST,
+    LEAVING,
 
     /**
      * The member failed with an unrecoverable error.
@@ -89,22 +89,21 @@ public enum MemberState {
      */
     static {
 
-        STABLE.previousValidStates = Arrays.asList(JOINING, SENDING_ACK_FOR_RECONCILED_ASSIGNMENT);
+        STABLE.previousValidStates = Arrays.asList(JOINING, ACKNOWLEDGING);
 
         RECONCILING.previousValidStates = Arrays.asList(STABLE, JOINING);
 
-        SENDING_ACK_FOR_RECONCILED_ASSIGNMENT.previousValidStates = Arrays.asList(RECONCILING);
+        ACKNOWLEDGING.previousValidStates = Arrays.asList(RECONCILING);
 
-        FATAL.previousValidStates = Arrays.asList(JOINING, STABLE, RECONCILING, SENDING_ACK_FOR_RECONCILED_ASSIGNMENT);
+        FATAL.previousValidStates = Arrays.asList(JOINING, STABLE, RECONCILING, ACKNOWLEDGING);
 
-        FENCED.previousValidStates = Arrays.asList(JOINING, STABLE, RECONCILING, SENDING_ACK_FOR_RECONCILED_ASSIGNMENT);
+        FENCED.previousValidStates = Arrays.asList(JOINING, STABLE, RECONCILING, ACKNOWLEDGING);
 
-        JOINING.previousValidStates = Arrays.asList(FENCED, RECONCILING, NOT_IN_GROUP);
+        JOINING.previousValidStates = Arrays.asList(FENCED, UNSUBSCRIBED);
 
-        LEAVING.previousValidStates = Arrays.asList(JOINING, STABLE, RECONCILING,
-                SENDING_ACK_FOR_RECONCILED_ASSIGNMENT, NOT_IN_GROUP);
+        PREPARE_LEAVING.previousValidStates = Arrays.asList(JOINING, STABLE, RECONCILING, ACKNOWLEDGING, UNSUBSCRIBED);
 
-        SENDING_LEAVE_REQUEST.previousValidStates = Arrays.asList(LEAVING);
+        LEAVING.previousValidStates = Arrays.asList(PREPARE_LEAVING);
     }
 
     private List<MemberState> previousValidStates;

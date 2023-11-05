@@ -53,7 +53,7 @@ import java.util.concurrent.CompletableFuture;
  * <p/>
  *
  * While the subscribe API hasn't been called (or if the consumer called unsubscribe), this manager
- * will only be responsible for keeping the member in a {@link MemberState#NOT_IN_GROUP} state,
+ * will only be responsible for keeping the member in a {@link MemberState#UNSUBSCRIBED} state,
  * where it can commit offsets to the group identified by the {@link #groupId()}, without joining
  * the group.
  *
@@ -201,19 +201,6 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      */
     public static final int JOIN_GROUP_EPOCH = 0;
 
-    /**
-     * Epoch that a member (not static) must include in a heartbeat request to indicate that it
-     * wants to leave the group. This is considered as a definitive leave.
-     */
-    public static final int LEAVE_GROUP_EPOCH = -1;
-
-    /**
-     * Epoch that a static member (member with group instance id) must include in a heartbeat
-     * request to indicate that it wants to leave the group. This will be considered as a
-     * potentially temporary leave.
-     */
-    public static final int LEAVE_GROUP_EPOCH_FOR_STATIC_MEMBER = -2;
-
 
     public MembershipManagerImpl(String groupId,
                                  SubscriptionState subscriptions,
@@ -231,7 +218,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
                                  ConsumerMetadata metadata,
                                  LogContext logContext) {
         this.groupId = groupId;
-        this.state = MemberState.NOT_IN_GROUP;
+        this.state = MemberState.UNSUBSCRIBED;
         this.serverAssignor = Optional.ofNullable(serverAssignor);
         this.groupInstanceId = Optional.ofNullable(groupInstanceId);
         this.targetAssignment = Optional.empty();
@@ -307,7 +294,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         if (assignment != null) {
             setTargetAssignment(assignment);
             transitionTo(MemberState.RECONCILING);
-            reconcile(targetAssignment.get());
+            reconcile();
         } else {
             transitionTo(MemberState.STABLE);
         }
@@ -344,7 +331,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
 
         // Update epoch to indicate that the member is not in the group anymore, so that the
         // onPartitionsLost is called to release assignment.
-        memberEpoch = LEAVE_GROUP_EPOCH;
+        memberEpoch = ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
         invokeOnPartitionsRevokedOrLostToReleaseAssignment();
 
         clearAssignedTopicNamesCache();
@@ -366,7 +353,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      */
     @Override
     public CompletableFuture<Void> leaveGroup() {
-        transitionTo(MemberState.LEAVING);
+        transitionTo(MemberState.PREPARE_LEAVING);
 
         CompletableFuture<Void> callbackResult = invokeOnPartitionsRevokedOrLostToReleaseAssignment();
         callbackResult.whenComplete((result, error) -> {
@@ -428,22 +415,14 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
 
     /**
      * Reset member epoch to the value required for the leave the group heartbeat request, and
-     * transition to the {@link MemberState#SENDING_LEAVE_REQUEST} state so that a heartbeat
+     * transition to the {@link MemberState#LEAVING} state so that a heartbeat
      * request is sent out with it.
      */
     private void transitionToSendingLeaveGroup() {
-        memberEpoch = leaveGroupEpoch();
+        memberEpoch = ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
         currentAssignment = new HashSet<>();
         targetAssignment = Optional.empty();
-        transitionTo(MemberState.SENDING_LEAVE_REQUEST);
-    }
-
-    /**
-     * Return the epoch to use in the Heartbeat request to indicate that the member wants to
-     * leave the group. Should be -2 if this is a static member, or -1 in any other case.
-     */
-    private int leaveGroupEpoch() {
-        return groupInstanceId.isPresent() ? LEAVE_GROUP_EPOCH_FOR_STATIC_MEMBER : LEAVE_GROUP_EPOCH;
+        transitionTo(MemberState.LEAVING);
     }
 
     /**
@@ -451,8 +430,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      */
     @Override
     public boolean shouldHeartbeatNow() {
-        return state() == MemberState.SENDING_ACK_FOR_RECONCILED_ASSIGNMENT ||
-                state() == MemberState.SENDING_LEAVE_REQUEST;
+        return state() == MemberState.ACKNOWLEDGING || state() == MemberState.LEAVING;
     }
 
     /**
@@ -460,24 +438,25 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      */
     @Override
     public void onHeartbeatRequestSent() {
-        if (state() == MemberState.SENDING_ACK_FOR_RECONCILED_ASSIGNMENT) {
+        if (state() == MemberState.ACKNOWLEDGING) {
             transitionTo(MemberState.STABLE);
-        } else if (state() == MemberState.SENDING_LEAVE_REQUEST) {
-            transitionTo(MemberState.NOT_IN_GROUP);
+        } else if (state() == MemberState.LEAVING) {
+            transitionTo(MemberState.UNSUBSCRIBED);
         }
     }
 
     @Override
     public boolean shouldSkipHeartbeat() {
-        return state() == MemberState.NOT_IN_GROUP || state() == MemberState.FATAL;
+        return state() == MemberState.UNSUBSCRIBED || state() == MemberState.FATAL;
     }
 
-    void reconcile(ConsumerGroupHeartbeatResponseData.Assignment targetAssignment) {
+    void reconcile() {
 
         SortedSet<TopicPartition> ownedPartitions = new TreeSet<>(COMPARATOR);
         ownedPartitions.addAll(subscriptions.assignedPartitions());
 
-        CompletableFuture<SortedSet<TopicPartition>> assignedPartitionsByNameResult = extractTopicPartitionsFromAssignment(targetAssignment);
+        CompletableFuture<SortedSet<TopicPartition>> assignedPartitionsByNameResult =
+                extractTopicPartitionsFromAssignment(targetAssignment.get());
 
         assignedPartitionsByNameResult.whenComplete((assignedPartitions, metadataError) -> {
             if (metadataError != null) {
@@ -494,7 +473,6 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
             SortedSet<TopicPartition> addedPartitions = new TreeSet<>(COMPARATOR);
             addedPartitions.addAll(assignedPartitions);
             addedPartitions.removeAll(ownedPartitions);
-
 
             // Partitions to revoke
             SortedSet<TopicPartition> revokedPartitions = new TreeSet<>(COMPARATOR);
@@ -563,7 +541,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
                     if (state == MemberState.RECONCILING) {
 
                         // Make assignment effective on the broker by transitioning to send acknowledge.
-                        transitionTo(MemberState.SENDING_ACK_FOR_RECONCILED_ASSIGNMENT);
+                        transitionTo(MemberState.ACKNOWLEDGING);
 
                         // Make assignment effective on the member group manager
                         this.currentAssignment = assignedPartitions;

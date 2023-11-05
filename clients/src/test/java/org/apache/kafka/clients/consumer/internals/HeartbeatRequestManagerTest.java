@@ -338,7 +338,7 @@ public class HeartbeatRequestManagerTest {
     public void testOnSubscriptionUpdatedTransitionsToJoiningOnlyIfNotInGroup(MemberState state) {
         when(membershipManager.state()).thenReturn(state);
         heartbeatRequestManager.onSubscriptionUpdated();
-        if (state == MemberState.NOT_IN_GROUP) {
+        if (state == MemberState.UNSUBSCRIBED) {
             verify(membershipManager).transitionToJoining();
         } else {
             verify(membershipManager, never()).transitionToJoining();
@@ -350,7 +350,7 @@ public class HeartbeatRequestManagerTest {
     public void testOnUnsubscribe(MemberState state) {
         when(membershipManager.state()).thenReturn(state);
         CompletableFuture<Void> result = heartbeatRequestManager.onUnsubscribe();
-        List<MemberState> noOpStates = Arrays.asList(MemberState.NOT_IN_GROUP, MemberState.FATAL);
+        List<MemberState> noOpStates = Arrays.asList(MemberState.UNSUBSCRIBED, MemberState.FATAL);
 
         if (noOpStates.contains(state)) {
             // Should complete without leave group
