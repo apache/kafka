@@ -557,7 +557,7 @@ public class ConsumerGroupCommand {
             partitions.forEach(partition -> {
                 try {
                     deleteResult.partitionResult(partition).get();
-                    partitionLevelResult.remove(partition);
+                    partitionLevelResult.put(partition, null);
                 } catch (ExecutionException | InterruptedException e) {
                     partitionLevelResult.put(partition, e);
                 }
@@ -1147,27 +1147,29 @@ public class ConsumerGroupCommand {
                 withTimeoutMs(new DeleteConsumerGroupsOptions())
             ).deletedGroups();
 
-            Set<String> success = new HashSet<>();
+            Map<String, Throwable> success = new HashMap<>();
             Map<String, Throwable> failed = new HashMap<>();
 
             groupsToDelete.forEach((g, f) -> {
                 try {
                     f.get();
-                    success.add(g);
+                    success.put(g, null);
                 } catch (ExecutionException | InterruptedException e) {
                     failed.put(g, e);
                 }
             });
 
             if (failed.isEmpty())
-                System.out.println("Deletion of requested consumer groups (" + Utils.mkString(success.stream(), "'", "', '", "'") + ") was successful.");
+                System.out.println("Deletion of requested consumer groups (" + Utils.mkString(success.keySet().stream(), "'", "'", "', '") + ") was successful.");
             else {
                 printError("Deletion of some consumer groups failed:", Optional.empty());
                 failed.forEach((group, error) -> System.out.println("* Group '" + group + "' could not be deleted due to: " + error));
 
                 if (!success.isEmpty())
-                    System.out.println("\nThese consumer groups were deleted successfully: " + Utils.mkString(success.stream(), "'", "', '", "'"));
+                    System.out.println("\nThese consumer groups were deleted successfully: " + Utils.mkString(success.keySet().stream(), "'", "', '", "'"));
             }
+
+            failed.putAll(success);
 
             return failed;
         }
