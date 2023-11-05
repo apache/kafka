@@ -678,12 +678,12 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public void enforceRebalance() {
-        throw new UnsupportedOperationException("Operation not supported in new consumer group protocol");
+        log.warn("Operation not supported in new consumer group protocol");
     }
 
     @Override
     public void enforceRebalance(String reason) {
-        throw new UnsupportedOperationException("Operation not supported in new consumer group protocol");
+        log.warn("Operation not supported in new consumer group protocol");
     }
 
     @Override
