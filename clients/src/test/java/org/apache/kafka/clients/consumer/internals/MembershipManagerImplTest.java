@@ -18,7 +18,6 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
@@ -31,8 +30,6 @@ import org.junit.jupiter.api.Test;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -43,11 +40,12 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -63,8 +61,6 @@ public class MembershipManagerImplTest {
 
     private CommitRequestManager commitRequestManager;
 
-    private TopicMetadataRequestManager metadataRequestManager;
-
     private ConsumerTestBuilder testBuilder;
 
     @BeforeEach
@@ -73,7 +69,6 @@ public class MembershipManagerImplTest {
         metadata = testBuilder.metadata;
         subscriptionState = testBuilder.subscriptions;
         commitRequestManager = testBuilder.commitRequestManager.get();
-        metadataRequestManager = testBuilder.topicMetadataRequestManager;
     }
 
     @AfterEach
@@ -85,7 +80,7 @@ public class MembershipManagerImplTest {
 
     private MembershipManagerImpl createMembershipManagerJoiningGroup() {
         MembershipManagerImpl manager = new MembershipManagerImpl(
-                GROUP_ID, subscriptionState, commitRequestManager, metadataRequestManager,
+                GROUP_ID, subscriptionState, commitRequestManager,
                 metadata, testBuilder.logContext);
         manager.transitionToJoining();
         return manager;
@@ -95,7 +90,7 @@ public class MembershipManagerImplTest {
                                                                       String serverAssignor) {
         MembershipManagerImpl manager = new MembershipManagerImpl(
                 GROUP_ID, groupInstanceId, serverAssignor, subscriptionState,
-                commitRequestManager, metadataRequestManager, metadata, testBuilder.logContext);
+                commitRequestManager, metadata, testBuilder.logContext);
         manager.transitionToJoining();
         return manager;
     }
@@ -164,8 +159,8 @@ public class MembershipManagerImplTest {
     @Test
     public void testTransitionToFailedWhenTryingToJoin() {
         MembershipManagerImpl membershipManager = new MembershipManagerImpl(
-                GROUP_ID, subscriptionState, commitRequestManager, metadataRequestManager,
-                metadata, testBuilder.logContext);
+                GROUP_ID, subscriptionState, commitRequestManager, metadata,
+                testBuilder.logContext);
         assertEquals(MemberState.NOT_IN_GROUP, membershipManager.state());
         membershipManager.transitionToJoining();
 
@@ -305,7 +300,7 @@ public class MembershipManagerImplTest {
         when(subscriptionState.assignedPartitions()).thenReturn(Collections.singleton(ownedPartition));
         Uuid newAssignmentTopicId = Uuid.randomUuid();
         String newAssignmentTopicName = "topic2";
-        when(metadata.topicNames()).thenReturn(Collections.singletonMap(newAssignmentTopicId, newAssignmentTopicName));
+        mockTopicNameInMetadataCache(newAssignmentTopicId, newAssignmentTopicName, true);
         when(subscriptionState.checkAssignmentMatchedSubscription(anyCollection())).thenReturn(false);
 
         MembershipManagerImpl membershipManager = createMembershipManagerJoiningGroup();
@@ -328,13 +323,11 @@ public class MembershipManagerImplTest {
         MembershipManagerImpl membershipManager = createMemberInStableState();
         mockOwnedPartition();
 
-        when(commitRequestManager.autoCommitEnabled()).thenReturn(false);
-        doNothing().when(subscriptionState).markPendingRevocation(anySet());
-        when(subscriptionState.rebalanceListener()).thenReturn(Optional.empty()).thenReturn(Optional.empty());
+        mockRevocationNoCallbacks(false);
 
         receiveEmptyAssignment(membershipManager);
 
-        testReconciliationOfRevokedPartitionsCompleted(membershipManager);
+        testRevocationOfAllPartitionsCompleted(membershipManager);
     }
 
     @Test
@@ -342,7 +335,7 @@ public class MembershipManagerImplTest {
         MembershipManagerImpl membershipManager = createMemberInStableState();
         mockOwnedPartition();
 
-        CompletableFuture<Void> commitResult = mockRevocationWithAutoCommitNoCallbacks();
+        CompletableFuture<Void> commitResult = mockRevocationNoCallbacks(true);
 
         receiveEmptyAssignment(membershipManager);
 
@@ -354,7 +347,7 @@ public class MembershipManagerImplTest {
         // Complete commit request
         commitResult.complete(null);
 
-        testReconciliationOfRevokedPartitionsCompleted(membershipManager);
+        testRevocationOfAllPartitionsCompleted(membershipManager);
     }
 
     @Test
@@ -362,7 +355,7 @@ public class MembershipManagerImplTest {
         MembershipManagerImpl membershipManager = createMemberInStableState();
         mockOwnedPartition();
 
-        CompletableFuture<Void> commitResult = mockRevocationWithAutoCommitNoCallbacks();
+        CompletableFuture<Void> commitResult = mockRevocationNoCallbacks(true);
 
         receiveEmptyAssignment(membershipManager);
 
@@ -375,7 +368,7 @@ public class MembershipManagerImplTest {
         commitResult.completeExceptionally(new KafkaException("Commit request failed with " +
                 "non-retriable error"));
 
-        testReconciliationOfRevokedPartitionsCompleted(membershipManager);
+        testRevocationOfAllPartitionsCompleted(membershipManager);
     }
 
     @Test
@@ -383,8 +376,9 @@ public class MembershipManagerImplTest {
         Uuid topicId = Uuid.randomUuid();
         String topicName = "topic1";
         TopicPartition ownedPartition = new TopicPartition(topicName, 0);
-        mockOwnedPartitionAndAssignmentReceived(topicId, topicName,
-                Collections.singleton(ownedPartition), true);
+        mockOwnedPartitionAndAssignmentReceived(topicId, topicName, Collections.singleton(ownedPartition), true);
+
+        mockRevocationNoCallbacks(false);
 
         MembershipManagerImpl membershipManager = createMembershipManagerJoiningGroup();
         // New assignment received, revoking partition 0, and assigning new partitions 1 and 2.
@@ -392,19 +386,17 @@ public class MembershipManagerImplTest {
                 .setTopicPartitions(Collections.singletonList(
                         new ConsumerGroupHeartbeatResponseData.TopicPartitions()
                                 .setTopicId(topicId)
-                                .setPartitions(Arrays.asList(0, 1, 2))));
+                                .setPartitions(Arrays.asList(1, 2))));
         ConsumerGroupHeartbeatResponse heartbeatResponse = createConsumerGroupHeartbeatResponse(targetAssignment);
         membershipManager.onHeartbeatResponseReceived(heartbeatResponse.data());
 
         assertEquals(MemberState.SENDING_ACK_FOR_RECONCILED_ASSIGNMENT, membershipManager.state());
         Set<TopicPartition> assignedPartitions = new HashSet<>(Arrays.asList(
-                ownedPartition,
                 new TopicPartition("topic1", 1),
                 new TopicPartition("topic1", 2)));
         assertEquals(assignedPartitions, membershipManager.currentAssignment());
         assertFalse(membershipManager.targetAssignment().isPresent());
 
-        verify(commitRequestManager).resetAutoCommitTimer();
         verify(subscriptionState).assignFromSubscribed(anyCollection());
     }
 
@@ -413,7 +405,7 @@ public class MembershipManagerImplTest {
         MembershipManager membershipManager = createMemberInStableState();
         mockOwnedPartition();
 
-        CompletableFuture<Void> commitResult = mockRevocationWithAutoCommitNoCallbacks();
+        CompletableFuture<Void> commitResult = mockRevocationNoCallbacks(true);
 
         receiveEmptyAssignment(membershipManager);
 
@@ -433,10 +425,8 @@ public class MembershipManagerImplTest {
     public void testReconcileNewPartitionsMetadataRequestSuccess() {
         Uuid topicId = Uuid.randomUuid();
         String topicName = "topic1";
+
         mockOwnedPartitionAndAssignmentReceived(topicId, topicName, Collections.emptySet(), false);
-        when(metadata.topicNames()).thenReturn(Collections.emptyMap());
-        CompletableFuture<Map<Topic, List<PartitionInfo>>> metadataResult = new CompletableFuture<>();
-        when(metadataRequestManager.requestTopicMetadata(any())).thenReturn(metadataResult);
 
         // Member received assignment to reconcile
         MembershipManagerImpl membershipManager = createMembershipManagerJoiningGroup();
@@ -448,16 +438,11 @@ public class MembershipManagerImplTest {
         ConsumerGroupHeartbeatResponse heartbeatResponse = createConsumerGroupHeartbeatResponse(targetAssignment);
         membershipManager.onHeartbeatResponseReceived(heartbeatResponse.data());
 
-        // Member should still be reconciling while waiting for the metadata response
+        // Member should request metadata once, and stay reconciling until it gets the update
         assertEquals(MemberState.RECONCILING, membershipManager.state());
-
-        // Receive metadata response
-        Map<Topic, List<PartitionInfo>> metadataResponse = Collections.singletonMap(
-                new Topic(topicId, topicName),
-                Arrays.asList(
-                        new PartitionInfo(topicName, 0, null, null, null),
-                        new PartitionInfo(topicName, 1, null, null, null)));
-        metadataResult.complete(metadataResponse);
+        verify(metadata, times(1)).requestUpdate(anyBoolean());
+        mockTopicNameInMetadataCache(topicId, topicName, true);
+        membershipManager.onUpdate(null);
 
         // Member should complete reconciliation
         assertEquals(MemberState.SENDING_ACK_FOR_RECONCILED_ASSIGNMENT, membershipManager.state());
@@ -470,13 +455,80 @@ public class MembershipManagerImplTest {
         verify(subscriptionState).assignFromSubscribed(anyCollection());
     }
 
-    private CompletableFuture<Void> mockRevocationWithAutoCommitNoCallbacks() {
-        when(commitRequestManager.autoCommitEnabled()).thenReturn(true);
+    @Test
+    public void testRevokePartitionsUsesTopicNamesLocalCacheWhenMetadataNotAvailable() {
+        Uuid topicId = Uuid.randomUuid();
+        String topicName = "topic1";
+
+        mockOwnedPartitionAndAssignmentReceived(topicId, topicName, Collections.emptySet(), true);
+
+        // Member received assignment to reconcile
+        MembershipManagerImpl membershipManager = createMembershipManagerJoiningGroup();
+        ConsumerGroupHeartbeatResponseData.Assignment targetAssignment = new ConsumerGroupHeartbeatResponseData.Assignment()
+                .setTopicPartitions(Collections.singletonList(
+                        new ConsumerGroupHeartbeatResponseData.TopicPartitions()
+                                .setTopicId(topicId)
+                                .setPartitions(Arrays.asList(0, 1))));
+        ConsumerGroupHeartbeatResponse heartbeatResponse = createConsumerGroupHeartbeatResponse(targetAssignment);
+        membershipManager.onHeartbeatResponseReceived(heartbeatResponse.data());
+
+        // Member should complete reconciliation
+        assertEquals(MemberState.SENDING_ACK_FOR_RECONCILED_ASSIGNMENT, membershipManager.state());
+        Set<TopicPartition> assignedPartitions = new HashSet<>(Arrays.asList(
+                new TopicPartition(topicName, 0),
+                new TopicPartition(topicName, 1)));
+        assertEquals(assignedPartitions, membershipManager.currentAssignment());
+        assertFalse(membershipManager.targetAssignment().isPresent());
+
+        mockAckSent(membershipManager);
+        when(subscriptionState.assignedPartitions()).thenReturn(assignedPartitions);
+
+        // Revocation of topic not found in metadata cache
+        when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
+        mockRevocationNoCallbacks(false);
+        mockTopicNameInMetadataCache(topicId, topicName, false);
+
+
+        // Revoke one of the 2 partitions
+        targetAssignment = new ConsumerGroupHeartbeatResponseData.Assignment()
+                .setTopicPartitions(Collections.singletonList(
+                        new ConsumerGroupHeartbeatResponseData.TopicPartitions()
+                                .setTopicId(topicId)
+                                .setPartitions(Arrays.asList(1))));
+        heartbeatResponse = createConsumerGroupHeartbeatResponse(targetAssignment);
+        membershipManager.onHeartbeatResponseReceived(heartbeatResponse.data());
+
+        // Revocation should complete without requesting any metadata update given that the topic
+        // received in target assignment should exist in local topic name cache.
+        verify(metadata, never()).requestUpdate(anyBoolean());
+        Set<TopicPartition> remainingAssignment = Collections.singleton(new TopicPartition(topicName, 1));
+
+        testRevocationCompleted(membershipManager, remainingAssignment);
+    }
+
+    private void mockAckSent(MembershipManagerImpl membershipManager) {
+        membershipManager.onHeartbeatRequestSent();
+    }
+
+    private void mockTopicNameInMetadataCache(Uuid topicId, String topicName, boolean isPresent) {
+        if (isPresent) {
+            when(metadata.topicNames()).thenReturn(Collections.singletonMap(topicId, topicName));
+        } else {
+            when(metadata.topicNames()).thenReturn(Collections.emptyMap());
+        }
+    }
+
+    private CompletableFuture<Void> mockRevocationNoCallbacks(boolean withAutoCommit) {
         doNothing().when(subscriptionState).markPendingRevocation(anySet());
         when(subscriptionState.rebalanceListener()).thenReturn(Optional.empty()).thenReturn(Optional.empty());
-        CompletableFuture<Void> commitResult = new CompletableFuture<>();
-        when(commitRequestManager.maybeAutoCommitAllConsumed()).thenReturn(commitResult);
-        return commitResult;
+        if (withAutoCommit) {
+            when(commitRequestManager.autoCommitEnabled()).thenReturn(true);
+            CompletableFuture<Void> commitResult = new CompletableFuture<>();
+            when(commitRequestManager.maybeAutoCommitAllConsumed()).thenReturn(commitResult);
+            return commitResult;
+        } else {
+            return CompletableFuture.completedFuture(null);
+        }
     }
 
     private void mockMemberHasAutoAssignedPartition() {
@@ -487,13 +539,18 @@ public class MembershipManagerImplTest {
         when(subscriptionState.rebalanceListener()).thenReturn(Optional.empty()).thenReturn(Optional.empty());
     }
 
-    private void testReconciliationOfRevokedPartitionsCompleted(MembershipManagerImpl membershipManager) {
+    private void testRevocationOfAllPartitionsCompleted(MembershipManagerImpl membershipManager) {
+        testRevocationCompleted(membershipManager, Collections.emptySet());
+    }
+
+    private void testRevocationCompleted(MembershipManagerImpl membershipManager,
+                                         Set<TopicPartition> expectedCurrentAssignment) {
         assertEquals(MemberState.SENDING_ACK_FOR_RECONCILED_ASSIGNMENT, membershipManager.state());
-        assertTrue(membershipManager.currentAssignment().isEmpty());
+        assertEquals(expectedCurrentAssignment, membershipManager.currentAssignment());
         assertFalse(membershipManager.targetAssignment().isPresent());
 
         verify(subscriptionState).markPendingRevocation(anySet());
-        verify(subscriptionState).assignFromSubscribed(Collections.emptySet());
+        verify(subscriptionState).assignFromSubscribed(expectedCurrentAssignment);
     }
 
     private void mockOwnedPartitionAndAssignmentReceived(Uuid topicId,

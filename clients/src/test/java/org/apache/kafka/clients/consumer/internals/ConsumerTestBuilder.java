@@ -191,7 +191,6 @@ public class ConsumerTestBuilder implements Closeable {
                         null,
                         subscriptions,
                         commit,
-                        topicMetadataRequestManager,
                         metadata,
                         logContext
                 )

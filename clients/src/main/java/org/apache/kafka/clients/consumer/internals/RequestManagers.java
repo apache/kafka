@@ -165,7 +165,6 @@ public class RequestManagers implements Closeable {
                             groupState.groupId,
                             subscriptions,
                             commit,
-                            topic,
                             metadata,
                             logContext);
                     heartbeatRequestManager = new HeartbeatRequestManager(
