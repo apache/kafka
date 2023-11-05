@@ -21,6 +21,7 @@ import kafka.utils.TestUtils;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.RangeAssignor;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -32,6 +33,7 @@ import scala.collection.Seq;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
@@ -122,12 +124,20 @@ public class ConsumerGroupCommandTest extends kafka.integration.KafkaServerTestH
         return service;
     }
 
+    ConsumerGroupExecutor addConsumerGroupExecutor(int numConsumers) {
+        return addConsumerGroupExecutor(numConsumers, TOPIC, GROUP, RangeAssignor.class.getName(), Optional.empty(), false);
+    }
+
     ConsumerGroupExecutor addConsumerGroupExecutor(int numConsumers, String topic, String group, String strategy,
                                                    Optional<Properties> customPropsOpt, boolean syncCommit) {
         ConsumerGroupExecutor executor = new ConsumerGroupExecutor(bootstrapServers(listenerName()), numConsumers, group,
             topic, strategy, customPropsOpt, syncCommit);
         addExecutor(executor);
         return executor;
+    }
+
+    SimpleConsumerGroupExecutor addSimpleGroupExecutor(String group) {
+        return addSimpleGroupExecutor(Arrays.asList(new TopicPartition(TOPIC, 0)), group);
     }
 
     SimpleConsumerGroupExecutor addSimpleGroupExecutor(Collection<TopicPartition> partitions, String group) {
@@ -148,14 +158,19 @@ public class ConsumerGroupCommandTest extends kafka.integration.KafkaServerTestH
         final boolean syncCommit;
 
         final Properties props = new Properties();
-        final KafkaConsumer<String, String> consumer;
+        KafkaConsumer<String, String> consumer;
+
+        boolean configured = false;
 
         public AbstractConsumerRunnable(String broker, String groupId, Optional<Properties> customPropsOpt, boolean syncCommit) {
             this.broker = broker;
             this.groupId = groupId;
             this.customPropsOpt = customPropsOpt;
             this.syncCommit = syncCommit;
+        }
 
+        void configure() {
+            configured = true;
             configure(props);
             customPropsOpt.ifPresent(props::putAll);
             consumer = new KafkaConsumer<>(props);
@@ -172,6 +187,7 @@ public class ConsumerGroupCommandTest extends kafka.integration.KafkaServerTestH
 
         @Override
         public void run() {
+            assert configured : "Must call configure before use";
             try {
                 subscribe();
                 while (true) {
@@ -260,8 +276,11 @@ public class ConsumerGroupCommandTest extends kafka.integration.KafkaServerTestH
         public ConsumerGroupExecutor(String broker, int numConsumers, String groupId, String topic, String strategy,
                                      Optional<Properties> customPropsOpt, boolean syncCommit) {
             super(numConsumers);
-            IntStream.rangeClosed(1, numConsumers)
-                .forEach(i -> submit(new ConsumerRunnable(broker, groupId, topic, strategy, customPropsOpt, syncCommit)));
+            IntStream.rangeClosed(1, numConsumers).forEach(i -> {
+                ConsumerRunnable th = new ConsumerRunnable(broker, groupId, topic, strategy, customPropsOpt, syncCommit);
+                th.configure();
+                submit(th);
+            });
         }
     }
 
@@ -269,7 +288,9 @@ public class ConsumerGroupCommandTest extends kafka.integration.KafkaServerTestH
         public SimpleConsumerGroupExecutor(String broker, String groupId, Collection<TopicPartition> partitions) {
             super(1);
 
-            submit(new SimpleConsumerRunnable(broker, groupId, partitions));
+            SimpleConsumerRunnable th = new SimpleConsumerRunnable(broker, groupId, partitions);
+            th.configure();
+            submit(th);
         }
     }
 }
