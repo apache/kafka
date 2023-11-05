@@ -37,7 +37,6 @@ import java.util.concurrent.CompletableFuture;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyBoolean;
@@ -294,31 +293,6 @@ public class MembershipManagerImplTest {
     }
 
     @Test
-    public void testNewAssignmentWithTopicNotInSubscriptionIsNotReconciledAndMemberRejoins() {
-        String subscribedTopicName = "topic1";
-        TopicPartition ownedPartition = new TopicPartition(subscribedTopicName, 0);
-        when(subscriptionState.assignedPartitions()).thenReturn(Collections.singleton(ownedPartition));
-        Uuid newAssignmentTopicId = Uuid.randomUuid();
-        String newAssignmentTopicName = "topic2";
-        mockTopicNameInMetadataCache(newAssignmentTopicId, newAssignmentTopicName, true);
-        when(subscriptionState.checkAssignmentMatchedSubscription(anyCollection())).thenReturn(false);
-
-        MembershipManagerImpl membershipManager = createMembershipManagerJoiningGroup();
-        // New assignment received, for a topic that is not in the member subscription
-        ConsumerGroupHeartbeatResponseData.Assignment targetAssignment = new ConsumerGroupHeartbeatResponseData.Assignment()
-                .setTopicPartitions(Collections.singletonList(
-                        new ConsumerGroupHeartbeatResponseData.TopicPartitions()
-                                .setTopicId(newAssignmentTopicId)
-                                .setPartitions(Arrays.asList(0, 1, 2))));
-        ConsumerGroupHeartbeatResponse heartbeatResponse = createConsumerGroupHeartbeatResponse(targetAssignment);
-        membershipManager.onHeartbeatResponseReceived(heartbeatResponse.data());
-
-        assertEquals(MemberState.JOINING, membershipManager.state());
-        assertEquals(0, membershipManager.memberEpoch());
-        assertNull(membershipManager.currentAssignment());
-    }
-
-    @Test
     public void testReconcilePartitionsRevokedNoAutoCommitNoCallbacks() {
         MembershipManagerImpl membershipManager = createMemberInStableState();
         mockOwnedPartition();
@@ -561,7 +535,6 @@ public class MembershipManagerImplTest {
         if (mockMetadata) {
             when(metadata.topicNames()).thenReturn(Collections.singletonMap(topicId, topicName));
         }
-        when(subscriptionState.checkAssignmentMatchedSubscription(anyCollection())).thenReturn(true);
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
         when(subscriptionState.rebalanceListener()).thenReturn(Optional.empty()).thenReturn(Optional.empty());
     }

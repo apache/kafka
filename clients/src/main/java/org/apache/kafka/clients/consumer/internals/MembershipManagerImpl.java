@@ -490,16 +490,6 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
                 return;
             }
 
-            if (!subscriptions.checkAssignmentMatchedSubscription(assignedPartitions)) {
-                log.debug("Target assignment {} does not match the current subscription {}; it is " +
-                                "likely that the subscription has changed since we joined the group, " +
-                                "will re-join with current subscription",
-                        targetAssignment,
-                        subscriptions.prettyString());
-                transitionToJoining();
-                return;
-            }
-
             // Partitions to assign (not previously owned)
             SortedSet<TopicPartition> addedPartitions = new TreeSet<>(COMPARATOR);
             addedPartitions.addAll(assignedPartitions);
