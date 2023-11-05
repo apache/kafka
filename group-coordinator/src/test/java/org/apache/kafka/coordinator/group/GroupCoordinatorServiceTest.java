@@ -88,7 +88,6 @@ import java.util.stream.Stream;
 
 import static org.apache.kafka.common.requests.JoinGroupRequest.UNKNOWN_MEMBER_ID;
 import static org.apache.kafka.coordinator.group.TestUtil.requestContext;
-import static org.apache.kafka.test.TestUtils.assertFutureThrows;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -140,7 +139,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testConsumerGroupHeartbeatWhenNotStarted() {
+    public void testConsumerGroupHeartbeatWhenNotStarted() throws ExecutionException, InterruptedException {
         CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
         GroupCoordinatorService service = new GroupCoordinatorService(
             new LogContext(),
@@ -151,12 +150,15 @@ public class GroupCoordinatorServiceTest {
         ConsumerGroupHeartbeatRequestData request = new ConsumerGroupHeartbeatRequestData()
             .setGroupId("foo");
 
-        assertFutureThrows(
-            service.consumerGroupHeartbeat(
-                requestContext(ApiKeys.CONSUMER_GROUP_HEARTBEAT),
-                request
-            ),
-            CoordinatorNotAvailableException.class
+        CompletableFuture<ConsumerGroupHeartbeatResponseData> future = service.consumerGroupHeartbeat(
+            requestContext(ApiKeys.CONSUMER_GROUP_HEARTBEAT),
+            request
+        );
+
+        assertEquals(
+            new ConsumerGroupHeartbeatResponseData()
+                .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code()),
+            future.get()
         );
     }
 
@@ -427,6 +429,31 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
+    public void testJoinGroupWhenNotStarted() throws ExecutionException, InterruptedException {
+        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorService(
+            new LogContext(),
+            createConfig(),
+            runtime
+        );
+
+        JoinGroupRequestData request = new JoinGroupRequestData()
+            .setGroupId("foo");
+
+        CompletableFuture<JoinGroupResponseData> future = service.joinGroup(
+            requestContext(ApiKeys.JOIN_GROUP),
+            request,
+            BufferSupplier.NO_CACHING
+        );
+
+        assertEquals(
+            new JoinGroupResponseData()
+                .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code()),
+            future.get()
+        );
+    }
+
+    @Test
     public void testSyncGroup() {
         CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
         GroupCoordinatorService service = new GroupCoordinatorService(
@@ -517,6 +544,31 @@ public class GroupCoordinatorServiceTest {
             .setErrorCode(Errors.INVALID_GROUP_ID.code());
 
         assertEquals(expectedResponse, response.get());
+    }
+
+    @Test
+    public void testSyncGroupWhenNotStarted() throws ExecutionException, InterruptedException {
+        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorService(
+            new LogContext(),
+            createConfig(),
+            runtime
+        );
+
+        SyncGroupRequestData request = new SyncGroupRequestData()
+            .setGroupId("foo");
+
+        CompletableFuture<SyncGroupResponseData> future = service.syncGroup(
+            requestContext(ApiKeys.SYNC_GROUP),
+            request,
+            BufferSupplier.NO_CACHING
+        );
+
+        assertEquals(
+            new SyncGroupResponseData()
+                .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code()),
+            future.get()
+        );
     }
 
     @Test
@@ -611,6 +663,30 @@ public class GroupCoordinatorServiceTest {
         assertTrue(future.isDone());
         assertEquals(
             new HeartbeatResponseData().setErrorCode(Errors.REBALANCE_IN_PROGRESS.code()),
+            future.get()
+        );
+    }
+
+    @Test
+    public void testHeartbeatWhenNotStarted() throws ExecutionException, InterruptedException {
+        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorService(
+            new LogContext(),
+            createConfig(),
+            runtime
+        );
+
+        HeartbeatRequestData request = new HeartbeatRequestData()
+            .setGroupId("foo");
+
+        CompletableFuture<HeartbeatResponseData> future = service.heartbeat(
+            requestContext(ApiKeys.CONSUMER_GROUP_HEARTBEAT),
+            request
+        );
+
+        assertEquals(
+            new HeartbeatResponseData()
+                .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code()),
             future.get()
         );
     }
@@ -758,6 +834,29 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
+    public void testListGroupsWhenNotStarted() throws ExecutionException, InterruptedException {
+        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorService(
+            new LogContext(),
+            createConfig(),
+            runtime
+        );
+
+        ListGroupsRequestData request = new ListGroupsRequestData();
+
+        CompletableFuture<ListGroupsResponseData> future = service.listGroups(
+            requestContext(ApiKeys.LIST_GROUPS),
+            request
+        );
+
+        assertEquals(
+            new ListGroupsResponseData()
+                .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code()),
+            future.get()
+        );
+    }
+
+    @Test
     public void testDescribeGroups() throws Exception {
         CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
         GroupCoordinatorService service = new GroupCoordinatorService(
@@ -861,6 +960,29 @@ public class GroupCoordinatorServiceTest {
         );
     }
 
+    @Test
+    public void testDescribeGroupsWhenNotStarted() throws ExecutionException, InterruptedException {
+        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorService(
+            new LogContext(),
+            createConfig(),
+            runtime
+        );
+
+        CompletableFuture<List<DescribeGroupsResponseData.DescribedGroup>> future = service.describeGroups(
+            requestContext(ApiKeys.DESCRIBE_GROUPS),
+            Collections.singletonList("group-id")
+        );
+
+        assertEquals(
+            Collections.singletonList(new DescribeGroupsResponseData.DescribedGroup()
+                .setGroupId("group-id")
+                .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
+            ),
+            future.get()
+        );
+    }
+
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     public void testFetchOffsets(
@@ -916,6 +1038,39 @@ public class GroupCoordinatorServiceTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
+    public void testFetchOffsetsWhenNotStarted(
+        boolean requireStable
+    ) throws ExecutionException, InterruptedException {
+        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorService(
+            new LogContext(),
+            createConfig(),
+            runtime
+        );
+
+        OffsetFetchRequestData.OffsetFetchRequestGroup request =
+            new OffsetFetchRequestData.OffsetFetchRequestGroup()
+                .setGroupId("group")
+                .setTopics(Collections.singletonList(new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                    .setName("foo")
+                    .setPartitionIndexes(Collections.singletonList(0))));
+
+        CompletableFuture<OffsetFetchResponseData.OffsetFetchResponseGroup> future = service.fetchOffsets(
+            requestContext(ApiKeys.OFFSET_FETCH),
+            request,
+            requireStable
+        );
+
+        assertEquals(
+            new OffsetFetchResponseData.OffsetFetchResponseGroup()
+                .setGroupId("group")
+                .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code()),
+            future.get()
+        );
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
     public void testFetchAllOffsets(
         boolean requireStable
     ) throws ExecutionException, InterruptedException, TimeoutException {
@@ -962,6 +1117,36 @@ public class GroupCoordinatorServiceTest {
         );
 
         assertEquals(response, future.get(5, TimeUnit.SECONDS));
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testFetchAllOffsetsWhenNotStarted(
+        boolean requireStable
+    ) throws ExecutionException, InterruptedException {
+        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorService(
+            new LogContext(),
+            createConfig(),
+            runtime
+        );
+
+        OffsetFetchRequestData.OffsetFetchRequestGroup request =
+            new OffsetFetchRequestData.OffsetFetchRequestGroup()
+                .setGroupId("group");
+
+        CompletableFuture<OffsetFetchResponseData.OffsetFetchResponseGroup> future = service.fetchAllOffsets(
+            requestContext(ApiKeys.OFFSET_FETCH),
+            request,
+            requireStable
+        );
+
+        assertEquals(
+            new OffsetFetchResponseData.OffsetFetchResponseGroup()
+                .setGroupId("group")
+                .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code()),
+            future.get()
+        );
     }
 
     @Test
@@ -1045,6 +1230,30 @@ public class GroupCoordinatorServiceTest {
             ));
 
         assertEquals(expectedResponse, future.get());
+    }
+
+    @Test
+    public void testLeaveGroupWhenNotStarted() throws ExecutionException, InterruptedException {
+        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorService(
+            new LogContext(),
+            createConfig(),
+            runtime
+        );
+
+        LeaveGroupRequestData request = new LeaveGroupRequestData()
+            .setGroupId("foo");
+
+        CompletableFuture<LeaveGroupResponseData> future = service.leaveGroup(
+            requestContext(ApiKeys.LEAVE_GROUP),
+            request
+        );
+
+        assertEquals(
+            new LeaveGroupResponseData()
+                .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code()),
+            future.get()
+        );
     }
 
     @Test
@@ -1288,6 +1497,31 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
+    public void testDeleteOffsetsWhenNotStarted() throws ExecutionException, InterruptedException {
+        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorService(
+            new LogContext(),
+            createConfig(),
+            runtime
+        );
+
+        OffsetDeleteRequestData request = new OffsetDeleteRequestData()
+            .setGroupId("foo");
+
+        CompletableFuture<OffsetDeleteResponseData> future = service.deleteOffsets(
+            requestContext(ApiKeys.OFFSET_DELETE),
+            request,
+            BufferSupplier.NO_CACHING
+        );
+
+        assertEquals(
+            new OffsetDeleteResponseData()
+                .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code()),
+            future.get()
+        );
+    }
+
+    @Test
     public void testDeleteGroups() throws Exception {
         CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
         GroupCoordinatorService service = new GroupCoordinatorService(
@@ -1391,6 +1625,32 @@ public class GroupCoordinatorServiceTest {
                     .setGroupId("group-id")
                     .setErrorCode(expectedErrorCode)
             ).iterator()),
+            future.get()
+        );
+    }
+
+    @Test
+    public void testDeleteGroupsWhenNotStarted() throws ExecutionException, InterruptedException {
+        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorService(
+            new LogContext(),
+            createConfig(),
+            runtime
+        );
+
+        CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> future = service.deleteGroups(
+            requestContext(ApiKeys.DELETE_GROUPS),
+            Collections.singletonList("foo"),
+            BufferSupplier.NO_CACHING
+        );
+
+        assertEquals(
+            new DeleteGroupsResponseData.DeletableGroupResultCollection(
+                Collections.singletonList(new DeleteGroupsResponseData.DeletableGroupResult()
+                    .setGroupId("foo")
+                    .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
+                ).iterator()
+            ),
             future.get()
         );
     }

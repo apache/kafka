@@ -132,7 +132,6 @@ class PermissiveControllerMutationQuota(private val time: Time,
 }
 
 object ControllerMutationQuotaManager {
-  val QuotaControllerMutationDefault = Int.MaxValue.toDouble
 
   /**
    * This calculates the amount of time needed to bring the TokenBucket within quota

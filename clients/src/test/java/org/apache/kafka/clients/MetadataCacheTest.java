@@ -20,6 +20,7 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.junit.jupiter.api.Test;
@@ -81,6 +82,71 @@ public class MetadataCacheTest {
         assertTrue(replicas.get(5).isEmpty());
         assertEquals(nodesById.get(6), replicas.get(6));
         assertEquals(nodesById.get(7), replicas.get(7));
+    }
+
+    @Test
+    public void testMergeWithThatPreExistingPartitionIsRetainedPostMerge() {
+        // Set up a Metadata Cache with 1 topic partition belong topic1.
+        String topic1 = "topic1";
+        TopicPartition topic1Partition = new TopicPartition(topic1, 1);
+        MetadataResponse.PartitionMetadata partitionMetadata1 = new MetadataResponse.PartitionMetadata(
+            Errors.NONE,
+            topic1Partition,
+            Optional.of(5),
+            Optional.of(10),
+            Arrays.asList(5, 6, 7),
+            Arrays.asList(5, 6, 7),
+            Collections.emptyList());
+
+        Map<Integer, Node> nodesById = new HashMap<>();
+        nodesById.put(6, new Node(6, "localhost", 2077));
+        nodesById.put(7, new Node(7, "localhost", 2078));
+        nodesById.put(8, new Node(8, "localhost", 2079));
+
+        Map<String, Uuid> topicsIds = new HashMap<>();
+        Uuid topic1Id = Uuid.randomUuid();
+        topicsIds.put(topic1Partition.topic(), topic1Id);
+
+        MetadataCache cache = new MetadataCache("clusterId",
+            nodesById,
+            Collections.singleton(partitionMetadata1),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            null,
+            topicsIds);
+
+        Cluster cluster = cache.cluster();
+        assertEquals(1, cluster.topics().size());
+        assertEquals(topic1Id, cluster.topicId(topic1));
+        assertEquals(topic1, cluster.topicName(topic1Id));
+
+        // Merge the metadata cache with a new partition topic2Partition.
+        String topic2 = "topic2";
+        TopicPartition topic2Partition = new TopicPartition(topic2, 2);
+        MetadataResponse.PartitionMetadata partitionMetadata2 = new MetadataResponse.PartitionMetadata(
+            Errors.NONE,
+            topic2Partition,
+            Optional.of(5),
+            Optional.of(10),
+            Arrays.asList(5, 6, 7),
+            Arrays.asList(5, 6, 7),
+            Collections.emptyList());
+        topicsIds = new HashMap<>();
+        Uuid topic2Id = Uuid.randomUuid();
+        topicsIds.put(topic2Partition.topic(), topic2Id);
+        cache = cache.mergeWith("clusterId", nodesById, Collections.singleton(partitionMetadata2),
+            Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), null, topicsIds, (topic, retain) -> true);
+        cluster = cache.cluster();
+
+        // Verify topic1Partition is retained & topic2Partition is added.
+        assertEquals(2, cluster.topics().size());
+
+        assertEquals(topic1Id, cluster.topicId(topic1));
+        assertEquals(topic1, cluster.topicName(topic1Id));
+
+        assertEquals(topic2Id, cluster.topicId(topic2));
+        assertEquals(topic2, cluster.topicName(topic2Id));
     }
 
 }

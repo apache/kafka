@@ -49,7 +49,9 @@ public class BrokerNode implements TestKitNode {
             return this;
         }
 
-        public BrokerNode build() {
+        BrokerNode build(
+            String baseDirectory
+        ) {
             if (id == -1) {
                 throw new RuntimeException("You must set the node id");
             }
@@ -60,9 +62,11 @@ public class BrokerNode implements TestKitNode {
                 logDataDirectories = Collections.
                     singletonList(String.format("broker_%d_data0", id));
             }
+            logDataDirectories = TestKitNodes.absolutize(baseDirectory, logDataDirectories);
             if (metadataDirectory == null) {
                 metadataDirectory = logDataDirectories.get(0);
             }
+            metadataDirectory = TestKitNodes.absolutize(baseDirectory, metadataDirectory);
             return new BrokerNode(id, incarnationId, metadataDirectory,
                 logDataDirectories);
         }

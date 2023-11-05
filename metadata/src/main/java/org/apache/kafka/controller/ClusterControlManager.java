@@ -317,7 +317,8 @@ public class ClusterControlManager {
     public ControllerResult<BrokerRegistrationReply> registerBroker(
             BrokerRegistrationRequestData request,
             long brokerEpoch,
-            FinalizedControllerFeatures finalizedFeatures) {
+            FinalizedControllerFeatures finalizedFeatures,
+            short version) {
         if (heartbeatManager == null) {
             throw new RuntimeException("ClusterControlManager is not active.");
         }
@@ -327,6 +328,10 @@ public class ClusterControlManager {
         }
         int brokerId = request.brokerId();
         BrokerRegistration existing = brokerRegistrations.get(brokerId);
+        if (version < 2 || existing == null || request.previousBrokerEpoch() != existing.epoch()) {
+            // TODO(KIP-966): Update the ELR if the broker has an unclean shutdown.
+            log.debug("Received an unclean shutdown request");
+        }
         if (existing != null) {
             if (heartbeatManager.hasValidSession(brokerId)) {
                 if (!existing.incarnationId().equals(request.incarnationId())) {
