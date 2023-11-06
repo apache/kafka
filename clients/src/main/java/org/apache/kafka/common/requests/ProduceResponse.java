@@ -116,7 +116,7 @@ public class ProduceResponse extends AbstractResponse {
                     .setLogAppendTimeMs(response.logAppendTime)
                     .setErrorMessage(response.errorMessage)
                     .setErrorCode(response.error.code())
-                    .setCurrentLeader(response.currentLeader != null ? response.currentLeader : new LeaderIdAndEpoch())
+                    .setCurrentLeader(response.currentLeader)
                     .setRecordErrors(response.recordErrors
                         .stream()
                         .map(e -> new ProduceResponseData.BatchIndexAndErrorMessage()
