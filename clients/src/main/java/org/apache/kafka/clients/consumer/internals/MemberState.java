@@ -17,6 +17,7 @@
 
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.common.protocol.Errors;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -27,60 +28,71 @@ public enum MemberState {
      * Member has a group id, but it is not subscribed to any topic to receive automatic
      * assignments. This will be the state when the member has never subscribed, or when it has
      * unsubscribed from all topics. While in this state the member can commit offsets but won't
-     * be an active member ofRe the consumer group (no heartbeats).
+     * be an active member of the consumer group (no heartbeats sent).
      */
     UNSUBSCRIBED,
 
     /**
-     * Member is attempting to join a consumer group. This could be the case when joining for the
-     * first time, or when it has been fenced and tries to re-join.
+     * Member is attempting to join a consumer group. While in this state, the member will send
+     * heartbeat requests on the interval, with epoch 0, until it gets a response with an epoch > 0
+     * or a fatal failure. A member transitions to this state when it tries to join the group for
+     * the first time with a call to subscribe, or when it has been fenced and tries to re-join.
      */
     JOINING,
 
     /**
      * Member has received a new target assignment (partitions could have been assigned or
-     * revoked), and it is processing it. While in this state, the member will
-     * invoke the user callbacks for onPartitionsAssigned or onPartitionsRevoked, and then make
-     * the new assignment effective.
+     * revoked), and it is processing it. While in this state, the member will continue to send
+     * heartbeat on the interval, and reconcile the assignment (it will commit offsets if
+     * needed, invoke the user callbacks for onPartitionsAssigned or onPartitionsRevoked, and make
+     * the new assignment effective)
      */
     RECONCILING,
 
     /**
-     * Member has completed reconciling an assignment received, and stays in this state until the
-     * next heartbeat request is sent out to acknowledge the assignment to the server.
+     * Member has completed reconciling an assignment received, and stays in this state only until
+     * the next heartbeat request is sent out to acknowledge the assignment to the server. This
+     * state indicates that the next heartbeat request must be sent without waiting for the
+     * heartbeat interval to expire.
      */
     ACKNOWLEDGING,
 
     /**
-     * Member is active in a group, sending heartbeats, and has processed all assignments received.
+     * Member is active in a group and has processed all assignments received. While in this
+     * state, the member will send heartbeats on the interval.
      */
     STABLE,
 
     /**
-     * Member transitions to this state when it receives a
-     * {@link org.apache.kafka.common.protocol.Errors#UNKNOWN_MEMBER_ID} or
-     * {@link org.apache.kafka.common.protocol.Errors#FENCED_MEMBER_EPOCH} error from the
-     * broker. This is a recoverable state, where the member
-     * gives up its partitions by invoking the user callbacks for onPartitionsLost, and then
-     * transitions to {@link #JOINING} to rejoin the group as a new member.
+     * Member transitions to this state when it receives a {@link Errors#UNKNOWN_MEMBER_ID} or
+     * {@link Errors#FENCED_MEMBER_EPOCH} error from the broker, indicating that it has been
+     * left out of the group. While in this state, the member will stop sending heartbeats, it
+     * will give up its partitions by invoking the user callbacks for onPartitionsLost, and then
+     * transition to {@link #JOINING} to re-join the group as a new member.
      */
     FENCED,
 
     /**
-     * The member transitions to this state after a call to unsubscribe, to start taking actions
-     * before actually leaving the group. These actions involve committing offsets if needed and
-     * releasing its assignment (calling user's callback for partitions revoked or lost).
+     * The member transitions to this state after a call to unsubscribe. While in this state, the
+     * member will stop sending heartbeats, will commit offsets if needed and release its
+     * assignment (calling user's callback for partitions revoked or lost). When all these
+     * actions complete, the member will transition out of this state into {@link #LEAVING} to
+     * effectively leave the group.
      */
     PREPARE_LEAVING,
 
     /**
-     * Member has completed releasing its assignment, and stays in this state until the next
-     * heartbeat request is sent out to effectively leave the group.
+     * Member has committed offsets and releases its assignment, so it stays in this state until
+     * the next heartbeat request is sent out with epoch -1 to effectively leave the group. This
+     * state indicates that the next heartbeat request must be sent without waiting for the
+     * heartbeat interval to expire.
      */
     LEAVING,
 
     /**
-     * The member failed with an unrecoverable error.
+     * The member failed with an unrecoverable error received in a heartbeat response. This in an
+     * unrecoverable state where the member won't send any requests to the broker and cannot
+     * perform any other transition.
      */
     FATAL;
 
