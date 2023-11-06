@@ -207,7 +207,6 @@ public class StandaloneHerderTest {
         Map<String, String> config = connectorConfig(SourceSink.SOURCE);
         Connector connectorMock = mock(SourceConnector.class);
         expectConfigValidation(connectorMock, true, config, config);
-        // No new connector is created
 
         herder.putConnectorConfig(CONNECTOR_NAME, config, false, createCallback);
         Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(1000L, TimeUnit.SECONDS);
@@ -215,6 +214,7 @@ public class StandaloneHerderTest {
 
         // Second should fail
         FutureCallback<Herder.Created<ConnectorInfo>> failedCreateCallback = new FutureCallback<>();
+        // No new connector is created
         herder.putConnectorConfig(CONNECTOR_NAME, config, false, failedCreateCallback);
         ExecutionException exception = assertThrows(ExecutionException.class, () -> failedCreateCallback.get(1000L, TimeUnit.SECONDS));
         if (AlreadyExistsException.class != exception.getCause().getClass()) {
