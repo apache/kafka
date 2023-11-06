@@ -461,15 +461,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
                 extractTopicPartitionsFromAssignment(targetAssignment.get());
 
         assignedPartitionsByNameResult.whenComplete((assignedPartitions, metadataError) -> {
-            if (metadataError != null) {
-                log.error("Reconciliation failed due to error getting metadata to resolve topic " +
-                        "names for topic IDs {} in target assignment.", targetAssignment);
-                // TODO: failing reconciliation (no ack sent to the broker), but leaving
-                //  member in STABLE state. Double check if any other action should be taken
-                //  here.
-                transitionTo(MemberState.STABLE);
-                return;
-            }
+            // All assigned topic IDs are resolved now in the local cache
 
             // Partitions to assign (not previously owned)
             SortedSet<TopicPartition> addedPartitions = new TreeSet<>(COMPARATOR);
@@ -615,8 +607,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
             }
         });
 
-        final CompletableFuture<SortedSet<TopicPartition>> assignedPartitionsWithTopicName =
-                new CompletableFuture<>();
+        final CompletableFuture<SortedSet<TopicPartition>> assignedPartitionsWithTopicName = new CompletableFuture<>();
 
         if (topicsRequiringMetadata.isEmpty()) {
             assignedPartitionsWithTopicName.complete(assignedPartitions);
@@ -629,19 +620,12 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
             // metadata updates via the onUpdate callback.
             allAssignedTopicNamesResolvedInLocalCache = new CompletableFuture<>();
             allAssignedTopicNamesResolvedInLocalCache.whenComplete((result, error) -> {
-                if (error != null) {
-                    // This is unexpected, as this is an internal future that is only completed
-                    // successfully on the onUpdate, when all unknown topics are resolved, or it
-                    // is not completed at all.
-                    assignedPartitionsWithTopicName.completeExceptionally(error);
-                } else {
-                    // All assigned topic IDs are resolved now in the local cache
-                    topicsRequiringMetadata.forEach((topicId, partitions) -> {
-                        String topicName = assignedTopicNamesCache.get(topicId);
-                        partitions.forEach(tp -> assignedPartitions.add(new TopicPartition(topicName, tp)));
-                    });
-                    assignedPartitionsWithTopicName.complete(assignedPartitions);
-                }
+                // All assigned topic IDs are resolved now in the local cache
+                topicsRequiringMetadata.forEach((topicId, partitions) -> {
+                    String topicName = assignedTopicNamesCache.get(topicId);
+                    partitions.forEach(tp -> assignedPartitions.add(new TopicPartition(topicName, tp)));
+                });
+                assignedPartitionsWithTopicName.complete(assignedPartitions);
             });
             metadata.requestUpdate(true);
         }
