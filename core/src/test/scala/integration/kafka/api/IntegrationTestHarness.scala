@@ -68,6 +68,10 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
     if (isZkMigrationTest()) {
       cfgs.foreach(_.setProperty(KafkaConfig.MigrationEnabledProp, "true"))
     }
+    if (isNewGroupCoordinatorEnabled()) {
+      cfgs.foreach(_.setProperty(KafkaConfig.UnstableApiVersionsEnableProp, "true"))
+      cfgs.foreach(_.setProperty(KafkaConfig.NewGroupCoordinatorEnableProp, "true"))
+    }
     insertControllerListenersIfNeeded(cfgs)
     cfgs.map(KafkaConfig.fromProps)
   }
