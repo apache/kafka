@@ -275,20 +275,7 @@ public class NetworkClientDelegate implements AutoCloseable {
             this.handler = new FutureCompletionHandler();
         }
 
-        public UnsentRequest(final AbstractRequest.Builder<?> requestBuilder,
-                             final Optional<Node> node,
-                             final BiConsumer<ClientResponse, Throwable> callback) {
-            this(requestBuilder, node);
-            this.handler.future().whenComplete(callback);
-        }
-
-        public UnsentRequest(final AbstractRequest.Builder<?> requestBuilder,
-                             final Node node,
-                             final BiConsumer<ClientResponse, Throwable> callback) {
-            this(requestBuilder, Optional.of(node), callback);
-        }
-
-        public void setTimer(final Time time, final long requestTimeoutMs) {
+        void setTimer(final Time time, final long requestTimeoutMs) {
             this.timer = time.timer(requestTimeoutMs);
         }
 
@@ -298,6 +285,11 @@ public class NetworkClientDelegate implements AutoCloseable {
 
         FutureCompletionHandler handler() {
             return handler;
+        }
+
+        UnsentRequest whenComplete(BiConsumer<ClientResponse, Throwable> callback) {
+            handler.future().whenComplete(callback);
+            return this;
         }
 
         AbstractRequest.Builder<?> requestBuilder() {

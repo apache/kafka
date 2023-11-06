@@ -807,18 +807,24 @@ public class RecordAccumulator {
     private boolean shouldBackoff(boolean hasLeaderChanged, final ProducerBatch batch, final long waitedTimeMs) {
         boolean shouldWaitMore = batch.attempts() > 0 && waitedTimeMs < retryBackoff.backoff(batch.attempts() - 1);
         boolean shouldBackoff = !hasLeaderChanged && shouldWaitMore;
-        if (shouldBackoff) {
-            log.trace(
-                "For {}, will backoff", batch);
-        } else {
-            log.trace(
-                "For {}, will not backoff, shouldWaitMore {}, hasLeaderChanged {}", batch, shouldWaitMore, hasLeaderChanged);
+        if (log.isTraceEnabled()) {
+            if (shouldBackoff) {
+                log.trace(
+                    "For {}, will backoff", batch);
+            } else {
+                log.trace(
+                    "For {}, will not backoff, shouldWaitMore {}, hasLeaderChanged {}", batch,
+                    shouldWaitMore, hasLeaderChanged);
+            }
+        } else if (log.isDebugEnabled() && hasLeaderChanged) {
+            // Add less-verbose log at DEBUG.
+            log.debug("For {}, leader has changed, hence skipping backoff.", batch);
         }
         return shouldBackoff;
     }
 
     private boolean shouldStopDrainBatchesForPartition(ProducerBatch first, TopicPartition tp) {
-        ProducerIdAndEpoch producerIdAndEpoch = null;
+        ProducerIdAndEpoch producerIdAndEpoch;
         if (transactionManager != null) {
             if (!transactionManager.isSendToPartitionAllowed(tp))
                 return true;

@@ -26,6 +26,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Optional;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
@@ -50,10 +51,10 @@ public class AssignmentReconcilerTest {
     }
 
     private void setup() {
-        setup(new NoOpConsumerRebalanceListener());
+        setup(Optional.empty());
     }
 
-    private void setup(ConsumerRebalanceListener listener) {
+    private void setup(Optional<ConsumerRebalanceListener> listener) {
         testBuilder = new ConsumerTestBuilder(ConsumerTestBuilder.createDefaultGroupInformation());
 
         // Create our subscriptions and subscribe to the topics.
@@ -156,7 +157,7 @@ public class AssignmentReconcilerTest {
             }
         };
 
-        setup(failingListener);
+        setup(Optional.of(failingListener));
 
         // This mimics having set up an assignment of four partitions.
         SortedSet<TopicPartition> partitions = newTopicPartitions(0, 1, 2, 3);

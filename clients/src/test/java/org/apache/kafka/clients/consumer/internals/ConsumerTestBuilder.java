@@ -251,8 +251,10 @@ public class ConsumerTestBuilder implements Closeable {
                 fetchConfig,
                 fetchBuffer,
                 metricsManager,
-                networkClientDelegate));
-        this.topicMetadataRequestManager = spy(new TopicMetadataRequestManager(logContext, config));
+                networkClientDelegate,
+                apiVersions));
+        this.topicMetadataRequestManager = spy(new TopicMetadataRequestManager(logContext,
+                config));
         this.requestManagers = new RequestManagers(logContext,
                 offsetsRequestManager,
                 topicMetadataRequestManager,

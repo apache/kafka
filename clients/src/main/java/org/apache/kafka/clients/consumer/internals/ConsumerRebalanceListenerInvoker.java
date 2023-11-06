@@ -27,6 +27,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
+import java.util.Optional;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.concurrent.atomic.AtomicReference;
@@ -41,32 +42,35 @@ public class ConsumerRebalanceListenerInvoker {
     private final Logger log;
     private final SubscriptionState subscriptions;
     private final Time time;
-    private final ConsumerCoordinatorMetrics sensors;
+    private final ConsumerCoordinatorMetrics coordinatorMetrics;
 
     ConsumerRebalanceListenerInvoker(LogContext logContext,
                                      SubscriptionState subscriptions,
                                      Time time,
-                                     ConsumerCoordinatorMetrics sensors) {
+                                     ConsumerCoordinatorMetrics coordinatorMetrics) {
         this.log = logContext.logger(getClass());
         this.subscriptions = subscriptions;
         this.time = time;
-        this.sensors = sensors;
+        this.coordinatorMetrics = coordinatorMetrics;
     }
 
     Exception invokePartitionsAssigned(final SortedSet<TopicPartition> assignedPartitions) {
         log.info("Adding newly assigned partitions: {}", Utils.join(assignedPartitions, ", "));
 
-        ConsumerRebalanceListener listener = subscriptions.rebalanceListener();
-        try {
-            final long startMs = time.milliseconds();
-            listener.onPartitionsAssigned(assignedPartitions);
-            sensors.assignCallbackSensor.record(time.milliseconds() - startMs);
-        } catch (WakeupException | InterruptException e) {
-            throw e;
-        } catch (Exception e) {
-            log.error("User provided listener {} failed on invocation of onPartitionsAssigned for partitions {}",
-                    listener.getClass().getName(), assignedPartitions, e);
-            return e;
+        Optional<ConsumerRebalanceListener> listener = subscriptions.rebalanceListener();
+
+        if (listener.isPresent()) {
+            try {
+                final long startMs = time.milliseconds();
+                listener.get().onPartitionsAssigned(assignedPartitions);
+                coordinatorMetrics.assignCallbackSensor.record(time.milliseconds() - startMs);
+            } catch (WakeupException | InterruptException e) {
+                throw e;
+            } catch (Exception e) {
+                log.error("User provided listener {} failed on invocation of onPartitionsAssigned for partitions {}",
+                        listener.getClass().getName(), assignedPartitions, e);
+                return e;
+            }
         }
 
         return null;
@@ -77,19 +81,22 @@ public class ConsumerRebalanceListenerInvoker {
         Set<TopicPartition> revokePausedPartitions = subscriptions.pausedPartitions();
         revokePausedPartitions.retainAll(revokedPartitions);
         if (!revokePausedPartitions.isEmpty())
-            log.info("The pause flag in partitions [{}] will be removed due to revocation.", org.apache.kafka.common.utils.Utils.join(revokePausedPartitions, ", "));
+            log.info("The pause flag in partitions [{}] will be removed due to revocation.", Utils.join(revokePausedPartitions, ", "));
 
-        ConsumerRebalanceListener listener = subscriptions.rebalanceListener();
-        try {
-            final long startMs = time.milliseconds();
-            listener.onPartitionsRevoked(revokedPartitions);
-            sensors.revokeCallbackSensor.record(time.milliseconds() - startMs);
-        } catch (WakeupException | InterruptException e) {
-            throw e;
-        } catch (Exception e) {
-            log.error("User provided listener {} failed on invocation of onPartitionsRevoked for partitions {}",
-                    listener.getClass().getName(), revokedPartitions, e);
-            return e;
+        Optional<ConsumerRebalanceListener> listener = subscriptions.rebalanceListener();
+
+        if (listener.isPresent()) {
+            try {
+                final long startMs = time.milliseconds();
+                listener.get().onPartitionsRevoked(revokedPartitions);
+                coordinatorMetrics.revokeCallbackSensor.record(time.milliseconds() - startMs);
+            } catch (WakeupException | InterruptException e) {
+                throw e;
+            } catch (Exception e) {
+                log.error("User provided listener {} failed on invocation of onPartitionsRevoked for partitions {}",
+                        listener.getClass().getName(), revokedPartitions, e);
+                return e;
+            }
         }
 
         return null;
@@ -102,17 +109,20 @@ public class ConsumerRebalanceListenerInvoker {
         if (!lostPausedPartitions.isEmpty())
             log.info("The pause flag in partitions [{}] will be removed due to partition lost.", Utils.join(lostPausedPartitions, ", "));
 
-        ConsumerRebalanceListener listener = subscriptions.rebalanceListener();
-        try {
-            final long startMs = time.milliseconds();
-            listener.onPartitionsLost(lostPartitions);
-            sensors.loseCallbackSensor.record(time.milliseconds() - startMs);
-        } catch (WakeupException | InterruptException e) {
-            throw e;
-        } catch (Exception e) {
-            log.error("User provided listener {} failed on invocation of onPartitionsLost for partitions {}",
-                    listener.getClass().getName(), lostPartitions, e);
-            return e;
+        Optional<ConsumerRebalanceListener> listener = subscriptions.rebalanceListener();
+
+        if (listener.isPresent()) {
+            try {
+                final long startMs = time.milliseconds();
+                listener.get().onPartitionsLost(lostPartitions);
+                coordinatorMetrics.loseCallbackSensor.record(time.milliseconds() - startMs);
+            } catch (WakeupException | InterruptException e) {
+                throw e;
+            } catch (Exception e) {
+                log.error("User provided listener {} failed on invocation of onPartitionsLost for partitions {}",
+                        listener.getClass().getName(), lostPartitions, e);
+                return e;
+            }
         }
 
         return null;

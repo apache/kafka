@@ -95,7 +95,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     private final Logger log;
     private final List<ConsumerPartitionAssignor> assignors;
     private final ConsumerMetadata metadata;
-    private final ConsumerCoordinatorMetrics sensors;
+    private final ConsumerCoordinatorMetrics coordinatorMetrics;
     private final SubscriptionState subscriptions;
     private final OffsetCommitCallback defaultOffsetCommitCallback;
     private final boolean autoCommitEnabled;
@@ -143,7 +143,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     private final RebalanceProtocol protocol;
-    private final ConsumerRebalanceListenerInvoker consumerRebalanceListenerInvoker;
+    // Wraps the logic for invoking the ConsumerRebalanceListener methods
+    private final ConsumerRebalanceListenerInvoker rebalanceListenerInvoker;
     // pending commit offset request in onJoinPrepare
     private RequestFuture<Void> autoCommitOffsetRequestFuture = null;
     // a timer for join prepare to know when to stop.
@@ -185,7 +186,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         this.autoCommitIntervalMs = autoCommitIntervalMs;
         this.assignors = assignors;
         this.completedOffsetCommits = new ConcurrentLinkedQueue<>();
-        this.sensors = new ConsumerCoordinatorMetrics(subscriptions, metrics, metricGrpPrefix);
+        this.coordinatorMetrics = new ConsumerCoordinatorMetrics(subscriptions, metrics, metricGrpPrefix);
         this.interceptors = interceptors;
         this.inFlightAsyncCommits = new AtomicInteger();
         this.pendingAsyncCommits = new AtomicInteger();
@@ -223,11 +224,11 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             protocol = null;
         }
 
-        this.consumerRebalanceListenerInvoker = new ConsumerRebalanceListenerInvoker(
-                logContext,
-                subscriptions,
-                time,
-                sensors
+        this.rebalanceListenerInvoker = new ConsumerRebalanceListenerInvoker(
+            logContext,
+            subscriptions,
+            time,
+            coordinatorMetrics
         );
         this.metadata.requestUpdate(true);
     }
@@ -390,7 +391,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 // Revoke partitions that were previously owned but no longer assigned;
                 // note that we should only change the assignment (or update the assignor's state)
                 // AFTER we've triggered  the revoke callback
-                firstException.compareAndSet(null, consumerRebalanceListenerInvoker.invokePartitionsRevoked(revokedPartitions));
+                firstException.compareAndSet(null, rebalanceListenerInvoker.invokePartitionsRevoked(revokedPartitions));
 
                 // If revoked any partitions, need to re-join the group afterwards
                 final String fullReason = String.format("need to revoke partitions %s as indicated " +
@@ -413,7 +414,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         subscriptions.assignFromSubscribed(assignedPartitions);
 
         // Add partitions that were not previously owned but are now assigned
-        firstException.compareAndSet(null, consumerRebalanceListenerInvoker.invokePartitionsAssigned(addedPartitions));
+        firstException.compareAndSet(null, rebalanceListenerInvoker.invokePartitionsAssigned(addedPartitions));
 
         if (firstException.get() != null) {
             if (firstException.get() instanceof KafkaException) {
@@ -768,7 +769,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             if (!revokedPartitions.isEmpty()) {
                 log.info("Giving away all assigned partitions as lost since generation/memberID has been reset," +
                     "indicating that consumer is in old state or no longer part of the group");
-                exception = consumerRebalanceListenerInvoker.invokePartitionsLost(revokedPartitions);
+                exception = rebalanceListenerInvoker.invokePartitionsLost(revokedPartitions);
 
                 subscriptions.assignFromSubscribed(Collections.emptySet());
             }
@@ -777,7 +778,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 case EAGER:
                     // revoke all partitions
                     revokedPartitions.addAll(subscriptions.assignedPartitions());
-                    exception = consumerRebalanceListenerInvoker.invokePartitionsRevoked(revokedPartitions);
+                    exception = rebalanceListenerInvoker.invokePartitionsRevoked(revokedPartitions);
 
                     subscriptions.assignFromSubscribed(Collections.emptySet());
 
@@ -791,7 +792,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                         .collect(Collectors.toSet()));
 
                     if (!revokedPartitions.isEmpty()) {
-                        exception = consumerRebalanceListenerInvoker.invokePartitionsRevoked(revokedPartitions);
+                        exception = rebalanceListenerInvoker.invokePartitionsRevoked(revokedPartitions);
 
                         ownedPartitions.removeAll(revokedPartitions);
                         subscriptions.assignFromSubscribed(ownedPartitions);
@@ -845,9 +846,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             if ((currentGeneration.generationId == Generation.NO_GENERATION.generationId ||
                 currentGeneration.memberId.equals(Generation.NO_GENERATION.memberId)) ||
                 rebalanceInProgress()) {
-                e = consumerRebalanceListenerInvoker.invokePartitionsLost(droppedPartitions);
+                e = rebalanceListenerInvoker.invokePartitionsLost(droppedPartitions);
             } else {
-                e = consumerRebalanceListenerInvoker.invokePartitionsRevoked(droppedPartitions);
+                e = rebalanceListenerInvoker.invokePartitionsRevoked(droppedPartitions);
             }
 
             subscriptions.assignFromSubscribed(Collections.emptySet());
@@ -1183,7 +1184,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         return commitOffsetsAsync(allConsumedOffsets, (offsets, exception) -> {
             if (exception != null) {
                 if (exception instanceof RetriableCommitFailedException) {
-                    log.debug("Asynchronous auto-commit of offsets {} failed due to retriable error: {}", offsets,
+                    log.debug("Asynchronous auto-commit of offsets {} failed due to retriable error.", offsets,
                         exception);
                     nextAutoCommitTimer.updateAndReset(rebalanceConfig.retryBackoffMs);
                 } else {
@@ -1303,7 +1304,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         @Override
         public void handle(OffsetCommitResponse commitResponse, RequestFuture<Void> future) {
-            sensors.commitSensor.record(response.requestLatencyMs());
+            coordinatorMetrics.commitSensor.record(response.requestLatencyMs());
             Set<String> unauthorizedTopics = new HashSet<>();
 
             for (OffsetCommitResponseData.OffsetCommitResponseTopic topic : commitResponse.data().topics()) {

@@ -26,7 +26,6 @@ import org.apache.kafka.common.metrics.stats.WindowedCount;
 
 class ConsumerCoordinatorMetrics {
 
-    final String metricGrpName;
     final Sensor commitSensor;
     final Sensor revokeCallbackSensor;
     final Sensor assignCallbackSensor;
@@ -35,14 +34,14 @@ class ConsumerCoordinatorMetrics {
     ConsumerCoordinatorMetrics(SubscriptionState subscriptions,
                                Metrics metrics,
                                String metricGrpPrefix) {
-        this.metricGrpName = metricGrpPrefix + "-coordinator-metrics";
+        String metricGrpName = metricGrpPrefix + "-coordinator-metrics";
 
         this.commitSensor = metrics.sensor("commit-latency");
         this.commitSensor.add(metrics.metricName("commit-latency-avg",
-                this.metricGrpName,
+                metricGrpName,
                 "The average time taken for a commit request"), new Avg());
         this.commitSensor.add(metrics.metricName("commit-latency-max",
-                this.metricGrpName,
+                metricGrpName,
                 "The max time taken for a commit request"), new Max());
         this.commitSensor.add(new Meter(new WindowedCount(),
                 metrics.metricName("commit-rate", metricGrpName,
@@ -52,31 +51,31 @@ class ConsumerCoordinatorMetrics {
 
         this.revokeCallbackSensor = metrics.sensor("partition-revoked-latency");
         this.revokeCallbackSensor.add(metrics.metricName("partition-revoked-latency-avg",
-                this.metricGrpName,
+                metricGrpName,
                 "The average time taken for a partition-revoked rebalance listener callback"), new Avg());
         this.revokeCallbackSensor.add(metrics.metricName("partition-revoked-latency-max",
-                this.metricGrpName,
+                metricGrpName,
                 "The max time taken for a partition-revoked rebalance listener callback"), new Max());
 
         this.assignCallbackSensor = metrics.sensor("partition-assigned-latency");
         this.assignCallbackSensor.add(metrics.metricName("partition-assigned-latency-avg",
-                this.metricGrpName,
+                metricGrpName,
                 "The average time taken for a partition-assigned rebalance listener callback"), new Avg());
         this.assignCallbackSensor.add(metrics.metricName("partition-assigned-latency-max",
-                this.metricGrpName,
+                metricGrpName,
                 "The max time taken for a partition-assigned rebalance listener callback"), new Max());
 
         this.loseCallbackSensor = metrics.sensor("partition-lost-latency");
         this.loseCallbackSensor.add(metrics.metricName("partition-lost-latency-avg",
-                this.metricGrpName,
+                metricGrpName,
                 "The average time taken for a partition-lost rebalance listener callback"), new Avg());
         this.loseCallbackSensor.add(metrics.metricName("partition-lost-latency-max",
-                this.metricGrpName,
+                metricGrpName,
                 "The max time taken for a partition-lost rebalance listener callback"), new Max());
 
         Measurable numParts = (config, now) -> subscriptions.numAssignedPartitions();
         metrics.addMetric(metrics.metricName("assigned-partitions",
-                this.metricGrpName,
+                metricGrpName,
                 "The number of partitions currently assigned to this consumer"), numParts);
     }
 }
