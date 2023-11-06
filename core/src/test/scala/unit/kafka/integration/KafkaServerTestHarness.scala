@@ -178,7 +178,7 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
           admin = admin,
           topic = topic,
           brokers = brokers,
-          controllerServers,
+          controllers = controllerServers,
           numPartitions = numPartitions,
           replicationFactor = replicationFactor,
           topicConfig = topicConfig
