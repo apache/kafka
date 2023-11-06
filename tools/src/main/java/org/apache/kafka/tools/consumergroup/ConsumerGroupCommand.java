@@ -913,6 +913,7 @@ public class ConsumerGroupCommand {
                     isOldCsvFormat = true;
                 }
             } catch (IOException e) {
+                e.printStackTrace();
                 // Ignore.
             }
 
@@ -925,14 +926,14 @@ public class ConsumerGroupCommand {
                     for (String line : lines) {
                         CsvUtils.CsvRecordNoGroup rec = csvReader.readValue(line, CsvUtils.CsvRecordNoGroup.class);
                         dataMap.computeIfAbsent(group, k -> new HashMap<>())
-                            .put(new TopicPartition(rec.topic, rec.partition), new OffsetAndMetadata(rec.offset));
+                            .put(new TopicPartition(rec.getTopic(), rec.getPartition()), new OffsetAndMetadata(rec.getOffset()));
                     }
                 } else {
                     csvReader = new CsvUtils().readerFor(CsvUtils.CsvRecordWithGroup.class);
                     for (String line : lines) {
                         CsvUtils.CsvRecordWithGroup rec = csvReader.readValue(line, CsvUtils.CsvRecordWithGroup.class);
-                        dataMap.computeIfAbsent(rec.group, k -> new HashMap<>())
-                            .put(new TopicPartition(rec.topic, rec.partition), new OffsetAndMetadata(rec.offset));
+                        dataMap.computeIfAbsent(rec.getGroup(), k -> new HashMap<>())
+                            .put(new TopicPartition(rec.getTopic(), rec.getPartition()), new OffsetAndMetadata(rec.getOffset()));
                     }
                 }
             } catch (IOException e) {

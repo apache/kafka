@@ -128,6 +128,10 @@ public class ConsumerGroupCommandTest extends kafka.integration.KafkaServerTestH
         return addConsumerGroupExecutor(numConsumers, TOPIC, GROUP, RangeAssignor.class.getName(), Optional.empty(), false);
     }
 
+    ConsumerGroupExecutor addConsumerGroupExecutor(int numConsumers, String topic, String group) {
+        return addConsumerGroupExecutor(numConsumers, topic, group, RangeAssignor.class.getName(), Optional.empty(), false);
+    }
+
     ConsumerGroupExecutor addConsumerGroupExecutor(int numConsumers, String topic, String group, String strategy,
                                                    Optional<Properties> customPropsOpt, boolean syncCommit) {
         ConsumerGroupExecutor executor = new ConsumerGroupExecutor(bootstrapServers(listenerName()), numConsumers, group,

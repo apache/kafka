@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.tools.consumergroup;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectReader;
 import com.fasterxml.jackson.databind.ObjectWriter;
 import com.fasterxml.jackson.dataformat.csv.CsvMapper;
@@ -50,10 +51,20 @@ public class CsvUtils {
     public static class CsvRecordWithGroup implements CsvRecord {
         public static final String[] FIELDS = new String[] {"group", "topic", "partition", "offset"};
 
-        public final String group;
-        public final String topic;
-        public final int partition;
-        public final long offset;
+        @JsonProperty
+        private String group;
+
+        @JsonProperty
+        private String topic;
+
+        @JsonProperty
+        private int partition;
+
+        @JsonProperty
+        private long offset;
+
+        public CsvRecordWithGroup() {
+        }
 
         public CsvRecordWithGroup(String group, String topic, int partition, long offset) {
             this.group = group;
@@ -61,18 +72,82 @@ public class CsvUtils {
             this.partition = partition;
             this.offset = offset;
         }
+
+        public void setGroup(String group) {
+            this.group = group;
+        }
+
+        public void setTopic(String topic) {
+            this.topic = topic;
+        }
+
+        public void setPartition(int partition) {
+            this.partition = partition;
+        }
+
+        public void setOffset(long offset) {
+            this.offset = offset;
+        }
+
+        public String getGroup() {
+            return group;
+        }
+
+        public String getTopic() {
+            return topic;
+        }
+
+        public int getPartition() {
+            return partition;
+        }
+
+        public long getOffset() {
+            return offset;
+        }
     }
 
     public static class CsvRecordNoGroup implements CsvRecord {
         public static final String[] FIELDS = new String[]{"topic", "partition", "offset"};
 
-        public final String topic;
-        public final int partition;
-        public final long offset;
+        @JsonProperty
+        private String topic;
+
+        @JsonProperty
+        private int partition;
+
+        @JsonProperty
+        private long offset;
+
+        public CsvRecordNoGroup() {
+        }
 
         public CsvRecordNoGroup(String topic, int partition, long offset) {
             this.topic = topic;
             this.partition = partition;
+            this.offset = offset;
+        }
+
+        public String getTopic() {
+            return topic;
+        }
+
+        public void setTopic(String topic) {
+            this.topic = topic;
+        }
+
+        public int getPartition() {
+            return partition;
+        }
+
+        public void setPartition(int partition) {
+            this.partition = partition;
+        }
+
+        public long getOffset() {
+            return offset;
+        }
+
+        public void setOffset(long offset) {
             this.offset = offset;
         }
     }
