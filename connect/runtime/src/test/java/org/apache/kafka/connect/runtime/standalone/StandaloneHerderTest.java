@@ -94,7 +94,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.CALLS_REAL_METHODS;
-import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doReturn;
@@ -588,7 +587,7 @@ public class StandaloneHerderTest {
         herder.restartConnectorAndTasks(restartRequest, restartCallback);
         assertEquals(connectorStateInfo, restartCallback.get(1000L, TimeUnit.MILLISECONDS));
         ArgumentCaptor<TaskStatus> taskStatus = ArgumentCaptor.forClass(TaskStatus.class);
-        verify(statusBackingStore, atLeastOnce()).put(taskStatus.capture());
+        verify(statusBackingStore).put(taskStatus.capture());
         assertEquals(AbstractStatus.State.RESTARTING, taskStatus.getValue().state());
     }
 
@@ -854,7 +853,7 @@ public class StandaloneHerderTest {
         assertEquals(createdInfo(SourceSink.SOURCE), connectorInfo.result());
         herder.pauseConnector(CONNECTOR_NAME);
         herder.stopConnector(CONNECTOR_NAME, stopCallback);
-        verify(statusBackingStore, atLeastOnce()).put(new TaskStatus(new ConnectorTaskId(CONNECTOR_NAME, 0), AbstractStatus.State.DESTROYED, WORKER_ID, 0));
+        verify(statusBackingStore).put(new TaskStatus(new ConnectorTaskId(CONNECTOR_NAME, 0), AbstractStatus.State.DESTROYED, WORKER_ID, 0));
         stopCallback.get(10L, TimeUnit.SECONDS);
         herder.taskConfigs(CONNECTOR_NAME, taskConfigsCallback);
         assertEquals(Collections.emptyList(), taskConfigsCallback.get(1, TimeUnit.SECONDS));
