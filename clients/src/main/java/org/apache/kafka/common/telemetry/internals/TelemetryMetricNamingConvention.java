@@ -53,7 +53,7 @@ public class TelemetryMetricNamingConvention {
             @Override
             public MetricKey derivedMetricKey(MetricKey key, String derivedComponent) {
                 Objects.requireNonNull(derivedComponent, "derived component cannot be null");
-                return new MetricKey(key.getName() + NAME_JOINER + derivedComponent, key.tags());
+                return new MetricKey(key.name() + NAME_JOINER + derivedComponent, key.tags());
             }
         };
     }

@@ -116,7 +116,7 @@ public class ProduceResponse extends AbstractResponse {
                     .setLogAppendTimeMs(response.logAppendTime)
                     .setErrorMessage(response.errorMessage)
                     .setErrorCode(response.error.code())
-                    .setCurrentLeader(response.currentLeader)
+                    .setCurrentLeader(response.currentLeader != null ? response.currentLeader : new LeaderIdAndEpoch())
                     .setRecordErrors(response.recordErrors
                         .stream()
                         .map(e -> new ProduceResponseData.BatchIndexAndErrorMessage()
@@ -182,7 +182,11 @@ public class ProduceResponse extends AbstractResponse {
         }
 
         public PartitionResponse(Errors error, long baseOffset, long logAppendTime, long logStartOffset, List<RecordError> recordErrors, String errorMessage) {
-            this(error, baseOffset, INVALID_OFFSET, logAppendTime, logStartOffset, recordErrors, errorMessage);
+            this(error, baseOffset, INVALID_OFFSET, logAppendTime, logStartOffset, recordErrors, errorMessage, new ProduceResponseData.LeaderIdAndEpoch());
+        }
+
+        public PartitionResponse(Errors error, long baseOffset, long lastOffset, long logAppendTime, long logStartOffset, List<RecordError> recordErrors, String errorMessage) {
+            this(error, baseOffset, lastOffset, logAppendTime, logStartOffset, recordErrors, errorMessage, new ProduceResponseData.LeaderIdAndEpoch());
         }
 
         public PartitionResponse(
@@ -192,7 +196,8 @@ public class ProduceResponse extends AbstractResponse {
             long logAppendTime,
             long logStartOffset,
             List<RecordError> recordErrors,
-            String errorMessage
+            String errorMessage,
+            ProduceResponseData.LeaderIdAndEpoch currentLeader
         ) {
             this.error = error;
             this.baseOffset = baseOffset;
@@ -201,7 +206,7 @@ public class ProduceResponse extends AbstractResponse {
             this.logStartOffset = logStartOffset;
             this.recordErrors = recordErrors;
             this.errorMessage = errorMessage;
-            this.currentLeader = new LeaderIdAndEpoch();
+            this.currentLeader = currentLeader;
         }
 
         @Override
