@@ -19,9 +19,8 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantLock
 import java.util.regex.Pattern
 import java.util.{Locale, Optional, Properties}
-
-import kafka.server.{KafkaServer, QuotaType}
-import kafka.utils.TestUtils
+import kafka.server.{KafkaBroker, QuotaType}
+import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.admin.{NewPartitions, NewTopic}
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
@@ -36,7 +35,7 @@ import org.apache.kafka.test.{MockConsumerInterceptor, MockProducerInterceptor}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
 
 import scala.collection.mutable
 import scala.collection.mutable.Buffer
@@ -45,8 +44,9 @@ import scala.jdk.CollectionConverters._
 /* We have some tests in this class instead of `BaseConsumerTest` in order to keep the build time under control. */
 class PlaintextConsumerTest extends BaseConsumerTest {
 
-  @Test
-  def testHeaders(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testHeaders(quorum: String): Unit = {
     val numRecords = 1
     val record = new ProducerRecord(tp.topic, tp.partition, null, "key".getBytes, "value".getBytes)
 
@@ -132,16 +132,18 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   }
 
   @deprecated("poll(Duration) is the replacement", since = "2.0")
-  @Test
-  def testDeprecatedPollBlocksForAssignment(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testDeprecatedPollBlocksForAssignment(quorum: String): Unit = {
     val consumer = createConsumer()
     consumer.subscribe(Set(topic).asJava)
     consumer.poll(0)
     assertEquals(Set(tp, tp2), consumer.assignment().asScala)
   }
 
-  @Test
-  def testHeadersSerializerDeserializer(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testHeadersSerializerDeserializer(quorum: String): Unit = {
     val extendedSerializer = new Serializer[Array[Byte]] with SerializerImpl
 
     val extendedDeserializer = new Deserializer[Array[Byte]] with DeserializerImpl
@@ -149,8 +151,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     testHeadersSerializeDeserialize(extendedSerializer, extendedDeserializer)
   }
 
-  @Test
-  def testMaxPollRecords(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testMaxPollRecords(quorum: String): Unit = {
     val maxPollRecords = 2
     val numRecords = 10000
 
@@ -165,8 +168,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
       startingTimestamp = startingTimestamp)
   }
 
-  @Test
-  def testMaxPollIntervalMs(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testMaxPollIntervalMs(quorum: String): Unit = {
     this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 1000.toString)
     this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 500.toString)
     this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 2000.toString)
@@ -190,8 +194,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(1, listener.callsToRevoked)
   }
 
-  @Test
-  def testMaxPollIntervalMsDelayInRevocation(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testMaxPollIntervalMsDelayInRevocation(quorum: String): Unit = {
     this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 5000.toString)
     this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 500.toString)
     this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 1000.toString)
@@ -230,8 +235,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertTrue(commitCompleted)
   }
 
-  @Test
-  def testMaxPollIntervalMsDelayInAssignment(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testMaxPollIntervalMsDelayInAssignment(quorum: String): Unit = {
     this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 5000.toString)
     this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 500.toString)
     this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 1000.toString)
@@ -254,8 +260,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     ensureNoRebalance(consumer, listener)
   }
 
-  @Test
-  def testAutoCommitOnClose(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testAutoCommitOnClose(quorum: String): Unit = {
     this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true")
     val consumer = createConsumer()
 
@@ -277,8 +284,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(500, anotherConsumer.committed(Set(tp2).asJava).get(tp2).offset)
   }
 
-  @Test
-  def testAutoCommitOnCloseAfterWakeup(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testAutoCommitOnCloseAfterWakeup(quorum: String): Unit = {
     this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true")
     val consumer = createConsumer()
 
@@ -304,8 +312,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(500, anotherConsumer.committed(Set(tp2).asJava).get(tp2).offset)
   }
 
-  @Test
-  def testAutoOffsetReset(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testAutoOffsetReset(quorum: String): Unit = {
     val producer = createProducer()
     val startingTimestamp = System.currentTimeMillis()
     sendRecords(producer, numRecords = 1, tp, startingTimestamp = startingTimestamp)
@@ -315,8 +324,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumeAndVerifyRecords(consumer = consumer, numRecords = 1, startingOffset = 0, startingTimestamp = startingTimestamp)
   }
 
-  @Test
-  def testGroupConsumption(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testGroupConsumption(quorum: String): Unit = {
     val producer = createProducer()
     val startingTimestamp = System.currentTimeMillis()
     sendRecords(producer, numRecords = 10, tp, startingTimestamp = startingTimestamp)
@@ -335,8 +345,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
    * metadata refresh the consumer becomes subscribed to this new topic and all partitions
    * of that topic are assigned to it.
    */
-  @Test
-  def testPatternSubscription(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testPatternSubscription(quorum: String): Unit = {
     val numRecords = 10000
     val producer = createProducer()
     sendRecords(producer, numRecords, tp)
@@ -392,8 +403,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
    * The metadata refresh interval is intentionally increased to a large enough value to guarantee
    * that it is the subscription call that triggers a metadata refresh, and not the timeout.
    */
-  @Test
-  def testSubsequentPatternSubscription(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testSubsequentPatternSubscription(quorum: String): Unit = {
     this.consumerConfig.setProperty(ConsumerConfig.METADATA_MAX_AGE_CONFIG, "30000")
     val consumer = createConsumer()
 
@@ -443,8 +455,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
    * When consumer unsubscribes from all its subscriptions, it is expected that its
    * assignments are cleared right away.
    */
-  @Test
-  def testPatternUnsubscription(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testPatternUnsubscription(quorum: String): Unit = {
     val numRecords = 10000
     val producer = createProducer()
     sendRecords(producer, numRecords, tp)
@@ -469,8 +482,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(0, consumer.assignment().size)
   }
 
-  @Test
-  def testCommitMetadata(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testCommitMetadata(quorum: String): Unit = {
     val consumer = createConsumer()
     consumer.assign(List(tp).asJava)
 
@@ -490,8 +504,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(nullMetadata, consumer.committed(Set(tp).asJava).get(tp))
   }
 
-  @Test
-  def testAsyncCommit(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testAsyncCommit(quorum: String): Unit = {
     val consumer = createConsumer()
     consumer.assign(List(tp).asJava)
 
@@ -509,8 +524,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(new OffsetAndMetadata(count), consumer.committed(Set(tp).asJava).get(tp))
   }
 
-  @Test
-  def testExpandingTopicSubscriptions(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testExpandingTopicSubscriptions(quorum: String): Unit = {
     val otherTopic = "other"
     val initialAssignment = Set(new TopicPartition(topic, 0), new TopicPartition(topic, 1))
     val consumer = createConsumer()
@@ -523,8 +539,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     awaitAssignment(consumer, expandedAssignment)
   }
 
-  @Test
-  def testShrinkingTopicSubscriptions(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testShrinkingTopicSubscriptions(quorum: String): Unit = {
     val otherTopic = "other"
     createTopic(otherTopic, 2, brokerCount)
     val initialAssignment = Set(new TopicPartition(topic, 0), new TopicPartition(topic, 1), new TopicPartition(otherTopic, 0), new TopicPartition(otherTopic, 1))
@@ -537,8 +554,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     awaitAssignment(consumer, shrunkenAssignment)
   }
 
-  @Test
-  def testPartitionsFor(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testPartitionsFor(quorum: String): Unit = {
     val numParts = 2
     createTopic("part-test", numParts, 1)
     val consumer = createConsumer()
@@ -556,14 +574,16 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertFalse(partitions.isEmpty)
   }
 
-  @Test
-  def testPartitionsForInvalidTopic(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testPartitionsForInvalidTopic(quorum: String): Unit = {
     val consumer = createConsumer()
     assertThrows(classOf[InvalidTopicException], () => consumer.partitionsFor(";3# ads,{234"))
   }
 
-  @Test
-  def testSeek(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testSeek(quorum: String): Unit = {
     val consumer = createConsumer()
     val totalRecords = 50L
     val mid = totalRecords / 2
@@ -617,8 +637,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     producer.close()
   }
 
-  @Test
-  def testPositionAndCommit(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testPositionAndCommit(quorum: String): Unit = {
     val producer = createProducer()
     var startingTimestamp = System.currentTimeMillis()
     sendRecords(producer, numRecords = 5, tp, startingTimestamp = startingTimestamp)
@@ -649,8 +670,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumeAndVerifyRecords(consumer = otherConsumer, numRecords = 1, startingOffset = 5, startingTimestamp = startingTimestamp)
   }
 
-  @Test
-  def testPartitionPauseAndResume(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testPartitionPauseAndResume(quorum: String): Unit = {
     val partitions = List(tp).asJava
     val producer = createProducer()
     var startingTimestamp = System.currentTimeMillis()
@@ -667,8 +689,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumeAndVerifyRecords(consumer = consumer, numRecords = 5, startingOffset = 5, startingTimestamp = startingTimestamp)
   }
 
-  @Test
-  def testFetchInvalidOffset(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testFetchInvalidOffset(quorum: String): Unit = {
     this.consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "none")
     val consumer = createConsumer(configOverrides = this.consumerConfig)
 
@@ -692,8 +715,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(outOfRangePos.toLong, outOfRangePartitions.get(tp))
   }
 
-  @Test
-  def testFetchOutOfRangeOffsetResetConfigEarliest(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testFetchOutOfRangeOffsetResetConfigEarliest(quorum: String): Unit = {
     this.consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
     // ensure no in-flight fetch request so that the offset can be reset immediately
     this.consumerConfig.setProperty(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, "0")
@@ -713,8 +737,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   }
 
 
-  @Test
-  def testFetchOutOfRangeOffsetResetConfigLatest(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testFetchOutOfRangeOffsetResetConfigLatest(quorum: String): Unit = {
     this.consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest")
     // ensure no in-flight fetch request so that the offset can be reset immediately
     this.consumerConfig.setProperty(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, "0")
@@ -739,8 +764,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(totalRecords, nextRecord.offset())
   }
 
-  @Test
-  def testFetchRecordLargerThanFetchMaxBytes(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testFetchRecordLargerThanFetchMaxBytes(quorum: String): Unit = {
     val maxFetchBytes = 10 * 1024
     this.consumerConfig.setProperty(ConsumerConfig.FETCH_MAX_BYTES_CONFIG, maxFetchBytes.toString)
     checkLargeRecord(maxFetchBytes + 1)
@@ -768,8 +794,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   }
 
   /** We should only return a large record if it's the first record in the first non-empty partition of the fetch request */
-  @Test
-  def testFetchHonoursFetchSizeIfLargeRecordNotFirst(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testFetchHonoursFetchSizeIfLargeRecordNotFirst(quorum: String): Unit = {
     val maxFetchBytes = 10 * 1024
     this.consumerConfig.setProperty(ConsumerConfig.FETCH_MAX_BYTES_CONFIG, maxFetchBytes.toString)
     checkFetchHonoursSizeIfLargeRecordNotFirst(maxFetchBytes)
@@ -800,23 +827,26 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   }
 
   /** We should only return a large record if it's the first record in the first partition of the fetch request */
-  @Test
-  def testFetchHonoursMaxPartitionFetchBytesIfLargeRecordNotFirst(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testFetchHonoursMaxPartitionFetchBytesIfLargeRecordNotFirst(quorum: String): Unit = {
     val maxPartitionFetchBytes = 10 * 1024
     this.consumerConfig.setProperty(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, maxPartitionFetchBytes.toString)
     checkFetchHonoursSizeIfLargeRecordNotFirst(maxPartitionFetchBytes)
   }
 
-  @Test
-  def testFetchRecordLargerThanMaxPartitionFetchBytes(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testFetchRecordLargerThanMaxPartitionFetchBytes(quorum: String): Unit = {
     val maxPartitionFetchBytes = 10 * 1024
     this.consumerConfig.setProperty(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, maxPartitionFetchBytes.toString)
     checkLargeRecord(maxPartitionFetchBytes + 1)
   }
 
   /** Test that we consume all partitions if fetch max bytes and max.partition.fetch.bytes are low */
-  @Test
-  def testLowMaxFetchSizeForRequestAndPartition(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testLowMaxFetchSizeForRequestAndPartition(quorum: String): Unit = {
     // one of the effects of this is that there will be some log reads where `0 > remaining limit bytes < message size`
     // and we don't return the message because it's not the first message in the first non-empty partition of the fetch
     // this behaves a little different than when remaining limit bytes is 0 and it's important to test it
@@ -863,8 +893,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(expected, actual)
   }
 
-  @Test
-  def testRoundRobinAssignment(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testRoundRobinAssignment(quorum: String): Unit = {
     // 1 consumer using round-robin assignment
     this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "roundrobin-group")
     this.consumerConfig.setProperty(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, classOf[RoundRobinAssignor].getName)
@@ -899,8 +930,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(0, consumer.assignment().size)
   }
 
-  @Test
-  def testMultiConsumerRoundRobinAssignor(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testMultiConsumerRoundRobinAssignor(quorum: String): Unit = {
     this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "roundrobin-group")
     this.consumerConfig.setProperty(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, classOf[RoundRobinAssignor].getName)
 
@@ -936,8 +968,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
    *  - (#par / 10) partition per consumer, where one partition from each of the early (#par mod 9) consumers
    *    will move to consumer #10, leading to a total of (#par mod 9) partition movement
    */
-  @Test
-  def testMultiConsumerStickyAssignor(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testMultiConsumerStickyAssignor(quorum: String): Unit = {
 
     def reverse(m: Map[Long, Set[TopicPartition]]) =
       m.values.toSet.flatten.map(v => (v, m.keys.filter(m(_).contains(v)).head)).toMap
@@ -982,8 +1015,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
    * This test re-uses BaseConsumerTest's consumers.
    * As a result, it is testing the default assignment strategy set by BaseConsumerTest
    */
-  @Test
-  def testMultiConsumerDefaultAssignor(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testMultiConsumerDefaultAssignor(quorum: String): Unit = {
     // use consumers and topics defined in this class + one more topic
     val producer = createProducer()
     sendRecords(producer, numRecords = 100, tp)
@@ -1018,10 +1052,15 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array(
-    "org.apache.kafka.clients.consumer.CooperativeStickyAssignor",
-    "org.apache.kafka.clients.consumer.RangeAssignor"))
-  def testRebalanceAndRejoin(assignmentStrategy: String): Unit = {
+  @CsvSource(Array(
+    "org.apache.kafka.clients.consumer.CooperativeStickyAssignor,   zk",
+    "org.apache.kafka.clients.consumer.RangeAssignor,               zk",
+    "org.apache.kafka.clients.consumer.CooperativeStickyAssignor,   kraft",
+    "org.apache.kafka.clients.consumer.RangeAssignor,               kraft",
+    "org.apache.kafka.clients.consumer.CooperativeStickyAssignor,   kraft+kip848",
+    "org.apache.kafka.clients.consumer.RangeAssignor,               kraft+kip848"
+  ))
+  def testRebalanceAndRejoin(assignmentStrategy: String, quorum: String): Unit = {
     // create 2 consumers
     this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "rebalance-and-rejoin-group")
     this.consumerConfig.setProperty(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, assignmentStrategy)
@@ -1105,8 +1144,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
    * As a result, it is testing the default assignment strategy set by BaseConsumerTest
    * It tests the assignment results is expected using default assignor (i.e. Range assignor)
    */
-  @Test
-  def testMultiConsumerDefaultAssignorAndVerifyAssignment(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testMultiConsumerDefaultAssignorAndVerifyAssignment(quorum: String): Unit = {
     // create two new topics, each having 3 partitions
     val topic1 = "topic1"
     val topic2 = "topic2"
@@ -1137,18 +1177,21 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     }
   }
 
-  @Test
-  def testMultiConsumerSessionTimeoutOnStopPolling(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testMultiConsumerSessionTimeoutOnStopPolling(quorum: String): Unit = {
     runMultiConsumerSessionTimeoutTest(false)
   }
 
-  @Test
-  def testMultiConsumerSessionTimeoutOnClose(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testMultiConsumerSessionTimeoutOnClose(quorum: String): Unit = {
     runMultiConsumerSessionTimeoutTest(true)
   }
 
-  @Test
-  def testInterceptors(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testInterceptors(quorum: String): Unit = {
     val appendStr = "mock"
     MockConsumerInterceptor.resetCounters()
     MockProducerInterceptor.resetCounters()
@@ -1206,8 +1249,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     MockProducerInterceptor.resetCounters()
   }
 
-  @Test
-  def testAutoCommitIntercept(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testAutoCommitIntercept(quorum: String): Unit = {
     val topic2 = "topic2"
     createTopic(topic2, 2, brokerCount)
 
@@ -1256,8 +1300,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     MockConsumerInterceptor.resetCounters()
   }
 
-  @Test
-  def testInterceptorsWithWrongKeyValue(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testInterceptorsWithWrongKeyValue(quorum: String): Unit = {
     val appendStr = "mock"
     // create producer with interceptor that has different key and value types from the producer
     val producerProps = new Properties()
@@ -1282,8 +1327,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(s"value will not be modified", new String(record.value()))
   }
 
-  @Test
-  def testConsumeMessagesWithCreateTime(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testConsumeMessagesWithCreateTime(quorum: String): Unit = {
     val numRecords = 50
     // Test non-compressed messages
     val producer = createProducer()
@@ -1299,8 +1345,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumeAndVerifyRecords(consumer = consumer, numRecords = numRecords, tp = tp2, startingOffset = 0)
   }
 
-  @Test
-  def testConsumeMessagesWithLogAppendTime(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testConsumeMessagesWithLogAppendTime(quorum: String): Unit = {
     val topicName = "testConsumeMessagesWithLogAppendTime"
     val topicProps = new Properties()
     topicProps.setProperty(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, "LogAppendTime")
@@ -1327,8 +1374,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
       startingTimestamp = startTime, timestampType = TimestampType.LOG_APPEND_TIME)
   }
 
-  @Test
-  def testListTopics(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testListTopics(quorum: String): Unit = {
     val numParts = 2
     val topic1 = "part-test-topic-1"
     val topic2 = "part-test-topic-2"
@@ -1347,8 +1395,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(2, topics.get(topic3).size)
   }
 
-  @Test
-  def testUnsubscribeTopic(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testUnsubscribeTopic(quorum: String): Unit = {
     this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "100") // timeout quickly to avoid slow test
     this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "30")
     val consumer = createConsumer()
@@ -1363,8 +1412,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(0, consumer.assignment.size())
   }
 
-  @Test
-  def testPauseStateNotPreservedByRebalance(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testPauseStateNotPreservedByRebalance(quorum: String): Unit = {
     this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "100") // timeout quickly to avoid slow test
     this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "30")
     val consumer = createConsumer()
@@ -1384,8 +1434,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumeAndVerifyRecords(consumer = consumer, numRecords = 0, startingOffset = 5, startingTimestamp = startingTimestamp)
   }
 
-  @Test
-  def testCommitSpecifiedOffsets(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testCommitSpecifiedOffsets(quorum: String): Unit = {
     val producer = createProducer()
     sendRecords(producer, numRecords = 5, tp)
     sendRecords(producer, numRecords = 7, tp2)
@@ -1411,8 +1462,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(7, consumer.committed(Set(tp2).asJava).get(tp2).offset)
   }
 
-  @Test
-  def testAutoCommitOnRebalance(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testAutoCommitOnRebalance(quorum: String): Unit = {
     val topic2 = "topic2"
     createTopic(topic2, 2, brokerCount)
 
@@ -1450,8 +1502,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(500, consumer.committed(Set(tp2).asJava).get(tp2).offset)
   }
 
-  @Test
-  def testPerPartitionLeadMetricsCleanUpWithSubscribe(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testPerPartitionLeadMetricsCleanUpWithSubscribe(quorum: String): Unit = {
     val numMessages = 1000
     val topic2 = "topic2"
     createTopic(topic2, 2, brokerCount)
@@ -1489,8 +1542,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertNull(consumer.metrics.get(new MetricName("records-lead", "consumer-fetch-manager-metrics", "", tags2)))
   }
 
-  @Test
-  def testPerPartitionLagMetricsCleanUpWithSubscribe(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testPerPartitionLagMetricsCleanUpWithSubscribe(quorum: String): Unit = {
     val numMessages = 1000
     val topic2 = "topic2"
     createTopic(topic2, 2, brokerCount)
@@ -1529,8 +1583,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertNull(consumer.metrics.get(new MetricName("records-lag", "consumer-fetch-manager-metrics", "", tags2)))
   }
 
-  @Test
-  def testPerPartitionLeadMetricsCleanUpWithAssign(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testPerPartitionLeadMetricsCleanUpWithAssign(quorum: String): Unit = {
     val numMessages = 1000
     // Test assign
     // send some messages.
@@ -1558,8 +1613,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertNull(consumer.metrics.get(new MetricName("records-lead", "consumer-fetch-manager-metrics", "", tags)))
   }
 
-  @Test
-  def testPerPartitionLagMetricsCleanUpWithAssign(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testPerPartitionLagMetricsCleanUpWithAssign(quorum: String): Unit = {
     val numMessages = 1000
     // Test assign
     // send some messages.
@@ -1589,8 +1645,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertNull(consumer.metrics.get(new MetricName("records-lag", "consumer-fetch-manager-metrics", "", tags)))
   }
 
-  @Test
-  def testPerPartitionLagMetricsWhenReadCommitted(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testPerPartitionLagMetricsWhenReadCommitted(quorum: String): Unit = {
     val numMessages = 1000
     // send some messages.
     val producer = createProducer()
@@ -1612,8 +1669,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertNotNull(fetchLag)
   }
 
-  @Test
-  def testPerPartitionLeadWithMaxPollRecords(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testPerPartitionLeadWithMaxPollRecords(quorum: String): Unit = {
     val numMessages = 1000
     val maxPollRecords = 10
     val producer = createProducer()
@@ -1634,8 +1692,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(maxPollRecords, lead.metricValue().asInstanceOf[Double], s"The lead should be $maxPollRecords")
   }
 
-  @Test
-  def testPerPartitionLagWithMaxPollRecords(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testPerPartitionLagWithMaxPollRecords(quorum: String): Unit = {
     val numMessages = 1000
     val maxPollRecords = 10
     val producer = createProducer()
@@ -1657,8 +1716,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(numMessages - records.count, lag.metricValue.asInstanceOf[Double], epsilon, s"The lag should be ${numMessages - records.count}")
   }
 
-  @Test
-  def testQuotaMetricsNotCreatedIfNoQuotasConfigured(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testQuotaMetricsNotCreatedIfNoQuotasConfigured(quorum: String): Unit = {
     val numRecords = 1000
     val producer = createProducer()
     val startingTimestamp = System.currentTimeMillis()
@@ -1669,7 +1729,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumer.seek(tp, 0)
     consumeAndVerifyRecords(consumer = consumer, numRecords = numRecords, startingOffset = 0, startingTimestamp = startingTimestamp)
 
-    def assertNoMetric(broker: KafkaServer, name: String, quotaType: QuotaType, clientId: String): Unit = {
+    def assertNoMetric(broker: KafkaBroker, name: String, quotaType: QuotaType, clientId: String): Unit = {
         val metricName = broker.metrics.metricName("throttle-time",
                                   quotaType.toString,
                                   "",
@@ -1677,15 +1737,15 @@ class PlaintextConsumerTest extends BaseConsumerTest {
                                   "client-id", clientId)
         assertNull(broker.metrics.metric(metricName), "Metric should not have been created " + metricName)
     }
-    servers.foreach(assertNoMetric(_, "byte-rate", QuotaType.Produce, producerClientId))
-    servers.foreach(assertNoMetric(_, "throttle-time", QuotaType.Produce, producerClientId))
-    servers.foreach(assertNoMetric(_, "byte-rate", QuotaType.Fetch, consumerClientId))
-    servers.foreach(assertNoMetric(_, "throttle-time", QuotaType.Fetch, consumerClientId))
+    brokers.foreach(assertNoMetric(_, "byte-rate", QuotaType.Produce, producerClientId))
+    brokers.foreach(assertNoMetric(_, "throttle-time", QuotaType.Produce, producerClientId))
+    brokers.foreach(assertNoMetric(_, "byte-rate", QuotaType.Fetch, consumerClientId))
+    brokers.foreach(assertNoMetric(_, "throttle-time", QuotaType.Fetch, consumerClientId))
 
-    servers.foreach(assertNoMetric(_, "request-time", QuotaType.Request, producerClientId))
-    servers.foreach(assertNoMetric(_, "throttle-time", QuotaType.Request, producerClientId))
-    servers.foreach(assertNoMetric(_, "request-time", QuotaType.Request, consumerClientId))
-    servers.foreach(assertNoMetric(_, "throttle-time", QuotaType.Request, consumerClientId))
+    brokers.foreach(assertNoMetric(_, "request-time", QuotaType.Request, producerClientId))
+    brokers.foreach(assertNoMetric(_, "throttle-time", QuotaType.Request, producerClientId))
+    brokers.foreach(assertNoMetric(_, "request-time", QuotaType.Request, consumerClientId))
+    brokers.foreach(assertNoMetric(_, "throttle-time", QuotaType.Request, consumerClientId))
   }
 
   def runMultiConsumerSessionTimeoutTest(closeConsumer: Boolean): Unit = {
@@ -1805,16 +1865,19 @@ class PlaintextConsumerTest extends BaseConsumerTest {
         s"The current assignment is ${consumer.assignment()}")
   }
 
-  @Test
-  def testConsumingWithNullGroupId(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testConsumingWithNullGroupId(quorum: String): Unit = {
     val topic = "test_topic"
     val partition = 0;
     val tp = new TopicPartition(topic, partition)
     createTopic(topic, 1, 1)
 
-    TestUtils.waitUntilTrue(() => {
-      this.zkClient.topicExists(topic)
-    }, "Failed to create topic")
+    if (!isKRaftTest()) {
+      TestUtils.waitUntilTrue(() => {
+        this.zkClientOrNull.topicExists(topic)
+      }, "Failed to create topic")
+    }
 
     val producer = createProducer()
     producer.send(new ProducerRecord(topic, partition, "k1".getBytes, "v1".getBytes)).get()
@@ -1870,15 +1933,16 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(2, numRecords3, "Expected consumer3 to consume from offset 1")
   }
 
-  @Test
-  def testConsumingWithEmptyGroupId(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testConsumingWithEmptyGroupId(quorum: String): Unit = {
     val topic = "test_topic"
     val partition = 0;
     val tp = new TopicPartition(topic, partition)
     createTopic(topic, 1, 1)
 
     TestUtils.waitUntilTrue(() => {
-      this.zkClient.topicExists(topic)
+      this.zkClientOrNull.topicExists(topic)
     }, "Failed to create topic")
 
     val producer = createProducer()
@@ -1919,8 +1983,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
       "Expected consumer2 to consume one message from offset 1, which is the committed offset of consumer1")
   }
 
-  @Test
-  def testStaticConsumerDetectsNewPartitionCreatedAfterRestart(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testStaticConsumerDetectsNewPartitionCreatedAfterRestart(quorum: String): Unit = {
     val foo = "foo"
     val foo0 = new TopicPartition(foo, 0)
     val foo1 = new TopicPartition(foo, 1)
