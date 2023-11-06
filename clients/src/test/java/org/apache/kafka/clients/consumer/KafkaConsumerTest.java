@@ -218,6 +218,23 @@ public class KafkaConsumerTest {
         return Arrays.stream(GroupProtocol.values()).map(Arguments::of).collect(Collectors.toList());
     }
 
+    /**
+     * A given test may choose to use the {@link GroupProtocol#GENERIC generic group protocol} for a number of reasons.
+     * Among the reasons for a test to do so is because it...
+     *
+     * <ul>
+     *     <li>
+     *         ...exercises rebalancing logic that is not yet implemented in the
+     *         {@link GroupProtocol#CONSUMER consumer group protocol}.
+     *     </li>
+     *     <li>...includes topic metadata that is not yet implemented in the consumer group protocol.</li>
+     *     <li>...fails, possibly due to the omission of functionality in the consumer group protocol.</li>
+     *     <li>...uses logic, timing, etc. that are not applicable to the consumer group protocol.</li>
+     * </ul>
+     *
+     * Less than half of the tests for the consumer group protocol pass as of now, but it's very tedious to
+     * investigate at this point due to known bugs and missing functionality.
+     */
     private static Collection<Arguments> genericGroupProtocolOnly() {
         return Collections.singleton(Arguments.of(GroupProtocol.GENERIC));
     }
