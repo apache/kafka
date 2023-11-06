@@ -308,7 +308,7 @@ public class ConsumerGroup implements Group {
     /**
      * Gets a static member.
      *
-     * @param instanceId        The group instance id.
+     * @param instanceId The group instance id.
      *
      * @return The member corresponding to the given instance id or null if it does not exist
      */

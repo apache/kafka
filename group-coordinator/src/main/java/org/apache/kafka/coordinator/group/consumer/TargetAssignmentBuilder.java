@@ -128,6 +128,11 @@ public class TargetAssignmentBuilder {
     private final Map<String, ConsumerGroupMember> updatedMembers = new HashMap<>();
 
     /**
+     * The static members in the group.
+     */
+    private final Map<String, String> staticMembers = new HashMap<>();
+
+    /**
      * Constructs the object.
      *
      * @param groupId       The group id.
@@ -195,6 +200,9 @@ public class TargetAssignmentBuilder {
         String memberId,
         ConsumerGroupMember member
     ) {
+        if (member != null && member.instanceId() != null) {
+            this.staticMembers.put(memberId, member.instanceId());
+        }
         this.updatedMembers.put(memberId, member);
         return this;
     }
@@ -209,6 +217,7 @@ public class TargetAssignmentBuilder {
     public TargetAssignmentBuilder removeMember(
         String memberId
     ) {
+        this.staticMembers.remove(memberId);
         return addOrUpdateMember(memberId, null);
     }
 
@@ -221,22 +230,36 @@ public class TargetAssignmentBuilder {
      */
     public TargetAssignmentResult build() throws PartitionAssignorException {
         Map<String, AssignmentMemberSpec> memberSpecs = new HashMap<>();
+        Map<String, Assignment> assignmentByInstanceId = new HashMap<>();
 
         // Prepare the member spec for all members.
-        members.forEach((memberId, member) -> memberSpecs.put(memberId, createAssignmentMemberSpec(
-            member,
-            targetAssignment.getOrDefault(memberId, Assignment.EMPTY),
-            subscriptionMetadata
-        )));
+        members.forEach((memberId, member) -> {
+            memberSpecs.put(memberId, createAssignmentMemberSpec(
+                member,
+                targetAssignment.getOrDefault(memberId, Assignment.EMPTY),
+                subscriptionMetadata
+            ));
+            if (member.instanceId() != null) {
+                assignmentByInstanceId.put(member.instanceId(), targetAssignment.getOrDefault(memberId, Assignment.EMPTY));
+            }
+        });
 
         // Update the member spec if updated or deleted members.
         updatedMembers.forEach((memberId, updatedMemberOrNull) -> {
             if (updatedMemberOrNull == null) {
                 memberSpecs.remove(memberId);
             } else {
+                ConsumerGroupMember member = members.get(memberId);
+                Assignment assignment;
+                // A new static member joins and needs to replace an existing departed one.
+                if (member == null && staticMembers.containsKey(memberId)) {
+                    assignment = assignmentByInstanceId.get(staticMembers.get(memberId));
+                } else {
+                    assignment = targetAssignment.getOrDefault(memberId, Assignment.EMPTY);
+                }
                 memberSpecs.put(memberId, createAssignmentMemberSpec(
                     updatedMemberOrNull,
-                    targetAssignment.getOrDefault(memberId, Assignment.EMPTY),
+                    assignment,
                     subscriptionMetadata
                 ));
             }

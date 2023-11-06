@@ -2189,7 +2189,15 @@ public class GroupMetadataManagerTest {
                 .setMemberId(member2RejoinId)
                 .setMemberEpoch(10)
                 .setHeartbeatIntervalMs(5000)
-                .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()),
+                .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()
+                    .setTopicPartitions(Arrays.asList(
+                    new ConsumerGroupHeartbeatResponseData.TopicPartitions()
+                        .setTopicId(fooTopicId)
+                        .setPartitions(Arrays.asList(3, 4, 5)),
+                    new ConsumerGroupHeartbeatResponseData.TopicPartitions()
+                        .setTopicId(barTopicId)
+                        .setPartitions(Collections.singletonList(2))
+                ))),
                 rejoinResult.response()
         );
 
@@ -2203,7 +2211,7 @@ public class GroupMetadataManagerTest {
             .setRebalanceTimeoutMs(5000)
             .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
             .setServerAssignorName("range")
-            .setPartitionsPendingAssignment(mkAssignment(
+            .setAssignedPartitions(mkAssignment(
                     mkTopicAssignment(fooTopicId, 3, 4, 5),
                     mkTopicAssignment(barTopicId, 2)))
             .build();
