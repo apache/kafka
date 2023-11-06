@@ -36,7 +36,7 @@ then
     ub ensure KAFKA_ADVERTISED_LISTENERS
   fi 
 else
-  echo "Only KRaft mode is supported KAFKA_PROCESS_ROLES is a mandatory config"
+  echo "Only KRaft mode is supported. KAFKA_PROCESS_ROLES is a mandatory config"
   exit 1
 fi
 
@@ -49,7 +49,7 @@ then
   KAFKA_LISTENERS=$(echo "$KAFKA_ADVERTISED_LISTENERS" | sed -e 's|://[^:]*:|://0.0.0.0:|g')
 fi
 
-ub path /etc/kafka/ writable
+ub path /opt/kafka/config/ writable
 
 if [[ -z "${KAFKA_LOG_DIRS-}" ]]
 then
@@ -141,6 +141,6 @@ fi
 
 
 # --- for broker
-ub render-properties /etc/kafka/docker/kafka-propertiesSpec.json > /etc/kafka/kafka.properties
-ub render-template /etc/kafka/docker/kafka-log4j.properties.template > /etc/kafka/log4j.properties
-ub render-template /etc/kafka/docker/kafka-tools-log4j.properties.template > /etc/kafka/tools-log4j.properties
+ub render-properties /etc/kafka/docker/kafka-propertiesSpec.json > /opt/kafka/config/kafka.properties
+ub render-template /etc/kafka/docker/kafka-log4j.properties.template > /opt/kafka/config/log4j.properties
+ub render-template /etc/kafka/docker/kafka-tools-log4j.properties.template > /opt/kafka/config/tools-log4j.properties
