@@ -30,6 +30,7 @@ import org.apache.kafka.storage.internals.log.AppendOrigin
 
 import java.nio.ByteBuffer
 import java.util
+import java.util.concurrent.CompletableFuture
 import scala.collection.Map
 
 /**
@@ -115,6 +116,23 @@ class CoordinatorPartitionWriter[T](
     tp: TopicPartition,
     records: util.List[T]
   ): Long = {
+    // TODO: should avoid this as it holds the thread around async call, but it is functionally correct
+    appendAsync(tp, records).get();
+  }
+
+  /**
+   * Write records to the partitions. Records are written in one batch so
+   * atomicity is guaranteed.
+   *
+   * @param tp      The partition to write records to.
+   * @param records The list of records. The records are written in a single batch.
+   * @return The future log end offset right after the written records.
+   * @throws KafkaException Any KafkaException caught during the write operation.
+   */
+  override def appendAsync(tp: TopicPartition,
+                           records: util.List[T]
+                          ) : CompletableFuture[Long] = {
+
     if (records.isEmpty) throw new IllegalStateException("records must be non-empty.")
 
     replicaManager.getLogConfig(tp) match {
@@ -145,28 +163,31 @@ class CoordinatorPartitionWriter[T](
             s"in append to partition $tp which exceeds the maximum configured size of $maxBatchSize.")
         }
 
-        var appendResults: Map[TopicPartition, PartitionResponse] = Map.empty
+        val future = new CompletableFuture[Long]()
+        def responseCallback(responseStatus: Map[TopicPartition, PartitionResponse]): Unit = {
+          val result = responseStatus.get(tp)
+          if (result.isEmpty) {
+            future.completeExceptionally(new IllegalStateException(s"Append status $responseStatus should have partition $tp."))
+          } else if (result.get.error != Errors.NONE) {
+            future.completeExceptionally(result.get.error.exception())
+          } else {
+            // The required offset.
+            future.complete(result.get.lastOffset + 1)
+          }
+        }
+
         replicaManager.appendRecords(
           timeout = 0L,
           requiredAcks = 1,
           internalTopicsAllowed = true,
           origin = AppendOrigin.COORDINATOR,
           entriesPerPartition = Map(tp -> recordsBuilder.build()),
-          responseCallback = results => appendResults = results,
+          responseCallback = responseCallback,
           // We can directly complete the purgatories here because we don't hold
           // any conflicting locks.
           actionQueue = directActionQueue
         )
-
-        val partitionResult = appendResults.getOrElse(tp,
-          throw new IllegalStateException(s"Append status $appendResults should have partition $tp."))
-
-        if (partitionResult.error != Errors.NONE) {
-          throw partitionResult.error.exception()
-        }
-
-        // Required offset.
-        partitionResult.lastOffset + 1
+        future
 
       case None =>
         throw Errors.NOT_LEADER_OR_FOLLOWER.exception()

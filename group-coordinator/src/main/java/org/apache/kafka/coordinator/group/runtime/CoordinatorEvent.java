@@ -18,6 +18,8 @@ package org.apache.kafka.coordinator.group.runtime;
 
 import org.apache.kafka.common.TopicPartition;
 
+import java.util.concurrent.CompletableFuture;
+
 /**
  * The base event type used by all events processed in the
  * coordinator runtime.
@@ -28,6 +30,15 @@ public interface CoordinatorEvent extends EventAccumulator.Event<TopicPartition>
      * Executes the event.
      */
     void run();
+
+    /**
+     * Executes the event asynchronously
+     * @return Completable future
+     */
+    default CompletableFuture<Void> runAsync() {
+        run();
+        return CompletableFuture.completedFuture(null);
+    }
 
     /**
      * Completes the event with the provided exception.
