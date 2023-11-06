@@ -216,11 +216,11 @@ public class StandaloneHerderTest {
         // Second should fail
         FutureCallback<Herder.Created<ConnectorInfo>> failedCreateCallback = new FutureCallback<>();
         herder.putConnectorConfig(CONNECTOR_NAME, config, false, failedCreateCallback);
-        verify(loaderSwap, times(2)).close();
         ExecutionException exception = assertThrows(ExecutionException.class, () -> failedCreateCallback.get(1000L, TimeUnit.SECONDS));
         if (AlreadyExistsException.class != exception.getCause().getClass()) {
             throw new AssertionError(exception.getCause());
         }
+        verify(loaderSwap, times(2)).close();
     }
 
     @Test
