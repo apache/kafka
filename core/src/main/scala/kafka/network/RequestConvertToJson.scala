@@ -100,6 +100,7 @@ object RequestConvertToJson {
       case req: LiMoveControllerRequest => LiMoveControllerRequestDataJsonConverter.write(req.data, request.version())
       case req: LiCreateFederatedTopicZnodesRequest => LiCreateFederatedTopicZnodesRequestDataJsonConverter.write(req.data, request.version())
       case req: LiDeleteFederatedTopicZnodesRequest => LiDeleteFederatedTopicZnodesRequestDataJsonConverter.write(req.data, request.version())
+      case req: LiListFederatedTopicZnodesRequest => LiListFederatedTopicZnodesRequestDataJsonConverter.write(req.data, request.version())
       case _ => throw new IllegalStateException(s"ApiKey ${request.apiKey} is not currently handled in `request`, the " +
         "code should be updated to do so.");
     }
@@ -180,6 +181,7 @@ object RequestConvertToJson {
       case res: LiMoveControllerResponse => LiMoveControllerResponseDataJsonConverter.write(res.data, version)
       case res: LiCreateFederatedTopicZnodesResponse => LiCreateFederatedTopicZnodesResponseDataJsonConverter.write(res.data, version)
       case res: LiDeleteFederatedTopicZnodesResponse => LiDeleteFederatedTopicZnodesResponseDataJsonConverter.write(res.data, version)
+      case res: LiListFederatedTopicZnodesResponse => LiListFederatedTopicZnodesResponseDataJsonConverter.write(res.data, version)
       case _ => throw new IllegalStateException(s"ApiKey ${response.apiKey} is not currently handled in `response`, the " +
         "code should be updated to do so.");
     }

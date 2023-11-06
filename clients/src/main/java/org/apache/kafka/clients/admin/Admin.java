@@ -19,6 +19,7 @@ package org.apache.kafka.clients.admin;
 
 import java.time.Duration;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -308,6 +309,25 @@ public interface Admin extends AutoCloseable {
      * @return The ListTopicsResult.
      */
     ListTopicsResult listTopics(ListTopicsOptions options);
+
+    /**
+     * List all federated topic znodes
+     * @return all federated topic znodes, formatted /namespace/topic
+     */
+    default ListFederatedTopicZnodesResult listFederatedTopicZnodes() {
+        return listFederatedTopicZnodes(Collections.emptyList(), new ListFederatedTopicZnodesOptions());
+    }
+
+    /**
+     * List federated topic znodes match given topic names; if empty list passed, all existing federated topic znodes
+     * will be listed
+     * @param federatedTopics topic names
+     * @param options the options to use when list federated topic znodes
+     * @return empty list if the given topic names' znode don't exist; otherwise return the federated topics formatted
+     *         /namespace/topic
+     */
+    ListFederatedTopicZnodesResult listFederatedTopicZnodes(List<String> federatedTopics,
+                                                            ListFederatedTopicZnodesOptions options);
 
     /**
      * Describe some topics in the cluster, with the default options.

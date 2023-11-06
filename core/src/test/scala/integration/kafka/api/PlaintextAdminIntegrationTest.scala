@@ -136,7 +136,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   def testFederatedTopicCreateDeleteAndGet(): Unit = {
     client = Admin.create(createConfig)
     val federatedTopic = Map("federated-test-topic" -> "tracking").asJava
-    val expectedFedTopic = Seq("/tracking/federated-test-topic")
+    val expectedFedTopicString = "/tracking/federated-test-topic"
+    val expectedFedTopic = Seq(expectedFedTopicString)
     // create one federated topic
     client.createFederatedTopicZnodes(federatedTopic)
     // since creation is async, wait for federated topic znodes to be created
@@ -145,6 +146,21 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     // check federated topic is created
     val federatedTopics = zkClient.getAllFederatedTopics
     assertEquals(1, federatedTopics.size)
+
+    // test list federated topic znodes api
+    // 1. test list all
+    val allZnodes = client.listFederatedTopicZnodes().topics().get()
+    assertEquals(1, allZnodes.size())
+    assertEquals(expectedFedTopicString, allZnodes.get(0))
+    // 2. test list specific success
+    val expectedSuccess = client.listFederatedTopicZnodes(Collections.singletonList("federated-test-topic"),
+        new ListFederatedTopicZnodesOptions()).topics().get()
+    assertEquals(1, expectedSuccess.size())
+    assertEquals(expectedFedTopicString, expectedSuccess.get(0))
+    // 3. test list specific fail
+    val expectedFail = client.listFederatedTopicZnodes(Collections.singletonList("non-exist-topic"),
+      new ListFederatedTopicZnodesOptions()).topics().get()
+    assertEquals(0, expectedFail.size())
 
     // delete federated topic znode
     client.deleteFederatedTopicZnodes(federatedTopic)

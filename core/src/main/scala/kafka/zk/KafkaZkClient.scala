@@ -145,6 +145,16 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient,
     }.toMap
   }
 
+  def getFederatedTopic(topic: String): String = {
+    val getDataRequest = GetDataRequest(FederatedTopicZnode.path(topic))
+    val getDataResponse = retryRequestUntilConnected(getDataRequest)
+    getDataResponse.resultCode match {
+      case Code.OK => "/" + FederatedTopicZnode.decode(getDataResponse.data) + "/" + topic
+      case Code.NONODE => null
+      case _ => throw getDataResponse.resultException.get
+    }
+  }
+
   def getAllFederatedTopics: Set[String] = {
     val topics = getChildren(FederatedTopicsZNode.path)
 

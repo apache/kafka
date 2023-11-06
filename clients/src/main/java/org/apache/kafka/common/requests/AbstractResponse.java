@@ -257,6 +257,8 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
                 return LiCreateFederatedTopicZnodesResponse.parse(responseBuffer, version);
             case LI_DELETE_FEDERATED_TOPIC_ZNODES:
                 return LiDeleteFederatedTopicZnodesResponse.parse(responseBuffer, version);
+            case LI_LIST_FEDERATED_TOPIC_ZNODES:
+                return LiListFederatedTopicZnodesResponse.parse(responseBuffer, version);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseResponse`, the " +
                         "code should be updated to do so.", apiKey));

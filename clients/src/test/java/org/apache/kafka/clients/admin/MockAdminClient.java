@@ -361,6 +361,12 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
+    public ListFederatedTopicZnodesResult listFederatedTopicZnodes(List<String> federatedTopics,
+        ListFederatedTopicZnodesOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
     synchronized public DescribeTopicsResult describeTopics(Collection<String> topicNames, DescribeTopicsOptions options) {
         Map<String, KafkaFuture<TopicDescription>> topicDescriptions = new HashMap<>();
 

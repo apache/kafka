@@ -69,6 +69,12 @@ public class NoOpAdminClient extends AdminClient {
     }
 
     @Override
+    public ListFederatedTopicZnodesResult listFederatedTopicZnodes(List<String> federatedTopics,
+        ListFederatedTopicZnodesOptions options) {
+        return null;
+    }
+
+    @Override
     public DescribeTopicsResult describeTopics(Collection<String> topicNames, DescribeTopicsOptions options) {
         return null;
     }
