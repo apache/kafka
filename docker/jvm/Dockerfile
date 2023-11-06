@@ -16,9 +16,7 @@
 # limitations under the License.
 ###############################################################################
 
-ARG GOLANG_VERSION=1.21.1
-
-FROM golang:${GOLANG_VERSION} AS build-ub
+FROM golang:latest AS build-ub
 WORKDIR /build
 RUN useradd --no-log-init --create-home --shell /bin/bash appuser
 COPY --chown=appuser:appuser resources/ub/ ./
@@ -27,7 +25,29 @@ USER appuser
 RUN go test ./...
 
 
-FROM eclipse-temurin:21-jre
+FROM eclipse-temurin:21-jre-alpine AS build-jsa
+
+USER root
+
+# Get kafka from https://archive.apache.org/dist/kafka and pass the url through build arguments
+ARG kafka_url
+
+ENV KAFKA_URL=$kafka_url
+
+COPY jsa_launch /etc/kafka/docker/jsa_launch
+
+RUN set -eux ; \
+    apk update ; \
+    apk upgrade ; \
+    apk add --no-cache wget gcompat procps netcat-openbsd; \
+    mkdir opt/kafka; \
+    wget -nv -O kafka.tgz "$KAFKA_URL"; \
+    tar xfz kafka.tgz -C /opt/kafka --strip-components 1;
+
+RUN /etc/kafka/docker/jsa_launch
+
+
+FROM eclipse-temurin:21-jre-alpine
 
 # exposed ports
 EXPOSE 9092
@@ -49,9 +69,9 @@ LABEL org.label-schema.name="kafka" \
 ENV KAFKA_URL=$kafka_url
 
 RUN set -eux ; \
-    apt-get update ; \
-    apt-get upgrade -y ; \
-    apt-get install -y --no-install-recommends curl wget gpg dirmngr gpg-agent; \
+    apk update ; \
+    apk upgrade ; \
+    apk add --no-cache curl wget gpg dirmngr gpg-agent gcompat; \
     mkdir opt/kafka; \
     wget -nv -O kafka.tgz "$KAFKA_URL"; \
     wget -nv -O kafka.tgz.asc "$KAFKA_URL.asc"; \
@@ -61,14 +81,16 @@ RUN set -eux ; \
     gpg --batch --verify kafka.tgz.asc kafka.tgz; \
     mkdir -p /var/lib/kafka/data /etc/kafka/secrets /var/log/kafka /var/lib/zookeeper; \
     mkdir -p /etc/kafka/docker /usr/logs; \
-    useradd --no-log-init --create-home --shell /bin/bash appuser; \
-    chown appuser:appuser -R /etc/kafka/ /usr/logs /opt/kafka; \
-    chown appuser:root -R /etc/kafka /var/lib/kafka /etc/kafka/secrets /var/lib/kafka /etc/kafka /var/log/kafka /var/lib/zookeeper; \
+    adduser -h /home/appuser -D --shell /bin/bash appuser; \
+    chown appuser:appuser -R /usr/logs /opt/kafka; \
+    chown appuser:root -R /var/lib/kafka /etc/kafka/secrets /var/lib/kafka /etc/kafka /var/log/kafka /var/lib/zookeeper; \
     chmod -R ug+w /etc/kafka /var/lib/kafka /var/lib/kafka /etc/kafka/secrets /etc/kafka /var/log/kafka /var/lib/zookeeper; \
-    rm kafka.tgz; \
-    rm kafka.tgz.asc;
+    rm kafka.tgz kafka.tgz.asc KEYS; \
+    apk del curl wget gpg dirmngr gpg-agent; \
+    apk cache clean;
 
-COPY --from=build-ub /build/ub /usr/bin
+COPY --from=build-jsa kafka.jsa /opt/kafka/kafka.jsa
+COPY --chown=appuser:appuser --from=build-ub /build/ub /usr/bin
 COPY --chown=appuser:appuser resources/common-scripts /etc/kafka/docker
 COPY --chown=appuser:appuser launch /etc/kafka/docker/launch
 

@@ -20,7 +20,7 @@
 
 # Override this section from the script to include the com.sun.management.jmxremote.rmi.port property.
 if [ -z "$KAFKA_JMX_OPTS" ]; then
-  export KAFKA_JMX_OPTS="-Dcom.sun.management.jmxremote=true -Dcom.sun.management.jmxremote.authenticate=false  -Dcom.sun.management.jmxremote.ssl=false "
+    export KAFKA_JMX_OPTS="-Dcom.sun.management.jmxremote=true -Dcom.sun.management.jmxremote.authenticate=false  -Dcom.sun.management.jmxremote.ssl=false "
 fi
 
 # The JMX client needs to be able to connect to java.rmi.server.hostname.
@@ -33,8 +33,8 @@ export KAFKA_JMX_HOSTNAME=${KAFKA_JMX_HOSTNAME:-$(hostname -i | cut -d" " -f1)}
 
 if [ "$KAFKA_JMX_PORT" ]; then
   # This ensures that the "if" section for JMX_PORT in kafka launch script does not trigger.
-  export JMX_PORT=$KAFKA_JMX_PORT
-  export KAFKA_JMX_OPTS="$KAFKA_JMX_OPTS -Djava.rmi.server.hostname=$KAFKA_JMX_HOSTNAME -Dcom.sun.management.jmxremote.local.only=false -Dcom.sun.management.jmxremote.rmi.port=$JMX_PORT -Dcom.sun.management.jmxremote.port=$JMX_PORT"
+    export JMX_PORT=$KAFKA_JMX_PORT
+    export KAFKA_JMX_OPTS="$KAFKA_JMX_OPTS -Djava.rmi.server.hostname=$KAFKA_JMX_HOSTNAME -Dcom.sun.management.jmxremote.local.only=false -Dcom.sun.management.jmxremote.rmi.port=$JMX_PORT -Dcom.sun.management.jmxremote.port=$JMX_PORT"
 fi
 
 # KRaft required step: Format the storage directory with provided cluster ID unless it already exists.
@@ -46,6 +46,12 @@ then
     result=$(/opt/kafka/bin/kafka-storage.sh format --cluster-id=$CLUSTER_ID -c /etc/kafka/kafka.properties 2>&1) || \
         echo $result | grep -i "already formatted" || \
         { echo $result && (exit 1) }
+fi
+
+if [ -z "$KAFKA_JVM_PERFORMANCE_OPTS" ]; then
+    export KAFKA_JVM_PERFORMANCE_OPTS="-XX:SharedArchiveFile=/opt/kafka/kafka.jsa"
+else
+    export KAFKA_JVM_PERFORMANCE_OPTS="$KAFKA_JVM_PERFORMANCE_OPTS -XX:SharedArchiveFile=/opt/kafka/kafka.jsa"
 fi
 
 # Start kafka broker

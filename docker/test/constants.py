@@ -13,22 +13,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-SCHEMA_REGISTRY_URL="http://localhost:8081"
-CONNECT_URL="http://localhost:8083/connectors"
+KAFKA_TOPICS="./fixtures/kafka/bin/kafka-topics.sh"
+KAFKA_CONSOLE_PRODUCER="./fixtures/kafka/bin/kafka-console-producer.sh"
+KAFKA_CONSOLE_CONSUMER="./fixtures/kafka/bin/kafka-console-consumer.sh"
+
+KRAFT_COMPOSE="fixtures/kraft/docker-compose.yml"
+ZOOKEEPER_COMPOSE="fixtures/zookeeper/docker-compose.yml"
+
 CLIENT_TIMEOUT=40
-SCHEMA_REGISTRY_TEST_TOPIC="test_topic_schema"
-CONNECT_TEST_TOPIC="test_topic_connect"
-CONNECT_SOURCE_CONNECTOR_CONFIG="@fixtures/source_connector.json"
 
-SSL_TOPIC="test_topic_ssl"
-SSL_CA_LOCATION="./fixtures/secrets/ca-cert"
-SSL_CERTIFICATE_LOCATION="./fixtures/secrets/client_python_client.pem"
-SSL_KEY_LOCATION="./fixtures/secrets/client_python_client.key"
-SSL_KEY_PASSWORD="abcdefgh"
+SSL_FLOW_TESTS="SSL Flow Tests"
+SSL_CLIENT_CONFIG="./fixtures/secrets/client-ssl.properties"
+SSL_TOPIC="test-topic-ssl"
 
-BROKER_RESTART_TEST_TOPIC="test_topic_broker_restart"
+BROKER_RESTART_TESTS="Broker Restart Tests"
+BROKER_CONTAINER="broker"
+BROKER_RESTART_TEST_TOPIC="test-topic-broker-restart"
 
-SCHEMA_REGISTRY_ERROR_PREFIX="SCHEMA_REGISTRY_ERR"
-CONNECT_ERROR_PREFIX="CONNECT_ERR"
 SSL_ERROR_PREFIX="SSL_ERR"
 BROKER_RESTART_ERROR_PREFIX="BROKER_RESTART_ERR"

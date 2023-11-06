@@ -28,11 +28,10 @@ import org.apache.kafka.server.quota.ClientQuotaCallback
 import scala.jdk.CollectionConverters._
 
 object ClientRequestQuotaManager {
-  val QuotaRequestPercentDefault = Int.MaxValue.toDouble
-  val NanosToPercentagePerSecond = 100.0 / TimeUnit.SECONDS.toNanos(1)
+  val NanosToPercentagePerSecond: Double = 100.0 / TimeUnit.SECONDS.toNanos(1)
   // Since exemptSensor is for all clients and has a constant name, we do not expire exemptSensor and only
   // create once.
-  val DefaultInactiveExemptSensorExpirationTimeSeconds = Long.MaxValue
+  val DefaultInactiveExemptSensorExpirationTimeSeconds: Long = Long.MaxValue
 
   private val ExemptSensorName = "exempt-" + QuotaType.Request
 }

@@ -81,7 +81,13 @@ class ConnectDistributedTest(Test):
         self.value_converter = "org.apache.kafka.connect.json.JsonConverter"
         self.schemas = True
 
-    def setup_services(self, security_protocol=SecurityConfig.PLAINTEXT, timestamp_type=None, broker_version=DEV_BRANCH, auto_create_topics=False, include_filestream_connectors=False):
+    def setup_services(self,
+                       security_protocol=SecurityConfig.PLAINTEXT,
+                       timestamp_type=None,
+                       broker_version=DEV_BRANCH,
+                       auto_create_topics=False,
+                       include_filestream_connectors=False,
+                       num_workers=3):
         self.kafka = KafkaService(self.test_context, self.num_brokers, self.zk,
                                   security_protocol=security_protocol, interbroker_security_protocol=security_protocol,
                                   topics=self.topics, version=broker_version,
@@ -94,7 +100,7 @@ class ConnectDistributedTest(Test):
             for node in self.kafka.nodes:
                 node.config[config_property.MESSAGE_TIMESTAMP_TYPE] = timestamp_type
 
-        self.cc = ConnectDistributedService(self.test_context, 3, self.kafka, [self.INPUT_FILE, self.OUTPUT_FILE],
+        self.cc = ConnectDistributedService(self.test_context, num_workers, self.kafka, [self.INPUT_FILE, self.OUTPUT_FILE],
                                             include_filestream_connectors=include_filestream_connectors)
         self.cc.log_level = "DEBUG"
 
@@ -375,6 +381,184 @@ class ConnectDistributedTest(Test):
             wait_until(lambda: self.is_paused(self.source, node), timeout_sec=120,
                        err_msg="Failed to see connector startup in PAUSED state")
 
+    @cluster(num_nodes=5)
+    def test_dynamic_logging(self):
+        """
+        Test out the REST API for dynamically adjusting logging levels, on both a single-worker and cluster-wide basis.
+        """
+
+        self.setup_services(num_workers=3)
+        self.cc.set_configs(lambda node: self.render("connect-distributed.properties", node=node))
+        self.cc.start()
+
+        worker = self.cc.nodes[0]
+        initial_loggers = self.cc.get_all_loggers(worker)
+        self.logger.debug("Listed all loggers via REST API: %s", str(initial_loggers))
+        assert initial_loggers is not None
+        assert 'root' in initial_loggers
+        # We need root and at least one other namespace (the other namespace is checked
+        # later on to make sure that it hasn't changed)
+        assert len(initial_loggers) >= 2
+        # We haven't made any modifications yet; ensure that the last-modified timestamps
+        # for all namespaces are null
+        for logger in initial_loggers.values():
+            assert logger['last_modified'] is None
+
+        # Find a non-root namespace to adjust
+        namespace = None
+        for logger in initial_loggers.keys():
+            if logger != 'root':
+                namespace = logger
+                break
+        assert namespace is not None
+
+        initial_level = self.cc.get_logger(worker, namespace)['level']
+        # Make sure we pick a different one than what's already set for that namespace
+        new_level = self._different_level(initial_level)
+        request_time = self._set_logger(worker, namespace, new_level)
+
+        # Verify that our adjustment was applied on the worker we issued the request to...
+        assert self._loggers_are_set(new_level, request_time, namespace, workers=[worker])
+        # ... and that no adjustments have been applied to the other workers in the cluster
+        assert self._loggers_are_set(initial_level, None, namespace, workers=self.cc.nodes[1:])
+
+        # Force all loggers to get updated by setting the root namespace to
+        # two different levels
+        # This guarantees that their last-modified times will be updated
+        self._set_logger(worker, 'root', 'DEBUG', 'cluster')
+        new_root = 'INFO'
+        request_time = self._set_logger(worker, 'root', new_root, 'cluster')
+        self._wait_for_loggers(new_root, request_time, 'root')
+
+        new_level = 'DEBUG'
+        request_time = self._set_logger(worker, namespace, new_level, 'cluster')
+        self._wait_for_loggers(new_level, request_time, namespace)
+
+        prior_all_loggers = [self.cc.get_all_loggers(node) for node in self.cc.nodes]
+        # Set the same level twice for a namespace
+        self._set_logger(worker, namespace, new_level, 'cluster')
+
+        prior_namespace = namespace
+        new_namespace = None
+        for logger, level in prior_all_loggers[0].items():
+            if logger != 'root' and not logger.startswith(namespace):
+                new_namespace = logger
+                new_level = self._different_level(level['level'])
+        assert new_namespace is not None
+
+        request_time = self._set_logger(worker, new_namespace, new_level, 'cluster')
+        self._wait_for_loggers(new_level, request_time, new_namespace)
+
+        # Verify that the last-modified timestamp and logging level of the prior namespace
+        # has not changed since the second-most-recent adjustment for it (the most-recent
+        # adjustment used the same level and should not have had any impact on level or
+        # timestamp)
+        new_all_loggers = [self.cc.get_all_loggers(node) for node in self.cc.nodes]
+        assert len(prior_all_loggers) == len(new_all_loggers)
+        for i in range(len(prior_all_loggers)):
+            prior_loggers, new_loggers = prior_all_loggers[i], new_all_loggers[i]
+            for logger, prior_level in prior_loggers.items():
+                if logger.startswith(prior_namespace):
+                    new_level = new_loggers[logger]
+                    assert prior_level == new_level
+
+        # Forcibly update all loggers in the cluster to a new level, bumping their
+        # last-modified timestamps
+        new_root = 'INFO'
+        self._set_logger(worker, 'root', 'DEBUG', 'cluster')
+        root_request_time = self._set_logger(worker, 'root', new_root, 'cluster')
+        self._wait_for_loggers(new_root, root_request_time, 'root')
+        # Track the loggers reported on every node
+        prior_all_loggers = [self.cc.get_all_loggers(node) for node in self.cc.nodes]
+
+        # Make a final worker-scoped logging adjustment
+        namespace = new_namespace
+        new_level = self._different_level(new_root)
+        request_time = self._set_logger(worker, namespace, new_level, 'worker')
+        assert self._loggers_are_set(new_level, request_time, namespace, workers=[worker])
+
+        # Make sure no changes to loggers outside the affected namespace have taken place
+        all_loggers = self.cc.get_all_loggers(worker)
+        for logger, level in all_loggers.items():
+            if not logger.startswith(namespace):
+                assert level['level'] == new_root
+                assert root_request_time <= level['last_modified'] < request_time
+
+        # Verify that the last worker-scoped request we issued had no effect on other
+        # workers in the cluster
+        new_all_loggers = [self.cc.get_all_loggers(node) for node in self.cc.nodes]
+        # Exclude the first node, which we've made worker-scope modifications to
+        # since we last adjusted the cluster-scope root level
+        assert prior_all_loggers[1:] == new_all_loggers[1:]
+
+        # Restart a worker and ensure that all logging level adjustments (regardless of scope)
+        # have been discarded
+        self._restart_worker(worker)
+        restarted_loggers = self.cc.get_all_loggers(worker)
+        assert initial_loggers == restarted_loggers
+
+    def _different_level(self, current_level):
+        return 'INFO' if current_level is None or current_level.upper() != 'INFO' else 'WARN'
+
+    def _set_logger(self, worker, namespace, new_level, scope=None):
+        """
+        Set a log level via the PUT /admin/loggers/{logger} endpoint, verify that the response
+        has the expected format, and then return the time at which the request was issued.
+        :param worker: the worker to issue the REST request to
+        :param namespace: the logging namespace to adjust
+        :param new_level: the new level for the namespace
+        :param scope: the scope of the logging adjustment; if None, then no scope will be specified
+        in the REST request
+        :return: the time at or directly before which the REST request was made
+        """
+        request_time = int(time.time() * 1000)
+        affected_loggers = self.cc.set_logger(worker, namespace, new_level, scope)
+        if scope is not None and scope.lower() == 'cluster':
+            assert affected_loggers is None
+        else:
+            assert len(affected_loggers) >= 1
+            for logger in affected_loggers:
+                assert logger.startswith(namespace)
+        return request_time
+
+    def _loggers_are_set(self, expected_level, last_modified, namespace, workers=None):
+        """
+        Verify that all loggers for a namespace (as returned from the GET /admin/loggers endpoint) have
+        an expected level and last-modified timestamp.
+        :param expected_level: the expected level for all loggers in the namespace
+        :param last_modified: the expected last modified timestamp; if None, then all loggers
+        are expected to have null timestamps; otherwise, all loggers are expected to have timestamps
+        greater than or equal to this value
+        :param namespace: the logging namespace to examine
+        :param workers: the workers to query
+        :return: whether the expected logging levels and last-modified timestamps are set
+        """
+        if workers is None:
+            workers = self.cc.nodes
+        for worker in workers:
+            all_loggers = self.cc.get_all_loggers(worker)
+            self.logger.debug("Read loggers on %s from Connect REST API: %s", str(worker), str(all_loggers))
+            namespaced_loggers = {k: v for k, v in all_loggers.items() if k.startswith(namespace)}
+            if len(namespaced_loggers) < 1:
+                return False
+            for logger in namespaced_loggers.values():
+                if logger['level'] != expected_level:
+                    return False
+                if last_modified is None:
+                    # Fail fast if there's a non-null timestamp; it'll never be reset to null
+                    assert logger['last_modified'] is None
+                elif logger['last_modified'] is None or logger['last_modified'] < last_modified:
+                    return False
+        return True
+
+    def _wait_for_loggers(self, level, request_time, namespace, workers=None):
+        wait_until(
+            lambda: self._loggers_are_set(level, request_time, namespace, workers),
+            # This should be super quick--just a write+read of the config topic, which workers are constantly polling
+            timeout_sec=10,
+            err_msg="Log level for namespace '" + namespace + "'  was not adjusted in a reasonable amount of time."
+        )
+
     @cluster(num_nodes=6)
     @matrix(security_protocol=[SecurityConfig.PLAINTEXT, SecurityConfig.SASL_SSL], exactly_once_source=[True, False], connect_protocol=['sessioned', 'compatible', 'eager'], metadata_quorum=quorum.all_non_upgrade)
     def test_file_source_and_sink(self, security_protocol, exactly_once_source, connect_protocol, metadata_quorum):
@@ -434,15 +618,7 @@ class ConnectDistributedTest(Test):
             # Don't want to restart worker nodes in the same order every time
             shuffled_nodes = self.cc.nodes[start:] + self.cc.nodes[:start]
             for node in shuffled_nodes:
-                started = time.time()
-                self.logger.info("%s bouncing Kafka Connect on %s", clean and "Clean" or "Hard", str(node.account))
-                self.cc.stop_node(node, clean_shutdown=clean, await_shutdown=True)
-                with node.account.monitor_log(self.cc.LOG_FILE) as monitor:
-                    self.cc.start_node(node)
-                    monitor.wait_until("Starting connectors and tasks using config offset", timeout_sec=90,
-                                       err_msg="Kafka Connect worker didn't successfully join group and start work")
-                self.logger.info("Bounced Kafka Connect on %s and rejoined in %f seconds", node.account, time.time() - started)
-
+                self._restart_worker(node, clean=clean)
                 # Give additional time for the consumer groups to recover. Even if it is not a hard bounce, there are
                 # some cases where a restart can cause a rebalance to take the full length of the session timeout
                 # (e.g. if the client shuts down before it has received the memberId from its initial JoinGroup).
@@ -560,14 +736,7 @@ class ConnectDistributedTest(Test):
             # Don't want to restart worker nodes in the same order every time
             shuffled_nodes = self.cc.nodes[start:] + self.cc.nodes[:start]
             for node in shuffled_nodes:
-                started = time.time()
-                self.logger.info("%s bouncing Kafka Connect on %s", clean and "Clean" or "Hard", str(node.account))
-                self.cc.stop_node(node, clean_shutdown=clean, await_shutdown=True)
-                with node.account.monitor_log(self.cc.LOG_FILE) as monitor:
-                    self.cc.start_node(node)
-                    monitor.wait_until("Starting connectors and tasks using config offset", timeout_sec=90,
-                                       err_msg="Kafka Connect worker didn't successfully join group and start work")
-                self.logger.info("Bounced Kafka Connect on %s and rejoined in %f seconds", node.account, time.time() - started)
+                self._restart_worker(node, clean=clean)
 
                 if i < 2:
                     # Give additional time for the worker group to recover. Even if it is not a hard bounce, there are
@@ -775,3 +944,13 @@ class ConnectDistributedTest(Test):
             return list(node.account.ssh_capture("cat " + file))
         except RemoteCommandError:
             return []
+
+    def _restart_worker(self, node, clean=True):
+        started = time.time()
+        self.logger.info("%s bouncing Kafka Connect on %s", clean and "Clean" or "Hard", str(node.account))
+        self.cc.stop_node(node, clean_shutdown=clean, await_shutdown=True)
+        with node.account.monitor_log(self.cc.LOG_FILE) as monitor:
+            self.cc.start_node(node)
+            monitor.wait_until("Starting connectors and tasks using config offset", timeout_sec=90,
+                               err_msg="Kafka Connect worker didn't successfully join group and start work")
+        self.logger.info("Bounced Kafka Connect on %s and rejoined in %f seconds", node.account, time.time() - started)

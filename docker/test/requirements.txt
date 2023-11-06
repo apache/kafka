@@ -1,6 +1,3 @@
-confluent-kafka
 urllib3
 requests
-fastavro
-jsonschema
 HTMLTestRunner-Python3

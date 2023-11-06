@@ -36,9 +36,8 @@ then
     ub ensure KAFKA_ADVERTISED_LISTENERS
   fi 
 else
-  echo "Running in Zookeeper mode..."
-  ub ensure KAFKA_ZOOKEEPER_CONNECT
-  ub ensure KAFKA_ADVERTISED_LISTENERS
+  echo "Only KRaft mode is supported KAFKA_PROCESS_ROLES is a mandatory config"
+  exit 1
 fi
 
 # By default, LISTENERS is derived from ADVERTISED_LISTENERS by replacing

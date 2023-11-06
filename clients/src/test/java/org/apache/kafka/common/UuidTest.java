@@ -19,11 +19,14 @@ package org.apache.kafka.common;
 import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
 import java.util.Base64;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class UuidTest {
@@ -108,4 +111,29 @@ public class UuidTest {
         assertThrows(IllegalArgumentException.class, () -> Uuid.fromString(undersizeString));
     }
 
+    @Test
+    void testToArray() {
+        assertNull(Uuid.toArray(null));
+        assertArrayEquals(
+                new Uuid[]{
+                    Uuid.ZERO_UUID, Uuid.fromString("UXyU9i5ARn6W00ON2taeWA")
+                },
+                Uuid.toArray(Arrays.asList(
+                    Uuid.ZERO_UUID, Uuid.fromString("UXyU9i5ARn6W00ON2taeWA")
+                ))
+        );
+    }
+
+    @Test
+    void testToList() {
+        assertNull(Uuid.toList(null));
+        assertEquals(
+                Arrays.asList(
+                    Uuid.ZERO_UUID, Uuid.fromString("UXyU9i5ARn6W00ON2taeWA")
+                ),
+                Uuid.toList(new Uuid[]{
+                    Uuid.ZERO_UUID, Uuid.fromString("UXyU9i5ARn6W00ON2taeWA")
+                })
+        );
+    }
 }
