@@ -565,7 +565,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(2, parts.size)
   }
 
-  @Test
+  @Test // TODO: doesn't pass for kraft and kraft+kip848
   def testPartitionsForAutoCreate(): Unit = {
     val consumer = createConsumer()
     // First call would create the topic
