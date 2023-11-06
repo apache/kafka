@@ -25,8 +25,8 @@ import org.apache.kafka.common.message.{BrokerHeartbeatResponseData, BrokerRegis
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, BrokerHeartbeatRequest, BrokerHeartbeatResponse, BrokerRegistrationRequest, BrokerRegistrationResponse}
 import org.apache.kafka.metadata.BrokerState
-import org.junit.jupiter.api.{Test, Timeout}
 import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{Test, Timeout}
 
 import java.util.concurrent.{CompletableFuture, Future}
 import scala.jdk.CollectionConverters._
@@ -197,15 +197,6 @@ class BrokerLifecycleManagerTest {
     result
   }
 
-  def poll[T](context: RegistrationTestContext, manager: BrokerLifecycleManager, future: Future[T]): T = {
-    while (!future.isDone || context.mockClient.hasInFlightRequests) {
-      context.poll()
-      manager.eventQueue.wakeup()
-      context.time.sleep(100)
-    }
-    future.get
-  }
-
   @Test
   def testOfflineDirsSentUntilHeartbeatSuccess(): Unit = {
     val ctx = new RegistrationTestContext(configProperties)
@@ -219,12 +210,22 @@ class BrokerLifecycleManagerTest {
     val hb2 = prepareResponse[BrokerHeartbeatRequest](ctx, new BrokerHeartbeatResponse(new BrokerHeartbeatResponseData()))
     val hb3 = prepareResponse[BrokerHeartbeatRequest](ctx, new BrokerHeartbeatResponse(new BrokerHeartbeatResponseData()))
 
+    val offlineDirs = Set(Uuid.fromString("h3sC4Yk-Q9-fd0ntJTocCA"), Uuid.fromString("ej8Q9_d2Ri6FXNiTxKFiow"))
+    offlineDirs.foreach(manager.propagateDirectoryFailure)
+
+    // start the manager late to prevent a race, and force expectations on the first heartbeat
     manager.start(() => ctx.highestMetadataOffset.get(),
       ctx.mockChannelManager, ctx.clusterId, ctx.advertisedListeners,
       Collections.emptyMap(), OptionalLong.empty())
-    val offlineDirs = Set(Uuid.fromString("h3sC4Yk-Q9-fd0ntJTocCA"), Uuid.fromString("ej8Q9_d2Ri6FXNiTxKFiow"))
-    manager.propagateDirectoryFailures(offlineDirs)
 
+    def poll[T](context: RegistrationTestContext, manager: BrokerLifecycleManager, future: Future[T]): T = {
+      while (!future.isDone || context.mockClient.hasInFlightRequests) {
+        context.poll()
+        manager.eventQueue.wakeup()
+        context.time.sleep(100)
+      }
+      future.get
+    }
     poll(ctx, manager, registration)
     val dirs1 = poll(ctx, manager, hb1).data().offlineLogDirs()
     val dirs2 = poll(ctx, manager, hb2).data().offlineLogDirs()

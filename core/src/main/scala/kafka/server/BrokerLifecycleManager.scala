@@ -23,7 +23,7 @@ import kafka.utils.Logging
 import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.message.BrokerRegistrationRequestData.ListenerCollection
-import org.apache.kafka.common.message.{BrokerHeartbeatRequestData, BrokerRegistrationRequestData}
+import org.apache.kafka.common.message.{BrokerHeartbeatRequestData, BrokerHeartbeatResponseData, BrokerRegistrationRequestData, BrokerRegistrationResponseData}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{BrokerHeartbeatRequest, BrokerHeartbeatResponse, BrokerRegistrationRequest, BrokerRegistrationResponse}
 import org.apache.kafka.metadata.{BrokerState, VersionRange}
@@ -33,7 +33,6 @@ import org.apache.kafka.queue.{EventQueue, KafkaEventQueue}
 
 import java.util.OptionalLong
 import scala.jdk.CollectionConverters._
-
 
 /**
  * The broker lifecycle manager owns the broker state.
@@ -155,7 +154,7 @@ class BrokerLifecycleManager(
 
   /**
    * True if we sent a event queue to the active controller requesting controlled
-   * shutdown.  This variable can only be read or written from the BrokerToControllerRequestThread.
+   * shutdown.  This variable can only be read or written from the event queue thread.
    */
   private var gotControlledShutdownResponse = false
 
@@ -237,10 +236,10 @@ class BrokerLifecycleManager(
 
   /**
    * Propagate directory failures to the controller.
-   * @param directories The directories that have failed.
+   * @param directory The ID for the directory that failed.
    */
-  def propagateDirectoryFailures(directories: Set[Uuid]): Unit = {
-    eventQueue.append(new OfflineDirsEvent(directories))
+  def propagateDirectoryFailure(directory: Uuid): Unit = {
+    eventQueue.append(new OfflineDirEvent(directory))
   }
 
   def brokerEpoch: Long = _brokerEpoch
@@ -297,22 +296,16 @@ class BrokerLifecycleManager(
     }
   }
 
-  private class OfflineDirsEvent(val dirs: Set[Uuid]) extends EventQueue.Event {
+  private class OfflineDirEvent(val dir: Uuid) extends EventQueue.Event {
     override def run(): Unit = {
       if (offlineDirsPending.isEmpty) {
-        offlineDirsPending = dirs
+        offlineDirsPending = Set(dir)
       } else {
-        offlineDirsPending = offlineDirsPending.concat(dirs)
+        offlineDirsPending = offlineDirsPending.incl(dir)
       }
       if (registered) {
         scheduleNextCommunicationImmediately()
       }
-    }
-  }
-
-  private class OfflineDirsClearEvent(val dirs: Set[Uuid]) extends EventQueue.Event {
-    override def run(): Unit = {
-      offlineDirsPending = offlineDirsPending.diff(dirs)
     }
   }
 
@@ -386,12 +379,10 @@ class BrokerLifecycleManager(
         val message = response.responseBody().asInstanceOf[BrokerRegistrationResponse]
         val errorCode = Errors.forCode(message.data().errorCode())
         if (errorCode == Errors.NONE) {
-          failedAttempts = 0
-          _brokerEpoch = message.data().brokerEpoch()
-          registered = true
-          initialRegistrationSucceeded = true
-          info(s"Successfully registered broker $nodeId with broker epoch ${_brokerEpoch}")
-          scheduleNextCommunicationImmediately() // Immediately send a heartbeat
+          // this response handler is not invoked from the event handler thread,
+          // and processing a successful registration response requires updating
+          // state, so to continue we need to schedule an event
+          eventQueue.prepend(new BrokerRegistrationResponseEvent(message.data()))
         } else {
           info(s"Unable to register broker $nodeId because the controller returned " +
             s"error $errorCode")
@@ -403,6 +394,17 @@ class BrokerLifecycleManager(
     override def onTimeout(): Unit = {
       info(s"Unable to register the broker because the RPC got timed out before it could be sent.")
       scheduleNextCommunicationAfterFailure()
+    }
+  }
+
+  private class BrokerRegistrationResponseEvent(response: BrokerRegistrationResponseData) extends EventQueue.Event {
+    override def run(): Unit = {
+      failedAttempts = 0
+      _brokerEpoch = response.brokerEpoch()
+      registered = true
+      initialRegistrationSucceeded = true
+      info(s"Successfully registered broker $nodeId with broker epoch ${_brokerEpoch}")
+      scheduleNextCommunicationImmediately() // Immediately send a heartbeat
     }
   }
 
@@ -443,56 +445,10 @@ class BrokerLifecycleManager(
         val message = response.responseBody().asInstanceOf[BrokerHeartbeatResponse]
         val errorCode = Errors.forCode(message.data().errorCode())
         if (errorCode == Errors.NONE) {
-          failedAttempts = 0
-          eventQueue.append(new OfflineDirsClearEvent(dirsInFlight))
-          _state match {
-            case BrokerState.STARTING =>
-              if (message.data().isCaughtUp) {
-                info(s"The broker has caught up. Transitioning from STARTING to RECOVERY.")
-                _state = BrokerState.RECOVERY
-                initialCatchUpFuture.complete(null)
-              } else {
-                debug(s"The broker is STARTING. Still waiting to catch up with cluster metadata.")
-              }
-              // Schedule the heartbeat after only 10 ms so that in the case where
-              // there is no recovery work to be done, we start up a bit quicker.
-              scheduleNextCommunication(NANOSECONDS.convert(10, MILLISECONDS))
-            case BrokerState.RECOVERY =>
-              if (!message.data().isFenced) {
-                info(s"The broker has been unfenced. Transitioning from RECOVERY to RUNNING.")
-                initialUnfenceFuture.complete(null)
-                _state = BrokerState.RUNNING
-              } else {
-                info(s"The broker is in RECOVERY.")
-              }
-              scheduleNextCommunicationAfterSuccess()
-            case BrokerState.RUNNING =>
-              debug(s"The broker is RUNNING. Processing heartbeat response.")
-              scheduleNextCommunicationAfterSuccess()
-            case BrokerState.PENDING_CONTROLLED_SHUTDOWN =>
-              if (!message.data().shouldShutDown()) {
-                info(s"The broker is in PENDING_CONTROLLED_SHUTDOWN state, still waiting " +
-                  "for the active controller.")
-                if (!gotControlledShutdownResponse) {
-                  // If this is the first pending controlled shutdown response we got,
-                  // schedule our next heartbeat a little bit sooner than we usually would.
-                  // In the case where controlled shutdown completes quickly, this will
-                  // speed things up a little bit.
-                  scheduleNextCommunication(NANOSECONDS.convert(50, MILLISECONDS))
-                } else {
-                  scheduleNextCommunicationAfterSuccess()
-                }
-              } else {
-                info(s"The controller has asked us to exit controlled shutdown.")
-                beginShutdown()
-              }
-              gotControlledShutdownResponse = true
-            case BrokerState.SHUTTING_DOWN =>
-              info(s"The broker is SHUTTING_DOWN. Ignoring heartbeat response.")
-            case _ =>
-              error(s"Unexpected broker state ${_state}")
-              scheduleNextCommunicationAfterSuccess()
-          }
+          // this response handler is not invoked from the event handler thread,
+          // and processing a successful heartbeat response requires updating
+          // state, so to continue we need to schedule an event
+          eventQueue.prepend(new BrokerHeartbeatResponseEvent(message.data(), dirsInFlight))
         } else {
           warn(s"Broker $nodeId sent a heartbeat request but received error $errorCode.")
           scheduleNextCommunicationAfterFailure()
@@ -503,6 +459,61 @@ class BrokerLifecycleManager(
     override def onTimeout(): Unit = {
       info("Unable to send a heartbeat because the RPC got timed out before it could be sent.")
       scheduleNextCommunicationAfterFailure()
+    }
+  }
+
+  private class BrokerHeartbeatResponseEvent(response: BrokerHeartbeatResponseData, dirsInFlight: Set[Uuid]) extends EventQueue.Event {
+    override def run(): Unit = {
+      failedAttempts = 0
+      offlineDirsPending = offlineDirsPending.diff(dirsInFlight)
+      _state match {
+        case BrokerState.STARTING =>
+          if (response.isCaughtUp) {
+            info(s"The broker has caught up. Transitioning from STARTING to RECOVERY.")
+            _state = BrokerState.RECOVERY
+            initialCatchUpFuture.complete(null)
+          } else {
+            debug(s"The broker is STARTING. Still waiting to catch up with cluster metadata.")
+          }
+          // Schedule the heartbeat after only 10 ms so that in the case where
+          // there is no recovery work to be done, we start up a bit quicker.
+          scheduleNextCommunication(NANOSECONDS.convert(10, MILLISECONDS))
+        case BrokerState.RECOVERY =>
+          if (!response.isFenced) {
+            info(s"The broker has been unfenced. Transitioning from RECOVERY to RUNNING.")
+            initialUnfenceFuture.complete(null)
+            _state = BrokerState.RUNNING
+          } else {
+            info(s"The broker is in RECOVERY.")
+          }
+          scheduleNextCommunicationAfterSuccess()
+        case BrokerState.RUNNING =>
+          debug(s"The broker is RUNNING. Processing heartbeat response.")
+          scheduleNextCommunicationAfterSuccess()
+        case BrokerState.PENDING_CONTROLLED_SHUTDOWN =>
+          if (!response.shouldShutDown()) {
+            info(s"The broker is in PENDING_CONTROLLED_SHUTDOWN state, still waiting " +
+              "for the active controller.")
+            if (!gotControlledShutdownResponse) {
+              // If this is the first pending controlled shutdown response we got,
+              // schedule our next heartbeat a little bit sooner than we usually would.
+              // In the case where controlled shutdown completes quickly, this will
+              // speed things up a little bit.
+              scheduleNextCommunication(NANOSECONDS.convert(50, MILLISECONDS))
+            } else {
+              scheduleNextCommunicationAfterSuccess()
+            }
+          } else {
+            info(s"The controller has asked us to exit controlled shutdown.")
+            beginShutdown()
+          }
+          gotControlledShutdownResponse = true
+        case BrokerState.SHUTTING_DOWN =>
+          info(s"The broker is SHUTTING_DOWN. Ignoring heartbeat response.")
+        case _ =>
+          error(s"Unexpected broker state ${_state}")
+          scheduleNextCommunicationAfterSuccess()
+      }
     }
   }
 
