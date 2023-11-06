@@ -45,7 +45,7 @@ public class CleanerConfig {
      * @param maxMessageSize The maximum size of a message that can appear in the log
      * @param maxIoBytesPerSecond The maximum read and write I/O that all cleaner threads are allowed to do
      * @param backoffMs The amount of time to wait before rechecking if no logs are eligible for cleaning
-     * @param enableCleaner Allows completely disabling the log cleaner
+     * @param enableCleaner Allows completely enabling the log cleaner
      */
     public CleanerConfig(int numThreads,
                          long dedupeBufferSize,
