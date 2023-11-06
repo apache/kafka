@@ -1111,7 +1111,7 @@ public class StandaloneHerderTest {
 
     private void verifyConnectorStatusRestart() {
         ArgumentCaptor<ConnectorStatus> connectorStatus = ArgumentCaptor.forClass(ConnectorStatus.class);
-        verify(statusBackingStore, atLeastOnce()).put(connectorStatus.capture());
+        verify(statusBackingStore).put(connectorStatus.capture());
         assertEquals(CONNECTOR_NAME, connectorStatus.getValue().id());
         assertEquals(AbstractStatus.State.RESTARTING, connectorStatus.getValue().state());
     }
