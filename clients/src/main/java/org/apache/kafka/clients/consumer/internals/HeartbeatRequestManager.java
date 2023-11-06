@@ -96,11 +96,6 @@ public class HeartbeatRequestManager implements RequestManager {
      */
     private final BackgroundEventHandler backgroundEventHandler;
 
-    /**
-     * True if the subscription has been updated and should be sent on the next heartbeat request.
-     */
-    private boolean sendUpdatedSubscription;
-
     public HeartbeatRequestManager(
         final LogContext logContext,
         final Time time,
@@ -158,7 +153,6 @@ public class HeartbeatRequestManager implements RequestManager {
             return;
         }
 
-        sendUpdatedSubscription = true;
         if (membershipManager.state() == MemberState.UNSUBSCRIBED) {
             membershipManager.transitionToJoining();
         }
@@ -214,7 +208,11 @@ public class HeartbeatRequestManager implements RequestManager {
     }
 
     private NetworkClientDelegate.UnsentRequest makeHeartbeatRequest() {
-        // TODO: We only need to send the rebalanceTimeoutMs field once unless the first request failed.
+        // TODO: extract this logic for building the ConsumerGroupHeartbeatRequestData to a
+        //  stateful builder (HeartbeatState), that will keep the last data sent, and determine
+        //  the fields that changed and need to be included in the next HB (ex. check
+        //  subscriptionState changed from last sent to include assignment). It should also
+        //  ensure that all fields are sent on failure.
         ConsumerGroupHeartbeatRequestData data = new ConsumerGroupHeartbeatRequestData()
             .setGroupId(membershipManager.groupId())
             .setMemberEpoch(membershipManager.memberEpoch())
@@ -226,14 +224,10 @@ public class HeartbeatRequestManager implements RequestManager {
 
         membershipManager.groupInstanceId().ifPresent(data::setInstanceId);
 
-        // Send subscription to the broker only if it has changed
-        if (sendUpdatedSubscription) {
-            if (this.subscriptions.hasPatternSubscription()) {
-                // TODO: Pass the string to the GC if server side regex is used.
-            } else {
-                data.setSubscribedTopicNames(new ArrayList<>(this.subscriptions.subscription()));
-            }
-            sendUpdatedSubscription = false;
+        if (this.subscriptions.hasPatternSubscription()) {
+            // TODO: Pass the string to the GC if server side regex is used.
+        } else {
+            data.setSubscribedTopicNames(new ArrayList<>(this.subscriptions.subscription()));
         }
 
         this.membershipManager.serverAssignor().ifPresent(data::setServerAssignor);
