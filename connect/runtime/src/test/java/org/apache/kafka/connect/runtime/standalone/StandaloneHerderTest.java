@@ -515,8 +515,6 @@ public class StandaloneHerderTest {
         when(restartPlan.restartConnectorStateInfo()).thenReturn(connectorStateInfo);
         doReturn(Optional.of(restartPlan)).when(herder).buildRestartPlan(restartRequest);
 
-        herder.onRestart(CONNECTOR_NAME);
-
         connector = mock(BogusSinkConnector.class);
         expectAdd(SourceSink.SINK);
 
