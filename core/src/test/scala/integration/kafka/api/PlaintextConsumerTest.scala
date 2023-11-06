@@ -1941,9 +1941,11 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val tp = new TopicPartition(topic, partition)
     createTopic(topic, 1, 1)
 
-    TestUtils.waitUntilTrue(() => {
-      this.zkClientOrNull.topicExists(topic)
-    }, "Failed to create topic")
+    if (!isKRaftTest()) {
+      TestUtils.waitUntilTrue(() => {
+        this.zkClientOrNull.topicExists(topic)
+      }, "Failed to create topic")
+    }
 
     val producer = createProducer()
     producer.send(new ProducerRecord(topic, partition, "k1".getBytes, "v1".getBytes)).get()
