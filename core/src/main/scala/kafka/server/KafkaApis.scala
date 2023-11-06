@@ -1729,9 +1729,6 @@ class KafkaApis(val requestChannel: RequestChannel,
         if (exception != null) {
           requestHelper.sendMaybeThrottle(request, joinGroupRequest.getErrorResponse(exception))
         } else {
-          if (response.errorCode() == Errors.GROUP_MAX_SIZE_REACHED.code()) {
-            response.setErrorCode(81)
-          }
           requestHelper.sendMaybeThrottle(request, new JoinGroupResponse(response, request.context.apiVersion))
         }
       }
