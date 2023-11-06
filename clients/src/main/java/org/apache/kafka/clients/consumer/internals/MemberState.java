@@ -113,7 +113,8 @@ public enum MemberState {
 
         JOINING.previousValidStates = Arrays.asList(FENCED, UNSUBSCRIBED);
 
-        PREPARE_LEAVING.previousValidStates = Arrays.asList(JOINING, STABLE, RECONCILING, ACKNOWLEDGING, UNSUBSCRIBED);
+        PREPARE_LEAVING.previousValidStates = Arrays.asList(JOINING, STABLE, RECONCILING,
+                ACKNOWLEDGING, UNSUBSCRIBED, FENCED);
 
         LEAVING.previousValidStates = Arrays.asList(PREPARE_LEAVING);
     }
