@@ -31,8 +31,10 @@ WORKDIR /app
 ENV KAFKA_URL=$kafka_url
 COPY native-image-configs native-image-configs
 
-RUN wget -nv -O kafka.tgz "$KAFKA_URL"; \
-    tar xfz kafka.tgz -C /kafka --strip-components 1; \
+RUN mkdir kafka; \
+    microdnf install wget; \
+    wget -nv -O kafka.tgz "$KAFKA_URL"; \
+    tar xfz kafka.tgz -C kafka --strip-components 1; \
     rm kafka.tgz ; \
     cd kafka ;  \
     native-image --no-fallback \
@@ -57,7 +59,7 @@ RUN apk update && \
 WORKDIR /app
 
 COPY --from=build-ub /build/ub /usr/bin
-COPY --from=build-native-image /app/kafka_2.13-3.7.0-SNAPSHOT/kafka.kafkanativewrapper .
+COPY --from=build-native-image /app/kafka/kafka.kafkanativewrapper .
 COPY resources/common-scripts /etc/kafka/docker
 COPY launch /etc/kafka/docker/
 

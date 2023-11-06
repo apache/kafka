@@ -31,12 +31,11 @@ def build_jvm(image, tag, kafka_url):
         return
     shutil.rmtree("jvm/resources")
 
-
-def build_native(image, tag):
+def build_native(image, tag, kafka_url):
     image = f'{image}:{tag}'
     copy_tree("resources", "native-image/resources")
     result = subprocess.run(
-        ["docker", "build", "-f", "native-image/Dockerfile", "-t", image,
+        ["docker", "build", "-f", "native-image/Dockerfile", "-t", image, "--build-arg", f"kafka_url={kafka_url}",
          "--build-arg", f'build_date={date.today()}', "native-image"])
     if result.stderr:
         print(result.stdout)
@@ -51,12 +50,11 @@ def run_jvm_tests(image, tag, kafka_url):
     subprocess.run(["rm", "kafka.tgz"])
     shutil.rmtree("./test/fixtures/kafka")
 
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("image", help="Image name that you want to keep for the Docker image")
     parser.add_argument("-tag", "--image-tag", default="latest", dest="tag", help="Image tag that you want to add to the image")
-    parser.add_argument("-type", "--image-type", choices=["jvm"], dest="image_type", help="Image type you want to build")
+    parser.add_argument("-type", "--image-type", choices=["jvm", "native"], dest="image_type", help="Image type you want to build")
     parser.add_argument("-u", "--kafka-url", dest="kafka_url", help="Kafka url to be used to download kafka binary tarball in the docker image")
     parser.add_argument("-b", "--build", action="store_true", dest="build_only", default=False, help="Only build the image, don't run tests")
     parser.add_argument("-t", "--test", action="store_true", dest="test_only", default=False, help="Only run the tests, don't build the image")
@@ -68,8 +66,11 @@ if __name__ == '__main__':
         else:
             raise ValueError("--kafka-url is a required argument for jvm image")
 
-    if args.image_type in ("all", "native-image") and (args.build_only or not (args.build_only or args.test_only)):
-        build_native(args.image, args.tag)
+    if args.image_type == "native" and (args.build_only or not (args.build_only or args.test_only)):
+        if args.kafka_url:
+            build_native(args.image, args.tag, args.kafka_url)
+        else:
+            raise ValueError("--kafka-url is a required argument for building docker image")
 
     if args.image_type == "jvm" and (args.test_only or not (args.build_only or args.test_only)):
         run_jvm_tests(args.image, args.tag, args.kafka_url)
