@@ -430,7 +430,8 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      */
     @Override
     public boolean shouldHeartbeatNow() {
-        return state() == MemberState.ACKNOWLEDGING || state() == MemberState.LEAVING;
+        MemberState state = state();
+        return state == MemberState.ACKNOWLEDGING || state == MemberState.LEAVING;
     }
 
     /**
@@ -438,20 +439,21 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      */
     @Override
     public void onHeartbeatRequestSent() {
-        if (state() == MemberState.ACKNOWLEDGING) {
+        MemberState state = state();
+        if (state == MemberState.ACKNOWLEDGING) {
             transitionTo(MemberState.STABLE);
-        } else if (state() == MemberState.LEAVING) {
+        } else if (state == MemberState.LEAVING) {
             transitionTo(MemberState.UNSUBSCRIBED);
         }
     }
 
     @Override
     public boolean shouldSkipHeartbeat() {
-        return state() == MemberState.UNSUBSCRIBED || state() == MemberState.FATAL;
+        MemberState state = state();
+        return state == MemberState.UNSUBSCRIBED || state == MemberState.FATAL;
     }
 
     void reconcile() {
-
         SortedSet<TopicPartition> ownedPartitions = new TreeSet<>(COMPARATOR);
         ownedPartitions.addAll(subscriptions.assignedPartitions());
 
