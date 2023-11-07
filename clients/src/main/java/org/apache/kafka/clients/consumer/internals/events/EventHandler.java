@@ -42,8 +42,8 @@ public class EventHandler<T> implements Closeable {
     }
 
     /**
-     * Add an {@link T} to the underlying queue and internally invoke {@link #notifyWatcher}
-     * to alert the watcher that it has something to process.
+     * Add an event to the underlying queue and internally invoke {@link #notifyWatcher} to alert the watcher that
+     * it has an event to process.
      *
      * @param event An event to enqueue for later processing
      */
