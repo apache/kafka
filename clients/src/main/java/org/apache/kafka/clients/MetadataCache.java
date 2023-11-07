@@ -80,7 +80,7 @@ public class MetadataCache {
         this.invalidTopics = invalidTopics;
         this.internalTopics = internalTopics;
         this.controller = controller;
-        this.topicIds = Collections.unmodifiableMap(topicIds);
+        this.topicIds = topicIds;
 
         this.metadataByPartition = new HashMap<>(partitions.size());
         for (PartitionMetadata p : partitions) {
