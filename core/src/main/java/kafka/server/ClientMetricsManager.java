@@ -132,7 +132,7 @@ public class ClientMetricsManager implements Closeable {
         } catch (ApiException exception) {
             return request.getErrorResponse(throttleMs, exception);
         } finally {
-            clientInstance.lastRequestEpoch(now);
+            clientInstance.lastGetRequestEpoch(now);
         }
 
         clientInstance.lastKnownError(Errors.NONE);
@@ -161,7 +161,7 @@ public class ClientMetricsManager implements Closeable {
         } finally {
             // Update the client instance with the latest push request parameters.
             clientInstance.terminating(request.data().terminating());
-            clientInstance.lastRequestEpoch(now);
+            clientInstance.lastPushRequestEpoch(now);
         }
 
         // Push the metrics to the external client receiver plugin.
@@ -301,7 +301,7 @@ public class ClientMetricsManager implements Closeable {
     private void validateGetRequest(GetTelemetrySubscriptionsRequest request,
         ClientMetricsInstance clientInstance) {
 
-        if (!clientInstance.canAcceptRequest() && clientInstance.lastKnownError() != Errors.UNKNOWN_SUBSCRIPTION_ID) {
+        if (!clientInstance.canAcceptGetRequest() && clientInstance.lastKnownError() != Errors.UNKNOWN_SUBSCRIPTION_ID) {
             String msg = String.format("Request from the client [%s] arrived before the next push interval time",
                 request.data().clientInstanceId());
             throw new ThrottlingQuotaExceededException(msg);
@@ -318,7 +318,7 @@ public class ClientMetricsManager implements Closeable {
             throw new InvalidRequestException(msg);
         }
 
-        if (!clientInstance.canAcceptRequest() && !request.data().terminating()) {
+        if (!clientInstance.canAcceptPushRequest() && !request.data().terminating()) {
             String msg = String.format("Request from the client [%s] arrived before the next push interval time",
                 request.data().clientInstanceId());
             throw new ThrottlingQuotaExceededException(msg);

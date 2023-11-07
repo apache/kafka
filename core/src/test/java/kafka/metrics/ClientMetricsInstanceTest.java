@@ -39,24 +39,57 @@ public class ClientMetricsInstanceTest {
     }
 
     @Test
-    public void testCanAcceptRequestValid() {
+    public void testCanAcceptFirstRequestValid() {
         // First request should be accepted.
-        assertTrue(clientInstance.canAcceptRequest());
+        assertTrue(clientInstance.canAcceptGetRequest());
+        assertTrue(clientInstance.canAcceptPushRequest());
     }
 
     @Test
-    public void testCanAcceptRequestAfterElapsedTimeValid() {
-        assertTrue(clientInstance.canAcceptRequest());
-        clientInstance.lastRequestEpoch(System.currentTimeMillis() - ClientMetricsConfigs.DEFAULT_INTERVAL_MS);
+    public void testCanAcceptGetRequestAfterElapsedTimeValid() {
+        assertTrue(clientInstance.canAcceptGetRequest());
+        clientInstance.lastGetRequestEpoch(System.currentTimeMillis() - ClientMetricsConfigs.DEFAULT_INTERVAL_MS);
         // Second request should be accepted as time since last request is greater than the retry interval.
-        assertTrue(clientInstance.canAcceptRequest());
+        assertTrue(clientInstance.canAcceptGetRequest());
     }
 
     @Test
-    public void testCanAcceptRequestWithImmediateRetryFail() {
-        assertTrue(clientInstance.canAcceptRequest());
-        clientInstance.lastRequestEpoch(System.currentTimeMillis());
+    public void testCanAcceptGetRequestWithImmediateRetryFail() {
+        assertTrue(clientInstance.canAcceptGetRequest());
+        clientInstance.lastGetRequestEpoch(System.currentTimeMillis());
         // Second request should be rejected as time since last request is less than the retry interval.
-        assertFalse(clientInstance.canAcceptRequest());
+        assertFalse(clientInstance.canAcceptGetRequest());
+    }
+
+    @Test
+    public void testCanAcceptGetRequestWithImmediateRetryAfterPushFail() {
+        assertTrue(clientInstance.canAcceptGetRequest());
+        clientInstance.lastPushRequestEpoch(System.currentTimeMillis());
+        // Next request after push should be rejected as time since last request is less than the retry interval.
+        assertFalse(clientInstance.canAcceptGetRequest());
+    }
+
+    @Test
+    public void testCanAcceptPushRequestAfterElapsedTimeValid() {
+        assertTrue(clientInstance.canAcceptPushRequest());
+        clientInstance.lastPushRequestEpoch(System.currentTimeMillis() - ClientMetricsConfigs.DEFAULT_INTERVAL_MS);
+        // Second request should be accepted as time since last request is greater than the retry interval.
+        assertTrue(clientInstance.canAcceptPushRequest());
+    }
+
+    @Test
+    public void testCanAcceptPushRequestWithImmediateRetryFail() {
+        assertTrue(clientInstance.canAcceptPushRequest());
+        clientInstance.lastPushRequestEpoch(System.currentTimeMillis());
+        // Second request should be rejected as time since last request is less than the retry interval.
+        assertFalse(clientInstance.canAcceptPushRequest());
+    }
+
+    @Test
+    public void testCanAcceptPushRequestWithImmediateRetryAfterGetValid() {
+        assertTrue(clientInstance.canAcceptPushRequest());
+        clientInstance.lastGetRequestEpoch(System.currentTimeMillis());
+        // Next request after get should be accepted.
+        assertTrue(clientInstance.canAcceptPushRequest());
     }
 }
