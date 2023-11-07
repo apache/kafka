@@ -848,10 +848,6 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         UnsubscribeApplicationEvent unsubscribeApplicationEvent = new UnsubscribeApplicationEvent();
         applicationEventHandler.add(unsubscribeApplicationEvent);
         unsubscribeApplicationEvent.future().whenComplete((result, error) -> {
-            if (error != null) {
-                // Callback failed - Keeping same exception message thrown by the legacy consumer
-                throw new KafkaException("User rebalance callback throws an error", error);
-            }
             subscriptions.unsubscribe();
         });
     }
