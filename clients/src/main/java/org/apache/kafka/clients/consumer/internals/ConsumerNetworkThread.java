@@ -16,12 +16,12 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
-import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.internals.IdempotentCloser;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.utils.KafkaThread;
@@ -36,6 +36,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -90,14 +91,13 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
             while (running) {
                 try {
                     runOnce();
-                } catch (final WakeupException e) {
-                    log.debug("WakeupException caught, consumer network thread won't be interrupted");
+                } catch (final Throwable e) {
+                    log.error("Unexpected error caught in consumer network thread", e);
                     // swallow the wakeup exception to prevent killing the thread.
                 }
             }
         } catch (final Throwable t) {
-            log.error("The consumer network thread failed due to unexpected error", t);
-            throw new KafkaException(t);
+            log.error("The consumer network thread is shutting down due to unexpected error", t);
         } finally {
             cleanup();
         }
@@ -181,9 +181,6 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         long pollWaitTimeMs = pollResults.stream()
                 .map(networkClientDelegate::addAll)
                 .reduce(MAX_POLL_TIMEOUT_MS, Math::min);
-        pollWaitTimeMs = Math.min(pollWaitTimeMs, timer.remainingMs());
-        networkClientDelegate.poll(pollWaitTimeMs, timer.currentTimeMs());
-        timer.update();
 
         List<Future<?>> requestFutures = pollResults.stream()
                 .flatMap(fads -> fads.unsentRequests.stream())
@@ -192,10 +189,11 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
 
         // Poll to ensure that request has been written to the socket. Wait until either the timer has expired or until
         // all requests have received a response.
-        while (timer.notExpired() && !requestFutures.stream().allMatch(Future::isDone)) {
-            networkClientDelegate.poll(timer.remainingMs(), timer.currentTimeMs());
+        do {
+            pollWaitTimeMs = Math.min(pollWaitTimeMs, timer.remainingMs());
+            networkClientDelegate.poll(pollWaitTimeMs, timer.currentTimeMs());
             timer.update();
-        }
+        } while (timer.notExpired() && !requestFutures.stream().allMatch(Future::isDone));
     }
 
     public boolean isRunning() {
@@ -257,10 +255,62 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
     void cleanup() {
         log.trace("Closing the consumer network thread");
         Timer timer = time.timer(closeTimeout);
+        coordinatorOnClose(timer);
         runAtClose(requestManagers.entries(), networkClientDelegate, timer);
         closeQuietly(requestManagers, "request managers");
         closeQuietly(networkClientDelegate, "network client delegate");
         closeQuietly(applicationEventProcessor, "application event processor");
         log.debug("Closed the consumer network thread");
+    }
+
+    void coordinatorOnClose(final Timer timer) {
+        if (!requestManagers.coordinatorRequestManager.isPresent())
+            return;
+
+        connectCoordinator(timer);
+
+        List<NetworkClientDelegate.UnsentRequest> tasks = closingTasks();
+        do {
+            long currentTimeMs = timer.currentTimeMs();
+            connectCoordinator(timer);
+            networkClientDelegate.poll(timer.remainingMs(), currentTimeMs);
+        } while (timer.notExpired() && !tasks.stream().allMatch(v -> v.future().isDone()));
+    }
+
+    private void connectCoordinator(final Timer timer) {
+        while (!coordinatorReady()) {
+            findCoordinatorSync(timer);
+        }
+    }
+
+    private boolean coordinatorReady() {
+        CoordinatorRequestManager coordinatorRequestManager = requestManagers.coordinatorRequestManager.get();
+        Optional<Node> coordinator = coordinatorRequestManager.coordinator();
+        return coordinator.isPresent() && !networkClientDelegate.isUnavailable(coordinator.get());
+    }
+
+    private void findCoordinatorSync(final Timer timer) {
+        CoordinatorRequestManager coordinatorRequestManager = requestManagers.coordinatorRequestManager.get();
+        long currentTimeMs = timer.currentTimeMs();
+        NetworkClientDelegate.PollResult request = coordinatorRequestManager.pollOnClose();
+        networkClientDelegate.addAll(request);
+        CompletableFuture<ClientResponse> findCoordinatorRequest = request.unsentRequests.get(0).future();
+        while (timer.notExpired() && !findCoordinatorRequest.isDone()) {
+            networkClientDelegate.poll(timer.remainingMs(), currentTimeMs);
+            timer.update();
+        }
+    }
+
+    private List<NetworkClientDelegate.UnsentRequest> maybeAutoCommitOnClose() {
+        if (!requestManagers.commitRequestManager.isPresent()) {
+            return null;
+        }
+        List<NetworkClientDelegate.UnsentRequest> autocommit = requestManagers.commitRequestManager.get().maybeAutoCommitOnClose();
+        networkClientDelegate.addAll(autocommit);
+        return autocommit;
+    }
+
+    private List<NetworkClientDelegate.UnsentRequest> closingTasks() {
+        return maybeAutoCommitOnClose();
     }
 }

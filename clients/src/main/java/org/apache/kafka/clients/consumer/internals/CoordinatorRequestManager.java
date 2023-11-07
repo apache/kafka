@@ -105,7 +105,7 @@ public class CoordinatorRequestManager implements RequestManager {
         return new NetworkClientDelegate.PollResult(coordinatorRequestState.remainingBackoffMs(currentTimeMs));
     }
 
-    private NetworkClientDelegate.UnsentRequest makeFindCoordinatorRequest(final long currentTimeMs) {
+    NetworkClientDelegate.UnsentRequest makeFindCoordinatorRequest(final long currentTimeMs) {
         coordinatorRequestState.onSendAttempt(currentTimeMs);
         FindCoordinatorRequestData data = new FindCoordinatorRequestData()
                 .setKeyType(FindCoordinatorRequest.CoordinatorType.GROUP.id())
@@ -218,5 +218,15 @@ public class CoordinatorRequestManager implements RequestManager {
      */
     public Optional<Node> coordinator() {
         return Optional.ofNullable(this.coordinator);
+    }
+
+    @Override
+    public NetworkClientDelegate.PollResult pollOnClose() {
+        if (this.coordinator != null)
+            return EMPTY;
+
+        // Using Long.MAX_VALUE because we don't need to reset backoff timer on close.  So any value would work
+        NetworkClientDelegate.UnsentRequest request = makeFindCoordinatorRequest(Long.MAX_VALUE);
+        return new NetworkClientDelegate.PollResult(request);
     }
 }
