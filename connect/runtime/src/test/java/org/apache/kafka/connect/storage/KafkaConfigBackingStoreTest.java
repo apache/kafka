@@ -945,7 +945,6 @@ public class KafkaConfigBackingStoreTest {
         expectRead(serializedAfterStartup, deserializedAfterStartup);
 
         configUpdateListener.onConnectorTargetStateChange(CONNECTOR_IDS.get(0));
-        configUpdateListener.onConnectorTargetStateChange(CONNECTOR_IDS.get(1));
         EasyMock.expectLastCall();
 
         expectPartitionCount(1);
