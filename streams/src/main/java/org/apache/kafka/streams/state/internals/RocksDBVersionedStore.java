@@ -23,6 +23,7 @@ import java.io.File;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -259,8 +260,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
         return null;
     }
 
-    // Visible for testing
-    ValueIterator<VersionedRecord<byte[]>> get(final Bytes key, final long fromTimestamp, final long toTimestamp, final boolean isAscending) {
+    public ValueIterator<VersionedRecord<byte[]>> get(final Bytes key, final long fromTimestamp, final long toTimestamp, final boolean isAscending) {
 
         Objects.requireNonNull(key, "key cannot be null");
         validateStoreOpen();
@@ -273,12 +273,12 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
             // still be returned (i.e., the latest record version per key never expires).
             final byte[] rawLatestValueAndTimestamp = latestValueStore.get(key);
             if (rawLatestValueAndTimestamp != null) {
-                final long latestTimestamp = LatestValueFormatter.getTimestamp(rawLatestValueAndTimestamp);
-                if (latestTimestamp <= toTimestamp) {
+                final long recordTimestamp = LatestValueFormatter.getTimestamp(rawLatestValueAndTimestamp);
+                if (recordTimestamp <= toTimestamp) {
                     // latest value satisfies timestamp bound
                     queryResults.add(new VersionedRecord<>(
                         LatestValueFormatter.getValue(rawLatestValueAndTimestamp),
-                        latestTimestamp
+                        recordTimestamp
                     ));
                 }
             }
@@ -289,24 +289,22 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
             if (queryResults.size() == 0) {
                 LOG.warn("Returning null for expired get.");
             }
-            if (!isAscending) {
-                queryResults.sort((r1, r2) -> (int) (r1.timestamp() - r2.timestamp()));
-            }
             return new VersionedRecordIterator<>(queryResults);
         } else {
             // first check the latest value store
             final byte[] rawLatestValueAndTimestamp = latestValueStore.get(key);
             if (rawLatestValueAndTimestamp != null) {
-                final long latestTimestamp = LatestValueFormatter.getTimestamp(
-                    rawLatestValueAndTimestamp);
-                if (latestTimestamp <= toTimestamp) {
+                final long recordTimestamp = LatestValueFormatter.getTimestamp(rawLatestValueAndTimestamp);
+                if (recordTimestamp <= toTimestamp) {
                     queryResults.add(new VersionedRecord<>(
                         LatestValueFormatter.getValue(rawLatestValueAndTimestamp),
-                        latestTimestamp));
+                        recordTimestamp));
                 }
             }
 
             // check segment stores
+            // consider the search lower bound as -INF (LONG.MIN_VALUE) to find the record that has been inserted before the {@code fromTimestamp}
+            // but is still valid in query specified time interval.
             final List<LogicalKeyValueSegment> segments = segmentStores.segments(Long.MIN_VALUE,
                 toTimestamp, false);
             for (final LogicalKeyValueSegment segment : segments) {
@@ -319,14 +317,13 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
                         break;
                     }
 
-                    // the desired result is contained in this segment
+                    // this segments contains the (some of) queried records
                     final List<SegmentSearchResult> searchResults = RocksDBVersionedStoreSegmentValueFormatter
                                                                     .deserialize(rawSegmentValue)
                                                                     .findAll(fromTimestamp, toTimestamp);
                     for (final SegmentSearchResult searchResult : searchResults) {
                         if (searchResult.value() != null && searchResult.validFrom() <= toTimestamp && searchResult.validTo() >= fromTimestamp) {
-                            queryResults.add(new VersionedRecord<>(searchResult.value(),
-                                             searchResult.validFrom(), searchResult.validTo()));
+                            queryResults.add(new VersionedRecord<>(searchResult.value(), searchResult.validFrom(), searchResult.validTo()));
                         }
                     }
                 }

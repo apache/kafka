@@ -25,6 +25,11 @@ import org.apache.kafka.streams.state.VersionedRecord;
 
 /**
  * Interactive query for retrieving a set of records with the same specified key and different timestamps within the specified time range.
+ * The query returns the records with a global ascending order of keys. The records with the same key are ordered based on their insertion
+ * timestamp in ascending order. Both the global and partial ordering are modifiable with the corresponding methods defined for the class.
+ *
+ *  @param <K> The type of the key.
+ *  @param <V> The type of the result returned by this query.
  */
 @Evolving
 public final class MultiVersionedKeyQuery<K, V> implements Query<ValueIterator<VersionedRecord<V>>> {
@@ -35,52 +40,55 @@ public final class MultiVersionedKeyQuery<K, V> implements Query<ValueIterator<V
     private final boolean isAscending;
 
     private MultiVersionedKeyQuery(final K key, final Optional<Instant> fromTime, final Optional<Instant> toTime, final boolean isAscending) {
-        this.key = Objects.requireNonNull(key);
+        this.key = key;
         this.fromTime = fromTime;
         this.toTime = toTime;
         this.isAscending = isAscending;
     }
 
-      /**
-       * Creates a query that will retrieve the set of records identified by {@code key} if any exists
-       * (or {@code null} otherwise).
-       * @param key The key to retrieve
-       * @throws NullPointerException if @param key is null
-       * @param <K> The type of the key
-       * @param <V> The type of the value that will be retrieved
-       * @throws NullPointerException if @param key is null
-       */
+  /**
+   * Creates a query that will retrieve the set of records identified by {@code key} if any exists
+   * (or {@code null} otherwise).
+   *
+   * <p>
+   * While the query by default returns the all the record versions of the specified {@code key}, setting
+   * the {@code fromTimestamp} (by calling the {@link #fromTime(Instant)} method), and the {@code toTimestamp}
+   * (by calling the {@link #toTime(Instant)} method) makes the query to return the record versions associated
+   * to the specified time range.
+   *
+   * @param key The specified key by the query
+   * @param <K> The type of the key
+   * @param <V> The type of the value that will be retrieved
+   * @throws NullPointerException if @param key is null
+   */
     public static <K, V> MultiVersionedKeyQuery<K, V> withKey(final K key) {
+        Objects.requireNonNull(key, "key cannot be null.");
         return new MultiVersionedKeyQuery<>(key, Optional.empty(), Optional.empty(), true);
     }
 
     /**
      * Specifies the starting time point for the key query.
-     * <pre>
-     * The key query returns all the records that are still existing in the time range starting from the timestamp {@code fromTime}. There can be records which have been inserted before the {@code fromTime}
-     * and are valid in the query specified time range (the whole time range or even partially). The key query in fact returns all the records that have NOT become tombstone at or after {@code fromTime}.
-     * </pre>
+     * <p>
+     * The key query returns all the records that are still existing in the time range starting from the timestamp {@code fromTime}. There can
+     * be records which have been inserted before the {@code fromTime} and are still valid in the query specified time range (the whole time range
+     * or even partially). The key query in fact returns all the records that have NOT become tombstone at or after {@code fromTime}.
+     *
      * @param fromTime The starting time point
-     * If @param fromTime is null, will be considered as negative infinity
+     * If {@code fromTime} is null, it will be considered as negative infinity, ie, no lower bound
      */
     public MultiVersionedKeyQuery<K, V> fromTime(final Instant fromTime) {
-        if (fromTime == null) {
-            return new MultiVersionedKeyQuery<>(key, Optional.empty(), toTime, true);
-        }
-        return new MultiVersionedKeyQuery<>(key, Optional.of(fromTime), toTime, true);
+        return new MultiVersionedKeyQuery<>(key, Optional.ofNullable(fromTime), toTime, true);
     }
 
     /**
      * Specifies the ending time point for the key query.
-     * The key query returns all the records that have timestamp <= {@code toTime}.
+     * The key query returns all the records that have timestamp &lt;= toTime.
+     *
      * @param toTime The ending time point
-     * If @param toTime is null, will be considered as positive infinity
+     * If @param toTime is null, will be considered as positive infinity, ie, no upper bound
      */
     public MultiVersionedKeyQuery<K, V> toTime(final Instant toTime) {
-        if (toTime == null) {
-            return new MultiVersionedKeyQuery<>(key, fromTime, Optional.empty(), true);
-        }
-        return new MultiVersionedKeyQuery<>(key, fromTime, Optional.of(toTime), true);
+        return new MultiVersionedKeyQuery<>(key, fromTime, Optional.ofNullable(toTime), true);
     }
 
     /**
@@ -99,6 +107,7 @@ public final class MultiVersionedKeyQuery<K, V> implements Query<ValueIterator<V
 
     /**
      * The key that was specified for this query.
+     * @return The specified {@code key} of the query.
      */
     public K key() {
         return key;
@@ -106,6 +115,7 @@ public final class MultiVersionedKeyQuery<K, V> implements Query<ValueIterator<V
 
     /**
      * The starting time point of the query, if specified
+     * @return The specified {@code fromTime} of the query.
      */
     public Optional<Instant> fromTime() {
         return fromTime;
@@ -113,12 +123,14 @@ public final class MultiVersionedKeyQuery<K, V> implements Query<ValueIterator<V
 
     /**
      * The ending time point of the query, if specified
+     * @return The specified {@code toTime} of the query.
      */
     public Optional<Instant> toTime() {
         return toTime;
     }
 
     /**
+     * The order of the returned records by timestamp.
      * @return true if the query returns records in ascending order of timestamps
      */
     public boolean isAscending() {

@@ -354,9 +354,10 @@ public final class StoreQueryUtils {
             final RocksDBVersionedStore rocksDBVersionedStore = (RocksDBVersionedStore) store;
             final MultiVersionedKeyQuery<Bytes, byte[]> rawKeyQuery = (MultiVersionedKeyQuery<Bytes, byte[]>) query;
             try {
-                final long fromTime = rawKeyQuery.fromTime().isPresent() ? rawKeyQuery.fromTime().get().toEpochMilli() : Long.MIN_VALUE;
-                final long toTime = rawKeyQuery.toTime().isPresent() ? rawKeyQuery.toTime().get().toEpochMilli() : Long.MAX_VALUE;
-                final ValueIterator<VersionedRecord<byte[]>> bytes = rocksDBVersionedStore.get(rawKeyQuery.key(), fromTime, toTime, rawKeyQuery.isAscending());
+                final ValueIterator<VersionedRecord<byte[]>> bytes = rocksDBVersionedStore.get(rawKeyQuery.key(),
+                                                                                               rawKeyQuery.fromTime().get().toEpochMilli(),
+                                                                                               rawKeyQuery.toTime().get().toEpochMilli(),
+                                                                                               rawKeyQuery.isAscending());
                 return (QueryResult<R>) QueryResult.forResult(bytes);
             } catch (final Exception e) {
                 final String message = parseStoreException(e, store, query);
@@ -384,7 +385,7 @@ public final class StoreQueryUtils {
     }
 
     public static <V> ValueIterator<VersionedRecord<V>> deserializeValueIterator(final StateSerdes<?, V> serdes,
-        final ValueIterator<VersionedRecord<byte[]>> rawValueIterator) {
+                                                                                 final ValueIterator<VersionedRecord<byte[]>> rawValueIterator) {
 
         final List<VersionedRecord<V>> versionedRecords = new ArrayList<>();
         while (rawValueIterator.hasNext()) {

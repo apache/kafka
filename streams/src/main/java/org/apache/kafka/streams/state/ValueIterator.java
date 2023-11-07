@@ -21,7 +21,7 @@ import java.util.Iterator;
 
 
 /**
- * Iterator interface of {@link VersionedRecord}.
+ * Iterator interface of {@link V}.
  * <p>
  * Users must call its {@code close} method explicitly upon completeness to release resources,
  * or use try-with-resources statement (available since JDK7) for this {@link Closeable} class.
@@ -35,8 +35,8 @@ public interface ValueIterator<V> extends Iterator<V>, Closeable {
     void close();
 
     /**
-     * Peek the next value without advancing the iterator
-     * @return the value that would be returned from the next call to next
+     * Peek the next value without advancing the iterator.
+     * @return The value that would be returned from the next call to {@link #next()}.
      */
     V peek();
 

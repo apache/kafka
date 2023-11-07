@@ -32,11 +32,11 @@ public final class VersionedRecord<V> {
     /**
      * Create a new {@link VersionedRecord} instance. {@code value} cannot be {@code null}.
      *
-     * @param value      the value
-     * @param timestamp  the timestamp
+     * @param value      The value
+     * @param timestamp  The type of the result returned by this query.
      */
     public VersionedRecord(final V value, final long timestamp) {
-        this.value = Objects.requireNonNull(value);
+        this.value = Objects.requireNonNull(value, "value cannot be null.");
         this.timestamp = timestamp;
         this.validTo = Long.MAX_VALUE;
     }
@@ -44,9 +44,9 @@ public final class VersionedRecord<V> {
     /**
      * Create a new {@link VersionedRecord} instance. {@code value} cannot be {@code null}.
      *
-     * @param value      the value
-     * @param timestamp  the timestamp
-     * @param validTo    the latest timestamp that value is valid
+     * @param value      The value
+     * @param timestamp  The timestamp
+     * @param validTo    The exclusive upper bound of the validity interval
      */
     public VersionedRecord(final V value, final long timestamp, final long validTo) {
         this.value = Objects.requireNonNull(value);
@@ -69,7 +69,7 @@ public final class VersionedRecord<V> {
 
     @Override
     public String toString() {
-        return "<" + value + "," + timestamp + ">";
+        return "<" + value + "," + timestamp + "," + validTo +">";
     }
 
     @Override
@@ -81,12 +81,12 @@ public final class VersionedRecord<V> {
             return false;
         }
         final VersionedRecord<?> that = (VersionedRecord<?>) o;
-        return timestamp == that.timestamp &&
+        return timestamp == that.timestamp && validTo == that.validTo &&
             Objects.equals(value, that.value);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(value, timestamp);
+        return Objects.hash(value, timestamp, validTo);
     }
 }

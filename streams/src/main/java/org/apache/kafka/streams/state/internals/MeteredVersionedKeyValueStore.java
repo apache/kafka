@@ -214,7 +214,7 @@ public class MeteredVersionedKeyValueStore<K, V>
         }
 
         @SuppressWarnings("unchecked")
-        protected <R> QueryResult<R> runMultiVersionedKeyQuery(final Query<R> query,
+        private <R> QueryResult<R> runMultiVersionedKeyQuery(final Query<R> query,
                                                                final PositionBound positionBound,
                                                                final QueryConfig config) {
             final QueryResult<R> result;
