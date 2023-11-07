@@ -99,8 +99,8 @@ public class StandbyTaskTest {
     private final String storeChangelogTopicName2 = ProcessorStateManager.storeChangelogTopic(applicationId, storeName2, taskId.topologyName());
 
     private final TopicPartition partition = new TopicPartition(storeChangelogTopicName1, 0);
-    private final MockKeyValueStore store1 = (MockKeyValueStore) new MockKeyValueStoreBuilder(storeName1, false).build();
-    private final MockKeyValueStore store2 = (MockKeyValueStore) new MockKeyValueStoreBuilder(storeName2, true).build();
+    private final MockKeyValueStore store1 = new MockKeyValueStoreBuilder(storeName1, false).build();
+    private final MockKeyValueStore store2 = new MockKeyValueStoreBuilder(storeName2, true).build();
 
     private final ProcessorTopology topology = ProcessorTopologyFactories.withLocalStores(
         asList(store1, store2),

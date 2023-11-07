@@ -535,6 +535,7 @@ public class StreamsConfig extends AbstractConfig {
 
     public static final String ROCKS_DB = "rocksDB";
     public static final String IN_MEMORY = "in_memory";
+    public static final String DEFAULT_DSL_STORE_DEFAULT = ROCKS_DB;
 
     /** {@code default.windowed.key.serde.inner} */
     @SuppressWarnings("WeakerAccess")
@@ -1000,7 +1001,7 @@ public class StreamsConfig extends AbstractConfig {
                     CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_DOC)
             .define(DEFAULT_DSL_STORE_CONFIG,
                     Type.STRING,
-                    ROCKS_DB,
+                    DEFAULT_DSL_STORE_DEFAULT,
                     in(ROCKS_DB, IN_MEMORY),
                     Importance.LOW,
                     DEFAULT_DSL_STORE_DOC)
