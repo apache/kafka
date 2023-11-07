@@ -34,11 +34,11 @@ import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
-import org.apache.kafka.clients.consumer.internals.events.ApplicationEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventProcessor;
+import org.apache.kafka.clients.consumer.internals.events.ApplicationEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
@@ -143,10 +143,10 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     private final long defaultApiTimeoutMs;
     private volatile boolean closed = false;
     private final List<ConsumerPartitionAssignor> assignors;
-    private final WakeupTrigger wakeupTrigger = new WakeupTrigger();
 
     // to keep from repeatedly scanning subscriptions in poll(), cache the result during metadata updates
     private boolean cachedSubscriptionHasAllFetchPositions;
+    private final WakeupTrigger wakeupTrigger = new WakeupTrigger();
 
     public PrototypeAsyncConsumer(final Properties properties,
                                   final Deserializer<K> keyDeserializer,

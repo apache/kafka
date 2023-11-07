@@ -28,7 +28,6 @@ import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProces
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventProcessor;
-import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.requests.MetadataResponse;
@@ -40,6 +39,7 @@ import org.apache.kafka.common.utils.Time;
 
 import java.io.Closeable;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
@@ -55,7 +55,6 @@ import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createFe
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createMetrics;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createSubscriptionState;
 import static org.apache.kafka.common.utils.Utils.closeQuietly;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.spy;
 
 @SuppressWarnings("ClassDataAbstractionCoupling")
@@ -65,8 +64,6 @@ public class ConsumerTestBuilder implements Closeable {
     static final long DEFAULT_RETRY_BACKOFF_MAX_MS = 1000;
     static final int DEFAULT_REQUEST_TIMEOUT_MS = 500;
     static final int DEFAULT_MAX_POLL_INTERVAL_MS = 10000;
-    static final String DEFAULT_TOPIC_NAME = "sample-topic-name";
-    static final Uuid DEFAULT_TOPIC_ID = Uuid.randomUuid();
     static final String DEFAULT_GROUP_INSTANCE_ID = "group-instance-id";
     static final String DEFAULT_GROUP_ID = "group-id";
     static final int DEFAULT_HEARTBEAT_INTERVAL_MS = 1000;
@@ -151,17 +148,15 @@ public class ConsumerTestBuilder implements Closeable {
         this.metricsManager = createFetchMetricsManager(metrics);
 
         this.client = new MockClient(time, metadata);
-        MetadataResponse metadataResponse = RequestTestUtils.metadataUpdateWithIds(
-                1,
-                Collections.singletonMap(DEFAULT_TOPIC_NAME, 1),
-                Collections.singletonMap(DEFAULT_TOPIC_NAME, DEFAULT_TOPIC_ID)
-        );
+        MetadataResponse metadataResponse = RequestTestUtils.metadataUpdateWith(1, new HashMap<String, Integer>() {
+            {
+                String topic1 = "test1";
+                put(topic1, 1);
+                String topic2 = "test2";
+                put(topic2, 1);
+            }
+        });
         this.client.updateMetadata(metadataResponse);
-
-        assertEquals(1, metadata.topicNames().size());
-        assertEquals(DEFAULT_TOPIC_NAME, metadata.topicNames().get(DEFAULT_TOPIC_ID));
-        assertEquals(1, metadata.topicIds().size());
-        assertEquals(DEFAULT_TOPIC_ID, metadata.topicIds().get(DEFAULT_TOPIC_NAME));
 
         this.networkClientDelegate = spy(new NetworkClientDelegate(time,
                 config,
@@ -194,7 +189,7 @@ public class ConsumerTestBuilder implements Closeable {
                     config,
                     coordinator,
                     groupState));
-            MembershipManagerImpl mm = spy(
+            MembershipManager mm = spy(
                     new MembershipManagerImpl(
                         gi.groupState.groupId,
                         gi.groupState.groupInstanceId.orElse(null),
