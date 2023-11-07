@@ -49,7 +49,10 @@ class InternalApplicationEventHandler extends ApplicationEventHandler {
     @Override
     public void close(final Duration timeout) {
         closer.close(
-                () -> Utils.closeQuietly(() -> networkThread.close(timeout), "consumer network thread"),
+                () -> {
+                    Utils.closeQuietly(() -> networkThread.close(timeout), "consumer network thread");
+                    super.close(timeout);
+                },
                 () -> log.warn("The application event handler was already closed")
         );
     }
