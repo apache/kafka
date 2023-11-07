@@ -39,16 +39,17 @@ import java.util.Locale;
  * <p/>
  *
  * The current logic for the {@code ConsumerCreator} inspects the incoming configuration and determines if
- * it is using the new KIP-848 consumer protocol or if it should fall back to the existing, legacy group protocol.
- * This is based on the presence and value of the {@link ConsumerConfig#GROUP_PROTOCOL_CONFIG group.protocol}
+ * it is using the new consumer group protocol (KIP-848) or if it should fall back to the existing, legacy group
+ * protocol. This is based on the presence and value of the {@link ConsumerConfig#GROUP_PROTOCOL_CONFIG group.protocol}
  * configuration. If the value is present and equal to &quot;{@code consumer}&quot;, the {@link AsyncKafkaConsumer}
  * will be returned. Otherwise, the {@link LegacyKafkaConsumer} will be returned.
  *
+ *
  * <p/>
  *
- * This is not to be called by end users and callers should not attempt to determine the underlying implementation
- * as this will make such code very brittle. Users of this facility should honor the top-level {@link Consumer} API
- * contract as-is.
+ * <em>Note</em>: this is for internal use only and is not intended for use by end users. Internal users should
+ * not attempt to determine the underlying implementation to avoid coding to an unstable interface. Rather, it is
+ * the {@link Consumer} API contract that should serve as the caller's interface.
  */
 public class ConsumerDelegateCreator {
 
