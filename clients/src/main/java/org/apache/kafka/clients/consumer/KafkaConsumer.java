@@ -1789,8 +1789,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     // Functions below are for testing only
-    String getClientId() {
-        return delegate.getClientId();
+    String clientId() {
+        return delegate.clientId();
     }
 
     Metrics metricsInternal() {

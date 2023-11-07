@@ -247,7 +247,7 @@ public class KafkaConsumerTest {
 
         MockMetricsReporter mockMetricsReporter = (MockMetricsReporter) consumer.metricsInternal().reporters().get(0);
 
-        assertEquals(consumer.getClientId(), mockMetricsReporter.clientId);
+        assertEquals(consumer.clientId(), mockMetricsReporter.clientId);
         assertEquals(2, consumer.metricsInternal().reporters().size());
     }
 
@@ -3135,10 +3135,10 @@ public void testClosingConsumerUnregistersConsumerMetrics(GroupProtocol groupPro
         props.put(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, ConsumerInterceptorForClientId.class.getName());
 
         consumer = newConsumer(props);
-        assertNotNull(consumer.getClientId());
-        assertNotEquals(0, consumer.getClientId().length());
+        assertNotNull(consumer.clientId());
+        assertNotEquals(0, consumer.clientId().length());
         assertEquals(3, CLIENT_IDS.size());
-        CLIENT_IDS.forEach(id -> assertEquals(id, consumer.getClientId()));
+        CLIENT_IDS.forEach(id -> assertEquals(id, consumer.clientId()));
     }
 
     @ParameterizedTest

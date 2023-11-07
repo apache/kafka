@@ -26,7 +26,7 @@ import org.apache.kafka.common.utils.Timer;
  */
 public interface ConsumerDelegate<K, V> extends Consumer<K, V> {
 
-    String getClientId();
+    String clientId();
 
     Metrics metricsInternal();
 

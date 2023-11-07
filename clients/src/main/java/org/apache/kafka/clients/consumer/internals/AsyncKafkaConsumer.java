@@ -1143,7 +1143,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     @Override
-    public String getClientId() {
+    public String clientId() {
         return clientId;
     }
 

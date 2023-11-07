@@ -2628,7 +2628,7 @@ public class LegacyKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     // Functions below are for testing only
     @Override
-    public String getClientId() {
+    public String clientId() {
         return clientId;
     }
 
