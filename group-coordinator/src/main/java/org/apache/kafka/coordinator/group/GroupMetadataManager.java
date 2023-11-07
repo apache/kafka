@@ -453,14 +453,20 @@ public class GroupMetadataManager {
     /**
      * Get the Group List.
      *
-     * @param statesFilter The states of the groups we want to list.
-     *                     If empty all groups are returned with their state.
-     * @param committedOffset A specified committed offset corresponding to this shard
+     * @param statesFilter      The states of the groups we want to list.
+     *                          If empty all groups are returned with their state.
+     * @param typesFilter       The types of the groups we want to list.
+     *                          If empty all groups are returned.
+     * @param committedOffset   A specified committed offset corresponding to this shard
      *
      * @return A list containing the ListGroupsResponseData.ListedGroup
      */
 
-    public List<ListGroupsResponseData.ListedGroup> listGroups(List<String> statesFilter, long committedOffset) {
+    public List<ListGroupsResponseData.ListedGroup> listGroups(
+        List<String> statesFilter,
+        List<String> typesFilter,
+        long committedOffset
+    ) {
         Stream<Group> groupStream = groups.values(committedOffset).stream();
         if (!statesFilter.isEmpty()) {
             groupStream = groupStream.filter(group -> statesFilter.contains(group.stateAsString(committedOffset)));
