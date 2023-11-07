@@ -309,7 +309,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         transitionTo(MemberState.FENCED);
 
         // Release assignment
-        CompletableFuture<Void> callbackResult = invokeOnPartitionsRevokedOrLostToReleaseAssignment();
+        CompletableFuture<Void> callbackResult = invokeOnPartitionsLostCallback(subscriptions.assignedPartitions());
         callbackResult.whenComplete((result, error) -> {
             if (error != null) {
                 log.debug("OnPartitionsLost callback invocation failed while releasing assignment" +
@@ -332,7 +332,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         // Update epoch to indicate that the member is not in the group anymore, so that the
         // onPartitionsLost is called to release assignment.
         memberEpoch = ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
-        invokeOnPartitionsRevokedOrLostToReleaseAssignment();
+        invokeOnPartitionsLostCallback(subscriptions.assignedPartitions());
 
         clearAssignedTopicNamesCache();
         transitionTo(MemberState.FATAL);
@@ -727,8 +727,10 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     }
 
     private CompletableFuture<Void> invokeOnPartitionsRevokedCallback(Set<TopicPartition> partitionsRevoked) {
+        // TODO: when implementing callbacks, keep the current logic for not triggering the
+        //  callback if partitionsRevoked is empty, to keep the current contract for user callbacks
         Optional<ConsumerRebalanceListener> listener = subscriptions.rebalanceListener();
-        if (listener.isPresent()) {
+        if (!partitionsRevoked.isEmpty() && listener.isPresent()) {
             throw new UnsupportedOperationException("User-defined callbacks not supported yet");
         } else {
             return CompletableFuture.completedFuture(null);
@@ -736,6 +738,8 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     }
 
     private CompletableFuture<Void> invokeOnPartitionsAssignedCallback(Set<TopicPartition> partitionsAssigned) {
+        // This should always trigger the callback, even if partitionsAssigned is empty, to keep
+        // the current contract for user callbacks
         Optional<ConsumerRebalanceListener> listener = subscriptions.rebalanceListener();
         if (listener.isPresent()) {
             throw new UnsupportedOperationException("User-defined callbacks not supported yet");
@@ -745,8 +749,10 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     }
 
     private CompletableFuture<Void> invokeOnPartitionsLostCallback(Set<TopicPartition> partitionsLost) {
+        // TODO: when implementing callbacks, keep the current logic for not triggering the
+        //  callback if partitionsLost is empty, to keep the current contract for user callbacks
         Optional<ConsumerRebalanceListener> listener = subscriptions.rebalanceListener();
-        if (listener.isPresent()) {
+        if (!partitionsLost.isEmpty() && listener.isPresent()) {
             throw new UnsupportedOperationException("User-defined callbacks not supported yet");
         } else {
             return CompletableFuture.completedFuture(null);
