@@ -264,9 +264,9 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
     val topic1 = "kafka.testTopic1"
     val topic2 = "kafka.testTopic2"
     val topic3 = "oooof.testTopic1"
-    TestUtils.createTopicWithAdmin(adminClient, topic1, brokers, 2, 2)
-    TestUtils.createTopicWithAdmin(adminClient, topic2, brokers, 2, 2)
-    TestUtils.createTopicWithAdmin(adminClient, topic3, brokers, 2, 2)
+    TestUtils.createTopicWithAdmin(adminClient, topic1, brokers, controllerServers, 2, 2)
+    TestUtils.createTopicWithAdmin(adminClient, topic2, brokers, controllerServers, 2, 2)
+    TestUtils.createTopicWithAdmin(adminClient, topic3, brokers, controllerServers, 2, 2)
 
     val output = TestUtils.grabConsoleOutput(
       topicService.listTopics(new TopicCommandOptions(Array("--topic", "kafka.*"))))
@@ -280,8 +280,8 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
   @ValueSource(strings = Array("zk", "kraft"))
   def testListTopicsWithExcludeInternal(quorum: String): Unit = {
     val topic1 = "kafka.testTopic1"
-    TestUtils.createTopicWithAdmin(adminClient, topic1, brokers, 2, 2)
-    TestUtils.createTopicWithAdmin(adminClient, Topic.GROUP_METADATA_TOPIC_NAME, brokers, 2, 2)
+    TestUtils.createTopicWithAdmin(adminClient, topic1, brokers, controllerServers, 2, 2)
+    TestUtils.createTopicWithAdmin(adminClient, Topic.GROUP_METADATA_TOPIC_NAME, brokers, controllerServers, 2, 2)
 
     val output = TestUtils.grabConsoleOutput(
       topicService.listTopics(new TopicCommandOptions(Array("--exclude-internal"))))
@@ -293,7 +293,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testAlterPartitionCount(quorum: String): Unit = {
-    TestUtils.createTopicWithAdmin(adminClient, testTopicName, brokers, 2, 2)
+    TestUtils.createTopicWithAdmin(adminClient, testTopicName, brokers, controllerServers, 2, 2)
 
     topicService.alterTopic(new TopicCommandOptions(
       Array("--topic", testTopicName, "--partitions", "3")))
@@ -308,7 +308,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testAlterAssignment(quorum: String): Unit = {
-    TestUtils.createTopicWithAdmin(adminClient, testTopicName, brokers, 2, 2)
+    TestUtils.createTopicWithAdmin(adminClient, testTopicName, brokers, controllerServers, 2, 2)
 
     topicService.alterTopic(new TopicCommandOptions(
       Array("--topic", testTopicName, "--replica-assignment", "5:3,3:1,4:2", "--partitions", "3")))
@@ -324,7 +324,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testAlterAssignmentWithMoreAssignmentThanPartitions(quorum: String): Unit = {
-    TestUtils.createTopicWithAdmin(adminClient, testTopicName, brokers, 2, 2)
+    TestUtils.createTopicWithAdmin(adminClient, testTopicName, brokers, controllerServers, 2, 2)
 
     assertThrows(classOf[ExecutionException],
       () => topicService.alterTopic(new TopicCommandOptions(
@@ -334,7 +334,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testAlterAssignmentWithMorePartitionsThanAssignment(quorum: String): Unit = {
-    TestUtils.createTopicWithAdmin(adminClient, testTopicName, brokers, 2, 2)
+    TestUtils.createTopicWithAdmin(adminClient, testTopicName, brokers, controllerServers, 2, 2)
 
     assertThrows(classOf[ExecutionException],
       () => topicService.alterTopic(new TopicCommandOptions(
@@ -520,7 +520,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDescribe(quorum: String): Unit = {
-    TestUtils.createTopicWithAdmin(adminClient, testTopicName, brokers, 2, 2)
+    TestUtils.createTopicWithAdmin(adminClient, testTopicName, brokers, controllerServers, 2, 2)
 
     val output = TestUtils.grabConsoleOutput(
       topicService.describeTopic(new TopicCommandOptions(Array("--topic", testTopicName))))
@@ -545,7 +545,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeUnavailablePartitions(quorum: String): Unit = {
-    TestUtils.createTopicWithAdmin(adminClient, testTopicName, brokers, numBrokers, 1)
+    TestUtils.createTopicWithAdmin(adminClient, testTopicName, brokers, controllerServers, numBrokers, 1)
 
     try {
       // check which partition is on broker 0 which we'll kill
@@ -587,7 +587,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeUnderReplicatedPartitions(quorum: String): Unit = {
-    TestUtils.createTopicWithAdmin(adminClient, testTopicName, brokers, 1, numBrokers)
+    TestUtils.createTopicWithAdmin(adminClient, testTopicName, brokers, controllerServers, 1, numBrokers)
 
     try {
       killBroker(0)
@@ -612,7 +612,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
     topicProps.setProperty(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, numBrokers.toString)
 
     // create topic
-    TestUtils.createTopicWithAdmin(adminClient, testTopicName, brokers, 1, numBrokers, topicConfig = topicProps)
+    TestUtils.createTopicWithAdmin(adminClient, testTopicName, brokers, controllerServers, 1, numBrokers, topicConfig = topicProps)
 
     try {
       killBroker(0)
@@ -638,7 +638,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
   def testDescribeUnderReplicatedPartitionsWhenReassignmentIsInProgress(quorum: String): Unit = {
     val tp = new TopicPartition(testTopicName, 0)
 
-    TestUtils.createTopicWithAdmin(adminClient, testTopicName, brokers, 1, 1)
+    TestUtils.createTopicWithAdmin(adminClient, testTopicName, brokers, controllerServers, 1, 1)
 
     // Produce multiple batches.
     TestUtils.generateAndProduceMessages(brokers, testTopicName, numMessages = 10, acks = -1)
@@ -690,7 +690,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
     topicProps.setProperty(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "4")
 
     // create topic
-    TestUtils.createTopicWithAdmin(adminClient, testTopicName, brokers, 1, numBrokers, topicConfig = topicProps)
+    TestUtils.createTopicWithAdmin(adminClient, testTopicName, brokers, controllerServers, 1, numBrokers, topicConfig = topicProps)
 
     try {
       killBroker(0)
@@ -735,10 +735,10 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
     topicProps.setProperty(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, numBrokers.toString)
 
     // create topic
-    TestUtils.createTopicWithAdmin(adminClient, underMinIsrTopic, brokers, 1, numBrokers, topicConfig = topicProps)
-    TestUtils.createTopicWithAdmin(adminClient, notUnderMinIsrTopic, brokers, 1, numBrokers)
-    TestUtils.createTopicWithAdmin(adminClient, offlineTopic, brokers, 1, replicaAssignment = Map(0 -> Seq(0)))
-    TestUtils.createTopicWithAdmin(adminClient, fullyReplicatedTopic, brokers, 1, replicaAssignment = Map(0 -> Seq(1, 2, 3)))
+    TestUtils.createTopicWithAdmin(adminClient, underMinIsrTopic, brokers, controllerServers, 1, numBrokers, topicConfig = topicProps)
+    TestUtils.createTopicWithAdmin(adminClient, notUnderMinIsrTopic, brokers, controllerServers, 1, numBrokers)
+    TestUtils.createTopicWithAdmin(adminClient, offlineTopic, brokers, controllerServers, 1, replicaAssignment = Map(0 -> Seq(0)))
+    TestUtils.createTopicWithAdmin(adminClient, fullyReplicatedTopic, brokers, controllerServers, 1, replicaAssignment = Map(0 -> Seq(1, 2, 3)))
 
     try {
       killBroker(0)
@@ -811,7 +811,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
       Set(new TopicPartition(testTopicName, 0)).asJava
     )
 
-    TestUtils.createTopicWithAdmin(adminClient, testTopicName, brokers, 1, 1)
+    TestUtils.createTopicWithAdmin(adminClient, testTopicName, brokers, controllerServers, 1, 1)
 
     val output = TestUtils.grabConsoleOutput(
       topicService.describeTopic(new TopicCommandOptions(Array("--topic", testTopicName))))
@@ -823,7 +823,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testCreateWithTopicNameCollision(quorum: String): Unit = {
-    TestUtils.createTopicWithAdmin(adminClient, "foo_bar", brokers, 1, numBrokers)
+    TestUtils.createTopicWithAdmin(adminClient, "foo_bar", brokers, controllerServers, 1, numBrokers)
 
     assertThrows(classOf[InvalidTopicException],
       () => topicService.createTopic(new TopicCommandOptions(Array("--topic", "foo.bar"))))

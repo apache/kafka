@@ -74,7 +74,8 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) {
     // in this test because it does not use FindCoordinator API.
     TestUtils.createOffsetsTopicWithAdmin(
       admin = admin,
-      brokers = raftCluster.brokers.collect(Collectors.toList[BrokerServer]).asScala
+      brokers = raftCluster.brokers.collect(Collectors.toList[BrokerServer]).asScala,
+      controllers = raftCluster.controllerServers().asScala.toSeq
     )
 
     // Heartbeat request to join the group. Note that the member subscribes

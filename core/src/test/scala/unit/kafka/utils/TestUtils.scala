@@ -455,6 +455,7 @@ object TestUtils extends Logging {
     admin: Admin,
     topic: String,
     brokers: Seq[B],
+    controllers: Seq[ControllerServer],
     numPartitions: Int = 1,
     replicationFactor: Int = 1,
     replicaAssignment: collection.Map[Int, Seq[Int]] = Map.empty,
@@ -492,6 +493,7 @@ object TestUtils extends Logging {
 
     // wait until we've propagated all partitions metadata to all brokers
     val allPartitionsMetadata = waitForAllPartitionsMetadata(brokers, topic, effectiveNumPartitions)
+    controllers.foreach(controller => ensureConsistentKRaftMetadata(brokers, controller))
 
     (0 until effectiveNumPartitions).map { i =>
       i -> allPartitionsMetadata.get(new TopicPartition(topic, i)).map(_.leader()).getOrElse(
@@ -521,7 +523,8 @@ object TestUtils extends Logging {
 
   def createOffsetsTopicWithAdmin[B <: KafkaBroker](
     admin: Admin,
-    brokers: Seq[B]
+    brokers: Seq[B],
+    controllers: Seq[ControllerServer]
   ): Map[Int, Int] = {
     val broker = brokers.head
     createTopicWithAdmin(
@@ -530,6 +533,7 @@ object TestUtils extends Logging {
       numPartitions = broker.config.getInt(KafkaConfig.OffsetsTopicPartitionsProp),
       replicationFactor = broker.config.getShort(KafkaConfig.OffsetsTopicReplicationFactorProp).toInt,
       brokers = brokers,
+      controllers = controllers,
       topicConfig = broker.groupCoordinator.groupMetadataTopicConfigs,
     )
   }
@@ -538,6 +542,7 @@ object TestUtils extends Logging {
     admin: Admin,
     topic: String,
     brokers: Seq[B],
+    controllers: Seq[ControllerServer]
   ): Unit = {
     try {
       admin.deleteTopics(Collections.singletonList(topic)).all().get()
@@ -547,6 +552,7 @@ object TestUtils extends Logging {
         // ignore
     }
     waitForAllPartitionsMetadata(brokers, topic, 0)
+    controllers.foreach(controller => ensureConsistentKRaftMetadata(brokers, controller))
   }
 
   /**
