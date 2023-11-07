@@ -2487,7 +2487,7 @@ class KafkaApisTest {
 
       val responseCallback: ArgumentCaptor[Map[TopicPartition, PartitionResponse] => Unit] = ArgumentCaptor.forClass(classOf[Map[TopicPartition, PartitionResponse] => Unit])
 
-      val tp = new TopicPartition("topic", 0)
+      val tp = new TopicPartition(topic, 0)
       val partition = mock(classOf[Partition])
       val newLeaderId = 2
       val newLeaderEpoch = 5
@@ -2542,6 +2542,71 @@ class KafkaApisTest {
       val node = response.data.nodeEndpoints.asScala.head
       assertEquals(2, node.nodeId)
       assertEquals("broker2", node.host)
+    }
+  }
+
+  @Test
+  def testProduceResponseLookupErrorOnNotLeaderOrFollower(): Unit = {
+    val topic = "topic"
+    addTopicToMetadataCache(topic, numPartitions = 2, numBrokers = 3)
+
+    for (version <- 10 to ApiKeys.PRODUCE.latestVersion) {
+
+      reset(replicaManager, clientQuotaManager, clientRequestQuotaManager, requestChannel, txnCoordinator)
+
+      val responseCallback: ArgumentCaptor[Map[TopicPartition, PartitionResponse] => Unit] = ArgumentCaptor.forClass(classOf[Map[TopicPartition, PartitionResponse] => Unit])
+
+      val tp = new TopicPartition(topic, 0)
+
+      val produceRequest = ProduceRequest.forCurrentMagic(new ProduceRequestData()
+        .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
+          Collections.singletonList(new ProduceRequestData.TopicProduceData()
+            .setName(tp.topic).setPartitionData(Collections.singletonList(
+            new ProduceRequestData.PartitionProduceData()
+              .setIndex(tp.partition)
+              .setRecords(MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("test".getBytes))))))
+            .iterator))
+        .setAcks(1.toShort)
+        .setTimeoutMs(5000))
+        .build(version.toShort)
+      val request = buildRequest(produceRequest)
+
+      when(replicaManager.appendRecords(anyLong,
+        anyShort,
+        ArgumentMatchers.eq(false),
+        ArgumentMatchers.eq(AppendOrigin.CLIENT),
+        any(),
+        responseCallback.capture(),
+        any(),
+        any(),
+        any(),
+        any(),
+        any())
+      ).thenAnswer(_ => responseCallback.getValue.apply(Map(tp -> new PartitionResponse(Errors.NOT_LEADER_OR_FOLLOWER))))
+
+      when(replicaManager.getPartitionOrError(tp)).thenAnswer(_ => Left(Errors.UNKNOWN_TOPIC_OR_PARTITION))
+
+      when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
+        any[Long])).thenReturn(0)
+      when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
+        any[RequestChannel.Request](), anyDouble, anyLong)).thenReturn(0)
+
+      createKafkaApis().handleProduceRequest(request, RequestLocal.withThreadConfinedCaching)
+
+      val response = verifyNoThrottling[ProduceResponse](request)
+
+      assertEquals(1, response.data.responses.size)
+      val topicProduceResponse = response.data.responses.asScala.head
+      assertEquals(1, topicProduceResponse.partitionResponses.size)
+      val partitionProduceResponse = topicProduceResponse.partitionResponses.asScala.head
+      assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, Errors.forCode(partitionProduceResponse.errorCode))
+      // Assert we fallback to the metadata cache
+      assertEquals(0, partitionProduceResponse.currentLeader.leaderId())
+      assertEquals(1, partitionProduceResponse.currentLeader.leaderEpoch())
+      assertEquals(1, response.data.nodeEndpoints.size)
+      val node = response.data.nodeEndpoints.asScala.head
+      assertEquals(0, node.nodeId)
+      assertEquals("broker0", node.host)
     }
   }
 
