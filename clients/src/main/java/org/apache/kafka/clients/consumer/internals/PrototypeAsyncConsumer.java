@@ -234,8 +234,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
             final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(logContext,
                     metadata,
                     applicationEventQueue,
-                    requestManagersSupplier,
-                    Optional.empty());
+                    requestManagersSupplier);
             ConsumerCoordinatorMetrics sensors = new ConsumerCoordinatorMetrics(
                     subscriptions,
                     metrics,

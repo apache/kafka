@@ -69,7 +69,6 @@ public class ConsumerTestBuilder implements Closeable {
     static final Uuid DEFAULT_TOPIC_ID = Uuid.randomUuid();
     static final String DEFAULT_GROUP_INSTANCE_ID = "group-instance-id";
     static final String DEFAULT_GROUP_ID = "group-id";
-    static final String DEFAULT_MEMBER_ID = "test-member-1";
     static final int DEFAULT_HEARTBEAT_INTERVAL_MS = 1000;
     static final double DEFAULT_HEARTBEAT_JITTER_MS = 0.0;
 
@@ -92,7 +91,6 @@ public class ConsumerTestBuilder implements Closeable {
     final Optional<HeartbeatRequestManager> heartbeatRequestManager;
     final Optional<MembershipManager> membershipManager;
     final Optional<HeartbeatRequestManager.HeartbeatRequestState> heartbeatRequestState;
-    final Optional<AssignmentReconciler> assignmentReconciler;
     final TopicMetadataRequestManager topicMetadataRequestManager;
     final FetchRequestManager fetchRequestManager;
     final RequestManagers requestManagers;
@@ -100,7 +98,6 @@ public class ConsumerTestBuilder implements Closeable {
     public final BackgroundEventProcessor backgroundEventProcessor;
     public ApplicationEventHandler applicationEventHandler;
     public final BackgroundEventHandler backgroundEventHandler;
-    public final ConsumerCoordinatorMetrics consumerCoordinatorMetrics;
     public final ConsumerRebalanceListenerInvoker rebalanceListenerInvoker;
     final MockClient client;
     final Optional<GroupInformation> groupInfo;
@@ -197,19 +194,12 @@ public class ConsumerTestBuilder implements Closeable {
                     config,
                     coordinator,
                     groupState));
-            AssignmentReconciler assignmentReconciler = new AssignmentReconciler(
-                    logContext,
-                    subscriptions,
-                    backgroundEventQueue
-            );
             MembershipManagerImpl mm = spy(
                     new MembershipManagerImpl(
-                        logContext,
-                        assignmentReconciler,
-                        metadata,
                         gi.groupState.groupId,
-                        gi.groupState.groupInstanceId,
-                        Optional.empty()
+                        gi.groupState.groupInstanceId.orElse(null),
+                        null,
+                        logContext
                 )
             );
             HeartbeatRequestManager.HeartbeatRequestState state = spy(new HeartbeatRequestManager.HeartbeatRequestState(logContext,
@@ -233,14 +223,12 @@ public class ConsumerTestBuilder implements Closeable {
             this.heartbeatRequestManager = Optional.of(heartbeat);
             this.heartbeatRequestState = Optional.of(state);
             this.membershipManager = Optional.of(mm);
-            this.assignmentReconciler = Optional.of(assignmentReconciler);
         } else {
             this.coordinatorRequestManager = Optional.empty();
             this.commitRequestManager = Optional.empty();
             this.heartbeatRequestManager = Optional.empty();
             this.heartbeatRequestState = Optional.empty();
             this.membershipManager = Optional.empty();
-            this.assignmentReconciler = Optional.empty();
         }
 
         this.fetchBuffer = new FetchBuffer(logContext);
@@ -266,10 +254,9 @@ public class ConsumerTestBuilder implements Closeable {
                 logContext,
                 applicationEventQueue,
                 requestManagers,
-                metadata,
-                Optional.ofNullable(membershipManager.orElse(null)))
+                metadata)
         );
-        this.consumerCoordinatorMetrics = new ConsumerCoordinatorMetrics(
+        ConsumerCoordinatorMetrics consumerCoordinatorMetrics = new ConsumerCoordinatorMetrics(
                 subscriptions,
                 metrics,
                 CONSUMER_METRIC_GROUP_PREFIX
