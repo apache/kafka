@@ -203,7 +203,7 @@ public class ClientMetricsManagerTest {
     public void testGetTelemetryAllMetricSubscribedSubscription() throws UnknownHostException {
         clientMetricsManager.updateSubscription("sub-1", ClientMetricsTestUtils.defaultProperties());
         Properties properties = new Properties();
-        properties.put("metrics", ClientMetricsConfigs.ALL_SUBSCRIBED_METRICS);
+        properties.put("metrics", ClientMetricsConfigs.ALL_SUBSCRIBED_METRICS_CONFIG);
         clientMetricsManager.updateSubscription("sub-2", properties);
 
         assertEquals(2, clientMetricsManager.subscriptions().size());
@@ -312,7 +312,7 @@ public class ClientMetricsManagerTest {
 
         // Update subscription
         Properties properties = new Properties();
-        properties.put("metrics", ClientMetricsConfigs.ALL_SUBSCRIBED_METRICS);
+        properties.put("metrics", ClientMetricsConfigs.ALL_SUBSCRIBED_METRICS_CONFIG);
         clientMetricsManager.updateSubscription("sub-2", properties);
         assertEquals(2, clientMetricsManager.subscriptions().size());
 

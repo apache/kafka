@@ -248,7 +248,7 @@ public class ClientMetricsManager implements Closeable {
         for (SubscriptionInfo info : subscriptions()) {
             if (instanceMetadata.isMatch(info.matchPattern())) {
                 allMetricsSubscribed = allMetricsSubscribed || info.metrics().contains(
-                    ClientMetricsConfigs.ALL_SUBSCRIBED_METRICS);
+                    ClientMetricsConfigs.ALL_SUBSCRIBED_METRICS_CONFIG);
                 subscribedMetrics.addAll(info.metrics());
                 pushIntervalMs = Math.min(pushIntervalMs, info.intervalMs());
             }
@@ -260,6 +260,7 @@ public class ClientMetricsManager implements Closeable {
         */
         if (allMetricsSubscribed) {
             subscribedMetrics.clear();
+            // Add an empty string to indicate that all metrics are subscribed.
             subscribedMetrics.add(ClientMetricsConfigs.ALL_SUBSCRIBED_METRICS);
         }
 
