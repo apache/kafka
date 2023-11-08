@@ -19,7 +19,10 @@ package org.apache.kafka.connect.runtime.rest.entities;
 import org.apache.kafka.connect.runtime.TargetState;
 import org.junit.Test;
 
+import java.util.Collections;
+
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 
 public class CreateConnectorRequestTest {
 
@@ -28,6 +31,9 @@ public class CreateConnectorRequestTest {
         assertEquals(TargetState.STARTED, CreateConnectorRequest.InitialState.RUNNING.toTargetState());
         assertEquals(TargetState.PAUSED, CreateConnectorRequest.InitialState.PAUSED.toTargetState());
         assertEquals(TargetState.STOPPED, CreateConnectorRequest.InitialState.STOPPED.toTargetState());
+
+        CreateConnectorRequest createConnectorRequest = new CreateConnectorRequest("test-name", Collections.emptyMap(), null);
+        assertNull(createConnectorRequest.initialTargetState());
     }
 
     @Test

@@ -52,6 +52,14 @@ public class CreateConnectorRequest {
         return initialState;
     }
 
+    public TargetState initialTargetState() {
+        if (initialState != null) {
+            return initialState.toTargetState();
+        } else {
+            return null;
+        }
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -86,7 +94,7 @@ public class CreateConnectorRequest {
                 case STOPPED:
                     return TargetState.STOPPED;
                 default:
-                    throw new IllegalArgumentException("Unknown initial state");
+                    throw new IllegalArgumentException("Unknown initial state: " + this);
             }
         }
     }

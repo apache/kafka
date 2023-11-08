@@ -19,6 +19,7 @@ package org.apache.kafka.connect.cli;
 import com.fasterxml.jackson.core.exc.StreamReadException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.DatabindException;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Time;
@@ -87,7 +88,7 @@ public class ConnectStandalone extends AbstractConnectCli<StandaloneConfig> {
                 });
                 herder.putConnectorConfig(
                     createConnectorRequest.name(), createConnectorRequest.config(),
-                    createConnectorRequest.initialState() != null ? createConnectorRequest.initialState().toTargetState() : null,
+                    createConnectorRequest.initialTargetState(),
                     false, cb);
                 cb.get();
             }
@@ -99,7 +100,8 @@ public class ConnectStandalone extends AbstractConnectCli<StandaloneConfig> {
     }
 
     /**
-     * Parse a connector configuration file into a {@link CreateConnectorRequest}. The file can have any one of the following formats:
+     * Parse a connector configuration file into a {@link CreateConnectorRequest}. The file can have any one of the following formats (note that
+     * we attempt to parse the file in this order):
      * <ol>
      *     <li>A JSON file containing an Object with only String keys and values that represent the connector configuration.</li>
      *     <li>A JSON file containing an Object that can be parsed directly into a {@link CreateConnectorRequest}</li>
@@ -130,11 +132,13 @@ public class ConnectStandalone extends AbstractConnectCli<StandaloneConfig> {
         }
 
         try {
+            objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
             CreateConnectorRequest createConnectorRequest = objectMapper.readValue(connectorConfigurationFile,
                 new TypeReference<CreateConnectorRequest>() { });
             if (createConnectorRequest.config().containsKey(NAME_CONFIG)) {
                 if (!createConnectorRequest.config().get(NAME_CONFIG).equals(createConnectorRequest.name())) {
-                    throw new ConnectException("Connector name configuration in 'config' doesn't match the one specified in 'name'");
+                    throw new ConnectException("Connector name configuration in 'config' doesn't match the one specified in 'name' at '" + filePath
+                        + "'");
                 }
             } else {
                 createConnectorRequest.config().put(NAME_CONFIG, createConnectorRequest.name());

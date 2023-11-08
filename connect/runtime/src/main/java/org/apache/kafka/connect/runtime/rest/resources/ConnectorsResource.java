@@ -23,7 +23,6 @@ import org.apache.kafka.connect.errors.NotFoundException;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.RestartRequest;
-import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.runtime.rest.HerderRequestHandler;
 import org.apache.kafka.connect.runtime.rest.RestClient;
 import org.apache.kafka.connect.runtime.rest.RestServerConfig;
@@ -146,11 +145,7 @@ public class ConnectorsResource implements ConnectResource {
         checkAndPutConnectorConfigName(name, configs);
 
         FutureCallback<Herder.Created<ConnectorInfo>> cb = new FutureCallback<>();
-        TargetState targetState = null;
-        if (createRequest.initialState() != null) {
-            targetState = createRequest.initialState().toTargetState();
-        }
-        herder.putConnectorConfig(name, configs, targetState, false, cb);
+        herder.putConnectorConfig(name, configs, createRequest.initialTargetState(), false, cb);
         Herder.Created<ConnectorInfo> info = requestHandler.completeOrForwardRequest(cb, "/connectors", "POST", headers, createRequest,
                 new TypeReference<ConnectorInfo>() { }, new CreatedConnectorInfoTranslator(), forward);
 

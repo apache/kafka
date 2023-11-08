@@ -93,4 +93,35 @@ public class ConnectStandaloneTest {
         CreateConnectorRequest parsedRequest = connectStandalone.parseConnectorConfigurationFile(connectorConfigurationFile.getAbsolutePath());
         assertEquals(requestToWrite, parsedRequest);
     }
+
+    @Test
+    public void testParseJsonFileWithCreateConnectorRequestWithoutInitialState() throws Exception {
+        Map<String, Object> requestToWrite = new HashMap<>();
+        requestToWrite.put("name", CONNECTOR_NAME);
+        requestToWrite.put("config", CONNECTOR_CONFIG);
+
+        try (FileWriter writer = new FileWriter(connectorConfigurationFile)) {
+            writer.write(new ObjectMapper().writeValueAsString(requestToWrite));
+        }
+
+        CreateConnectorRequest parsedRequest = connectStandalone.parseConnectorConfigurationFile(connectorConfigurationFile.getAbsolutePath());
+        CreateConnectorRequest expectedRequest = new CreateConnectorRequest(CONNECTOR_NAME, CONNECTOR_CONFIG, null);
+        assertEquals(expectedRequest, parsedRequest);
+    }
+
+    @Test
+    public void testParseJsonFileWithCreateConnectorRequestWithUnknownField() throws Exception {
+        Map<String, Object> requestToWrite = new HashMap<>();
+        requestToWrite.put("name", CONNECTOR_NAME);
+        requestToWrite.put("config", CONNECTOR_CONFIG);
+        requestToWrite.put("unknown-field", "random-value");
+
+        try (FileWriter writer = new FileWriter(connectorConfigurationFile)) {
+            writer.write(new ObjectMapper().writeValueAsString(requestToWrite));
+        }
+
+        CreateConnectorRequest parsedRequest = connectStandalone.parseConnectorConfigurationFile(connectorConfigurationFile.getAbsolutePath());
+        CreateConnectorRequest expectedRequest = new CreateConnectorRequest(CONNECTOR_NAME, CONNECTOR_CONFIG, null);
+        assertEquals(expectedRequest, parsedRequest);
+    }
 }
