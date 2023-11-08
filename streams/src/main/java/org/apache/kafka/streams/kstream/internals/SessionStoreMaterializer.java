@@ -19,68 +19,64 @@ package org.apache.kafka.streams.kstream.internals;
 import java.time.Duration;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.EmitStrategy;
-import org.apache.kafka.streams.kstream.Windows;
+import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
+import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
-import org.apache.kafka.streams.state.TimestampedWindowStore;
-import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
-import org.apache.kafka.streams.state.WindowStore;
-import org.apache.kafka.streams.state.internals.RocksDbIndexedTimeOrderedWindowBytesStoreSupplier;
+import org.apache.kafka.streams.state.internals.RocksDbTimeOrderedSessionBytesStoreSupplier;
 
-public class TimeWindowStoreMaterializer<K, V> extends MaterializedStoreFactory<K, V, WindowStore<Bytes, byte[]>> {
+public class SessionStoreMaterializer<K, V> extends MaterializedStoreFactory<K, V, SessionStore<Bytes, byte[]>> {
 
-    private final Windows<?> windows;
+    private final MaterializedInternal<K, V, SessionStore<Bytes, byte[]>> materialized;
+    private final SessionWindows sessionWindows;
     private final EmitStrategy emitStrategy;
     private final long retentionPeriod;
 
-    public TimeWindowStoreMaterializer(
-            final MaterializedInternal<K, V, WindowStore<Bytes, byte[]>> materialized,
-            final Windows<?> windows,
+    public SessionStoreMaterializer(
+            final MaterializedInternal<K, V, SessionStore<Bytes, byte[]>> materialized,
+            final SessionWindows sessionWindows,
             final EmitStrategy emitStrategy
     ) {
         super(materialized);
-        this.windows = windows;
+        this.materialized = materialized;
+        this.sessionWindows = sessionWindows;
         this.emitStrategy = emitStrategy;
 
         retentionPeriod = retentionPeriod();
-
-        if ((windows.size() + windows.gracePeriodMs()) > retentionPeriod) {
-            throw new IllegalArgumentException("The retention period of the window store "
-                    + materialized.storeName() + " must be no smaller than its window size plus the grace period."
-                    + " Got size=[" + windows.size() + "],"
-                    + " grace=[" + windows.gracePeriodMs() + "],"
+        if ((sessionWindows.inactivityGap() + sessionWindows.gracePeriodMs()) > retentionPeriod) {
+            throw new IllegalArgumentException("The retention period of the session store "
+                    + materialized.storeName()
+                    + " must be no smaller than the session inactivity gap plus the"
+                    + " grace period."
+                    + " Got gap=[" + sessionWindows.inactivityGap() + "],"
+                    + " grace=[" + sessionWindows.gracePeriodMs() + "],"
                     + " retention=[" + retentionPeriod + "]");
         }
     }
 
     @Override
     public StateStore build() {
-        WindowBytesStoreSupplier supplier = (WindowBytesStoreSupplier) materialized.storeSupplier();
+        SessionBytesStoreSupplier supplier = (SessionBytesStoreSupplier) materialized.storeSupplier();
         if (supplier == null) {
+
             switch (defaultStoreType) {
                 case IN_MEMORY:
-                    supplier = Stores.inMemoryWindowStore(
+                    supplier = Stores.inMemorySessionStore(
                             materialized.storeName(),
-                            Duration.ofMillis(retentionPeriod),
-                            Duration.ofMillis(windows.size()),
-                            false
+                            Duration.ofMillis(retentionPeriod)
                     );
                     break;
                 case ROCKS_DB:
                     supplier = emitStrategy.type() == EmitStrategy.StrategyType.ON_WINDOW_CLOSE ?
-                            RocksDbIndexedTimeOrderedWindowBytesStoreSupplier.create(
+                            new RocksDbTimeOrderedSessionBytesStoreSupplier(
                                     materialized.storeName(),
-                                    Duration.ofMillis(retentionPeriod),
-                                    Duration.ofMillis(windows.size()),
-                                    false,
-                                    false
-                            ) :
-                            Stores.persistentTimestampedWindowStore(
+                                    retentionPeriod,
+                                    true) :
+                            Stores.persistentSessionStore(
                                     materialized.storeName(),
-                                    Duration.ofMillis(retentionPeriod),
-                                    Duration.ofMillis(windows.size()),
-                                    false
+                                    Duration.ofMillis(retentionPeriod)
                             );
                     break;
                 default:
@@ -88,7 +84,7 @@ public class TimeWindowStoreMaterializer<K, V> extends MaterializedStoreFactory<
             }
         }
 
-        final StoreBuilder<TimestampedWindowStore<K, V>> builder = Stores.timestampedWindowStoreBuilder(
+        final StoreBuilder<SessionStore<K, V>> builder = Stores.sessionStoreBuilder(
                 supplier,
                 materialized.keySerde(),
                 materialized.valueSerde()
@@ -100,10 +96,11 @@ public class TimeWindowStoreMaterializer<K, V> extends MaterializedStoreFactory<
             builder.withLoggingDisabled();
         }
 
-        // TODO(agavra): remove before merging, should we do what we do with other stores
-        // and disable caching in the case StrategyType.ON_WINDOW_CLOSE is used?
-        if (materialized.cachingEnabled()) {
+        // do not enable cache if the emit final strategy is used
+        if (materialized.cachingEnabled() && emitStrategy.type() != EmitStrategy.StrategyType.ON_WINDOW_CLOSE) {
             builder.withCachingEnabled();
+        } else {
+            builder.withCachingDisabled();
         }
 
         return builder.build();
@@ -113,7 +110,7 @@ public class TimeWindowStoreMaterializer<K, V> extends MaterializedStoreFactory<
     public long retentionPeriod() {
         return materialized.retention() != null
                 ? materialized.retention().toMillis()
-                : windows.size() + windows.gracePeriodMs();
+                : sessionWindows.inactivityGap() + sessionWindows.gracePeriodMs();
     }
 
     @Override
@@ -131,4 +128,5 @@ public class TimeWindowStoreMaterializer<K, V> extends MaterializedStoreFactory<
     public boolean isVersionedStore() {
         return false;
     }
+
 }

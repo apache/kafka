@@ -110,7 +110,7 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
         final String aggregateName = new NamedInternal(named).orElseGenerateWithPrefix(builder, AGGREGATE_NAME);
         return aggregateBuilder.build(
             new NamedInternal(aggregateName),
-            new SessionWindowStoreMaterializer<>(materializedInternal, windows, emitStrategy),
+            new SessionStoreMaterializer<>(materializedInternal, windows, emitStrategy),
             new KStreamSessionWindowAggregate<>(
                 windows,
                 materializedInternal.storeName(),
@@ -160,7 +160,7 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
         final String reduceName = new NamedInternal(named).orElseGenerateWithPrefix(builder, REDUCE_NAME);
         return aggregateBuilder.build(
             new NamedInternal(reduceName),
-            new SessionWindowStoreMaterializer<>(materializedInternal, windows, emitStrategy),
+            new SessionStoreMaterializer<>(materializedInternal, windows, emitStrategy),
             new KStreamSessionWindowAggregate<>(
                 windows,
                 materializedInternal.storeName(),
@@ -219,7 +219,7 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
 
         return aggregateBuilder.build(
             new NamedInternal(aggregateName),
-            new SessionWindowStoreMaterializer<>(materializedInternal, windows, emitStrategy),
+            new SessionStoreMaterializer<>(materializedInternal, windows, emitStrategy),
             new KStreamSessionWindowAggregate<>(
                 windows,
                 materializedInternal.storeName(),

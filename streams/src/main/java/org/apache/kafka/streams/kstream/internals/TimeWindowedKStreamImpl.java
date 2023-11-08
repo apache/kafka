@@ -105,7 +105,7 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
 
         return aggregateBuilder.build(
             new NamedInternal(aggregateName),
-            new TimeWindowStoreMaterializer<>(materializedInternal, windows, emitStrategy),
+            new WindowStoreMaterializer<>(materializedInternal, windows, emitStrategy),
             new KStreamWindowAggregate<>(
                 windows,
                 materializedInternal.storeName(),
@@ -157,7 +157,7 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
 
         return aggregateBuilder.build(
             new NamedInternal(aggregateName),
-            new TimeWindowStoreMaterializer<>(materializedInternal, windows, emitStrategy),
+            new WindowStoreMaterializer<>(materializedInternal, windows, emitStrategy),
             new KStreamWindowAggregate<>(
                 windows,
                 materializedInternal.storeName(),
@@ -208,7 +208,7 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
 
         return aggregateBuilder.build(
             new NamedInternal(reduceName),
-            new TimeWindowStoreMaterializer<>(materializedInternal, windows, emitStrategy),
+            new WindowStoreMaterializer<>(materializedInternal, windows, emitStrategy),
             new KStreamWindowAggregate<>(
                 windows,
                 materializedInternal.storeName(),

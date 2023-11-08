@@ -92,7 +92,7 @@ public class SessionWindowedCogroupedKStreamImpl<K, V> extends
             groupPatterns,
             initializer,
             new NamedInternal(named),
-            new SessionWindowStoreMaterializer<>(
+            new SessionStoreMaterializer<>(
                     materializedInternal,
                     sessionWindows,
                     EmitStrategy.onWindowUpdate()),
