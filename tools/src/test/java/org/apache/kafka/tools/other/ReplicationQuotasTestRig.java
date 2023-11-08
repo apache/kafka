@@ -93,7 +93,7 @@ public class ReplicationQuotasTestRig {
     private static final String DIR;
 
     static {
-        PropertyConfigurator.configure("tools/src/test/resources/log4j-off.properties");
+        PropertyConfigurator.configure("core/src/test/resources/log4j.properties");
 
         new File("Experiments").mkdir();
         DIR = "Experiments/Run" + Long.valueOf(System.currentTimeMillis()).toString().substring(8);
