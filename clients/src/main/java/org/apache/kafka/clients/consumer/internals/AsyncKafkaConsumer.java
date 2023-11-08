@@ -397,8 +397,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      */
     @Override
     public ConsumerRecords<K, V> poll(final Duration timeout) {
-        maybeInvokeCallbacks();
-        maybeThrowFencedInstanceException();
         Timer timer = time.timer(timeout);
 
         try {
@@ -469,6 +467,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     // Visible for testing
     CompletableFuture<Void> commit(Map<TopicPartition, OffsetAndMetadata> offsets, final boolean isWakeupable) {
         maybeThrowFencedInstanceException();
+        maybeInvokeCallbacks();
         maybeThrowInvalidGroupIdException();
 
         if (offsets.isEmpty()) {
@@ -835,7 +834,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     @Override
     public void commitSync(Map<TopicPartition, OffsetAndMetadata> offsets, Duration timeout) {
-        maybeInvokeCallbacks();
         long commitStart = time.nanoseconds();
         try {
             CompletableFuture<Void> commitFuture = commit(offsets, true);
