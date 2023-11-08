@@ -84,8 +84,6 @@ import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
  *
  * Currently you'll need about 40GB of disk space to run these experiments (largest data written x2). Tune the msgSize
  * & #partitions and throttle to adjust this.
- *
- * To run this tool without excessive logging add to jvm params "-Dlog4j2.configurationFile=classpath:log4j-off.properties"
  */
 public class ReplicationQuotasTestRig {
     public static final Logger LOGGER = LoggerFactory.getLogger(ReplicationQuotasTestRig.class);
