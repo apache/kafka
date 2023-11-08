@@ -136,6 +136,6 @@ mv /etc/kafka/docker/tools-log4j.properties /opt/kafka/config/tools-log4j.proper
 
 cp -R /mnt/shared/config/. /opt/kafka/config/
 
-ub render-properties /etc/kafka/docker/kafka-propertiesSpec.json >> /opt/kafka/config/kafka.properties
-ub render-template /etc/kafka/docker/kafka-log4j.properties.template >> /opt/kafka/config/log4j.properties
-ub render-template /etc/kafka/docker/kafka-tools-log4j.properties.template >> /opt/kafka/config/tools-log4j.properties
+echo -e "\n$(ub render-properties /etc/kafka/docker/kafka-propertiesSpec.json)" >> /opt/kafka/config/kafka.properties
+echo -e "\n$(ub render-template /etc/kafka/docker/kafka-log4j.properties.template)" >> /opt/kafka/config/log4j.properties
+echo -e "\n$(ub render-template /etc/kafka/docker/kafka-tools-log4j.properties.template)" >> /opt/kafka/config/tools-log4j.properties
