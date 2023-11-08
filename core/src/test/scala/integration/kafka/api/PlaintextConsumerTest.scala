@@ -19,7 +19,6 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantLock
 import java.util.regex.Pattern
 import java.util.{Locale, Optional, Properties}
-
 import kafka.server.{KafkaServer, QuotaType}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.{NewPartitions, NewTopic}
@@ -551,9 +550,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   def testPartitionsForAutoCreate(): Unit = {
     val consumer = createConsumer()
     // First call would create the topic
-    consumer.partitionsFor("non-exist-topic")
-    val partitions = consumer.partitionsFor("non-exist-topic")
-    assertFalse(partitions.isEmpty)
+    TestUtils.waitUntilTrue(
+      () => !consumer.partitionsFor("non-exist-topic").isEmpty,
+      "Timeout waiting for non-exist-topic being created")
   }
 
   @Test

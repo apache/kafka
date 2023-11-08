@@ -177,41 +177,41 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
     // Delete only ACLs on literal 'mytopic2' topic
     var deleted = client.deleteAcls(List(acl2.toFilter).asJava).all().get().asScala.toSet
     assertEquals(Set(acl2), deleted)
-    assertEquals(Set(anyAcl, fooAcl, prefixAcl), getAcls(allTopicAcls))
+    TestUtils.waitUntilAssertEquals(Set(anyAcl, fooAcl, prefixAcl), () => getAcls(allTopicAcls))
 
     ensureAcls(deleted)
 
     // Delete only ACLs on literal '*' topic
     deleted = client.deleteAcls(List(anyAcl.toFilter).asJava).all().get().asScala.toSet
     assertEquals(Set(anyAcl), deleted)
-    assertEquals(Set(acl2, fooAcl, prefixAcl), getAcls(allTopicAcls))
+    TestUtils.waitUntilAssertEquals(Set(acl2, fooAcl, prefixAcl), () => getAcls(allTopicAcls))
 
     ensureAcls(deleted)
 
     // Delete only ACLs on specific prefixed 'mytopic' topics:
     deleted = client.deleteAcls(List(prefixAcl.toFilter).asJava).all().get().asScala.toSet
     assertEquals(Set(prefixAcl), deleted)
-    assertEquals(Set(anyAcl, acl2, fooAcl), getAcls(allTopicAcls))
+    TestUtils.waitUntilAssertEquals(Set(anyAcl, acl2, fooAcl), () => getAcls(allTopicAcls))
 
     ensureAcls(deleted)
 
     // Delete all literal ACLs:
     deleted = client.deleteAcls(List(allLiteralTopicAcls).asJava).all().get().asScala.toSet
     assertEquals(Set(anyAcl, acl2, fooAcl), deleted)
-    assertEquals(Set(prefixAcl), getAcls(allTopicAcls))
+    TestUtils.waitUntilAssertEquals(Set(prefixAcl), () => getAcls(allTopicAcls))
 
     ensureAcls(deleted)
 
     // Delete all prefixed ACLs:
     deleted = client.deleteAcls(List(allPrefixedTopicAcls).asJava).all().get().asScala.toSet
     assertEquals(Set(prefixAcl), deleted)
-    assertEquals(Set(anyAcl, acl2, fooAcl), getAcls(allTopicAcls))
+    TestUtils.waitUntilAssertEquals(Set(anyAcl, acl2, fooAcl), () => getAcls(allTopicAcls))
 
     ensureAcls(deleted)
 
     // Delete all topic ACLs:
     deleted = client.deleteAcls(List(allTopicAcls).asJava).all().get().asScala.toSet
-    assertEquals(Set(), getAcls(allTopicAcls))
+    TestUtils.waitUntilAssertEquals(Set(), () => getAcls(allTopicAcls))
   }
 
   //noinspection ScalaDeprecation - test explicitly covers clients using legacy / deprecated constructors
