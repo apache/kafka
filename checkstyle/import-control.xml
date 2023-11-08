@@ -323,6 +323,8 @@
     </subpackage>
 
     <subpackage name="consumergroup">
+      <allow pkg="kafka.security"/>
+      <allow pkg="org.apache.kafka.metadata.authorizer"/>
       <allow pkg="org.apache.kafka.tools"/>
     </subpackage>
   </subpackage>
