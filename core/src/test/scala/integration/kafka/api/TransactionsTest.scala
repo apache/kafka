@@ -26,6 +26,7 @@ import kafka.server.KafkaConfig
 import kafka.utils.{TestInfoUtils, TestUtils}
 import kafka.utils.TestUtils.{consumeRecords, waitUntilTrue}
 import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, ConsumerGroupMetadata, OffsetAndMetadata}
+import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.errors.{InvalidProducerEpochException, ProducerFencedException, TimeoutException}
 import org.apache.kafka.common.TopicPartition
@@ -69,6 +70,8 @@ class TransactionsTest extends IntegrationTestHarness {
     props.put(KafkaConfig.AutoLeaderRebalanceEnableProp, false.toString)
     props.put(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
     props.put(KafkaConfig.TransactionsAbortTimedOutTransactionCleanupIntervalMsProp, "200")
+    props.put(KafkaConfig.NumNetworkThreadsProp, 2.toString)
+    props.put(KafkaConfig.NumIoThreadsProp, 2.toString)
     props
 
   }
@@ -94,8 +97,8 @@ class TransactionsTest extends IntegrationTestHarness {
     createTopic(topic1, numPartitions, brokerCount, topicConfig())
     createTopic(topic2, numPartitions, brokerCount, topicConfig())
 
-    for (_ <- 0 until transactionalProducerCount)
-      createTransactionalProducer("transactional-producer")
+    for (i <- 0 until transactionalProducerCount)
+      createTransactionalProducer("transactional-producer-" + i.toString)
     for (_ <- 0 until transactionalConsumerCount)
       createReadCommittedConsumer("transactional-group")
     for (_ <- 0 until nonTransactionalConsumerCount)
@@ -820,6 +823,35 @@ class TransactionsTest extends IntegrationTestHarness {
     assertEquals((initialProducerEpoch + 1).toShort, producerStateEntry.producerEpoch)
   }
 
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testTransactionsWithCompression(quorum: String): Unit = {
+    val numRecords = 50
+    val numProducersWithCompression = 5
+    val numTransactions = 40
+
+    for (i <- 0 until numProducersWithCompression) {
+      createTransactionalProducer("transactional-compression-producer-" + i.toString,  compressionType = "snappy")
+    }
+
+    val topicConfig = new Properties()
+    topicConfig.put(KafkaConfig.MinInSyncReplicasProp, 1.toString)
+    createTopic("topic", 100, 1, topicConfig)
+    transactionalProducers.foreach(_.initTransactions())
+
+    for (i <- 0 until numTransactions) {
+      transactionalProducers.foreach(_.beginTransaction())
+
+      for (i <- 0 until numRecords) {
+        transactionalProducers.foreach(producer =>
+          producer.send(TestUtils.producerRecordWithExpectedTransactionStatus("topic", null, i.toString, producer.toString, willBeCommitted = true),
+            new ErrorLoggingCallback("topic", i.toString.getBytes(StandardCharsets.UTF_8), producer.toString.getBytes(StandardCharsets.UTF_8), true))
+        )
+      }
+      transactionalProducers.foreach(_.commitTransaction())
+    }
+  }
+
   private def sendTransactionalMessagesWithValueRange(producer: KafkaProducer[Array[Byte], Array[Byte]], topic: String,
                                                       start: Int, end: Int, willBeCommitted: Boolean): Unit = {
     for (i <- start until end) {
@@ -852,14 +884,16 @@ class TransactionsTest extends IntegrationTestHarness {
                                           transactionTimeoutMs: Long = 60000,
                                           maxBlockMs: Long = 60000,
                                           deliveryTimeoutMs: Int = 120000,
-                                          requestTimeoutMs: Int = 30000): KafkaProducer[Array[Byte], Array[Byte]] = {
+                                          requestTimeoutMs: Int = 30000,
+                                          compressionType: String = "none"): KafkaProducer[Array[Byte], Array[Byte]] = {
     val producer = TestUtils.createTransactionalProducer(
       transactionalId,
       brokers,
       transactionTimeoutMs = transactionTimeoutMs,
       maxBlockMs = maxBlockMs,
       deliveryTimeoutMs = deliveryTimeoutMs,
-      requestTimeoutMs = requestTimeoutMs
+      requestTimeoutMs = requestTimeoutMs,
+      compressionType = compressionType
     )
     transactionalProducers += producer
     producer
