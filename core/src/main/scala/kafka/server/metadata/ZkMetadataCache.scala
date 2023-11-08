@@ -35,9 +35,10 @@ import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataP
 import org.apache.kafka.common.{Cluster, Node, PartitionInfo, TopicPartition, Uuid}
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopic
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponsePartition
+import org.apache.kafka.common.message.UpdateMetadataRequestData
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.{ApiVersionsResponse, MetadataResponse, UpdateMetadataRequest}
+import org.apache.kafka.common.requests.{AbstractControlRequest, ApiVersionsResponse, MetadataResponse, UpdateMetadataRequest}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.server.common.{Features, MetadataVersion}
 
@@ -373,9 +374,55 @@ class ZkMetadataCache(
       controllerId(snapshot).orNull)
   }
 
+  def maybeInjectDeletedPartitions(updateMetadataRequest: UpdateMetadataRequest): UpdateMetadataRequest = {
+    if (updateMetadataRequest.updateType() == AbstractControlRequest.Type.FULL) {
+      inReadLock(partitionMetadataLock) {
+        val prevMetadataSnapshot = metadataSnapshot
+        val prevTopicIds = prevMetadataSnapshot.topicIds.values.toSet
+        val requestTopics = updateMetadataRequest.topicStates().asScala.map { topicState =>
+
+          topicState.topicName() -> topicState.topicId()
+        }.toMap
+
+        val deleteTopics = prevTopicIds -- requestTopics.values.toSet
+        if (deleteTopics.nonEmpty) {
+          updateMetadataRequest.data().topicStates()
+        }
+
+        deleteTopics.foreach { deletedTopicId =>
+          val topicName = prevMetadataSnapshot.topicNames(deletedTopicId)
+          val topicState = new UpdateMetadataRequestData.UpdateMetadataTopicState()
+            .setTopicId(deletedTopicId)
+            .setTopicName(topicName)
+            .setPartitionStates(new util.ArrayList())
+
+          prevMetadataSnapshot.partitionStates(topicName).foreach { case (partitionId, partitionState) =>
+            val lisr = LeaderAndIsr.duringDelete(partitionState.isr().asScala.map(_.intValue()).toList)
+            val newPartitionState = new UpdateMetadataPartitionState()
+              .setPartitionIndex(partitionId.toInt)
+              .setTopicName(topicName)
+              .setLeader(lisr.leader)
+              .setLeaderEpoch(lisr.leaderEpoch)
+              .setControllerEpoch(updateMetadataRequest.controllerEpoch())
+              .setReplicas(partitionState.replicas())
+              .setZkVersion(lisr.partitionEpoch)
+              .setIsr(lisr.isr.map(Integer.valueOf).asJava)
+            topicState.partitionStates().add(newPartitionState)
+          }
+          updateMetadataRequest.data().topicStates().add(topicState)
+        }
+
+        updateMetadataRequest
+      }
+    } else {
+      updateMetadataRequest
+    }
+  }
+
   // This method returns the deleted TopicPartitions received from UpdateMetadataRequest
-  def updateMetadata(correlationId: Int, updateMetadataRequest: UpdateMetadataRequest): Seq[TopicPartition] = {
+  def updateMetadata(correlationId: Int, originalUpdateMetadataRequest: UpdateMetadataRequest): Seq[TopicPartition] = {
     inWriteLock(partitionMetadataLock) {
+      val updateMetadataRequest = maybeInjectDeletedPartitions(originalUpdateMetadataRequest)
 
       val aliveBrokers = new mutable.LongMap[Broker](metadataSnapshot.aliveBrokers.size)
       val aliveNodes = new mutable.LongMap[collection.Map[ListenerName, Node]](metadataSnapshot.aliveNodes.size)

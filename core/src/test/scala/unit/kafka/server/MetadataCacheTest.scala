@@ -21,20 +21,18 @@ import org.apache.kafka.common.{Node, TopicPartition, Uuid}
 import java.util
 import java.util.Arrays.asList
 import java.util.Collections
-
 import kafka.api.LeaderAndIsr
 import kafka.server.metadata.{KRaftMetadataCache, ZkMetadataCache}
 import org.apache.kafka.common.message.UpdateMetadataRequestData.{UpdateMetadataBroker, UpdateMetadataEndpoint, UpdateMetadataPartitionState, UpdateMetadataTopicState}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
 import org.apache.kafka.common.record.RecordBatch
-import org.apache.kafka.common.requests.UpdateMetadataRequest
+import org.apache.kafka.common.requests.{AbstractControlRequest, UpdateMetadataRequest}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.metadata.{BrokerRegistrationChangeRecord, PartitionRecord, RegisterBrokerRecord, RemoveTopicRecord, TopicRecord}
 import org.apache.kafka.common.metadata.RegisterBrokerRecord.{BrokerEndpoint, BrokerEndpointCollection}
 import org.apache.kafka.image.{ClusterImage, MetadataDelta, MetadataImage, MetadataProvenance}
 import org.apache.kafka.server.common.MetadataVersion
-
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
@@ -782,7 +780,7 @@ class MetadataCacheTest {
         .setSecurityProtocol(securityProtocol.id)
         .setListener(listenerName.value)).asJava))
     val updateMetadataRequest = new UpdateMetadataRequest.Builder(version, controllerId, controllerEpoch, brokerEpoch,
-      partitionStates.asJava, brokers.asJava, util.Collections.emptyMap(), false).build()
+      partitionStates.asJava, brokers.asJava, util.Collections.emptyMap(), false, AbstractControlRequest.Type.UNKNOWN).build()
     MetadataCacheTest.updateCache(cache, updateMetadataRequest)
 
     val partitionState = cache.getPartitionInfo(topic, partitionIndex).get
