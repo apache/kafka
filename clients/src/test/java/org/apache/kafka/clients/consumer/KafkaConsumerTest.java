@@ -95,9 +95,7 @@ import org.apache.kafka.test.MockMetricsReporter;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
-import org.junit.jupiter.params.provider.MethodSource;
 
 import javax.management.MBeanServer;
 import javax.management.ObjectName;
@@ -174,13 +172,11 @@ public class KafkaConsumerTest {
 
     private final int sessionTimeoutMs = 10000;
     private final int defaultApiTimeoutMs = 60000;
-    private final int requestTimeoutMs = defaultApiTimeoutMs / 2;
     private final int heartbeatIntervalMs = 1000;
 
     // Set auto commit interval lower than heartbeat so we don't need to deal with
     // a concurrent heartbeat request
     private final int autoCommitIntervalMs = 500;
-    private final int throttleMs = 10;
 
     private final String groupId = "mock-group";
     private final String memberId = "memberId";
@@ -213,27 +209,6 @@ public class KafkaConsumerTest {
         if (consumer != null) {
             consumer.close(Duration.ZERO);
         }
-    }
-
-    /**
-     * A given test may choose to use the {@link GroupProtocol#GENERIC generic group protocol} for a number of reasons.
-     * Among the reasons for a test to do so is because it...
-     *
-     * <ul>
-     *     <li>
-     *         ...exercises rebalancing logic that is not yet implemented in the
-     *         {@link GroupProtocol#CONSUMER consumer group protocol}.
-     *     </li>
-     *     <li>...includes topic metadata that is not yet implemented in the consumer group protocol.</li>
-     *     <li>...fails, possibly due to the omission of functionality in the consumer group protocol.</li>
-     *     <li>...uses logic, timing, etc. that are not applicable to the consumer group protocol.</li>
-     * </ul>
-     *
-     * Less than half of the tests for the consumer group protocol pass as of now, but it's very tedious to
-     * investigate at this point due to known bugs and missing functionality.
-     */
-    private static Collection<Arguments> genericGroupProtocolOnly() {
-        return Collections.singleton(Arguments.of(GroupProtocol.GENERIC));
     }
 
     @ParameterizedTest
@@ -274,8 +249,10 @@ public class KafkaConsumerTest {
         assertEquals(1, consumer.metricsInternal().reporters().size());
     }
 
+    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
+    //       Once it is implemented, this should use both group protocols.
     @ParameterizedTest
-    @MethodSource("genericGroupProtocolOnly")
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     @SuppressWarnings("unchecked")
     public void testPollReturnsRecords(GroupProtocol groupProtocol) {
         consumer = setUpConsumerWithRecordsToPoll(groupProtocol, tp0, 5);
@@ -287,8 +264,10 @@ public class KafkaConsumerTest {
         assertEquals(records.records(tp0).size(), 5);
     }
 
+    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
+    //       Once it is implemented, this should use both group protocols.
     @ParameterizedTest
-    @MethodSource("genericGroupProtocolOnly")
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     @SuppressWarnings("unchecked")
     public void testSecondPollWithDeserializationErrorThrowsRecordDeserializationException(GroupProtocol groupProtocol) {
         int invalidRecordNumber = 4;
@@ -582,10 +561,8 @@ public class KafkaConsumerTest {
 
             MockConsumerInterceptor.setThrowOnConfigExceptionThreshold(targetInterceptor);
 
-            assertThrows(KafkaException.class, () -> {
-                newConsumer(
-                        props, new StringDeserializer(), new StringDeserializer());
-            });
+            assertThrows(KafkaException.class, () -> newConsumer(
+                    props, new StringDeserializer(), new StringDeserializer()));
 
             assertEquals(3, MockConsumerInterceptor.CONFIG_COUNT.get());
             assertEquals(3, MockConsumerInterceptor.CLOSE_COUNT.get());
@@ -667,8 +644,10 @@ public class KafkaConsumerTest {
         return newConsumer(propsToMap(props), keyDeserializer, valueDeserializer);
     }
 
+    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
+    //       Once it is implemented, this should use both group protocols.
     @ParameterizedTest
-    @MethodSource("genericGroupProtocolOnly")
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     public void verifyHeartbeatSent(GroupProtocol groupProtocol) throws Exception {
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
@@ -698,8 +677,10 @@ public class KafkaConsumerTest {
         assertTrue(heartbeatReceived.get());
     }
 
+    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
+    //       Once it is implemented, this should use both group protocols.
     @ParameterizedTest
-    @MethodSource("genericGroupProtocolOnly")
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     public void verifyHeartbeatSentWhenFetchedDataReady(GroupProtocol groupProtocol) throws Exception {
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
@@ -753,9 +734,11 @@ public class KafkaConsumerTest {
         assertEquals(0, requests.stream().filter(request -> request.apiKey().equals(ApiKeys.FETCH)).count());
     }
 
-    @SuppressWarnings("deprecation")
+    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
+    //       Once it is implemented, this should use both group protocols.
     @ParameterizedTest
-    @MethodSource("genericGroupProtocolOnly")
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
+    @SuppressWarnings("deprecation")
     public void verifyDeprecatedPollDoesNotTimeOutDuringMetadataUpdate(GroupProtocol groupProtocol) {
         final ConsumerMetadata metadata = createMetadata(subscription);
         final MockClient client = new MockClient(time, metadata);
@@ -799,8 +782,10 @@ public class KafkaConsumerTest {
         assertEquals(55L, consumer.position(tp0));
     }
 
+    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
+    //       The bug will be investigated and fixed so this test can use both group protocols.
     @ParameterizedTest
-    @MethodSource("genericGroupProtocolOnly")
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     public void verifyNoCoordinatorLookupForManualAssignmentWithOffsetCommit(GroupProtocol groupProtocol) {
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
@@ -836,8 +821,10 @@ public class KafkaConsumerTest {
         assertEquals(55, consumer.committed(Collections.singleton(tp0), Duration.ZERO).get(tp0).offset());
     }
 
+    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
+    //       The bug will be investigated and fixed so this test can use both group protocols.
     @ParameterizedTest
-    @MethodSource("genericGroupProtocolOnly")
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     public void testFetchProgressWithMissingPartitionPosition(GroupProtocol groupProtocol) {
         // Verifies that we can make progress on one partition while we are awaiting
         // a reset on another partition.
@@ -894,8 +881,10 @@ public class KafkaConsumerTest {
         mockClient.updateMetadata(initialMetadata);
     }
 
+    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
+    //       The bug will be investigated and fixed so this test can use both group protocols.
     @ParameterizedTest
-    @MethodSource("genericGroupProtocolOnly")
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     public void testMissingOffsetNoResetPolicy(GroupProtocol groupProtocol) {
         SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE);
         ConsumerMetadata metadata = createMetadata(subscription);
@@ -916,8 +905,10 @@ public class KafkaConsumerTest {
         assertThrows(NoOffsetForPartitionException.class, () -> consumer.poll(Duration.ZERO));
     }
 
+    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
+    //       The bug will be investigated and fixed so this test can use both group protocols.
     @ParameterizedTest
-    @MethodSource("genericGroupProtocolOnly")
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     public void testResetToCommittedOffset(GroupProtocol groupProtocol) {
         SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE);
         ConsumerMetadata metadata = createMetadata(subscription);
@@ -939,8 +930,10 @@ public class KafkaConsumerTest {
         assertEquals(539L, consumer.position(tp0));
     }
 
+    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
+    //       The bug will be investigated and fixed so this test can use both group protocols.
     @ParameterizedTest
-    @MethodSource("genericGroupProtocolOnly")
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     public void testResetUsingAutoResetPolicy(GroupProtocol groupProtocol) {
         SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.LATEST);
         ConsumerMetadata metadata = createMetadata(subscription);
@@ -981,8 +974,10 @@ public class KafkaConsumerTest {
         assertEquals(subscription.validPosition(tp0).offset, 20L);
     }
 
+    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
+    //       The bug will be investigated and fixed so this test can use both group protocols.
     @ParameterizedTest
-    @MethodSource("genericGroupProtocolOnly")
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     public void testCommitsFetchedDuringAssign(GroupProtocol groupProtocol) {
         long offset1 = 10000;
         long offset2 = 20000;
@@ -1018,20 +1013,26 @@ public class KafkaConsumerTest {
         assertEquals(offset2, consumer.committed(Collections.singleton(tp1)).get(tp1).offset());
     }
 
+    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
+    //       The bug will be investigated and fixed so this test can use both group protocols.
     @ParameterizedTest
-    @MethodSource("genericGroupProtocolOnly")
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     public void testFetchStableOffsetThrowInCommitted(GroupProtocol groupProtocol) {
         assertThrows(UnsupportedVersionException.class, () -> setupThrowableConsumer(groupProtocol).committed(Collections.singleton(tp0)));
     }
 
+    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
+    //       The bug will be investigated and fixed so this test can use both group protocols.
     @ParameterizedTest
-    @MethodSource("genericGroupProtocolOnly")
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     public void testFetchStableOffsetThrowInPoll(GroupProtocol groupProtocol) {
         assertThrows(UnsupportedVersionException.class, () -> setupThrowableConsumer(groupProtocol).poll(Duration.ZERO));
     }
 
+    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
+    //       The bug will be investigated and fixed so this test can use both group protocols.
     @ParameterizedTest
-    @MethodSource("genericGroupProtocolOnly")
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     public void testFetchStableOffsetThrowInPosition(GroupProtocol groupProtocol) {
         assertThrows(UnsupportedVersionException.class, () -> setupThrowableConsumer(groupProtocol).position(tp0));
     }
@@ -1059,8 +1060,10 @@ public class KafkaConsumerTest {
         return consumer;
     }
 
+    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
+    //       The bug will be investigated and fixed so this test can use both group protocols.
     @ParameterizedTest
-    @EnumSource(GroupProtocol.class)
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     public void testNoCommittedOffsets(GroupProtocol groupProtocol) {
         long offset1 = 10000;
 
@@ -1085,8 +1088,10 @@ public class KafkaConsumerTest {
         assertNull(committed.get(tp1));
     }
 
+    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
+    //       Once it is implemented, this should use both group protocols.
     @ParameterizedTest
-    @MethodSource("genericGroupProtocolOnly")
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     public void testAutoCommitSentBeforePositionUpdate(GroupProtocol groupProtocol) {
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
@@ -1117,8 +1122,10 @@ public class KafkaConsumerTest {
         assertTrue(commitReceived.get());
     }
 
+    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
+    //       Once it is implemented, this should use both group protocols.
     @ParameterizedTest
-    @MethodSource("genericGroupProtocolOnly")
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     public void testRegexSubscription(GroupProtocol groupProtocol) {
         String unmatchedTopic = "unmatched";
         ConsumerMetadata metadata = createMetadata(subscription);
@@ -1144,8 +1151,10 @@ public class KafkaConsumerTest {
         assertEquals(singleton(tp0), consumer.assignment());
     }
 
+    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
+    //       Once it is implemented, this should use both group protocols.
     @ParameterizedTest
-    @MethodSource("genericGroupProtocolOnly")
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     public void testChangingRegexSubscription(GroupProtocol groupProtocol) {
         String otherTopic = "other";
         TopicPartition otherTopicPartition = new TopicPartition(otherTopic, 0);
@@ -1179,8 +1188,10 @@ public class KafkaConsumerTest {
         assertEquals(singleton(otherTopic), consumer.subscription());
     }
 
+    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
+    //       Once it is implemented, this should use both group protocols.
     @ParameterizedTest
-    @MethodSource("genericGroupProtocolOnly")
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     public void testWakeupWithFetchDataAvailable(GroupProtocol groupProtocol) throws Exception {
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
@@ -1218,8 +1229,10 @@ public class KafkaConsumerTest {
         exec.awaitTermination(5L, TimeUnit.SECONDS);
     }
 
+    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
+    //       Once it is implemented, this should use both group protocols.
     @ParameterizedTest
-    @MethodSource("genericGroupProtocolOnly")
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     public void testPollThrowsInterruptExceptionIfInterrupted(GroupProtocol groupProtocol) {
         final ConsumerMetadata metadata = createMetadata(subscription);
         final MockClient client = new MockClient(time, metadata);
@@ -1277,8 +1290,10 @@ public class KafkaConsumerTest {
      * Upon unsubscribing from subscribed topics the consumer subscription and assignment
      * are both updated right away but its consumed offsets are not auto committed.
      */
+    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
+    //       Once it is implemented, this should use both group protocols.
     @ParameterizedTest
-    @MethodSource("genericGroupProtocolOnly")
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     @SuppressWarnings("unchecked")
     public void testSubscriptionChangesWithAutoCommitEnabled(GroupProtocol groupProtocol) {
         ConsumerMetadata metadata = createMetadata(subscription);
@@ -1391,8 +1406,10 @@ public class KafkaConsumerTest {
      * Upon unsubscribing from subscribed topics, the assigned partitions immediately
      * change but if auto-commit is disabled the consumer offsets are not committed.
      */
+    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
+    //       Once it is implemented, this should use both group protocols.
     @ParameterizedTest
-    @MethodSource("genericGroupProtocolOnly")
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     public void testSubscriptionChangesWithAutoCommitDisabled(GroupProtocol groupProtocol) {
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
@@ -1446,8 +1463,10 @@ public class KafkaConsumerTest {
         client.requests().clear();
     }
 
+    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
+    //       Once it is implemented, this should use both group protocols.
     @ParameterizedTest
-    @MethodSource("genericGroupProtocolOnly")
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     public void testUnsubscribeShouldTriggerPartitionsRevokedWithValidGeneration(GroupProtocol groupProtocol) {
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
@@ -1470,8 +1489,10 @@ public class KafkaConsumerTest {
         assertEquals(partitionRevoked + singleTopicPartition, unsubscribeException.getCause().getMessage());
     }
 
+    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
+    //       Once it is implemented, this should use both group protocols.
     @ParameterizedTest
-    @MethodSource("genericGroupProtocolOnly")
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     public void testUnsubscribeShouldTriggerPartitionsLostWithNoGeneration(GroupProtocol groupProtocol) throws Exception {
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
@@ -1506,8 +1527,10 @@ public class KafkaConsumerTest {
         assertEquals(Collections.emptySet(), consumer.assignment());
     }
 
+    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
+    //       The bug will be investigated and fixed so this test can use both group protocols.
     @ParameterizedTest
-    @MethodSource("genericGroupProtocolOnly")
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     @SuppressWarnings("unchecked")
     public void testManualAssignmentChangeWithAutoCommitEnabled(GroupProtocol groupProtocol) {
         ConsumerMetadata metadata = createMetadata(subscription);
@@ -1562,8 +1585,10 @@ public class KafkaConsumerTest {
         client.requests().clear();
     }
 
+    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
+    //       The bug will be investigated and fixed so this test can use both group protocols.
     @ParameterizedTest
-    @MethodSource("genericGroupProtocolOnly")
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     public void testManualAssignmentChangeWithAutoCommitDisabled(GroupProtocol groupProtocol) {
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
@@ -1618,8 +1643,10 @@ public class KafkaConsumerTest {
         client.requests().clear();
     }
 
+    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
+    //       The bug will be investigated and fixed so this test can use both group protocols.
     @ParameterizedTest
-    @MethodSource("genericGroupProtocolOnly")
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     public void testOffsetOfPausedPartitions(GroupProtocol groupProtocol) {
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
@@ -1692,8 +1719,10 @@ public class KafkaConsumerTest {
         assertThrows(IllegalStateException.class, () -> consumer.poll(Duration.ZERO));
     }
 
+    // TODO: this test references RPCs to be sent that are not part of the CONSUMER group protocol.
+    //       We are deferring any attempts at generalizing this test for both group protocols to the future.
     @ParameterizedTest
-    @MethodSource("genericGroupProtocolOnly")
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     public void testGracefulClose(GroupProtocol groupProtocol) throws Exception {
         Map<TopicPartition, Errors> response = new HashMap<>();
         response.put(tp0, Errors.NONE);
@@ -1703,8 +1732,10 @@ public class KafkaConsumerTest {
         consumerCloseTest(groupProtocol, 5000, Arrays.asList(commitResponse, leaveGroupResponse, closeResponse), 0, false);
     }
 
+    // TODO: this test references RPCs to be sent that are not part of the CONSUMER group protocol.
+    //       We are deferring any attempts at generalizing this test for both group protocols to the future.
     @ParameterizedTest
-    @MethodSource("genericGroupProtocolOnly")
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     public void testCloseTimeoutDueToNoResponseForCloseFetchRequest(GroupProtocol groupProtocol) throws Exception {
         Map<TopicPartition, Errors> response = new HashMap<>();
         response.put(tp0, Errors.NONE);
@@ -1720,14 +1751,18 @@ public class KafkaConsumerTest {
         consumerCloseTest(groupProtocol, closeTimeoutMs, serverResponsesWithoutCloseResponse, waitForCloseCompletionMs, false);
     }
 
+    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
+    //       Once it is implemented, this should use both group protocols.
     @ParameterizedTest
-    @MethodSource("genericGroupProtocolOnly")
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     public void testCloseTimeout(GroupProtocol groupProtocol) throws Exception {
         consumerCloseTest(groupProtocol, 5000, Collections.emptyList(), 5000, false);
     }
 
+    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
+    //       Once it is implemented, this should use both group protocols.
     @ParameterizedTest
-    @MethodSource("genericGroupProtocolOnly")
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     public void testLeaveGroupTimeout(GroupProtocol groupProtocol) throws Exception {
         Map<TopicPartition, Errors> response = new HashMap<>();
         response.put(tp0, Errors.NONE);
@@ -1735,20 +1770,26 @@ public class KafkaConsumerTest {
         consumerCloseTest(groupProtocol, 5000, singletonList(commitResponse), 5000, false);
     }
 
+    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
+    //       Once it is implemented, this should use both group protocols.
     @ParameterizedTest
-    @MethodSource("genericGroupProtocolOnly")
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     public void testCloseNoWait(GroupProtocol groupProtocol) throws Exception {
         consumerCloseTest(groupProtocol, 0, Collections.emptyList(), 0, false);
     }
 
+    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
+    //       Once it is implemented, this should use both group protocols.
     @ParameterizedTest
-    @MethodSource("genericGroupProtocolOnly")
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     public void testCloseInterrupt(GroupProtocol groupProtocol) throws Exception {
         consumerCloseTest(groupProtocol, Long.MAX_VALUE, Collections.emptyList(), 0, true);
     }
 
+    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
+    //       The bug will be investigated and fixed so this test can use both group protocols.
     @ParameterizedTest
-    @MethodSource("genericGroupProtocolOnly")
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     public void testCloseShouldBeIdempotent(GroupProtocol groupProtocol) {
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = spy(new MockClient(time, metadata));
@@ -1846,8 +1887,10 @@ public class KafkaConsumerTest {
         consumer2.close(Duration.ZERO);
     }
 
+    // TODO: this test references RPCs to be sent that are not part of the CONSUMER group protocol.
+    //       We are deferring any attempts at generalizing this test for both group protocols to the future.
     @ParameterizedTest
-    @MethodSource("genericGroupProtocolOnly")
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     @SuppressWarnings("unchecked")
     public void testShouldAttemptToRejoinGroupAfterSyncGroupFailed(GroupProtocol groupProtocol) throws Exception {
         ConsumerMetadata metadata = createMetadata(subscription);
@@ -2011,8 +2054,10 @@ public class KafkaConsumerTest {
         }
     }
 
+    // TODO: this test requires topic metadata logic which is not yet implemented in the CONSUMER group protocol.
+    //       Once it is implemented, this should use both group protocols.
     @ParameterizedTest
-    @MethodSource("genericGroupProtocolOnly")
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     public void testPartitionsForNonExistingTopic(GroupProtocol groupProtocol) {
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
@@ -2030,44 +2075,56 @@ public class KafkaConsumerTest {
         assertEquals(Collections.emptyList(), consumer.partitionsFor("non-exist-topic"));
     }
 
+    // TODO: this test requires topic metadata logic which is not yet implemented in the CONSUMER group protocol.
+    //       Once it is implemented, this should use both group protocols.
     @ParameterizedTest
-    @MethodSource("genericGroupProtocolOnly")
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     public void testPartitionsForAuthenticationFailure(GroupProtocol groupProtocol) {
         final KafkaConsumer<String, String> consumer = consumerWithPendingAuthenticationError(groupProtocol);
         assertThrows(AuthenticationException.class, () -> consumer.partitionsFor("some other topic"));
     }
 
+    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
+    //       The bug will be investigated and fixed so this test can use both group protocols.
     @ParameterizedTest
-    @MethodSource("genericGroupProtocolOnly")
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     public void testBeginningOffsetsAuthenticationFailure(GroupProtocol groupProtocol) {
         final KafkaConsumer<String, String> consumer = consumerWithPendingAuthenticationError(groupProtocol);
         assertThrows(AuthenticationException.class, () -> consumer.beginningOffsets(Collections.singleton(tp0)));
     }
 
+    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
+    //       The bug will be investigated and fixed so this test can use both group protocols.
     @ParameterizedTest
-    @MethodSource("genericGroupProtocolOnly")
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     public void testEndOffsetsAuthenticationFailure(GroupProtocol groupProtocol) {
         final KafkaConsumer<String, String> consumer = consumerWithPendingAuthenticationError(groupProtocol);
         assertThrows(AuthenticationException.class, () -> consumer.endOffsets(Collections.singleton(tp0)));
     }
 
+    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
+    //       Once it is implemented, this should use both group protocols.
     @ParameterizedTest
-    @MethodSource("genericGroupProtocolOnly")
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     public void testPollAuthenticationFailure(GroupProtocol groupProtocol) {
         final KafkaConsumer<String, String> consumer = consumerWithPendingAuthenticationError(groupProtocol);
         consumer.subscribe(singleton(topic));
         assertThrows(AuthenticationException.class, () -> consumer.poll(Duration.ZERO));
     }
 
+    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
+    //       The bug will be investigated and fixed so this test can use both group protocols.
     @ParameterizedTest
-    @MethodSource("genericGroupProtocolOnly")
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     public void testOffsetsForTimesAuthenticationFailure(GroupProtocol groupProtocol) {
         final KafkaConsumer<String, String> consumer = consumerWithPendingAuthenticationError(groupProtocol);
         assertThrows(AuthenticationException.class, () -> consumer.offsetsForTimes(singletonMap(tp0, 0L)));
     }
 
+    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
+    //       The bug will be investigated and fixed so this test can use both group protocols.
     @ParameterizedTest
-    @MethodSource("genericGroupProtocolOnly")
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     public void testCommitSyncAuthenticationFailure(GroupProtocol groupProtocol) {
         final KafkaConsumer<String, String> consumer = consumerWithPendingAuthenticationError(groupProtocol);
         Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
@@ -2075,15 +2132,19 @@ public class KafkaConsumerTest {
         assertThrows(AuthenticationException.class, () -> consumer.commitSync(offsets));
     }
 
+    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
+    //       The bug will be investigated and fixed so this test can use both group protocols.
     @ParameterizedTest
-    @MethodSource("genericGroupProtocolOnly")
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     public void testCommittedAuthenticationFailure(GroupProtocol groupProtocol) {
         final KafkaConsumer<String, String> consumer = consumerWithPendingAuthenticationError(groupProtocol);
         assertThrows(AuthenticationException.class, () -> consumer.committed(Collections.singleton(tp0)).get(tp0));
     }
 
+    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
+    //       The bug will be investigated and fixed so this test can use both group protocols.
     @ParameterizedTest
-    @MethodSource("genericGroupProtocolOnly")
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     public void testMeasureCommitSyncDurationOnFailure(GroupProtocol groupProtocol) {
         final KafkaConsumer<String, String> consumer
             = consumerWithPendingError(groupProtocol, new MockTime(Duration.ofSeconds(1).toMillis()));
@@ -2098,8 +2159,10 @@ public class KafkaConsumerTest {
         assertTrue((Double) metric.metricValue() >= Duration.ofMillis(999).toNanos());
     }
 
+    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
+    //       The bug will be investigated and fixed so this test can use both group protocols.
     @ParameterizedTest
-    @EnumSource(GroupProtocol.class)
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     public void testMeasureCommitSyncDuration(GroupProtocol groupProtocol) {
         Time time = new MockTime(Duration.ofSeconds(1).toMillis());
         SubscriptionState subscription = new SubscriptionState(new LogContext(),
@@ -2127,8 +2190,10 @@ public class KafkaConsumerTest {
         assertTrue((Double) metric.metricValue() >= Duration.ofMillis(999).toNanos());
     }
 
+    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
+    //       The bug will be investigated and fixed so this test can use both group protocols.
     @ParameterizedTest
-    @MethodSource("genericGroupProtocolOnly")
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     public void testMeasureCommittedDurationOnFailure(GroupProtocol groupProtocol) {
         final KafkaConsumer<String, String> consumer
             = consumerWithPendingError(groupProtocol, new MockTime(Duration.ofSeconds(1).toMillis()));
@@ -2143,8 +2208,10 @@ public class KafkaConsumerTest {
         assertTrue((Double) metric.metricValue() >= Duration.ofMillis(999).toNanos());
     }
 
+    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
+    //       The bug will be investigated and fixed so this test can use both group protocols.
     @ParameterizedTest
-    @MethodSource("genericGroupProtocolOnly")
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     public void testMeasureCommittedDuration(GroupProtocol groupProtocol) {
         long offset1 = 10000;
         Time time = new MockTime(Duration.ofSeconds(1).toMillis());
@@ -2174,8 +2241,10 @@ public class KafkaConsumerTest {
         assertTrue((Double) metric.metricValue() >= Duration.ofMillis(999).toNanos());
     }
 
+    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
+    //       Once it is implemented, this should use both group protocols.
     @ParameterizedTest
-    @MethodSource("genericGroupProtocolOnly")
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     public void testRebalanceException(GroupProtocol groupProtocol) {
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
@@ -2217,8 +2286,10 @@ public class KafkaConsumerTest {
         assertTrue(subscription.assignedPartitions().isEmpty());
     }
 
+    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
+    //       Once it is implemented, this should use both group protocols.
     @ParameterizedTest
-    @MethodSource("genericGroupProtocolOnly")
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     public void testReturnRecordsDuringRebalance(GroupProtocol groupProtocol) throws InterruptedException {
         Time time = new MockTime(1L);
         ConsumerMetadata metadata = createMetadata(subscription);
@@ -2343,8 +2414,10 @@ public class KafkaConsumerTest {
         consumer.close(Duration.ZERO);
     }
 
+    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
+    //       Once it is implemented, this should use both group protocols.
     @ParameterizedTest
-    @MethodSource("genericGroupProtocolOnly")
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     public void testGetGroupMetadata(GroupProtocol groupProtocol) {
         final ConsumerMetadata metadata = createMetadata(subscription);
         final MockClient client = new MockClient(time, metadata);
@@ -2374,8 +2447,10 @@ public class KafkaConsumerTest {
         assertEquals(groupInstanceId, groupMetadataAfterPoll.groupInstanceId());
     }
 
+    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
+    //       Once it is implemented, this should use both group protocols.
     @ParameterizedTest
-    @MethodSource("genericGroupProtocolOnly")
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     public void testInvalidGroupMetadata(GroupProtocol groupProtocol) throws InterruptedException {
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
@@ -2402,8 +2477,10 @@ public class KafkaConsumerTest {
         assertThrows(IllegalStateException.class, consumer::groupMetadata);
     }
 
+    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
+    //       The bug will be investigated and fixed so this test can use both group protocols.
     @ParameterizedTest
-    @MethodSource("genericGroupProtocolOnly")
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     @SuppressWarnings("unchecked")
     public void testCurrentLag(GroupProtocol groupProtocol) {
         final ConsumerMetadata metadata = createMetadata(subscription);
@@ -2456,8 +2533,10 @@ public class KafkaConsumerTest {
         assertEquals(OptionalLong.of(45L), consumer.currentLag(tp0));
     }
 
+    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
+    //       The bug will be investigated and fixed so this test can use both group protocols.
     @ParameterizedTest
-    @MethodSource("genericGroupProtocolOnly")
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     public void testListOffsetShouldUpdateSubscriptions(GroupProtocol groupProtocol) {
         final ConsumerMetadata metadata = createMetadata(subscription);
         final MockClient client = new MockClient(time, metadata);
@@ -2649,6 +2728,7 @@ public class KafkaConsumerTest {
             partitionData.put(entry.getKey(), new OffsetFetchResponse.PartitionData(entry.getValue(),
                     Optional.empty(), "", error));
         }
+        int throttleMs = 10;
         return new OffsetFetchResponse(
             throttleMs,
             Collections.singletonMap(groupId, Errors.NONE),
@@ -2698,11 +2778,12 @@ public class KafkaConsumerTest {
             if (fetchCount == 0) {
                 records = MemoryRecords.EMPTY;
             } else {
-                MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE,
-                        TimestampType.CREATE_TIME, fetchOffset);
-                for (int i = 0; i < fetchCount; i++)
-                    builder.append(0L, ("key-" + i).getBytes(), ("value-" + i).getBytes());
-                records = builder.build();
+                try (MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE,
+                        TimestampType.CREATE_TIME, fetchOffset)) {
+                    for (int i = 0; i < fetchCount; i++)
+                        builder.append(0L, ("key-" + i).getBytes(), ("value-" + i).getBytes());
+                    records = builder.build();
+                }
             }
             tpResponses.put(new TopicIdPartition(topicIds.get(partition.topic()), partition),
                 new FetchResponseData.PartitionData()
@@ -2828,7 +2909,6 @@ public class KafkaConsumerTest {
                                              Deserializer<String> valueDeserializer,
                                              boolean throwOnStableOffsetNotSupported) {
         String clientId = "mock-consumer";
-        String metricGroupPrefix = "consumer";
         long retryBackoffMs = 100;
         long retryBackoffMaxMs = 1000;
         int minBytes = 1;
@@ -2838,6 +2918,7 @@ public class KafkaConsumerTest {
         int maxPollRecords = Integer.MAX_VALUE;
         boolean checkCrcs = true;
         int rebalanceTimeoutMs = 60000;
+        int requestTimeoutMs = defaultApiTimeoutMs / 2;
 
         Map<String, Object> configs = new HashMap<>();
         configs.put(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG, autoCommitIntervalMs);
@@ -2886,8 +2967,10 @@ public class KafkaConsumerTest {
         }
     }
 
+    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
+    //       Once it is implemented, this should use both group protocols.
     @ParameterizedTest
-    @MethodSource("genericGroupProtocolOnly")
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     public void testSubscriptionOnInvalidTopic(GroupProtocol groupProtocol) {
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
@@ -3024,16 +3107,18 @@ public void testClosingConsumerUnregistersConsumerMetrics(GroupProtocol groupPro
         assertFalse(consumerMetricPresent(consumer, "time-between-poll-max"));
     }
 
+    // NOTE: this test uses the enforceRebalance API which is not implemented in the CONSUMER group protocol.
     @ParameterizedTest
-    @MethodSource("genericGroupProtocolOnly")
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     public void testEnforceRebalanceWithManualAssignment(GroupProtocol groupProtocol) {
         consumer = newConsumer(groupProtocol, null);
         consumer.assign(singleton(new TopicPartition("topic", 0)));
         assertThrows(IllegalStateException.class, consumer::enforceRebalance);
     }
 
+    // NOTE: this test uses the enforceRebalance API which is not implemented in the CONSUMER group protocol.
     @ParameterizedTest
-    @MethodSource("genericGroupProtocolOnly")
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     public void testEnforceRebalanceTriggersRebalanceOnNextPoll(GroupProtocol groupProtocol) {
         Time time = new MockTime(1L);
         ConsumerMetadata metadata = createMetadata(subscription);
@@ -3062,8 +3147,9 @@ public void testClosingConsumerUnregistersConsumerMetrics(GroupProtocol groupPro
         assertEquals(countingRebalanceListener.revokedCount, 1);
     }
 
+    // NOTE: this test uses the enforceRebalance API which is not implemented in the CONSUMER group protocol.
     @ParameterizedTest
-    @MethodSource("genericGroupProtocolOnly")
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     public void testEnforceRebalanceReason(GroupProtocol groupProtocol) {
         Time time = new MockTime(1L);
 
@@ -3124,8 +3210,10 @@ public void testClosingConsumerUnregistersConsumerMetrics(GroupProtocol groupPro
         );
     }
 
+    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
+    //       The bug will be investigated and fixed so this test can use both group protocols.
     @ParameterizedTest
-    @MethodSource("genericGroupProtocolOnly")
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     public void configurableObjectsShouldSeeGeneratedClientId(GroupProtocol groupProtocol) {
         Properties props = new Properties();
         props.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name());
@@ -3169,8 +3257,10 @@ public void testClosingConsumerUnregistersConsumerMetrics(GroupProtocol groupPro
             () -> newConsumer(configs, new StringDeserializer(), new StringDeserializer()));
     }
 
+    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
+    //       The bug will be investigated and fixed so this test can use both group protocols.
     @ParameterizedTest
-    @MethodSource("genericGroupProtocolOnly")
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     public void testOffsetsForTimesTimeout(GroupProtocol groupProtocol) {
         final KafkaConsumer<String, String> consumer = consumerForCheckingTimeoutException(groupProtocol);
         assertEquals(
@@ -3179,8 +3269,10 @@ public void testClosingConsumerUnregistersConsumerMetrics(GroupProtocol groupPro
         );
     }
 
+    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
+    //       The bug will be investigated and fixed so this test can use both group protocols.
     @ParameterizedTest
-    @MethodSource("genericGroupProtocolOnly")
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     public void testBeginningOffsetsTimeout(GroupProtocol groupProtocol) {
         final KafkaConsumer<String, String> consumer = consumerForCheckingTimeoutException(groupProtocol);
         assertEquals(
@@ -3189,8 +3281,10 @@ public void testClosingConsumerUnregistersConsumerMetrics(GroupProtocol groupPro
         );
     }
 
+    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
+    //       The bug will be investigated and fixed so this test can use both group protocols.
     @ParameterizedTest
-    @MethodSource("genericGroupProtocolOnly")
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     public void testEndOffsetsTimeout(GroupProtocol groupProtocol) {
         final KafkaConsumer<String, String> consumer = consumerForCheckingTimeoutException(groupProtocol);
         assertEquals(
