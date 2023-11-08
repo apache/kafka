@@ -666,8 +666,9 @@ public class ConsumerGroupCommand {
                             Optional.of(consumerSummary.clientId()))
                         );
                     });
-                Map<TopicPartition, OffsetAndMetadata> unassignedPartitions = committedOffsets.entrySet().stream().filter(e -> !assignedTopicPartitions.contains(e.getKey()))
-                    .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+                Map<TopicPartition, OffsetAndMetadata> unassignedPartitions = new HashMap<>();
+                committedOffsets.entrySet().stream().filter(e -> !assignedTopicPartitions.contains(e.getKey()))
+                    .forEach(e -> unassignedPartitions.put(e.getKey(), e.getValue()));
                 Collection<PartitionAssignmentState> rowsWithoutConsumer = !unassignedPartitions.isEmpty()
                     ? collectConsumerAssignment(
                         groupId,
