@@ -88,7 +88,6 @@ import java.util.Set;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -156,7 +155,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     // to keep from repeatedly scanning subscriptions in poll(), cache the result during metadata updates
     private boolean cachedSubscriptionHasAllFetchPositions;
     private final WakeupTrigger wakeupTrigger = new WakeupTrigger();
-    private final AtomicBoolean fencedInstance = new AtomicBoolean(false);
+    private volatile boolean isFenced = false;
     private final Optional<String> groupInstanceId;
 
     private final OffsetCommitCallbackInvoker invoker = new OffsetCommitCallbackInvoker();
@@ -1172,7 +1171,14 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     @Override
     public KafkaConsumerMetrics kafkaConsumerMetrics() {
-            return kafkaConsumerMetrics;
+        return kafkaConsumerMetrics;
+    }
+
+    private void maybeThrowFencedInstanceException() {
+        if (isFenced) {
+            throw new FencedInstanceIdException("Get fenced exception for group.instance.id " +
+                groupInstanceId.orElse("null"));
+        }
     }
 
     // Visible for testing
@@ -1235,9 +1241,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 return;
             }
 
-            if (exception instanceof FencedInstanceIdException) {
-                fencedInstance.set(true);
-            }
+            if (exception instanceof FencedInstanceIdException)
+                isFenced = true;
             callback.onComplete(offsets, exception);
         }
     }
