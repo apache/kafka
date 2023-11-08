@@ -1634,7 +1634,7 @@ class ConfigCommandTest extends Logging {
     verifyAlterClientMetricsConfig(node, "1", List("--entity-name", "1"))
   }
 
-  def verifyAlterClientMetricsConfig(node: Node, resourceName: String, resourceOpts: List[String]): Unit = {
+  private def verifyAlterClientMetricsConfig(node: Node, resourceName: String, resourceOpts: List[String]): Unit = {
     val optsList = List("--bootstrap-server", "localhost:9092",
       "--entity-type", "client-metrics",
       "--alter",
@@ -1686,6 +1686,7 @@ class ConfigCommandTest extends Logging {
     }
     ConfigCommand.alterConfig(mockAdminClient, alterOpts)
     verify(describeResult).all()
+    verify(alterResult).all()
   }
 
   @Test
