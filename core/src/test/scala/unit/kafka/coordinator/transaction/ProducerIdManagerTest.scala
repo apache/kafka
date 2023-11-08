@@ -195,6 +195,7 @@ class ProducerIdManagerTest {
     verifyNewBlockAndProducerId(manager, new ProducerIdsBlock(0, 0, 1), 0)
 
     manager.error = error
+    time.sleep(RetryBackoffMs)
     verifyFailure(manager)
 
     manager.error = Errors.NONE

@@ -509,8 +509,8 @@ public class LogSegment implements Closeable {
                 }
             }
         } catch (CorruptRecordException | InvalidRecordException e) {
-            LOGGER.warn("Found invalid messages in log segment {} at byte offset {}: {}. {}", log.file().getAbsolutePath(),
-                validBytes, e.getMessage(), e.getCause());
+            LOGGER.warn("Found invalid messages in log segment {} at byte offset {}.", log.file().getAbsolutePath(),
+                validBytes, e);
         }
         int truncated = log.sizeInBytes() - validBytes;
         if (truncated > 0)

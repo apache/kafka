@@ -218,10 +218,7 @@ public class TopologyConfig extends AbstractConfig {
     }
 
     public Materialized.StoreType parseStoreType() {
-        if (storeType.equals(IN_MEMORY)) {
-            return Materialized.StoreType.IN_MEMORY;
-        }
-        return Materialized.StoreType.ROCKS_DB;
+        return Materialized.StoreType.parse(storeType);
     }
 
     public boolean isNamedTopology() {

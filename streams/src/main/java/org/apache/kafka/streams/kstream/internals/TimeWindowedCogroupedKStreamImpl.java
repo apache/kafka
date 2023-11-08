@@ -28,6 +28,8 @@ import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
+import org.apache.kafka.streams.processor.internals.StoreBuilderWrapper;
+import org.apache.kafka.streams.processor.internals.StoreFactory;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
@@ -102,7 +104,7 @@ public class TimeWindowedCogroupedKStreamImpl<K, V, W extends Window> extends Ab
             windows);
     }
 
-    private StoreBuilder<TimestampedWindowStore<K, V>> materialize(
+    private StoreFactory materialize(
         final MaterializedInternal<K, V, WindowStore<Bytes, byte[]>> materialized) {
         WindowBytesStoreSupplier supplier = (WindowBytesStoreSupplier) materialized.storeSupplier();
         if (supplier == null) {
@@ -158,6 +160,6 @@ public class TimeWindowedCogroupedKStreamImpl<K, V, W extends Window> extends Ab
         if (materialized.cachingEnabled()) {
             builder.withCachingEnabled();
         }
-        return builder;
+        return new StoreBuilderWrapper(builder);
     }
 }

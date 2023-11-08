@@ -16,6 +16,14 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import java.util.List;
+import java.util.Map;
+import java.util.function.BiConsumer;
+import java.util.function.Predicate;
+import java.util.stream.Collectors;
+import java.util.Optional;
+
+import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.FetchSessionHandler;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult;
@@ -24,13 +32,6 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.function.BiConsumer;
-import java.util.function.Predicate;
-import java.util.stream.Collectors;
 
 /**
  * {@code FetchRequestManager} is responsible for generating {@link FetchRequest} that represent the
@@ -48,8 +49,9 @@ public class FetchRequestManager extends AbstractFetch implements RequestManager
                         final FetchConfig fetchConfig,
                         final FetchBuffer fetchBuffer,
                         final FetchMetricsManager metricsManager,
-                        final NetworkClientDelegate networkClientDelegate) {
-        super(logContext, metadata, subscriptions, fetchConfig, fetchBuffer, metricsManager, time);
+                        final NetworkClientDelegate networkClientDelegate,
+                        final ApiVersions apiVersions) {
+        super(logContext, metadata, subscriptions, fetchConfig, fetchBuffer, metricsManager, time, apiVersions);
         this.networkClientDelegate = networkClientDelegate;
     }
 
