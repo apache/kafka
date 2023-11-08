@@ -217,8 +217,19 @@ public class TopologyConfig extends AbstractConfig {
         }
     }
 
+    public static Materialized.StoreType parse(final String storeType) {
+        switch (storeType) {
+            case IN_MEMORY:
+                return Materialized.StoreType.IN_MEMORY;
+            case ROCKS_DB:
+                return Materialized.StoreType.ROCKS_DB;
+            default:
+                throw new IllegalStateException("Unexpected storeType: " + storeType);
+        }
+    }
+
     public Materialized.StoreType parseStoreType() {
-        return Materialized.StoreType.parse(storeType);
+        return parse(storeType);
     }
 
     public boolean isNamedTopology() {
