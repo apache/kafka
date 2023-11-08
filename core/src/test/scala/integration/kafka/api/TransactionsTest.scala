@@ -834,6 +834,7 @@ class TransactionsTest extends IntegrationTestHarness {
       createTransactionalProducer("transactional-compression-producer-" + i.toString,  compressionType = "snappy")
     }
 
+    // KAFKA-15653 is triggered more easily with replication factor 1
     val topicConfig = new Properties()
     topicConfig.put(KafkaConfig.MinInSyncReplicasProp, 1.toString)
     createTopic("topic", 100, 1, topicConfig)
