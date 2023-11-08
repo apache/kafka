@@ -660,13 +660,13 @@ public class StandaloneHerderTest {
         Connector connectorMock = mock(SourceConnector.class);
         expectConfigValidation(connectorMock, true, connectorConfig);
 
-        // herder.stop() should stop any running connectors and tasks even if destroyConnector was not invoked
         expectStop();
 
         herder.putConnectorConfig(CONNECTOR_NAME, connectorConfig, false, createCallback);
         Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(1000L, TimeUnit.SECONDS);
         assertEquals(createdInfo(SourceSink.SOURCE), connectorInfo.result());
 
+        // herder.stop() should stop any running connectors and tasks even if destroyConnector was not invoked
         herder.stop();
         assertTrue(noneConnectorClientConfigOverridePolicy.isClosed());
         verify(worker).stop();
@@ -841,7 +841,6 @@ public class StandaloneHerderTest {
         expectTargetState(CONNECTOR_NAME, TargetState.PAUSED);
         expectTargetState(CONNECTOR_NAME, TargetState.STOPPED);
 
-        // herder.stop() should stop any running connectors and tasks even if destroyConnector was not invoked
         expectStop();
 
 
@@ -858,6 +857,7 @@ public class StandaloneHerderTest {
         herder.taskConfigs(CONNECTOR_NAME, taskConfigsCallback);
         assertEquals(Collections.emptyList(), taskConfigsCallback.get(1, TimeUnit.SECONDS));
 
+        // herder.stop() should stop any running connectors and tasks even if destroyConnector was not invoked
         herder.stop();
         assertTrue(noneConnectorClientConfigOverridePolicy.isClosed());
         verify(worker).stop();
