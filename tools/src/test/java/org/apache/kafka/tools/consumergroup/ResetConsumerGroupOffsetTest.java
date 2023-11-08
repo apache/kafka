@@ -64,10 +64,11 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
  * - export/import
  */
 public class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
-    @SuppressWarnings("deprecation")
     @Override
     public Seq<KafkaConfig> generateConfigs() {
-        return kafka.utils.TestUtils.createBrokerConfigs(
+        List<KafkaConfig> cfgs = new ArrayList<>();
+
+        kafka.utils.TestUtils.createBrokerConfigs(
             1,
             zkConnect(),
             false,
@@ -86,7 +87,12 @@ public class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
             (short) 1,
             0,
             false
-        ).toStream().map(KafkaConfig::fromProps);
+        ).foreach(props -> {
+            cfgs.add(KafkaConfig.fromProps(props));
+            return null;
+        });
+
+        return seq(cfgs);
     }
 
     private String[] basicArgs() {
@@ -589,10 +595,5 @@ public class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
         List<String> res = new ArrayList<>(Arrays.asList(args));
         res.addAll(Arrays.asList(extra));
         return res.toArray(new String[0]);
-    }
-
-    @SuppressWarnings({"deprecation"})
-    private static <T> Seq<T> seq(Collection<T> seq) {
-        return JavaConverters.asScalaIteratorConverter(seq.iterator()).asScala().toSeq();
     }
 }

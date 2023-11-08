@@ -29,6 +29,7 @@ import org.apache.kafka.tools.consumergroup.ConsumerGroupCommand.ConsumerGroupSe
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInfo;
+import scala.collection.JavaConverters;
 import scala.collection.Seq;
 
 import java.time.Duration;
@@ -54,10 +55,11 @@ public class ConsumerGroupCommandTest extends kafka.integration.KafkaServerTestH
     List<ConsumerGroupService> consumerGroupService = new ArrayList<>();
     List<AbstractConsumerGroupExecutor> consumerGroupExecutors = new ArrayList<>();
 
-    @SuppressWarnings("deprecation")
     @Override
     public Seq<KafkaConfig> generateConfigs() {
-        return TestUtils.createBrokerConfigs(
+        List<KafkaConfig> cfgs = new ArrayList<>();
+
+        TestUtils.createBrokerConfigs(
             1,
             zkConnectOrNull(),
             false,
@@ -76,7 +78,12 @@ public class ConsumerGroupCommandTest extends kafka.integration.KafkaServerTestH
             (short) 1,
             0,
             false
-        ).toStream().map(KafkaConfig::fromProps);
+        ).foreach(props -> {
+            cfgs.add(KafkaConfig.fromProps(props));
+            return null;
+        });
+
+        return seq(cfgs);
     }
 
     @BeforeEach
@@ -296,5 +303,10 @@ public class ConsumerGroupCommandTest extends kafka.integration.KafkaServerTestH
             th.configure();
             submit(th);
         }
+    }
+
+    @SuppressWarnings({"deprecation"})
+    static <T> Seq<T> seq(Collection<T> seq) {
+        return JavaConverters.asScalaIteratorConverter(seq.iterator()).asScala().toSeq();
     }
 }
