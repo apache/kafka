@@ -178,7 +178,7 @@ pipeline {
         stage('PowerPC') {
           agent { label 'ppc64le' }
           tools {
-            jdk 'jdk_20_latest'
+            jdk 'jdk_21_latest'
           }
           options {
             timeout(time: 8, unit: 'HOURS')
