@@ -23,7 +23,7 @@ import joptsimple.OptionException
 import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.raft.{KafkaRaftManager, RaftManager}
 import kafka.security.CredentialProvider
-import kafka.server.{KafkaConfig, KafkaRequestHandlerPool, MetaProperties, SimpleApiVersionManager}
+import kafka.server.{KafkaConfig, KafkaRequestHandlerPool, SimpleApiVersionManager}
 import kafka.utils.{CoreUtils, Exit, Logging}
 import org.apache.kafka.common.errors.InvalidConfigurationException
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
@@ -82,13 +82,8 @@ class TestRaftServer(
       () => Features.fromKRaftVersion(MetadataVersion.MINIMUM_KRAFT_VERSION))
     socketServer = new SocketServer(config, metrics, time, credentialProvider, apiVersionManager)
 
-    val metaProperties = MetaProperties(
-      clusterId = Uuid.ZERO_UUID.toString,
-      nodeId = config.nodeId
-    )
-
     raftManager = new KafkaRaftManager[Array[Byte]](
-      metaProperties,
+      Uuid.ZERO_UUID.toString,
       config,
       new ByteArraySerde,
       partition,

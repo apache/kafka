@@ -20,14 +20,17 @@ package kafka.testkit;
 import kafka.server.MetaProperties;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.network.ListenerName;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.test.TestUtils;
 
+import java.io.File;
+import java.io.IOException;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.NavigableMap;
 import java.util.TreeMap;
 
@@ -36,8 +39,8 @@ public class TestKitNodes {
         private boolean combined = false;
         private Uuid clusterId = null;
         private MetadataVersion bootstrapMetadataVersion = null;
-        private final NavigableMap<Integer, ControllerNode> controllerNodes = new TreeMap<>();
-        private final NavigableMap<Integer, BrokerNode> brokerNodes = new TreeMap<>();
+        private final NavigableMap<Integer, ControllerNode.Builder> controllerNodeBuilders = new TreeMap<>();
+        private final NavigableMap<Integer, BrokerNode.Builder> brokerNodeBuilders = new TreeMap<>();
 
         public Builder setClusterId(Uuid clusterId) {
             this.clusterId = clusterId;
@@ -54,42 +57,21 @@ public class TestKitNodes {
             return this;
         }
 
-        public Builder addNodes(TestKitNode[] nodes) {
-            for (TestKitNode node : nodes) {
-                addNode(node);
-            }
-            return this;
-        }
-
-        public Builder addNode(TestKitNode node) {
-            if (node instanceof ControllerNode) {
-                ControllerNode controllerNode = (ControllerNode) node;
-                controllerNodes.put(node.id(), controllerNode);
-            } else if (node instanceof BrokerNode) {
-                BrokerNode brokerNode = (BrokerNode) node;
-                brokerNodes.put(node.id(), brokerNode);
-            } else {
-                throw new RuntimeException("Can't handle TestKitNode subclass " +
-                        node.getClass().getSimpleName());
-            }
-            return this;
-        }
-
         public Builder setNumControllerNodes(int numControllerNodes) {
             if (numControllerNodes < 0) {
                 throw new RuntimeException("Invalid negative value for numControllerNodes");
             }
 
-            while (controllerNodes.size() > numControllerNodes) {
-                controllerNodes.pollFirstEntry();
+            while (controllerNodeBuilders.size() > numControllerNodes) {
+                controllerNodeBuilders.pollFirstEntry();
             }
-            while (controllerNodes.size() < numControllerNodes) {
+            while (controllerNodeBuilders.size() < numControllerNodes) {
                 int nextId = startControllerId();
-                if (!controllerNodes.isEmpty()) {
-                    nextId = controllerNodes.lastKey() + 1;
+                if (!controllerNodeBuilders.isEmpty()) {
+                    nextId = controllerNodeBuilders.lastKey() + 1;
                 }
-                controllerNodes.put(nextId, new ControllerNode.Builder().
-                    setId(nextId).build());
+                controllerNodeBuilders.put(nextId, new ControllerNode.Builder().
+                    setId(nextId));
             }
             return this;
         }
@@ -98,16 +80,16 @@ public class TestKitNodes {
             if (numBrokerNodes < 0) {
                 throw new RuntimeException("Invalid negative value for numBrokerNodes");
             }
-            while (brokerNodes.size() > numBrokerNodes) {
-                brokerNodes.pollFirstEntry();
+            while (brokerNodeBuilders.size() > numBrokerNodes) {
+                brokerNodeBuilders.pollFirstEntry();
             }
-            while (brokerNodes.size() < numBrokerNodes) {
+            while (brokerNodeBuilders.size() < numBrokerNodes) {
                 int nextId = startBrokerId();
-                if (!brokerNodes.isEmpty()) {
-                    nextId = brokerNodes.lastKey() + 1;
+                if (!brokerNodeBuilders.isEmpty()) {
+                    nextId = brokerNodeBuilders.lastKey() + 1;
                 }
-                brokerNodes.put(nextId, new BrokerNode.Builder().
-                    setId(nextId).build());
+                brokerNodeBuilders.put(nextId, new BrokerNode.Builder().
+                    setId(nextId));
             }
             return this;
         }
@@ -119,7 +101,35 @@ public class TestKitNodes {
             if (bootstrapMetadataVersion == null) {
                 bootstrapMetadataVersion = MetadataVersion.latest();
             }
-            return new TestKitNodes(clusterId, bootstrapMetadataVersion, controllerNodes, brokerNodes);
+            String baseDirectory = TestUtils.tempDirectory("kafka_" + clusterId).getAbsolutePath();
+            try {
+                NavigableMap<Integer, ControllerNode> controllerNodes = new TreeMap<>();
+                for (ControllerNode.Builder controllerNodeBuilder : controllerNodeBuilders.values()) {
+                    ControllerNode controllerNode = controllerNodeBuilder.build(baseDirectory);
+                    if (controllerNodes.put(controllerNode.id(), controllerNode) != null) {
+                        throw new RuntimeException("More than one controller claimed ID " + controllerNode.id());
+                    }
+                }
+                NavigableMap<Integer, BrokerNode> brokerNodes = new TreeMap<>();
+                for (BrokerNode.Builder brokerNodeBuilder : brokerNodeBuilders.values()) {
+                    BrokerNode brokerNode = brokerNodeBuilder.build(baseDirectory);
+                    if (brokerNodes.put(brokerNode.id(), brokerNode) != null) {
+                        throw new RuntimeException("More than one broker claimed ID " + brokerNode.id());
+                    }
+                }
+                return new TestKitNodes(baseDirectory,
+                    clusterId,
+                    bootstrapMetadataVersion,
+                    controllerNodes,
+                    brokerNodes);
+            } catch (Exception e) {
+                try {
+                    Utils.delete(new File(baseDirectory));
+                } catch (IOException x) {
+                    throw new RuntimeException(x);
+                }
+                throw e;
+            }
         }
 
         private int startBrokerId() {
@@ -134,6 +144,7 @@ public class TestKitNodes {
         }
     }
 
+    private final String baseDirectory;
     private final Uuid clusterId;
     private final MetadataVersion bootstrapMetadataVersion;
     private final NavigableMap<Integer, ControllerNode> controllerNodes;
@@ -143,14 +154,22 @@ public class TestKitNodes {
         return controllerNodes.containsKey(node) && brokerNodes.containsKey(node);
     }
 
-    private TestKitNodes(Uuid clusterId,
-                         MetadataVersion bootstrapMetadataVersion,
-                         NavigableMap<Integer, ControllerNode> controllerNodes,
-                         NavigableMap<Integer, BrokerNode> brokerNodes) {
+    private TestKitNodes(
+        String baseDirectory,
+        Uuid clusterId,
+        MetadataVersion bootstrapMetadataVersion,
+        NavigableMap<Integer, ControllerNode> controllerNodes,
+        NavigableMap<Integer, BrokerNode> brokerNodes
+    ) {
+        this.baseDirectory = baseDirectory;
         this.clusterId = clusterId;
         this.bootstrapMetadataVersion = bootstrapMetadataVersion;
         this.controllerNodes = controllerNodes;
         this.brokerNodes = brokerNodes;
+    }
+
+    public String baseDirectory() {
+        return baseDirectory;
     }
 
     public Uuid clusterId() {
@@ -189,24 +208,7 @@ public class TestKitNodes {
         return new ListenerName("CONTROLLER");
     }
 
-    public TestKitNodes copyWithAbsolutePaths(String baseDirectory) {
-        NavigableMap<Integer, ControllerNode> newControllerNodes = new TreeMap<>();
-        NavigableMap<Integer, BrokerNode> newBrokerNodes = new TreeMap<>();
-        for (Entry<Integer, ControllerNode> entry : controllerNodes.entrySet()) {
-            ControllerNode node = entry.getValue();
-            newControllerNodes.put(entry.getKey(), new ControllerNode(node.id(),
-                absolutize(baseDirectory, node.metadataDirectory())));
-        }
-        for (Entry<Integer, BrokerNode> entry : brokerNodes.entrySet()) {
-            BrokerNode node = entry.getValue();
-            newBrokerNodes.put(entry.getKey(), new BrokerNode(node.id(),
-                node.incarnationId(), absolutize(baseDirectory, node.metadataDirectory()),
-                absolutize(baseDirectory, node.logDataDirectories()), node.propertyOverrides()));
-        }
-        return new TestKitNodes(clusterId, bootstrapMetadataVersion, newControllerNodes, newBrokerNodes);
-    }
-
-    private static List<String> absolutize(String base, Collection<String> directories) {
+    static List<String> absolutize(String base, Collection<String> directories) {
         List<String> newDirectories = new ArrayList<>();
         for (String directory : directories) {
             newDirectories.add(absolutize(base, directory));
@@ -214,7 +216,7 @@ public class TestKitNodes {
         return newDirectories;
     }
 
-    private static String absolutize(String base, String directory) {
+    static String absolutize(String base, String directory) {
         if (Paths.get(directory).isAbsolute()) {
             return directory;
         }

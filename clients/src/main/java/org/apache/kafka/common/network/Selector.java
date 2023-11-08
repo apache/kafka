@@ -399,7 +399,7 @@ public class Selector implements Selectable, AutoCloseable {
                 this.failedSends.add(connectionId);
                 close(channel, CloseMode.DISCARD_NO_NOTIFY);
                 if (!(e instanceof CancelledKeyException)) {
-                    log.error("Unexpected exception during send, closing connection {} and rethrowing exception {}",
+                    log.error("Unexpected exception during send, closing connection {} and rethrowing exception.",
                             connectionId, e);
                     throw e;
                 }
