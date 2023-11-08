@@ -20,6 +20,7 @@ import joptsimple.OptionException;
 import org.apache.kafka.clients.admin.ConsumerGroupListing;
 import org.apache.kafka.common.ConsumerGroupState;
 import org.apache.kafka.test.TestUtils;
+import org.apache.kafka.tools.ToolsTestUtils;
 import org.apache.kafka.tools.consumergroup.ConsumerGroupCommand.ConsumerGroupService;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -121,19 +122,19 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
 
         String[] cgcArgs1 = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--list"};
         TestUtils.waitForCondition(() -> {
-            out[0] = TestUtils.grabConsoleOutput(() -> ConsumerGroupCommand.main(cgcArgs1));
+            out[0] = ToolsTestUtils.grabConsoleOutput(() -> ConsumerGroupCommand.main(cgcArgs1));
             return !out[0].contains("STATE") && out[0].contains(simpleGroup) && out[0].contains(GROUP);
         }, "Expected to find " + simpleGroup + ", " + GROUP + " and no header, but found " + out[0]);
 
         String[] cgcArgs2 = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--list", "--state"};
         TestUtils.waitForCondition(() -> {
-            out[0] = TestUtils.grabConsoleOutput(() -> ConsumerGroupCommand.main(cgcArgs2));
+            out[0] = ToolsTestUtils.grabConsoleOutput(() -> ConsumerGroupCommand.main(cgcArgs2));
             return out[0].contains("STATE") && out[0].contains(simpleGroup) && out[0].contains(GROUP);
         }, "Expected to find " + simpleGroup + ", " + GROUP + " and the header, but found " + out[0]);
 
         String[] cgcArgs3 = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--list", "--state", "Stable"};
         TestUtils.waitForCondition(() -> {
-            out[0] = TestUtils.grabConsoleOutput(() -> ConsumerGroupCommand.main(cgcArgs3));
+            out[0] = ToolsTestUtils.grabConsoleOutput(() -> ConsumerGroupCommand.main(cgcArgs3));
             return out[0].contains("STATE") && out[0].contains(GROUP) && out[0].contains("Stable");
         }, "Expected to find " + GROUP + " in state Stable and the header, but found " + out[0]);
     }

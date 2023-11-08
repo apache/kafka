@@ -631,7 +631,7 @@ object TestUtils extends Logging {
    * until the leader is elected and metadata is propagated to all brokers. If it does, the method verifies that it has
    * the expected number of partition and replication factor however it does not guarantee that the topic is empty.
    */
-  def createOffsetsTopic(zkClient: KafkaZkClient, servers: Seq[KafkaBroker]): Unit = {
+  def createOffsetsTopic[B <: KafkaBroker](zkClient: KafkaZkClient, servers: Seq[B]): Unit = {
     val server = servers.head
     val numPartitions = server.config.offsetsTopicPartitions
     val replicationFactor = server.config.offsetsTopicReplicationFactor.toInt

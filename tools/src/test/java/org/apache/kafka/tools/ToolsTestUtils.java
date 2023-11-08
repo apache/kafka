@@ -38,6 +38,8 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
+import java.util.function.Predicate;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 public class ToolsTestUtils {
@@ -196,6 +198,91 @@ public class ToolsTestUtils {
         return moves.entrySet().stream()
             .flatMap(entry -> entry.getValue().stream().map(replicaId -> entry.getKey().partition() + ":" + replicaId))
             .collect(Collectors.joining(","));
+    }
+
+    /**
+     * Capture the console output during the execution of the provided function.
+     */
+    public static String grabConsoleOutput(Runnable f) {
+        ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        PrintStream out = new PrintStream(buf);
+        PrintStream out0 = System.out;
+
+        System.setOut(out);
+        try {
+            f.run();
+        } finally {
+            System.setOut(out0);
+        }
+        out.flush();
+        return buf.toString();
+    }
+
+    /**
+     * Capture the console error during the execution of the provided function.
+     */
+    public static String grabConsoleError(Runnable f) {
+        ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        PrintStream err = new PrintStream(buf);
+        PrintStream err0 = System.err;
+
+        System.setErr(err);
+        try {
+            f.run();
+        } finally {
+            System.setErr(err0);
+        }
+        err.flush();
+        return buf.toString();
+    }
+
+    /**
+     * Capture both the console output and console error during the execution of the provided function.
+     */
+    public static Tuple2<String, String> grabConsoleOutputAndError(Runnable f) {
+        ByteArrayOutputStream outBuf = new ByteArrayOutputStream();
+        PrintStream out = new PrintStream(outBuf);
+        PrintStream out0 = System.out;
+
+        ByteArrayOutputStream errBuf = new ByteArrayOutputStream();
+        PrintStream err = new PrintStream(errBuf);
+        PrintStream err0 = System.err;
+
+        System.setOut(out);
+        System.setErr(err);
+
+        try {
+            f.run();
+        } finally {
+            System.setOut(out0);
+            System.setErr(err0);
+        }
+        out.flush();
+        err.flush();
+        return new Tuple2<>(out.toString(), err.toString());
+    }
+
+    /**
+     * Invoke `compute` until `predicate` is true or `waitTime` elapses.
+     *
+     * Return the last `compute` result and a boolean indicating whether `predicate` succeeded for that value.
+     *
+     * This method is useful in cases where `waitUntilTrue` makes it awkward to provide good error messages.
+     */
+    public static <T> Tuple2<T, Boolean> computeUntilTrue(Supplier<T> compute, long waitTime, long pause, Predicate<T> predicate) {
+        try {
+            long startTime = System.currentTimeMillis();
+            while (true) {
+                T result = compute.get();
+                if (predicate.test(result))
+                    return new Tuple2<>(result, true);
+                if (System.currentTimeMillis() > startTime + waitTime)
+                    return new Tuple2<>(result, false);
+                Thread.sleep(Math.min(waitTime, pause));
+            }
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     public static class MockExitProcedure implements Exit.Procedure {

@@ -22,6 +22,7 @@ import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.GroupNotEmptyException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.test.TestUtils;
+import org.apache.kafka.tools.ToolsTestUtils;
 import org.apache.kafka.tools.consumergroup.ConsumerGroupCommand.ConsumerGroupService;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -60,7 +61,7 @@ public class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
         String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--delete", "--group", missingGroup};
         ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
-        String output = TestUtils.grabConsoleOutput(service::deleteGroups);
+        String output = ToolsTestUtils.grabConsoleOutput(service::deleteGroups);
         assertTrue(output.contains("Group '" + missingGroup + "' could not be deleted due to:") && output.contains(Errors.GROUP_ID_NOT_FOUND.message()),
             "The expected error (" + Errors.GROUP_ID_NOT_FOUND + ") was not detected while deleting consumer group");
     }
@@ -95,7 +96,7 @@ public class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
             "The group did not initialize as expected."
         );
 
-        String output = TestUtils.grabConsoleOutput(service::deleteGroups);
+        String output = ToolsTestUtils.grabConsoleOutput(service::deleteGroups);
         assertTrue(output.contains("Group '" + GROUP + "' could not be deleted due to:") && output.contains(Errors.NON_EMPTY_GROUP.message()),
             "The expected error (" + Errors.NON_EMPTY_GROUP + ") was not detected while deleting consumer group. Output was: (" + output + ")");
     }
@@ -144,7 +145,7 @@ public class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
             "The group did not become empty as expected."
         );
 
-        String output = TestUtils.grabConsoleOutput(service::deleteGroups);
+        String output = ToolsTestUtils.grabConsoleOutput(service::deleteGroups);
         assertTrue(output.contains("Deletion of requested consumer groups ('" + GROUP + "') was successful."),
             "The consumer group could not be deleted as expected");
     }
@@ -175,7 +176,7 @@ public class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
             groups.keySet().stream().allMatch(groupId -> Objects.equals(service.collectGroupState(groupId).state, "Empty")),
             "The group did not become empty as expected.");
 
-        String output = TestUtils.grabConsoleOutput(service::deleteGroups).trim();
+        String output = ToolsTestUtils.grabConsoleOutput(service::deleteGroups).trim();
         Set<String> expectedGroupsForDeletion = groups.keySet();
         Set<String> deletedGroupsGrepped = Arrays.stream(output.substring(output.indexOf('(') + 1, output.indexOf(')')).split(","))
             .map(str -> str.replaceAll("'", "").trim()).collect(Collectors.toSet());
@@ -239,7 +240,7 @@ public class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
 
         ConsumerGroupService service2 = getConsumerGroupService(cgcArgs2);
 
-        String output = TestUtils.grabConsoleOutput(service2::deleteGroups);
+        String output = ToolsTestUtils.grabConsoleOutput(service2::deleteGroups);
         assertTrue(output.contains("Group '" + missingGroup + "' could not be deleted due to:")
             && output.contains(Errors.GROUP_ID_NOT_FOUND.message())
             && output.contains("These consumer groups were deleted successfully: '" + GROUP + "'"),

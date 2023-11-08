@@ -39,10 +39,8 @@ import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
-import java.io.PrintStream;
 import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -641,23 +639,5 @@ public class TestUtils {
                 Collections.emptyMap(),
                 ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH,
                 zkMigrationEnabled);
-    }
-
-    /**
-     * Capture the console output during the execution of the provided function.
-     */
-    public static String grabConsoleOutput(Runnable f) {
-        ByteArrayOutputStream buf = new ByteArrayOutputStream();
-        PrintStream out = new PrintStream(buf);
-        PrintStream out0 = System.out;
-
-        System.setOut(out);
-        try {
-            f.run();
-        } finally {
-            System.setOut(out0);
-        }
-        out.flush();
-        return buf.toString();
     }
 }
