@@ -45,7 +45,9 @@ public enum MemberState {
      * revoked), and it is processing it. While in this state, the member will continue to send
      * heartbeat on the interval, and reconcile the assignment (it will commit offsets if
      * needed, invoke the user callbacks for onPartitionsAssigned or onPartitionsRevoked, and make
-     * the new assignment effective)
+     * the new assignment effective). Note that while in this state the member may be trying to
+     * resolve metadata for the target assignment, or triggering commits/callbacks if topic names
+     * already resolved.
      */
     RECONCILING,
 
@@ -53,7 +55,10 @@ public enum MemberState {
      * Member has completed reconciling an assignment received, and stays in this state only until
      * the next heartbeat request is sent out to acknowledge the assignment to the server. This
      * state indicates that the next heartbeat request must be sent without waiting for the
-     * heartbeat interval to expire.
+     * heartbeat interval to expire. Note that once the ack is sent, the member could go back to
+     * {@link #RECONCILING} if it still has assignment waiting to be reconciled (assignments
+     * waiting for metadata, assignments for which metadata was resolved, or new assignments
+     * received from the broker)
      */
     ACKNOWLEDGING,
 
@@ -103,7 +108,7 @@ public enum MemberState {
 
         STABLE.previousValidStates = Arrays.asList(JOINING, ACKNOWLEDGING);
 
-        RECONCILING.previousValidStates = Arrays.asList(STABLE, JOINING);
+        RECONCILING.previousValidStates = Arrays.asList(STABLE, JOINING, ACKNOWLEDGING);
 
         ACKNOWLEDGING.previousValidStates = Arrays.asList(RECONCILING);
 
