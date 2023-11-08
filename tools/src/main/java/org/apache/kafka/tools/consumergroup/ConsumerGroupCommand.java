@@ -147,15 +147,13 @@ public class ConsumerGroupCommand {
         if (!groupAssignmentsToReset.isEmpty())
             System.out.printf("\n" + format, "GROUP", "TOPIC", "PARTITION", "NEW-OFFSET");
 
-        groupAssignmentsToReset.forEach((groupId, assignment) -> {
-            assignment.forEach((consumerAssignment, offsetAndMetadata) -> {
+        groupAssignmentsToReset.forEach((groupId, assignment) ->
+            assignment.forEach((consumerAssignment, offsetAndMetadata) ->
                 System.out.printf(format,
                     groupId,
                     consumerAssignment.topic(),
                     consumerAssignment.partition(),
-                    offsetAndMetadata.offset());
-            });
-        });
+                    offsetAndMetadata.offset())));
     }
 
     @SuppressWarnings("ClassFanOutComplexity")
@@ -254,6 +252,7 @@ public class ConsumerGroupCommand {
                     System.err.println("\nWarning: Consumer group '" + group + "' is rebalancing.");
                     break;
                 case "Stable":
+                    break;
                 default:
                     // the control should never reach here
                     throw new KafkaException("Expected a valid consumer group state, but found '" + state0 + "'.");
@@ -357,8 +356,8 @@ public class ConsumerGroupCommand {
                                 Map<String, List<TopicPartition>> grouped = new HashMap<>();
                                 memberAssignment.assignment.forEach(
                                     tp -> grouped.computeIfAbsent(tp.topic(), key -> new ArrayList<>()).add(tp));
-                                partitions = grouped.entrySet().stream().map(e ->
-                                    e.getValue().stream().map(TopicPartition::partition).map(Object::toString).sorted().collect(Collectors.joining(",", "(", ")"))
+                                partitions = grouped.values().stream().map(topicPartitions ->
+                                    topicPartitions.stream().map(TopicPartition::partition).map(Object::toString).sorted().collect(Collectors.joining(",", "(", ")"))
                                 ).sorted().collect(Collectors.joining(", "));
                             }
                             System.out.printf("%s", partitions);
@@ -384,7 +383,7 @@ public class ConsumerGroupCommand {
             });
         }
 
-        void describeGroups() {
+        void describeGroups() throws Exception {
             Collection<String> groupIds = opts.options.has(opts.allGroupsOpt)
                 ? listConsumerGroups()
                 : opts.options.valuesOf(opts.groupOpt);
@@ -616,32 +615,30 @@ public class ConsumerGroupCommand {
                 });
         }
 
-        Map<String, ConsumerGroupDescription> describeConsumerGroups(Collection<String> groupIds) {
+        Map<String, ConsumerGroupDescription> describeConsumerGroups(Collection<String> groupIds) throws Exception {
             Map<String, ConsumerGroupDescription> res = new HashMap<>();
-            adminClient.describeConsumerGroups(
+            Map<String, KafkaFuture<ConsumerGroupDescription>> stringKafkaFutureMap = adminClient.describeConsumerGroups(
                 groupIds,
                 withTimeoutMs(new DescribeConsumerGroupsOptions())
-            ).describedGroups().forEach((groupId, groupDescriptionFuture) -> {
-                try {
-                    res.put(groupId, groupDescriptionFuture.get());
-                } catch (InterruptedException | ExecutionException e) {
-                    throw new RuntimeException(e);
-                }
-            });
+            ).describedGroups();
+
+            for (Map.Entry<String, KafkaFuture<ConsumerGroupDescription>> e : stringKafkaFutureMap.entrySet()) {
+                res.put(e.getKey(), e.getValue().get());
+            }
             return res;
         }
 
         /**
          * Returns the state of the specified consumer group and partition assignment states
          */
-        Tuple2<Optional<String>, Optional<Collection<PartitionAssignmentState>>> collectGroupOffsets(String groupId) {
+        Tuple2<Optional<String>, Optional<Collection<PartitionAssignmentState>>> collectGroupOffsets(String groupId) throws Exception {
             return collectGroupsOffsets(Collections.singletonList(groupId)).getOrDefault(groupId, new Tuple2<>(Optional.empty(), Optional.empty()));
         }
 
         /**
          * Returns states of the specified consumer groups and partition assignment states
          */
-        TreeMap<String, Tuple2<Optional<String>, Optional<Collection<PartitionAssignmentState>>>> collectGroupsOffsets(Collection<String> groupIds) {
+        TreeMap<String, Tuple2<Optional<String>, Optional<Collection<PartitionAssignmentState>>>> collectGroupsOffsets(Collection<String> groupIds) throws Exception {
             Map<String, ConsumerGroupDescription> consumerGroups = describeConsumerGroups(groupIds);
             TreeMap<String, Tuple2<Optional<String>, Optional<Collection<PartitionAssignmentState>>>> groupOffsets = new TreeMap<>();
 
@@ -649,7 +646,7 @@ public class ConsumerGroupCommand {
                 ConsumerGroupState state = consumerGroup.state();
                 Map<TopicPartition, OffsetAndMetadata> committedOffsets = getCommittedOffsets(groupId);
                 // The admin client returns `null` as a value to indicate that there is not committed offset for a partition.
-                Function<TopicPartition, Optional<Long>> getPartitionOffset = tp -> Optional.of(committedOffsets.get(tp)).map(OffsetAndMetadata::offset);
+                Function<TopicPartition, Optional<Long>> getPartitionOffset = tp -> Optional.ofNullable(committedOffsets.get(tp)).map(OffsetAndMetadata::offset);
                 List<TopicPartition> assignedTopicPartitions = new ArrayList<>();
                 Comparator<MemberDescription> comparator =
                     Comparator.<MemberDescription>comparingInt(m -> m.assignment().topicPartitions().size()).reversed();
@@ -671,7 +668,7 @@ public class ConsumerGroupCommand {
                     });
                 Map<TopicPartition, OffsetAndMetadata> unassignedPartitions = committedOffsets.entrySet().stream().filter(e -> !assignedTopicPartitions.contains(e.getKey()))
                     .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
-                Collection<PartitionAssignmentState> rowsWithoutConsumer = unassignedPartitions.isEmpty()
+                Collection<PartitionAssignmentState> rowsWithoutConsumer = !unassignedPartitions.isEmpty()
                     ? collectConsumerAssignment(
                         groupId,
                         Optional.of(consumerGroup.coordinator()),
@@ -690,11 +687,11 @@ public class ConsumerGroupCommand {
             return groupOffsets;
         }
 
-        Tuple2<Optional<String>, Optional<Collection<MemberAssignmentState>>> collectGroupMembers(String groupId, boolean verbose) {
+        Tuple2<Optional<String>, Optional<Collection<MemberAssignmentState>>> collectGroupMembers(String groupId, boolean verbose) throws Exception {
             return collectGroupsMembers(Collections.singleton(groupId), verbose).get(groupId);
         }
 
-        TreeMap<String, Tuple2<Optional<String>, Optional<Collection<MemberAssignmentState>>>> collectGroupsMembers(Collection<String> groupIds, boolean verbose) {
+        TreeMap<String, Tuple2<Optional<String>, Optional<Collection<MemberAssignmentState>>>> collectGroupsMembers(Collection<String> groupIds, boolean verbose) throws Exception {
             Map<String, ConsumerGroupDescription> consumerGroups = describeConsumerGroups(groupIds);
             TreeMap<String, Tuple2<Optional<String>, Optional<Collection<MemberAssignmentState>>>> res = new TreeMap<>();
 
@@ -715,11 +712,11 @@ public class ConsumerGroupCommand {
             return res;
         }
 
-        GroupState collectGroupState(String groupId) {
+        GroupState collectGroupState(String groupId) throws Exception {
             return collectGroupsState(Collections.singleton(groupId)).get(groupId);
         }
 
-        TreeMap<String, GroupState> collectGroupsState(Collection<String> groupIds) {
+        TreeMap<String, GroupState> collectGroupsState(Collection<String> groupIds) throws Exception {
             Map<String, ConsumerGroupDescription> consumerGroups = describeConsumerGroups(groupIds);
             TreeMap<String, GroupState> res = new TreeMap<>();
             consumerGroups.forEach((groupId, groupDescription) ->

@@ -1,12 +1,12 @@
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -14,13 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.tools.consumergroup;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.RangeAssignor;
 import org.apache.kafka.clients.consumer.RoundRobinAssignor;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.tools.ToolsTestUtils;
@@ -37,7 +37,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
@@ -73,11 +72,11 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
 
         for (String[] describeType : DESCRIBE_TYPES) {
             // note the group to be queried is a different (non-existing) group
-            List<String> cgcArgs = Arrays.asList("--bootstrap-server", bootstrapServers(listenerName()), "--describe", "--group", missingGroup);
+            List<String> cgcArgs = new ArrayList<>(Arrays.asList("--bootstrap-server", bootstrapServers(listenerName()), "--describe", "--group", missingGroup));
             cgcArgs.addAll(Arrays.asList(describeType));
             ConsumerGroupService service = getConsumerGroupService(cgcArgs.toArray(new String[0]));
 
-            String output = ToolsTestUtils.grabConsoleOutput(service::describeGroups);
+            String output = ToolsTestUtils.grabConsoleOutput(describeGroups(service));
             assertTrue(output.contains("Consumer group '" + missingGroup + "' does not exist."),
                 "Expected error was not detected for describe option '" + String.join(" ", describeType) + "'");
         }
@@ -126,7 +125,7 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     }
 
     @Test
-    public void testDescribeOffsetsOfNonExistingGroup() {
+    public void testDescribeOffsetsOfNonExistingGroup() throws Exception {
         String group = "missing.group";
         kafka.utils.TestUtils.createOffsetsTopic(zkClient(), servers());
 
@@ -142,7 +141,7 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     }
 
     @Test
-    public void testDescribeMembersOfNonExistingGroup() {
+    public void testDescribeMembersOfNonExistingGroup() throws Exception {
         String group = "missing.group";
         kafka.utils.TestUtils.createOffsetsTopic(zkClient(), servers());
 
@@ -162,7 +161,7 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     }
 
     @Test
-    public void testDescribeStateOfNonExistingGroup() {
+    public void testDescribeStateOfNonExistingGroup() throws Exception {
         String group = "missing.group";
         kafka.utils.TestUtils.createOffsetsTopic(zkClient(), servers());
 
@@ -174,7 +173,7 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
 
         GroupState state = service.collectGroupState(group);
         assertTrue(Objects.equals(state.state, "Dead") && state.numMembers == 0 &&
-                state.coordinator != null && servers().map(s -> s.config().brokerId()).toList().contains(state.coordinator.id()),
+                state.coordinator != null && !servers().filter(s -> s.config().brokerId() == state.coordinator.id()).isEmpty(),
             "Expected the state to be 'Dead', with no members in the group '" + group + "'."
         );
     }
@@ -192,7 +191,7 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
             ConsumerGroupService service = getConsumerGroupService(cgcArgs.toArray(new String[0]));
 
             TestUtils.waitForCondition(() -> {
-                Tuple2<String, String> res = ToolsTestUtils.grabConsoleOutputAndError(service::describeGroups);
+                Tuple2<String, String> res = ToolsTestUtils.grabConsoleOutputAndError(describeGroups(service));
                 return res.v1.trim().split("\n").length == 2 && res.v2.isEmpty();
             }, "Expected a data row and no error in describe results with describe type " + String.join(" ", describeType) + ".");
         }
@@ -220,7 +219,7 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
             ConsumerGroupService service = getConsumerGroupService(cgcArgs.toArray(new String[0]));
 
             TestUtils.waitForCondition(() -> {
-                Tuple2<String, String> res = ToolsTestUtils.grabConsoleOutputAndError(service::describeGroups);
+                Tuple2<String, String> res = ToolsTestUtils.grabConsoleOutputAndError(describeGroups(service));
                 long numLines = Arrays.stream(res.v1.trim().split("\n")).filter(line -> !line.isEmpty()).count();
                 return (numLines == expectedNumLines) && res.v2.isEmpty();
             }, "Expected a data row and no error in describe results with describe type " + String.join(" ", describeType) + ".");
@@ -245,7 +244,7 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
             ConsumerGroupService service = getConsumerGroupService(cgcArgs.toArray(new String[0]));
 
             TestUtils.waitForCondition(() -> {
-                Tuple2<String, String> res = ToolsTestUtils.grabConsoleOutputAndError(service::describeGroups);
+                Tuple2<String, String> res = ToolsTestUtils.grabConsoleOutputAndError(describeGroups(service));
                 long numLines = Arrays.stream(res.v1.trim().split("\n")).filter(s -> !s.isEmpty()).count();
                 return (numLines == expectedNumLines) && res.v2.isEmpty();
             }, "Expected a data row and no error in describe results with describe type " + String.join(" ", describeType) + ".");
@@ -327,7 +326,7 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
                 state.numMembers == 1 &&
                 Objects.equals(state.assignmentStrategy, "range") &&
                 state.coordinator != null &&
-                !servers().find(s -> s.config().brokerId() == state.coordinator.id()).isDefined();
+                servers().count(s -> s.config().brokerId() == state.coordinator.id()) > 0;
         }, "Expected a 'Stable' group status, with one member and round robin assignment strategy for group " + GROUP + ".");
     }
 
@@ -346,7 +345,7 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
                 state.numMembers == 1 &&
                 Objects.equals(state.assignmentStrategy, "roundrobin") &&
                 state.coordinator != null &&
-                servers().find(s -> s.config().brokerId() == state.coordinator.id()).isDefined();
+                servers().count(s -> s.config().brokerId() == state.coordinator.id()) > 0;
         }, "Expected a 'Stable' group status, with one member and round robin assignment strategy for group " + GROUP + ".");
     }
 
@@ -358,19 +357,19 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
             String group = GROUP + String.join("", describeType);
             // run one consumer in the group consuming from a single-partition topic
             ConsumerGroupExecutor executor = addConsumerGroupExecutor(1, TOPIC, group);
-            List<String> cgcArgs = new ArrayList<>(Arrays.asList("--bootstrap-server", bootstrapServers(listenerName()), "--describe", "--group", GROUP));
+            List<String> cgcArgs = new ArrayList<>(Arrays.asList("--bootstrap-server", bootstrapServers(listenerName()), "--describe", "--group", group));
             cgcArgs.addAll(Arrays.asList(describeType));
             ConsumerGroupService service = getConsumerGroupService(cgcArgs.toArray(new String[0]));
 
             TestUtils.waitForCondition(() -> {
-                Tuple2<String, String> res = ToolsTestUtils.grabConsoleOutputAndError(service::describeGroups);
-                return res.v1.trim().split("\n").length == 2 && res.v1.isEmpty();
+                Tuple2<String, String> res = ToolsTestUtils.grabConsoleOutputAndError(describeGroups(service));
+                return res.v1.trim().split("\n").length == 2 && res.v2.isEmpty();
             }, "Expected describe group results with one data row for describe type '" + String.join(" ", describeType) + "'");
 
             // stop the consumer so the group has no active member anymore
             executor.shutdown();
             TestUtils.waitForCondition(
-                () -> ToolsTestUtils.grabConsoleError(service::describeGroups).contains("Consumer group '" + GROUP + "' has no active members."),
+                () -> ToolsTestUtils.grabConsoleError(describeGroups(service)).contains("Consumer group '" + group + "' has no active members."),
                 "Expected no active member in describe group results with describe type " + String.join(" ", describeType));
         }
     }
@@ -394,19 +393,29 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         // stop the consumer so the group has no active member anymore
         executor.shutdown();
 
-        Tuple2<Tuple2<Optional<String>, Optional<Collection<PartitionAssignmentState>>>, Boolean> res = ToolsTestUtils.computeUntilTrue(() -> service.collectGroupOffsets(GROUP), DEFAULT_MAX_WAIT_MS, 100, offsets -> {
-            Optional<String> state = offsets.v1;
-            Optional<Collection<PartitionAssignmentState>> assignments = offsets.v2;
+        Tuple2<Tuple2<Optional<String>, Optional<Collection<PartitionAssignmentState>>>, Boolean> res = ToolsTestUtils.computeUntilTrue(
+            () -> {
+                try {
+                    return service.collectGroupOffsets(GROUP);
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+            },
+            DEFAULT_MAX_WAIT_MS,
+            100,
+            offsets -> {
+                Optional<String> state = offsets.v1;
+                Optional<Collection<PartitionAssignmentState>> assignments = offsets.v2;
 
-            List<PartitionAssignmentState> testGroupAssignments =
-                assignments.orElse(Collections.emptyList()).stream().filter(a -> Objects.equals(a.group, GROUP)).collect(Collectors.toList());
-            PartitionAssignmentState assignment = testGroupAssignments.get(0);
-            return state.map(s -> s.contains("Empty")).orElse(false) &&
-                testGroupAssignments.size() == 1 &&
-                assignment.consumerId.map(c -> c.trim().equals(ConsumerGroupCommand.MISSING_COLUMN_VALUE)).orElse(false) && // the member should be gone
-                assignment.clientId.map(c -> c.trim().equals(ConsumerGroupCommand.MISSING_COLUMN_VALUE)).orElse(false) &&
-                assignment.host.map(c -> c.trim().equals(ConsumerGroupCommand.MISSING_COLUMN_VALUE)).orElse(false);
-        });
+                List<PartitionAssignmentState> testGroupAssignments =
+                    assignments.orElse(Collections.emptyList()).stream().filter(a -> Objects.equals(a.group, GROUP)).collect(Collectors.toList());
+                PartitionAssignmentState assignment = testGroupAssignments.get(0);
+                return state.map(s -> s.contains("Empty")).orElse(false) &&
+                    testGroupAssignments.size() == 1 &&
+                    assignment.consumerId.map(c -> c.trim().equals(ConsumerGroupCommand.MISSING_COLUMN_VALUE)).orElse(false) && // the member should be gone
+                    assignment.clientId.map(c -> c.trim().equals(ConsumerGroupCommand.MISSING_COLUMN_VALUE)).orElse(false) &&
+                    assignment.host.map(c -> c.trim().equals(ConsumerGroupCommand.MISSING_COLUMN_VALUE)).orElse(false);
+            });
 
         assertTrue(res.v2, "Expected no active member in describe group results, state: " + res.v1.v1 + ", assignments: " + res.v1.v2);
     }
@@ -451,7 +460,7 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
             return Objects.equals(state.state, "Stable") &&
                 state.numMembers == 1 &&
                 state.coordinator != null &&
-                servers().find(s -> s.config().brokerId() == state.coordinator.id()).isDefined();
+                servers().count(s -> s.config().brokerId() == state.coordinator.id()) > 0;
         }, "Expected the group '" + GROUP + "' to initially become stable, and have a single member.");
 
         // stop the consumer so the group has no active member anymore
@@ -476,7 +485,7 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
             ConsumerGroupService service = getConsumerGroupService(cgcArgs.toArray(new String[0]));
 
             TestUtils.waitForCondition(() -> {
-                Tuple2<String, String> res = ToolsTestUtils.grabConsoleOutputAndError(service::describeGroups);
+                Tuple2<String, String> res = ToolsTestUtils.grabConsoleOutputAndError(describeGroups(service));
                 int expectedNumRows = Arrays.asList(DESCRIBE_TYPE_MEMBERS).contains(describeType) ? 3 : 2;
                 return res.v2.isEmpty() && res.v1.trim().split("\n").length == expectedNumRows;
             }, "Expected a single data row in describe group result with describe type '" + String.join(" ", describeType) + "'");
@@ -559,7 +568,7 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
             ConsumerGroupService service = getConsumerGroupService(cgcArgs.toArray(new String[0]));
 
             TestUtils.waitForCondition(() -> {
-                Tuple2<String, String> res = ToolsTestUtils.grabConsoleOutputAndError(service::describeGroups);
+                Tuple2<String, String> res = ToolsTestUtils.grabConsoleOutputAndError(describeGroups(service));
                 int expectedNumRows = Arrays.asList(DESCRIBE_TYPE_STATE).contains(describeType) ? 2 : 3;
                 return res.v2.isEmpty() && res.v1.trim().split("\n").length == expectedNumRows;
             }, "Expected a single data row in describe group result with describe type '" + String.join(" ", describeType) + "'");
@@ -665,7 +674,14 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         cgcArgs.addAll(Arrays.asList(describeType));
         ConsumerGroupService service = getConsumerGroupService(cgcArgs.toArray(new String[0]));
 
-        Throwable e = assertThrows(ExecutionException.class, () -> ToolsTestUtils.grabConsoleOutputAndError(service::describeGroups));
+        Throwable e = null;
+        try {
+            service.describeGroups();
+            fail("describeGroups must fail");
+        } catch (Exception err) {
+            assertTrue(err instanceof ExecutionException);
+            e = err;
+        }
         assertEquals(TimeoutException.class, e.getCause().getClass());
     }
 
@@ -749,5 +765,15 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
                 res.v2.get().stream().filter(isGrp).findFirst().get().clientId.map(c -> !c.trim().equals(ConsumerGroupCommand.MISSING_COLUMN_VALUE)).orElse(false) &&
                 res.v2.get().stream().filter(isGrp).findFirst().get().host.map(h -> !h.trim().equals(ConsumerGroupCommand.MISSING_COLUMN_VALUE)).orElse(false);
         }, "Expected a 'Stable' group status, rows and valid values for consumer id / client id / host columns in describe results for non-offset-committing group " + GROUP + ".");
+    }
+
+    private Runnable describeGroups(ConsumerGroupService service) {
+        return () -> {
+            try {
+                service.describeGroups();
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        };
     }
 }

@@ -241,16 +241,14 @@ public class ToolsTestUtils {
      */
     public static Tuple2<String, String> grabConsoleOutputAndError(Runnable f) {
         ByteArrayOutputStream outBuf = new ByteArrayOutputStream();
-        PrintStream out = new PrintStream(outBuf);
-        PrintStream out0 = System.out;
-
         ByteArrayOutputStream errBuf = new ByteArrayOutputStream();
+        PrintStream out = new PrintStream(outBuf);
         PrintStream err = new PrintStream(errBuf);
+        PrintStream out0 = System.out;
         PrintStream err0 = System.err;
 
         System.setOut(out);
         System.setErr(err);
-
         try {
             f.run();
         } finally {
@@ -259,7 +257,7 @@ public class ToolsTestUtils {
         }
         out.flush();
         err.flush();
-        return new Tuple2<>(out.toString(), err.toString());
+        return new Tuple2<>(outBuf.toString(), errBuf.toString());
     }
 
     /**

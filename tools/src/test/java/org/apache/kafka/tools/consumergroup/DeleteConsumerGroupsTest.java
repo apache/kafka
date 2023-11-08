@@ -166,14 +166,26 @@ public class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
 
         TestUtils.waitForCondition(() ->
             new HashSet<>(service.listConsumerGroups()).equals(groups.keySet()) &&
-                groups.keySet().stream().allMatch(groupId -> Objects.equals(service.collectGroupState(groupId).state, "Stable")),
+                groups.keySet().stream().allMatch(groupId -> {
+                    try {
+                        return Objects.equals(service.collectGroupState(groupId).state, "Stable");
+                    } catch (Exception e) {
+                        throw new RuntimeException(e);
+                    }
+                }),
             "The group did not initialize as expected.");
 
         // Shutdown consumers to empty out groups
         groups.values().forEach(AbstractConsumerGroupExecutor::shutdown);
 
         TestUtils.waitForCondition(() ->
-            groups.keySet().stream().allMatch(groupId -> Objects.equals(service.collectGroupState(groupId).state, "Empty")),
+            groups.keySet().stream().allMatch(groupId -> {
+                try {
+                    return Objects.equals(service.collectGroupState(groupId).state, "Empty");
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+            }),
             "The group did not become empty as expected.");
 
         String output = ToolsTestUtils.grabConsoleOutput(service::deleteGroups).trim();
