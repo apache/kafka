@@ -562,7 +562,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
   }
 
-  case class LeaderNode(leaderId: Int, leaderEpoch: Int, node: Node)
+  case class LeaderNode(leaderId: Int, leaderEpoch: Int, node: Option[Node])
 
   private def getCurrentLeader(tp: TopicPartition, ln: ListenerName): LeaderNode = {
     val partitionInfoOrError = replicaManager.getPartitionOrError(tp)
@@ -576,10 +576,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           case None => (-1, -1)
         }
     }
-    val leaderNode: Node = metadataCache.getAliveBrokerNode(leaderId, ln).getOrElse({
-      Node.noNode()
-    })
-    LeaderNode(leaderId, leaderEpoch, leaderNode)
+    LeaderNode(leaderId, leaderEpoch, metadataCache.getAliveBrokerNode(leaderId, ln))
   }
 
   /**
@@ -648,7 +645,9 @@ class KafkaApis(val requestChannel: RequestChannel,
             status.error match {
               case Errors.NOT_LEADER_OR_FOLLOWER =>
                 val leaderNode = getCurrentLeader(topicPartition, request.context.listenerName)
-                nodeEndpoints.put(leaderNode.node.id(), leaderNode.node)
+                leaderNode.node.foreach { node =>
+                  nodeEndpoints.put(node.id(), node)
+                }
                 status.currentLeader
                   .setLeaderId(leaderNode.leaderId)
                   .setLeaderEpoch(leaderNode.leaderEpoch)
@@ -904,7 +903,9 @@ class KafkaApis(val requestChannel: RequestChannel,
           data.error match {
             case Errors.NOT_LEADER_OR_FOLLOWER | Errors.FENCED_LEADER_EPOCH =>
               val leaderNode = getCurrentLeader(tp.topicPartition(), request.context.listenerName)
-              nodeEndpoints.put(leaderNode.node.id(), leaderNode.node)
+              leaderNode.node.foreach { node =>
+                nodeEndpoints.put(node.id(), node)
+              }
               partitionData.currentLeader()
                 .setLeaderId(leaderNode.leaderId)
                 .setLeaderEpoch(leaderNode.leaderEpoch)

@@ -2670,10 +2670,7 @@ class KafkaApisTest {
       assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, Errors.forCode(partitionProduceResponse.errorCode))
       assertEquals(-1, partitionProduceResponse.currentLeader.leaderId())
       assertEquals(-1, partitionProduceResponse.currentLeader.leaderEpoch())
-      assertEquals(1, response.data.nodeEndpoints.size)
-      val node = response.data.nodeEndpoints.asScala.head
-      assertEquals(Node.noNode().id(), node.nodeId)
-      assertEquals(Node.noNode().host(), node.host)
+      assertEquals(0, response.data.nodeEndpoints.size)
     }
   }
 
