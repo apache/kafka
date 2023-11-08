@@ -37,16 +37,11 @@ if [ "$KAFKA_JMX_PORT" ]; then
     export KAFKA_JMX_OPTS="$KAFKA_JMX_OPTS -Djava.rmi.server.hostname=$KAFKA_JMX_HOSTNAME -Dcom.sun.management.jmxremote.local.only=false -Dcom.sun.management.jmxremote.rmi.port=$JMX_PORT -Dcom.sun.management.jmxremote.port=$JMX_PORT"
 fi
 
-# KRaft required step: Format the storage directory with provided cluster ID unless it already exists.
-if [[ -n "${KAFKA_PROCESS_ROLES-}" ]]
-then
-    echo "===> Using provided cluster id $CLUSTER_ID ..."
-
-    # A bit of a hack to not error out if the storage is already formatted.  Need storage-tool to support this
-    result=$(/opt/kafka/bin/kafka-storage.sh format --cluster-id=$CLUSTER_ID -c /opt/kafka/config/kafka.properties 2>&1) || \
-        echo $result | grep -i "already formatted" || \
-        { echo $result && (exit 1) }
-fi
+echo "===> Using provided cluster id $CLUSTER_ID ..."
+# A bit of a hack to not error out if the storage is already formatted.  Need storage-tool to support this
+result=$(/opt/kafka/bin/kafka-storage.sh format --cluster-id=$CLUSTER_ID -c /opt/kafka/config/kafka.properties 2>&1) || \
+    echo $result | grep -i "already formatted" || \
+    { echo $result && (exit 1) }
 
 if [ -z "$KAFKA_JVM_PERFORMANCE_OPTS" ]; then
     export KAFKA_JVM_PERFORMANCE_OPTS="-XX:SharedArchiveFile=/opt/kafka/kafka.jsa"
