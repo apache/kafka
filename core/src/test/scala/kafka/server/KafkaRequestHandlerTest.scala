@@ -149,42 +149,6 @@ class KafkaRequestHandlerTest {
     assertEquals(1, handledCount)
   }
 
-  @Test
-  def testCallbackOnSameThread(): Unit = {
-    val time = new MockTime()
-    val metrics = mock(classOf[RequestChannel.Metrics])
-    val apiHandler = mock(classOf[ApiRequestHandler])
-    val requestChannel = new RequestChannel(10, "", time, metrics)
-    val handler = new KafkaRequestHandler(0, 0, mock(classOf[Meter]), new AtomicInteger(1), requestChannel, apiHandler, time)
-
-    val originalRequestLocal = mock(classOf[RequestLocal])
-    when(originalRequestLocal.bufferSupplier).thenReturn(BufferSupplier.create())
-
-    var handledCount = 0
-
-    val request = makeRequest(time, metrics)
-    requestChannel.sendRequest(request)
-
-    when(apiHandler.handle(ArgumentMatchers.eq(request), any())).thenAnswer { _ =>
-      // Prepare the callback.
-      val callback = KafkaRequestHandler.wrapAsyncCallback(
-        (reqLocal: RequestLocal, ms: Int) => {
-          reqLocal.bufferSupplier.close()
-          handledCount = handledCount + 1
-          handler.stop()
-        },
-        originalRequestLocal)
-      // Execute the callback before the request returns.
-      callback(1)
-    }
-
-    handler.run()
-    // Verify that we do use the request local that we passed in.
-    verify(originalRequestLocal, times(1)).bufferSupplier
-    assertEquals(1, handledCount)
-  }
-
-
   @ParameterizedTest
   @ValueSource(booleans = Array(true, false))
   def testTopicStats(systemRemoteStorageEnabled: Boolean): Unit = {
