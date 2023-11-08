@@ -20,7 +20,6 @@ import org.apache.kafka.common.message.ListGroupsRequestData
 import org.apache.kafka.common.metrics.{KafkaMetric, MetricsReporter}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity}
 import org.apache.kafka.common.requests.{ListGroupsRequest, ListGroupsResponse}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.jupiter.api.Assertions._
@@ -31,7 +30,6 @@ import org.junit.jupiter.params.provider.ValueSource
 import java.net.Socket
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.{Collections, Properties}
-import scala.jdk.CollectionConverters.{MapHasAsJava, PropertiesHasAsScala, SeqHasAsJava}
 
 /*
  * this test checks that a reporter that throws an exception will not affect other reporters
@@ -53,16 +51,7 @@ class KafkaMetricReporterExceptionHandlingTest extends BaseRequestTest {
     val quotaProps = new Properties()
     quotaProps.put(QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, "0.1")
 
-    if (isKRaftTest()) {
-      val admin = createAdminClient()
-      admin.alterClientQuotas(Collections.singleton(
-        new ClientQuotaAlteration(
-          new ClientQuotaEntity(Map(ClientQuotaEntity.CLIENT_ID -> "<default>").asJava),
-          quotaProps.asScala.map { case (key, value) => new ClientQuotaAlteration.Op(key, value.toDouble) }.toList.asJava))
-      )
-    } else {
-      adminZkClient.changeClientIdConfig("<default>", quotaProps)
-    }
+    changeClientIdConfig("<default>", quotaProps)
   }
 
   @AfterEach
