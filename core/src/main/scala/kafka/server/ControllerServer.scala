@@ -124,6 +124,7 @@ class ControllerServer(
   @volatile var incarnationId: Uuid = _
   @volatile var registrationManager: ControllerRegistrationManager = _
   @volatile var registrationChannelManager: NodeToControllerChannelManager = _
+  var clientMetricsManager: ClientMetricsManager = _
 
   private def maybeChangeStatus(from: ProcessStatus, to: ProcessStatus): Boolean = {
     lock.lock()
@@ -137,7 +138,7 @@ class ControllerServer(
     true
   }
 
-  def clusterId: String = sharedServer.metaProps.clusterId
+  def clusterId: String = sharedServer.clusterId()
 
   def startup(): Unit = {
     if (!maybeChangeStatus(SHUTDOWN, STARTING)) return
@@ -245,6 +246,7 @@ class ControllerServer(
           setQuorumFeatures(quorumFeatures).
           setDefaultReplicationFactor(config.defaultReplicationFactor.toShort).
           setDefaultNumPartitions(config.numPartitions.intValue()).
+          setDefaultMinIsr(config.minInSyncReplicas.intValue()).
           setSessionTimeoutNs(TimeUnit.NANOSECONDS.convert(config.brokerSessionTimeoutMs.longValue(),
             TimeUnit.MILLISECONDS)).
           setLeaderImbalanceCheckIntervalNs(leaderImbalanceCheckIntervalNs).
@@ -262,7 +264,8 @@ class ControllerServer(
           setDelegationTokenSecretKey(delegationTokenKeyString).
           setDelegationTokenMaxLifeMs(config.delegationTokenMaxLifeMs).
           setDelegationTokenExpiryTimeMs(config.delegationTokenExpiryTimeMs).
-          setDelegationTokenExpiryCheckIntervalMs(config.delegationTokenExpiryCheckIntervalMs)
+          setDelegationTokenExpiryCheckIntervalMs(config.delegationTokenExpiryCheckIntervalMs).
+          setEligibleLeaderReplicasEnabled(config.elrEnabled)
       }
       controller = controllerBuilder.build()
 
@@ -317,7 +320,7 @@ class ControllerServer(
         controller,
         raftManager,
         config,
-        sharedServer.metaProps,
+        clusterId,
         registrationsPublisher,
         apiVersionManager,
         metadataCache)
@@ -329,6 +332,8 @@ class ControllerServer(
         s"${DataPlaneAcceptor.MetricPrefix}RequestHandlerAvgIdlePercent",
         DataPlaneAcceptor.ThreadPrefix,
         "controller")
+
+      clientMetricsManager = ClientMetricsManager.instance()
 
       // Set up the metadata cache publisher.
       metadataPublishers.add(metadataCachePublisher)
@@ -345,6 +350,7 @@ class ControllerServer(
         time,
         s"controller-${config.nodeId}-",
         QuorumFeatures.defaultFeatureMap(),
+        config.migrationEnabled,
         incarnationId,
         listenerInfo)
 
@@ -359,7 +365,8 @@ class ControllerServer(
         sharedServer.metadataPublishingFaultHandler,
         immutable.Map[String, ConfigHandler](
           // controllers don't host topics, so no need to do anything with dynamic topic config changes here
-          ConfigType.Broker -> new BrokerConfigHandler(config, quotaManagers)
+          ConfigType.Broker -> new BrokerConfigHandler(config, quotaManagers),
+          ConfigType.ClientMetrics -> new ClientMetricsConfigHandler(clientMetricsManager)
         ),
         "controller"))
 

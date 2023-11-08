@@ -80,7 +80,7 @@ public class RestExceptionMapperTest {
     @Test
     public void testToResponseUnknownException() {
         RestExceptionMapper mapper = new RestExceptionMapper();
-        Response resp = mapper.toResponse(new Exception("Unkown exception"));
+        Response resp = mapper.toResponse(new Exception("Unknown exception"));
         assertEquals(resp.getStatus(), Response.Status.INTERNAL_SERVER_ERROR.getStatusCode());
     }
 
@@ -104,6 +104,6 @@ public class RestExceptionMapperTest {
 
     @Test
     public void testToExceptionRuntimeException() {
-        assertThrows(RuntimeException.class, () -> RestExceptionMapper.toException(-1, "Unkown status code"));
+        assertThrows(RuntimeException.class, () -> RestExceptionMapper.toException(-1, "Unknown status code"));
     }
 }

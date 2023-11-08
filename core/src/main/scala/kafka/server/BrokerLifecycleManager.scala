@@ -30,6 +30,8 @@ import org.apache.kafka.metadata.{BrokerState, VersionRange}
 import org.apache.kafka.queue.EventQueue.DeadlineFunction
 import org.apache.kafka.common.utils.{ExponentialBackoff, LogContext, Time}
 import org.apache.kafka.queue.{EventQueue, KafkaEventQueue}
+
+import java.util.OptionalLong
 import scala.jdk.CollectionConverters._
 
 
@@ -188,6 +190,11 @@ class BrokerLifecycleManager(
   private var _channelManager: NodeToControllerChannelManager = _
 
   /**
+   * The broker epoch from the previous run, or empty if the epoch is not found.
+   */
+  @volatile private var previousBrokerEpoch: OptionalLong = OptionalLong.empty()
+
+  /**
    * The event queue.
    */
   private[server] val eventQueue = new KafkaEventQueue(time,
@@ -201,12 +208,18 @@ class BrokerLifecycleManager(
    * @param highestMetadataOffsetProvider Provides the current highest metadata offset.
    * @param channelManager                The NodeToControllerChannelManager to use.
    * @param clusterId                     The cluster ID.
+   * @param advertisedListeners           The advertised listeners for this broker.
+   * @param supportedFeatures             The features for this broker.
+   * @param previousBrokerEpoch           The broker epoch before the reboot.
+   *
    */
   def start(highestMetadataOffsetProvider: () => Long,
             channelManager: NodeToControllerChannelManager,
             clusterId: String,
             advertisedListeners: ListenerCollection,
-            supportedFeatures: util.Map[String, VersionRange]): Unit = {
+            supportedFeatures: util.Map[String, VersionRange],
+            previousBrokerEpoch: OptionalLong): Unit = {
+    this.previousBrokerEpoch = previousBrokerEpoch
     eventQueue.append(new StartupEvent(highestMetadataOffsetProvider,
       channelManager, clusterId, advertisedListeners, supportedFeatures))
   }
@@ -252,7 +265,7 @@ class BrokerLifecycleManager(
    * Start shutting down the BrokerLifecycleManager, but do not block.
    */
   def beginShutdown(): Unit = {
-    eventQueue.beginShutdown("beginShutdown");
+    eventQueue.beginShutdown("beginShutdown")
   }
 
   /**
@@ -310,7 +323,8 @@ class BrokerLifecycleManager(
         setFeatures(features).
         setIncarnationId(incarnationId).
         setListeners(_advertisedListeners).
-        setRack(rack.orNull)
+        setRack(rack.orNull).
+        setPreviousBrokerEpoch(previousBrokerEpoch.orElse(-1L))
     if (isDebugEnabled) {
       debug(s"Sending broker registration $data")
     }
@@ -483,7 +497,7 @@ class BrokerLifecycleManager(
     override def run(): Unit = {
       if (!initialRegistrationSucceeded) {
         error("Shutting down because we were unable to register with the controller quorum.")
-        eventQueue.beginShutdown("registrationTimeout");
+        eventQueue.beginShutdown("registrationTimeout")
       }
     }
   }

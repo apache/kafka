@@ -21,6 +21,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.metadata.PartitionRegistration;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -51,7 +52,23 @@ public class CapturingTopicMigrationClient implements TopicMigrationClient {
     }
 
     @Override
-    public ZkMigrationLeadershipState deleteTopic(String topicName, ZkMigrationLeadershipState state) {
+    public Set<String> readPendingTopicDeletions() {
+        return Collections.emptySet();
+    }
+
+    @Override
+    public ZkMigrationLeadershipState clearPendingTopicDeletions(
+        Set<String> pendingTopicDeletions,
+        ZkMigrationLeadershipState state
+    ) {
+        return state;
+    }
+
+    @Override
+    public ZkMigrationLeadershipState deleteTopic(
+        String topicName,
+        ZkMigrationLeadershipState state
+    ) {
         deletedTopics.add(topicName);
         return state;
     }

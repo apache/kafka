@@ -105,7 +105,7 @@ public class TopologyConfig extends AbstractConfig {
                 Importance.LOW,
                 DEFAULT_DSL_STORE_DOC);
     }
-    private final Logger log = LoggerFactory.getLogger(TopologyConfig.class);
+    private final static Logger log = LoggerFactory.getLogger(TopologyConfig.class);
 
     public final String topologyName;
     public final boolean eosEnabled;
@@ -218,10 +218,7 @@ public class TopologyConfig extends AbstractConfig {
     }
 
     public Materialized.StoreType parseStoreType() {
-        if (storeType.equals(IN_MEMORY)) {
-            return Materialized.StoreType.IN_MEMORY;
-        }
-        return Materialized.StoreType.ROCKS_DB;
+        return Materialized.StoreType.parse(storeType);
     }
 
     public boolean isNamedTopology() {

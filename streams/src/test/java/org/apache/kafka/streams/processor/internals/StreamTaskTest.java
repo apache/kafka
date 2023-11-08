@@ -1841,7 +1841,9 @@ public class StreamTaskTest {
             stateManager,
             recordCollector,
             context,
-            logContext);
+            logContext,
+            false
+            );
 
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
@@ -2504,7 +2506,9 @@ public class StreamTaskTest {
                 stateManager,
                 recordCollector,
                 context,
-                logContext)
+                logContext,
+                false
+            )
         );
 
         assertThat(exception.getMessage(), equalTo("Invalid topology: " +
@@ -2700,7 +2704,8 @@ public class StreamTaskTest {
             stateManager,
             recordCollector,
             context,
-            logContext
+            logContext,
+            false
         );
     }
 
@@ -2741,7 +2746,8 @@ public class StreamTaskTest {
             stateManager,
             recordCollector,
             context,
-            logContext
+            logContext,
+            false
         );
     }
 
@@ -2774,7 +2780,8 @@ public class StreamTaskTest {
             stateManager,
             recordCollector,
             context,
-            logContext
+            logContext,
+            false
         );
     }
 
@@ -2812,7 +2819,8 @@ public class StreamTaskTest {
             stateManager,
             recordCollector,
             context,
-            logContext
+            logContext,
+            false
         );
     }
 
@@ -2852,7 +2860,8 @@ public class StreamTaskTest {
             stateManager,
             recordCollector,
             context,
-            logContext
+            logContext,
+            false
         );
     }
 
@@ -2893,7 +2902,8 @@ public class StreamTaskTest {
             stateManager,
             recordCollector,
             context,
-            logContext
+            logContext,
+            false
         );
     }
 
@@ -2932,7 +2942,8 @@ public class StreamTaskTest {
             stateManager,
             recordCollector,
             context,
-            logContext
+            logContext,
+            false
         );
     }
 
@@ -2966,7 +2977,8 @@ public class StreamTaskTest {
             stateManager,
             recordCollector,
             context,
-            logContext
+            logContext,
+            false
         );
     }
 

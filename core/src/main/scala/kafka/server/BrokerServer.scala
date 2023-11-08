@@ -36,6 +36,7 @@ import org.apache.kafka.common.security.token.delegation.internals.DelegationTok
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.common.{ClusterResource, KafkaException, TopicPartition}
 import org.apache.kafka.coordinator.group
+import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorRuntimeMetrics
 import org.apache.kafka.coordinator.group.util.SystemTimerReaper
 import org.apache.kafka.coordinator.group.{GroupCoordinator, GroupCoordinatorConfig, GroupCoordinatorService, RecordSerde}
 import org.apache.kafka.image.publisher.MetadataPublisher
@@ -142,6 +143,8 @@ class BrokerServer(
   def kafkaYammerMetrics: KafkaYammerMetrics = KafkaYammerMetrics.INSTANCE
 
   val metadataPublishers: util.List[MetadataPublisher] = new util.ArrayList[MetadataPublisher]()
+
+  var clientMetricsManager: ClientMetricsManager = _
 
   private def maybeChangeStatus(from: ProcessStatus, to: ProcessStatus): Boolean = {
     lock.lock()
@@ -311,9 +314,12 @@ class BrokerServer(
         config, Some(clientToControllerChannelManager), None, None,
         groupCoordinator, transactionCoordinator)
 
+      clientMetricsManager = ClientMetricsManager.instance()
+
       dynamicConfigHandlers = Map[String, ConfigHandler](
         ConfigType.Topic -> new TopicConfigHandler(replicaManager, config, quotaManagers, None),
-        ConfigType.Broker -> new BrokerConfigHandler(config, quotaManagers))
+        ConfigType.Broker -> new BrokerConfigHandler(config, quotaManagers),
+        ConfigType.ClientMetrics -> new ClientMetricsConfigHandler(clientMetricsManager))
 
       val featuresRemapped = brokerFeatures.supportedFeatures.features().asScala.map {
         case (k: String, v: SupportedVersionRange) =>
@@ -334,7 +340,8 @@ class BrokerServer(
         brokerLifecycleChannelManager,
         sharedServer.metaProps.clusterId,
         listenerInfo.toBrokerRegistrationRequest,
-        featuresRemapped
+        featuresRemapped,
+        logManager.readBrokerEpochFromCleanShutdownFiles()
       )
       // If the BrokerLifecycleManager's initial catch-up future fails, it means we timed out
       // or are shutting down before we could catch up. Therefore, also fail the firstPublishFuture.
@@ -371,7 +378,8 @@ class BrokerServer(
         clusterId = clusterId,
         time = time,
         tokenManager = tokenManager,
-        apiVersionManager = apiVersionManager)
+        apiVersionManager = apiVersionManager,
+        clientMetricsManager = Some(clientMetricsManager))
 
       dataPlaneRequestHandlerPool = new KafkaRequestHandlerPool(config.nodeId,
         socketServer.dataPlaneRequestChannel, dataPlaneRequestProcessor, time,
@@ -522,13 +530,16 @@ class BrokerServer(
         config.groupInitialRebalanceDelay,
         GroupCoordinatorConfig.GENERIC_GROUP_NEW_MEMBER_JOIN_TIMEOUT_MS,
         config.groupMinSessionTimeoutMs,
-        config.groupMaxSessionTimeoutMs
+        config.groupMaxSessionTimeoutMs,
+        config.offsetsRetentionCheckIntervalMs,
+        config.offsetsRetentionMinutes * 60 * 1000L
       )
       val timer = new SystemTimerReaper(
         "group-coordinator-reaper",
         new SystemTimer("group-coordinator")
       )
       val loader = new CoordinatorLoaderImpl[group.Record](
+        time,
         replicaManager,
         serde,
         config.offsetsLoadBufferSize
@@ -544,6 +555,7 @@ class BrokerServer(
         .withTimer(timer)
         .withLoader(loader)
         .withWriter(writer)
+        .withCoordinatorRuntimeMetrics(new GroupCoordinatorRuntimeMetrics(metrics))
         .build()
     } else {
       GroupCoordinatorAdapter(
@@ -640,7 +652,7 @@ class BrokerServer(
         CoreUtils.swallow(clientToControllerChannelManager.shutdown(), this)
 
       if (logManager != null)
-        CoreUtils.swallow(logManager.shutdown(), this)
+        CoreUtils.swallow(logManager.shutdown(lifecycleManager.brokerEpoch), this)
 
       // Close remote log manager to give a chance to any of its underlying clients
       // (especially in RemoteStorageManager and RemoteLogMetadataManager) to close gracefully.
