@@ -1,4 +1,3 @@
-{{ with $value := getEnv "KAFKA_TOOLS_LOG4J_LOGLEVEL" "WARN"}}
-{{if ne $value "WARN"}}
-log4j.rootLogger=$value, stderr
+{{ with $value := getEnv "KAFKA_TOOLS_LOG4J_LOGLEVEL" "WARN"}} {{if ne $value "WARN"}}
+log4j.rootLogger={{ $value }}, stderr
 {{ end }}{{ end }}
