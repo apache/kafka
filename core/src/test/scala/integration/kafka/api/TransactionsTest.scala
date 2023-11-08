@@ -97,8 +97,8 @@ class TransactionsTest extends IntegrationTestHarness {
     createTopic(topic1, numPartitions, brokerCount, topicConfig())
     createTopic(topic2, numPartitions, brokerCount, topicConfig())
 
-    for (i <- 0 until transactionalProducerCount)
-      createTransactionalProducer("transactional-producer-" + i.toString)
+    for (_ <- 0 until transactionalProducerCount)
+      createTransactionalProducer("transactional-producer")
     for (_ <- 0 until transactionalConsumerCount)
       createReadCommittedConsumer("transactional-group")
     for (_ <- 0 until nonTransactionalConsumerCount)
@@ -829,27 +829,28 @@ class TransactionsTest extends IntegrationTestHarness {
     val numRecords = 50
     val numProducersWithCompression = 5
     val numTransactions = 40
+    val transactionalCompressionProducers = Buffer[KafkaProducer[Array[Byte], Array[Byte]]]()
 
     for (i <- 0 until numProducersWithCompression) {
-      createTransactionalProducer("transactional-compression-producer-" + i.toString,  compressionType = "snappy")
+      transactionalCompressionProducers += createTransactionalProducer("transactional-compression-producer-" + i.toString,  compressionType = "snappy")
     }
 
     // KAFKA-15653 is triggered more easily with replication factor 1
     val topicConfig = new Properties()
     topicConfig.put(KafkaConfig.MinInSyncReplicasProp, 1.toString)
     createTopic("topic", 100, 1, topicConfig)
-    transactionalProducers.foreach(_.initTransactions())
+    transactionalCompressionProducers.foreach(_.initTransactions())
 
     for (i <- 0 until numTransactions) {
-      transactionalProducers.foreach(_.beginTransaction())
+      transactionalCompressionProducers.foreach(_.beginTransaction())
 
       for (i <- 0 until numRecords) {
-        transactionalProducers.foreach(producer =>
+        transactionalCompressionProducers.foreach(producer =>
           producer.send(TestUtils.producerRecordWithExpectedTransactionStatus("topic", null, i.toString, producer.toString, willBeCommitted = true),
             new ErrorLoggingCallback("topic", i.toString.getBytes(StandardCharsets.UTF_8), producer.toString.getBytes(StandardCharsets.UTF_8), true))
         )
       }
-      transactionalProducers.foreach(_.commitTransaction())
+      transactionalCompressionProducers.foreach(_.commitTransaction())
     }
   }
 
