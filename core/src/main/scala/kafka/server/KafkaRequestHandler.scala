@@ -56,9 +56,9 @@ object KafkaRequestHandler {
   /**
    * Creates a wrapped callback to be executed asynchronously on an arbitrary request thread.
    * NOTE: this function must be originally called from a request thread.
-   * @param asyncCompletionCallback A callback method that we intend to call from the current thread or in another
-   *                                thread after an asynchronous action completes. The RequestLocal passed in must
-   *                                belong to the request handler thread that is executing the callback.
+   * @param asyncCompletionCallback A callback method that we intend to call from another thread after an asynchronous
+   *                                action completes. The RequestLocal passed in must belong to the request handler
+   *                                thread that is executing the callback.
    * @param requestLocal The RequestLocal for the current request handler thread in case we need to execute the callback
    *                     function synchronously from the calling thread (used for testing)
    * @return Wrapped callback will schedule `asyncCompletionCallback` on an arbitrary request thread
