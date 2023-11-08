@@ -22,6 +22,7 @@ import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.json.JsonConverterConfig;
 import org.junit.Test;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -76,48 +77,50 @@ public class OffsetUtilsTest {
     }
 
     @Test
+    public void testProcessPartitionKeyWithUnknownSerialization() {
+        assertProcessPartitionKeyLogMessage(
+                new byte[]{0},
+                "Ignoring offset partition key with unknown serialization");
+        assertProcessPartitionKeyLogMessage(
+                "i-am-not-json".getBytes(StandardCharsets.UTF_8),
+                "Ignoring offset partition key with unknown serialization");
+    }
+
+    @Test
     public void testProcessPartitionKeyNotList() {
-        try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(OffsetUtils.class)) {
-            Map<String, Set<Map<String, Object>>> connectorPartitions = new HashMap<>();
-            OffsetUtils.processPartitionKey(serializePartitionKey(new HashMap<>()), new byte[0], CONVERTER, connectorPartitions);
-            // Expect no partition to be added to the map since the partition key is of an invalid format
-            assertEquals(0, connectorPartitions.size());
-            assertEquals(1, logCaptureAppender.getMessages().size());
-            assertThat(logCaptureAppender.getMessages().get(0),
-                    containsString("Ignoring offset partition key with an unexpected format"));
-        }
+        assertProcessPartitionKeyLogMessage(
+                new byte[]{},
+                "Ignoring offset partition key with an unexpected format");
+        assertProcessPartitionKeyLogMessage(
+                serializePartitionKey(new HashMap<>()),
+                "Ignoring offset partition key with an unexpected format");
     }
 
     @Test
     public void testProcessPartitionKeyListWithOneElement() {
-        try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(OffsetUtils.class)) {
-            Map<String, Set<Map<String, Object>>> connectorPartitions = new HashMap<>();
-            OffsetUtils.processPartitionKey(serializePartitionKey(Collections.singletonList("")), new byte[0], CONVERTER, connectorPartitions);
-            // Expect no partition to be added to the map since the partition key is of an invalid format
-            assertEquals(0, connectorPartitions.size());
-            assertEquals(1, logCaptureAppender.getMessages().size());
-            assertThat(logCaptureAppender.getMessages().get(0),
-                    containsString("Ignoring offset partition key with an unexpected number of elements"));
-        }
+        assertProcessPartitionKeyLogMessage(
+                serializePartitionKey(Collections.singletonList("")),
+                "Ignoring offset partition key with an unexpected number of elements");
     }
 
     @Test
     public void testProcessPartitionKeyListWithElementsOfWrongType() {
+        assertProcessPartitionKeyLogMessage(
+                serializePartitionKey(Arrays.asList(1, new HashMap<>())),
+                "Ignoring offset partition key with an unexpected format for the first element in the partition key list");
+        assertProcessPartitionKeyLogMessage(
+                serializePartitionKey(Arrays.asList("connector-name", new ArrayList<>())),
+                "Ignoring offset partition key with an unexpected format for the second element in the partition key list");
+    }
+
+    public void assertProcessPartitionKeyLogMessage(byte[] key, String message) {
         try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(OffsetUtils.class)) {
             Map<String, Set<Map<String, Object>>> connectorPartitions = new HashMap<>();
-            OffsetUtils.processPartitionKey(serializePartitionKey(Arrays.asList(1, new HashMap<>())), new byte[0], CONVERTER, connectorPartitions);
+            OffsetUtils.processPartitionKey(key, new byte[0], CONVERTER, connectorPartitions);
             // Expect no partition to be added to the map since the partition key is of an invalid format
             assertEquals(0, connectorPartitions.size());
             assertEquals(1, logCaptureAppender.getMessages().size());
-            assertThat(logCaptureAppender.getMessages().get(0),
-                    containsString("Ignoring offset partition key with an unexpected format for the first element in the partition key list"));
-
-            OffsetUtils.processPartitionKey(serializePartitionKey(Arrays.asList("connector-name", new ArrayList<>())), new byte[0], CONVERTER, connectorPartitions);
-            // Expect no partition to be added to the map since the partition key is of an invalid format
-            assertEquals(0, connectorPartitions.size());
-            assertEquals(2, logCaptureAppender.getMessages().size());
-            assertThat(logCaptureAppender.getMessages().get(1),
-                    containsString("Ignoring offset partition key with an unexpected format for the second element in the partition key list"));
+            assertThat(logCaptureAppender.getMessages().get(0), containsString(message));
         }
     }
 

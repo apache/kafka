@@ -89,7 +89,13 @@ public class OffsetUtils {
         }
         // The topic parameter is irrelevant for the JsonConverter which is the internal converter used by
         // Connect workers.
-        Object deserializedKey = keyConverter.toConnectData("", partitionKey).value();
+        Object deserializedKey;
+        try {
+            deserializedKey = keyConverter.toConnectData("", partitionKey).value();
+        } catch (DataException e) {
+            log.warn("Ignoring offset partition key with unknown serialization. Expected json.", e);
+            return;
+        }
         if (!(deserializedKey instanceof List)) {
             log.warn("Ignoring offset partition key with an unexpected format. Expected type: {}, actual type: {}",
                     List.class.getName(), className(deserializedKey));
