@@ -1151,7 +1151,7 @@ object TestUtils extends Logging {
    * @param waitTimeMs the wait time in milliseconds
    * @param pause      the pause time between each try
    */
-  def waitUntilAssertEquals(expected: Object, actual: () => Object,
+  def waitUntilAssertEquals[T](expected: T, actual: () => T,
                             waitTimeMs: Long = JTestUtils.DEFAULT_MAX_WAIT_MS, pause: Long = 100L): Unit = {
     tryUntilNoAssertionError() {
       assertEquals(expected, actual())
