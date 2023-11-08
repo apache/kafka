@@ -814,9 +814,9 @@ public class RocksDBVersionedStoreTest {
             = store.get(new Bytes(STRING_SERIALIZER.serialize(null, key)), fromTime, toTime, isAscending);
         final List<VersionedRecord<String>> versionedRecordsList = new ArrayList<>();
         while (versionedRecords.hasNext()) {
-            versionedRecordsList.add(deserializedRecord(versionedRecords.peek()));
+            versionedRecordsList.add(deserializedRecord(versionedRecords.next()));
         }
-        return new VersionedRecordIterator<>(versionedRecordsList);
+        return new VersionedRecordIterator<>(versionedRecordsList.listIterator());
     }
 
     private void verifyGetValueFromStore(final String key, final String expectedValue, final long expectedTimestamp) {
@@ -846,7 +846,7 @@ public class RocksDBVersionedStoreTest {
         final ValueIterator<VersionedRecord<String>> records = getFromStore(key, fromTime, toTime, isAscending);
         int i = 0;
         while (records.hasNext()) {
-            final VersionedRecord<String> record = records.peek();
+            final VersionedRecord<String> record = records.next();
             assertThat(record.value(), equalTo(expectedValues.get(i)));
             assertThat(record.timestamp(), equalTo(expectedTimestamps.get(i)));
             assertThat(record.validTo(), equalTo(expectedValidTos.get(i)));

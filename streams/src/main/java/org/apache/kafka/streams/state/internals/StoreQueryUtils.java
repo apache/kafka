@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import java.util.ArrayList;
-import java.util.List;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
@@ -384,19 +382,28 @@ public final class StoreQueryUtils {
         return byteArray -> deserializer.deserialize(serdes.topic(), byteArray);
     }
 
-    public static <V> ValueIterator<VersionedRecord<V>> deserializeValueIterator(final StateSerdes<?, V> serdes,
-                                                                                 final ValueIterator<VersionedRecord<byte[]>> rawValueIterator) {
+//    public static <V> ValueIterator<VersionedRecord<V>> deserializeValueIterator(final StateSerdes<?, V> serdes,
+//                                                                                 final ValueIterator<VersionedRecord<byte[]>> rawValueIterator) {
+//
+//        final List<VersionedRecord<V>> versionedRecords = new ArrayList<>();
+//        while (rawValueIterator.hasNext()) {
+//            final VersionedRecord<byte[]> rawVersionedRecord = rawValueIterator.next();
+//            final Deserializer<V> valueDeserializer = serdes.valueDeserializer();
+//            final long timestamp = rawVersionedRecord.timestamp();
+//            final long validTo = rawVersionedRecord.validTo();
+//            final V value = valueDeserializer.deserialize(serdes.topic(), rawVersionedRecord.value());
+//            versionedRecords.add(new VersionedRecord<>(value, timestamp, validTo));
+//        }
+//        return new VersionedRecordIterator<>(versionedRecords.listIterator());
+//    }
 
-        final List<VersionedRecord<V>> versionedRecords = new ArrayList<>();
-        while (rawValueIterator.hasNext()) {
-            final VersionedRecord<byte[]> rawVersionedRecord = rawValueIterator.peek();
-            final Deserializer<V> valueDeserializer = serdes.valueDeserializer();
-            final long timestamp = rawVersionedRecord.timestamp();
-            final long validTo = rawVersionedRecord.validTo();
-            final V value = valueDeserializer.deserialize(serdes.topic(), rawVersionedRecord.value());
-            versionedRecords.add(new VersionedRecord<>(value, timestamp, validTo));
-        }
-        return new VersionedRecordIterator<>(versionedRecords);
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public static <V> Function<VersionedRecord<byte[]>, VersionedRecord<V>> getDeserializeValue(final StateSerdes<?, V> serdes) {
+        final Serde<V> valueSerde = serdes.valueSerde();
+        final Deserializer<V> deserializer = valueSerde.deserializer();
+        return rawVersionedRecord -> new VersionedRecord<>(deserializer.deserialize(serdes.topic(), rawVersionedRecord.value()),
+                                                           rawVersionedRecord.timestamp(),
+                                                           rawVersionedRecord.validTo());
     }
 
     public static void checkpointPosition(final OffsetCheckpoint checkpointFile,

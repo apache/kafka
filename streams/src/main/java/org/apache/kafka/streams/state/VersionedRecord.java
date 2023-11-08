@@ -69,7 +69,7 @@ public final class VersionedRecord<V> {
 
     @Override
     public String toString() {
-        return "<" + value + "," + timestamp + "," + validTo +">";
+        return "<" + value + "," + timestamp + "," + validTo + ">";
     }
 
     @Override

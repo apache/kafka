@@ -16,22 +16,25 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import java.util.ListIterator;
+import java.util.function.Function;
 import org.apache.kafka.streams.state.ValueIterator;
 import org.apache.kafka.streams.state.VersionedRecord;
 
-public class VersionedRecordIterator<V> implements ValueIterator<VersionedRecord<V>> {
+public class MeteredMultiVersionedKeyQueryIterator<V> implements ValueIterator<VersionedRecord<V>> {
 
-    protected final ListIterator<VersionedRecord<V>> iterator;
+    private final ValueIterator<VersionedRecord<byte[]>> iterator;
+    private final Function<VersionedRecord<byte[]>, VersionedRecord<V>> deserializeValue;
 
-    public VersionedRecordIterator(final ListIterator<VersionedRecord<V>> iterator) {
+
+    public MeteredMultiVersionedKeyQueryIterator(final ValueIterator<VersionedRecord<byte[]>> iterator,
+                                                 final Function<VersionedRecord<byte[]>, VersionedRecord<V>> deserializeValue) {
         this.iterator = iterator;
+        this.deserializeValue = deserializeValue;
     }
 
 
     @Override
     public void close() {
-
     }
 
     @Override
@@ -41,7 +44,7 @@ public class VersionedRecordIterator<V> implements ValueIterator<VersionedRecord
 
     @Override
     public VersionedRecord<V> next() {
-        return iterator.next();
+        return deserializeValue.apply(iterator.next());
     }
 }
 

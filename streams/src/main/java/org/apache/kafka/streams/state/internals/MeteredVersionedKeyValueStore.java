@@ -230,9 +230,10 @@ public class MeteredVersionedKeyValueStore<K, V>
 
             final QueryResult<ValueIterator<VersionedRecord<byte[]>>> rawResult = wrapped().query(rawKeyQuery, positionBound, config);
             if (rawResult.isSuccess()) {
-                final ValueIterator<VersionedRecord<V>> valueIterator = StoreQueryUtils.deserializeValueIterator(plainValueSerdes, rawResult.getResult());
-                final QueryResult<ValueIterator<VersionedRecord<V>>> typedQueryResult =
-                    InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, valueIterator);
+                final MeteredMultiVersionedKeyQueryIterator<V> typedResult = new MeteredMultiVersionedKeyQueryIterator<V>(rawResult.getResult(),
+                                                                                                                          StoreQueryUtils.getDeserializeValue(plainValueSerdes));
+                final QueryResult<MeteredMultiVersionedKeyQueryIterator<V>> typedQueryResult =
+                    InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, typedResult);
                 result = (QueryResult<R>) typedQueryResult;
             } else {
                 // the generic type doesn't matter, since failed queries have no result set.

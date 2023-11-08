@@ -23,7 +23,6 @@ import java.io.File;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -289,7 +288,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
             if (queryResults.size() == 0) {
                 LOG.warn("Returning null for expired get.");
             }
-            return new VersionedRecordIterator<>(queryResults);
+            return new VersionedRecordIterator<>(queryResults.listIterator());
         } else {
             // first check the latest value store
             final byte[] rawLatestValueAndTimestamp = latestValueStore.get(key);
@@ -331,7 +330,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
             if (!isAscending) {
                 queryResults.sort((r1, r2) -> (int) (r1.timestamp() - r2.timestamp()));
             }
-            return new VersionedRecordIterator<>(queryResults);
+            return new VersionedRecordIterator<>(queryResults.listIterator());
         }
     }
 

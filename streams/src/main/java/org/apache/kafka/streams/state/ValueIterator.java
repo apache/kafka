@@ -33,11 +33,4 @@ public interface ValueIterator<V> extends Iterator<V>, Closeable {
 
     @Override
     void close();
-
-    /**
-     * Peek the next value without advancing the iterator.
-     * @return The value that would be returned from the next call to {@link #next()}.
-     */
-    V peek();
-
 }
