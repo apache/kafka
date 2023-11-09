@@ -22,8 +22,10 @@ import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.MessageUtil;
+import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -168,32 +170,54 @@ public class LeaveGroupResponseTest {
         }
     }
 
-    @Test
-    public void testNoMembersResponses() {
-        for (short version : ApiKeys.LEAVE_GROUP.allVersions()) {
-            LeaveGroupResponseData data = new LeaveGroupResponseData()
-                .setErrorCode(Errors.NONE.code())
-                .setMembers(Collections.emptyList());
+    @ParameterizedTest
+    @ApiKeyVersionsSource(apiKey = ApiKeys.LEAVE_GROUP)
+    public void testNoErrorNoMembersResponses(short version) {
+        LeaveGroupResponseData data = new LeaveGroupResponseData()
+            .setErrorCode(Errors.NONE.code())
+            .setMembers(Collections.emptyList());
 
+        if (version < 3) {
+            assertThrows(UnsupportedVersionException.class,
+                    () -> new LeaveGroupResponse(data, version));
+        } else {
             LeaveGroupResponse response = new LeaveGroupResponse(data, version);
             assertEquals(Errors.NONE, response.topLevelError());
         }
     }
 
-    @Test
-    public void testMultipleMembersResponses() {
-        for (short version : ApiKeys.LEAVE_GROUP.allVersions()) {
-            LeaveGroupResponseData data = new LeaveGroupResponseData()
-                .setErrorCode(Errors.NONE.code())
-                .setMembers(memberResponses);
+    @ParameterizedTest
+    @ApiKeyVersionsSource(apiKey = ApiKeys.LEAVE_GROUP)
+    public void testNoErrorMultipleMembersResponses(short version) {
+        LeaveGroupResponseData data = new LeaveGroupResponseData()
+            .setErrorCode(Errors.NONE.code())
+            .setMembers(memberResponses);
 
-            if (version < 3) {
-                assertThrows(UnsupportedVersionException.class,
-                             () -> new LeaveGroupResponse(data, version));
-            } else {
-                LeaveGroupResponse response = new LeaveGroupResponse(data, version);
-                assertEquals(Errors.NONE, response.topLevelError());
-            }
+        if (version < 3) {
+            assertThrows(UnsupportedVersionException.class,
+                         () -> new LeaveGroupResponse(data, version));
+        } else {
+            LeaveGroupResponse response = new LeaveGroupResponse(data, version);
+            assertEquals(Errors.NONE, response.topLevelError());
         }
     }
+    
+    @ParameterizedTest
+    @ApiKeyVersionsSource(apiKey = ApiKeys.LEAVE_GROUP)
+    public void testErrorResponses(short version) {
+        LeaveGroupResponseData dataNoMembers = new LeaveGroupResponseData()
+            .setErrorCode(Errors.GROUP_ID_NOT_FOUND.code())
+            .setMembers(Collections.emptyList());
+
+        LeaveGroupResponse responseNoMembers = new LeaveGroupResponse(dataNoMembers, version);
+        assertEquals(Errors.GROUP_ID_NOT_FOUND, responseNoMembers.topLevelError());
+        
+        LeaveGroupResponseData dataMembers = new LeaveGroupResponseData()
+            .setErrorCode(Errors.GROUP_ID_NOT_FOUND.code())
+            .setMembers(memberResponses);
+        
+        LeaveGroupResponse responseMembers = new LeaveGroupResponse(dataMembers, version);
+        assertEquals(Errors.GROUP_ID_NOT_FOUND, responseMembers.topLevelError());
+    }
+
 }
