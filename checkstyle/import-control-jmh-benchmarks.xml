@@ -40,6 +40,7 @@
     <allow pkg="kafka.network"/>
     <allow pkg="kafka.utils"/>
     <allow pkg="kafka.zk"/>
+    <allow pkg="kafka.zookeeper"/>
     <allow class="kafka.utils.Pool"/>
     <allow class="kafka.utils.KafkaScheduler"/>
     <allow class="org.apache.kafka.clients.FetchSessionHandler"/>

@@ -21,6 +21,8 @@ import kafka.cluster.BrokerEndPoint;
 import kafka.cluster.DelayedOperations;
 import kafka.cluster.AlterPartitionListener;
 import kafka.cluster.Partition;
+
+import org.apache.kafka.common.Node;
 import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.storage.internals.log.LogAppendInfo;
 import kafka.log.LogManager;
@@ -28,6 +30,7 @@ import kafka.server.AlterPartitionManager;
 import kafka.server.BrokerFeatures;
 import kafka.server.BrokerTopicStats;
 import kafka.server.FailedPartitions;
+import kafka.server.HostedPartition;
 import kafka.server.InitialFetchState;
 import kafka.server.KafkaConfig;
 import kafka.server.MetadataCache;
@@ -102,6 +105,8 @@ import java.util.concurrent.TimeUnit;
 import scala.Option;
 import scala.collection.Iterator;
 import scala.collection.Map;
+import scala.collection.Seq;
+import scala.collection.Seq$;
 
 @State(Scope.Benchmark)
 @Fork(value = 1)
@@ -161,6 +166,27 @@ public class ReplicaFetcherThreadBenchmark {
         HashMap<String, Uuid> topicIds = new HashMap<>();
         scala.collection.mutable.Map<TopicPartition, InitialFetchState> initialFetchStates = new scala.collection.mutable.HashMap<>();
         List<UpdateMetadataRequestData.UpdateMetadataPartitionState> updatePartitionState = new ArrayList<>();
+
+        // TODO: fix to support raft
+        @SuppressWarnings("unchecked")
+        ZkMetadataCache metadataCache = MetadataCache.zkMetadataCache(0,
+                                                                      config.interBrokerProtocolVersion(),
+                                                                      BrokerFeatures.createEmpty(),
+                                                                      (Seq<Node>) Seq$.MODULE$.empty());
+        replicaManager = new ReplicaManagerBuilder().
+                setConfig(config).
+                setMetrics(metrics).
+                setTime(new MockTime()).
+                setZkClient(Mockito.mock(KafkaZkClient.class)).
+                setScheduler(scheduler).
+                setLogManager(logManager).
+                setQuotaManagers(Mockito.mock(QuotaFactory.QuotaManagers.class)).
+                setBrokerTopicStats(brokerTopicStats).
+                setMetadataCache(metadataCache).
+                setLogDirFailureChannel(new LogDirFailureChannel(logDirs.size())).
+                setAlterPartitionManager(TestUtils.createAlterIsrManager()).
+                build();
+
         for (int i = 0; i < partitionCount; i++) {
             TopicPartition tp = new TopicPartition("topic", i);
 
@@ -184,6 +210,7 @@ public class ReplicaFetcherThreadBenchmark {
 
             partition.makeFollower(partitionState, offsetCheckpoints, topicId);
             pool.put(tp, partition);
+            replicaManager.allPartitions().put(tp, new HostedPartition.Online(partition));
             initialFetchStates.put(tp, new InitialFetchState(topicId, new BrokerEndPoint(3, "host", 3000), 0, 0));
             BaseRecords fetched = new BaseRecords() {
                 @Override
@@ -216,24 +243,8 @@ public class ReplicaFetcherThreadBenchmark {
         UpdateMetadataRequest updateMetadataRequest = new UpdateMetadataRequest.Builder(ApiKeys.UPDATE_METADATA.latestVersion(),
                 0, 0, 0, updatePartitionState, Collections.emptyList(), topicIds).build();
 
-        // TODO: fix to support raft
-        ZkMetadataCache metadataCache = MetadataCache.zkMetadataCache(0,
-            config.interBrokerProtocolVersion(), BrokerFeatures.createEmpty(), null);
         metadataCache.updateMetadata(0, updateMetadataRequest);
 
-        replicaManager = new ReplicaManagerBuilder().
-            setConfig(config).
-            setMetrics(metrics).
-            setTime(new MockTime()).
-            setZkClient(Mockito.mock(KafkaZkClient.class)).
-            setScheduler(scheduler).
-            setLogManager(logManager).
-            setQuotaManagers(Mockito.mock(QuotaFactory.QuotaManagers.class)).
-            setBrokerTopicStats(brokerTopicStats).
-            setMetadataCache(metadataCache).
-            setLogDirFailureChannel(new LogDirFailureChannel(logDirs.size())).
-            setAlterPartitionManager(TestUtils.createAlterIsrManager()).
-            build();
         replicaQuota = new ReplicaQuota() {
             @Override
             public boolean isQuotaExceeded() {
@@ -316,7 +327,7 @@ public class ReplicaFetcherThreadBenchmark {
                             replicaManager,
                             replicaQuota,
                             config::interBrokerProtocolVersion,
-                            () -> -1
+                            () -> -1L
                     ) {
                         @Override
                         public OffsetAndEpoch fetchEarliestOffset(TopicPartition topicPartition, int currentLeaderEpoch) {
