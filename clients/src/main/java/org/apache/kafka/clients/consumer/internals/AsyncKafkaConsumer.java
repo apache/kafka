@@ -1032,6 +1032,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     private boolean initWithCommittedOffsetsIfNeeded(Timer timer) {
         final Set<TopicPartition> initializingPartitions = subscriptions.initializingPartitions();
 
+        if (initializingPartitions.isEmpty())
+            return true;
+
         log.debug("Refreshing committed offsets for partitions {}", initializingPartitions);
         try {
             final OffsetFetchApplicationEvent event = new OffsetFetchApplicationEvent(initializingPartitions);
