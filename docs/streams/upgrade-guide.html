@@ -212,9 +212,9 @@
 
     <p>
         The <code>default.dsl.store</code> config was deprecated in favor of the new
-        <code>dsl.store.suppliers.class</code> config to allow for custom state store 
+        <code>dsl.store.suppliers.class</code> config to allow for custom state store
         implementations to be configured as the default.
-        
+
         If you currently specify <code>default.dsl.store=ROCKS_DB</code> or <code>default.dsl.store=IN_MEMORY</code> replace those
         configurations with <code>dsl.store.suppliers.class=BuiltInDslStoreSuppliers.RocksDBDslStoreSuppliers.class</code> and
         <code>dsl.stores.suppliers.class=BuiltInDslStoreSuppliers.InMemoryDslStoreSuppliers.class</code> respectively
