@@ -34,7 +34,6 @@ import org.junit.jupiter.api.Test
 import java.util.Properties
 import scala.collection.Map
 import scala.jdk.CollectionConverters._
-import scala.util.{Failure, Success}
 
 /**
  * ZooKeeper integration tests that verify the interoperability of KafkaZkClient and ZkMigrationClient.
@@ -234,10 +233,7 @@ class ZkMigrationClientTest extends ZkMigrationTestHarness {
     assertEquals(1, migrationState.migrationZkVersion())
 
     val manager = ProducerIdManager.zk(1, zkClient)
-    val producerId = manager.generateProducerId() match {
-      case Failure(e) => fail("Encountered error when generating producer id", e)
-      case Success(value) => value
-    }
+    val producerId = manager.generateProducerId()
     assertEquals(7000, producerId)
   }
 

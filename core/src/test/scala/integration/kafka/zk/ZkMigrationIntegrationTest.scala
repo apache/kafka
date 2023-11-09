@@ -53,8 +53,7 @@ import org.slf4j.LoggerFactory
 
 import java.util
 import java.util.concurrent.{CompletableFuture, TimeUnit}
-import java.util.{Properties, UUID}
-import scala.collection.Seq
+import java.util.UUID
 import scala.jdk.CollectionConverters._
 
 
