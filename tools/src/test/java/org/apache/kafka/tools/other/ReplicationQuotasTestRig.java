@@ -142,6 +142,7 @@ public class ReplicationQuotasTestRig {
         long throttle;
         int msgsPerPartition;
         int msgSize;
+        final long targetBytesPerBrokerMB;
 
         public ExperimentDef(String name, int brokers, int partitions, long throttle, int msgsPerPartition, int msgSize) {
             this.name = name;
@@ -150,10 +151,7 @@ public class ReplicationQuotasTestRig {
             this.throttle = throttle;
             this.msgsPerPartition = msgsPerPartition;
             this.msgSize = msgSize;
-        }
-
-        long targetBytesPerBrokerMB() {
-            return (long) msgsPerPartition * (long) msgSize * (long) partitions / brokers / 1_000_000;
+            this.targetBytesPerBrokerMB = (long) msgsPerPartition * (long) msgSize * (long) partitions / brokers / 1_000_000;
         }
     }
 
@@ -189,12 +187,15 @@ public class ReplicationQuotasTestRig {
         public void run(ExperimentDef config, Journal journal, boolean displayChartsOnScreen) throws Exception {
             experimentName = config.name;
             List<Integer> brokers = IntStream.rangeClosed(100, 100 + config.brokers).boxed().collect(Collectors.toList());
-            int[] count = new int[] {0};
             int shift = Math.round(config.brokers / 2f);
 
-            IntSupplier nextReplicaRoundRobin = () -> {
-                count[0]++;
-                return 100 + (count[0] + shift) % config.brokers;
+            IntSupplier nextReplicaRoundRobin = new IntSupplier() {
+                int count = 0;
+
+                @Override public int getAsInt() {
+                    count++;
+                    return 100 + (count + shift) % config.brokers;
+                }
             };
 
             Map<Integer, Seq<Integer>> replicas = IntStream.rangeClosed(0, config.partitions).boxed().collect(Collectors.toMap(
@@ -275,8 +276,8 @@ public class ReplicationQuotasTestRig {
             System.out.println("throttle: " + config.throttle);
             System.out.println("numMessagesPerPartition: " + config.msgsPerPartition);
             System.out.println("msgSize: " + config.msgSize);
-            System.out.println("We will write " + config.targetBytesPerBrokerMB() + "MB of data per broker");
-            System.out.println("Worst case duration is " + config.targetBytesPerBrokerMB() * 1000 * 1000 / config.throttle);
+            System.out.println("We will write " + config.targetBytesPerBrokerMB + "MB of data per broker");
+            System.out.println("Worst case duration is " + config.targetBytesPerBrokerMB * 1000 * 1000 / config.throttle);
         }
 
         void waitForReassignmentToComplete() {
@@ -433,7 +434,7 @@ public class ReplicationQuotasTestRig {
                 "<p>- Throttle: " + format.format(config.throttle) + " MB/s" +
                 "<p>- MsgCount: " + format.format(config.msgsPerPartition) + " " +
                 "<p>- MsgSize: " + format.format(config.msgSize) +
-                "<p>- TargetBytesPerBrokerMB: " + config.targetBytesPerBrokerMB() + "<p>";
+                "<p>- TargetBytesPerBrokerMB: " + config.targetBytesPerBrokerMB + "<p>";
 
             append(message);
         }
