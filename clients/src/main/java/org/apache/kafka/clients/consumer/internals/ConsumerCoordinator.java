@@ -417,9 +417,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         if (firstException.get() == null) {
             subscriptions.assignFromSubscribed(assignedPartitions);
         } else if (firstException.get() instanceof KafkaException) {
-                throw (KafkaException) firstException.get();
+            throw (KafkaException) firstException.get();
         } else {
-                throw new KafkaException("User rebalance callback throws an error", firstException.get());
+            throw new KafkaException("User rebalance callback throws an error", firstException.get());
         }
     }
 
