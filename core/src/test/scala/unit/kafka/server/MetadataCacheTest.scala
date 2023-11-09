@@ -22,7 +22,7 @@ import java.util
 import java.util.Arrays.asList
 import java.util.Collections
 import kafka.api.LeaderAndIsr
-import kafka.server.metadata.{KRaftMetadataCache, ZkMetadataCache}
+import kafka.server.metadata.{KRaftMetadataCache, MetadataSnapshot, ZkMetadataCache}
 import org.apache.kafka.common.message.UpdateMetadataRequestData.{UpdateMetadataBroker, UpdateMetadataEndpoint, UpdateMetadataPartitionState, UpdateMetadataTopicState}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
@@ -798,6 +798,116 @@ class MetadataCacheTest {
     assertEquals(replicas, partitionState.replicas())
     if (cache.isInstanceOf[ZkMetadataCache]) {
       assertEquals(offlineReplicas, partitionState.offlineReplicas())
+    }
+  }
+
+  @Test
+  def testFullUpdateMetadataRequestZkMigration(): Unit = {
+    // Create an initial set of metadata with two topics, then send various UMRs. Verify that implicit
+    // topic deletions become explicit in the UMR.
+
+    def addTopic(
+        name: String,
+        partitions: Int,
+        topicStates: mutable.AnyRefMap[String, mutable.LongMap[UpdateMetadataPartitionState]]
+    ): Unit = {
+      val partitionMap = mutable.LongMap.empty[UpdateMetadataPartitionState]
+      for (i <- 0 until partitions) {
+        partitionMap.put(i, new UpdateMetadataPartitionState()
+          .setTopicName(name)
+          .setPartitionIndex(i)
+          .setControllerEpoch(2)
+          .setLeader(0)
+          .setLeaderEpoch(10)
+          .setIsr(asList(0, 1))
+          .setZkVersion(10)
+          .setReplicas(asList(0, 1, 2)))
+      }
+      topicStates.put(name, partitionMap)
+    }
+
+    val topicStates = mutable.AnyRefMap.empty[String, mutable.LongMap[UpdateMetadataPartitionState]]
+    addTopic("test-topic-1", 3, topicStates)
+    addTopic("test-topic-2", 3, topicStates)
+
+    val topicIds = Map(
+      "test-topic-1" -> Uuid.randomUuid(),
+      "test-topic-2" -> Uuid.randomUuid()
+    )
+
+    val initialSnapshot = MetadataSnapshot(
+      partitionStates = topicStates,
+      topicIds = topicIds,
+      controllerId = Some(KRaftCachedControllerId(3000)),
+      aliveBrokers = mutable.LongMap.empty,
+      aliveNodes = mutable.LongMap.empty)
+
+    val partitionStates = Seq(new UpdateMetadataPartitionState()
+      .setTopicName("different-topic")
+      .setPartitionIndex(0)
+      .setControllerEpoch(42)
+      .setLeader(0)
+      .setLeaderEpoch(10)
+      .setIsr(asList[Integer](0, 1, 2))
+      .setZkVersion(1)
+      .setReplicas(asList[Integer](0, 1, 2)))
+
+    val version = ApiKeys.UPDATE_METADATA.latestVersion
+    val updateMetadataRequestBuilder = () => new UpdateMetadataRequest.Builder(version, 1, 42, brokerEpoch,
+      partitionStates.asJava, Seq.empty.asJava, util.Collections.emptyMap(), true, AbstractControlRequest.Type.FULL).build()
+
+    def verifyTopicStates(
+      updateMetadataRequest: UpdateMetadataRequest
+    )(
+      verifier: mutable.AnyRefMap[String, mutable.LongMap[UpdateMetadataPartitionState]] => Unit
+    ): Unit  = {
+      val finalTopicStates = mutable.AnyRefMap.empty[String, mutable.LongMap[UpdateMetadataPartitionState]]
+      updateMetadataRequest.topicStates().forEach { topicState =>
+        finalTopicStates.put(topicState.topicName(), mutable.LongMap.empty[UpdateMetadataPartitionState])
+        topicState.partitionStates().forEach { partitionState =>
+          finalTopicStates(topicState.topicName()).put(partitionState.partitionIndex(), partitionState)
+        }
+      }
+      verifier.apply(finalTopicStates)
+    }
+
+    // KRaft=true Type=FULL
+    var updateMetadataRequest = updateMetadataRequestBuilder.apply()
+    ZkMetadataCache.maybeInjectDeletedPartitions(initialSnapshot, updateMetadataRequest)
+    verifyTopicStates(updateMetadataRequest) { topicStates =>
+      assertEquals(3, topicStates.size)
+      assertEquals(3, topicStates("test-topic-1").values.toSeq.count(_.leader() == -2))
+      assertEquals(3, topicStates("test-topic-2").values.toSeq.count(_.leader() == -2))
+    }
+
+    // KRaft=false Type=FULL
+    updateMetadataRequest = updateMetadataRequestBuilder.apply()
+    updateMetadataRequest.data().setIsKRaftController(false)
+    ZkMetadataCache.maybeInjectDeletedPartitions(initialSnapshot, updateMetadataRequest)
+    verifyTopicStates(updateMetadataRequest) { topicStates =>
+      assertEquals(1, topicStates.size)
+      assertFalse(topicStates.contains("test-topic-1"))
+      assertFalse(topicStates.contains("test-topic-2"))
+    }
+
+    // KRaft=true Type=INCREMENTAL
+    updateMetadataRequest = updateMetadataRequestBuilder.apply()
+    updateMetadataRequest.data().setType(AbstractControlRequest.Type.INCREMENTAL.toByte)
+    ZkMetadataCache.maybeInjectDeletedPartitions(initialSnapshot, updateMetadataRequest)
+    verifyTopicStates(updateMetadataRequest) { topicStates =>
+      assertEquals(1, topicStates.size)
+      assertFalse(topicStates.contains("test-topic-1"))
+      assertFalse(topicStates.contains("test-topic-2"))
+    }
+
+    // KRaft=true Type=UNKNOWN
+    updateMetadataRequest = updateMetadataRequestBuilder.apply()
+    updateMetadataRequest.data().setType(AbstractControlRequest.Type.UNKNOWN.toByte)
+    ZkMetadataCache.maybeInjectDeletedPartitions(initialSnapshot, updateMetadataRequest)
+    verifyTopicStates(updateMetadataRequest) { topicStates =>
+      assertEquals(1, topicStates.size)
+      assertFalse(topicStates.contains("test-topic-1"))
+      assertFalse(topicStates.contains("test-topic-2"))
     }
   }
 }

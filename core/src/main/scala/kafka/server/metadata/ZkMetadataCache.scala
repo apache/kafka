@@ -56,6 +56,64 @@ trait ZkFinalizedFeatureCache {
   def getFeatureOption: Option[Features]
 }
 
+case class MetadataSnapshot(partitionStates: mutable.AnyRefMap[String, mutable.LongMap[UpdateMetadataPartitionState]],
+                            topicIds: Map[String, Uuid],
+                            controllerId: Option[CachedControllerId],
+                            aliveBrokers: mutable.LongMap[Broker],
+                            aliveNodes: mutable.LongMap[collection.Map[ListenerName, Node]]) {
+  val topicNames: Map[Uuid, String] = topicIds.map { case (topicName, topicId) => (topicId, topicName) }
+}
+
+object ZkMetadataCache {
+  /**
+   * Create topic deletions (leader=-2) for topics that are missing in a FULL UpdateMetadataRequest coming from a
+   * KRaft controller during a ZK migration.
+   */
+  def maybeInjectDeletedPartitions(
+    currentMetadata: MetadataSnapshot,
+    updateMetadataRequest: UpdateMetadataRequest
+  ): Seq[Uuid] = {
+    if (updateMetadataRequest.isKRaftController && updateMetadataRequest.updateType() == AbstractControlRequest.Type.FULL) {
+      val prevTopicIds = currentMetadata.topicIds.values.toSet
+      val requestTopics = updateMetadataRequest.topicStates().asScala.map { topicState =>
+
+        topicState.topicName() -> topicState.topicId()
+      }.toMap
+
+      val deleteTopics = prevTopicIds -- requestTopics.values.toSet
+      if (deleteTopics.isEmpty) {
+        return Seq.empty
+      }
+
+      deleteTopics.foreach { deletedTopicId =>
+        val topicName = currentMetadata.topicNames(deletedTopicId)
+        val topicState = new UpdateMetadataRequestData.UpdateMetadataTopicState()
+          .setTopicId(deletedTopicId)
+          .setTopicName(topicName)
+          .setPartitionStates(new util.ArrayList())
+
+        currentMetadata.partitionStates(topicName).foreach { case (partitionId, partitionState) =>
+          val lisr = LeaderAndIsr.duringDelete(partitionState.isr().asScala.map(_.intValue()).toList)
+          val newPartitionState = new UpdateMetadataPartitionState()
+            .setPartitionIndex(partitionId.toInt)
+            .setTopicName(topicName)
+            .setLeader(lisr.leader)
+            .setLeaderEpoch(lisr.leaderEpoch)
+            .setControllerEpoch(updateMetadataRequest.controllerEpoch())
+            .setReplicas(partitionState.replicas())
+            .setZkVersion(lisr.partitionEpoch)
+            .setIsr(lisr.isr.map(Integer.valueOf).asJava)
+          topicState.partitionStates().add(newPartitionState)
+        }
+        updateMetadataRequest.data().topicStates().add(topicState)
+      }
+      deleteTopics.toSeq
+    } else {
+      Seq.empty
+    }
+  }
+}
+
 /**
  *  A cache for the state (e.g., current leader) of each partition. This cache is updated through
  *  UpdateMetadataRequest from the controller. Every broker maintains the same cache, asynchronously.
@@ -64,7 +122,8 @@ class ZkMetadataCache(
   brokerId: Int,
   metadataVersion: MetadataVersion,
   brokerFeatures: BrokerFeatures,
-  kraftControllerNodes: Seq[Node] = Seq.empty)
+  kraftControllerNodes: Seq[Node] = Seq.empty,
+  zkMigrationEnabled: Boolean = false)
   extends MetadataCache with ZkFinalizedFeatureCache with Logging {
 
   private val partitionMetadataLock = new ReentrantReadWriteLock()
@@ -374,55 +433,27 @@ class ZkMetadataCache(
       controllerId(snapshot).orNull)
   }
 
-  def maybeInjectDeletedPartitions(updateMetadataRequest: UpdateMetadataRequest): UpdateMetadataRequest = {
-    if (updateMetadataRequest.updateType() == AbstractControlRequest.Type.FULL) {
-      inReadLock(partitionMetadataLock) {
-        val prevMetadataSnapshot = metadataSnapshot
-        val prevTopicIds = prevMetadataSnapshot.topicIds.values.toSet
-        val requestTopics = updateMetadataRequest.topicStates().asScala.map { topicState =>
-
-          topicState.topicName() -> topicState.topicId()
-        }.toMap
-
-        val deleteTopics = prevTopicIds -- requestTopics.values.toSet
-        if (deleteTopics.nonEmpty) {
-          updateMetadataRequest.data().topicStates()
-        }
-
-        deleteTopics.foreach { deletedTopicId =>
-          val topicName = prevMetadataSnapshot.topicNames(deletedTopicId)
-          val topicState = new UpdateMetadataRequestData.UpdateMetadataTopicState()
-            .setTopicId(deletedTopicId)
-            .setTopicName(topicName)
-            .setPartitionStates(new util.ArrayList())
-
-          prevMetadataSnapshot.partitionStates(topicName).foreach { case (partitionId, partitionState) =>
-            val lisr = LeaderAndIsr.duringDelete(partitionState.isr().asScala.map(_.intValue()).toList)
-            val newPartitionState = new UpdateMetadataPartitionState()
-              .setPartitionIndex(partitionId.toInt)
-              .setTopicName(topicName)
-              .setLeader(lisr.leader)
-              .setLeaderEpoch(lisr.leaderEpoch)
-              .setControllerEpoch(updateMetadataRequest.controllerEpoch())
-              .setReplicas(partitionState.replicas())
-              .setZkVersion(lisr.partitionEpoch)
-              .setIsr(lisr.isr.map(Integer.valueOf).asJava)
-            topicState.partitionStates().add(newPartitionState)
-          }
-          updateMetadataRequest.data().topicStates().add(topicState)
-        }
-
-        updateMetadataRequest
-      }
-    } else {
-      updateMetadataRequest
-    }
-  }
-
   // This method returns the deleted TopicPartitions received from UpdateMetadataRequest
-  def updateMetadata(correlationId: Int, originalUpdateMetadataRequest: UpdateMetadataRequest): Seq[TopicPartition] = {
+  def updateMetadata(correlationId: Int, updateMetadataRequest: UpdateMetadataRequest): Seq[TopicPartition] = {
     inWriteLock(partitionMetadataLock) {
-      val updateMetadataRequest = maybeInjectDeletedPartitions(originalUpdateMetadataRequest)
+      if (updateMetadataRequest.updateType() == AbstractControlRequest.Type.FULL) {
+        if (updateMetadataRequest.version() < 8) {
+          stateChangeLogger.error(s"Received UpdateMetadataRequest with Type=FULL (2), but at version " +
+            s"${updateMetadataRequest.version()}. Not treating this as a full metadata update")
+        } else if (!zkMigrationEnabled) {
+          stateChangeLogger.error(s"Received UpdateMetadataRequest with Type=FULL (2), but ZK migrations " +
+            s"are not enabled on this broker. Not treating this as a full metadata update")
+        } else {
+          val deletedTopicIds = ZkMetadataCache.maybeInjectDeletedPartitions(metadataSnapshot, updateMetadataRequest)
+          if (deletedTopicIds.isEmpty) {
+            stateChangeLogger.trace(s"Received UpdateMetadataRequest with Type=FULL (2), " +
+              s"but no deleted topics were detected.")
+          } else {
+            stateChangeLogger.debug(s"Received UpdateMetadataRequest with Type=FULL (2), " +
+              s"found ${deletedTopicIds.size} deleted topic ID(s): $deletedTopicIds.")
+          }
+        }
+      }
 
       val aliveBrokers = new mutable.LongMap[Broker](metadataSnapshot.aliveBrokers.size)
       val aliveNodes = new mutable.LongMap[collection.Map[ListenerName, Node]](metadataSnapshot.aliveNodes.size)
@@ -522,14 +553,6 @@ class ZkMetadataCache(
       }
       true
     }
-  }
-
-  case class MetadataSnapshot(partitionStates: mutable.AnyRefMap[String, mutable.LongMap[UpdateMetadataPartitionState]],
-                              topicIds: Map[String, Uuid],
-                              controllerId: Option[CachedControllerId],
-                              aliveBrokers: mutable.LongMap[Broker],
-                              aliveNodes: mutable.LongMap[collection.Map[ListenerName, Node]]) {
-    val topicNames: Map[Uuid, String] = topicIds.map { case (topicName, topicId) => (topicId, topicName) }
   }
 
   override def metadataVersion(): MetadataVersion = metadataVersion
