@@ -17,7 +17,6 @@
 declare -A env_defaults
 env_defaults=(
 # Replace CLUSTER_ID with a unique base64 UUID using "bin/kafka-storage.sh random-uuid"
-# See https://docs.confluent.io/kafka/operations-tools/kafka-tools.html#kafka-storage-sh
   ["CLUSTER_ID"]="5L6g3nShT-eMCtK--X86sw"
 )
 

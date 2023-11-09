@@ -20,6 +20,7 @@ from datetime import date
 import argparse
 from distutils.dir_util import copy_tree
 import shutil
+from test.docker_sanity_test import run_tests
 
 def build_jvm(image, tag, kafka_url):
     image = f'{image}:{tag}'
@@ -35,9 +36,11 @@ def run_jvm_tests(image, tag, kafka_url):
     subprocess.run(["wget", "-nv", "-O", "kafka.tgz", kafka_url])
     subprocess.run(["mkdir", "./test/fixtures/kafka"])
     subprocess.run(["tar", "xfz", "kafka.tgz", "-C", "./test/fixtures/kafka", "--strip-components", "1"])
-    subprocess.run(["python3", "docker_sanity_test.py", f"{image}:{tag}", "jvm"], cwd="test")
+    failure_count = run_tests(f"{image}:{tag}", "jvm")
     subprocess.run(["rm", "kafka.tgz"])
     shutil.rmtree("./test/fixtures/kafka")
+    if failure_count != 0:
+        raise SystemError("Test Failure. Error count is non 0")
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

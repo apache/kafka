@@ -13,17 +13,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-KAFKA_TOPICS="./fixtures/kafka/bin/kafka-topics.sh"
-KAFKA_CONSOLE_PRODUCER="./fixtures/kafka/bin/kafka-console-producer.sh"
-KAFKA_CONSOLE_CONSUMER="./fixtures/kafka/bin/kafka-console-consumer.sh"
+KAFKA_TOPICS="./test/fixtures/kafka/bin/kafka-topics.sh"
+KAFKA_CONSOLE_PRODUCER="./test/fixtures/kafka/bin/kafka-console-producer.sh"
+KAFKA_CONSOLE_CONSUMER="./test/fixtures/kafka/bin/kafka-console-consumer.sh"
 
-JVM_COMPOSE="fixtures/jvm/docker-compose.yml"
-ZOOKEEPER_COMPOSE="fixtures/zookeeper/docker-compose.yml"
+JVM_COMPOSE="./test/fixtures/jvm/docker-compose.yml"
 
 CLIENT_TIMEOUT=40
 
 SSL_FLOW_TESTS="SSL Flow Tests"
-SSL_CLIENT_CONFIG="./fixtures/secrets/client-ssl.properties"
+SSL_CLIENT_CONFIG="./test/fixtures/secrets/client-ssl.properties"
 SSL_TOPIC="test-topic-ssl"
 
 FILE_INPUT_FLOW_TESTS="File Input Flow Tests"
