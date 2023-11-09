@@ -78,42 +78,42 @@ public class OffsetUtilsTest {
 
     @Test
     public void testProcessPartitionKeyWithUnknownSerialization() {
-        assertProcessPartitionKeyLogMessage(
+        assertInvalidPartitionKey(
                 new byte[]{0},
                 "Ignoring offset partition key with unknown serialization");
-        assertProcessPartitionKeyLogMessage(
+        assertInvalidPartitionKey(
                 "i-am-not-json".getBytes(StandardCharsets.UTF_8),
                 "Ignoring offset partition key with unknown serialization");
     }
 
     @Test
     public void testProcessPartitionKeyNotList() {
-        assertProcessPartitionKeyLogMessage(
+        assertInvalidPartitionKey(
                 new byte[]{},
                 "Ignoring offset partition key with an unexpected format");
-        assertProcessPartitionKeyLogMessage(
+        assertInvalidPartitionKey(
                 serializePartitionKey(new HashMap<>()),
                 "Ignoring offset partition key with an unexpected format");
     }
 
     @Test
     public void testProcessPartitionKeyListWithOneElement() {
-        assertProcessPartitionKeyLogMessage(
+        assertInvalidPartitionKey(
                 serializePartitionKey(Collections.singletonList("")),
                 "Ignoring offset partition key with an unexpected number of elements");
     }
 
     @Test
     public void testProcessPartitionKeyListWithElementsOfWrongType() {
-        assertProcessPartitionKeyLogMessage(
+        assertInvalidPartitionKey(
                 serializePartitionKey(Arrays.asList(1, new HashMap<>())),
                 "Ignoring offset partition key with an unexpected format for the first element in the partition key list");
-        assertProcessPartitionKeyLogMessage(
+        assertInvalidPartitionKey(
                 serializePartitionKey(Arrays.asList("connector-name", new ArrayList<>())),
                 "Ignoring offset partition key with an unexpected format for the second element in the partition key list");
     }
 
-    public void assertProcessPartitionKeyLogMessage(byte[] key, String message) {
+    public void assertInvalidPartitionKey(byte[] key, String message) {
         try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(OffsetUtils.class)) {
             Map<String, Set<Map<String, Object>>> connectorPartitions = new HashMap<>();
             OffsetUtils.processPartitionKey(key, new byte[0], CONVERTER, connectorPartitions);
