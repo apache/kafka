@@ -301,14 +301,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
             resolveMetadataForUnresolvedAssignment();
             // TODO: improve reconciliation triggering. Initial approach of triggering on every
             //  HB response and metadata update.
-            boolean reconciliationTriggered = reconcile();
-            if (!reconciliationTriggered) {
-                if (!assignment.topicPartitions().isEmpty() && !reconciliationInProgress) {
-                    log.debug("Member could not start reconciliation for any of the assignments " +
-                            "received. Sending empty ack (with current subscription).");
-                    transitionTo(MemberState.ACKNOWLEDGING);
-                }
-            }
+            reconcile();
         } else if (allPendingAssignmentsReconciled()) {
             transitionTo(MemberState.STABLE);
         }
@@ -882,11 +875,11 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
 
 
     /**
-     * @return Number of assignments the member has received but not been able to resolve topic
-     * names for. Visible for testing.
+     * @return Number of topics received in a target assignment that have not been reconciled yet
+     * because topic names are not in metadata. Visible for testing.
      */
-    int assignmentsWaitingOnMetadata() {
-        return assignmentUnresolved.size();
+    Set<Uuid> topicsWaitingForMetadata() {
+        return Collections.unmodifiableSet(assignmentUnresolved.keySet());
     }
 
     /**
