@@ -3801,9 +3801,16 @@ class KafkaApis(val requestChannel: RequestChannel,
         }
       }
 
+      val toDeleteZNodes = mutable.Map[String, String]()
+      federatedTopicZnodesDeleteRequest.data.topics.forEach { topic =>
+        if (results.find(topic.name).errorCode == Errors.NONE.code) {
+          toDeleteZNodes += topic.name -> topic.namespace
+        }
+      }
+
       try {
-        toDelete.foreach(federatedTopic => {
-          zkSupport.zkClient.deleteFederatedTopicZNode(federatedTopic)
+        toDeleteZNodes.foreach(federatedTopic => {
+          zkSupport.zkClient.deleteFederatedTopicZNode(federatedTopic._1, federatedTopic._2)
         })
         requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
           LiDeleteFederatedTopicZnodesResponse.prepareResponse(Errors.NONE, requestThrottleMs,
@@ -3844,14 +3851,10 @@ class KafkaApis(val requestChannel: RequestChannel,
         )
       } else {
         // if non-empty list passed, only list znode values for the given topics
-        val foundFederatedTopicZnodes = mutable.Set[String]()
-
-        requestedTopics.forEach(topic => {
-          val curFederatedTopicZnode = zkSupport.zkClient.getFederatedTopic(topic.name())
-          if (curFederatedTopicZnode != null) {
-            foundFederatedTopicZnodes.add(curFederatedTopicZnode)
-          }
-        })
+        val foundFederatedTopicZnodes = requestedTopics.asScala
+          // from a list of Options, flatten extracts value from Some, and nothing from None
+          .flatMap(topic => zkSupport.zkClient.getFederatedTopic(topic.name(), topic.namespace()))
+          .toSet
 
         requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
           new LiListFederatedTopicZnodesResponse(

@@ -315,7 +315,7 @@ public interface Admin extends AutoCloseable {
      * @return all federated topic znodes, formatted /namespace/topic
      */
     default ListFederatedTopicZnodesResult listFederatedTopicZnodes() {
-        return listFederatedTopicZnodes(Collections.emptyList(), new ListFederatedTopicZnodesOptions());
+        return listFederatedTopicZnodes(Collections.emptyMap(), new ListFederatedTopicZnodesOptions());
     }
 
     /**
@@ -326,7 +326,7 @@ public interface Admin extends AutoCloseable {
      * @return empty list if the given topic names' znode don't exist; otherwise return the federated topics formatted
      *         /namespace/topic
      */
-    ListFederatedTopicZnodesResult listFederatedTopicZnodes(List<String> federatedTopics,
+    ListFederatedTopicZnodesResult listFederatedTopicZnodes(Map<String, String> federatedTopics,
                                                             ListFederatedTopicZnodesOptions options);
 
     /**

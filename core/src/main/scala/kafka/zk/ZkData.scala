@@ -340,9 +340,8 @@ object BrokerIdZNode {
 }
 
 object FederatedTopicZnode {
-  def path(topic: String) = s"${FederatedTopicsZNode.path}/$topic"
-  def encode(namespace: String): Array[Byte] = namespace.getBytes(UTF_8)
-  def decode(bytes: Array[Byte]): String = if (bytes != null) new String(bytes, UTF_8) else ""
+  def path(topic: String, namespace: String) = s"${FederatedTopicsZNode.path}/$namespace/$topic"
+  def namespacePath(namespace: String) = s"${FederatedTopicsZNode.path}/$namespace"
 }
 
 object TopicsZNode {

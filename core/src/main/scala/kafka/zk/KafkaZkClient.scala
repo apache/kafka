@@ -145,37 +145,25 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient,
     }.toMap
   }
 
-  def getFederatedTopic(topic: String): String = {
-    val getDataRequest = GetDataRequest(FederatedTopicZnode.path(topic))
-    val getDataResponse = retryRequestUntilConnected(getDataRequest)
-    getDataResponse.resultCode match {
-      case Code.OK => "/" + FederatedTopicZnode.decode(getDataResponse.data) + "/" + topic
-      case Code.NONODE => null
-      case _ => throw getDataResponse.resultException.get
+  private[kafka] def getFederatedTopic(topic: String, namespace: String): Option[String] = {
+    if (pathExists(FederatedTopicZnode.path(topic, namespace))) {
+      Some(s"/$namespace/$topic")
+    } else {
+      None
     }
   }
 
   def getAllFederatedTopics: Set[String] = {
-    val topics = getChildren(FederatedTopicsZNode.path)
-
-    val merge: ((String, String)) => String = {
-      case (key, value) => "/" + value + "/" + key
-    }
-
-    val getDataRequests = topics.map(topic => GetDataRequest(
-      FederatedTopicZnode.path(topic),
-      ctx = Some(topic)))
-
-    val getDataResponses = retryRequestsUntilConnected(getDataRequests)
-    getDataResponses.flatMap { getDataResponse =>
-      val topic = getDataResponse.ctx.get.asInstanceOf[String]
-      getDataResponse.resultCode match {
-        case Code.OK => Some(topic, FederatedTopicZnode.decode(getDataResponse.data))
-        case Code.NONODE => None
-        case _ => throw getDataResponse.resultException.get
-      }
-    }.toMap.map(merge)
-  }.toSet
+    val namespaces = getChildren(FederatedTopicsZNode.path)
+    namespaces
+      // For all topics, generate (topic -> namespace) tuple
+      .flatMap(namespace => getAllFederatedTopicsInNamespace(namespace).map(_ -> namespace))
+      // To map to merge potential duplicate of topic -> namespace
+      .toMap
+      // Serialize to znode paths
+      .map { case (topic: String, namespace: String) => s"/$namespace/$topic" }
+      .toSet
+  }
 
   /**
    * Registers a given broker in zookeeper as the controller and increments controller epoch.
@@ -620,6 +608,29 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient,
         GetChildrenPaginatedRequest(TopicsZNode.path, registerWatch)
       } else {
         GetChildrenRequest(TopicsZNode.path, registerWatch)
+      }
+    )
+    getChildrenResponse.resultCode match {
+      case Code.OK => getChildrenResponse.children.toSet
+      case Code.NONODE => Set.empty
+      case _ => throw getChildrenResponse.resultException.get
+    }
+  }
+
+  /**
+   * Gets all federated topics in the namespace.
+   * @param registerWatch indicates if a watch must be registered or not
+   * @return sequence of topics in the cluster.
+   *
+   */
+  def getAllFederatedTopicsInNamespace(namespace: String, registerWatch: Boolean = false): Set[String] = {
+    val getChildrenResponse = retryRequestUntilConnected(
+      if (paginateTopics) {
+        debug(s"upgrading GetChildrenRequest to GetChildrenPaginatedRequest for " +
+          s"'${FederatedTopicZnode.namespacePath(namespace)}'")
+        GetChildrenPaginatedRequest(FederatedTopicZnode.namespacePath(namespace), registerWatch)
+      } else {
+        GetChildrenRequest(FederatedTopicZnode.namespacePath(namespace), registerWatch)
       }
     )
     getChildrenResponse.resultCode match {
@@ -1896,12 +1907,12 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient,
   }
 
   def createFederatedTopicZNode(topic: String, namespace: String): Unit = {
-    val path = FederatedTopicZnode.path(topic)
-    createRecursive(path, FederatedTopicZnode.encode(namespace))
+    val path = FederatedTopicZnode.path(topic, namespace)
+    createRecursive(path)
   }
 
-  def deleteFederatedTopicZNode(topic: String): Unit = {
-    deletePath(FederatedTopicZnode.path(topic), ZkVersion.MatchAnyVersion, false)
+  def deleteFederatedTopicZNode(topic: String, namespace: String): Unit = {
+    deletePath(FederatedTopicZnode.path(topic, namespace), ZkVersion.MatchAnyVersion, false)
   }
 
   private def setConsumerOffset(group: String, topicPartition: TopicPartition, offset: Long): SetDataResponse = {

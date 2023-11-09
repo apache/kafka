@@ -361,8 +361,8 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
-    public ListFederatedTopicZnodesResult listFederatedTopicZnodes(List<String> federatedTopics,
-        ListFederatedTopicZnodesOptions options) {
+    public ListFederatedTopicZnodesResult listFederatedTopicZnodes(Map<String, String> federatedTopics,
+                                                                   ListFederatedTopicZnodesOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 

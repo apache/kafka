@@ -2033,12 +2033,14 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     @Override
-    public ListFederatedTopicZnodesResult listFederatedTopicZnodes(List<String> federatedTopics,
+    public ListFederatedTopicZnodesResult listFederatedTopicZnodes(Map<String, String> federatedTopics,
                                                                    ListFederatedTopicZnodesOptions options) {
         final KafkaFutureImpl<List<String>> federatedTopicZnodesListingFuture = new KafkaFutureImpl<>();
         List<LiListFederatedTopicZnodesRequestData.FederatedTopics> topicsRequested = new ArrayList<>();
-        federatedTopics.forEach(topic ->
-            topicsRequested.add(new LiListFederatedTopicZnodesRequestData.FederatedTopics().setName(topic)));
+        federatedTopics.forEach((topic, namespace) ->
+            topicsRequested.add(
+                new LiListFederatedTopicZnodesRequestData.FederatedTopics().setName(topic).setNamespace(namespace)
+            ));
         final long now = time.milliseconds();
         runnable.call(new Call("listFederatedTopicZnodes", calcDeadlineMs(now, options.timeoutMs()),
             new LeastLoadedNodeProvider()) {

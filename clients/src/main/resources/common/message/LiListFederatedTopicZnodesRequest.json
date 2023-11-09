@@ -23,7 +23,8 @@
   "fields": [
     { "name": "Topics", "type": "[]FederatedTopics", "versions": "0+", "about": "The simple name of the federated topics",
       "fields": [
-        {"name": "Name", "type": "string", "versions": "0+", "about": "The topic name"}
+        {"name": "Name", "type": "string", "versions": "0+", "about": "The topic name"},
+        {"name": "Namespace", "type": "string", "versions": "0+", "about": "The namespace of the topic"}
       ]}
   ]
 }

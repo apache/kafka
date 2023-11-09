@@ -153,12 +153,11 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertEquals(1, allZnodes.size())
     assertEquals(expectedFedTopicString, allZnodes.get(0))
     // 2. test list specific success
-    val expectedSuccess = client.listFederatedTopicZnodes(Collections.singletonList("federated-test-topic"),
-        new ListFederatedTopicZnodesOptions()).topics().get()
+    val expectedSuccess = client.listFederatedTopicZnodes(federatedTopic, new ListFederatedTopicZnodesOptions()).topics().get()
     assertEquals(1, expectedSuccess.size())
     assertEquals(expectedFedTopicString, expectedSuccess.get(0))
     // 3. test list specific fail
-    val expectedFail = client.listFederatedTopicZnodes(Collections.singletonList("non-exist-topic"),
+    val expectedFail = client.listFederatedTopicZnodes(Collections.singletonMap("non-exist-topic", "tracking"),
       new ListFederatedTopicZnodesOptions()).topics().get()
     assertEquals(0, expectedFail.size())
 
