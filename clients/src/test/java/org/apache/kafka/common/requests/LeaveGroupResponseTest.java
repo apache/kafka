@@ -179,10 +179,11 @@ public class LeaveGroupResponseTest {
 
         if (version < 3) {
             assertThrows(UnsupportedVersionException.class,
-                    () -> new LeaveGroupResponse(data, version));
+                () -> new LeaveGroupResponse(data, version));
         } else {
             LeaveGroupResponse response = new LeaveGroupResponse(data, version);
             assertEquals(Errors.NONE, response.topLevelError());
+            assertEquals(Collections.emptyList(), response.memberResponses());
         }
     }
 
@@ -195,10 +196,11 @@ public class LeaveGroupResponseTest {
 
         if (version < 3) {
             assertThrows(UnsupportedVersionException.class,
-                         () -> new LeaveGroupResponse(data, version));
+                () -> new LeaveGroupResponse(data, version));
         } else {
             LeaveGroupResponse response = new LeaveGroupResponse(data, version);
             assertEquals(Errors.NONE, response.topLevelError());
+            assertEquals(memberResponses, response.memberResponses());
         }
     }
     
