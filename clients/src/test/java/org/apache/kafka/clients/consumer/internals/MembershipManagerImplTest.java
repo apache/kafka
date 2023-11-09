@@ -49,6 +49,7 @@ import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -124,18 +125,6 @@ public class MembershipManagerImplTest {
     }
 
     @Test
-    public void testReconcilingWhenReceivingAssignmentNotFoundInMetadata() {
-        MembershipManager membershipManager = mockJoinAndReceiveAssignment(false);
-        assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
-        verify(metadata).requestUpdate(anyBoolean());
-
-        // When the ack is sent the member should go back to RECONCILING to keep trying on the
-        // pending assignment.
-        membershipManager.onHeartbeatRequestSent();
-        assertEquals(MemberState.RECONCILING, membershipManager.state());
-    }
-
-    @Test
     public void testTransitionToReconcilingOnlyIfAssignmentReceived() {
         MembershipManagerImpl membershipManager = createMembershipManagerJoiningGroup();
         assertEquals(MemberState.JOINING, membershipManager.state());
@@ -203,10 +192,6 @@ public class MembershipManagerImplTest {
     @Test
     public void testFencingWhenStateIsReconciling() {
         MembershipManager membershipManager = mockJoinAndReceiveAssignment(false);
-        assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
-
-        // When the ack is sent the member should go back to RECONCILING
-        membershipManager.onHeartbeatRequestSent();
         assertEquals(MemberState.RECONCILING, membershipManager.state());
 
         testFencedMemberReleasesAssignmentAndResetsEpochToRejoin(membershipManager);
@@ -223,14 +208,9 @@ public class MembershipManagerImplTest {
     @Test
     public void testLeaveGroupWhenStateIsReconciling() {
         MembershipManager membershipManager = mockJoinAndReceiveAssignment(false);
-        assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
-
-        // When the ack is sent the member should go back to RECONCILING
-        membershipManager.onHeartbeatRequestSent();
         assertEquals(MemberState.RECONCILING, membershipManager.state());
 
         testLeaveGroupReleasesAssignmentAndResetsEpochToSendLeaveGroup(membershipManager);
-        verify(subscriptionState).assignFromSubscribed(Collections.emptySet());
     }
 
     @Test
@@ -270,14 +250,14 @@ public class MembershipManagerImplTest {
      * proceed with the reconciliation of the new assignment.
      */
     @Test
-    public void testMemberAcceptsNewAssignmentReplacingAPreviousOneWaitingOnMetadata() {
+    public void testNewAssignmentReplacesPreviousOneWaitingOnMetadata() {
         MembershipManagerImpl membershipManager = mockJoinAndReceiveAssignment(false);
-        assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
+        assertEquals(MemberState.RECONCILING, membershipManager.state());
 
         // When the ack is sent the member should go back to RECONCILING
         membershipManager.onHeartbeatRequestSent();
         assertEquals(MemberState.RECONCILING, membershipManager.state());
-        assertTrue(membershipManager.assignmentsWaitingOnMetadata() > 0);
+        assertTrue(membershipManager.topicsWaitingForMetadata().size() > 0);
 
         // New target assignment received while there is another one waiting to be resolved
         // and reconciled. This assignment does not include the previous one that is waiting
@@ -300,7 +280,7 @@ public class MembershipManagerImplTest {
         // because the first assignment that was not resolved should have been discarded
         membershipManager.onHeartbeatRequestSent();
         assertEquals(MemberState.STABLE, membershipManager.state());
-        assertEquals(0, membershipManager.assignmentsWaitingOnMetadata());
+        assertTrue(membershipManager.topicsWaitingForMetadata().isEmpty());
     }
 
     /**
@@ -309,27 +289,40 @@ public class MembershipManagerImplTest {
      * member. The member should keep it was waiting for metadata and continue to request updates.
      */
     @Test
-    public void testMemberKeepsAssignmentWaitingForMetadataWhileStillReceivingItFromTheBroker() {
-        boolean foundInMetadata = false;
-        ConsumerGroupHeartbeatResponseData.Assignment assignment = createAssignment(foundInMetadata);
-        MembershipManagerImpl membershipManager = mockJoinAndReceiveAssignment(foundInMetadata, assignment);
+    public void testMemberKeepsUnresolvedAssignmentWaitingForMetadataUntilResolved() {
+        // Assignment with 2 topics, only 1 found in metadata
+        Uuid topic1 = Uuid.randomUuid();
+        String topic1Name = "topic1";
+        Uuid topic2 = Uuid.randomUuid();
+        ConsumerGroupHeartbeatResponseData.Assignment assignment = new ConsumerGroupHeartbeatResponseData.Assignment()
+                .setTopicPartitions(Arrays.asList(
+                        new ConsumerGroupHeartbeatResponseData.TopicPartitions()
+                                .setTopicId(topic1)
+                                .setPartitions(Arrays.asList(0)),
+                        new ConsumerGroupHeartbeatResponseData.TopicPartitions()
+                                .setTopicId(topic2)
+                                .setPartitions(Arrays.asList(1, 3))
+                ));
+        when(metadata.topicNames()).thenReturn(Collections.singletonMap(topic1, topic1Name));
+
+        // Receive assignment partly in metadata - reconcile+ack what's in metadata, keep the
+        // unresolved and request metadata update.
+        MembershipManagerImpl membershipManager = mockJoinAndReceiveAssignment(true, assignment);
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
         verify(metadata).requestUpdate(anyBoolean());
+        assertEquals(Collections.singleton(topic2), membershipManager.topicsWaitingForMetadata());
 
-        // When the ack is sent the member should go back to RECONCILING
+        // When the ack is sent the member should go back to RECONCILING because it still has
+        // unresolved assignment to be reconciled.
         membershipManager.onHeartbeatRequestSent();
         assertEquals(MemberState.RECONCILING, membershipManager.state());
 
-        // Target assignment received while there is another one waiting to be resolved
-        // and reconciled. This assignment includes the previous one that is waiting
-        // for metadata, so the member will keep trying to resolve metadata for it.
+        // Target assignment received again with the same unresolved topic. Client should keep it
+        // as unresolved.
+        clearInvocations(subscriptionState);
         membershipManager.onHeartbeatResponseReceived(createConsumerGroupHeartbeatResponse(assignment).data());
-        assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
-
-        // When the ack is sent the member should go back to RECONCILING again
-        membershipManager.onHeartbeatRequestSent();
         assertEquals(MemberState.RECONCILING, membershipManager.state());
-        assertEquals(assignment.topicPartitions().size(), membershipManager.assignmentsWaitingOnMetadata());
+        assertEquals(Collections.singleton(topic2), membershipManager.topicsWaitingForMetadata());
         verify(subscriptionState, never()).assignFromSubscribed(anyCollection());
     }
 
@@ -532,39 +525,61 @@ public class MembershipManagerImplTest {
     }
 
     @Test
-    public void testReconcileNewPartitionsNotInMetadataAndMetadataRequestSucceeds() {
+    public void testMetadataUpdatesReconcilesUnresolvedAssignments() {
         Uuid topicId = Uuid.randomUuid();
-        String topicName = "topic1";
 
-        // Member received assignment to reconcile but does not find any of it in metadata.
-        // Should send ack, keep it to resolve later, and request metadata update.
-        MembershipManagerImpl membershipManager = createMembershipManagerJoiningGroup();
+        // Assignment not in metadata
         ConsumerGroupHeartbeatResponseData.Assignment targetAssignment = new ConsumerGroupHeartbeatResponseData.Assignment()
                 .setTopicPartitions(Collections.singletonList(
                         new ConsumerGroupHeartbeatResponseData.TopicPartitions()
                                 .setTopicId(topicId)
                                 .setPartitions(Arrays.asList(0, 1))));
-        ConsumerGroupHeartbeatResponse heartbeatResponse = createConsumerGroupHeartbeatResponse(targetAssignment);
-        mockOwnedPartitionAndAssignmentReceived(topicId, topicName, Collections.emptySet(), false);
-        membershipManager.onHeartbeatResponseReceived(heartbeatResponse.data());
-        verifyAckSentWithoutTriggeringReconciliation(membershipManager);
-        assertTrue(membershipManager.assignmentsWaitingOnMetadata() > 0);
-        verify(metadata).requestUpdate(anyBoolean());
-        // After next HB sent, member should go back to RECONCILING
-        membershipManager.onHeartbeatRequestSent();
+        MembershipManagerImpl membershipManager = mockJoinAndReceiveAssignment(false, targetAssignment);
         assertEquals(MemberState.RECONCILING, membershipManager.state());
 
+        // Should not trigger reconciliation, and request a metadata update.
+        verifyReconciliationNotTriggered(membershipManager);
+        assertEquals(Collections.singleton(topicId), membershipManager.topicsWaitingForMetadata());
+        verify(metadata).requestUpdate(anyBoolean());
+
+        String topicName = "topic1";
         mockTopicNameInMetadataCache(Collections.singletonMap(topicId, topicName), true);
 
-        // When metadata is updated, the member should trigger reconciliation for the pending
-        // assignment
+        // When metadata is updated, the member should re-trigger reconciliation
         membershipManager.onUpdate(null);
         Set<TopicPartition> expectedAssignmentReconciled = new HashSet<>(Arrays.asList(
                 new TopicPartition(topicName, 0),
                 new TopicPartition(topicName, 1)));
         verifyReconciliationTriggeredAndCompleted(membershipManager, expectedAssignmentReconciled);
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
-        assertEquals(0, membershipManager.assignmentsWaitingOnMetadata());
+        assertTrue(membershipManager.topicsWaitingForMetadata().isEmpty());
+    }
+
+    @Test
+    public void testMetadataUpdatesRequestsAnotherUpdateIfNeeded() {
+        Uuid topicId = Uuid.randomUuid();
+
+        // Assignment not in metadata
+        ConsumerGroupHeartbeatResponseData.Assignment targetAssignment = new ConsumerGroupHeartbeatResponseData.Assignment()
+                .setTopicPartitions(Collections.singletonList(
+                        new ConsumerGroupHeartbeatResponseData.TopicPartitions()
+                                .setTopicId(topicId)
+                                .setPartitions(Arrays.asList(0, 1))));
+        MembershipManagerImpl membershipManager = mockJoinAndReceiveAssignment(false, targetAssignment);
+        assertEquals(MemberState.RECONCILING, membershipManager.state());
+
+        // Should not trigger reconciliation, and request a metadata update.
+        verifyReconciliationNotTriggered(membershipManager);
+        assertEquals(Collections.singleton(topicId), membershipManager.topicsWaitingForMetadata());
+        verify(metadata).requestUpdate(anyBoolean());
+
+        // Metadata update received, but still without the unresolved topic in it. Should keep
+        // the unresolved and request update again.
+        when(metadata.topicNames()).thenReturn(Collections.emptyMap());
+        membershipManager.onUpdate(null);
+        verifyReconciliationNotTriggered(membershipManager);
+        assertEquals(Collections.singleton(topicId), membershipManager.topicsWaitingForMetadata());
+        verify(metadata, times(2)).requestUpdate(anyBoolean());
     }
 
     @Test
@@ -618,10 +633,9 @@ public class MembershipManagerImplTest {
         testRevocationCompleted(membershipManager, remainingAssignment);
     }
 
-    private void verifyAckSentWithoutTriggeringReconciliation(MembershipManagerImpl membershipManager) {
+    private void verifyReconciliationNotTriggered(MembershipManagerImpl membershipManager) {
         verify(membershipManager, never()).markReconciliationInProgress();
         verify(membershipManager, never()).markReconciliationCompleted();
-        assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
     }
 
     private void verifyReconciliationTriggeredAndCompleted(MembershipManagerImpl membershipManager,
@@ -705,11 +719,11 @@ public class MembershipManagerImplTest {
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
     }
 
-    private MembershipManagerImpl mockJoinAndReceiveAssignment(boolean foundInMetadata) {
-        return mockJoinAndReceiveAssignment(foundInMetadata, createAssignment(foundInMetadata));
+    private MembershipManagerImpl mockJoinAndReceiveAssignment(boolean expectSubscriptionUpdated) {
+        return mockJoinAndReceiveAssignment(expectSubscriptionUpdated, createAssignment(expectSubscriptionUpdated));
     }
 
-    private MembershipManagerImpl mockJoinAndReceiveAssignment(boolean foundInMetadata,
+    private MembershipManagerImpl mockJoinAndReceiveAssignment(boolean expectSubscriptionUpdated,
                                                                ConsumerGroupHeartbeatResponseData.Assignment assignment) {
         MembershipManagerImpl membershipManager = createMembershipManagerJoiningGroup();
         ConsumerGroupHeartbeatResponse heartbeatResponse = createConsumerGroupHeartbeatResponse(assignment);
@@ -717,7 +731,7 @@ public class MembershipManagerImplTest {
         when(subscriptionState.rebalanceListener()).thenReturn(Optional.empty()).thenReturn(Optional.empty());
 
         membershipManager.onHeartbeatResponseReceived(heartbeatResponse.data());
-        if (foundInMetadata) {
+        if (expectSubscriptionUpdated) {
             verify(subscriptionState).assignFromSubscribed(anyCollection());
         } else {
             verify(subscriptionState, never()).assignFromSubscribed(anyCollection());
@@ -773,6 +787,7 @@ public class MembershipManagerImplTest {
         assertEquals(-1, membershipManager.memberEpoch());
         assertTrue(membershipManager.currentAssignment().isEmpty());
         assertEquals(MemberState.LEAVING, membershipManager.state());
+        verify(subscriptionState).assignFromSubscribed(Collections.emptySet());
     }
 
     private void testStateUpdateOnFatalFailure(MembershipManager membershipManager) {
