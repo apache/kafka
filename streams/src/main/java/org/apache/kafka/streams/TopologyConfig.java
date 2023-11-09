@@ -23,6 +23,7 @@ import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.internals.StreamsConfigUtils;
+import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 
 import org.apache.kafka.streams.processor.internals.namedtopology.KafkaStreamsNamedTopologyWrapper;
@@ -217,19 +218,8 @@ public class TopologyConfig extends AbstractConfig {
         }
     }
 
-    public static Materialized.StoreType parse(final String storeType) {
-        switch (storeType) {
-            case IN_MEMORY:
-                return Materialized.StoreType.IN_MEMORY;
-            case ROCKS_DB:
-                return Materialized.StoreType.ROCKS_DB;
-            default:
-                throw new IllegalStateException("Unexpected storeType: " + storeType);
-        }
-    }
-
     public Materialized.StoreType parseStoreType() {
-        return parse(storeType);
+        return MaterializedInternal.parse(storeType);
     }
 
     public boolean isNamedTopology() {

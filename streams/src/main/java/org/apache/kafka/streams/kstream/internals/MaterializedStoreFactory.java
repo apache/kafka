@@ -20,7 +20,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.TopologyConfig;import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.StoreFactory;
 
@@ -32,7 +32,7 @@ public abstract class MaterializedStoreFactory<K, V, S extends StateStore> imple
     protected final MaterializedInternal<K, V, S> materialized;
     private final Set<String> connectedProcessorNames = new HashSet<>();
     protected Materialized.StoreType defaultStoreType
-            = TopologyConfig.parse(StreamsConfig.DEFAULT_DSL_STORE);
+            = MaterializedInternal.parse(StreamsConfig.DEFAULT_DSL_STORE);
 
     public MaterializedStoreFactory(final MaterializedInternal<K, V, S> materialized) {
         this.materialized = materialized;
