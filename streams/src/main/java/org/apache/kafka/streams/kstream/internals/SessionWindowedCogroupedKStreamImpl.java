@@ -29,6 +29,8 @@ import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.WindowedSerdes;
 import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
+import org.apache.kafka.streams.processor.internals.StoreBuilderWrapper;
+import org.apache.kafka.streams.processor.internals.StoreFactory;
 import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -106,7 +108,7 @@ public class SessionWindowedCogroupedKStreamImpl<K, V> extends
             sessionMerger);
     }
 
-    private  StoreBuilder<SessionStore<K, V>> materialize(final MaterializedInternal<K, V, SessionStore<Bytes, byte[]>> materialized) {
+    private StoreFactory materialize(final MaterializedInternal<K, V, SessionStore<Bytes, byte[]>> materialized) {
         SessionBytesStoreSupplier supplier = (SessionBytesStoreSupplier) materialized.storeSupplier();
         if (supplier == null) {
             final long retentionPeriod = materialized.retention() != null ?
@@ -155,7 +157,7 @@ public class SessionWindowedCogroupedKStreamImpl<K, V> extends
         if (materialized.cachingEnabled()) {
             builder.withCachingEnabled();
         }
-        return builder;
+        return new StoreBuilderWrapper(builder);
     }
 
 }

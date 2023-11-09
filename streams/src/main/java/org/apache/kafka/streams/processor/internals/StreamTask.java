@@ -39,6 +39,7 @@ import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.internals.AbstractPartitionGroup.RecordInfo;
 import org.apache.kafka.streams.processor.internals.metrics.ProcessorNodeMetrics;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
@@ -64,7 +65,7 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
 
 /**
- * A StreamTask is associated with a {@link PartitionGroup}, and is assigned to a StreamThread for processing.
+ * A StreamTask is associated with a {@link AbstractPartitionGroup}, and is assigned to a StreamThread for processing.
  */
 public class StreamTask extends AbstractTask implements ProcessorNodePunctuator, Task {
 
@@ -77,9 +78,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     private final boolean eosEnabled;
 
     private final int maxBufferedSize;
-    private final PartitionGroup partitionGroup;
+    private final AbstractPartitionGroup partitionGroup;
     private final RecordCollector recordCollector;
-    private final PartitionGroup.RecordInfo recordInfo;
+    private final AbstractPartitionGroup.RecordInfo recordInfo;
     private final Map<TopicPartition, Long> consumedOffsets;
     private final Map<TopicPartition, Long> committedOffsets;
     private final Map<TopicPartition, Long> highWatermark;
@@ -111,7 +112,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     private boolean hasPendingTxCommit = false;
     private Optional<Long> timeCurrentIdlingStarted;
 
-    @SuppressWarnings({"rawtypes", "this-escape"})
+    @SuppressWarnings({"rawtypes", "this-escape", "checkstyle:ParameterNumber"})
     public StreamTask(final TaskId id,
                       final Set<TopicPartition> inputPartitions,
                       final ProcessorTopology topology,
@@ -124,7 +125,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                       final ProcessorStateManager stateMgr,
                       final RecordCollector recordCollector,
                       final InternalProcessorContext processorContext,
-                      final LogContext logContext) {
+                      final LogContext logContext,
+                      final boolean processingThreadsEnabled
+                      ) {
         super(
             id,
             topology,
@@ -181,19 +184,30 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
         recordQueueCreator = new RecordQueueCreator(this.logContext, config.timestampExtractor, config.deserializationExceptionHandler);
 
-        recordInfo = new PartitionGroup.RecordInfo();
+        recordInfo = new RecordInfo();
 
         final Sensor enforcedProcessingSensor;
         enforcedProcessingSensor = TaskMetrics.enforcedProcessingSensor(threadId, taskId, streamsMetrics);
         final long maxTaskIdleMs = config.maxTaskIdleMs;
-        partitionGroup = new PartitionGroup(
-            logContext,
-            createPartitionQueues(),
-            mainConsumer::currentLag,
-            TaskMetrics.recordLatenessSensor(threadId, taskId, streamsMetrics),
-            enforcedProcessingSensor,
-            maxTaskIdleMs
-        );
+        if (processingThreadsEnabled) {
+            partitionGroup = new SynchronizedPartitionGroup(new PartitionGroup(
+                logContext,
+                createPartitionQueues(),
+                mainConsumer::currentLag,
+                TaskMetrics.recordLatenessSensor(threadId, taskId, streamsMetrics),
+                enforcedProcessingSensor,
+                maxTaskIdleMs
+            ));
+        } else {
+            partitionGroup = new PartitionGroup(
+                logContext,
+                createPartitionQueues(),
+                mainConsumer::currentLag,
+                TaskMetrics.recordLatenessSensor(threadId, taskId, streamsMetrics),
+                enforcedProcessingSensor,
+                maxTaskIdleMs
+            );
+        }
 
         stateMgr.registerGlobalStateStores(topology.globalStateStores());
         committedOffsets = new HashMap<>();

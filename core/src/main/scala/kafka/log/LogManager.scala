@@ -18,7 +18,7 @@
 package kafka.log
 
 import java.io._
-import java.nio.file.Files
+import java.nio.file.{Files, NoSuchFileException}
 import java.util.concurrent._
 import java.util.concurrent.atomic.AtomicInteger
 import kafka.server.checkpoints.OffsetCheckpointFile
@@ -35,13 +35,15 @@ import scala.collection.mutable.ArrayBuffer
 import scala.util.{Failure, Success, Try}
 import kafka.utils.Implicits._
 import org.apache.kafka.common.config.TopicConfig
+import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, PropertiesUtils}
 
-import java.util.Properties
+import java.util.{OptionalLong, Properties}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.storage.internals.log.LogConfig.MessageFormatVersion
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.Scheduler
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig, RemoteIndexCache}
+import org.apache.kafka.storage.internals.checkpoint.CleanShutdownFileHandler
 
 import scala.annotation.nowarn
 
@@ -92,6 +94,10 @@ class LogManager(logDirs: Seq[File],
   // Each element in the queue contains the log object to be deleted and the time it is scheduled for deletion.
   private val logsToBeDeleted = new LinkedBlockingQueue[(UnifiedLog, Long)]()
 
+  // Map of stray partition to stray log. This holds all stray logs detected on the broker.
+  // Visible for testing
+  private val strayLogs = new Pool[TopicPartition, UnifiedLog]()
+
   private val _liveLogDirs: ConcurrentLinkedQueue[File] = createAndValidateLogDirs(logDirs, initialOfflineDirs)
   @volatile private var _currentDefaultConfig = initialDefaultConfig
   @volatile private var numRecoveryThreadsPerDataDir = recoveryThreadsPerDataDir
@@ -117,9 +123,7 @@ class LogManager(logDirs: Seq[File],
   }
 
   private val dirLocks = lockLogDirs(liveLogDirs)
-  private val dirIds = directoryIds(liveLogDirs)
-  // visible for testing
-  private[log] val directoryIds: Set[Uuid] = dirIds.values.toSet
+  val directoryIds: Map[String, Uuid] = loadDirectoryIds(liveLogDirs)
   @volatile private var recoveryPointCheckpoints = liveLogDirs.map(dir =>
     (dir, new OffsetCheckpointFile(new File(dir, RecoveryPointCheckpointFile), logDirFailureChannel))).toMap
   @volatile private var logStartOffsetCheckpoints = liveLogDirs.map(dir =>
@@ -267,39 +271,39 @@ class LogManager(logDirs: Seq[File],
   /**
    * Retrieves the Uuid for the directory, given its absolute path.
    */
-  def directoryId(dir: String): Option[Uuid] = dirIds.get(dir)
+  def directoryId(dir: String): Option[Uuid] = directoryIds.get(dir)
 
   /**
    * Determine directory ID for each directory with a meta.properties.
    * If meta.properties does not include a directory ID, one is generated and persisted back to meta.properties.
    * Directories without a meta.properties don't get a directory ID assigned.
    */
-  private def directoryIds(dirs: Seq[File]): Map[String, Uuid] = {
-    dirs.flatMap { dir =>
+  private def loadDirectoryIds(logDirs: Seq[File]): Map[String, Uuid] = {
+    val result = mutable.HashMap[String, Uuid]()
+    logDirs.foreach(logDir => {
       try {
-        val metadataCheckpoint = new BrokerMetadataCheckpoint(new File(dir, KafkaServer.brokerMetaPropsFile))
-        metadataCheckpoint.read().map { props =>
-          val rawMetaProperties = new RawMetaProperties(props)
-          val uuid = rawMetaProperties.directoryId match {
-            case Some(uuidStr) => Uuid.fromString(uuidStr)
-            case None =>
-              val uuid = Uuid.randomUuid()
-              rawMetaProperties.directoryId = uuid.toString
-              metadataCheckpoint.write(rawMetaProperties.props)
-              uuid
-          }
-          dir.getAbsolutePath -> uuid
-        }.toMap
+        val props = PropertiesUtils.readPropertiesFile(
+          new File(logDir, MetaPropertiesEnsemble.META_PROPERTIES_NAME).getAbsolutePath)
+        val metaProps = new MetaProperties.Builder(props).build()
+        metaProps.directoryId().ifPresent(directoryId => {
+          result += (logDir.getAbsolutePath -> directoryId)
+        })
       } catch {
-        case e: IOException =>
-          logDirFailureChannel.maybeAddOfflineLogDir(dir.getAbsolutePath, s"Disk error while loading ID $dir", e)
-          None
-      }
-    }.toMap
+        case e: NoSuchFileException =>
+          info(s"No meta.properties file found in ${logDir}.")
+         case e: IOException =>
+          logDirFailureChannel.maybeAddOfflineLogDir(logDir.getAbsolutePath, s"Disk error while loading ID $logDir", e)
+       }
+    })
+    result
   }
 
   private def addLogToBeDeleted(log: UnifiedLog): Unit = {
     this.logsToBeDeleted.add((log, time.milliseconds()))
+  }
+
+  def addStrayLog(strayPartition: TopicPartition, strayLog: UnifiedLog): Unit = {
+    this.strayLogs.put(strayPartition, strayLog)
   }
 
   // Only for testing
@@ -337,6 +341,9 @@ class LogManager(logDirs: Seq[File],
 
     if (logDir.getName.endsWith(UnifiedLog.DeleteDirSuffix)) {
       addLogToBeDeleted(log)
+    } else if (logDir.getName.endsWith(UnifiedLog.StrayDirSuffix)) {
+      addStrayLog(topicPartition, log)
+      warn(s"Loaded stray log: $logDir")
     } else {
       val previous = {
         if (log.isFuture)
@@ -408,11 +415,11 @@ class LogManager(logDirs: Seq[File],
           new LogRecoveryThreadFactory(logDirAbsolutePath))
         threadPools.append(pool)
 
-        val cleanShutdownFile = new File(dir, LogLoader.CleanShutdownFile)
-        if (cleanShutdownFile.exists) {
+        val cleanShutdownFileHandler = new CleanShutdownFileHandler(dir.getPath)
+        if (cleanShutdownFileHandler.exists()) {
           // Cache the clean shutdown status and use that for rest of log loading workflow. Delete the CleanShutdownFile
           // so that if broker crashes while loading the log, it is considered hard shutdown during the next boot up. KAFKA-10471
-          Files.deleteIfExists(cleanShutdownFile.toPath)
+          cleanShutdownFileHandler.delete()
           hadCleanShutdown = true
         }
         hadCleanShutdownFlags.put(logDirAbsolutePath, hadCleanShutdown)
@@ -625,7 +632,7 @@ class LogManager(logDirs: Seq[File],
   /**
    * Close all the logs
    */
-  def shutdown(): Unit = {
+  def shutdown(brokerEpoch: Long = -1): Unit = {
     info("Shutting down.")
 
     metricsGroup.removeMetric("OfflineLogDirectoryCount")
@@ -684,8 +691,9 @@ class LogManager(logDirs: Seq[File],
           val logDirAbsolutePath = dir.getAbsolutePath
           if (hadCleanShutdownFlags.getOrDefault(logDirAbsolutePath, false) ||
               loadLogsCompletedFlags.getOrDefault(logDirAbsolutePath, false)) {
-            debug(s"Writing clean shutdown marker at $dir")
-            CoreUtils.swallow(Files.createFile(new File(dir, LogLoader.CleanShutdownFile).toPath), this)
+            val cleanShutdownFileHandler = new CleanShutdownFileHandler(dir.getPath)
+            debug(s"Writing clean shutdown marker at $dir with broker epoch=$brokerEpoch")
+            CoreUtils.swallow(cleanShutdownFileHandler.write(brokerEpoch), this)
           }
         }
       }
@@ -837,7 +845,7 @@ class LogManager(logDirs: Seq[File],
     try {
       logStartOffsetCheckpoints.get(logDir).foreach { checkpoint =>
         val logStartOffsets = logsToCheckpoint.collect {
-          case (tp, log) if log.logStartOffset > log.logSegments.head.baseOffset => tp -> log.logStartOffset
+          case (tp, log) if log.logStartOffset > log.logSegments.asScala.head.baseOffset => tp -> log.logStartOffset
         }
         checkpoint.write(logStartOffsets)
       }
@@ -1202,7 +1210,8 @@ class LogManager(logDirs: Seq[File],
     */
   def asyncDelete(topicPartition: TopicPartition,
                   isFuture: Boolean = false,
-                  checkpoint: Boolean = true): Option[UnifiedLog] = {
+                  checkpoint: Boolean = true,
+                  isStray: Boolean = false): Option[UnifiedLog] = {
     val removedLog: Option[UnifiedLog] = logCreationOrDeletionLock synchronized {
       removeLogAndMetrics(if (isFuture) futureLogs else currentLogs, topicPartition)
     }
@@ -1215,15 +1224,21 @@ class LogManager(logDirs: Seq[File],
             cleaner.updateCheckpoints(removedLog.parentDirFile, partitionToRemove = Option(topicPartition))
           }
         }
-        removedLog.renameDir(UnifiedLog.logDeleteDirName(topicPartition), false)
+        if (isStray) {
+          // Move aside stray partitions, don't delete them
+          removedLog.renameDir(UnifiedLog.logStrayDirName(topicPartition), false)
+          warn(s"Log for partition ${removedLog.topicPartition} is marked as stray and renamed to ${removedLog.dir.getAbsolutePath}")
+        } else {
+          removedLog.renameDir(UnifiedLog.logDeleteDirName(topicPartition), false)
+          addLogToBeDeleted(removedLog)
+          info(s"Log for partition ${removedLog.topicPartition} is renamed to ${removedLog.dir.getAbsolutePath} and is scheduled for deletion")
+        }
         if (checkpoint) {
           val logDir = removedLog.parentDirFile
           val logsToCheckpoint = logsInDir(logDir)
           checkpointRecoveryOffsetsInDir(logDir, logsToCheckpoint)
           checkpointLogStartOffsetsInDir(logDir, logsToCheckpoint)
         }
-        addLogToBeDeleted(removedLog)
-        info(s"Log for partition ${removedLog.topicPartition} is renamed to ${removedLog.dir.getAbsolutePath} and is scheduled for deletion")
 
       case None =>
         if (offlineLogDirs.nonEmpty) {
@@ -1243,6 +1258,7 @@ class LogManager(logDirs: Seq[File],
    *                     topic-partition is raised
    */
   def asyncDelete(topicPartitions: Set[TopicPartition],
+                  isStray: Boolean,
                   errorHandler: (TopicPartition, Throwable) => Unit): Unit = {
     val logDirs = mutable.Set.empty[File]
 
@@ -1250,11 +1266,11 @@ class LogManager(logDirs: Seq[File],
       try {
         getLog(topicPartition).foreach { log =>
           logDirs += log.parentDirFile
-          asyncDelete(topicPartition, checkpoint = false)
+          asyncDelete(topicPartition, checkpoint = false, isStray = isStray)
         }
         getLog(topicPartition, isFuture = true).foreach { log =>
           logDirs += log.parentDirFile
-          asyncDelete(topicPartition, isFuture = true, checkpoint = false)
+          asyncDelete(topicPartition, isFuture = true, checkpoint = false, isStray = isStray)
         }
       } catch {
         case e: Throwable => errorHandler(topicPartition, e)
@@ -1408,6 +1424,29 @@ class LogManager(logDirs: Seq[File],
     } else {
       None
     }
+  }
+
+  def readBrokerEpochFromCleanShutdownFiles(): OptionalLong = {
+    // Verify whether all the log dirs have the same broker epoch in their clean shutdown files. If there is any dir not
+    // live, fail the broker epoch check.
+    if (liveLogDirs.size < logDirs.size) {
+      return OptionalLong.empty()
+    }
+    var brokerEpoch = -1L
+    for (dir <- liveLogDirs) {
+      val cleanShutdownFileHandler = new CleanShutdownFileHandler(dir.getPath)
+      val currentBrokerEpoch = cleanShutdownFileHandler.read
+      if (!currentBrokerEpoch.isPresent) {
+        info(s"Unable to read the broker epoch in ${dir.toString}.")
+        return OptionalLong.empty()
+      }
+      if (brokerEpoch != -1 && currentBrokerEpoch.getAsLong != brokerEpoch) {
+        info(s"Found different broker epochs in ${dir.toString}. Other=$brokerEpoch vs current=$currentBrokerEpoch.")
+        return OptionalLong.empty()
+      }
+      brokerEpoch = currentBrokerEpoch.getAsLong
+    }
+    OptionalLong.of(brokerEpoch)
   }
 }
 

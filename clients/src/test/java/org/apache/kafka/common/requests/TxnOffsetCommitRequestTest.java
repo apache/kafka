@@ -19,6 +19,7 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData.TxnOffsetCommitRequestTopic;
+import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.TxnOffsetCommitRequest.CommittedOffset;
@@ -32,6 +33,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import static org.apache.kafka.common.requests.TxnOffsetCommitRequest.getErrorResponse;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TxnOffsetCommitRequestTest extends OffsetCommitRequestTest {
@@ -126,5 +128,26 @@ public class TxnOffsetCommitRequestTest extends OffsetCommitRequestTest {
             assertEquals(Collections.singletonMap(Errors.NOT_COORDINATOR, 2), response.errorCounts());
             assertEquals(throttleTimeMs, response.throttleTimeMs());
         }
+    }
+
+    @Test
+    @Override
+    public void testGetErrorResponse() {
+        TxnOffsetCommitResponseData expectedResponse = new TxnOffsetCommitResponseData()
+            .setTopics(Arrays.asList(
+                new TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic()
+                    .setName(topicOne)
+                    .setPartitions(Collections.singletonList(
+                        new TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition()
+                            .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code())
+                            .setPartitionIndex(partitionOne))),
+                new TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic()
+                    .setName(topicTwo)
+                    .setPartitions(Collections.singletonList(
+                        new TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition()
+                            .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code())
+                            .setPartitionIndex(partitionTwo)))));
+
+        assertEquals(expectedResponse, getErrorResponse(builderWithGroupMetadata.data, Errors.UNKNOWN_MEMBER_ID));
     }
 }

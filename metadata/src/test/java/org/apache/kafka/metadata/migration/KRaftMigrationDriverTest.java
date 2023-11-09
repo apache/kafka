@@ -617,7 +617,7 @@ public class KRaftMigrationDriverTest {
 
             // Wait for migration
             TestUtils.waitForCondition(() -> driver.migrationState().get(1, TimeUnit.MINUTES).equals(MigrationDriverState.DUAL_WRITE),
-                    "Waiting for KRaftMigrationDriver to enter ZK_MIGRATION state");
+                    "Waiting for KRaftMigrationDriver to enter DUAL_WRITE state");
 
             // Modify topics in a KRaft snapshot -- delete foo, modify bar, add baz, add new foo, add bam, delete bam
             provenance = new MetadataProvenance(200, 1, 1);
@@ -636,6 +636,61 @@ public class KRaftMigrationDriverTest {
             assertEquals(2, configClient.deletedResources.size());
             assertTrue(configClient.deletedResources.contains(new ConfigResource(ConfigResource.Type.TOPIC, "foo")));
             assertTrue(configClient.deletedResources.contains(new ConfigResource(ConfigResource.Type.TOPIC, "bam")));
+        });
+    }
+
+    @Test
+    public void testNoDualWriteBeforeMigration() throws Exception {
+        setupTopicDualWrite((driver, migrationClient, topicClient, configClient) -> {
+            MetadataImage image = new MetadataImage(
+                MetadataProvenance.EMPTY,
+                FeaturesImage.EMPTY,
+                ClusterImage.EMPTY,
+                IMAGE1,
+                ConfigurationsImage.EMPTY,
+                ClientQuotasImage.EMPTY,
+                ProducerIdsImage.EMPTY,
+                AclsImage.EMPTY,
+                ScramImage.EMPTY,
+                DelegationTokenImage.EMPTY);
+            MetadataDelta delta = new MetadataDelta(image);
+
+            driver.start();
+            setupDeltaForMigration(delta, true);
+            delta.replay(ZkMigrationState.PRE_MIGRATION.toRecord().message());
+            delta.replay(zkBrokerRecord(0));
+            delta.replay(zkBrokerRecord(1));
+            delta.replay(zkBrokerRecord(2));
+            delta.replay(zkBrokerRecord(3));
+            delta.replay(zkBrokerRecord(4));
+            delta.replay(zkBrokerRecord(5));
+            MetadataProvenance provenance = new MetadataProvenance(100, 1, 1);
+            image = delta.apply(provenance);
+
+            // Publish a delta with this node (3000) as the leader
+            LeaderAndEpoch newLeader = new LeaderAndEpoch(OptionalInt.of(3000), 1);
+            driver.onControllerChange(newLeader);
+
+            TestUtils.waitForCondition(() -> driver.migrationState().get(1, TimeUnit.MINUTES).equals(MigrationDriverState.WAIT_FOR_CONTROLLER_QUORUM),
+                "Waiting for KRaftMigrationDriver to enter DUAL_WRITE state");
+
+            driver.onMetadataUpdate(delta, image, logDeltaManifestBuilder(provenance, newLeader).build());
+
+            driver.transitionTo(MigrationDriverState.WAIT_FOR_BROKERS);
+            driver.transitionTo(MigrationDriverState.BECOME_CONTROLLER);
+            driver.transitionTo(MigrationDriverState.ZK_MIGRATION);
+            driver.transitionTo(MigrationDriverState.SYNC_KRAFT_TO_ZK);
+
+            provenance = new MetadataProvenance(200, 1, 1);
+            delta = new MetadataDelta(image);
+            RecordTestUtils.replayAll(delta, DELTA1_RECORDS);
+            image = delta.apply(provenance);
+            driver.onMetadataUpdate(delta, image, new SnapshotManifest(provenance, 100));
+
+
+            // Wait for migration
+            TestUtils.waitForCondition(() -> driver.migrationState().get(1, TimeUnit.MINUTES).equals(MigrationDriverState.DUAL_WRITE),
+                "Waiting for KRaftMigrationDriver to enter DUAL_WRITE state");
         });
     }
 

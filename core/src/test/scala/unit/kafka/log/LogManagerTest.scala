@@ -20,13 +20,14 @@ package kafka.log
 import com.yammer.metrics.core.{Gauge, MetricName}
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.server.metadata.{ConfigRepository, MockConfigRepository}
-import kafka.server.{BrokerMetadataCheckpoint, BrokerTopicStats, KafkaServer, RawMetaProperties}
+import kafka.server.BrokerTopicStats
 import kafka.utils._
 import org.apache.directory.api.util.FileUtils
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.OffsetOutOfRangeException
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
+import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.ArgumentMatchers.any
@@ -36,10 +37,11 @@ import org.mockito.Mockito.{doAnswer, doNothing, mock, never, spy, times, verify
 import java.io._
 import java.nio.file.Files
 import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap, Future}
-import java.util.{Collections, Properties}
+import java.util.{Collections, Optional, OptionalLong, Properties}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.log.{FetchDataInfo, FetchIsolation, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig, RemoteIndexCache}
+import org.apache.kafka.storage.internals.checkpoint.CleanShutdownFileHandler
 
 import scala.collection.{Map, mutable}
 import scala.collection.mutable.ArrayBuffer
@@ -127,10 +129,39 @@ class LogManagerTest {
       // This should cause log1.close() to fail during LogManger shutdown sequence.
       FileUtils.deleteDirectory(logFile1)
 
-      logManagerForTest.get.shutdown()
+      logManagerForTest.get.shutdown(3)
 
-      assertFalse(Files.exists(new File(logDir1, LogLoader.CleanShutdownFile).toPath))
-      assertTrue(Files.exists(new File(logDir2, LogLoader.CleanShutdownFile).toPath))
+      assertFalse(Files.exists(new File(logDir1, CleanShutdownFileHandler.CLEAN_SHUTDOWN_FILE_NAME).toPath))
+      assertTrue(Files.exists(new File(logDir2, CleanShutdownFileHandler.CLEAN_SHUTDOWN_FILE_NAME).toPath))
+      assertEquals(OptionalLong.empty(), logManagerForTest.get.readBrokerEpochFromCleanShutdownFiles())
+    } finally {
+      logManagerForTest.foreach(manager => manager.liveLogDirs.foreach(Utils.delete))
+    }
+  }
+
+  @Test
+  def testCleanShutdownFileWithBrokerEpoch(): Unit = {
+    val logDir1 = TestUtils.tempDir()
+    val logDir2 = TestUtils.tempDir()
+    var logManagerForTest: Option[LogManager] = Option.empty
+    try {
+      logManagerForTest = Some(createLogManager(Seq(logDir1, logDir2)))
+
+      assertEquals(2, logManagerForTest.get.liveLogDirs.size)
+      logManagerForTest.get.startup(Set.empty)
+      logManagerForTest.get.getOrCreateLog(new TopicPartition(name, 0), topicId = None)
+      logManagerForTest.get.getOrCreateLog(new TopicPartition(name, 1), topicId = None)
+
+      val logFile1 = new File(logDir1, name + "-0")
+      assertTrue(logFile1.exists)
+      val logFile2 = new File(logDir2, name + "-1")
+      assertTrue(logFile2.exists)
+
+      logManagerForTest.get.shutdown(3)
+
+      assertTrue(Files.exists(new File(logDir1, CleanShutdownFileHandler.CLEAN_SHUTDOWN_FILE_NAME).toPath))
+      assertTrue(Files.exists(new File(logDir2, CleanShutdownFileHandler.CLEAN_SHUTDOWN_FILE_NAME).toPath))
+      assertEquals(OptionalLong.of(3L), logManagerForTest.get.readBrokerEpochFromCleanShutdownFiles())
     } finally {
       logManagerForTest.foreach(manager => manager.liveLogDirs.foreach(Utils.delete))
     }
@@ -160,7 +191,7 @@ class LogManagerTest {
 
     // 2. simulate unclean shutdown by deleting clean shutdown marker file
     logManager.shutdown()
-    assertTrue(Files.deleteIfExists(new File(logDir, LogLoader.CleanShutdownFile).toPath))
+    assertTrue(Files.deleteIfExists(new File(logDir, CleanShutdownFileHandler.CLEAN_SHUTDOWN_FILE_NAME).toPath))
 
     // 3. create a new LogManager and start it in a different thread
     @volatile var loadLogCalled = 0
@@ -186,7 +217,7 @@ class LogManagerTest {
     logManager = null
 
     // 5. verify that CleanShutdownFile is not created under logDir
-    assertFalse(Files.exists(new File(logDir, LogLoader.CleanShutdownFile).toPath))
+    assertFalse(Files.exists(new File(logDir, CleanShutdownFileHandler.CLEAN_SHUTDOWN_FILE_NAME).toPath))
   }
 
   /**
@@ -275,15 +306,15 @@ class LogManagerTest {
     assertTrue(log.numberOfSegments > 1, "There should be more than one segment now.")
     log.updateHighWatermark(log.logEndOffset)
 
-    log.logSegments.foreach(_.log.file.setLastModified(time.milliseconds))
+    log.logSegments.forEach(_.log.file.setLastModified(time.milliseconds))
 
     time.sleep(maxLogAgeMs + 1)
     assertEquals(1, log.numberOfSegments, "Now there should only be only one segment in the index.")
     time.sleep(log.config.fileDeleteDelayMs + 1)
 
-    log.logSegments.foreach(s => {
-      s.lazyOffsetIndex.get
-      s.lazyTimeIndex.get
+    log.logSegments.forEach(s => {
+      s.offsetIndex()
+      s.timeIndex()
     })
 
     // there should be a log file, two indexes, one producer snapshot, and the leader epoch checkpoint
@@ -374,7 +405,7 @@ class LogManagerTest {
     val numSegments = log.numberOfSegments
     assertTrue(log.numberOfSegments > 1, "There should be more than one segment now.")
 
-    log.logSegments.foreach(_.log.file.setLastModified(time.milliseconds))
+    log.logSegments.forEach(_.log.file.setLastModified(time.milliseconds))
 
     time.sleep(maxLogAgeMs + 1)
     assertEquals(numSegments, log.numberOfSegments, "number of segments shouldn't have changed")
@@ -511,12 +542,12 @@ class LogManagerTest {
 
     val removedLog = logManager.asyncDelete(new TopicPartition(name, 0)).get
     val removedSegment = removedLog.activeSegment
-    val indexFilesAfterDelete = Seq(removedSegment.lazyOffsetIndex.file, removedSegment.lazyTimeIndex.file,
+    val indexFilesAfterDelete = Seq(removedSegment.offsetIndexFile, removedSegment.timeIndexFile,
       removedSegment.txnIndex.file)
 
     assertEquals(new File(removedLog.dir, logName), removedSegment.log.file)
-    assertEquals(new File(removedLog.dir, indexName), removedSegment.lazyOffsetIndex.file)
-    assertEquals(new File(removedLog.dir, timeIndexName), removedSegment.lazyTimeIndex.file)
+    assertEquals(new File(removedLog.dir, indexName), removedSegment.offsetIndexFile)
+    assertEquals(new File(removedLog.dir, timeIndexName), removedSegment.timeIndexFile)
     assertEquals(new File(removedLog.dir, txnIndexName), removedSegment.txnIndex.file)
 
     // Try to detect the case where a new index type was added and we forgot to update the pointer
@@ -1013,27 +1044,34 @@ class LogManagerTest {
 
   @Test
   def testLoadDirectoryIds(): Unit = {
-    def writeMetaProperties(dir: File, id: Option[String] = None): Unit = {
-      val rawProps = new RawMetaProperties()
-      rawProps.nodeId = 1
-      rawProps.clusterId = "IVT1Seu3QjacxS7oBTKhDQ"
-      id.foreach(v => rawProps.directoryId = v)
-      new BrokerMetadataCheckpoint(new File(dir, KafkaServer.brokerMetaPropsFile)).write(rawProps.props)
+    def writeMetaProperties(
+      dir: File,
+      directoryId: Optional[Uuid] = Optional.empty()
+    ): Unit = {
+      val metaProps = new MetaProperties.Builder().
+        setVersion(MetaPropertiesVersion.V0).
+        setClusterId("IVT1Seu3QjacxS7oBTKhDQ").
+        setNodeId(1).
+        setDirectoryId(directoryId).
+        build()
+      PropertiesUtils.writePropertiesFile(metaProps.toProperties,
+        new File(dir, MetaPropertiesEnsemble.META_PROPERTIES_NAME).getAbsolutePath, false)
     }
     val dirs: Seq[File] = Seq.fill(5)(TestUtils.tempDir())
     writeMetaProperties(dirs(0))
-    writeMetaProperties(dirs(1), Some("ZwkGXjB0TvSF6mjVh6gO7Q"))
+    writeMetaProperties(dirs(1), Optional.of(Uuid.fromString("ZwkGXjB0TvSF6mjVh6gO7Q")))
     // no meta.properties on dirs(2)
-    writeMetaProperties(dirs(3), Some("kQfNPJ2FTHq_6Qlyyv6Jqg"))
+    writeMetaProperties(dirs(3), Optional.of(Uuid.fromString("kQfNPJ2FTHq_6Qlyyv6Jqg")))
     writeMetaProperties(dirs(4))
 
     logManager = createLogManager(dirs)
 
-    assertTrue(logManager.directoryId(dirs(0).getAbsolutePath).isDefined)
+    assertFalse(logManager.directoryId(dirs(0).getAbsolutePath).isDefined)
+    assertTrue(logManager.directoryId(dirs(1).getAbsolutePath).isDefined)
     assertEquals(Some(Uuid.fromString("ZwkGXjB0TvSF6mjVh6gO7Q")), logManager.directoryId(dirs(1).getAbsolutePath))
     assertEquals(None, logManager.directoryId(dirs(2).getAbsolutePath))
     assertEquals(Some(Uuid.fromString("kQfNPJ2FTHq_6Qlyyv6Jqg")), logManager.directoryId(dirs(3).getAbsolutePath))
-    assertTrue(logManager.directoryId(dirs(4).getAbsolutePath).isDefined)
-    assertEquals(4, logManager.directoryIds.size)
+    assertTrue(logManager.directoryId(dirs(3).getAbsolutePath).isDefined)
+    assertEquals(2, logManager.directoryIds.size)
   }
 }

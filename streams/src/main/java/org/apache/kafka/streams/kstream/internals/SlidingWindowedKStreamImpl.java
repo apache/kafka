@@ -31,6 +31,8 @@ import org.apache.kafka.streams.kstream.SlidingWindows;
 import org.apache.kafka.streams.kstream.TimeWindowedKStream;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
+import org.apache.kafka.streams.processor.internals.StoreBuilderWrapper;
+import org.apache.kafka.streams.processor.internals.StoreFactory;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
@@ -205,7 +207,7 @@ public class SlidingWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
         return this;
     }
 
-    private <VR> StoreBuilder<TimestampedWindowStore<K, VR>> materialize(final MaterializedInternal<K, VR, WindowStore<Bytes, byte[]>> materialized) {
+    private <VR> StoreFactory materialize(final MaterializedInternal<K, VR, WindowStore<Bytes, byte[]>> materialized) {
         WindowBytesStoreSupplier supplier = (WindowBytesStoreSupplier) materialized.storeSupplier();
         if (supplier == null) {
             final long retentionPeriod = materialized.retention() != null ? materialized.retention().toMillis() : windows.gracePeriodMs() + 2 * windows.timeDifferenceMs();
@@ -268,7 +270,7 @@ public class SlidingWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
         } else {
             builder.withCachingDisabled();
         }
-        return builder;
+        return new StoreBuilderWrapper(builder);
     }
 
     private Aggregator<K, V, V> aggregatorForReducer(final Reducer<V> reducer) {

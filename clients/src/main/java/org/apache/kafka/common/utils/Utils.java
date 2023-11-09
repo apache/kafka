@@ -71,6 +71,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.BinaryOperator;
@@ -1042,14 +1043,20 @@ public final class Utils {
         if (exception != null)
             throw exception;
     }
-    public static void swallow(final Logger log, final Level level, final String what, final Runnable code) {
+
+    @FunctionalInterface
+    public interface SwallowAction {
+        void run() throws Throwable;
+    }
+
+    public static void swallow(final Logger log, final Level level, final String what, final SwallowAction code) {
         swallow(log, level, what, code, null);
     }
 
     /**
      * Run the supplied code. If an exception is thrown, it is swallowed and registered to the firstException parameter.
      */
-    public static void swallow(final Logger log, final Level level, final String what, final Runnable code,
+    public static void swallow(final Logger log, final Level level, final String what, final SwallowAction code,
                                final AtomicReference<Throwable> firstException) {
         if (code != null) {
             try {
@@ -1102,11 +1109,26 @@ public final class Utils {
      * use a method reference from it.
      */
     public static void closeQuietly(AutoCloseable closeable, String name) {
+        closeQuietly(closeable, name, log);
+    }
+
+    /**
+     * Closes {@code closeable} and if an exception is thrown, it is logged with the provided logger at the WARN level.
+     * <b>Be cautious when passing method references as an argument.</b> For example:
+     * <p>
+     * {@code closeQuietly(task::stop, "source task");}
+     * <p>
+     * Although this method gracefully handles null {@link AutoCloseable} objects, attempts to take a method
+     * reference from a null object will result in a {@link NullPointerException}. In the example code above,
+     * it would be the caller's responsibility to ensure that {@code task} was non-null before attempting to
+     * use a method reference from it.
+     */
+    public static void closeQuietly(AutoCloseable closeable, String name, Logger logger) {
         if (closeable != null) {
             try {
                 closeable.close();
             } catch (Throwable t) {
-                log.warn("Failed to close {} with type {}", name, closeable.getClass().getName(), t);
+                logger.warn("Failed to close {} with type {}", name, closeable.getClass().getName(), t);
             }
         }
     }
@@ -1141,6 +1163,30 @@ public final class Utils {
      */
     public static void closeAllQuietly(AtomicReference<Throwable> firstException, String name, AutoCloseable... closeables) {
         for (AutoCloseable closeable : closeables) closeQuietly(closeable, name, firstException);
+    }
+
+    /**
+     * Invokes every function in `all` even if one or more functions throws an exception.
+     *
+     * If any of the functions throws an exception, the first one will be rethrown at the end with subsequent exceptions
+     * added as suppressed exceptions.
+     */
+    // Note that this is a generalised version of `closeAll`. We could potentially make it more general by
+    // changing the signature to `public <R> List<R> tryAll(all: List[Callable<R>])`
+    public static void tryAll(List<Callable<Void>> all) throws Throwable {
+        Throwable exception = null;
+        for (Callable call : all) {
+            try {
+                call.call();
+            } catch (Throwable t) {
+                if (exception != null)
+                    exception.addSuppressed(t);
+                else
+                    exception = t;
+            }
+        }
+        if (exception != null)
+            throw exception;
     }
 
     /**

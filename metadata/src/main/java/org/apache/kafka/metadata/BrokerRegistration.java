@@ -27,7 +27,6 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -41,12 +40,96 @@ import java.util.stream.Collectors;
  * An immutable class which represents broker registrations.
  */
 public class BrokerRegistration {
-    private static Map<String, Endpoint> listenersToMap(Collection<Endpoint> listeners) {
-        Map<String, Endpoint> listenersMap = new HashMap<>();
-        for (Endpoint endpoint : listeners) {
-            listenersMap.put(endpoint.listenerName().get(), endpoint);
+    public static class Builder {
+        private int id = 0;
+        private long epoch = -1;
+        private Uuid incarnationId = null;
+        private Map<String, Endpoint> listeners;
+        private Map<String, VersionRange> supportedFeatures;
+        private Optional<String> rack = Optional.empty();
+        private boolean fenced = false;
+        private boolean inControlledShutdown = false;
+        private boolean isMigratingZkBroker = false;
+
+        public Builder() {
+            this.id = 0;
+            this.epoch = -1;
+            this.incarnationId = null;
+            this.listeners = new HashMap<>();
+            this.supportedFeatures = new HashMap<>();
+            this.rack = Optional.empty();
+            this.fenced = false;
+            this.inControlledShutdown = false;
+            this.isMigratingZkBroker = false;
         }
-        return listenersMap;
+
+        public Builder setId(int id) {
+            this.id = id;
+            return this;
+        }
+
+        public Builder setEpoch(long epoch) {
+            this.epoch = epoch;
+            return this;
+        }
+
+        public Builder setIncarnationId(Uuid incarnationId) {
+            this.incarnationId = incarnationId;
+            return this;
+        }
+
+        public Builder setListeners(List<Endpoint> listeners) {
+            Map<String, Endpoint> listenersMap = new HashMap<>();
+            for (Endpoint endpoint : listeners) {
+                listenersMap.put(endpoint.listenerName().get(), endpoint);
+            }
+            this.listeners = listenersMap;
+            return this;
+        }
+
+        public Builder setListeners(Map<String, Endpoint> listeners) {
+            this.listeners = listeners;
+            return this;
+        }
+
+        public Builder setSupportedFeatures(Map<String, VersionRange> supportedFeatures) {
+            this.supportedFeatures = supportedFeatures;
+            return this;
+        }
+
+        public Builder setRack(Optional<String> rack) {
+            Objects.requireNonNull(rack);
+            this.rack = rack;
+            return this;
+        }
+
+        public Builder setFenced(boolean fenced) {
+            this.fenced = fenced;
+            return this;
+        }
+
+        public Builder setInControlledShutdown(boolean inControlledShutdown) {
+            this.inControlledShutdown = inControlledShutdown;
+            return this;
+        }
+
+        public Builder setIsMigratingZkBroker(boolean isMigratingZkBroker) {
+            this.isMigratingZkBroker = isMigratingZkBroker;
+            return this;
+        }
+
+        public BrokerRegistration build() {
+            return new BrokerRegistration(
+                id,
+                epoch,
+                incarnationId,
+                listeners,
+                supportedFeatures,
+                rack,
+                fenced,
+                inControlledShutdown,
+                isMigratingZkBroker);
+        }
     }
 
     public static Optional<Long> zkBrokerEpoch(long value) {
@@ -67,53 +150,17 @@ public class BrokerRegistration {
     private final boolean inControlledShutdown;
     private final boolean isMigratingZkBroker;
 
-    // Visible for testing
-    public BrokerRegistration(int id,
-                              long epoch,
-                              Uuid incarnationId,
-                              List<Endpoint> listeners,
-                              Map<String, VersionRange> supportedFeatures,
-                              Optional<String> rack,
-                              boolean fenced,
-                              boolean inControlledShutdown) {
-        this(id, epoch, incarnationId, listenersToMap(listeners), supportedFeatures, rack,
-            fenced, inControlledShutdown, false);
-    }
-
-    public BrokerRegistration(int id,
-                              long epoch,
-                              Uuid incarnationId,
-                              List<Endpoint> listeners,
-                              Map<String, VersionRange> supportedFeatures,
-                              Optional<String> rack,
-                              boolean fenced,
-                              boolean inControlledShutdown,
-                              boolean isMigratingZkBroker) {
-        this(id, epoch, incarnationId, listenersToMap(listeners), supportedFeatures, rack,
-            fenced, inControlledShutdown, isMigratingZkBroker);
-    }
-
-    // Visible for testing
-    public BrokerRegistration(int id,
-                              long epoch,
-                              Uuid incarnationId,
-                              Map<String, Endpoint> listeners,
-                              Map<String, VersionRange> supportedFeatures,
-                              Optional<String> rack,
-                              boolean fenced,
-                              boolean inControlledShutdown) {
-        this(id, epoch, incarnationId, listeners, supportedFeatures, rack, fenced, inControlledShutdown, false);
-    }
-
-    public BrokerRegistration(int id,
-                              long epoch,
-                              Uuid incarnationId,
-                              Map<String, Endpoint> listeners,
-                              Map<String, VersionRange> supportedFeatures,
-                              Optional<String> rack,
-                              boolean fenced,
-                              boolean inControlledShutdown,
-                              boolean isMigratingZkBroker) {
+    private BrokerRegistration(
+        int id,
+        long epoch,
+        Uuid incarnationId,
+        Map<String, Endpoint> listeners,
+        Map<String, VersionRange> supportedFeatures,
+        Optional<String> rack,
+        boolean fenced,
+        boolean inControlledShutdown,
+        boolean isMigratingZkBroker
+    ) {
         this.id = id;
         this.epoch = epoch;
         this.incarnationId = incarnationId;
@@ -127,7 +174,6 @@ public class BrokerRegistration {
         this.listeners = Collections.unmodifiableMap(newListeners);
         Objects.requireNonNull(supportedFeatures);
         this.supportedFeatures = new HashMap<>(supportedFeatures);
-        Objects.requireNonNull(rack);
         this.rack = rack;
         this.fenced = fenced;
         this.inControlledShutdown = inControlledShutdown;
