@@ -17,7 +17,7 @@
 package kafka.admin
 
 import java.util
-import java.util.{Collections, Properties}
+import java.util.Properties
 import kafka.admin.ConfigCommand.ConfigCommandOptions
 import kafka.cluster.Broker
 import kafka.server.{ConfigEntityName, ConfigType}
@@ -1645,7 +1645,7 @@ class ConfigCommandTest extends Logging {
 
     val resource = new ConfigResource(ConfigResource.Type.CLIENT_METRICS, resourceName)
     val configEntries = util.Collections.singletonList(new ConfigEntry("interval.ms", "1000",
-      ConfigEntry.ConfigSource.DYNAMIC_CLIENT_METRICS_CONFIG, false, false, Collections.emptyList,
+      ConfigEntry.ConfigSource.DYNAMIC_CLIENT_METRICS_CONFIG, false, false, util.Collections.emptyList[ConfigEntry.ConfigSynonym],
       ConfigEntry.ConfigType.UNKNOWN, null))
     val future = new KafkaFutureImpl[util.Map[ConfigResource, Config]]
     future.complete(util.Collections.singletonMap(resource, new Config(configEntries)))
