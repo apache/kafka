@@ -21,7 +21,6 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SslClientAuth;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
-import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.eclipse.jetty.util.StringUtil;
@@ -292,7 +291,7 @@ public abstract class RestServerConfig extends AbstractConfig {
                         + "The '[header name]' cannot contain whitespace", headerName));
             }
         } catch (ArrayIndexOutOfBoundsException e) {
-            throw new InvalidConfigurationException(String.format("Invalid header config '%s'.", config), e);
+            throw new ConfigException(String.format("Invalid header config '%s'.", config), e);
         }
     }
 

@@ -19,10 +19,9 @@ package kafka.utils
 
 
 import javax.crypto.SecretKeyFactory
-
 import kafka.server.Defaults
-import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.config.types.Password
+import org.apache.kafka.common.errors.InvalidConfigurationException
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
@@ -84,7 +83,7 @@ class PasswordEncoderTest {
     try {
       decoder2.decode(encoded)
     } catch {
-      case e: ConfigException => // expected exception
+      case e: InvalidConfigurationException => // expected exception
     }
   }
 

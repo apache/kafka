@@ -22,7 +22,6 @@ import org.apache.kafka.common.cache.LRUCache;
 import org.apache.kafka.common.cache.SynchronizedCache;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.components.Versioned;
@@ -414,7 +413,7 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
                 try {
                     type = Schema.Type.valueOf(parts[1].trim().toUpperCase(Locale.ROOT));
                 } catch (IllegalArgumentException e) {
-                    throw new InvalidConfigurationException("Invalid type found in casting spec: " + parts[1].trim(), e);
+                    throw new ConfigException("Invalid type found in casting spec: " + parts[1].trim(), e);
                 }
                 m.put(parts[0].trim(), validCastType(type, FieldType.OUTPUT));
             }

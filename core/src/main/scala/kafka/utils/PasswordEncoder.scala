@@ -20,6 +20,7 @@ import java.nio.charset.StandardCharsets
 import java.security.{AlgorithmParameters, NoSuchAlgorithmException, SecureRandom}
 import java.security.spec.AlgorithmParameterSpec
 import java.util.Base64
+
 import javax.crypto.{Cipher, SecretKeyFactory}
 import javax.crypto.spec._
 import kafka.utils.PasswordEncoder._
