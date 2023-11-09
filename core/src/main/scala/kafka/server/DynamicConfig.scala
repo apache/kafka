@@ -115,11 +115,7 @@ object DynamicConfig {
   object ClientMetrics {
     private val clientConfigs = kafka.metrics.ClientMetricsConfigs.configDef()
 
-    def configKeys: util.Map[String, ConfigDef.ConfigKey] = clientConfigs.configKeys
-
     def names: util.Set[String] = clientConfigs.names
-
-    def validate(props: Properties) = DynamicConfig.validate(clientConfigs, props, customPropsAllowed = false)
   }
 
   private def validate(configDef: ConfigDef, props: Properties, customPropsAllowed: Boolean) = {
