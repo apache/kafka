@@ -18,6 +18,7 @@ import time
 
 from ducktape.utils.util import wait_until
 from ducktape.mark import parametrize
+from ducktape.mark.resource import cluster
 from ducktape.errors import TimeoutError
 
 from kafkatest.services.console_consumer import ConsoleConsumer
