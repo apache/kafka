@@ -302,7 +302,8 @@ public class ClientMetricsManager implements Closeable {
     private void validateGetRequest(GetTelemetrySubscriptionsRequest request,
         ClientMetricsInstance clientInstance) {
 
-        if (!clientInstance.canAcceptGetRequest() && clientInstance.lastKnownError() != Errors.UNKNOWN_SUBSCRIPTION_ID) {
+        if (!clientInstance.canAcceptGetRequest() && (clientInstance.lastKnownError() != Errors.UNKNOWN_SUBSCRIPTION_ID
+            || clientInstance.lastKnownError() != Errors.UNSUPPORTED_COMPRESSION_TYPE)) {
             String msg = String.format("Request from the client [%s] arrived before the next push interval time",
                 request.data().clientInstanceId());
             throw new ThrottlingQuotaExceededException(msg);
