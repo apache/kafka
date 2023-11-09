@@ -301,7 +301,14 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
             resolveMetadataForUnresolvedAssignment();
             // TODO: improve reconciliation triggering. Initial approach of triggering on every
             //  HB response and metadata update.
-            reconcile();
+            boolean reconciliationTriggered = reconcile();
+            if (!reconciliationTriggered) {
+                if (!assignment.topicPartitions().isEmpty() && !reconciliationInProgress) {
+                    log.debug("Member could not start reconciliation for any of the assignments " +
+                            "received. Sending empty ack (with current subscription).");
+                    transitionTo(MemberState.ACKNOWLEDGING);
+                }
+            }
         } else if (allPendingAssignmentsReconciled()) {
             transitionTo(MemberState.STABLE);
         }
@@ -495,20 +502,24 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      * triggered, it will be no-op, and the assignment will be reconciled on the next
      * reconciliation loop.
      */
-    void reconcile() {
-        if (reconciliationInProgress) {
-            log.debug("Attempt to reconcile assignment ready for reconciliation, but there is " +
-                    "another reconciliation already in progress. Ignoring this attempt given that" +
-                    " the assignments ready to be reconciled might be already being handled, or " +
-                    "will be handled in the next reconciliation loop (after new heartbeat " +
-                    "response or metadata update received.");
-            return;
-        }
-
+    boolean reconcile() {
         // Make copy of the assignment to reconcile as it could change as new assignments or metadata updates are received
         SortedSet<TopicPartition> assignedPartitions = new TreeSet<>(assignmentReadyToReconcile);
+        boolean sameAssignmentReceived = assignedPartitions.equals(subscriptions.assignedPartitions());
 
-        reconciliationInProgress = true;
+        if (reconciliationInProgress || sameAssignmentReceived) {
+            String reason = null;
+            if (reconciliationInProgress) {
+                reason = "Another reconciliation is alraedy in progress. Assignment " +
+                        assignmentReadyToReconcile + " will be handled in the next reconciliation loop.";
+            } else if (sameAssignmentReceived) {
+                reason = "Target assignment ready to reconcile is equals to the member current assignment.";
+            }
+            log.debug("Ignoring reconciliation attempt." + reason);
+            return false;
+        }
+
+        markReconciliationInProgress();
 
         SortedSet<TopicPartition> ownedPartitions = new TreeSet<>(COMPARATOR);
         ownedPartitions.addAll(subscriptions.assignedPartitions());
@@ -576,7 +587,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
                 });
 
         reconciliationResult.whenComplete((result, error) -> {
-            reconciliationInProgress = false;
+            markReconciliationCompleted();
             if (error != null) {
                 // Leaving member in RECONCILING state after callbacks fail. The member
                 // won't send the ack, and the expectation is that the broker will kick the
@@ -609,6 +620,22 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
                 }
             }
         });
+
+        return true;
+    }
+
+    /**
+     *  Visible for testing.
+     */
+    void markReconciliationInProgress() {
+        reconciliationInProgress = true;
+    }
+
+    /**
+     *  Visible for testing.
+     */
+    void markReconciliationCompleted() {
+        reconciliationInProgress = false;
     }
 
     /**
