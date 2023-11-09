@@ -22,6 +22,7 @@ import org.apache.kafka.common.cache.LRUCache;
 import org.apache.kafka.common.cache.SynchronizedCache;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.components.Versioned;
@@ -307,7 +308,7 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
                 format = new SimpleDateFormat(formatPattern);
                 format.setTimeZone(UTC);
             } catch (IllegalArgumentException e) {
-                throw new ConfigException("TimestampConverter requires a SimpleDateFormat-compatible pattern for string timestamps: "
+                throw new InvalidConfigurationException("TimestampConverter requires a SimpleDateFormat-compatible pattern for string timestamps: "
                         + formatPattern, e);
             }
         }

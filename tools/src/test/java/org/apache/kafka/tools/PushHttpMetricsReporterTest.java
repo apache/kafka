@@ -34,6 +34,7 @@ import java.io.IOException;
 import java.util.List;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.metrics.Gauge;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -111,7 +112,7 @@ public class PushHttpMetricsReporterTest {
         Map<String, String> config = new HashMap<>();
         config.put(PushHttpMetricsReporter.METRICS_URL_CONFIG, "malformed;url");
         config.put(PushHttpMetricsReporter.METRICS_PERIOD_CONFIG, "5");
-        assertThrows(ConfigException.class, () -> reporter.configure(config));
+        assertThrows(InvalidConfigurationException.class, () -> reporter.configure(config));
     }
 
     @Test

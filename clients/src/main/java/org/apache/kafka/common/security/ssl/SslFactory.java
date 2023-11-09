@@ -21,6 +21,7 @@ import org.apache.kafka.common.Reconfigurable;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
+import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.network.Mode;
 import org.apache.kafka.common.security.auth.SslEngineFactory;
 import org.apache.kafka.common.utils.Utils;
@@ -99,7 +100,7 @@ public class SslFactory implements Reconfigurable, Closeable {
             try {
                 SslEngineValidator.validate(builder, builder);
             } catch (Exception e) {
-                throw new ConfigException("A client SSLEngine created with the provided settings " +
+                throw new InvalidConfigurationException("A client SSLEngine created with the provided settings " +
                         "can't connect to a server SSLEngine created with those settings.", e);
             }
         }

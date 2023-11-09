@@ -33,6 +33,7 @@ import org.apache.kafka.common.Reconfigurable
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, SslConfigs}
 import org.apache.kafka.common.metrics.{JmxReporter, Metrics, MetricsReporter}
 import org.apache.kafka.common.config.types.Password
+import org.apache.kafka.common.errors.InvalidConfigurationException
 import org.apache.kafka.common.network.{ListenerName, ListenerReconfigurable}
 import org.apache.kafka.common.security.authenticator.LoginManager
 import org.apache.kafka.common.utils.{ConfigUtils, Utils}
@@ -597,7 +598,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
           if (!validateOnly)
             error(s"Failed to update broker configuration with configs : " +
                   s"${ConfigUtils.configMapToRedactedString(newConfig.originalsFromThisConfig, KafkaConfig.configDef)}", e)
-          throw new ConfigException("Invalid dynamic configuration", e)
+          throw new InvalidConfigurationException("Invalid dynamic configuration", e)
       }
     }
     else

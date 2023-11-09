@@ -20,12 +20,12 @@ import java.nio.charset.StandardCharsets
 import java.security.{AlgorithmParameters, NoSuchAlgorithmException, SecureRandom}
 import java.security.spec.AlgorithmParameterSpec
 import java.util.Base64
-
 import javax.crypto.{Cipher, SecretKeyFactory}
 import javax.crypto.spec._
 import kafka.utils.PasswordEncoder._
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.config.types.Password
+import org.apache.kafka.common.errors.InvalidConfigurationException
 
 import scala.collection.Map
 
@@ -130,7 +130,7 @@ class EncryptingPasswordEncoder(
       val decrypted = cipher.doFinal(encryptedPassword)
       new String(decrypted, StandardCharsets.UTF_8)
     } catch {
-      case e: Exception => throw new ConfigException("Password could not be decoded", e)
+      case e: Exception => throw new InvalidConfigurationException("Password could not be decoded", e)
     }
     if (password.length != passwordLengthProp) // Sanity check
       throw new ConfigException("Password could not be decoded, sanity check of length failed")
