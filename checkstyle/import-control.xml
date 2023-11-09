@@ -205,8 +205,11 @@
 
   <subpackage name="clients">
     <allow pkg="org.apache.kafka.common" />
-    <allow pkg="org.apache.kafka.clients" exact-match="true"/>
+    <allow pkg="org.apache.kafka.clients"/>
     <allow pkg="org.apache.kafka.test" />
+    <allow pkg="io.opentelemetry.proto.metrics" />
+    <allow pkg="io.opentelemetry.proto.common.v1" />
+    <allow pkg="io.opentelemetry.proto.resource.v1" />
 
     <subpackage name="consumer">
       <allow pkg="org.apache.kafka.clients.consumer" />
