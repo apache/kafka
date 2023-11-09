@@ -78,7 +78,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -465,9 +464,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     // Visible for testing
-    CompletableFuture<Void> commit(Map<TopicPartition, OffsetAndMetadata> offsets, final boolean isWakeupable) {
+    CompletableFuture<Void> commit(final Map<TopicPartition, OffsetAndMetadata> offsets, final boolean isWakeupable) {
+        maybeInvokeCommitCallbacks();
         maybeThrowFencedInstanceException();
-        maybeInvokeCallbacks();
         maybeThrowInvalidGroupIdException();
 
         if (offsets.isEmpty()) {
@@ -792,7 +791,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
         // Invoke all callbacks after the background thread exists in case if there are unsent async
         // commits
-        maybeInvokeCallbacks();
+        maybeInvokeCommitCallbacks();
 
         closeQuietly(fetchBuffer, "Failed to close the fetch buffer", firstException);
         closeQuietly(interceptors, "consumer interceptors", firstException);
@@ -1080,6 +1079,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     @Override
     public boolean updateAssignmentMetadataIfNeeded(Timer timer) {
+        maybeInvokeCommitCallbacks();
+        maybeThrowFencedInstanceException();
         backgroundEventProcessor.process();
 
         // Keeping this updateAssignmentMetadataIfNeeded wrapping up the updateFetchPositions as
@@ -1180,7 +1181,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     // Visible for testing
-    void maybeInvokeCallbacks() {
+    void maybeInvokeCommitCallbacks() {
         if (callbacks() > 0) {
             invoker.executeCallbacks();
         }
@@ -1193,7 +1194,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     /**
      * Utility class that helps the application thread to invoke user registered {@link OffsetCommitCallback}. This is
-     * achieved by having the background thread to register a {@link OffsetCommitCallbackTask} to the invoker upon the
+     * achieved by having the background thread register a {@link OffsetCommitCallbackTask} to the invoker upon the
      * future completion, and execute the callbacks when user polls/commits/closes the consumer.
      */
     private class OffsetCommitCallbackInvoker {
@@ -1201,18 +1202,12 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         private final BlockingQueue<OffsetCommitCallbackTask> callbackQueue = new LinkedBlockingQueue<>();
 
         public void submit(final OffsetCommitCallbackTask callback) {
-            try {
-                callbackQueue.offer(callback);
-            } catch (Exception e) {
-                log.error("Failed to enqueue OffsetCommitCallback", e);
-            }
+            callbackQueue.offer(callback);
         }
 
         public void executeCallbacks() {
-            LinkedList<OffsetCommitCallbackTask> callbacks = new LinkedList<>();
-            callbackQueue.drainTo(callbacks);
-            while (!callbacks.isEmpty()) {
-                OffsetCommitCallbackTask callback = callbacks.poll();
+            while (!callbackQueue.isEmpty()) {
+                OffsetCommitCallbackTask callback = callbackQueue.poll();
                 if (callback != null) {
                     callback.invoke();
                 }

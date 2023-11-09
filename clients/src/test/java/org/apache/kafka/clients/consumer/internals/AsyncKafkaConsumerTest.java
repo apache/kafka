@@ -156,11 +156,11 @@ public class AsyncKafkaConsumerTest {
 
         if (exception == null) {
             future.complete(null);
-            consumer.maybeInvokeCallbacks();
+            consumer.maybeInvokeCommitCallbacks();
             assertNull(callback.exception);
         } else {
             future.completeExceptionally(exception);
-            consumer.maybeInvokeCallbacks();
+            consumer.maybeInvokeCommitCallbacks();
             assertSame(exception.getClass(), callback.exception.getClass());
         }
     }
@@ -221,7 +221,7 @@ public class AsyncKafkaConsumerTest {
             });
             latch.await();
             assertEquals(1, consumer.callbacks());
-            consumer.maybeInvokeCallbacks();
+            consumer.maybeInvokeCommitCallbacks();
             assertEquals(currentThread, callback.completionThread);
         } catch (Exception e) {
             fail("Not expecting an exception");
