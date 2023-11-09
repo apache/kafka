@@ -425,8 +425,7 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  *
  * <h3><a name="multithreaded">Multi-threaded Processing</a></h3>
  *
- * The Kafka consumer is NOT thread-safe. All network I/O happens in the thread of the application
- * making the call. It is the responsibility of the user to ensure that multi-threaded access
+ * The Kafka consumer is NOT thread-safe. It is the responsibility of the user to ensure that multi-threaded access
  * is properly synchronized. Un-synchronized access will result in {@link ConcurrentModificationException}.
  *
  * <p>
