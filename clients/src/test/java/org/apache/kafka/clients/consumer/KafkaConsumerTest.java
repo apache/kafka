@@ -220,10 +220,10 @@ public class KafkaConsumerTest {
         props.setProperty(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, MockMetricsReporter.class.getName());
         consumer = newConsumer(props, new StringDeserializer(), new StringDeserializer());
 
-        MockMetricsReporter mockMetricsReporter = (MockMetricsReporter) consumer.metricsInternal().reporters().get(0);
+        MockMetricsReporter mockMetricsReporter = (MockMetricsReporter) consumer.metricsRegistry().reporters().get(0);
 
         assertEquals(consumer.clientId(), mockMetricsReporter.clientId);
-        assertEquals(2, consumer.metricsInternal().reporters().size());
+        assertEquals(2, consumer.metricsRegistry().reporters().size());
     }
 
     @ParameterizedTest
@@ -235,7 +235,7 @@ public class KafkaConsumerTest {
         props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         props.setProperty(ConsumerConfig.AUTO_INCLUDE_JMX_REPORTER_CONFIG, "false");
         consumer = newConsumer(props, new StringDeserializer(), new StringDeserializer());
-        assertTrue(consumer.metricsInternal().reporters().isEmpty());
+        assertTrue(consumer.metricsRegistry().reporters().isEmpty());
     }
 
     @ParameterizedTest
@@ -246,7 +246,7 @@ public class KafkaConsumerTest {
         props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         props.setProperty(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, "org.apache.kafka.common.metrics.JmxReporter");
         consumer = newConsumer(props, new StringDeserializer(), new StringDeserializer());
-        assertEquals(1, consumer.metricsInternal().reporters().size());
+        assertEquals(1, consumer.metricsRegistry().reporters().size());
     }
 
     // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
@@ -602,9 +602,9 @@ public class KafkaConsumerTest {
         config.put("client.id", "client-1");
         consumer = newConsumer(config, new ByteArrayDeserializer(), new ByteArrayDeserializer());
         MBeanServer server = ManagementFactory.getPlatformMBeanServer();
-        MetricName testMetricName = consumer.metricsInternal().metricName("test-metric",
+        MetricName testMetricName = consumer.metricsRegistry().metricName("test-metric",
                 "grp1", "test metric");
-        consumer.metricsInternal().addMetric(testMetricName, new Avg());
+        consumer.metricsRegistry().addMetric(testMetricName, new Avg());
         assertNotNull(server.getObjectInstance(new ObjectName("kafka.consumer:type=grp1,client-id=client-1")));
     }
 
@@ -1878,12 +1878,12 @@ public class KafkaConsumerTest {
         props.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name());
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
         KafkaConsumer<byte[], byte[]> consumer = newConsumer(props, new ByteArrayDeserializer(), new ByteArrayDeserializer());
-        assertEquals(Sensor.RecordingLevel.INFO, consumer.metricsInternal().config().recordLevel());
+        assertEquals(Sensor.RecordingLevel.INFO, consumer.metricsRegistry().config().recordLevel());
         consumer.close(Duration.ZERO);
 
         props.put(ConsumerConfig.METRICS_RECORDING_LEVEL_CONFIG, "DEBUG");
         KafkaConsumer<byte[], byte[]> consumer2 = newConsumer(props, new ByteArrayDeserializer(), new ByteArrayDeserializer());
-        assertEquals(Sensor.RecordingLevel.DEBUG, consumer2.metricsInternal().config().recordLevel());
+        assertEquals(Sensor.RecordingLevel.DEBUG, consumer2.metricsRegistry().config().recordLevel());
         consumer2.close(Duration.ZERO);
     }
 
@@ -2155,7 +2155,7 @@ public class KafkaConsumerTest {
         }
 
         final Metric metric = consumer.metrics()
-            .get(consumer.metricsInternal().metricName("commit-sync-time-ns-total", "consumer-metrics"));
+            .get(consumer.metricsRegistry().metricName("commit-sync-time-ns-total", "consumer-metrics"));
         assertTrue((Double) metric.metricValue() >= Duration.ofMillis(999).toNanos());
     }
 
@@ -2186,7 +2186,7 @@ public class KafkaConsumerTest {
         consumer.commitSync(Collections.singletonMap(tp0, new OffsetAndMetadata(10L)));
 
         final Metric metric = consumer.metrics()
-            .get(consumer.metricsInternal().metricName("commit-sync-time-ns-total", "consumer-metrics"));
+            .get(consumer.metricsRegistry().metricName("commit-sync-time-ns-total", "consumer-metrics"));
         assertTrue((Double) metric.metricValue() >= Duration.ofMillis(999).toNanos());
     }
 
@@ -2204,7 +2204,7 @@ public class KafkaConsumerTest {
         }
 
         final Metric metric = consumer.metrics()
-            .get(consumer.metricsInternal().metricName("committed-time-ns-total", "consumer-metrics"));
+            .get(consumer.metricsRegistry().metricName("committed-time-ns-total", "consumer-metrics"));
         assertTrue((Double) metric.metricValue() >= Duration.ofMillis(999).toNanos());
     }
 
@@ -2237,7 +2237,7 @@ public class KafkaConsumerTest {
         consumer.committed(Collections.singleton(tp0)).get(tp0).offset();
 
         final Metric metric = consumer.metrics()
-            .get(consumer.metricsInternal().metricName("committed-time-ns-total", "consumer-metrics"));
+            .get(consumer.metricsRegistry().metricName("committed-time-ns-total", "consumer-metrics"));
         assertTrue((Double) metric.metricValue() >= Duration.ofMillis(999).toNanos());
     }
 
@@ -3005,7 +3005,7 @@ public class KafkaConsumerTest {
         KafkaConsumer<String, String> consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, true, groupInstanceId);
         consumer.subscribe(singletonList(topic));
         // MetricName objects to check
-        Metrics metrics = consumer.metricsInternal();
+        Metrics metrics = consumer.metricsRegistry();
         MetricName lastPollSecondsAgoName = metrics.metricName("last-poll-seconds-ago", "consumer-metrics");
         MetricName timeBetweenPollAvgName = metrics.metricName("time-between-poll-avg", "consumer-metrics");
         MetricName timeBetweenPollMaxName = metrics.metricName("time-between-poll-max", "consumer-metrics");
@@ -3050,7 +3050,7 @@ public void testPollIdleRatio(GroupProtocol groupProtocol) {
 
         KafkaConsumer<String, String> consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, true, groupInstanceId);
         // MetricName object to check
-        Metrics metrics = consumer.metricsInternal();
+        Metrics metrics = consumer.metricsRegistry();
         MetricName pollIdleRatio = metrics.metricName("poll-idle-ratio-avg", "consumer-metrics");
         // Test default value
         assertEquals(Double.NaN, consumer.metrics().get(pollIdleRatio).metricValue());
@@ -3085,7 +3085,7 @@ public void testPollIdleRatio(GroupProtocol groupProtocol) {
 
     private static boolean consumerMetricPresent(KafkaConsumer<String, String> consumer, String name) {
         MetricName metricName = new MetricName(name, "consumer-metrics", "", Collections.emptyMap());
-        return consumer.metricsInternal().metrics().containsKey(metricName);
+        return consumer.metricsRegistry().metrics().containsKey(metricName);
     }
 
     @ParameterizedTest

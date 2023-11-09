@@ -1793,8 +1793,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         return delegate.clientId();
     }
 
-    Metrics metricsInternal() {
-        return delegate.metricsInternal();
+    Metrics metricsRegistry() {
+        return delegate.metricsRegistry();
     }
 
     KafkaConsumerMetrics kafkaConsumerMetrics() {

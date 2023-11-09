@@ -2633,7 +2633,7 @@ public class LegacyKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     @Override
-    public Metrics metricsInternal() {
+    public Metrics metricsRegistry() {
         return metrics;
     }
 

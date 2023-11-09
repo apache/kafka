@@ -1151,7 +1151,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     @Override
-    public Metrics metricsInternal() {
+    public Metrics metricsRegistry() {
         return metrics;
     }
 

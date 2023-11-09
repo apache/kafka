@@ -34,7 +34,7 @@ public interface ConsumerDelegate<K, V> extends Consumer<K, V> {
 
     String clientId();
 
-    Metrics metricsInternal();
+    Metrics metricsRegistry();
 
     KafkaConsumerMetrics kafkaConsumerMetrics();
 
