@@ -2819,7 +2819,7 @@ public class DistributedHerderTest {
                 configTransformer);
 
         expectConfigRefreshAndSnapshot(snapshotWithTransform);
-
+        EasyMock.expect(configBackingStore.snapshot()).andReturn(snapshotWithTransform);
 
         member.wakeup();
         PowerMock.expectLastCall().anyTimes();
