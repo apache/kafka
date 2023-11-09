@@ -39,7 +39,7 @@ fi
 
 echo "===> Using provided cluster id $CLUSTER_ID ..."
 # A bit of a hack to not error out if the storage is already formatted.  Need storage-tool to support this
-result=$(/opt/kafka/bin/kafka-storage.sh format --cluster-id=$CLUSTER_ID -c /opt/kafka/config/kafka.properties 2>&1) || \
+result=$(/opt/kafka/bin/kafka-storage.sh format --cluster-id=$CLUSTER_ID -c /opt/kafka/config/server.properties 2>&1) || \
     echo $result | grep -i "already formatted" || \
     { echo $result && (exit 1) }
 
@@ -50,4 +50,4 @@ else
 fi
 
 # Start kafka broker
-exec /opt/kafka/bin/kafka-server-start.sh /opt/kafka/config/kafka.properties
+exec /opt/kafka/bin/kafka-server-start.sh /opt/kafka/config/server.properties

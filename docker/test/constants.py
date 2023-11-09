@@ -17,7 +17,7 @@ KAFKA_TOPICS="./fixtures/kafka/bin/kafka-topics.sh"
 KAFKA_CONSOLE_PRODUCER="./fixtures/kafka/bin/kafka-console-producer.sh"
 KAFKA_CONSOLE_CONSUMER="./fixtures/kafka/bin/kafka-console-consumer.sh"
 
-KRAFT_COMPOSE="fixtures/kraft/docker-compose.yml"
+JVM_COMPOSE="fixtures/jvm/docker-compose.yml"
 ZOOKEEPER_COMPOSE="fixtures/zookeeper/docker-compose.yml"
 
 CLIENT_TIMEOUT=40
@@ -26,9 +26,13 @@ SSL_FLOW_TESTS="SSL Flow Tests"
 SSL_CLIENT_CONFIG="./fixtures/secrets/client-ssl.properties"
 SSL_TOPIC="test-topic-ssl"
 
+FILE_INPUT_FLOW_TESTS="File Input Flow Tests"
+FILE_INPUT_TOPIC="test-topic-file-input"
+
 BROKER_RESTART_TESTS="Broker Restart Tests"
 BROKER_CONTAINER="broker"
 BROKER_RESTART_TEST_TOPIC="test-topic-broker-restart"
 
 SSL_ERROR_PREFIX="SSL_ERR"
 BROKER_RESTART_ERROR_PREFIX="BROKER_RESTART_ERR"
+FILE_INPUT_ERROR_PREFIX="FILE_INPUT_ERR"

@@ -69,3 +69,14 @@ services:
       KAFKA_SSL_CLIENT_AUTH: "required"
       KAFKA_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM: ""
       KAFKA_LISTENER_NAME_INTERNAL_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM: ""
+  broker-ssl-file-input:
+    image: {$IMAGE}
+    hostname: broker-ssl-file-input
+    container_name: broker-ssl-file-input
+    ports:
+      - "9094:9093"
+    volumes:
+      - ../secrets:/etc/kafka/secrets
+      - ../file-input:/mnt/shared/config
+    environment:
+      CLUSTER_ID: '4L6g3nShT-eMCtK--X86sw'

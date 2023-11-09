@@ -22,13 +22,13 @@ import argparse
 class DockerSanityTest(unittest.TestCase):
     IMAGE="apache/kafka"
     
-    def resumeImage(self):
+    def resume_container(self):
         subprocess.run(["docker", "start", constants.BROKER_CONTAINER])
 
-    def stopImage(self) -> None:
+    def stop_container(self) -> None:
         subprocess.run(["docker", "stop", constants.BROKER_CONTAINER])
 
-    def startCompose(self, filename) -> None:
+    def start_compose(self, filename) -> None:
         old_string="image: {$IMAGE}"
         new_string=f"image: {self.IMAGE}"
         with open(filename) as f:
@@ -39,7 +39,7 @@ class DockerSanityTest(unittest.TestCase):
 
         subprocess.run(["docker-compose", "-f", filename, "up", "-d"])
     
-    def destroyCompose(self, filename) -> None:
+    def destroy_compose(self, filename) -> None:
         old_string=f"image: {self.IMAGE}"
         new_string="image: {$IMAGE}"
         subprocess.run(["docker-compose", "-f", filename, "down"])
@@ -71,37 +71,37 @@ class DockerSanityTest(unittest.TestCase):
         message = subprocess.check_output(["bash", "-c", " ".join(command)], timeout=constants.CLIENT_TIMEOUT)
         return message.decode("utf-8").strip()
 
-    def ssl_flow(self):
-        print(f"Running {constants.SSL_FLOW_TESTS}")
+    def ssl_flow(self, ssl_broker_port, test_name, test_error_prefix, topic):
+        print(f"Running {test_name}")
         errors = []
         try:
-            self.assertTrue(self.create_topic(constants.SSL_TOPIC, ["--bootstrap-server", "localhost:9093", "--command-config", constants.SSL_CLIENT_CONFIG]))
+            self.assertTrue(self.create_topic(topic, ["--bootstrap-server", ssl_broker_port, "--command-config", constants.SSL_CLIENT_CONFIG]))
         except AssertionError as e:
-            errors.append(constants.SSL_ERROR_PREFIX + str(e))
+            errors.append(test_error_prefix + str(e))
             return errors
 
-        producer_config = ["--bootstrap-server", "localhost:9093",
+        producer_config = ["--bootstrap-server", ssl_broker_port,
                            "--producer.config", constants.SSL_CLIENT_CONFIG]
-        self.produce_message(constants.SSL_TOPIC, producer_config, "key", "message")
+        self.produce_message(topic, producer_config, "key", "message")
 
         consumer_config = [
-            "--bootstrap-server", "localhost:9093",
+            "--bootstrap-server", ssl_broker_port,
             "--property", "auto.offset.reset=earliest",
             "--consumer.config", constants.SSL_CLIENT_CONFIG,
         ]
-        message = self.consume_message(constants.SSL_TOPIC, consumer_config)
+        message = self.consume_message(topic, consumer_config)
         try:
             self.assertIsNotNone(message)
         except AssertionError as e:
-            errors.append(constants.SSL_ERROR_PREFIX + str(e))
+            errors.append(test_error_prefix + str(e))
         try:
             self.assertEqual(message, "key:message")
         except AssertionError as e:
-            errors.append(constants.SSL_ERROR_PREFIX + str(e))
+            errors.append(test_error_prefix + str(e))
         if errors:
-            print(f"Errors in {constants.SSL_FLOW_TESTS}:- {errors}")
+            print(f"Errors in {test_name}:- {errors}")
         else:
-            print(f"No errors in {constants.SSL_FLOW_TESTS}")
+            print(f"No errors in {test_name}")
         return errors
     
     def broker_restart_flow(self):
@@ -118,9 +118,9 @@ class DockerSanityTest(unittest.TestCase):
         self.produce_message(constants.BROKER_RESTART_TEST_TOPIC, producer_config, "key", "message")
 
         print("Stopping Container")
-        self.stopImage()
-        print("Resuming Image")
-        self.resumeImage()
+        self.stop_container()
+        print("Resuming Container")
+        self.resume_container()
 
         consumer_config = ["--bootstrap-server", "localhost:9092", "--property", "auto.offset.reset=earliest"]
         message = self.consume_message(constants.BROKER_RESTART_TEST_TOPIC, consumer_config)
@@ -142,37 +142,42 @@ class DockerSanityTest(unittest.TestCase):
     def execute(self):
         total_errors = []
         try:
-            total_errors.extend(self.ssl_flow())
+            total_errors.extend(self.ssl_flow('localhost:9093', constants.SSL_FLOW_TESTS, constants.SSL_ERROR_PREFIX, constants.SSL_TOPIC))
         except Exception as e:
-            print("SSL flow error", str(e))
+            print(constants.SSL_ERROR_PREFIX, str(e))
+            total_errors.append(str(e))
+        try:
+            total_errors.extend(self.ssl_flow('localhost:9094', constants.FILE_INPUT_FLOW_TESTS, constants.FILE_INPUT_ERROR_PREFIX, constants.FILE_INPUT_TOPIC))
+        except Exception as e:
+            print(constants.FILE_INPUT_ERROR_PREFIX, str(e))
             total_errors.append(str(e))
         try:
             total_errors.extend(self.broker_restart_flow())
         except Exception as e:
-            print("Broker restart flow error", str(e))
+            print(constants.BROKER_RESTART_ERROR_PREFIX, str(e))
             total_errors.append(str(e))
         
         self.assertEqual(total_errors, [])
 
-class DockerSanityTestKraftMode(DockerSanityTest):
+class DockerSanityTestJVM(DockerSanityTest):
     def setUp(self) -> None:
-        self.startCompose(constants.KRAFT_COMPOSE)
+        self.start_compose(constants.JVM_COMPOSE)
     def tearDown(self) -> None:
-        self.destroyCompose(constants.KRAFT_COMPOSE)
+        self.destroy_compose(constants.JVM_COMPOSE)
     def test_bed(self):
         self.execute()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("image")
-    parser.add_argument("mode", default="all")
+    parser.add_argument("mode")
     args = parser.parse_args()
 
     DockerSanityTest.IMAGE = args.image
 
     test_classes_to_run = []
     if args.mode == "jvm":
-        test_classes_to_run = [DockerSanityTestKraftMode]
+        test_classes_to_run = [DockerSanityTestJVM]
     
     loader = unittest.TestLoader()
     suites_list = []
