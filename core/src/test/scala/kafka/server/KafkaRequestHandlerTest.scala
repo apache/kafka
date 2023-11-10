@@ -32,10 +32,11 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 import org.mockito.ArgumentMatchers
 import org.mockito.ArgumentMatchers.any
-import org.mockito.Mockito.{mock, when}
+import org.mockito.Mockito.{mock, times, verify, when}
 
 import java.net.InetAddress
 import java.nio.ByteBuffer
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.atomic.AtomicInteger
 
 class KafkaRequestHandlerTest {
@@ -53,14 +54,17 @@ class KafkaRequestHandlerTest {
       val request = makeRequest(time, metrics)
       requestChannel.sendRequest(request)
 
-      def callback(ms: Int): Unit = {
-        time.sleep(ms)
-        handler.stop()
-      }
-
       when(apiHandler.handle(ArgumentMatchers.eq(request), any())).thenAnswer { _ =>
         time.sleep(2)
-        KafkaRequestHandler.wrap(callback(_: Int))(1)
+        // Prepare the callback.
+        val callback = KafkaRequestHandler.wrapAsyncCallback(
+          (reqLocal: RequestLocal, ms: Int) => {
+            time.sleep(ms)
+            handler.stop()
+          },
+          RequestLocal.NoCaching)
+        // Execute the callback asynchronously.
+        CompletableFuture.runAsync(() => callback(1))
         request.apiLocalCompleteTimeNanos = time.nanoseconds
       }
 
@@ -86,16 +90,19 @@ class KafkaRequestHandlerTest {
     var handledCount = 0
     var tryCompleteActionCount = 0
 
-    def callback(x: Int): Unit = {
-      handler.stop()
-    }
-
     val request = makeRequest(time, metrics)
     requestChannel.sendRequest(request)
 
     when(apiHandler.handle(ArgumentMatchers.eq(request), any())).thenAnswer { _ =>
       handledCount = handledCount + 1
-      KafkaRequestHandler.wrap(callback(_: Int))(1)
+      // Prepare the callback.
+      val callback = KafkaRequestHandler.wrapAsyncCallback(
+        (reqLocal: RequestLocal, ms: Int) => {
+          handler.stop()
+        },
+        RequestLocal.NoCaching)
+      // Execute the callback asynchronously.
+      CompletableFuture.runAsync(() => callback(1))
     }
 
     when(apiHandler.tryCompleteActions()).thenAnswer { _ =>
@@ -108,6 +115,39 @@ class KafkaRequestHandlerTest {
     assertEquals(1, tryCompleteActionCount)
   }
 
+  @Test
+  def testHandlingCallbackOnNewThread(): Unit = {
+    val time = new MockTime()
+    val metrics = mock(classOf[RequestChannel.Metrics])
+    val apiHandler = mock(classOf[ApiRequestHandler])
+    val requestChannel = new RequestChannel(10, "", time, metrics)
+    val handler = new KafkaRequestHandler(0, 0, mock(classOf[Meter]), new AtomicInteger(1), requestChannel, apiHandler, time)
+
+    val originalRequestLocal = mock(classOf[RequestLocal])
+
+    var handledCount = 0
+
+    val request = makeRequest(time, metrics)
+    requestChannel.sendRequest(request)
+
+    when(apiHandler.handle(ArgumentMatchers.eq(request), any())).thenAnswer { _ =>
+      // Prepare the callback.
+      val callback = KafkaRequestHandler.wrapAsyncCallback(
+        (reqLocal: RequestLocal, ms: Int) => {
+          reqLocal.bufferSupplier.close()
+          handledCount = handledCount + 1
+          handler.stop()
+        },
+        originalRequestLocal)
+      // Execute the callback asynchronously.
+      CompletableFuture.runAsync(() => callback(1))
+    }
+
+    handler.run()
+    // Verify that we don't use the request local that we passed in.
+    verify(originalRequestLocal, times(0)).bufferSupplier
+    assertEquals(1, handledCount)
+  }
 
   @ParameterizedTest
   @ValueSource(booleans = Array(true, false))

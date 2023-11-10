@@ -128,7 +128,7 @@ versions += [
   lz4: "1.8.0",
   mavenArtifact: "3.8.8",
   metrics: "2.2.0",
-  netty: "4.1.94.Final",
+  netty: "4.1.100.Final",
   pcollections: "4.0.1",
   powermock: "2.0.9",
   reflections: "0.10.2",
@@ -142,13 +142,13 @@ versions += [
   scalaJava8Compat : "1.0.2",
   scoverage: "1.9.3",
   slf4j: "1.7.36",
-  snappy: "1.1.10.4",
+  snappy: "1.1.10.5",
   spotbugs: "4.7.3",
   // New version of Swagger 2.2.14 requires minimum JDK 11.
   swaggerAnnotations: "2.2.8",
   swaggerJaxrs2: "2.2.8",
   zinc: "1.9.2",
-  zookeeper: "3.8.2",
+  zookeeper: "3.8.3",
   zstd: "1.5.5-1"
 ]
 

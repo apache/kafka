@@ -727,7 +727,6 @@ class ReplicaManager(val config: KafkaConfig,
                     transactionStatePartition: Option[Int] = None,
                     actionQueue: ActionQueue = this.actionQueue): Unit = {
     if (isValidRequiredAcks(requiredAcks)) {
-      val sTime = time.milliseconds
 
       val verificationGuards: mutable.Map[TopicPartition, Object] = mutable.Map[TopicPartition, Object]()
       val (verifiedEntriesPerPartition, notYetVerifiedEntriesPerPartition, errorsPerPartition) =
@@ -741,117 +740,19 @@ class ReplicaManager(val config: KafkaConfig,
           (verifiedEntries.toMap, unverifiedEntries.toMap, errorEntries.toMap)
         }
 
-      def appendEntries(allEntries: Map[TopicPartition, MemoryRecords])(unverifiedEntries: Map[TopicPartition, Errors]): Unit = {
-        val verifiedEntries = 
-          if (unverifiedEntries.isEmpty)
-            allEntries 
-          else
-            allEntries.filter { case (tp, _) =>
-              !unverifiedEntries.contains(tp)
-            }
-        
-        val localProduceResults = appendToLocalLog(internalTopicsAllowed = internalTopicsAllowed,
-          origin, verifiedEntries, requiredAcks, requestLocal, verificationGuards.toMap)
-        debug("Produce to local log in %d ms".format(time.milliseconds - sTime))
-
-        def produceStatusResult(appendResult: Map[TopicPartition, LogAppendResult],
-                                useCustomMessage: Boolean): Map[TopicPartition, ProducePartitionStatus] = {
-          appendResult.map { case (topicPartition, result) =>
-            topicPartition -> ProducePartitionStatus(
-              result.info.lastOffset + 1, // required offset
-              new PartitionResponse(
-                result.error,
-                result.info.firstOffset.map[Long](_.messageOffset).orElse(-1L),
-                result.info.lastOffset,
-                result.info.logAppendTime,
-                result.info.logStartOffset,
-                result.info.recordErrors,
-                if (useCustomMessage) result.exception.get.getMessage else result.info.errorMessage
-              )
-            ) // response status
-          }
-        }
-        
-        val unverifiedResults = unverifiedEntries.map {
-          case (topicPartition, error) =>
-            val finalException =
-              error match {
-                case Errors.INVALID_TXN_STATE => error.exception("Partition was not added to the transaction")
-                case Errors.CONCURRENT_TRANSACTIONS |
-                     Errors.COORDINATOR_LOAD_IN_PROGRESS |
-                     Errors.COORDINATOR_NOT_AVAILABLE |
-                     Errors.NOT_COORDINATOR => new NotEnoughReplicasException(
-                         s"Unable to verify the partition has been added to the transaction. Underlying error: ${error.toString}")
-                case _ => error.exception()
-            }
-            topicPartition -> LogAppendResult(
-              LogAppendInfo.UNKNOWN_LOG_APPEND_INFO,
-              Some(finalException)
-            )
-        }
-
-        val errorResults = errorsPerPartition.map {
-          case (topicPartition, error) =>
-            topicPartition -> LogAppendResult(
-              LogAppendInfo.UNKNOWN_LOG_APPEND_INFO,
-              Some(error.exception())
-            )
-        }
-
-        val produceStatus = Set((localProduceResults, false), (unverifiedResults, true), (errorResults, false)).flatMap {
-          case (results, useCustomError) => produceStatusResult(results, useCustomError)
-        }.toMap
-        val allResults = localProduceResults ++ unverifiedResults ++ errorResults
-
-        actionQueue.add {
-          () => allResults.foreach { case (topicPartition, result) =>
-            val requestKey = TopicPartitionOperationKey(topicPartition)
-            result.info.leaderHwChange match {
-              case LeaderHwChange.INCREASED =>
-                // some delayed operations may be unblocked after HW changed
-                delayedProducePurgatory.checkAndComplete(requestKey)
-                delayedFetchPurgatory.checkAndComplete(requestKey)
-                delayedDeleteRecordsPurgatory.checkAndComplete(requestKey)
-              case LeaderHwChange.SAME =>
-                // probably unblock some follower fetch requests since log end offset has been updated
-                delayedFetchPurgatory.checkAndComplete(requestKey)
-              case LeaderHwChange.NONE =>
-              // nothing
-            }
-          }
-        }
-
-        recordConversionStatsCallback(localProduceResults.map { case (k, v) => k -> v.info.recordConversionStats })
-
-        if (delayedProduceRequestRequired(requiredAcks, allEntries, allResults)) {
-          // create delayed produce operation
-          val produceMetadata = ProduceMetadata(requiredAcks, produceStatus)
-          val delayedProduce = new DelayedProduce(timeout, produceMetadata, this, responseCallback, delayedProduceLock)
-
-          // create a list of (topic, partition) pairs to use as keys for this delayed produce operation
-          val producerRequestKeys = allEntries.keys.map(TopicPartitionOperationKey(_)).toSeq
-
-          // try to complete the request immediately, otherwise put it into the purgatory
-          // this is because while the delayed produce operation is being created, new
-          // requests may arrive and hence make this operation completable.
-          delayedProducePurgatory.tryCompleteElseWatch(delayedProduce, producerRequestKeys)
-        } else {
-          // we can respond immediately
-          val produceResponseStatus = produceStatus.map { case (k, status) => k -> status.responseStatus }
-          responseCallback(produceResponseStatus)
-        }
-      }
-
       if (notYetVerifiedEntriesPerPartition.isEmpty || addPartitionsToTxnManager.isEmpty) {
-        appendEntries(verifiedEntriesPerPartition)(Map.empty)
+        appendEntries(verifiedEntriesPerPartition, internalTopicsAllowed, origin, requiredAcks, verificationGuards.toMap,
+          errorsPerPartition, recordConversionStatsCallback, timeout, responseCallback, delayedProduceLock)(requestLocal, Map.empty)
       } else {
         // For unverified entries, send a request to verify. When verified, the append process will proceed via the callback.
         val (error, node) = getTransactionCoordinator(transactionStatePartition.get)
 
         if (error != Errors.NONE) {
-          appendEntries(entriesPerPartition)(notYetVerifiedEntriesPerPartition.map {
-            case (tp, _) => (tp, error)
-          }.toMap)
+          appendEntries(verifiedEntriesPerPartition, internalTopicsAllowed, origin, requiredAcks, verificationGuards.toMap,
+            errorsPerPartition, recordConversionStatsCallback, timeout, responseCallback, delayedProduceLock)(requestLocal,
+            notYetVerifiedEntriesPerPartition.map {
+              case (tp, _) => (tp, error)
+            }.toMap)
         } else {
           val topicGrouping = notYetVerifiedEntriesPerPartition.keySet.groupBy(tp => tp.topic())
           val topicCollection = new AddPartitionsToTxnTopicCollection()
@@ -871,7 +772,21 @@ class ReplicaManager(val config: KafkaConfig,
             .setVerifyOnly(true)
             .setTopics(topicCollection)
 
-          addPartitionsToTxnManager.foreach(_.addTxnData(node, notYetVerifiedTransaction, KafkaRequestHandler.wrap(appendEntries(entriesPerPartition)(_))))
+          addPartitionsToTxnManager.foreach(_.addTxnData(node, notYetVerifiedTransaction, KafkaRequestHandler.wrapAsyncCallback(
+            appendEntries(
+              entriesPerPartition,
+              internalTopicsAllowed,
+              origin,
+              requiredAcks,
+              verificationGuards.toMap,
+              errorsPerPartition,
+              recordConversionStatsCallback,
+              timeout,
+              responseCallback,
+              delayedProduceLock
+            ),
+            requestLocal)
+          ))
         }
       }
     } else {
@@ -886,6 +801,122 @@ class ReplicaManager(val config: KafkaConfig,
         )
       }
       responseCallback(responseStatus)
+    }
+  }
+
+  /*
+   * Note: This method can be used as a callback in a different request thread. Ensure that correct RequestLocal
+   * is passed when executing this method. Accessing non-thread-safe data structures should be avoided if possible.
+   */
+  private def appendEntries(allEntries: Map[TopicPartition, MemoryRecords],
+                            internalTopicsAllowed: Boolean,
+                            origin: AppendOrigin,
+                            requiredAcks: Short,
+                            verificationGuards: Map[TopicPartition, Object],
+                            errorsPerPartition: Map[TopicPartition, Errors],
+                            recordConversionStatsCallback: Map[TopicPartition, RecordConversionStats] => Unit,
+                            timeout: Long,
+                            responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
+                            delayedProduceLock: Option[Lock])
+                           (requestLocal: RequestLocal, unverifiedEntries: Map[TopicPartition, Errors]): Unit = {
+    val sTime = time.milliseconds
+    val verifiedEntries =
+      if (unverifiedEntries.isEmpty)
+        allEntries
+      else
+        allEntries.filter { case (tp, _) =>
+          !unverifiedEntries.contains(tp)
+        }
+
+    val localProduceResults = appendToLocalLog(internalTopicsAllowed = internalTopicsAllowed,
+      origin, verifiedEntries, requiredAcks, requestLocal, verificationGuards.toMap)
+    debug("Produce to local log in %d ms".format(time.milliseconds - sTime))
+
+    def produceStatusResult(appendResult: Map[TopicPartition, LogAppendResult],
+                            useCustomMessage: Boolean): Map[TopicPartition, ProducePartitionStatus] = {
+      appendResult.map { case (topicPartition, result) =>
+        topicPartition -> ProducePartitionStatus(
+          result.info.lastOffset + 1, // required offset
+          new PartitionResponse(
+            result.error,
+            result.info.firstOffset.map[Long](_.messageOffset).orElse(-1L),
+            result.info.lastOffset,
+            result.info.logAppendTime,
+            result.info.logStartOffset,
+            result.info.recordErrors,
+            if (useCustomMessage) result.exception.get.getMessage else result.info.errorMessage
+          )
+        ) // response status
+      }
+    }
+
+    val unverifiedResults = unverifiedEntries.map {
+      case (topicPartition, error) =>
+        val finalException =
+          error match {
+            case Errors.INVALID_TXN_STATE => error.exception("Partition was not added to the transaction")
+            case Errors.CONCURRENT_TRANSACTIONS |
+                 Errors.COORDINATOR_LOAD_IN_PROGRESS |
+                 Errors.COORDINATOR_NOT_AVAILABLE |
+                 Errors.NOT_COORDINATOR => new NotEnoughReplicasException(
+              s"Unable to verify the partition has been added to the transaction. Underlying error: ${error.toString}")
+            case _ => error.exception()
+          }
+        topicPartition -> LogAppendResult(
+          LogAppendInfo.UNKNOWN_LOG_APPEND_INFO,
+          Some(finalException)
+        )
+    }
+
+    val errorResults = errorsPerPartition.map {
+      case (topicPartition, error) =>
+        topicPartition -> LogAppendResult(
+          LogAppendInfo.UNKNOWN_LOG_APPEND_INFO,
+          Some(error.exception())
+        )
+    }
+
+    val produceStatus = Set((localProduceResults, false), (unverifiedResults, true), (errorResults, false)).flatMap {
+      case (results, useCustomError) => produceStatusResult(results, useCustomError)
+    }.toMap
+    val allResults = localProduceResults ++ unverifiedResults ++ errorResults
+
+    actionQueue.add {
+      () => allResults.foreach { case (topicPartition, result) =>
+        val requestKey = TopicPartitionOperationKey(topicPartition)
+        result.info.leaderHwChange match {
+          case LeaderHwChange.INCREASED =>
+            // some delayed operations may be unblocked after HW changed
+            delayedProducePurgatory.checkAndComplete(requestKey)
+            delayedFetchPurgatory.checkAndComplete(requestKey)
+            delayedDeleteRecordsPurgatory.checkAndComplete(requestKey)
+          case LeaderHwChange.SAME =>
+            // probably unblock some follower fetch requests since log end offset has been updated
+            delayedFetchPurgatory.checkAndComplete(requestKey)
+          case LeaderHwChange.NONE =>
+          // nothing
+        }
+      }
+    }
+
+    recordConversionStatsCallback(localProduceResults.map { case (k, v) => k -> v.info.recordConversionStats })
+
+    if (delayedProduceRequestRequired(requiredAcks, allEntries, allResults)) {
+      // create delayed produce operation
+      val produceMetadata = ProduceMetadata(requiredAcks, produceStatus)
+      val delayedProduce = new DelayedProduce(timeout, produceMetadata, this, responseCallback, delayedProduceLock)
+
+      // create a list of (topic, partition) pairs to use as keys for this delayed produce operation
+      val producerRequestKeys = allEntries.keys.map(TopicPartitionOperationKey(_)).toSeq
+
+      // try to complete the request immediately, otherwise put it into the purgatory
+      // this is because while the delayed produce operation is being created, new
+      // requests may arrive and hence make this operation completable.
+      delayedProducePurgatory.tryCompleteElseWatch(delayedProduce, producerRequestKeys)
+    } else {
+      // we can respond immediately
+      val produceResponseStatus = produceStatus.map { case (k, status) => k -> status.responseStatus }
+      responseCallback(produceResponseStatus)
     }
   }
 

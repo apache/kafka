@@ -104,15 +104,13 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
 
         // rebalance
         this.records.clear();
-        this.subscriptions.assignFromSubscribed(newAssignment);
 
         // rebalance callbacks
-        if (!added.isEmpty()) {
-            this.subscriptions.rebalanceListener().onPartitionsAssigned(added);
-        }
         if (!removed.isEmpty()) {
             this.subscriptions.rebalanceListener().onPartitionsRevoked(removed);
         }
+        this.subscriptions.assignFromSubscribed(newAssignment);
+        this.subscriptions.rebalanceListener().onPartitionsAssigned(added);
     }
 
     @Override
