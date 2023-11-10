@@ -762,7 +762,6 @@ public class StandaloneHerderTest {
             .thenReturn(singletonList(taskConfig(SourceSink.SOURCE)));
 
         expectConfigValidation(connectorMock, false, newConnConfig);
-        when(worker.getPlugins()).thenReturn(plugins);
 
         herder.putConnectorConfig(CONNECTOR_NAME, connConfig, false, createCallback);
         Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(1000L, TimeUnit.SECONDS);
