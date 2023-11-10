@@ -1653,36 +1653,35 @@ public class KafkaConsumerTest {
 
     @Test
     public void testOperationsBySubscribingConsumerWithDefaultGroupId() {
-        try {
-            newConsumer(null, Optional.of(Boolean.TRUE));
+        try (KafkaConsumer<byte[], byte[]> consumer = newConsumer(null, Optional.of(Boolean.TRUE))) {
             fail("Expected an InvalidConfigurationException");
         } catch (KafkaException e) {
             assertEquals(InvalidConfigurationException.class, e.getCause().getClass());
         }
 
-        try {
-            newConsumer((String) null).subscribe(Collections.singleton(topic));
+        try (KafkaConsumer<byte[], byte[]> consumer = newConsumer((String) null)) {
+            consumer.subscribe(Collections.singleton(topic));
             fail("Expected an InvalidGroupIdException");
         } catch (InvalidGroupIdException e) {
             // OK, expected
         }
 
-        try {
-            newConsumer((String) null).committed(Collections.singleton(tp0)).get(tp0);
+        try (KafkaConsumer<byte[], byte[]> consumer = newConsumer((String) null)) {
+            consumer.committed(Collections.singleton(tp0)).get(tp0);
             fail("Expected an InvalidGroupIdException");
         } catch (InvalidGroupIdException e) {
             // OK, expected
         }
 
-        try {
-            newConsumer((String) null).commitAsync();
+        try (KafkaConsumer<byte[], byte[]> consumer = newConsumer((String) null)) {
+            consumer.commitAsync();
             fail("Expected an InvalidGroupIdException");
         } catch (InvalidGroupIdException e) {
             // OK, expected
         }
 
-        try {
-            newConsumer((String) null).commitSync();
+        try (KafkaConsumer<byte[], byte[]> consumer = newConsumer((String) null)) {
+            consumer.commitSync();
             fail("Expected an InvalidGroupIdException");
         } catch (InvalidGroupIdException e) {
             // OK, expected
@@ -1714,6 +1713,8 @@ public class KafkaConsumerTest {
         } catch (InvalidGroupIdException e) {
             // OK, expected
         }
+
+        consumer.close();
     }
 
     @Test

@@ -160,6 +160,9 @@ public class SslTransportTls12Tls13Test {
         SslTransportLayerTest.TestSslChannelBuilder channelBuilder = new SslTransportLayerTest.TestSslChannelBuilder(Mode.CLIENT);
         channelBuilder.configureBufferSizes(null, null, null);
         channelBuilder.configure(sslClientConfigs);
+        if (this.selector != null) {
+            this.selector.close();
+        }
         this.selector = new Selector(100 * 5000, new Metrics(), TIME, "MetricGroup", channelBuilder, new LogContext());
     }
 }
