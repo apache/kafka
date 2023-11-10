@@ -37,6 +37,7 @@ import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskIdFormatException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode;
+import org.apache.kafka.streams.processor.StandbyUpdateListener;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.StateDirectory.TaskDirectory;
 import org.apache.kafka.streams.processor.internals.Task.State;
@@ -70,6 +71,7 @@ import static org.apache.kafka.common.utils.Utils.union;
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_V2;
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.parseTaskDirectoryName;
 
+@SuppressWarnings("ClassFanOutComplexity")
 public class TaskManager {
     // initialize the task list
     // activeTasks needs to be concurrent as it can be accessed
@@ -100,6 +102,7 @@ public class TaskManager {
     private final StandbyTaskCreator standbyTaskCreator;
     private final StateUpdater stateUpdater;
     private final DefaultTaskManager schedulingTaskManager;
+    private final StandbyUpdateListener standbyTaskUpdateListener;
 
     TaskManager(final Time time,
                 final ChangelogReader changelogReader,
@@ -112,7 +115,8 @@ public class TaskManager {
                 final Admin adminClient,
                 final StateDirectory stateDirectory,
                 final StateUpdater stateUpdater,
-                final DefaultTaskManager schedulingTaskManager
+                final DefaultTaskManager schedulingTaskManager,
+                final StandbyUpdateListener standbyTaskUpdateListener
                 ) {
         this.time = time;
         this.processId = processId;
@@ -124,6 +128,7 @@ public class TaskManager {
         this.activeTaskCreator = activeTaskCreator;
         this.standbyTaskCreator = standbyTaskCreator;
         this.processingMode = topologyMetadata.processingMode();
+        this.standbyTaskUpdateListener = standbyTaskUpdateListener;
 
         final LogContext logContext = new LogContext(logPrefix);
         this.log = logContext.logger(getClass());
@@ -701,7 +706,15 @@ public class TaskManager {
     }
 
     private StreamTask convertStandbyToActive(final StandbyTask standbyTask, final Set<TopicPartition> partitions) {
-        return activeTaskCreator.createActiveTaskFromStandby(standbyTask, partitions, mainConsumer);
+        final StreamTask streamTask = activeTaskCreator.createActiveTaskFromStandby(standbyTask, partitions, mainConsumer);
+        final ProcessorStateManager stateManager = standbyTask.stateManager();
+        for (final TopicPartition partition : partitions) {
+            final ProcessorStateManager.StateStoreMetadata storeMetadata = stateManager.storeMetadata(partition);
+            if (storeMetadata != null && storeMetadata.endOffset() != null) {
+                standbyTaskUpdateListener.onUpdateSuspended(partition, storeMetadata.store().name(), storeMetadata.offset(), storeMetadata.endOffset(), StandbyUpdateListener.SuspendReason.PROMOTED);
+            }
+        }
+        return streamTask;
     }
 
     /**

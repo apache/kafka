@@ -84,6 +84,7 @@ import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.test.MockApiProcessor;
 import org.apache.kafka.test.MockClientSupplier;
 import org.apache.kafka.test.MockKeyValueStoreBuilder;
+import org.apache.kafka.test.MockStandbyUpdateListener;
 import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.MockTimestampExtractor;
 import org.apache.kafka.test.StreamsTestUtils;
@@ -320,6 +321,7 @@ public class StreamThreadTest {
             0,
             stateDirectory,
             new MockStateRestoreListener(),
+            new MockStandbyUpdateListener(),
             threadIdx,
             null,
             HANDLER
@@ -729,6 +731,7 @@ public class StreamThreadTest {
             0,
             stateDirectory,
             new MockStateRestoreListener(),
+            new MockStandbyUpdateListener(),
             threadIdx,
             null,
             null
@@ -797,6 +800,7 @@ public class StreamThreadTest {
             0,
             stateDirectory,
             new MockStateRestoreListener(),
+            new MockStandbyUpdateListener(),
             threadIdx,
             null,
             null
@@ -1037,7 +1041,8 @@ public class StreamThreadTest {
             null,
             null,
             null,
-            null
+            null,
+                null
         ) {
             @Override
             int commit(final Collection<Task> tasksToCommit) {
@@ -1155,7 +1160,8 @@ public class StreamThreadTest {
             null,
             null,
             stateUpdater,
-            schedulingTaskManager
+            schedulingTaskManager,
+            new MockStandbyUpdateListener()
         ) {
             @Override
             int commit(final Collection<Task> tasksToCommit) {
@@ -1979,6 +1985,7 @@ public class StreamThreadTest {
             0,
             stateDirectory,
             new MockStateRestoreListener(),
+            new MockStandbyUpdateListener(),
             threadIdx,
             null,
             HANDLER

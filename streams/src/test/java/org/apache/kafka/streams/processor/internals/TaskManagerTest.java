@@ -57,6 +57,8 @@ import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import java.nio.file.Files;
 import java.time.Duration;
 import java.util.ArrayList;
+
+import org.apache.kafka.test.MockStandbyUpdateListener;
 import org.easymock.EasyMock;
 import org.easymock.EasyMockRunner;
 import org.easymock.Mock;
@@ -184,6 +186,8 @@ public class TaskManagerTest {
     private final TopicPartition t2p0 = new TopicPartition(topic2, 0);
     private final Set<TopicPartition> taskId10Partitions = mkSet(t2p0);
 
+    private final MockStandbyUpdateListener standbyCallback = new MockStandbyUpdateListener();
+
     final java.util.function.Consumer<Set<TopicPartition>> noOpResetter = partitions -> { };
 
     @org.mockito.Mock
@@ -243,7 +247,8 @@ public class TaskManagerTest {
             adminClient,
             stateDirectory,
             stateUpdaterEnabled ? stateUpdater : null,
-            processingThreadsEnabled ? schedulingTaskManager : null
+            processingThreadsEnabled ? schedulingTaskManager : null,
+            standbyCallback
         );
         taskManager.setMainConsumer(consumer);
         return taskManager;
