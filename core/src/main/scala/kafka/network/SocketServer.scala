@@ -679,6 +679,9 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
   def close(): Unit = {
     beginShutdown()
     thread.join()
+    if (!started) {
+      closeAll()
+    }
     synchronized {
       processors.foreach(_.close())
     }
@@ -704,12 +707,16 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
         }
       }
     } finally {
-      debug("Closing server socket, selector, and any throttled sockets.")
-      CoreUtils.swallow(serverChannel.close(), this, Level.ERROR)
-      CoreUtils.swallow(nioSelector.close(), this, Level.ERROR)
-      throttledSockets.foreach(throttledSocket => closeSocket(throttledSocket.socket, this))
-      throttledSockets.clear()
+      closeAll()
     }
+  }
+
+  private def closeAll(): Unit = {
+    debug("Closing server socket, selector, and any throttled sockets.")
+    CoreUtils.swallow(serverChannel.close(), this, Level.ERROR)
+    CoreUtils.swallow(nioSelector.close(), this, Level.ERROR)
+    throttledSockets.foreach(throttledSocket => closeSocket(throttledSocket.socket, this))
+    throttledSockets.clear()
   }
 
   /**
@@ -920,6 +927,7 @@ private[kafka] class Processor(
   private val metricsGroup = new KafkaMetricsGroup(this.getClass)
 
   val shouldRun = new AtomicBoolean(true)
+  private var started = false
 
   val thread = KafkaThread.nonDaemon(threadName, this)
 
@@ -1356,7 +1364,10 @@ private[kafka] class Processor(
   private[network] def channel(connectionId: String): Option[KafkaChannel] =
     Option(selector.channel(connectionId))
 
-  def start(): Unit = thread.start()
+  def start(): Unit = {
+    thread.start()
+    started = true;
+  }
 
   /**
    * Wakeup the thread for selection.
@@ -1373,6 +1384,9 @@ private[kafka] class Processor(
     try {
       beginShutdown()
       thread.join()
+      if (!started) {
+        CoreUtils.swallow(closeAll(), this, Level.ERROR)
+      }
     } finally {
       metricsGroup.removeMetric("IdlePercent", Map("networkProcessor" -> id.toString).asJava)
       metrics.removeMetric(expiredConnectionsKilledCountMetricName)
