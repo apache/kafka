@@ -24,6 +24,7 @@ import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -37,6 +38,8 @@ import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.when;
 
 @Timeout(value = 40)
 public class BrokerRegistrationTest {
@@ -80,7 +83,9 @@ public class BrokerRegistrationTest {
             setRack(Optional.empty()).
             setFenced(false).
             setInControlledShutdown(true).
-            setIsMigratingZkBroker(true).build());
+            setIsMigratingZkBroker(true).
+            setDirectories(Arrays.asList(Uuid.fromString("r4HpEsMuST6nQ4rznIEJVA"))).
+            build());
 
     @Test
     public void testValues() {
@@ -111,19 +116,20 @@ public class BrokerRegistrationTest {
             "incarnationId=3MfdxWlNSn2UDYsmDP1pYg, listeners=[Endpoint(" +
             "listenerName='INTERNAL', securityProtocol=PLAINTEXT, " +
             "host='localhost', port=9091)], supportedFeatures={foo: 1-2}, " +
-            "rack=Optional.empty, fenced=true, inControlledShutdown=false, isMigratingZkBroker=false)",
+            "rack=Optional.empty, fenced=true, inControlledShutdown=false, isMigratingZkBroker=false, directories=[])",
             REGISTRATIONS.get(1).toString());
         assertEquals("BrokerRegistration(id=2, epoch=0, " +
             "incarnationId=eY7oaG1RREie5Kk9uy1l6g, listeners=[Endpoint(" +
             "listenerName='INTERNAL', securityProtocol=PLAINTEXT, " +
             "host='localhost', port=9092)], supportedFeatures={bar: 1-4, foo: 2-3}, " +
-            "rack=Optional[myrack], fenced=false, inControlledShutdown=true, isMigratingZkBroker=false)",
+            "rack=Optional[myrack], fenced=false, inControlledShutdown=true, isMigratingZkBroker=false, directories=[])",
             REGISTRATIONS.get(2).toString());
         assertEquals("BrokerRegistration(id=3, epoch=0, " +
             "incarnationId=1t8VyWx2TCSTpUWuqj-FOw, listeners=[Endpoint(" +
             "listenerName='INTERNAL', securityProtocol=PLAINTEXT, " +
             "host='localhost', port=9093)], supportedFeatures={metadata.version: 7}, " +
-            "rack=Optional.empty, fenced=false, inControlledShutdown=true, isMigratingZkBroker=true)",
+            "rack=Optional.empty, fenced=false, inControlledShutdown=true, isMigratingZkBroker=true, " +
+            "directories=[r4HpEsMuST6nQ4rznIEJVA])",
             REGISTRATIONS.get(3).toString());
     }
 
@@ -136,13 +142,18 @@ public class BrokerRegistrationTest {
     }
 
     private void testRoundTrip(BrokerRegistration registration) {
+        MetadataVersion metdataVersion = spy(MetadataVersion.latest()); // TODO replace with actual MV after bump for KIP-858
+        when(metdataVersion.isDirectoryAssignmentSupported()).thenReturn(true);
+        ImageWriterOptions options = new ImageWriterOptions.Builder().
+                setMetadataVersion(metdataVersion).
+                build();
         ApiMessageAndVersion messageAndVersion = registration.
-            toRecord(new ImageWriterOptions.Builder().build());
+            toRecord(options);
         BrokerRegistration registration2 = BrokerRegistration.fromRecord(
             (RegisterBrokerRecord) messageAndVersion.message());
         assertEquals(registration, registration2);
         ApiMessageAndVersion messageAndVersion2 = registration2.
-            toRecord(new ImageWriterOptions.Builder().build());
+            toRecord(options);
         assertEquals(messageAndVersion, messageAndVersion2);
     }
 

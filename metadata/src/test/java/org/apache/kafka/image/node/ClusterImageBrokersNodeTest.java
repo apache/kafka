@@ -66,7 +66,7 @@ public class ClusterImageBrokersNodeTest {
             "rack=Optional.empty, " +
             "fenced=false, " +
             "inControlledShutdown=false, " +
-            "isMigratingZkBroker=false)", child.stringify());
+            "isMigratingZkBroker=false, directories=[])", child.stringify());
     }
 
     @Test
