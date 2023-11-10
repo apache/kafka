@@ -762,7 +762,6 @@ public class StandaloneHerderTest {
             .thenReturn(singletonList(taskConfig(SourceSink.SOURCE)));
 
         expectConfigValidation(connectorMock, false, newConnConfig);
-        doNothing().when(connectorConfigCb).onCompletion(null, newConnConfig);
         when(worker.getPlugins()).thenReturn(plugins);
 
         herder.putConnectorConfig(CONNECTOR_NAME, connConfig, false, createCallback);
@@ -772,6 +771,7 @@ public class StandaloneHerderTest {
         herder.connectorConfig(CONNECTOR_NAME, connectorConfigCb);
 
         FutureCallback<Herder.Created<ConnectorInfo>> reconfigureCallback = new FutureCallback<>();
+        doNothing().when(connectorConfigCb).onCompletion(null, newConnConfig);
         herder.putConnectorConfig(CONNECTOR_NAME, newConnConfig, true, reconfigureCallback);
         Herder.Created<ConnectorInfo> newConnectorInfo = reconfigureCallback.get(1000L, TimeUnit.SECONDS);
         ConnectorInfo newConnInfo = new ConnectorInfo(CONNECTOR_NAME, newConnConfig, Arrays.asList(new ConnectorTaskId(CONNECTOR_NAME, 0)),
