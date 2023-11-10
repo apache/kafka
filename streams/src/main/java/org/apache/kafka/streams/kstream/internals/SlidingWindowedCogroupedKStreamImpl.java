@@ -85,7 +85,7 @@ public class SlidingWindowedCogroupedKStreamImpl<K, V> extends AbstractStream<K,
             groupPatterns,
             initializer,
             new NamedInternal(named),
-            new SlidingStoreMaterializer<>(materializedInternal, windows, EmitStrategy.onWindowUpdate()),
+            new SlidingWindowStoreMaterializer<>(materializedInternal, windows, EmitStrategy.onWindowUpdate()),
             materializedInternal.keySerde() != null ?
                 new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.timeDifferenceMs())
                 : null,
