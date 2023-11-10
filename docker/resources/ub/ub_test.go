@@ -261,7 +261,6 @@ func Test_buildProperties(t *testing.T) {
 				environment: map[string]string{
 					"PATH":                          "thePath",
 					"KAFKA_BOOTSTRAP_SERVERS":       "localhost:9092",
-					"CONFLUENT_METRICS":             "metricsValue",
 					"KAFKA_IGNORED":                 "ignored",
 					"KAFKA_EXCLUDE_PREFIX_PROPERTY": "ignored",
 				},
@@ -272,7 +271,7 @@ func Test_buildProperties(t *testing.T) {
 			name: "server properties",
 			args: args{
 				spec: ConfigSpec{
-					Prefixes: map[string]bool{"KAFKA": false, "CONFLUENT": true},
+					Prefixes: map[string]bool{"KAFKA": false},
 					Excludes: []string{"KAFKA_IGNORED"},
 					Renamed:  map[string]string{},
 					Defaults: map[string]string{
@@ -284,18 +283,17 @@ func Test_buildProperties(t *testing.T) {
 				environment: map[string]string{
 					"PATH":                          "thePath",
 					"KAFKA_BOOTSTRAP_SERVERS":       "localhost:9092",
-					"CONFLUENT_METRICS":             "metricsValue",
 					"KAFKA_IGNORED":                 "ignored",
 					"KAFKA_EXCLUDE_PREFIX_PROPERTY": "ignored",
 				},
 			},
-			want: map[string]string{"bootstrap.servers": "localhost:9092", "confluent.metrics": "metricsValue", "default.property.key": "default.property.value"},
+			want: map[string]string{"bootstrap.servers": "localhost:9092", "default.property.key": "default.property.value"},
 		},
 		{
 			name: "kafka properties",
 			args: args{
 				spec: ConfigSpec{
-					Prefixes: map[string]bool{"KAFKA": false, "CONFLUENT": true},
+					Prefixes: map[string]bool{"KAFKA": false},
 					Excludes: []string{"KAFKA_IGNORED"},
 					Renamed:  map[string]string{},
 					Defaults: map[string]string{

@@ -15,29 +15,27 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import subprocess
 from datetime import date
 import argparse
 from distutils.dir_util import copy_tree
 import shutil
 from test.docker_sanity_test import run_tests
+from common import execute
 
 def build_jvm(image, tag, kafka_url):
     image = f'{image}:{tag}'
     copy_tree("resources", "jvm/resources")
-    result = subprocess.run(["docker", "build", "-f", "jvm/Dockerfile", "-t", image, "--build-arg", f"kafka_url={kafka_url}",
+    execute(["docker", "build", "-f", "jvm/Dockerfile", "-t", image, "--build-arg", f"kafka_url={kafka_url}",
                             "--build-arg", f'build_date={date.today()}', "jvm"])
-    if result.stderr:
-        print(result.stdout)
-        return
+
     shutil.rmtree("jvm/resources")
 
 def run_jvm_tests(image, tag, kafka_url):
-    subprocess.run(["wget", "-nv", "-O", "kafka.tgz", kafka_url])
-    subprocess.run(["mkdir", "./test/fixtures/kafka"])
-    subprocess.run(["tar", "xfz", "kafka.tgz", "-C", "./test/fixtures/kafka", "--strip-components", "1"])
+    execute(["wget", "-nv", "-O", "kafka.tgz", kafka_url])
+    execute(["mkdir", "./test/fixtures/kafka"])
+    execute(["tar", "xfz", "kafka.tgz", "-C", "./test/fixtures/kafka", "--strip-components", "1"])
     failure_count = run_tests(f"{image}:{tag}", "jvm")
-    subprocess.run(["rm", "kafka.tgz"])
+    execute(["rm", "kafka.tgz"])
     shutil.rmtree("./test/fixtures/kafka")
     if failure_count != 0:
         raise SystemError("Test Failure. Error count is non 0")
@@ -46,7 +44,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("image", help="Image name that you want to keep for the Docker image")
     parser.add_argument("-tag", "--image-tag", default="latest", dest="tag", help="Image tag that you want to add to the image")
-    parser.add_argument("-type", "--image-type", choices=["jvm"], dest="image_type", help="Image type you want to build")
+    parser.add_argument("-type", "--image-type", choices=["jvm"], default="jvm", dest="image_type", help="Image type you want to build")
     parser.add_argument("-u", "--kafka-url", dest="kafka_url", help="Kafka url to be used to download kafka binary tarball in the docker image")
     parser.add_argument("-b", "--build", action="store_true", dest="build_only", default=False, help="Only build the image, don't run tests")
     parser.add_argument("-t", "--test", action="store_true", dest="test_only", default=False, help="Only run the tests, don't build the image")

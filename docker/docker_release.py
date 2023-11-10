@@ -22,30 +22,34 @@ Usage: docker_release.py
 Interactive utility to push the docker image to dockerhub
 """
 
-import subprocess
 from distutils.dir_util import copy_tree
 from datetime import date
 import shutil
 
+from common import execute, get_input
+
 def push_jvm(image, kafka_url):
     copy_tree("resources", "jvm/resources")
-    subprocess.run(["docker", "buildx", "build", "-f", "jvm/Dockerfile", "--build-arg", f"kafka_url={kafka_url}", "--build-arg", f"build_date={date.today()}",
+    execute(["docker", "buildx", "build", "-f", "jvm/Dockerfile", "--build-arg", f"kafka_url={kafka_url}", "--build-arg", f"build_date={date.today()}",
     "--push",
     "--platform", "linux/amd64,linux/arm64",
     "--tag", image, "jvm"])
     shutil.rmtree("jvm/resources")
 
 def login():
-    status = subprocess.run(["docker", "login"])
-    if status.returncode != 0:
-        print("Docker login failed, aborting the docker release")
-        raise PermissionError
+    execute(["docker", "login"])
 
 def create_builder():
-    subprocess.run(["docker", "buildx", "create", "--name", "kafka-builder", "--use"])
+    execute(["docker", "buildx", "create", "--name", "kafka-builder", "--use"])
 
 def remove_builder():
-    subprocess.run(["docker", "buildx", "rm", "kafka-builder"])
+    execute(["docker", "buildx", "rm", "kafka-builder"])
+
+def get_input(message):
+    value = input(message)
+    if value == "":
+        raise ValueError("This field cannot be empty")
+    return value
 
 if __name__ == "__main__":
     print("\
@@ -56,15 +60,9 @@ if __name__ == "__main__":
     if docker_registry == "":
         docker_registry = "docker.io"
     docker_namespace = input("Enter the docker namespace you want to push the image to: ")
-    image_name = input("Enter the image name: ")
-    if image_name == "":
-        raise ValueError("image name cannot be empty")
-    image_tag = input("Enter the image tag for the image: ")
-    if image_tag == "":
-        raise ValueError("image tag cannot be empty")
-    kafka_url = input("Enter the url for kafka binary tarball: ")
-    if kafka_url == "":
-        raise ValueError("kafka url cannot be empty")
+    image_name = get_input("Enter the image name: ")
+    image_tag = get_input("Enter the image tag for the image: ")
+    kafka_url = get_input("Enter the url for kafka binary tarball: ")
     image = f"{docker_registry}/{docker_namespace}/{image_name}:{image_tag}"
     print(f"Docker image containing kafka downloaded from {kafka_url} will be pushed to {image}")
     proceed = input("Should we proceed? [y/N]: ")
