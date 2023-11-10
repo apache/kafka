@@ -87,7 +87,7 @@ class ProducerCompressionTest extends QuorumTestHarness {
       val admin = TestUtils.createAdminClient(Seq(broker),
         ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT))
       try {
-        TestUtils.createTopicWithAdmin(admin, topic, Seq(broker))
+        TestUtils.createTopicWithAdmin(admin, topic, Seq(broker), controllerServers)
       } finally {
         admin.close()
       }
