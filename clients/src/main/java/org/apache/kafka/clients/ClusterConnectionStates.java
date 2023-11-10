@@ -306,6 +306,21 @@ final class ClusterConnectionStates {
         return false;
     }
 
+     /**
+     * Returns the number of currently connected nodes.
+     *
+     * @return the number of connected nodes
+     */
+    public int getConnectedNodeCount() {
+        int connectedNodes = 0;
+        for (NodeConnectionState state : nodeState.values()) {
+            if (state.state == ConnectionState.READY) {
+                connectedNodes++;
+            }
+        }
+        return connectedNodes;
+    }
+
     /**
      * Return true if the connection has been established
      * @param id The id of the node to check
