@@ -302,7 +302,7 @@ class BrokerLifecycleManager(
       if (offlineDirsPending.isEmpty) {
         offlineDirsPending = Set(dir)
       } else {
-        offlineDirsPending = offlineDirsPending.incl(dir)
+        offlineDirsPending = offlineDirsPending + dir
       }
       if (registered) {
         scheduleNextCommunicationImmediately()
