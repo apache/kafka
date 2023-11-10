@@ -695,6 +695,7 @@ public class StandaloneHerderTest {
         doNothing().when(connectorInfoCb).onCompletion(any(NotFoundException.class), isNull());
         doNothing().when(taskConfigsCb).onCompletion(any(NotFoundException.class), isNull());
         doNothing().when(tasksConfigCb).onCompletion(any(NotFoundException.class), isNull());
+        doNothing().when(connectorConfigCb).onCompletion(any(NotFoundException.class), isNull());
 
         // Create connector
         connector = mock(BogusSourceConnector.class);
