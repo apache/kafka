@@ -132,13 +132,17 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
         }
         observedStreamTime = Math.max(observedStreamTime, timestamp);
 
-        return doPut(
+        final long foundTs = doPut(
             versionedStoreClient,
             observedStreamTime,
             key,
             value,
             timestamp
         );
+
+        StoreQueryUtils.updatePosition(position, stateStoreContext);
+
+        return foundTs;
     }
 
     @Override
@@ -162,6 +166,8 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
             null,
             timestamp
         );
+
+        StoreQueryUtils.updatePosition(position, stateStoreContext);
 
         return existingRecord;
     }

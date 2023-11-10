@@ -36,7 +36,10 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
+import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.query.Position;
+import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.query.StateQueryRequest;
 import org.apache.kafka.streams.query.StateQueryResult;
@@ -63,6 +66,7 @@ public class IQv2VersionedStoreIntegrationTest {
     private static final int RECORD_KEY = 2;
     private static final int RECORD_VALUE_OLD = 2;
     private static final int RECORD_VALUE_NEW = 3;
+    private static final Position INPUT_POSITION = Position.emptyPosition();
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS,
         Utils.mkProperties(Collections.singletonMap("auto.create.topics.enable", "true")));
@@ -75,13 +79,15 @@ public class IQv2VersionedStoreIntegrationTest {
         producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class);
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class);
-        final KafkaProducer<Integer, Integer> producer = new KafkaProducer<>(producerProps);
-        producer.send(new ProducerRecord<>(INPUT_TOPIC_NAME, 0, RECORD_TIMESTAMP_OLD, RECORD_KEY, RECORD_VALUE_OLD)).get();
-        producer.send(new ProducerRecord<>(INPUT_TOPIC_NAME, 0, RECORD_TIMESTAMP_NEW, RECORD_KEY, RECORD_VALUE_NEW)).get();
+        try (final KafkaProducer<Integer, Integer> producer = new KafkaProducer<>(producerProps)) {
+            producer.send(new ProducerRecord<>(INPUT_TOPIC_NAME, 0, RECORD_TIMESTAMP_OLD, RECORD_KEY, RECORD_VALUE_OLD)).get();
+            producer.send(new ProducerRecord<>(INPUT_TOPIC_NAME, 0, RECORD_TIMESTAMP_NEW, RECORD_KEY, RECORD_VALUE_NEW)).get();
+        }
+        INPUT_POSITION.withComponent(INPUT_TOPIC_NAME, 0, 1);
     }
 
     @Before
-    public void beforeTest() throws InterruptedException {
+    public void beforeTest() {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.table(INPUT_TOPIC_NAME,
             Materialized.as(Stores.persistentVersionedKeyValueStore(STORE_NAME, HISTORY_RETENTION)));
@@ -90,9 +96,7 @@ public class IQv2VersionedStoreIntegrationTest {
         configs.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         configs.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.IntegerSerde.class.getName());
         configs.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.IntegerSerde.class.getName());
-        kafkaStreams = new KafkaStreams(builder.build(), configs);
-        kafkaStreams.start();
-        Thread.sleep(2000);
+        kafkaStreams = IntegrationTestUtils.getStartedStreams(configs, builder, true);
     }
 
     @After
@@ -131,8 +135,8 @@ public class IQv2VersionedStoreIntegrationTest {
         if (queryTimestamp.isPresent()) {
             query = query.asOf(queryTimestamp.get());
         }
-        final StateQueryRequest<VersionedRecord<Integer>> request = StateQueryRequest.inStore(STORE_NAME).withQuery(query);
-        final StateQueryResult<VersionedRecord<Integer>> result = kafkaStreams.query(request);
+        final StateQueryRequest<VersionedRecord<Integer>> request = StateQueryRequest.inStore(STORE_NAME).withQuery(query).withPositionBound(PositionBound.at(INPUT_POSITION));
+        final StateQueryResult<VersionedRecord<Integer>> result = IntegrationTestUtils.iqv2WaitForResult(kafkaStreams, request);
 
         if (result.getOnlyPartitionResult() == null) {
             throw new AssertionError("The query returned null.");
