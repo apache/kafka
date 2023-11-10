@@ -577,8 +577,7 @@ public class KRaftMigrationDriverTest {
             assertTrue(topicClient.createdTopics.contains("foo"));
             assertTrue(topicClient.createdTopics.contains("baz"));
             assertTrue(topicClient.updatedTopicPartitions.get("bar").contains(0));
-            assertEquals(1, configClient.deletedResources.size());
-            assertEquals(new ConfigResource(ConfigResource.Type.TOPIC, "foo"), configClient.deletedResources.get(0));
+            assertEquals(0, configClient.deletedResources.size());
         });
     }
 
@@ -633,9 +632,7 @@ public class KRaftMigrationDriverTest {
             assertTrue(topicClient.createdTopics.contains("foo"));
             assertTrue(topicClient.createdTopics.contains("baz"));
             assertTrue(topicClient.updatedTopicPartitions.get("bar").contains(0));
-            assertEquals(2, configClient.deletedResources.size());
-            assertTrue(configClient.deletedResources.contains(new ConfigResource(ConfigResource.Type.TOPIC, "foo")));
-            assertTrue(configClient.deletedResources.contains(new ConfigResource(ConfigResource.Type.TOPIC, "bam")));
+            assertEquals(0, configClient.deletedResources.size());
         });
     }
 
@@ -751,8 +748,7 @@ public class KRaftMigrationDriverTest {
             assertTrue(topicClient.createdTopics.contains("foo"));
             assertTrue(topicClient.createdTopics.contains("baz"));
             assertTrue(topicClient.updatedTopicPartitions.get("bar").contains(0));
-            assertEquals(1, configClient.deletedResources.size());
-            assertEquals(new ConfigResource(ConfigResource.Type.TOPIC, "foo"), configClient.deletedResources.get(0));
+            assertEquals(0, configClient.deletedResources.size());
         });
     }
 

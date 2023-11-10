@@ -103,7 +103,7 @@ public class ClusterImageTest {
             setId(2).
             setEpoch(123).
             setIncarnationId(Uuid.fromString("hr4TVh3YQiu3p16Awkka6w")).
-            setListeners(Arrays.asList(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9093))).
+            setListeners(Arrays.asList(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9094))).
             setSupportedFeatures(Collections.emptyMap()).
             setRack(Optional.of("arack")).
             setFenced(false).
@@ -210,33 +210,34 @@ public class ClusterImageTest {
         RecordTestUtils.replayAll(DELTA2, DELTA2_RECORDS);
 
         Map<Integer, BrokerRegistration> map3 = new HashMap<>();
-        map3.put(0, new BrokerRegistration(0,
-            1000,
-            Uuid.fromString("vZKYST0pSA2HO5x_6hoO2Q"),
-            Arrays.asList(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9092)),
-            Collections.singletonMap("foo", VersionRange.of((short) 1, (short) 3)),
-            Optional.empty(),
-            true,
-            true,
-            false));
-        map3.put(1, new BrokerRegistration(1,
-            1001,
-            Uuid.fromString("U52uRe20RsGI0RvpcTx33Q"),
-            Arrays.asList(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9093)),
-            Collections.singletonMap("foo", VersionRange.of((short) 1, (short) 3)),
-            Optional.empty(),
-            false,
-            false));
-        map3.put(2, new BrokerRegistration(2,
-            1002,
-            Uuid.fromString("Am5Yse7GQxaw0b2alM74bP"),
-            Arrays.asList(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9093)),
-            Collections.singletonMap("metadata.version",
-                VersionRange.of(MetadataVersion.IBP_3_3_IV3.featureLevel(), MetadataVersion.IBP_3_6_IV0.featureLevel())),
-            Optional.of("rack3"),
-            true,
-            false,
-            true));
+        map3.put(0, new BrokerRegistration.Builder().
+            setId(0).
+            setEpoch(1000).
+            setIncarnationId(Uuid.fromString("vZKYST0pSA2HO5x_6hoO2Q")).
+            setListeners(Arrays.asList(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9092))).
+            setSupportedFeatures(Collections.singletonMap("foo", VersionRange.of((short) 1, (short) 3))).
+            setRack(Optional.empty()).
+            setFenced(true).
+            setInControlledShutdown(true).build());
+        map3.put(1, new BrokerRegistration.Builder().
+            setId(1).
+            setEpoch(1001).
+            setIncarnationId(Uuid.fromString("U52uRe20RsGI0RvpcTx33Q")).
+            setListeners(Arrays.asList(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9093))).
+            setSupportedFeatures(Collections.singletonMap("foo", VersionRange.of((short) 1, (short) 3))).
+            setRack(Optional.empty()).
+            setFenced(true).
+            setInControlledShutdown(true).build());
+        map3.put(2, new BrokerRegistration.Builder().
+            setId(2).
+            setEpoch(1002).
+            setIncarnationId(Uuid.fromString("Am5Yse7GQxaw0b2alM74bP")).
+            setListeners(Arrays.asList(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9094))).
+            setSupportedFeatures(Collections.singletonMap("metadata.version",
+                VersionRange.of(MetadataVersion.IBP_3_3_IV3.featureLevel(), MetadataVersion.IBP_3_6_IV0.featureLevel()))).
+            setRack(Optional.of("rack3")).
+            setFenced(true).
+            setIsMigratingZkBroker(true).build());
 
         IMAGE3 = new ClusterImage(map3, cmap2);
     }
