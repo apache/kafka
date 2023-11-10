@@ -89,8 +89,8 @@ public class TopicBasedRemoteLogMetadataManagerTest {
         leaderTopicReplicas.add(2);
         assignedLeaderTopicReplicas.put(0, JavaConverters.asScalaBuffer(leaderTopicReplicas));
         remoteLogMetadataManagerHarness.createTopicWithAssignment(
-                leaderTopic, JavaConverters.mapAsScalaMap(assignedLeaderTopicReplicas),
-                remoteLogMetadataManagerHarness.listenerName());
+            leaderTopic, JavaConverters.mapAsScalaMap(assignedLeaderTopicReplicas),
+            remoteLogMetadataManagerHarness.listenerName());
 
         String followerTopic = "new-follower";
         HashMap<Object, Seq<Object>> assignedFollowerTopicReplicas = new HashMap<>();
@@ -101,8 +101,8 @@ public class TopicBasedRemoteLogMetadataManagerTest {
         followerTopicReplicas.add(0);
         assignedFollowerTopicReplicas.put(0, JavaConverters.asScalaBuffer(followerTopicReplicas));
         remoteLogMetadataManagerHarness.createTopicWithAssignment(
-                followerTopic, JavaConverters.mapAsScalaMap(assignedFollowerTopicReplicas),
-                remoteLogMetadataManagerHarness.listenerName());
+            followerTopic, JavaConverters.mapAsScalaMap(assignedFollowerTopicReplicas),
+            remoteLogMetadataManagerHarness.listenerName());
 
         final TopicIdPartition newLeaderTopicIdPartition = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition(leaderTopic, 0));
         final TopicIdPartition newFollowerTopicIdPartition = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition(followerTopic, 0));
@@ -111,23 +111,21 @@ public class TopicBasedRemoteLogMetadataManagerTest {
         // These messages would have been published to the respective metadata topic partitions but the ConsumerManager
         // has not yet been subscribing as they are not yet registered.
         RemoteLogSegmentMetadata leaderSegmentMetadata = new RemoteLogSegmentMetadata(new RemoteLogSegmentId(newLeaderTopicIdPartition, Uuid.randomUuid()),
-                0, 100, -1L, 0,
-                time.milliseconds(), SEG_SIZE, Collections.singletonMap(0, 0L));
-        Assertions.assertThrows(Exception.class, () -> topicBasedRlmm().addRemoteLogSegmentMetadata(leaderSegmentMetadata)
-                                                                       .get());
+                                                                                0, 100, -1L, 0,
+                                                                                time.milliseconds(), SEG_SIZE, Collections.singletonMap(0, 0L));
+        Assertions.assertThrows(Exception.class, () -> topicBasedRlmm().addRemoteLogSegmentMetadata(leaderSegmentMetadata).get());
 
         RemoteLogSegmentMetadata followerSegmentMetadata = new RemoteLogSegmentMetadata(new RemoteLogSegmentId(newFollowerTopicIdPartition, Uuid.randomUuid()),
-                0, 100, -1L, 0,
-                time.milliseconds(), SEG_SIZE, Collections.singletonMap(0, 0L));
-        Assertions.assertThrows(Exception.class, () -> topicBasedRlmm().addRemoteLogSegmentMetadata(followerSegmentMetadata)
-                                                                       .get());
+                                                                                0, 100, -1L, 0,
+                                                                                time.milliseconds(), SEG_SIZE, Collections.singletonMap(0, 0L));
+        Assertions.assertThrows(Exception.class, () -> topicBasedRlmm().addRemoteLogSegmentMetadata(followerSegmentMetadata).get());
 
         // `listRemoteLogSegments` will receive an exception as these topic partitions are not yet registered.
         Assertions.assertThrows(RemoteResourceNotFoundException.class, () -> topicBasedRlmm().listRemoteLogSegments(newLeaderTopicIdPartition));
         Assertions.assertThrows(RemoteResourceNotFoundException.class, () -> topicBasedRlmm().listRemoteLogSegments(newFollowerTopicIdPartition));
 
         topicBasedRlmm().onPartitionLeadershipChanges(Collections.singleton(newLeaderTopicIdPartition),
-                Collections.singleton(newFollowerTopicIdPartition));
+                                                      Collections.singleton(newFollowerTopicIdPartition));
 
         // RemoteLogSegmentMetadata events are already published, and topicBasedRlmm's consumer manager will start
         // fetching those events and build the cache.
