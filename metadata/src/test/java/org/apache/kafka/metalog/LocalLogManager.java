@@ -177,6 +177,11 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
         private final TreeMap<Long, LocalBatch> batches = new TreeMap<>();
 
         /**
+         * Maps committed offset to snapshot reader.
+         */
+        private final NavigableMap<Long, RawSnapshotReader> snapshots = new TreeMap<>();
+
+        /**
          * The current leader.
          */
         private LeaderAndEpoch leader = new LeaderAndEpoch(OptionalInt.empty(), 0);
@@ -191,11 +196,6 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
          * The initial max read offset which LocalLog instances will be configured with.
          */
         private long initialMaxReadOffset = Long.MAX_VALUE;
-
-        /**
-         * Maps committed offset to snapshot reader.
-         */
-        private NavigableMap<Long, RawSnapshotReader> snapshots = new TreeMap<>();
 
         public SharedLogData(Optional<RawSnapshotReader> snapshot) {
             if (snapshot.isPresent()) {
@@ -515,7 +515,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
      * result is half the records getting appended with leader election following that.
      * This is done to emulate having some of the records not getting committed.
      */
-    private AtomicBoolean resignAfterNonAtomicCommit = new AtomicBoolean(false);
+    private final AtomicBoolean resignAfterNonAtomicCommit = new AtomicBoolean(false);
 
     public LocalLogManager(LogContext logContext,
                            int nodeId,
@@ -827,7 +827,6 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
             // the leader epoch has already advanced. resign is a no op.
             log.debug("Ignoring call to resign from epoch {}. Either we are not the leader or the provided epoch is " +
                     "smaller than the current epoch {}", epoch, currentEpoch);
-            return;
         }
     }
 
