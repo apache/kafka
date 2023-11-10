@@ -153,13 +153,14 @@ public class IQv2VersionedStoreIntegrationTest {
         final VersionedRecord<Integer> result1 = queryResult.getResult();
         assertThat(result1.value(), is(expectedValue));
         assertThat(result1.timestamp(), is(expectedTimestamp));
-        assertThat(queryResult.getExecutionInfo(), is(empty()));    }
+        assertThat(queryResult.getExecutionInfo(), is(empty()));
+    }
 
     private void shouldVerifyGetNull(final Integer key, final Instant queryTimestamp) {
         VersionedKeyQuery<Integer, Integer> query = VersionedKeyQuery.withKey(key);
         query = query.asOf(queryTimestamp);
-        final StateQueryRequest<VersionedRecord<Integer>> request = StateQueryRequest.inStore(STORE_NAME).withQuery(query);
-        final StateQueryResult<VersionedRecord<Integer>> result = kafkaStreams.query(request);
+        final StateQueryRequest<VersionedRecord<Integer>> request = StateQueryRequest.inStore(STORE_NAME).withQuery(query).withPositionBound(PositionBound.at(INPUT_POSITION));
+        final StateQueryResult<VersionedRecord<Integer>> result = IntegrationTestUtils.iqv2WaitForResult(kafkaStreams, request);
         assertThat(result.getOnlyPartitionResult(), nullValue());
     }
 }

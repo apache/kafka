@@ -19,12 +19,20 @@ package org.apache.kafka.streams.query;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import org.apache.kafka.streams.state.VersionedRecord;
 import org.junit.Test;
 
 public class VersionedKeyQueryTest {
     @Test
     public void shouldThrowNPEWithNullKey() {
         final Exception exception = assertThrows(NullPointerException.class, () -> VersionedKeyQuery.withKey(null));
-        assertEquals("Key can not be null.", exception.getMessage());
+        assertEquals("key cannot be null.", exception.getMessage());
+    }
+
+    @Test
+    public void shouldThrowNPEWithNullAsOftimestamp() {
+        final VersionedKeyQuery<Integer, VersionedRecord<Integer>> query = VersionedKeyQuery.withKey(1);
+        final Exception exception = assertThrows(NullPointerException.class, () -> query.asOf(null));
+        assertEquals("asOf timestamp cannot be null.", exception.getMessage());
     }
 }

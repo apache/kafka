@@ -53,7 +53,7 @@ public final class VersionedKeyQuery<K, V> implements Query<VersionedRecord<V>> 
      * @throws NullPointerException if {@code key} is null
      */
     public static <K, V> VersionedKeyQuery<K, V> withKey(final K key) {
-        Objects.requireNonNull(key, "Key can not be null.");
+        Objects.requireNonNull(key, "key cannot be null.");
         return new VersionedKeyQuery<>(key, Optional.empty());
     }
 
@@ -65,7 +65,7 @@ public final class VersionedKeyQuery<K, V> implements Query<VersionedRecord<V>> 
      * @throws NullPointerException if {@code asOfTimestamp} is null
      */
     public VersionedKeyQuery<K, V> asOf(final Instant asOfTimestamp) {
-        Objects.requireNonNull(asOfTimestamp);
+        Objects.requireNonNull(asOfTimestamp, "asOf timestamp cannot be null.");
         return new VersionedKeyQuery<>(key, Optional.of(asOfTimestamp));
     }
 
