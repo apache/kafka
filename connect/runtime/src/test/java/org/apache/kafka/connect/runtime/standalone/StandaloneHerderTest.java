@@ -591,6 +591,7 @@ public class StandaloneHerderTest {
         ArgumentCaptor<TaskStatus> taskStatus = ArgumentCaptor.forClass(TaskStatus.class);
         verify(statusBackingStore).put(taskStatus.capture());
         assertEquals(AbstractStatus.State.RESTARTING, taskStatus.getValue().state());
+        assertEquals(taskId, taskStatus.getValue().id());
     }
 
     @Test
@@ -651,6 +652,8 @@ public class StandaloneHerderTest {
 
         verifyConnectorStatusRestart();
         verify(statusBackingStore).put(taskStatus.capture());
+        assertEquals(AbstractStatus.State.RESTARTING, taskStatus.getValue().state());
+        assertEquals(taskId, taskStatus.getValue().id());
     }
 
     @Test
