@@ -17,10 +17,7 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.internals.StoreFactory;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -31,38 +28,17 @@ import org.apache.kafka.streams.state.internals.VersionedKeyValueStoreBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
-
 /**
  * Materializes a key-value store as either a {@link TimestampedKeyValueStoreBuilder} or a
  * {@link VersionedKeyValueStoreBuilder} depending on whether the store is versioned or not.
  */
-public class KeyValueStoreMaterializer<K, V> implements StoreFactory {
+public class KeyValueStoreMaterializer<K, V> extends MaterializedStoreFactory<K, V, KeyValueStore<Bytes, byte[]>> {
     private static final Logger LOG = LoggerFactory.getLogger(KeyValueStoreMaterializer.class);
-
-    private final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materialized;
-    private final Set<String> connectedProcessorNames = new HashSet<>();
-
-    private Materialized.StoreType defaultStoreType
-            = Materialized.StoreType.parse(StreamsConfig.DEFAULT_DSL_STORE_DEFAULT);
 
     public KeyValueStoreMaterializer(
             final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materialized
     ) {
-        this.materialized = materialized;
-
-        // this condition will never be false; in the next PR we will
-        // remove the initialization of storeType from MaterializedInternal
-        if (materialized.storeType() != null) {
-            defaultStoreType = materialized.storeType;
-        }
-    }
-
-    @Override
-    public void configure(final StreamsConfig config) {
-        // in a follow-up PR, this will set the defaultStoreType to the configured value
+        super(materialized);
     }
 
     @Override
@@ -128,21 +104,6 @@ public class KeyValueStoreMaterializer<K, V> implements StoreFactory {
     }
 
     @Override
-    public Set<String> connectedProcessorNames() {
-        return connectedProcessorNames;
-    }
-
-    @Override
-    public boolean loggingEnabled() {
-        return materialized.loggingEnabled();
-    }
-
-    @Override
-    public String name() {
-        return materialized.storeName();
-    }
-
-    @Override
     public boolean isWindowStore() {
         return false;
     }
@@ -152,26 +113,4 @@ public class KeyValueStoreMaterializer<K, V> implements StoreFactory {
         return materialized.storeSupplier() instanceof VersionedBytesStoreSupplier;
     }
 
-    @Override
-    public Map<String, String> logConfig() {
-        return materialized.logConfig();
-    }
-
-    @Override
-    public StoreFactory withCachingDisabled() {
-        materialized.withCachingDisabled();
-        return this;
-    }
-
-    @Override
-    public StoreFactory withLoggingDisabled() {
-        materialized.withLoggingDisabled();
-        return this;
-    }
-
-    @Override
-    public boolean isCompatibleWith(final StoreFactory storeFactory) {
-        return (storeFactory instanceof KeyValueStoreMaterializer)
-                && ((KeyValueStoreMaterializer<?, ?>) storeFactory).materialized.equals(materialized);
-    }
 }

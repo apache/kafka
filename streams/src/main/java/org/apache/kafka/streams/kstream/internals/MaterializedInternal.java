@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.TopologyConfig;
@@ -56,6 +57,17 @@ public class MaterializedInternal<K, V, S extends StateStore> extends Materializ
                     storeType = topologyConfig.parseStoreType();
                 }
             }
+        }
+    }
+
+    public static StoreType parse(final String storeType) {
+        switch (storeType) {
+            case StreamsConfig.IN_MEMORY:
+                return StoreType.IN_MEMORY;
+            case StreamsConfig.ROCKS_DB:
+                return StoreType.ROCKS_DB;
+            default:
+                throw new IllegalStateException("Unexpected storeType: " + storeType);
         }
     }
 
