@@ -17,44 +17,41 @@
 package kafka.zk
 
 import kafka.security.authorizer.AclEntry.{WildcardHost, WildcardPrincipalString}
-import kafka.server.{ConfigType, ControllerRequestCompletionHandler, KafkaConfig}
+import kafka.server.{ConfigType, KafkaConfig}
 import kafka.test.{ClusterConfig, ClusterGenerator, ClusterInstance}
 import kafka.test.annotation.{AutoStart, ClusterConfigProperty, ClusterTemplate, ClusterTest, Type}
 import kafka.test.junit.ClusterTestExtensions
 import kafka.test.junit.ZkClusterInvocationContext.ZkClusterInstance
 import kafka.testkit.{KafkaClusterTestKit, TestKitNodes}
 import kafka.utils.{PasswordEncoder, TestUtils}
-import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.clients.admin._
+import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.acl.AclOperation.{DESCRIBE, READ, WRITE}
 import org.apache.kafka.common.acl.AclPermissionType.ALLOW
 import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding}
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
-import org.apache.kafka.common.errors.TimeoutException
-import org.apache.kafka.common.message.AllocateProducerIdsRequestData
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity}
-import org.apache.kafka.common.requests.{AllocateProducerIdsRequest, AllocateProducerIdsResponse}
 import org.apache.kafka.common.resource.PatternType.{LITERAL, PREFIXED}
 import org.apache.kafka.common.resource.ResourcePattern
 import org.apache.kafka.common.resource.ResourceType.TOPIC
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.security.scram.internals.ScramCredentialUtils
+import org.apache.kafka.common.serialization.StringSerializer
 import org.apache.kafka.common.utils.SecurityUtils
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
 import org.apache.kafka.metadata.authorizer.StandardAcl
 import org.apache.kafka.metadata.migration.ZkMigrationLeadershipState
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion, ProducerIdsBlock}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotEquals, assertNotNull, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotNull, assertTrue}
 import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.api.extension.ExtendWith
 import org.slf4j.LoggerFactory
 
 import java.util
-import java.util.concurrent.{CompletableFuture, TimeUnit}
+import java.util.concurrent.TimeUnit
 import java.util.{Properties, UUID}
-import scala.collection.Seq
 import scala.jdk.CollectionConverters._
 
 object ZkMigrationIntegrationTest {
@@ -363,8 +360,11 @@ class ZkMigrationIntegrationTest {
       kraftCluster.startup()
       val readyFuture = kraftCluster.controllers().values().asScala.head.controller.waitForReadyBrokers(3)
 
-      // Allocate a block of producer IDs while in ZK mode
-      val nextProducerId = sendAllocateProducerIds(zkCluster.asInstanceOf[ZkClusterInstance]).get(30, TimeUnit.SECONDS)
+//      // Allocate a block of producer IDs while in ZK mode
+//      val nextProducerId = sendAllocateProducerIds(zkCluster.asInstanceOf[ZkClusterInstance]).get(30, TimeUnit.SECONDS)
+      // Allocate a transactional producer ID while in ZK mode
+      allocateProducerId(zkCluster.bootstrapServers())
+      val producerIdBlock = readProducerIdBlock(zkClient)
 
       // Enable migration configs and restart brokers
       log.info("Restart brokers in migration mode")
@@ -395,8 +395,8 @@ class ZkMigrationIntegrationTest {
       log.info("Verifying metadata changes with ZK")
       verifyTopicConfigs(zkClient)
       verifyClientQuotas(zkClient)
-      val nextKRaftProducerId = sendAllocateProducerIds(zkCluster.asInstanceOf[ZkClusterInstance]).get(30, TimeUnit.SECONDS)
-      assertNotEquals(nextProducerId, nextKRaftProducerId)
+      allocateProducerId(zkCluster.bootstrapServers())
+      verifyProducerId(producerIdBlock, zkClient)
 
     } finally {
       shutdownInSequence(zkCluster, kraftCluster)
@@ -567,26 +567,24 @@ class ZkMigrationIntegrationTest {
     }
   }
 
-  def sendAllocateProducerIds(zkClusterInstance: ZkClusterInstance): CompletableFuture[Long] = {
-    val channel = zkClusterInstance.getUnderlying.brokers.head.clientToControllerChannelManager
-    val brokerId = zkClusterInstance.getUnderlying.brokers.head.config.brokerId
-    val brokerEpoch = zkClusterInstance.getUnderlying.brokers.head.replicaManager.brokerEpochSupplier.apply()
-    val request = new AllocateProducerIdsRequest.Builder(new AllocateProducerIdsRequestData()
-      .setBrokerId(brokerId)
-      .setBrokerEpoch(brokerEpoch))
+  def allocateProducerId(bootstrapServers: String): Unit = {
+    val props = new Properties()
+    props.put("bootstrap.servers", bootstrapServers)
+    props.put("transactional.id", "some-transaction-id")
+    val producer = new KafkaProducer[String, String](props, new StringSerializer(), new StringSerializer())
+    producer.initTransactions()
+    producer.beginTransaction()
+    producer.send(new ProducerRecord[String, String]("test", "", "one"))
+    producer.commitTransaction()
+    producer.flush()
+    producer.close()
+  }
 
-    val producerIdStart = new CompletableFuture[Long]()
-    channel.sendRequest(request, new ControllerRequestCompletionHandler() {
-        override def onTimeout(): Unit = {
-          producerIdStart.completeExceptionally(new TimeoutException("Request timed out"))
-        }
-
-        override def onComplete(response: ClientResponse): Unit = {
-          val body = response.responseBody().asInstanceOf[AllocateProducerIdsResponse]
-          producerIdStart.complete(body.data().producerIdStart())
-        }
-      })
-    producerIdStart
+  def verifyProducerId(firstProducerIdBlock: ProducerIdsBlock, zkClient: KafkaZkClient): Unit = {
+    TestUtils.retry(10000) {
+      val producerIdBlock = readProducerIdBlock(zkClient)
+      assertTrue(firstProducerIdBlock.firstProducerId() < producerIdBlock.firstProducerId())
+    }
   }
 
   def readProducerIdBlock(zkClient: KafkaZkClient): ProducerIdsBlock = {

@@ -264,7 +264,8 @@ public class ClusterConnectionStatesTest {
 
     @Test
     public void testSingleIP() throws UnknownHostException {
-        assertEquals(1, ClientUtils.resolve("localhost", singleIPHostResolver).size());
+        assertEquals(1, ClientUtils.resolve("localhost", singleIPHostResolver).size(),
+                "The host resolve is:" + ClientUtils.resolve("localhost", singleIPHostResolver));
 
         connectionStates.connecting(nodeId1, time.milliseconds(), "localhost");
         InetAddress currAddress = connectionStates.currentAddress(nodeId1);
