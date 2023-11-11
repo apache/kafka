@@ -23,11 +23,17 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataV
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
@@ -333,6 +339,9 @@ public class ConsumerGroupMemberTest {
         String clientHost = "clientHost";
         List<String> subscribedTopicNames = Arrays.asList("topic1", "topic2");
         String subscribedTopicRegex = "topic.*";
+        Map<Uuid, Set<Integer>> assignmentMap = new HashMap<>();
+        assignmentMap.put(Uuid.randomUuid(), new HashSet<>());
+        Assignment targetAssignment = new Assignment(assignmentMap);
         ConsumerGroupMember member = new ConsumerGroupMember.Builder(memberId)
             .updateWith(record)
             .setClientId(clientId)
@@ -343,7 +352,7 @@ public class ConsumerGroupMemberTest {
             .setSubscribedTopicRegex(subscribedTopicRegex)
             .build();
 
-        ConsumerGroupDescribeResponseData.Member consumerGroupDescribeMember = member.asConsumerGroupDescribeMember();
+        ConsumerGroupDescribeResponseData.Member consumerGroupDescribeMember = member.asConsumerGroupDescribeMember(targetAssignment);
 
         assertEquals(memberId, consumerGroupDescribeMember.memberId().toString());
         assertEquals(clientId, consumerGroupDescribeMember.clientId());
@@ -352,6 +361,15 @@ public class ConsumerGroupMemberTest {
         assertEquals(clientHost, consumerGroupDescribeMember.clientHost());
         assertEquals(subscribedTopicNames, consumerGroupDescribeMember.subscribedTopicNames());
         assertEquals(subscribedTopicRegex, consumerGroupDescribeMember.subscribedTopicRegex());
+        assertEquals(
+            new ConsumerGroupDescribeResponseData.Assignment()
+                .setTopicPartitions(targetAssignment.partitions().entrySet().stream().map(
+                    item -> new ConsumerGroupDescribeResponseData.TopicPartitions()
+                        .setTopicId(item.getKey())
+                        .setPartitions(new ArrayList<>(item.getValue()))
+                ).collect(Collectors.toList())),
+            consumerGroupDescribeMember.targetAssignment()
+        );
 
         assertEquals(assignedPartitions, consumerGroupDescribeMember.assignment().topicPartitions().get(0).partitions());
     }

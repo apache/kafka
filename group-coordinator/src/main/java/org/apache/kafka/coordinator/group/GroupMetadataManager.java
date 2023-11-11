@@ -469,12 +469,10 @@ public class GroupMetadataManager {
                 describedGroup.setGroupState(consumerGroup.stateAsString())
                     .setGroupEpoch(consumerGroup.groupEpoch())
                     .setAssignmentEpoch(consumerGroup.assignmentEpoch())
-                    .setAssignorName(
-                        consumerGroup.preferredServerAssignor().isPresent() ?
-                            consumerGroup.preferredServerAssignor().get() : null
-                    );
+                    .setAssignorName(consumerGroup.preferredServerAssignor().isPresent() ?
+                        consumerGroup.preferredServerAssignor().get() : "");
                 consumerGroup.members().forEach(
-                    (id, member) -> describedGroup.members().add(member.asConsumerGroupDescribeMember())
+                    (id, member) -> describedGroup.members().add(member.asConsumerGroupDescribeMember(consumerGroup.targetAssignment(member.memberId())))
                 );
             }
 

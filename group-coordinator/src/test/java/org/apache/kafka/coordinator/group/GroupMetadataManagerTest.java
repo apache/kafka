@@ -8690,8 +8690,8 @@ public class GroupMetadataManagerTest {
         ConsumerGroupDescribeResponseData.DescribedGroup describedGroup = new ConsumerGroupDescribeResponseData.DescribedGroup();
         describedGroup.setGroupEpoch(epoch + 1);
         describedGroup.setGroupId(consumerGroupId);
-        describedGroup.setMembers(Collections.singletonList(memberBuilder.build().asConsumerGroupDescribeMember()));
-        describedGroup.setAssignorName(null);
+        describedGroup.setMembers(Collections.singletonList(memberBuilder.build().asConsumerGroupDescribeMember(new Assignment(Collections.emptyMap()))));
+        describedGroup.setAssignorName("");
         describedGroup.setGroupState("assigning");
         List<ConsumerGroupDescribeResponseData.DescribedGroup> expected = Collections.singletonList(
             describedGroup

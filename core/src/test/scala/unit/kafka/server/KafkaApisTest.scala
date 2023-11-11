@@ -6474,8 +6474,10 @@ class KafkaApisTest {
 
     val future = new CompletableFuture[util.List[ConsumerGroupDescribeResponseData.DescribedGroup]]()
     when(groupCoordinator.consumerGroupDescribe(
-      any[RequestContext],
-      any[util.List[String]]
+      requestChannelRequest.context,
+      consumerGroupDescribeRequestData.groupIds
+//      any[RequestContext],
+//      any[util.List[String]]
     )).thenReturn(future)
 
     createKafkaApis(

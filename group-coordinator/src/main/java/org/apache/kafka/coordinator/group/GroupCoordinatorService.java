@@ -536,7 +536,10 @@ public class GroupCoordinatorService implements GroupCoordinator {
         List<String> groupIds
     ) {
         if (!isActive.get()) {
-            return FutureUtils.failedFuture(Errors.COORDINATOR_NOT_AVAILABLE.exception());
+            return CompletableFuture.completedFuture(ConsumerGroupDescribeRequest.getErrorDescribedGroupList(
+                groupIds,
+                Errors.COORDINATOR_NOT_AVAILABLE
+            ));
         }
 
         final List<CompletableFuture<List<ConsumerGroupDescribeResponseData.DescribedGroup>>> futures =

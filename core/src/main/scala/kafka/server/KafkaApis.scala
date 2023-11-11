@@ -3716,12 +3716,10 @@ class KafkaApis(val requestChannel: RequestChannel,
         }
       }
 
-      val future = groupCoordinator.consumerGroupDescribe(
+      groupCoordinator.consumerGroupDescribe(
         request.context,
         authorizedGroups.asJava
-      )
-
-      future.handle[Unit] { (results, exception) =>
+      ).handle[Unit] { (results, exception) =>
         if (exception != null) {
           requestHelper.sendMaybeThrottle(request, consumerGroupDescribeRequest.getErrorResponse(exception))
         } else {

@@ -547,23 +547,30 @@ public class ConsumerGroupMember {
             ')';
     }
 
-    public ConsumerGroupDescribeResponseData.Member asConsumerGroupDescribeMember() {
+    public ConsumerGroupDescribeResponseData.Member asConsumerGroupDescribeMember(Assignment targetAssignment) {
         return new ConsumerGroupDescribeResponseData.Member()
             .setMemberEpoch(memberEpoch)
             .setMemberId(Uuid.fromString(memberId))
             .setAssignment(new ConsumerGroupDescribeResponseData.Assignment()
-                .setTopicPartitions(
-                    assignedPartitions.entrySet().stream().map(
-                        item -> new ConsumerGroupDescribeResponseData.TopicPartitions()
-                            .setTopicId(item.getKey())
-                            .setPartitions(new ArrayList<>(item.getValue()))
-                    ).collect(Collectors.toList())))
+                .setTopicPartitions(topicPartitionsFromMap(assignedPartitions)))
+            .setTargetAssignment(new ConsumerGroupDescribeResponseData.Assignment()
+                .setTopicPartitions(topicPartitionsFromMap(targetAssignment.partitions())))
             .setClientHost(clientHost)
             .setClientId(clientId)
             .setInstanceId(instanceId)
             .setRackId(rackId)
             .setSubscribedTopicNames(subscribedTopicNames)
             .setSubscribedTopicRegex(subscribedTopicRegex);
+    }
+
+    private static List<ConsumerGroupDescribeResponseData.TopicPartitions> topicPartitionsFromMap(
+        Map<Uuid, Set<Integer>> partitions
+    ) {
+        return partitions.entrySet().stream().map(
+            item -> new ConsumerGroupDescribeResponseData.TopicPartitions()
+                .setTopicId(item.getKey())
+                .setPartitions(new ArrayList<>(item.getValue()))
+        ).collect(Collectors.toList());
     }
 
     @Override
