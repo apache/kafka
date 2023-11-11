@@ -61,7 +61,7 @@ public class MetricKey implements MetricKeyable {
         return this;
     }
 
-    public String getName() {
+    public String name() {
         return name;
     }
 
@@ -83,12 +83,12 @@ public class MetricKey implements MetricKeyable {
         if (getClass() != obj.getClass())
             return false;
         MetricKey other = (MetricKey) obj;
-        return this.getName().equals(other.getName()) && this.tags().equals(other.tags());
+        return this.name().equals(other.name()) && this.tags().equals(other.tags());
     }
 
     @Override
     public String toString() {
-        return "MetricKey {name=" + getName() + ", tags=" + tags() + "}";
+        return "MetricKey {name=" + name() + ", tags=" + tags() + "}";
     }
 
 }
