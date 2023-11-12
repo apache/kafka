@@ -108,7 +108,7 @@ public class WindowStoreMaterializer<K, V> extends MaterializedStoreFactory<K, V
     }
 
     @Override
-    public long retentionPeriod() {
+    public final long retentionPeriod() {
         return materialized.retention() != null
                 ? materialized.retention().toMillis()
                 : windows.size() + windows.gracePeriodMs();
