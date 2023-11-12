@@ -18,7 +18,6 @@ package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -71,17 +70,6 @@ public class Materialized<K, V, S extends StateStore> {
     public enum StoreType {
         ROCKS_DB,
         IN_MEMORY;
-
-        public static StoreType parse(final String storeType) {
-            switch (storeType) {
-                case StreamsConfig.IN_MEMORY:
-                    return StoreType.IN_MEMORY;
-                case StreamsConfig.ROCKS_DB:
-                    return StoreType.ROCKS_DB;
-                default:
-                    throw new IllegalStateException("Unexpected storeType: " + storeType);
-            }
-        }
     }
 
     private Materialized(final StoreSupplier<S> storeSupplier) {

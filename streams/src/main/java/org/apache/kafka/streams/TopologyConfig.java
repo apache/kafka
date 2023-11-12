@@ -23,6 +23,7 @@ import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.internals.StreamsConfigUtils;
+import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 
 import org.apache.kafka.streams.processor.internals.namedtopology.KafkaStreamsNamedTopologyWrapper;
@@ -218,7 +219,7 @@ public class TopologyConfig extends AbstractConfig {
     }
 
     public Materialized.StoreType parseStoreType() {
-        return Materialized.StoreType.parse(storeType);
+        return MaterializedInternal.parse(storeType);
     }
 
     public boolean isNamedTopology() {
