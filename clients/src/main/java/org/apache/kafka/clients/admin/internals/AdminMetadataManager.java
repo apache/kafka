@@ -18,6 +18,7 @@
 package org.apache.kafka.clients.admin.internals;
 
 import org.apache.kafka.clients.MetadataUpdater;
+import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
@@ -122,6 +123,16 @@ public class AdminMetadataManager {
         @Override
         public void handleSuccessfulResponse(RequestHeader requestHeader, long now, MetadataResponse metadataResponse) {
             // Do nothing
+        }
+
+        @Override
+        public boolean isBootstrapped() {
+            return false;
+        }
+
+        @Override
+        public boolean tryBootstrap(long nowMs, NetworkClient.BootstrapState bootstrapState) {
+            return false;
         }
 
         @Override

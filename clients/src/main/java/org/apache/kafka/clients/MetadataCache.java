@@ -214,7 +214,7 @@ public class MetadataCache {
         }
         return new MetadataCache(null, nodes, Collections.emptyList(),
                 Collections.emptySet(), Collections.emptySet(), Collections.emptySet(),
-                null, Collections.emptyMap(), Cluster.bootstrap(addresses));
+                null, Collections.emptyMap(), Cluster.bootstrap(nodes.values()));
     }
 
     static MetadataCache empty() {

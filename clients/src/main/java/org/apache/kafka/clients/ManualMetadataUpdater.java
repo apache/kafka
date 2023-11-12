@@ -82,6 +82,16 @@ public class ManualMetadataUpdater implements MetadataUpdater {
     }
 
     @Override
+    public boolean isBootstrapped() {
+        return false;
+    }
+
+    @Override
+    public boolean tryBootstrap(long nowMs, NetworkClient.BootstrapState bootstrapState) {
+        return false;
+    }
+
+    @Override
     public void close() {
     }
 }

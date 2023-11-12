@@ -17,6 +17,8 @@
 package kafka.server;
 
 import org.apache.kafka.clients.ApiVersions;
+import org.apache.kafka.clients.ClientDnsLookup;
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.ManualMetadataUpdater;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.common.Reconfigurable;
@@ -69,6 +71,10 @@ public class NetworkUtils {
         );
 
         String clientId = prefix + "-client-" + config.nodeId();
+        NetworkClient.BootstrapConfiguration bootstrapConfig = new NetworkClient.BootstrapConfiguration(
+                config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG),
+                ClientDnsLookup.forConfig(config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG)),
+                config.getLong(CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG));
         return new NetworkClient(
             selector,
             new ManualMetadataUpdater(),
@@ -81,6 +87,7 @@ public class NetworkUtils {
             config.requestTimeoutMs(),
             config.connectionSetupTimeoutMs(),
             config.connectionSetupTimeoutMaxMs(),
+            bootstrapConfig,
             time,
             false,
             new ApiVersions(),

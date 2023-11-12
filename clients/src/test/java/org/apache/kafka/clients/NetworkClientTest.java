@@ -82,16 +82,18 @@ public class NetworkClientTest {
     protected final long reconnectBackoffMaxMsTest = 10 * 10000;
     protected final long connectionSetupTimeoutMsTest = 5 * 1000;
     protected final long connectionSetupTimeoutMaxMsTest = 127 * 1000;
+    private final long bootstrapTimeoutMs = 5 * 1000;
     private final int reconnectBackoffExpBase = ClusterConnectionStates.RECONNECT_BACKOFF_EXP_BASE;
     private final double reconnectBackoffJitter = ClusterConnectionStates.RECONNECT_BACKOFF_JITTER;
     private final TestMetadataUpdater metadataUpdater = new TestMetadataUpdater(Collections.singletonList(node));
-    private final NetworkClient client = createNetworkClient(reconnectBackoffMaxMsTest);
-    private final NetworkClient clientWithNoExponentialBackoff = createNetworkClient(reconnectBackoffMsTest);
+    private final NetworkClient client = createBootstrappedNetworkClient(reconnectBackoffMaxMsTest);
+    private final NetworkClient clientWithNoExponentialBackoff = createBootstrappedNetworkClient(reconnectBackoffMsTest);
     private final NetworkClient clientWithStaticNodes = createNetworkClientWithStaticNodes();
     private final NetworkClient clientWithNoVersionDiscovery = createNetworkClientWithNoVersionDiscovery();
 
     private static ArrayList<InetAddress> initialAddresses;
     private static ArrayList<InetAddress> newAddresses;
+    private static List<String> bootstrapServer = Arrays.asList("127.0.0.1:8000");
 
     static {
         try {
@@ -110,10 +112,22 @@ public class NetworkClientTest {
         }
     }
 
-    private NetworkClient createNetworkClient(long reconnectBackoffMaxMs) {
-        return new NetworkClient(selector, metadataUpdater, "mock", Integer.MAX_VALUE,
-                reconnectBackoffMsTest, reconnectBackoffMaxMs, 64 * 1024, 64 * 1024,
-                defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest, time, true, new ApiVersions(), new LogContext());
+    private NetworkClient createBootstrappedNetworkClient(long reconnectBackoffMaxMs) {
+        return new NetworkClient(
+                selector,
+                metadataUpdater,
+                "mock",
+                Integer.MAX_VALUE,
+                reconnectBackoffMsTest,
+                reconnectBackoffMaxMs,
+                64 * 1024, 64 * 1024,
+                defaultRequestTimeoutMs,
+                connectionSetupTimeoutMsTest,
+                connectionSetupTimeoutMaxMsTest,
+                time,
+                true,
+                new ApiVersions(),
+                new LogContext());
     }
 
     private NetworkClient createNetworkClientWithMultipleNodes(long reconnectBackoffMaxMs, long connectionSetupTimeoutMsTest, int nodeNumber) {
@@ -141,6 +155,11 @@ public class NetworkClientTest {
                 reconnectBackoffMsTest, reconnectBackoffMaxMsTest,
                 64 * 1024, 64 * 1024, defaultRequestTimeoutMs,
                 connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest, time, false, new ApiVersions(), new LogContext());
+    }
+
+    private NetworkClient.BootstrapConfiguration bootstrapConfig(boolean shouldLookup) {
+        ClientDnsLookup dnsLookup = shouldLookup ? ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY : ClientDnsLookup.USE_ALL_DNS_IPS;
+        return new NetworkClient.BootstrapConfiguration(bootstrapServer, dnsLookup, bootstrapTimeoutMs);
     }
 
     @BeforeEach
@@ -462,14 +481,14 @@ public class NetworkClientTest {
     /**
      * This is a helper method that will execute two produce calls. The first call is expected to work and the
      * second produce call is intentionally made to emulate a request timeout. In the case that a timeout occurs
-     * during a request, we want to ensure that we {@link Metadata#requestUpdate() request a metadata update} so that
+     * during a request, we want to ensure that we {@link Metadata#requestUpdate(boolean)}  request a metadata update} so that
      * on a subsequent invocation of {@link NetworkClient#poll(long, long) poll}, the metadata request will be sent.
      *
      * <p/>
      *
      * The {@link MetadataUpdater} has a specific method to handle
      * {@link NetworkClient.DefaultMetadataUpdater#handleServerDisconnect(long, String, Optional) server disconnects}
-     * which is where we {@link Metadata#requestUpdate() request a metadata update}. This test helper method ensures
+     * which is where we {@link Metadata#requestUpdate(boolean)}  request a metadata update}. This test helper method ensures
      * that is invoked by checking {@link Metadata#updateRequested()} after the simulated timeout.
      *
      * @param requestTimeoutMs Timeout in ms
@@ -995,7 +1014,7 @@ public class NetworkClientTest {
         NetworkClient client = new NetworkClient(metadataUpdater, null, selector, "mock", Integer.MAX_VALUE,
                 reconnectBackoffMsTest, reconnectBackoffMaxMsTest, 64 * 1024, 64 * 1024,
                 defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest,
-                time, false, new ApiVersions(), null, new LogContext(), mockHostResolver);
+                bootstrapConfig(false), time, false, new ApiVersions(), null, new LogContext(), mockHostResolver);
 
         // Connect to one the initial addresses, then change the addresses and disconnect
         client.ready(node, time.milliseconds());
@@ -1039,7 +1058,7 @@ public class NetworkClientTest {
         NetworkClient client = new NetworkClient(metadataUpdater, null, selector, "mock", Integer.MAX_VALUE,
                 reconnectBackoffMsTest, reconnectBackoffMaxMsTest, 64 * 1024, 64 * 1024,
                 defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest,
-                time, false, new ApiVersions(), null, new LogContext(), mockHostResolver);
+                bootstrapConfig(false), time, false, new ApiVersions(), null, new LogContext(), mockHostResolver);
 
         // First connection attempt should fail
         client.ready(node, time.milliseconds());
@@ -1080,7 +1099,7 @@ public class NetworkClientTest {
         NetworkClient client = new NetworkClient(metadataUpdater, null, selector, "mock", Integer.MAX_VALUE,
                 reconnectBackoffMsTest, reconnectBackoffMaxMsTest, 64 * 1024, 64 * 1024,
                 defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest,
-                time, false, new ApiVersions(), null, new LogContext(), mockHostResolver);
+                bootstrapConfig(false), time, false, new ApiVersions(), null, new LogContext(), mockHostResolver);
 
         // Connect to one the initial addresses, then change the addresses and disconnect
         client.ready(node, time.milliseconds());
@@ -1217,6 +1236,11 @@ public class NetworkClientTest {
             maybeFatalException.ifPresent(exception -> {
                 failure = exception;
             });
+        }
+
+        @Override
+        public boolean tryBootstrap(final long nowMs, final NetworkClient.BootstrapState bootstrapState) {
+            return true;
         }
 
         public KafkaException getAndClearFailure() {

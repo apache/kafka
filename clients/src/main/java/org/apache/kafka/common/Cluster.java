@@ -213,8 +213,12 @@ public final class Cluster {
         int nodeId = -1;
         for (InetSocketAddress address : addresses)
             nodes.add(new Node(nodeId--, address.getHostString(), address.getPort()));
+        return bootstrap(nodes);
+    }
+
+    public static Cluster bootstrap(Collection<Node> nodes) {
         return new Cluster(null, true, nodes, new ArrayList<>(0),
-            Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), null, Collections.emptyMap());
+                Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), null, Collections.emptyMap());
     }
 
     /**
