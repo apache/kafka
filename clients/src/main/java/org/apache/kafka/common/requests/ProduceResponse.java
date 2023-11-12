@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.ProduceResponseData;
 import org.apache.kafka.common.message.ProduceResponseData.LeaderIdAndEpoch;
@@ -73,7 +72,7 @@ public class ProduceResponse extends AbstractResponse {
      */
     @Deprecated
     public ProduceResponse(Map<TopicPartition, PartitionResponse> responses) {
-        this(responses, DEFAULT_THROTTLE_TIME, Collections.emptyList());
+        this(responses, DEFAULT_THROTTLE_TIME);
     }
 
     /**
@@ -84,23 +83,10 @@ public class ProduceResponse extends AbstractResponse {
      */
     @Deprecated
     public ProduceResponse(Map<TopicPartition, PartitionResponse> responses, int throttleTimeMs) {
-        this(toData(responses, throttleTimeMs, Collections.emptyList()));
+        this(toData(responses, throttleTimeMs));
     }
 
-    /**
-     * Constructor for the latest version
-     * This is deprecated in favor of using the ProduceResponseData constructor, KafkaApis should switch to that
-     * in KAFKA-10730
-     * @param responses Produced data grouped by topic-partition
-     * @param throttleTimeMs Time in milliseconds the response was throttled
-     * @param nodeEndpoints List of node endpoints
-     */
-    @Deprecated
-    public ProduceResponse(Map<TopicPartition, PartitionResponse> responses, int throttleTimeMs, List<Node> nodeEndpoints) {
-        this(toData(responses, throttleTimeMs, nodeEndpoints));
-    }
-
-    private static ProduceResponseData toData(Map<TopicPartition, PartitionResponse> responses, int throttleTimeMs, List<Node> nodeEndpoints) {
+    private static ProduceResponseData toData(Map<TopicPartition, PartitionResponse> responses, int throttleTimeMs) {
         ProduceResponseData data = new ProduceResponseData().setThrottleTimeMs(throttleTimeMs);
         responses.forEach((tp, response) -> {
             ProduceResponseData.TopicProduceResponse tpr = data.responses().find(tp.topic());
@@ -124,12 +110,6 @@ public class ProduceResponse extends AbstractResponse {
                             .setBatchIndexErrorMessage(e.message))
                         .collect(Collectors.toList())));
         });
-        nodeEndpoints.forEach(endpoint -> data.nodeEndpoints()
-                .add(new ProduceResponseData.NodeEndpoint()
-                        .setNodeId(endpoint.id())
-                        .setHost(endpoint.host())
-                        .setPort(endpoint.port())
-                        .setRack(endpoint.rack())));
         return data;
     }
 
