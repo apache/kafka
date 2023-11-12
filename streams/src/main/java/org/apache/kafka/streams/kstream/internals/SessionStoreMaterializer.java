@@ -27,7 +27,7 @@ import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.RocksDbTimeOrderedSessionBytesStoreSupplier;
 
-public final class SessionStoreMaterializer<K, V> extends MaterializedStoreFactory<K, V, SessionStore<Bytes, byte[]>> {
+public class SessionStoreMaterializer<K, V> extends MaterializedStoreFactory<K, V, SessionStore<Bytes, byte[]>> {
 
     private final MaterializedInternal<K, V, SessionStore<Bytes, byte[]>> materialized;
     private final SessionWindows sessionWindows;
@@ -107,7 +107,7 @@ public final class SessionStoreMaterializer<K, V> extends MaterializedStoreFacto
     }
 
     @Override
-    public long retentionPeriod() {
+    public final long retentionPeriod() {
         return materialized.retention() != null
                 ? materialized.retention().toMillis()
                 : sessionWindows.inactivityGap() + sessionWindows.gracePeriodMs();

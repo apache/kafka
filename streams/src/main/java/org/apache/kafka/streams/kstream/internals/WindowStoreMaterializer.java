@@ -28,7 +28,7 @@ import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.internals.RocksDbIndexedTimeOrderedWindowBytesStoreSupplier;
 
-public final class WindowStoreMaterializer<K, V> extends MaterializedStoreFactory<K, V, WindowStore<Bytes, byte[]>> {
+public class WindowStoreMaterializer<K, V> extends MaterializedStoreFactory<K, V, WindowStore<Bytes, byte[]>> {
 
     private final Windows<?> windows;
     private final EmitStrategy emitStrategy;
@@ -108,7 +108,7 @@ public final class WindowStoreMaterializer<K, V> extends MaterializedStoreFactor
     }
 
     @Override
-    public long retentionPeriod() {
+    public final long retentionPeriod() {
         return materialized.retention() != null
                 ? materialized.retention().toMillis()
                 : windows.size() + windows.gracePeriodMs();
