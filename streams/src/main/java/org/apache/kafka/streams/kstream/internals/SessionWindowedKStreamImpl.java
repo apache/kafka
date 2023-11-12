@@ -32,15 +32,8 @@ import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.WindowedSerdes;
 import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
-import org.apache.kafka.streams.processor.internals.StoreBuilderWrapper;
-import org.apache.kafka.streams.processor.internals.StoreFactory;
-import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.SessionStore;
-import org.apache.kafka.streams.state.StoreBuilder;
-import org.apache.kafka.streams.state.Stores;
-import org.apache.kafka.streams.state.internals.RocksDbTimeOrderedSessionBytesStoreSupplier;
 
-import java.time.Duration;
 import java.util.Objects;
 import java.util.Set;
 
@@ -117,7 +110,7 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
         final String aggregateName = new NamedInternal(named).orElseGenerateWithPrefix(builder, AGGREGATE_NAME);
         return aggregateBuilder.build(
             new NamedInternal(aggregateName),
-            materialize(materializedInternal),
+            new SessionStoreMaterializer<>(materializedInternal, windows, emitStrategy),
             new KStreamSessionWindowAggregate<>(
                 windows,
                 materializedInternal.storeName(),
@@ -167,7 +160,7 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
         final String reduceName = new NamedInternal(named).orElseGenerateWithPrefix(builder, REDUCE_NAME);
         return aggregateBuilder.build(
             new NamedInternal(reduceName),
-            materialize(materializedInternal),
+            new SessionStoreMaterializer<>(materializedInternal, windows, emitStrategy),
             new KStreamSessionWindowAggregate<>(
                 windows,
                 materializedInternal.storeName(),
@@ -226,7 +219,7 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
 
         return aggregateBuilder.build(
             new NamedInternal(aggregateName),
-            materialize(materializedInternal),
+            new SessionStoreMaterializer<>(materializedInternal, windows, emitStrategy),
             new KStreamSessionWindowAggregate<>(
                 windows,
                 materializedInternal.storeName(),
@@ -238,67 +231,6 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
             materializedInternal.keySerde() != null ? new WindowedSerdes.SessionWindowedSerde<>(materializedInternal.keySerde()) : null,
             materializedInternal.valueSerde(),
             false);
-    }
-
-    private <VR> StoreFactory materialize(final MaterializedInternal<K, VR, SessionStore<Bytes, byte[]>> materialized) {
-        SessionBytesStoreSupplier supplier = (SessionBytesStoreSupplier) materialized.storeSupplier();
-        if (supplier == null) {
-            final long retentionPeriod = materialized.retention() != null ?
-                materialized.retention().toMillis() : windows.inactivityGap() + windows.gracePeriodMs();
-
-            if ((windows.inactivityGap() + windows.gracePeriodMs()) > retentionPeriod) {
-                throw new IllegalArgumentException("The retention period of the session store "
-                                                       + materialized.storeName()
-                                                       + " must be no smaller than the session inactivity gap plus the"
-                                                       + " grace period."
-                                                       + " Got gap=[" + windows.inactivityGap() + "],"
-                                                       + " grace=[" + windows.gracePeriodMs() + "],"
-                                                       + " retention=[" + retentionPeriod + "]");
-            }
-
-            switch (materialized.storeType()) {
-                case IN_MEMORY:
-                    supplier = Stores.inMemorySessionStore(
-                        materialized.storeName(),
-                        Duration.ofMillis(retentionPeriod)
-                    );
-                    break;
-                case ROCKS_DB:
-                    supplier = emitStrategy.type() == EmitStrategy.StrategyType.ON_WINDOW_CLOSE ?
-                        new RocksDbTimeOrderedSessionBytesStoreSupplier(
-                            materialized.storeName(),
-                            retentionPeriod,
-                            true) :
-                        Stores.persistentSessionStore(
-                            materialized.storeName(),
-                            Duration.ofMillis(retentionPeriod)
-                        );
-                    break;
-                default:
-                    throw new IllegalStateException("Unknown store type: " + materialized.storeType());
-            }
-        }
-
-        final StoreBuilder<SessionStore<K, VR>> builder = Stores.sessionStoreBuilder(
-            supplier,
-            materialized.keySerde(),
-            materialized.valueSerde()
-        );
-
-        if (materialized.loggingEnabled()) {
-            builder.withLoggingEnabled(materialized.logConfig());
-        } else {
-            builder.withLoggingDisabled();
-        }
-
-        // do not enable cache if the emit final strategy is used
-        if (materialized.cachingEnabled() && emitStrategy.type() != EmitStrategy.StrategyType.ON_WINDOW_CLOSE) {
-            builder.withCachingEnabled();
-        } else {
-            builder.withCachingDisabled();
-        }
-
-        return new StoreBuilderWrapper(builder);
     }
 
     private Merger<K, V> mergerForAggregator(final Aggregator<K, V, V> aggregator) {
