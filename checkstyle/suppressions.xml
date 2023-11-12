@@ -185,7 +185,7 @@
               files="(KafkaStreams|KStreamImpl|KTableImpl|InternalTopologyBuilder|StreamsPartitionAssignor|StreamThread|IQv2StoreIntegrationTest|KStreamImplTest|RocksDBStore).java"/>
 
     <suppress checks="MethodLength"
-              files="KTableImpl.java"/>
+              files="(KTableImpl|IQv2StoreIntegrationTest).java"/>
 
     <suppress checks="ParameterNumber"
               files="StreamThread.java"/>

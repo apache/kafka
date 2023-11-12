@@ -47,8 +47,10 @@ import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.streams.state.internals.StoreQueryUtils.QueryHandler;
 import org.apache.kafka.streams.state.internals.metrics.StateStoreMetrics;
 
+import java.time.Instant;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
@@ -390,12 +392,17 @@ public class MeteredWindowStore<K, V>
         final QueryResult<R> result;
         final WindowRangeQuery<K, V> typedQuery = (WindowRangeQuery<K, V>) query;
         // There's no store API for open time ranges
-        if (typedQuery.getTimeFrom().isPresent() && typedQuery.getTimeTo().isPresent()) {
+        final Optional<Instant> oldTimeFrom = typedQuery.getTimeFrom();
+        final Optional<Instant> oldTimeTo = typedQuery.getTimeTo();
+        Optional<Instant> timeFrom = typedQuery.timeFrom();
+        Optional<Instant> timeTo = typedQuery.timeTo();
+        if (!typedQuery.key().isPresent() && oldTimeFrom.isPresent() && oldTimeTo.isPresent()) {
             final WindowRangeQuery<Bytes, byte[]> rawKeyQuery =
-                WindowRangeQuery.withWindowStartRange(
-                    typedQuery.getTimeFrom().get(),
-                    typedQuery.getTimeTo().get()
-                );
+                WindowRangeQuery.<Bytes, byte[]>withKeyRange(
+                    keyBytes(typedQuery.lowerKeyBound().orElse(null)),
+                    keyBytes(typedQuery.upperKeyBound().orElse(null)))
+                    .fromTime(oldTimeFrom.get())
+                    .toTime(oldTimeTo.get());
             final QueryResult<KeyValueIterator<Windowed<Bytes>, byte[]>> rawResult =
                 wrapped().query(
                     rawKeyQuery,
@@ -413,14 +420,49 @@ public class MeteredWindowStore<K, V>
                         time
                     );
                 final QueryResult<MeteredWindowedKeyValueIterator<K, V>> typedQueryResult =
-                    InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, typedResult);
+                        InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, typedResult);
+                result = (QueryResult<R>) typedQueryResult;
+            } else {
+                // the generic type doesn't matter, since failed queries have no result set.
+                result = (QueryResult<R>) rawResult;
+            }
+        } else if (!typedQuery.key().isPresent() && !oldTimeFrom.isPresent() && !oldTimeTo.isPresent()) {
+            if (!typedQuery.timeFrom().isPresent()) {
+                timeFrom = Optional.of(Instant.EPOCH);
+            }
+            if (!typedQuery.timeTo().isPresent()) {
+                timeTo = Optional.ofNullable(Instant.ofEpochMilli(Long.MAX_VALUE));
+            }
+            final WindowRangeQuery<Bytes, byte[]> rawKeyQuery =
+                WindowRangeQuery.<Bytes, byte[]>withKeyRange(
+                    keyBytes(typedQuery.lowerKeyBound().orElse(null)),
+                    keyBytes(typedQuery.upperKeyBound().orElse(null)))
+                    .fromTime(timeFrom.get())
+                    .toTime(timeTo.get());
+            final QueryResult<KeyValueIterator<Windowed<Bytes>, byte[]>> rawResult =
+                wrapped().query(
+                    rawKeyQuery,
+                    positionBound,
+                    config
+                );
+            if (rawResult.isSuccess()) {
+                final MeteredWindowedKeyValueIterator<K, V> typedResult =
+                    new MeteredWindowedKeyValueIterator<>(
+                        rawResult.getResult(),
+                        fetchSensor,
+                        streamsMetrics,
+                        serdes::keyFrom,
+                        getDeserializeValue(serdes, wrapped()),
+                        time
+                    );
+                final QueryResult<MeteredWindowedKeyValueIterator<K, V>> typedQueryResult =
+                        InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, typedResult);
                 result = (QueryResult<R>) typedQueryResult;
             } else {
                 // the generic type doesn't matter, since failed queries have no result set.
                 result = (QueryResult<R>) rawResult;
             }
         } else {
-
             result = QueryResult.forFailure(
                 FailureReason.UNKNOWN_QUERY_TYPE,
                 "This store (" + getClass() + ") doesn't know how to"

@@ -297,10 +297,21 @@ public final class StoreQueryUtils {
                 // There's no store API for open time ranges
                 if (windowRangeQuery.getTimeFrom().isPresent() && windowRangeQuery.getTimeTo().isPresent()) {
                     final KeyValueIterator<Windowed<Bytes>, byte[]> iterator =
-                        windowStore.fetchAll(
+                        windowStore.fetch(
+                            windowRangeQuery.lowerKeyBound().orElse(null),
+                            windowRangeQuery.upperKeyBound().orElse(null),
                             windowRangeQuery.getTimeFrom().get(),
                             windowRangeQuery.getTimeTo().get()
                         );
+                    return (QueryResult<R>) QueryResult.forResult(iterator);
+                } else if (!windowRangeQuery.getTimeFrom().isPresent() && !windowRangeQuery.getTimeTo().isPresent()) {
+                    final KeyValueIterator<Windowed<Bytes>, byte[]> iterator =
+                        windowStore.fetch(
+                            windowRangeQuery.lowerKeyBound().orElse(null),
+                            windowRangeQuery.upperKeyBound().orElse(null),
+                            windowRangeQuery.timeFrom().get(),
+                            windowRangeQuery.timeTo().get()
+                    );
                     return (QueryResult<R>) QueryResult.forResult(iterator);
                 } else {
                     return QueryResult.forFailure(
@@ -324,9 +335,9 @@ public final class StoreQueryUtils {
                 (WindowRangeQuery<Bytes, byte[]>) query;
             final SessionStore<Bytes, byte[]> sessionStore = (SessionStore<Bytes, byte[]>) store;
             try {
-                if (windowRangeQuery.getKey().isPresent()) {
+                if (windowRangeQuery.key().isPresent()) {
                     final KeyValueIterator<Windowed<Bytes>, byte[]> iterator = sessionStore.fetch(
-                        windowRangeQuery.getKey().get());
+                        windowRangeQuery.key().get());
                     return (QueryResult<R>) QueryResult.forResult(iterator);
                 } else {
                     return QueryResult.forFailure(
