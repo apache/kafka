@@ -344,10 +344,15 @@ public class ClusterControlManagerTest {
             build();
         clusterControl.activate();
         clusterControl.replay(brokerRecord, 100L);
-        assertEquals(new BrokerRegistration(1, 100,
-                Uuid.fromString("fPZv1VBsRFmnlRvmGcOW9w"), Collections.singletonMap("PLAINTEXT",
-                new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "example.com", 9092)),
-                Collections.emptyMap(), Optional.of("arack"), true, false),
+        assertEquals(new BrokerRegistration.Builder().
+            setId(1).
+            setEpoch(100).
+            setIncarnationId(Uuid.fromString("fPZv1VBsRFmnlRvmGcOW9w")).
+            setListeners(Collections.singletonMap("PLAINTEXT",
+                new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "example.com", 9092))).
+            setRack(Optional.of("arack")).
+            setFenced(true).
+            setInControlledShutdown(false).build(),
             clusterControl.brokerRegistrations().get(1));
         assertEquals(100L, clusterControl.registerBrokerRecordOffset(brokerRecord.brokerId()).getAsLong());
         UnregisterBrokerRecord unregisterRecord = new UnregisterBrokerRecord().

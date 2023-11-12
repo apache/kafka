@@ -151,7 +151,7 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
   ): Unit = {
     if (isKRaftTest()) {
       resource(createAdminClient(brokers, listenerName, adminClientConfig)) { admin =>
-        TestUtils.createOffsetsTopicWithAdmin(admin, brokers)
+        TestUtils.createOffsetsTopicWithAdmin(admin, brokers, controllerServers)
       }
     } else {
       TestUtils.createOffsetsTopic(zkClient, servers)
@@ -177,6 +177,7 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
           admin = admin,
           topic = topic,
           brokers = brokers,
+          controllers = controllerServers,
           numPartitions = numPartitions,
           replicationFactor = replicationFactor,
           topicConfig = topicConfig
@@ -210,7 +211,8 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
           admin = admin,
           topic = topic,
           replicaAssignment = partitionReplicaAssignment,
-          brokers = brokers
+          brokers = brokers,
+          controllers = controllerServers
         )
       }
     } else {
@@ -231,7 +233,8 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
         TestUtils.deleteTopicWithAdmin(
           admin = admin,
           topic = topic,
-          brokers = aliveBrokers)
+          brokers = aliveBrokers,
+          controllers = controllerServers)
       }
     } else {
       adminZkClient.deleteTopic(topic)

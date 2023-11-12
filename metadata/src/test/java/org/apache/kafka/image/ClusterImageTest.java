@@ -67,30 +67,33 @@ public class ClusterImageTest {
 
     static {
         Map<Integer, BrokerRegistration> map1 = new HashMap<>();
-        map1.put(0, new BrokerRegistration(0,
-            1000,
-            Uuid.fromString("vZKYST0pSA2HO5x_6hoO2Q"),
-            Arrays.asList(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9092)),
-            Collections.singletonMap("foo", VersionRange.of((short) 1, (short) 3)),
-            Optional.empty(),
-            true,
-            false));
-        map1.put(1, new BrokerRegistration(1,
-            1001,
-            Uuid.fromString("U52uRe20RsGI0RvpcTx33Q"),
-            Arrays.asList(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9093)),
-            Collections.singletonMap("foo", VersionRange.of((short) 1, (short) 3)),
-            Optional.empty(),
-            false,
-            false));
-        map1.put(2, new BrokerRegistration(2,
-            123,
-            Uuid.fromString("hr4TVh3YQiu3p16Awkka6w"),
-            Arrays.asList(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9093)),
-            Collections.emptyMap(),
-            Optional.of("arack"),
-            false,
-            false));
+        map1.put(0, new BrokerRegistration.Builder().
+            setId(0).
+            setEpoch(1000).
+            setIncarnationId(Uuid.fromString("vZKYST0pSA2HO5x_6hoO2Q")).
+            setListeners(Arrays.asList(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9092))).
+            setSupportedFeatures(Collections.singletonMap("foo", VersionRange.of((short) 1, (short) 3))).
+            setRack(Optional.empty()).
+            setFenced(true).
+            setInControlledShutdown(false).build());
+        map1.put(1, new BrokerRegistration.Builder().
+            setId(1).
+            setEpoch(1001).
+            setIncarnationId(Uuid.fromString("U52uRe20RsGI0RvpcTx33Q")).
+            setListeners(Arrays.asList(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9093))).
+            setSupportedFeatures(Collections.singletonMap("foo", VersionRange.of((short) 1, (short) 3))).
+            setRack(Optional.empty()).
+            setFenced(false).
+            setInControlledShutdown(false).build());
+        map1.put(2, new BrokerRegistration.Builder().
+            setId(2).
+            setEpoch(123).
+            setIncarnationId(Uuid.fromString("hr4TVh3YQiu3p16Awkka6w")).
+            setListeners(Arrays.asList(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9093))).
+            setSupportedFeatures(Collections.emptyMap()).
+            setRack(Optional.of("arack")).
+            setFenced(false).
+            setInControlledShutdown(false).build());
         Map<Integer, ControllerRegistration> cmap1 = new HashMap<>();
         cmap1.put(1000, new ControllerRegistration.Builder().
             setId(1000).
@@ -131,22 +134,24 @@ public class ClusterImageTest {
         RecordTestUtils.replayAll(DELTA1, DELTA1_RECORDS);
 
         Map<Integer, BrokerRegistration> map2 = new HashMap<>();
-        map2.put(0, new BrokerRegistration(0,
-            1000,
-            Uuid.fromString("vZKYST0pSA2HO5x_6hoO2Q"),
-            Arrays.asList(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9092)),
-            Collections.singletonMap("foo", VersionRange.of((short) 1, (short) 3)),
-            Optional.empty(),
-            false,
-            true));
-        map2.put(1, new BrokerRegistration(1,
-            1001,
-            Uuid.fromString("U52uRe20RsGI0RvpcTx33Q"),
-            Arrays.asList(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9093)),
-            Collections.singletonMap("foo", VersionRange.of((short) 1, (short) 3)),
-            Optional.empty(),
-            true,
-            false));
+        map2.put(0, new BrokerRegistration.Builder().
+            setId(0).
+            setEpoch(1000).
+            setIncarnationId(Uuid.fromString("vZKYST0pSA2HO5x_6hoO2Q")).
+            setListeners(Arrays.asList(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9092))).
+            setSupportedFeatures(Collections.singletonMap("foo", VersionRange.of((short) 1, (short) 3))).
+            setRack(Optional.empty()).
+            setFenced(false).
+            setInControlledShutdown(true).build());
+        map2.put(1, new BrokerRegistration.Builder().
+            setId(1).
+            setEpoch(1001).
+            setIncarnationId(Uuid.fromString("U52uRe20RsGI0RvpcTx33Q")).
+            setListeners(Arrays.asList(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9093))).
+            setSupportedFeatures(Collections.singletonMap("foo", VersionRange.of((short) 1, (short) 3))).
+            setRack(Optional.empty()).
+            setFenced(true).
+            setInControlledShutdown(false).build());
         Map<Integer, ControllerRegistration> cmap2 = new HashMap<>(cmap1);
         cmap2.put(1001, new ControllerRegistration.Builder().
             setId(1001).
