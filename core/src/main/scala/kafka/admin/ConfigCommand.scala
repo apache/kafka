@@ -55,7 +55,7 @@ import scala.collection._
  *     <li> broker: --broker <broker-id> OR --entity-type brokers --entity-name <broker-id>
  *     <li> broker-logger: --broker-logger <broker-id> OR --entity-type broker-loggers --entity-name <broker-id>
  *     <li> ip: --ip <ip> OR --entity-type ips --entity-name <ip>
- *     <li> client-metrics: --client-metrics <subscription-id> OR --entity-type client-metrics --entity-name <subscription-id>
+ *     <li> client-metrics: --client-metrics <name> OR --entity-type client-metrics --entity-name <name>
  * </ul>
  * --entity-type <users|clients|brokers|ips> --entity-default may be specified in place of --entity-type <users|clients|brokers|ips> --entity-name <entityName>
  * when describing or altering default configuration for users, clients, brokers, or ips, respectively.
@@ -814,7 +814,7 @@ object ConfigCommand extends Logging {
     val entityType = parser.accepts("entity-type", "Type of entity (topics/clients/users/brokers/broker-loggers/ips/client-metrics)")
       .withRequiredArg
       .ofType(classOf[String])
-    val entityName = parser.accepts("entity-name", "Name of entity (topic name/client id/user principal name/broker id/ip/client metrics subscription name)")
+    val entityName = parser.accepts("entity-name", "Name of entity (topic name/client id/user principal name/broker id/ip/client metrics)")
       .withRequiredArg
       .ofType(classOf[String])
     val entityDefault = parser.accepts("entity-default", "Default entity name for clients/users/brokers/ips (applies to corresponding entity type in command line)")

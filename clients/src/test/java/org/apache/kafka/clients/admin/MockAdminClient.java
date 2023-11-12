@@ -826,11 +826,11 @@ public class MockAdminClient extends AdminClient {
                 throw new UnknownTopicOrPartitionException("Resource " + resource + " not found.");
             }
             case CLIENT_METRICS: {
-                String subscriptionName = resource.name();
-                if (subscriptionName.isEmpty()) {
-                    throw new InvalidRequestException("Empty subscription name");
+                String resourceName = resource.name();
+                if (resourceName.isEmpty()) {
+                    throw new InvalidRequestException("Empty resource name");
                 }
-                return toConfigObject(clientMetricsConfigs.get(subscriptionName));
+                return toConfigObject(clientMetricsConfigs.get(resourceName));
             }
             default:
                 throw new UnsupportedOperationException("Not implemented yet");
@@ -926,17 +926,17 @@ public class MockAdminClient extends AdminClient {
                 return null;
             }
             case CLIENT_METRICS: {
-                String subscriptionName = resource.name();
+                String resourceName = resource.name();
 
-                if (subscriptionName.isEmpty()) {
-                    return new InvalidRequestException("Empty subscription name");
+                if (resourceName.isEmpty()) {
+                    return new InvalidRequestException("Empty resource name");
                 }
 
-                if (!clientMetricsConfigs.containsKey(subscriptionName)) {
-                    clientMetricsConfigs.put(subscriptionName, new HashMap<>());
+                if (!clientMetricsConfigs.containsKey(resourceName)) {
+                    clientMetricsConfigs.put(resourceName, new HashMap<>());
                 }
 
-                HashMap<String, String> newMap = new HashMap<>(clientMetricsConfigs.get(subscriptionName));
+                HashMap<String, String> newMap = new HashMap<>(clientMetricsConfigs.get(resourceName));
                 for (AlterConfigOp op : ops) {
                     switch (op.opType()) {
                         case SET:
@@ -950,7 +950,7 @@ public class MockAdminClient extends AdminClient {
                                 "Unsupported op type " + op.opType());
                     }
                 }
-                clientMetricsConfigs.put(subscriptionName, newMap);
+                clientMetricsConfigs.put(resourceName, newMap);
                 return null;
             }
             default:
