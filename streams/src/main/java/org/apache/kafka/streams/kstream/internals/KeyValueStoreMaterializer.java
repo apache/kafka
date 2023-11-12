@@ -32,6 +32,7 @@ import org.slf4j.LoggerFactory;
  * Materializes a key-value store as either a {@link TimestampedKeyValueStoreBuilder} or a
  * {@link VersionedKeyValueStoreBuilder} depending on whether the store is versioned or not.
  */
+@SuppressWarnings("this-escape")
 public class KeyValueStoreMaterializer<K, V> extends MaterializedStoreFactory<K, V, KeyValueStore<Bytes, byte[]>> {
     private static final Logger LOG = LoggerFactory.getLogger(KeyValueStoreMaterializer.class);
 

@@ -27,6 +27,7 @@ import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.RocksDbTimeOrderedSessionBytesStoreSupplier;
 
+@SuppressWarnings("this-escape")
 public class SessionStoreMaterializer<K, V> extends MaterializedStoreFactory<K, V, SessionStore<Bytes, byte[]>> {
 
     private final MaterializedInternal<K, V, SessionStore<Bytes, byte[]>> materialized;
