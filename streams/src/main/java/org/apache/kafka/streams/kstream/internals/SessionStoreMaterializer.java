@@ -107,7 +107,7 @@ public class SessionStoreMaterializer<K, V> extends MaterializedStoreFactory<K, 
     }
 
     @Override
-    public long retentionPeriod() {
+    public final long retentionPeriod() {
         return materialized.retention() != null
                 ? materialized.retention().toMillis()
                 : sessionWindows.inactivityGap() + sessionWindows.gracePeriodMs();
