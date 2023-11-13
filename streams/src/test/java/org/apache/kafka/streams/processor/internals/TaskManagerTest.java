@@ -106,7 +106,7 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.common.utils.Utils.union;
 import static org.apache.kafka.streams.processor.internals.TopologyMetadata.UNNAMED_TOPOLOGY;
-import static org.apache.kafka.test.MockStandbyUpdateListener.UPDATE_SUSPENDED  ;
+import static org.apache.kafka.test.MockStandbyUpdateListener.UPDATE_SUSPENDED;
 import static org.apache.kafka.test.StreamsTestUtils.TaskBuilder.standbyTask;
 import static org.apache.kafka.test.StreamsTestUtils.TaskBuilder.statefulTask;
 import static org.easymock.EasyMock.anyObject;
