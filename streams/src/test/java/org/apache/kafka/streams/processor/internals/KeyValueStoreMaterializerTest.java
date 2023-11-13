@@ -25,7 +25,6 @@ import org.apache.kafka.streams.kstream.internals.KeyValueStoreMaterializer;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.VersionedBytesStore;
 import org.apache.kafka.streams.state.VersionedBytesStoreSupplier;
@@ -231,15 +230,13 @@ public class KeyValueStoreMaterializerTest {
     private static TimestampedKeyValueStore<String, String> getTimestampedStore(
         final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materialized) {
         final KeyValueStoreMaterializer<String, String> materializer = new KeyValueStoreMaterializer<>(materialized);
-        final StoreBuilder<?> builder = materializer.materialize();
-        return (TimestampedKeyValueStore<String, String>) builder.build();
+        return (TimestampedKeyValueStore<String, String>) ((StoreFactory) materializer).build();
     }
 
     @SuppressWarnings("unchecked")
     private static VersionedKeyValueStore<String, String> getVersionedStore(
         final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materialized) {
         final KeyValueStoreMaterializer<String, String> materializer = new KeyValueStoreMaterializer<>(materialized);
-        final StoreBuilder<?> builder = materializer.materialize();
-        return (VersionedKeyValueStore<String, String>) builder.build();
+        return (VersionedKeyValueStore<String, String>) ((StoreFactory) materializer).build();
     }
 }
