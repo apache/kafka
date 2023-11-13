@@ -216,7 +216,16 @@ public class SaslServerAuthenticator implements Authenticator {
 
     private SaslServer createSaslKerberosServer(final AuthenticateCallbackHandler saslServerCallbackHandler, final Map<String, ?> configs, Subject subject) throws IOException {
         // server is using a JAAS-authenticated subject: determine service principal name and hostname from kafka server's subject.
-        final String servicePrincipal = SaslClientAuthenticator.firstPrincipal(subject);
+        final String servicePrincipal;
+        if (subject.getPrincipals().isEmpty()) {
+            String serviceName = (String)configs.get("kerberos.service.name");
+            if (serviceName == null) serviceName = "kafka";
+            String serviceRealm = (String)configs.get("kerberos.service.realm");
+            if (serviceRealm == null) serviceRealm = "DEFAULT";
+            servicePrincipal = serviceName + "@" + serviceRealm;
+        } else {
+            servicePrincipal = SaslClientAuthenticator.firstPrincipal(subject);
+        }
         KerberosName kerberosName;
         try {
             kerberosName = KerberosName.parse(servicePrincipal);
