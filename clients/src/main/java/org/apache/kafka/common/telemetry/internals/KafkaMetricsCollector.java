@@ -146,7 +146,7 @@ public class KafkaMetricsCollector implements MetricsCollector {
     }
 
     // Visible for testing
-    public KafkaMetricsCollector(MetricNamingStrategy<MetricName> metricNamingStrategy, Time time) {
+    KafkaMetricsCollector(MetricNamingStrategy<MetricName> metricNamingStrategy, Time time) {
         this.metricNamingStrategy = metricNamingStrategy;
         this.time = time;
         this.ledger = new StateLedger();
