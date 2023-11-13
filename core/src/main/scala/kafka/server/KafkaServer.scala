@@ -196,6 +196,7 @@ class KafkaServer(
   def kafkaController: KafkaController = _kafkaController
 
   var lifecycleManager: BrokerLifecycleManager = _
+  private var raftManager: KafkaRaftManager[ApiMessageAndVersion] = _
 
   @volatile var brokerEpochManager: ZkBrokerEpochManager = _
 
@@ -413,7 +414,7 @@ class KafkaServer(
           // If the ZK broker is in migration mode, start up a RaftManager to learn about the new KRaft controller
           val controllerQuorumVotersFuture = CompletableFuture.completedFuture(
             RaftConfig.parseVoterConnections(config.quorumVoters))
-          val raftManager = new KafkaRaftManager[ApiMessageAndVersion](
+          raftManager = new KafkaRaftManager[ApiMessageAndVersion](
             metaPropsEnsemble.clusterId().get(),
             config,
             new MetadataRecordSerde,
@@ -1007,6 +1008,9 @@ class KafkaServer(
 
         // Clear all reconfigurable instances stored in DynamicBrokerConfig
         config.dynamicConfig.clear()
+
+        if (raftManager != null)
+          CoreUtils.swallow(raftManager.shutdown(), this)
 
         if (lifecycleManager != null) {
           lifecycleManager.close()
