@@ -23,7 +23,7 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * A LastValueTracker uses a ConcurrentMap to maintain historic values for a given key, and return
+ * A LastValueTracker uses a ConcurrentHashMap to maintain historic values for a given key, and return
  * a previous value and an Instant for that value.
  *
  * @param <T> The type of the value.
