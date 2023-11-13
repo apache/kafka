@@ -17,7 +17,6 @@
 package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.consumer.internals.HeartbeatRequestManager;
-import org.apache.kafka.clients.consumer.internals.Topic;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.internals.CachedSupplier;
 import org.apache.kafka.clients.consumer.internals.CommitRequestManager;
@@ -217,7 +216,7 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
     }
 
     private void process(final TopicMetadataApplicationEvent event) {
-        final CompletableFuture<Map<Topic, List<PartitionInfo>>> future =
+        final CompletableFuture<Map<String, List<PartitionInfo>>> future =
                 requestManagers.topicMetadataRequestManager.requestTopicMetadata(Optional.of(event.topic()));
         event.chain(future);
     }

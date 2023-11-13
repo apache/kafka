@@ -199,7 +199,7 @@ public class ConsumerNetworkThreadTest {
 
     @Test
     void testFetchTopicMetadata() {
-        applicationEventsQueue.add(new TopicMetadataApplicationEvent(new Topic("topic")));
+        applicationEventsQueue.add(new TopicMetadataApplicationEvent("topic"));
         consumerNetworkThread.runOnce();
         verify(applicationEventProcessor).process(any(TopicMetadataApplicationEvent.class));
     }
