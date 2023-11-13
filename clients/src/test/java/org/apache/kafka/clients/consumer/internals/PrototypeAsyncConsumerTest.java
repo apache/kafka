@@ -57,7 +57,6 @@ import static java.util.Collections.singleton;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -414,7 +413,7 @@ public class PrototypeAsyncConsumerTest {
     }
 
     private void assertNoPendingWakeup(final WakeupTrigger wakeupTrigger) {
-        assertNull(wakeupTrigger.getPendingTask());
+        assertFalse(wakeupTrigger.hasPendingTask());
     }
 
     private HashMap<TopicPartition, OffsetAndMetadata> mockTopicPartitionOffset() {

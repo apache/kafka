@@ -24,7 +24,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
-import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -43,7 +43,7 @@ public class WakeupTriggerTest {
         wakeupTrigger.setActiveTask(task);
         wakeupTrigger.wakeup();
         assertWakeupExceptionIsThrown(task);
-        assertNull(wakeupTrigger.getPendingTask());
+        assertFalse(wakeupTrigger.hasPendingTask());
     }
 
     @Test
@@ -52,7 +52,7 @@ public class WakeupTriggerTest {
         CompletableFuture<Void> task = new CompletableFuture<>();
         wakeupTrigger.setActiveTask(task);
         assertWakeupExceptionIsThrown(task);
-        assertNull(wakeupTrigger.getPendingTask());
+        assertFalse(wakeupTrigger.hasPendingTask());
     }
 
     @Test
@@ -60,7 +60,7 @@ public class WakeupTriggerTest {
         CompletableFuture<Void> task = new CompletableFuture<>();
         wakeupTrigger.setActiveTask(task);
         wakeupTrigger.clearActiveTask();
-        assertNull(wakeupTrigger.getPendingTask());
+        assertFalse(wakeupTrigger.hasPendingTask());
     }
 
     private void assertWakeupExceptionIsThrown(final CompletableFuture<?> future) {

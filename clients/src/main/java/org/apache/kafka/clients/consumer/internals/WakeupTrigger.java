@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.WakeupException;
 
@@ -24,25 +25,125 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * Ensures blocking APIs can be woken up by the consumer.wakeup().
+ * Ensures blocking APIs can be woken up by {@link Consumer#wakeup()}.
  */
-public class WakeupTrigger {
-    private final AtomicReference<Wakeupable> pendingTask = new AtomicReference<>(null);
+class WakeupTrigger {
+
+    private final static Object FAIL_NEXT_MARKER = new Object();
+    private final AtomicReference<Object> activeTask = new AtomicReference<>(null);
 
     /**
-     * Wakeup a pending task.  If there isn't any pending task, return a WakeupFuture, so that the subsequent call
-     * would know wakeup was previously called.
-     * <p>
-     * If there are active tasks, complete it with WakeupException, then unset pending task (return null here.
-     * If the current task has already been woken-up, do nothing.
+     * Wakeup a pending task.
+     *
+     * <p/>
+     *
+     * There are three cases that can happen when this method is invoked:
+     *
+     * <ul>
+     *     <li>
+     *         If there is no <em>active</em> task from a previous call to {@code setActiveTask}, we set an
+     *         internal indicator that the <em>next</em> attempt to start a long-running task (via a call to
+     *         {@link #setActiveTask(CompletableFuture)}) will fail with a {@link WakeupException}.
+     *     </li>
+     *     <li>
+     *         If there is an <em>active</em> task (i.e. there was a previous call to
+     *         {@link #setActiveTask(CompletableFuture)} for a long-running task), fail it via
+     *         {@link CompletableFuture#completeExceptionally(Throwable)} and then clear the <em>active</em> task.
+     *     </li>
+     *     <li>
+     *         If there is already an pending wakeup from a previous call to {@link Consumer#wakeup()}, do nothing.
+     *         We keep the internal state as is so that the future calls to {@link #setActiveTask(CompletableFuture)}
+     *         will fail as expected.
+     *     </li>
+     * </ul>
      */
-    public void wakeup() {
-        pendingTask.getAndUpdate(task -> {
+    void wakeup() {
+        activeTask.getAndUpdate(existingTask -> {
+            if (existingTask == null) {
+                // If there isn't an existing task, return our marker, so that the subsequent call will
+                // know wakeup was previously called.
+                return FAIL_NEXT_MARKER;
+            } else if (existingTask instanceof CompletableFuture<?>) {
+                // If there is an existing "active" task, complete it with WakeupException.
+                CompletableFuture<?> active = (CompletableFuture<?>) existingTask;
+                active.completeExceptionally(new WakeupException());
+
+                // We return a null here to effectively unset the "active" task.
+                return null;
+            } else {
+                // This is the case where the existing task is the wakeup marker. So the user has apparently
+                // called Consumer.wakeup() more than once.
+                return existingTask;
+            }
+        });
+    }
+
+    /**
+     * This method should be called before execution a blocking operation in the {@link Consumer}. This will
+     * store an internal reference to the given <em>active</em> {@link CompletableFuture task} that can be
+     * {@link CompletableFuture#completeExceptionally(Throwable) forcibly failed} if the user invokes the
+     * {@link Consumer#wakeup()} call before or during its execution.
+     *
+     * <p/>
+     *
+     * There are three cases that can happen when this method is invoked:
+     *
+     * <ul>
+     *     <li>
+     *         If there is no <em>active</em> task from a previous call to {@code setActiveTask} <em>and</em> no
+     *         previous calls to {@link #wakeup()}, set the given {@link CompletableFuture} as the
+     *         <em>active</em> task.
+     *     </li>
+     *     <li>
+     *         If there was a previous call to {@link #wakeup()}, the given {@link CompletableFuture task} will fail
+     *         via {@link CompletableFuture#completeExceptionally(Throwable)} and the <em>active</em> task will be
+     *         cleared.
+     *     </li>
+     *     <li>
+     *         If there is already an <em>active</em> task from a previous call to {@code setActiveTask},
+     *         a {@link KafkaException} will immediately be thrown.
+     *     </li>
+     * </ul>
+     *
+     * <p/>
+     *
+     * <em>Note</em>: the expected use of this method is to pair it with calls to {@link #clearActiveTask()}. That is,
+     * callers should usually invoke this function at the beginning of a {@code try} clause to set the <em>active</em>
+     * task and then invoke {@link #clearActiveTask()} in the {@code finally} clause to release it.
+     *
+     * @param currentTask {@link CompletableFuture Task} to set as the <em>active</em> task
+     */
+    void setActiveTask(final CompletableFuture<?> currentTask) {
+        Objects.requireNonNull(currentTask, "currentTask cannot be null");
+        activeTask.getAndUpdate(task -> {
             if (task == null) {
-                return new WakeupFuture();
-            } else if (task instanceof ActiveFuture) {
-                ActiveFuture active = (ActiveFuture) task;
-                active.future().completeExceptionally(new WakeupException());
+                return currentTask;
+            } else if (task == FAIL_NEXT_MARKER) {
+                currentTask.completeExceptionally(new WakeupException());
+                return null;
+            } else {
+                // last active state is still active
+                throw new KafkaException("Last active task is still active");
+            }
+        });
+    }
+
+    /**
+     * This method should be called after execution of a blocking operation in the {@link Consumer}. This will
+     * release the internal reference to the current <em>active</em> {@link CompletableFuture task}.
+     *
+     * <p/>
+     *
+     * <em>Note</em>: the expected use of this method is to pair it with calls to
+     * {@link #setActiveTask(CompletableFuture)}. That is, callers should usually invoke the
+     * {@link #setActiveTask(CompletableFuture)} method at the beginning of a {@code try} clause to set the
+     * <em>active</em> task and then invoke this method in the {@code finally} clause to release it.
+     */
+    void clearActiveTask() {
+        activeTask.getAndUpdate(task -> {
+            if (task == null) {
+                return null;
+            } else if (task instanceof CompletableFuture<?>) {
                 return null;
             } else {
                 return task;
@@ -50,59 +151,8 @@ public class WakeupTrigger {
         });
     }
 
-    /**
-     *     If there is no pending task, set the pending task active.
-     *     If wakeup was called before setting an active task, the current task will complete exceptionally with
-     *     WakeupException right
-     *     away.
-     *     if there is an active task, throw exception.
-     * @param currentTask
-     * @param <T>
-     * @return
-     */
-    public <T> CompletableFuture<T> setActiveTask(final CompletableFuture<T> currentTask) {
-        Objects.requireNonNull(currentTask, "currentTask cannot be null");
-        pendingTask.getAndUpdate(task -> {
-            if (task == null) {
-                return new ActiveFuture(currentTask);
-            } else if (task instanceof WakeupFuture) {
-                currentTask.completeExceptionally(new WakeupException());
-                return null;
-            }
-            // last active state is still active
-            throw new KafkaException("Last active task is still active");
-        });
-        return currentTask;
+    boolean hasPendingTask() {
+        Object o = activeTask.get();
+        return o != null;
     }
-
-    public void clearActiveTask() {
-        pendingTask.getAndUpdate(task -> {
-            if (task == null) {
-                return null;
-            } else if (task instanceof ActiveFuture) {
-                return null;
-            }
-            return task;
-        });
-    }
-
-    Wakeupable getPendingTask() {
-        return pendingTask.get();
-    }
-
-    interface Wakeupable { }
-
-    static class ActiveFuture implements Wakeupable {
-        private final CompletableFuture<?> future;
-
-        public ActiveFuture(final CompletableFuture<?> future) {
-            this.future = future;
-        }
-
-        public CompletableFuture<?> future() {
-            return future;
-        }
-    }
-
-    static class WakeupFuture implements Wakeupable { }
 }
