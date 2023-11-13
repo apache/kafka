@@ -79,7 +79,7 @@ class TransactionsExpirationTest extends KafkaServerTestHarness {
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
   def testBumpTransactionalEpochAfterInvalidProducerIdMapping(quorum: String): Unit = {
     producer.initTransactions()
 
@@ -119,7 +119,7 @@ class TransactionsExpirationTest extends KafkaServerTestHarness {
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
   def testTransactionAfterProducerIdExpires(quorum: String): Unit = {
     producer.initTransactions()
 
@@ -215,6 +215,10 @@ class TransactionsExpirationTest extends KafkaServerTestHarness {
     serverProps.put(KafkaConfig.TransactionsRemoveExpiredTransactionalIdCleanupIntervalMsProp, "500")
     serverProps.put(KafkaConfig.ProducerIdExpirationMsProp, "5000")
     serverProps.put(KafkaConfig.ProducerIdExpirationCheckIntervalMsProp, "500")
+    if (isNewGroupCoordinatorEnabled()) {
+      serverProps.put(KafkaConfig.UnstableApiVersionsEnableProp, "true")
+      serverProps.put(KafkaConfig.NewGroupCoordinatorEnableProp, "true")
+    }
     serverProps
   }
 }
