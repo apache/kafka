@@ -69,6 +69,7 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
+import org.mockito.Answers;
 import org.mockito.InOrder;
 import org.mockito.Mockito;
 import org.mockito.junit.MockitoJUnit;
@@ -105,6 +106,7 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.common.utils.Utils.union;
 import static org.apache.kafka.streams.processor.internals.TopologyMetadata.UNNAMED_TOPOLOGY;
+import static org.apache.kafka.test.MockStandbyUpdateListener.UPDATE_SUSPENDED  ;
 import static org.apache.kafka.test.StreamsTestUtils.TaskBuilder.standbyTask;
 import static org.apache.kafka.test.StreamsTestUtils.TaskBuilder.statefulTask;
 import static org.easymock.EasyMock.anyObject;
@@ -142,6 +144,7 @@ import static org.mockito.Mockito.mock;
 @RunWith(EasyMockRunner.class)
 public class TaskManagerTest {
 
+    private final String storeName = "store";
     private final String topic1 = "topic1";
     private final String topic2 = "topic2";
 
@@ -204,6 +207,10 @@ public class TaskManagerTest {
     private StandbyTaskCreator standbyTaskCreator;
     @org.mockito.Mock
     private Admin adminClient;
+    @org.mockito.Mock
+    private ProcessorStateManager stateManager;
+    @org.mockito.Mock(answer = Answers.RETURNS_DEEP_STUBS)
+    private ProcessorStateManager.StateStoreMetadata stateStore;
     final StateUpdater stateUpdater = Mockito.mock(StateUpdater.class);
     final DefaultTaskManager schedulingTaskManager = Mockito.mock(DefaultTaskManager.class);
 
@@ -4936,6 +4943,11 @@ public class TaskManagerTest {
         when(standbyTaskCreator.createTasks(taskId00Assignment)).thenReturn(singletonList(standbyTask));
         when(activeTaskCreator.createActiveTaskFromStandby(Mockito.eq(standbyTask), Mockito.eq(taskId00Partitions), any()))
             .thenReturn(activeTask);
+        when(standbyTask.stateManager()).thenReturn(stateManager);
+        when(stateManager.storeMetadata(t1p0)).thenReturn(stateStore);
+        when(stateStore.store().name()).thenReturn(storeName);
+        when(stateStore.offset()).thenReturn(4L);
+        when(stateStore.endOffset()).thenReturn(20L);
 
         replay(consumer);
 
@@ -4944,6 +4956,8 @@ public class TaskManagerTest {
 
         Mockito.verify(activeTaskCreator, times(2)).createTasks(any(), Mockito.eq(emptyMap()));
         Mockito.verify(standbyTaskCreator).createTasks(Collections.emptyMap());
+        assertEquals(storeName, standbyCallback.capturedStore(UPDATE_SUSPENDED));
+        assertEquals(t1p0, standbyCallback.updatePartition);
     }
 
     @Test
