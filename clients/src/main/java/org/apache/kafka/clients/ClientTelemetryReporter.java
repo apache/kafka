@@ -45,7 +45,6 @@ import org.apache.kafka.common.telemetry.internals.KafkaMetricsCollector;
 import org.apache.kafka.common.telemetry.internals.MetricKeyable;
 import org.apache.kafka.common.telemetry.internals.MetricsCollector;
 import org.apache.kafka.common.telemetry.internals.MetricsEmitter;
-import org.apache.kafka.common.telemetry.internals.MetricsProvider;
 import org.apache.kafka.common.telemetry.internals.SinglePointMetric;
 import org.apache.kafka.common.telemetry.internals.TelemetryMetricNamingConvention;
 import org.apache.kafka.common.utils.Utils;
@@ -114,7 +113,7 @@ public class ClientTelemetryReporter implements MetricsReporter {
     public static final long MAX_TERMINAL_PUSH_WAIT_MS = 1000;
 
     private final List<MetricsCollector> collectors;
-    private final MetricsProvider metricsProvider;
+    private final ClientTelemetryProvider telemetryProvider;
 
     private final ClientTelemetrySender clientTelemetrySender;
     private Map<String, Object> rawOriginalConfig;
@@ -122,7 +121,7 @@ public class ClientTelemetryReporter implements MetricsReporter {
 
     public ClientTelemetryReporter() {
         this.collectors = new CopyOnWriteArrayList<>();
-        this.metricsProvider = new ClientTelemetryProvider();
+        this.telemetryProvider = new ClientTelemetryProvider();
         this.clientTelemetrySender = new DefaultClientTelemetrySender();
     }
 
@@ -140,14 +139,14 @@ public class ClientTelemetryReporter implements MetricsReporter {
          */
         Objects.requireNonNull(this.rawOriginalConfig, "configure() was not called before contextChange()");
         if (!metricsContext.contextLabels().containsKey(MetricsContext.NAMESPACE)) {
-            log.error("_namespace not found in metrics context. Metrics collection is disabled");
+            log.warn("_namespace not found in metrics context. Metrics collection is disabled");
             return;
         }
 
         collectors.forEach(MetricsCollector::stop);
 
-        if (!metricsProvider.validate(metricsContext, rawOriginalConfig)) {
-            log.error("Validation failed for {} context {}, skip starting collectors", metricsProvider.getClass(), metricsContext.contextLabels());
+        if (!telemetryProvider.validate(metricsContext, rawOriginalConfig)) {
+            log.warn("Validation failed for {} context {}, skip starting collectors", telemetryProvider.getClass(), metricsContext.contextLabels());
             return;
         }
 
@@ -155,10 +154,10 @@ public class ClientTelemetryReporter implements MetricsReporter {
             // Initialize the provider only once. contextChange(..) can be called more than once,
             // but once it's been initialized and all necessary labels are present then we don't
             // re-initialize.
-            metricsProvider.configure(rawOriginalConfig);
+            telemetryProvider.configure(rawOriginalConfig);
         }
 
-        metricsProvider.contextChange(metricsContext);
+        telemetryProvider.contextChange(metricsContext);
 
         if (kafkaMetricsCollector == null) {
             initCollectors();
@@ -200,7 +199,7 @@ public class ClientTelemetryReporter implements MetricsReporter {
 
     @Override
     public void close() {
-        log.info("Stopping ClientTelemetryReporter");
+        log.debug("Stopping ClientTelemetryReporter");
         try {
             clientTelemetrySender.close();
         } catch (Exception exception) {
@@ -214,13 +213,14 @@ public class ClientTelemetryReporter implements MetricsReporter {
 
     private void initCollectors() {
         kafkaMetricsCollector = new KafkaMetricsCollector(
-            TelemetryMetricNamingConvention.getClientTelemetryMetricNamingStrategy(metricsProvider.domain()));
+            TelemetryMetricNamingConvention.getClientTelemetryMetricNamingStrategy(
+                telemetryProvider.domain()));
         collectors.add(kafkaMetricsCollector);
     }
 
     private ResourceMetrics buildMetric(Metric metric) {
         return ResourceMetrics.newBuilder()
-            .setResource(metricsProvider.resource())
+            .setResource(telemetryProvider.resource())
             .addScopeMetrics(ScopeMetrics.newBuilder()
                 .addMetrics(metric)
                 .build()).build();
@@ -236,8 +236,8 @@ public class ClientTelemetryReporter implements MetricsReporter {
     }
 
     // Visible for testing, only for unit tests
-    MetricsProvider metricsProvider() {
-        return metricsProvider;
+    ClientTelemetryProvider telemetryProvider() {
+        return telemetryProvider;
     }
 
     class DefaultClientTelemetrySender implements ClientTelemetrySender {
@@ -404,8 +404,7 @@ public class ClientTelemetryReporter implements MetricsReporter {
                 intervalMs,
                 acceptedCompressionTypes,
                 data.deltaTemporality(),
-                selector,
-                data.throttleTimeMs());
+                selector);
 
             try {
                 lock.writeLock().lock();
@@ -528,9 +527,9 @@ public class ClientTelemetryReporter implements MetricsReporter {
 
         @Override
         public void close() {
-            log.info("close telemetry sender for client telemetry reporter instance");
+            log.debug("close telemetry sender for client telemetry reporter instance");
 
-            initiateClose(Duration.ofMillis(MAX_TERMINAL_PUSH_WAIT_MS));
+            maybeInitiateClose(Duration.ofMillis(MAX_TERMINAL_PUSH_WAIT_MS));
 
             boolean shouldClose = false;
             try {
@@ -604,7 +603,7 @@ public class ClientTelemetryReporter implements MetricsReporter {
             }
 
             byte[] payload;
-            try (MetricsEmitter emitter = new ClientTelemetryEmitter(localSubscription.selector())) {
+            try (MetricsEmitter emitter = new ClientTelemetryEmitter(localSubscription.selector(), localSubscription.deltaTemporality())) {
                 emitter.init();
                 collectors.forEach(mc -> mc.collect(emitter));
                 payload = createPayload(emitter.emittedMetrics());
@@ -766,19 +765,20 @@ public class ClientTelemetryReporter implements MetricsReporter {
             return builder.build().toByteArray();
         }
 
-        private void initiateClose(Duration timeout) {
-            log.info("initiate close for client telemetry, check if terminal push required");
+        private void maybeInitiateClose(Duration timeout) {
+            log.debug("initiate close for client telemetry, check if terminal push required");
 
             long timeoutMs = timeout.toMillis();
-            if (timeoutMs < 0) {
-                throw new IllegalArgumentException("The timeout cannot be negative.");
-            }
-
             try {
                 lock.writeLock().lock();
                 // If we never fetched a subscription, we can't really push anything.
                 if (lastRequestMs == 0) {
                     log.info("Telemetry subscription not loaded, not attempting terminating push");
+                    return;
+                }
+
+                if (state == ClientTelemetryState.SUBSCRIPTION_NEEDED) {
+                    log.debug("Subscription not yet loaded, ignoring terminal push");
                     return;
                 }
 
@@ -855,7 +855,6 @@ public class ClientTelemetryReporter implements MetricsReporter {
      * Representation of the telemetry subscription that is retrieved from the cluster at startup and
      * then periodically afterward, following the telemetry push.
      */
-    // Visible for testing
     static class ClientTelemetrySubscription {
 
         private final Uuid clientInstanceId;
@@ -864,18 +863,16 @@ public class ClientTelemetryReporter implements MetricsReporter {
         private final List<CompressionType> acceptedCompressionTypes;
         private final boolean deltaTemporality;
         private final Predicate<? super MetricKeyable> selector;
-        private final long throttleTimeMs;
 
         ClientTelemetrySubscription(Uuid clientInstanceId, int subscriptionId, int pushIntervalMs,
                 List<CompressionType> acceptedCompressionTypes, boolean deltaTemporality,
-                Predicate<? super MetricKeyable> selector, long throttleTimeMs) {
+                Predicate<? super MetricKeyable> selector) {
             this.clientInstanceId = clientInstanceId;
             this.subscriptionId = subscriptionId;
             this.pushIntervalMs = pushIntervalMs;
             this.acceptedCompressionTypes = Collections.unmodifiableList(acceptedCompressionTypes);
             this.deltaTemporality = deltaTemporality;
             this.selector = selector;
-            this.throttleTimeMs = throttleTimeMs;
         }
 
         public Uuid clientInstanceId() {
@@ -902,10 +899,6 @@ public class ClientTelemetryReporter implements MetricsReporter {
             return selector;
         }
 
-        public long throttleTimeMs() {
-            return throttleTimeMs;
-        }
-
         @Override
         public String toString() {
             return new StringJoiner(", ", "ClientTelemetrySubscription{", "}")
@@ -915,7 +908,6 @@ public class ClientTelemetryReporter implements MetricsReporter {
                 .add("acceptedCompressionTypes=" + acceptedCompressionTypes)
                 .add("deltaTemporality=" + deltaTemporality)
                 .add("selector=" + selector)
-                .add("throttleTimeMs=" + throttleTimeMs)
                 .toString();
         }
     }

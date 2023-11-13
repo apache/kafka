@@ -68,7 +68,8 @@ public class ClientTelemetryUtils {
         int pushIntervalMs;
         String reason;
 
-        switch (Errors.forCode(errorCode)) {
+        Errors error = Errors.forCode(errorCode);
+        switch (error) {
             case INVALID_REQUEST:
             case INVALID_RECORD: {
                 pushIntervalMs = Integer.MAX_VALUE;
@@ -79,24 +80,23 @@ public class ClientTelemetryUtils {
             case UNKNOWN_SUBSCRIPTION_ID:
             case UNSUPPORTED_COMPRESSION_TYPE: {
                 pushIntervalMs = 0;
-                reason = Errors.forCode(errorCode).message();
+                reason = error.message();
                 break;
             }
             case TELEMETRY_TOO_LARGE:
             case THROTTLING_QUOTA_EXCEEDED: {
-                reason = Errors.forCode(errorCode).message();
+                reason = error.message();
                 pushIntervalMs = (intervalMs != -1) ? intervalMs : DEFAULT_PUSH_INTERVAL_MS;
                 break;
             }
             default: {
                 reason = "Unwrapped error code";
-                log.error("Error code: {}, reason: {}. Unmapped error for telemetry, disable telemetry.",
-                    errorCode, Errors.forCode(errorCode).message());
+                log.error("Error code: {}. Unmapped error for telemetry, disable telemetry.", errorCode);
                 pushIntervalMs = Integer.MAX_VALUE;
             }
         }
 
-        log.debug("Error code: {}, reason: {}. Retry automatically in {} ms.", errorCode, reason, pushIntervalMs);
+        log.debug("Error code: {}, reason: {}. Push interval update to {} ms.", errorCode, reason, pushIntervalMs);
         return Optional.of(pushIntervalMs);
     }
 
@@ -150,11 +150,7 @@ public class ClientTelemetryUtils {
         return intervalMs;
     }
 
-    public static boolean validateRequiredResourceLabels(Map<String, String> metadata) {
-        return notEmptyString(metadata, MetricsContext.NAMESPACE);
-    }
-
-    public static boolean notEmptyString(Map<String, ?> m, String key) {
+    public static boolean validateResourceLabel(Map<String, ?> m, String key) {
         if (!m.containsKey(key)) {
             log.trace("{} does not exist in map {}", key, m);
             return false;
@@ -176,6 +172,10 @@ public class ClientTelemetryUtils {
             return false;
         }
         return true;
+    }
+
+    public static boolean validateRequiredResourceLabels(Map<String, String> metadata) {
+        return validateResourceLabel(metadata, MetricsContext.NAMESPACE);
     }
 
     public static CompressionType preferredCompressionType(List<CompressionType> acceptedCompressionTypes) {

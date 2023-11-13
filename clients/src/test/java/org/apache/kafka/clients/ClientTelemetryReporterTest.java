@@ -67,7 +67,7 @@ public class ClientTelemetryReporterTest {
         configs = new HashMap<>();
         metricsContext = new KafkaMetricsContext("test");
         subscription = new ClientTelemetrySubscription(Uuid.randomUuid(), 1234, 20000,
-            Collections.emptyList(), true, null, 10);
+            Collections.emptyList(), true, null);
     }
 
     @Test
@@ -78,10 +78,10 @@ public class ClientTelemetryReporterTest {
         clientTelemetryReporter.configure(configs);
         clientTelemetryReporter.contextChange(metricsContext);
         assertEquals(1, clientTelemetryReporter.collectors().size());
-        assertNotNull(clientTelemetryReporter.metricsProvider().resource());
-        assertEquals(1, clientTelemetryReporter.metricsProvider().resource().getAttributesCount());
-        assertEquals(ClientTelemetryProvider.CLIENT_RACK, clientTelemetryReporter.metricsProvider().resource().getAttributes(0).getKey());
-        assertEquals("rack", clientTelemetryReporter.metricsProvider().resource().getAttributes(0).getValue().getStringValue());
+        assertNotNull(clientTelemetryReporter.telemetryProvider().resource());
+        assertEquals(1, clientTelemetryReporter.telemetryProvider().resource().getAttributesCount());
+        assertEquals(ClientTelemetryProvider.CLIENT_RACK, clientTelemetryReporter.telemetryProvider().resource().getAttributes(0).getKey());
+        assertEquals("rack", clientTelemetryReporter.telemetryProvider().resource().getAttributes(0).getValue().getStringValue());
     }
 
     @Test
@@ -105,9 +105,9 @@ public class ClientTelemetryReporterTest {
         clientTelemetryReporter.configure(configs);
         clientTelemetryReporter.contextChange(new KafkaMetricsContext(KafkaProducer.JMX_PREFIX));
         assertEquals(1, clientTelemetryReporter.collectors().size());
-        assertNotNull(clientTelemetryReporter.metricsProvider().resource());
+        assertNotNull(clientTelemetryReporter.telemetryProvider().resource());
 
-        List<KeyValue> attributes = clientTelemetryReporter.metricsProvider().resource().getAttributesList();
+        List<KeyValue> attributes = clientTelemetryReporter.telemetryProvider().resource().getAttributesList();
         assertEquals(2, attributes.size());
         attributes.forEach(attribute -> {
             if (attribute.getKey().equals(ClientTelemetryProvider.CLIENT_RACK)) {
@@ -129,9 +129,9 @@ public class ClientTelemetryReporterTest {
         clientTelemetryReporter.configure(configs);
         clientTelemetryReporter.contextChange(new KafkaMetricsContext(ConsumerUtils.CONSUMER_JMX_PREFIX));
         assertEquals(1, clientTelemetryReporter.collectors().size());
-        assertNotNull(clientTelemetryReporter.metricsProvider().resource());
+        assertNotNull(clientTelemetryReporter.telemetryProvider().resource());
 
-        List<KeyValue> attributes = clientTelemetryReporter.metricsProvider().resource().getAttributesList();
+        List<KeyValue> attributes = clientTelemetryReporter.telemetryProvider().resource().getAttributesList();
         assertEquals(3, attributes.size());
         attributes.forEach(attribute -> {
             if (attribute.getKey().equals(ClientTelemetryProvider.CLIENT_RACK)) {

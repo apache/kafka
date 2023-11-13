@@ -19,6 +19,7 @@ package org.apache.kafka.clients;
 import org.apache.kafka.common.telemetry.internals.MetricKey;
 import org.apache.kafka.common.telemetry.internals.MetricKeyable;
 import org.apache.kafka.common.telemetry.internals.SinglePointMetric;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -32,49 +33,64 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ClientTelemetryEmitterTest {
 
-    private final MetricKey metricKey = new MetricKey("name", Collections.emptyMap());
-    private final Instant now = Instant.now();
+    private MetricKey metricKey;
+    private Instant now;
+
+    @BeforeEach
+    public void setUp() {
+        metricKey = new MetricKey("name", Collections.emptyMap());
+        now = Instant.now();
+    }
 
     @Test
     public void testShouldEmitMetric() {
         Predicate<? super MetricKeyable> selector = ClientTelemetryUtils.getSelectorFromRequestedMetrics(
             Collections.singletonList("io.test.metric"));
-        ClientTelemetryEmitter emitter = new ClientTelemetryEmitter(selector);
+        ClientTelemetryEmitter emitter = new ClientTelemetryEmitter(selector, true);
 
         assertTrue(emitter.shouldEmitMetric(new MetricKey("io.test.metric")));
         assertTrue(emitter.shouldEmitMetric(new MetricKey("io.test.metric1")));
         assertTrue(emitter.shouldEmitMetric(new MetricKey("io.test.metric.producer.bytes")));
         assertFalse(emitter.shouldEmitMetric(new MetricKey("io.test")));
         assertFalse(emitter.shouldEmitMetric(new MetricKey("org.io.test.metric")));
+        assertTrue(emitter.shouldEmitDeltaMetrics());
     }
 
     @Test
     public void testShouldEmitMetricSelectorAll() {
-        ClientTelemetryEmitter emitter = new ClientTelemetryEmitter(ClientTelemetryUtils.SELECTOR_ALL_METRICS);
+        ClientTelemetryEmitter emitter = new ClientTelemetryEmitter(ClientTelemetryUtils.SELECTOR_ALL_METRICS, true);
 
         assertTrue(emitter.shouldEmitMetric(new MetricKey("io.test.metric")));
         assertTrue(emitter.shouldEmitMetric(new MetricKey("io.test.metric1")));
         assertTrue(emitter.shouldEmitMetric(new MetricKey("io.test.metric.producer.bytes")));
         assertTrue(emitter.shouldEmitMetric(new MetricKey("io.test")));
         assertTrue(emitter.shouldEmitMetric(new MetricKey("org.io.test.metric")));
+        assertTrue(emitter.shouldEmitDeltaMetrics());
     }
 
     @Test
     public void testShouldEmitMetricSelectorNone() {
-        ClientTelemetryEmitter emitter = new ClientTelemetryEmitter(ClientTelemetryUtils.SELECTOR_NO_METRICS);
+        ClientTelemetryEmitter emitter = new ClientTelemetryEmitter(ClientTelemetryUtils.SELECTOR_NO_METRICS, true);
 
         assertFalse(emitter.shouldEmitMetric(new MetricKey("io.test.metric")));
         assertFalse(emitter.shouldEmitMetric(new MetricKey("io.test.metric1")));
         assertFalse(emitter.shouldEmitMetric(new MetricKey("io.test.metric.producer.bytes")));
         assertFalse(emitter.shouldEmitMetric(new MetricKey("io.test")));
         assertFalse(emitter.shouldEmitMetric(new MetricKey("org.io.test.metric")));
+        assertTrue(emitter.shouldEmitDeltaMetrics());
+    }
+
+    @Test
+    public void testShouldEmitDeltaMetricsFalse() {
+        ClientTelemetryEmitter emitter = new ClientTelemetryEmitter(ClientTelemetryUtils.SELECTOR_ALL_METRICS, false);
+        assertFalse(emitter.shouldEmitDeltaMetrics());
     }
 
     @Test
     public void testEmitMetric() {
         Predicate<? super MetricKeyable> selector = ClientTelemetryUtils.getSelectorFromRequestedMetrics(
             Collections.singletonList("name"));
-        ClientTelemetryEmitter emitter = new ClientTelemetryEmitter(selector);
+        ClientTelemetryEmitter emitter = new ClientTelemetryEmitter(selector, true);
 
         SinglePointMetric gauge = SinglePointMetric.gauge(metricKey, Long.valueOf(1), now);
         SinglePointMetric sum = SinglePointMetric.sum(metricKey, 1.0, true, now);

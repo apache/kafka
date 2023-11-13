@@ -29,15 +29,22 @@ public class ClientTelemetryEmitter implements MetricsEmitter {
 
     private final Predicate<? super MetricKeyable> selector;
     private final List<SinglePointMetric> emitted;
+    private final boolean deltaMetrics;
 
-    public ClientTelemetryEmitter(Predicate<? super MetricKeyable> selector) {
+    public ClientTelemetryEmitter(Predicate<? super MetricKeyable> selector, boolean deltaMetrics) {
         this.selector = selector;
         this.emitted = new ArrayList<>();
+        this.deltaMetrics = deltaMetrics;
     }
 
     @Override
     public boolean shouldEmitMetric(MetricKeyable metricKeyable) {
         return selector.test(metricKeyable);
+    }
+
+    @Override
+    public boolean shouldEmitDeltaMetrics() {
+        return deltaMetrics;
     }
 
     @Override

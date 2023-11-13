@@ -24,13 +24,14 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.ConsumerUtils;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.metrics.MetricsContext;
-import org.apache.kafka.common.telemetry.internals.MetricsProvider;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
-public class ClientTelemetryProvider implements MetricsProvider {
+public class ClientTelemetryProvider implements Configurable {
 
     public static final String DOMAIN = "org.apache.kafka";
     // Client metrics tags
@@ -57,14 +58,27 @@ public class ClientTelemetryProvider implements MetricsProvider {
         this.config = configs;
     }
 
-    @Override
+    /**
+     * Validate that all the data required for generating correct metrics is present. The provider
+     * will be disabled if validation fails.
+     *
+     * @param metricsContext {@link MetricsContext}
+     * @return false if all the data required for generating correct metrics is missing, true
+     * otherwise.
+     */
     public boolean validate(MetricsContext metricsContext, Map<String, ?> config) {
         // metric collection will be disabled for clients without a client id (e.g. transient admin clients)
-        return ClientTelemetryUtils.notEmptyString(config, CommonClientConfigs.CLIENT_ID_CONFIG) &&
+        return ClientTelemetryUtils.validateResourceLabel(config, CommonClientConfigs.CLIENT_ID_CONFIG) &&
             ClientTelemetryUtils.validateRequiredResourceLabels(metricsContext.contextLabels());
     }
 
-    @Override
+    /**
+     * Sets the metrics tags for the service or library exposing metrics. This will be called before
+     * {@link org.apache.kafka.common.metrics.MetricsReporter#init(List)} and may be called anytime
+     * after that.
+     *
+     * @param metricsContext {@link MetricsContext}
+     */
     public void contextChange(MetricsContext metricsContext) {
         final Resource.Builder resourceBuilder = Resource.newBuilder();
 
@@ -93,12 +107,20 @@ public class ClientTelemetryProvider implements MetricsProvider {
         this.resource = resourceBuilder.build();
     }
 
-    @Override
+    /**
+     * The metrics resource for this provider which will be used to generate the metrics.
+     *
+     * @return A fully formed {@link Resource} with all the tags.
+     */
     public Resource resource() {
         return this.resource;
     }
 
-    @Override
+    /**
+     * Domain of the active provider i.e. specifies prefix to the metrics.
+     *
+     * @return Domain in string format.
+     */
     public String domain() {
         return DOMAIN;
     }
