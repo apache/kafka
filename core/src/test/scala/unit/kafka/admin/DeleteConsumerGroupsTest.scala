@@ -27,7 +27,7 @@ import org.junit.jupiter.params.provider.ValueSource
 class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
   def testDeleteWithTopicOption(quorum: String): Unit = {
     createOffsetsTopic()
     val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--delete", "--group", group, "--topic")
@@ -35,7 +35,7 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
   def testDeleteCmdNonExistingGroup(quorum: String): Unit = {
     createOffsetsTopic()
     val missingGroup = "missing.group"
@@ -49,7 +49,7 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
   def testDeleteNonExistingGroup(quorum: String): Unit = {
     createOffsetsTopic()
     val missingGroup = "missing.group"
@@ -64,7 +64,7 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
   def testDeleteCmdNonEmptyGroup(quorum: String): Unit = {
     createOffsetsTopic()
 
@@ -83,7 +83,7 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
   def testDeleteNonEmptyGroup(quorum: String): Unit = {
     createOffsetsTopic()
 
@@ -104,7 +104,7 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
   def testDeleteCmdEmptyGroup(quorum: String): Unit = {
     createOffsetsTopic()
 
@@ -129,7 +129,7 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
   def testDeleteCmdAllGroups(quorum: String): Unit = {
     createOffsetsTopic()
 
@@ -167,7 +167,7 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
   def testDeleteEmptyGroup(quorum: String): Unit = {
     createOffsetsTopic()
 
@@ -192,7 +192,7 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
   def testDeleteCmdWithMixOfSuccessAndError(quorum: String): Unit = {
     createOffsetsTopic()
     val missingGroup = "missing.group"
@@ -219,7 +219,7 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
   def testDeleteWithMixOfSuccessAndError(quorum: String): Unit = {
     createOffsetsTopic()
     val missingGroup = "missing.group"
@@ -250,7 +250,7 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
 
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
   def testDeleteWithUnrecognizedNewConsumerOption(quorum: String): Unit = {
     val cgcArgs = Array("--new-consumer", "--bootstrap-server", bootstrapServers(), "--delete", "--group", group)
     assertThrows(classOf[OptionException], () => getConsumerGroupService(cgcArgs))

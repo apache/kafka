@@ -46,9 +46,13 @@ class ConsumerGroupCommandTest extends KafkaServerTestHarness {
 
   // configure the servers and clients
   override def generateConfigs = {
-    TestUtils.createBrokerConfigs(1, zkConnectOrNull, enableControlledShutdown = false).map { props =>
-      KafkaConfig.fromProps(props)
+    val overridingProps = new Properties()
+    if (isNewGroupCoordinatorEnabled()) {
+      overridingProps.put(KafkaConfig.UnstableApiVersionsEnableProp, "true")
+      overridingProps.put(KafkaConfig.NewGroupCoordinatorEnableProp, "true")
     }
+    TestUtils.createBrokerConfigs(1, zkConnectOrNull, enableControlledShutdown = false)
+      .map(KafkaConfig.fromProps(_, overridingProps))
   }
 
   @BeforeEach
