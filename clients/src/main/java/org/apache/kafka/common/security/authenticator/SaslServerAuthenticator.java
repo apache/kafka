@@ -218,9 +218,11 @@ public class SaslServerAuthenticator implements Authenticator {
         // server is using a JAAS-authenticated subject: determine service principal name and hostname from kafka server's subject.
         final String servicePrincipal;
         if (subject.getPrincipals().isEmpty()) {
-            String serviceName = (String)configs.get("kerberos.service.name");
+            // server-only JAAS with principal="*" and isInitiator=false
+            // we need to construct servicePrincipal to statisfy Sasl.createSaslServer
+            String serviceName = (String) configs.get("kerberos.service.name");
             if (serviceName == null) serviceName = "kafka";
-            String serviceRealm = (String)configs.get("kerberos.service.realm");
+            String serviceRealm = (String) configs.get("kerberos.service.realm");
             if (serviceRealm == null) serviceRealm = "DEFAULT";
             servicePrincipal = serviceName + "@" + serviceRealm;
         } else {
