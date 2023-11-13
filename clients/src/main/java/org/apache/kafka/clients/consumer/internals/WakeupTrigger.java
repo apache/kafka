@@ -111,15 +111,15 @@ class WakeupTrigger {
      * callers should usually invoke this function at the beginning of a {@code try} clause to set the <em>active</em>
      * task and then invoke {@link #clearActiveTask()} in the {@code finally} clause to release it.
      *
-     * @param currentTask {@link CompletableFuture Task} to set as the <em>active</em> task
+     * @param task {@link CompletableFuture Task} to set as the <em>active</em> task if checks pass
      */
-    void setActiveTask(final CompletableFuture<?> currentTask) {
-        Objects.requireNonNull(currentTask, "currentTask cannot be null");
-        activeTask.getAndUpdate(task -> {
-            if (task == null) {
-                return currentTask;
-            } else if (task == FAIL_NEXT_MARKER) {
-                currentTask.completeExceptionally(new WakeupException());
+    void setActiveTask(final CompletableFuture<?> task) {
+        Objects.requireNonNull(task, "task cannot be null");
+        activeTask.getAndUpdate(existingTask -> {
+            if (existingTask == null) {
+                return task;
+            } else if (existingTask == FAIL_NEXT_MARKER) {
+                task.completeExceptionally(new WakeupException());
                 return null;
             } else {
                 // last active state is still active
@@ -140,19 +140,18 @@ class WakeupTrigger {
      * <em>active</em> task and then invoke this method in the {@code finally} clause to release it.
      */
     void clearActiveTask() {
-        activeTask.getAndUpdate(task -> {
-            if (task == null) {
+        activeTask.getAndUpdate(existingTask -> {
+            if (existingTask == null) {
                 return null;
-            } else if (task instanceof CompletableFuture<?>) {
+            } else if (existingTask instanceof CompletableFuture<?>) {
                 return null;
             } else {
-                return task;
+                return existingTask;
             }
         });
     }
 
     boolean hasPendingTask() {
-        Object o = activeTask.get();
-        return o != null;
+        return activeTask.get() != null;
     }
 }
