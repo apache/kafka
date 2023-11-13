@@ -27,69 +27,78 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ClientMetricsInstanceTest {
 
+    private Uuid uuid;
+    private ClientMetricsInstanceMetadata instanceMetadata;
     private ClientMetricsInstance clientInstance;
 
     @BeforeEach
     public void setUp() throws UnknownHostException {
-        Uuid uuid = Uuid.randomUuid();
-        ClientMetricsInstanceMetadata instanceMetadata = new ClientMetricsInstanceMetadata(uuid,
+        uuid = Uuid.randomUuid();
+        instanceMetadata = new ClientMetricsInstanceMetadata(uuid,
             ClientMetricsTestUtils.requestContext());
         clientInstance = new ClientMetricsInstance(Uuid.randomUuid(), instanceMetadata, 0, 0,
             null, ClientMetricsConfigs.DEFAULT_INTERVAL_MS);
     }
 
     @Test
-    public void testCanAcceptFirstRequestValid() {
+    public void testMaybeUpdateRequestEpochValid() {
         // First request should be accepted.
-        assertTrue(clientInstance.canAcceptGetRequest());
-        assertTrue(clientInstance.canAcceptPushRequest());
+        assertTrue(clientInstance.maybeUpdateGetRequestEpoch(System.currentTimeMillis()));
+        assertTrue(clientInstance.maybeUpdatePushRequestEpoch(System.currentTimeMillis()));
     }
 
     @Test
-    public void testCanAcceptGetRequestAfterElapsedTimeValid() {
-        assertTrue(clientInstance.canAcceptGetRequest());
-        clientInstance.lastGetRequestEpoch(System.currentTimeMillis() - ClientMetricsConfigs.DEFAULT_INTERVAL_MS);
+    public void testMaybeUpdateGetRequestAfterElapsedTimeValid() throws InterruptedException {
+        ClientMetricsInstance clientInstance = new ClientMetricsInstance(uuid, instanceMetadata, 0, 0,
+            null, 2);
+        assertTrue(clientInstance.maybeUpdateGetRequestEpoch(System.currentTimeMillis()));
+        // sleep for 3 ms to ensure that the next request is accepted.
+        Thread.sleep(3);
         // Second request should be accepted as time since last request is greater than the retry interval.
-        assertTrue(clientInstance.canAcceptGetRequest());
+        assertTrue(clientInstance.maybeUpdateGetRequestEpoch(System.currentTimeMillis()));
     }
 
     @Test
-    public void testCanAcceptGetRequestWithImmediateRetryFail() {
-        assertTrue(clientInstance.canAcceptGetRequest());
-        clientInstance.lastGetRequestEpoch(System.currentTimeMillis());
+    public void testMaybeUpdateGetRequestWithImmediateRetryFail() {
+        assertTrue(clientInstance.maybeUpdateGetRequestEpoch(System.currentTimeMillis()));
         // Second request should be rejected as time since last request is less than the retry interval.
-        assertFalse(clientInstance.canAcceptGetRequest());
+        assertFalse(clientInstance.maybeUpdateGetRequestEpoch(System.currentTimeMillis()));
     }
 
     @Test
-    public void testCanAcceptGetRequestWithImmediateRetryAfterPushFail() {
-        assertTrue(clientInstance.canAcceptGetRequest());
-        clientInstance.lastPushRequestEpoch(System.currentTimeMillis());
+    public void testMaybeUpdatePushRequestAfterElapsedTimeValid() throws InterruptedException {
+        ClientMetricsInstance clientInstance = new ClientMetricsInstance(uuid, instanceMetadata, 0, 0,
+            null, 2);
+        assertTrue(clientInstance.maybeUpdatePushRequestEpoch(System.currentTimeMillis()));
+        // sleep for 3 ms to ensure that the next request is accepted.
+        Thread.sleep(3);
+        // Second request should be accepted as time since last request is greater than the retry interval.
+        assertTrue(clientInstance.maybeUpdatePushRequestEpoch(System.currentTimeMillis()));
+    }
+
+    @Test
+    public void testMaybeUpdateGetRequestWithImmediateRetryAfterPushFail() {
+        assertTrue(clientInstance.maybeUpdateGetRequestEpoch(System.currentTimeMillis()));
         // Next request after push should be rejected as time since last request is less than the retry interval.
-        assertFalse(clientInstance.canAcceptGetRequest());
+        assertFalse(clientInstance.maybeUpdateGetRequestEpoch(System.currentTimeMillis()));
     }
 
     @Test
-    public void testCanAcceptPushRequestAfterElapsedTimeValid() {
-        assertTrue(clientInstance.canAcceptPushRequest());
-        clientInstance.lastPushRequestEpoch(System.currentTimeMillis() - ClientMetricsConfigs.DEFAULT_INTERVAL_MS);
-        // Second request should be accepted as time since last request is greater than the retry interval.
-        assertTrue(clientInstance.canAcceptPushRequest());
-    }
-
-    @Test
-    public void testCanAcceptPushRequestWithImmediateRetryFail() {
-        assertTrue(clientInstance.canAcceptPushRequest());
-        clientInstance.lastPushRequestEpoch(System.currentTimeMillis());
+    public void testMaybeUpdatePushRequestWithImmediateRetryFail() {
+        assertTrue(clientInstance.maybeUpdatePushRequestEpoch(System.currentTimeMillis()));
         // Second request should be rejected as time since last request is less than the retry interval.
-        assertFalse(clientInstance.canAcceptPushRequest());
+        assertFalse(clientInstance.maybeUpdatePushRequestEpoch(System.currentTimeMillis()));
     }
 
     @Test
-    public void testCanAcceptPushRequestWithImmediateRetryAfterGetValid() {
-        assertTrue(clientInstance.canAcceptPushRequest());
-        clientInstance.lastGetRequestEpoch(System.currentTimeMillis());
+    public void testMaybeUpdatePushRequestWithImmediateRetryAfterGetValid()
+        throws InterruptedException {
+        ClientMetricsInstance clientInstance = new ClientMetricsInstance(uuid, instanceMetadata, 0, 0,
+            null, 2);
+        assertTrue(clientInstance.maybeUpdatePushRequestEpoch(System.currentTimeMillis()));
+        Thread.sleep(3);
+        assertTrue(clientInstance.maybeUpdateGetRequestEpoch(System.currentTimeMillis()));
         // Next request after get should be accepted.
-        assertTrue(clientInstance.canAcceptPushRequest());
+        assertTrue(clientInstance.maybeUpdatePushRequestEpoch(System.currentTimeMillis()));
     }
 }

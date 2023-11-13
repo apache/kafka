@@ -16,8 +16,6 @@
  */
 package kafka.server;
 
-import java.util.Collections;
-import java.util.regex.Pattern;
 import kafka.metrics.ClientMetricsConfigs;
 import kafka.metrics.ClientMetricsInstance;
 import kafka.metrics.ClientMetricsInstanceMetadata;
@@ -34,6 +32,7 @@ import org.apache.kafka.common.errors.ThrottlingQuotaExceededException;
 import org.apache.kafka.common.errors.UnknownSubscriptionIdException;
 import org.apache.kafka.common.errors.UnsupportedCompressionTypeException;
 import org.apache.kafka.common.message.GetTelemetrySubscriptionsResponseData;
+import org.apache.kafka.common.message.PushTelemetryResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.requests.GetTelemetrySubscriptionsRequest;
@@ -49,7 +48,9 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -57,6 +58,7 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Pattern;
 import java.util.zip.CRC32;
 
 /**
@@ -66,6 +68,8 @@ public class ClientMetricsManager implements Closeable {
 
     private static final Logger log = LoggerFactory.getLogger(ClientMetricsManager.class);
     private static final ClientMetricsManager INSTANCE = new ClientMetricsManager();
+    private static final List<Byte> SUPPORTED_COMPRESSION_TYPES = Collections.unmodifiableList(
+        Arrays.asList(CompressionType.ZSTD.id, CompressionType.LZ4.id, CompressionType.GZIP.id, CompressionType.SNAPPY.id));
 
     public static ClientMetricsManager instance() {
         return INSTANCE;
@@ -77,7 +81,7 @@ public class ClientMetricsManager implements Closeable {
 
     // The last subscription updated time is used to determine if the next telemetry request needs
     // to re-evaluate the subscription id as per changes subscriptions.
-    private long lastSubscriptionUpdateEpoch;
+    private volatile long lastSubscriptionUpdateEpoch;
 
     // Visible for testing
     ClientMetricsManager() {
@@ -124,15 +128,13 @@ public class ClientMetricsManager implements Closeable {
          subscription has changed since the last request then the client should get the updated
          subscription immediately.
         */
-        ClientMetricsInstance clientInstance = getClientInstance(clientInstanceId, requestContext, now);
+        ClientMetricsInstance clientInstance = clientInstance(clientInstanceId, requestContext, now);
 
         try {
             // Validate the get request parameters for the client instance.
-            validateGetRequest(request, clientInstance);
+            validateGetRequest(request, clientInstance, now);
         } catch (ApiException exception) {
             return request.getErrorResponse(throttleMs, exception);
-        } finally {
-            clientInstance.lastGetRequestEpoch(now);
         }
 
         clientInstance.lastKnownError(Errors.NONE);
@@ -150,36 +152,41 @@ public class ClientMetricsManager implements Closeable {
         }
 
         long now = System.currentTimeMillis();
-        ClientMetricsInstance clientInstance = getClientInstance(clientInstanceId, requestContext, now);
+        ClientMetricsInstance clientInstance = clientInstance(clientInstanceId, requestContext, now);
 
         try {
             // Validate the push request parameters for the client instance.
-            validatePushRequest(request, telemetryMaxBytes, clientInstance);
+            validatePushRequest(request, telemetryMaxBytes, clientInstance, now);
         } catch (ApiException exception) {
+            log.debug("Error validating push telemetry request from client [{}]", clientInstanceId, exception);
             clientInstance.lastKnownError(Errors.forException(exception));
             return request.getErrorResponse(throttleMs, exception);
         } finally {
             // Update the client instance with the latest push request parameters.
             clientInstance.terminating(request.data().terminating());
-            clientInstance.lastPushRequestEpoch(now);
         }
 
         // Push the metrics to the external client receiver plugin.
         byte[] metrics = request.data().metrics();
         if (metrics != null && metrics.length > 0) {
-            ClientMetricsReceiverPlugin.exportMetrics(requestContext, request);
+            try {
+                ClientMetricsReceiverPlugin.instance().exportMetrics(requestContext, request);
+            } catch (Exception exception) {
+                clientInstance.lastKnownError(Errors.INVALID_RECORD);
+                return request.errorResponse(throttleMs, Errors.INVALID_RECORD);
+            }
         }
 
         clientInstance.lastKnownError(Errors.NONE);
-        return request.createResponse(throttleMs, Errors.NONE);
+        return new PushTelemetryResponse(new PushTelemetryResponseData().setThrottleTimeMs(throttleMs));
     }
 
     @Override
     public void close() throws IOException {
-        // Do nothing for now.
+        subscriptionMap.clear();
     }
 
-    private void updateLastSubscriptionUpdateEpoch() {
+    private synchronized void updateLastSubscriptionUpdateEpoch() {
         this.lastSubscriptionUpdateEpoch = System.currentTimeMillis();
     }
 
@@ -203,26 +210,44 @@ public class ClientMetricsManager implements Closeable {
         return id;
     }
 
-    private ClientMetricsInstance getClientInstance(Uuid clientInstanceId, RequestContext requestContext,
+    private ClientMetricsInstance clientInstance(Uuid clientInstanceId, RequestContext requestContext,
         long timestamp) {
-        // Check if null can be called on the cache. if can then we can avoid the method call.
         ClientMetricsInstance clientInstance = clientInstanceCache.get(clientInstanceId);
 
         if (clientInstance == null) {
-            // If the client instance is not present in the cache, then create a new client instance
-            // and update the cache. This can also happen when the telemetry request is received by
-            // the separate broker instance.
-            ClientMetricsInstanceMetadata instanceMetadata = new ClientMetricsInstanceMetadata(
-                clientInstanceId, requestContext);
-            clientInstance = createClientInstanceAndUpdateCache(clientInstanceId, instanceMetadata, timestamp);
+            /*
+             If the client instance is not present in the cache, then create a new client instance
+             and update the cache. This can also happen when the telemetry request is received by
+             the separate broker instance. Though cache is synchronized, but it is possible that
+             concurrent calls can create the same client instance. Hence, safeguard the client instance
+             creation with a double-checked lock to ensure that only one instance is created.
+            */
+            synchronized (this) {
+                clientInstance = clientInstanceCache.get(clientInstanceId);
+                if (clientInstance != null) {
+                    return clientInstance;
+                }
+
+                ClientMetricsInstanceMetadata instanceMetadata = new ClientMetricsInstanceMetadata(
+                    clientInstanceId, requestContext);
+                clientInstance = createClientInstanceAndUpdateCache(clientInstanceId, instanceMetadata, timestamp);
+            }
         } else if (clientInstance.subscriptionUpdateEpoch() < lastSubscriptionUpdateEpoch) {
             /*
              If the last subscription update time for client instance is older than the subscription
              updated time, then re-evaluate the subscription information for the client as per the
              updated subscriptions. This is to ensure that the client instance is always in sync with
-             the latest subscription information.
+             the latest subscription information. Though cache is synchronized, but it is possible that
+             concurrent calls can create the same client instance. Hence, safeguard the client instance
+             update with a double-checked lock to ensure that only one instance is created.
             */
-            clientInstance = createClientInstanceAndUpdateCache(clientInstanceId, clientInstance.instanceMetadata(), timestamp);
+            synchronized (this) {
+                clientInstance = clientInstanceCache.get(clientInstanceId);
+                if (clientInstance.subscriptionUpdateEpoch() >= lastSubscriptionUpdateEpoch) {
+                    return clientInstance;
+                }
+                clientInstance = createClientInstanceAndUpdateCache(clientInstanceId, clientInstance.instanceMetadata(), timestamp);
+            }
         }
 
         return clientInstance;
@@ -289,7 +314,7 @@ public class ClientMetricsManager implements Closeable {
             .setClientInstanceId(clientInstanceId)
             .setSubscriptionId(clientInstance.subscriptionId())
             .setRequestedMetrics(new ArrayList<>(clientInstance.metrics()))
-            .setAcceptedCompressionTypes(getSupportedCompressionTypes())
+            .setAcceptedCompressionTypes(SUPPORTED_COMPRESSION_TYPES)
             .setPushIntervalMs(clientInstance.pushIntervalMs())
             .setTelemetryMaxBytes(telemetryMaxBytes)
             .setDeltaTemporality(true)
@@ -300,9 +325,9 @@ public class ClientMetricsManager implements Closeable {
     }
 
     private void validateGetRequest(GetTelemetrySubscriptionsRequest request,
-        ClientMetricsInstance clientInstance) {
+        ClientMetricsInstance clientInstance, long timestamp) {
 
-        if (!clientInstance.canAcceptGetRequest() && (clientInstance.lastKnownError() != Errors.UNKNOWN_SUBSCRIPTION_ID
+        if (!clientInstance.maybeUpdateGetRequestEpoch(timestamp) && (clientInstance.lastKnownError() != Errors.UNKNOWN_SUBSCRIPTION_ID
             || clientInstance.lastKnownError() != Errors.UNSUPPORTED_COMPRESSION_TYPE)) {
             String msg = String.format("Request from the client [%s] arrived before the next push interval time",
                 request.data().clientInstanceId());
@@ -311,7 +336,7 @@ public class ClientMetricsManager implements Closeable {
     }
 
     private void validatePushRequest(PushTelemetryRequest request, int telemetryMaxBytes,
-        ClientMetricsInstance clientInstance) {
+        ClientMetricsInstance clientInstance, long timestamp) {
 
         if (clientInstance.terminating()) {
             String msg = String.format(
@@ -320,7 +345,7 @@ public class ClientMetricsManager implements Closeable {
             throw new InvalidRequestException(msg);
         }
 
-        if (!clientInstance.canAcceptPushRequest() && !request.data().terminating()) {
+        if (!clientInstance.maybeUpdatePushRequestEpoch(timestamp) && !request.data().terminating()) {
             String msg = String.format("Request from the client [%s] arrived before the next push interval time",
                 request.data().clientInstanceId());
             throw new ThrottlingQuotaExceededException(msg);
@@ -343,16 +368,6 @@ public class ClientMetricsManager implements Closeable {
                 request.data().clientInstanceId(), telemetryMaxBytes);
             throw new TelemetryTooLargeException(msg);
         }
-    }
-
-    private List<Byte> getSupportedCompressionTypes() {
-        List<Byte> compressionTypes = new ArrayList<>();
-        for (CompressionType compressionType : CompressionType.values()) {
-            if (compressionType != CompressionType.NONE) {
-                compressionTypes.add(compressionType.id);
-            }
-        }
-        return compressionTypes;
     }
 
     private static boolean isSupportedCompressionType(int id) {

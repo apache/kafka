@@ -34,15 +34,15 @@ public class ClientMetricsReceiverPluginTest {
 
     @Test
     public void testExportMetrics() throws UnknownHostException {
-        assertTrue(ClientMetricsReceiverPlugin.isEmpty());
+        assertTrue(ClientMetricsReceiverPlugin.instance().isEmpty());
 
-        ClientMetricsReceiverPlugin.add(telemetryReceiver);
-        assertFalse(ClientMetricsReceiverPlugin.isEmpty());
+        ClientMetricsReceiverPlugin.instance().add(telemetryReceiver);
+        assertFalse(ClientMetricsReceiverPlugin.instance().isEmpty());
 
         assertEquals(0, telemetryReceiver.exportMetricsInvokedCount);
         assertTrue(telemetryReceiver.metricsData.isEmpty());
 
-        ClientMetricsReceiverPlugin.exportMetrics(ClientMetricsTestUtils.requestContext(),
+        ClientMetricsReceiverPlugin.instance().exportMetrics(ClientMetricsTestUtils.requestContext(),
             new PushTelemetryRequest.Builder(
                 new PushTelemetryRequestData()
                     .setMetrics("test-metrics".getBytes(StandardCharsets.UTF_8)))

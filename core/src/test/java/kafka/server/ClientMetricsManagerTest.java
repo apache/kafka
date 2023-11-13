@@ -36,9 +36,14 @@ import org.junit.jupiter.api.Test;
 
 import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -128,7 +133,7 @@ public class ClientMetricsManagerTest {
     }
 
     @Test
-    public void testUpdateSubscriptionWithPropertiesDeletion() {
+    public void testUpdateSubscriptionWithPropertiesDeletion() throws InterruptedException {
         assertTrue(clientMetricsManager.subscriptions().isEmpty());
 
         long previousEpoch = clientMetricsManager.lastSubscriptionUpdateEpoch();
@@ -140,6 +145,7 @@ public class ClientMetricsManagerTest {
         assertTrue(clientMetricsManager.lastSubscriptionUpdateEpoch() > previousEpoch);
 
         previousEpoch = clientMetricsManager.lastSubscriptionUpdateEpoch();
+        Thread.sleep(1);
         clientMetricsManager.updateSubscription("sub-1", new Properties());
         // Subscription should be removed as all properties are removed.
         assertEquals(0, clientMetricsManager.subscriptions().size());
@@ -165,6 +171,11 @@ public class ClientMetricsManagerTest {
             assertTrue(response.data().requestedMetrics().contains(metric)));
 
         assertEquals(4, response.data().acceptedCompressionTypes().size());
+        // validate compression types order.
+        assertEquals(CompressionType.ZSTD.id, response.data().acceptedCompressionTypes().get(0));
+        assertEquals(CompressionType.LZ4.id, response.data().acceptedCompressionTypes().get(1));
+        assertEquals(CompressionType.GZIP.id, response.data().acceptedCompressionTypes().get(2));
+        assertEquals(CompressionType.SNAPPY.id, response.data().acceptedCompressionTypes().get(3));
         assertEquals(ClientMetricsTestUtils.DEFAULT_PUSH_INTERVAL_MS, response.data().pushIntervalMs());
         assertTrue(response.data().deltaTemporality());
         assertEquals(100, response.data().telemetryMaxBytes());
@@ -325,6 +336,124 @@ public class ClientMetricsManagerTest {
         assertEquals(Errors.NONE, response.error());
         // Subscription id updated in next request
         assertTrue(subscriptionId != response.data().subscriptionId());
+    }
+
+    @Test
+    public void testGetTelemetryConcurrentRequestNewClientInstance() throws InterruptedException {
+        GetTelemetrySubscriptionsRequest request = new GetTelemetrySubscriptionsRequest.Builder(
+            new GetTelemetrySubscriptionsRequestData().setClientInstanceId(Uuid.randomUuid())).build();
+
+        CountDownLatch lock = new CountDownLatch(2);
+        List<GetTelemetrySubscriptionsResponse> responses = Collections.synchronizedList(new ArrayList<>());
+
+        Thread thread = new Thread(() -> {
+            try {
+                GetTelemetrySubscriptionsResponse response = clientMetricsManager.processGetTelemetrySubscriptionRequest(
+                    request, 100, ClientMetricsTestUtils.requestContext(), 0);
+
+                responses.add(response);
+                lock.countDown();
+            } catch (UnknownHostException e) {
+                e.printStackTrace();
+            }
+        });
+
+        Thread thread1 = new Thread(() -> {
+            try {
+                GetTelemetrySubscriptionsResponse response = clientMetricsManager.processGetTelemetrySubscriptionRequest(
+                    request, 100, ClientMetricsTestUtils.requestContext(), 0);
+
+                responses.add(response);
+                lock.countDown();
+            } catch (UnknownHostException e) {
+                e.printStackTrace();
+            }
+        });
+
+        thread.start();
+        thread1.start();
+
+        assertTrue(lock.await(2000, TimeUnit.MILLISECONDS));
+        assertEquals(2, responses.size());
+
+        int throttlingErrorCount = 0;
+        for (GetTelemetrySubscriptionsResponse response : responses) {
+            if (response.error() == Errors.THROTTLING_QUOTA_EXCEEDED) {
+                throttlingErrorCount++;
+            } else {
+                // As subscription is updated hence 1 request shall fail with unknown subscription id.
+                assertEquals(Errors.NONE, response.error());
+            }
+        }
+        // 1 request should fail with throttling error.
+        assertEquals(1, throttlingErrorCount);
+    }
+
+    @Test
+    public void testGetTelemetryConcurrentRequestAfterSubscriptionUpdate()
+        throws InterruptedException, UnknownHostException {
+        GetTelemetrySubscriptionsRequest request = new GetTelemetrySubscriptionsRequest.Builder(
+            new GetTelemetrySubscriptionsRequestData().setClientInstanceId(Uuid.randomUuid())).build();
+
+        GetTelemetrySubscriptionsResponse subscriptionsResponse = clientMetricsManager.processGetTelemetrySubscriptionRequest(
+            request, 100, ClientMetricsTestUtils.requestContext(), 0);
+
+        ClientMetricsInstance instance = clientMetricsManager.clientInstance(subscriptionsResponse.data().clientInstanceId());
+        assertNotNull(instance);
+
+        CountDownLatch lock = new CountDownLatch(2);
+        List<GetTelemetrySubscriptionsResponse> responses = Collections.synchronizedList(new ArrayList<>());
+
+        // Add delay in request timestamp for requests.
+        Thread.sleep(10);
+
+        clientMetricsManager.updateSubscription("sub-1", ClientMetricsTestUtils.defaultProperties());
+        assertEquals(1, clientMetricsManager.subscriptions().size());
+
+        // Add delay in request timestamp for requests.
+        Thread.sleep(10);
+
+        Thread thread = new Thread(() -> {
+            try {
+                GetTelemetrySubscriptionsResponse response = clientMetricsManager.processGetTelemetrySubscriptionRequest(
+                    request, 100, ClientMetricsTestUtils.requestContext(), 0);
+
+                responses.add(response);
+                lock.countDown();
+            } catch (UnknownHostException e) {
+                e.printStackTrace();
+            }
+        });
+
+        Thread thread1 = new Thread(() -> {
+            try {
+                GetTelemetrySubscriptionsResponse response = clientMetricsManager.processGetTelemetrySubscriptionRequest(
+                    request, 100, ClientMetricsTestUtils.requestContext(), 0);
+
+                responses.add(response);
+                lock.countDown();
+            } catch (UnknownHostException e) {
+                e.printStackTrace();
+            }
+        });
+
+        thread.start();
+        thread1.start();
+
+        assertTrue(lock.await(2000, TimeUnit.MILLISECONDS));
+        assertEquals(2, responses.size());
+
+        int throttlingErrorCount = 0;
+        for (GetTelemetrySubscriptionsResponse response : responses) {
+            if (response.error() == Errors.THROTTLING_QUOTA_EXCEEDED) {
+                throttlingErrorCount++;
+            } else {
+                // As subscription is updated hence 1 request shall fail with unknown subscription id.
+                assertEquals(Errors.NONE, response.error());
+            }
+        }
+        // 1 request should fail with throttling error.
+        assertEquals(1, throttlingErrorCount);
     }
 
     @Test
@@ -646,5 +775,147 @@ public class ClientMetricsManagerTest {
         assertEquals(Errors.TELEMETRY_TOO_LARGE, response.error());
         assertFalse(instance.terminating());
         assertEquals(Errors.TELEMETRY_TOO_LARGE, instance.lastKnownError());
+    }
+
+    @Test
+    public void testPushTelemetryConcurrentRequestNewClientInstance() throws UnknownHostException, InterruptedException {
+        GetTelemetrySubscriptionsRequest subscriptionsRequest = new GetTelemetrySubscriptionsRequest.Builder(
+            new GetTelemetrySubscriptionsRequestData()).build();
+
+        GetTelemetrySubscriptionsResponse subscriptionsResponse = clientMetricsManager.processGetTelemetrySubscriptionRequest(
+            subscriptionsRequest, 100, ClientMetricsTestUtils.requestContext(), 0);
+
+        ClientMetricsInstance instance = clientMetricsManager.clientInstance(subscriptionsResponse.data().clientInstanceId());
+        assertNotNull(instance);
+
+        // Add delay in request timestamp for requests.
+        Thread.sleep(10);
+
+        PushTelemetryRequest request = new Builder(
+            new PushTelemetryRequestData()
+                .setClientInstanceId(subscriptionsResponse.data().clientInstanceId())
+                .setSubscriptionId(subscriptionsResponse.data().subscriptionId())
+                .setCompressionType(CompressionType.NONE.id)
+                .setMetrics("test-data".getBytes(StandardCharsets.UTF_8))).build();
+
+        CountDownLatch lock = new CountDownLatch(2);
+        List<PushTelemetryResponse> responses = Collections.synchronizedList(new ArrayList<>());
+
+        ClientMetricsManager newClientMetricsManager = new ClientMetricsManager();
+
+        Thread thread = new Thread(() -> {
+            try {
+                PushTelemetryResponse response = newClientMetricsManager.processPushTelemetryRequest(
+                    request, 100, ClientMetricsTestUtils.requestContext(), 0);
+                responses.add(response);
+            } catch (UnknownHostException e) {
+                e.printStackTrace();
+            } finally {
+                lock.countDown();
+            }
+        });
+
+        Thread thread1 = new Thread(() -> {
+            try {
+                PushTelemetryResponse response = newClientMetricsManager.processPushTelemetryRequest(
+                    request, 100, ClientMetricsTestUtils.requestContext(), 0);
+                responses.add(response);
+            } catch (UnknownHostException e) {
+                e.printStackTrace();
+            } finally {
+                lock.countDown();
+            }
+        });
+
+        thread.start();
+        thread1.start();
+
+        assertTrue(lock.await(2000, TimeUnit.MILLISECONDS));
+        assertEquals(2, responses.size());
+
+        int throttlingErrorCount = 0;
+        for (PushTelemetryResponse response : responses) {
+            if (response.error() == Errors.THROTTLING_QUOTA_EXCEEDED) {
+                throttlingErrorCount++;
+            } else {
+                // As subscription is updates hence 1 request shall fail with unknown subscription id.
+                assertEquals(Errors.NONE, response.error());
+            }
+        }
+        // 1 request should fail with throttling error.
+        assertEquals(1, throttlingErrorCount);
+    }
+
+    @Test
+    public void testPushTelemetryConcurrentRequestAfterSubscriptionUpdate() throws UnknownHostException, InterruptedException {
+        GetTelemetrySubscriptionsRequest subscriptionsRequest = new GetTelemetrySubscriptionsRequest.Builder(
+            new GetTelemetrySubscriptionsRequestData()).build();
+
+        GetTelemetrySubscriptionsResponse subscriptionsResponse = clientMetricsManager.processGetTelemetrySubscriptionRequest(
+            subscriptionsRequest, 100, ClientMetricsTestUtils.requestContext(), 0);
+
+        ClientMetricsInstance instance = clientMetricsManager.clientInstance(subscriptionsResponse.data().clientInstanceId());
+        assertNotNull(instance);
+
+        // Add delay in request timestamp for requests.
+        Thread.sleep(10);
+
+        PushTelemetryRequest request = new Builder(
+            new PushTelemetryRequestData()
+                .setClientInstanceId(subscriptionsResponse.data().clientInstanceId())
+                .setSubscriptionId(subscriptionsResponse.data().subscriptionId())
+                .setCompressionType(CompressionType.NONE.id)
+                .setMetrics("test-data".getBytes(StandardCharsets.UTF_8))).build();
+
+        clientMetricsManager.updateSubscription("sub-1", ClientMetricsTestUtils.defaultProperties());
+        assertEquals(1, clientMetricsManager.subscriptions().size());
+
+        // Add delay in request timestamp for requests.
+        Thread.sleep(10);
+
+        CountDownLatch lock = new CountDownLatch(2);
+        List<PushTelemetryResponse> responses = Collections.synchronizedList(new ArrayList<>());
+
+        Thread thread = new Thread(() -> {
+            try {
+                PushTelemetryResponse response = clientMetricsManager.processPushTelemetryRequest(
+                    request, 100, ClientMetricsTestUtils.requestContext(), 0);
+                responses.add(response);
+            } catch (UnknownHostException e) {
+                e.printStackTrace();
+            } finally {
+                lock.countDown();
+            }
+        });
+
+        Thread thread1 = new Thread(() -> {
+            try {
+                PushTelemetryResponse response = clientMetricsManager.processPushTelemetryRequest(
+                    request, 100, ClientMetricsTestUtils.requestContext(), 0);
+                responses.add(response);
+            } catch (UnknownHostException e) {
+                e.printStackTrace();
+            } finally {
+                lock.countDown();
+            }
+        });
+
+        thread.start();
+        thread1.start();
+
+        assertTrue(lock.await(2000, TimeUnit.MILLISECONDS));
+        assertEquals(2, responses.size());
+
+        int throttlingErrorCount = 0;
+        for (PushTelemetryResponse response : responses) {
+            if (response.error() == Errors.THROTTLING_QUOTA_EXCEEDED) {
+                throttlingErrorCount++;
+            } else {
+                // As subscription is updated hence 1 request shall fail with unknown subscription id.
+                assertEquals(Errors.UNKNOWN_SUBSCRIPTION_ID, response.error());
+            }
+        }
+        // 1 request should fail with throttling error.
+        assertEquals(1, throttlingErrorCount);
     }
 }

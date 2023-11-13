@@ -29,23 +29,33 @@ import java.util.List;
  */
 public class ClientMetricsReceiverPlugin {
 
-    private static final List<ClientTelemetryReceiver> RECEIVERS = new ArrayList<>();
+    private static final ClientMetricsReceiverPlugin INSTANCE = new ClientMetricsReceiverPlugin();
 
-    public static boolean isEmpty() {
-        return RECEIVERS.isEmpty();
+    private final List<ClientTelemetryReceiver> receivers;
+
+    private ClientMetricsReceiverPlugin() {
+        this.receivers = new ArrayList<>();
     }
 
-    public static void add(ClientTelemetryReceiver receiver) {
-        RECEIVERS.add(receiver);
+    public static ClientMetricsReceiverPlugin instance() {
+        return INSTANCE;
     }
 
-    public static DefaultClientTelemetryPayload getPayLoad(PushTelemetryRequest request) {
+    public boolean isEmpty() {
+        return receivers.isEmpty();
+    }
+
+    public void add(ClientTelemetryReceiver receiver) {
+        receivers.add(receiver);
+    }
+
+    public DefaultClientTelemetryPayload getPayLoad(PushTelemetryRequest request) {
         return new DefaultClientTelemetryPayload(request);
     }
 
-    public static void exportMetrics(RequestContext context, PushTelemetryRequest request) {
+    public void exportMetrics(RequestContext context, PushTelemetryRequest request) {
         DefaultClientTelemetryPayload payload = getPayLoad(request);
-        for (ClientTelemetryReceiver receiver : RECEIVERS) {
+        for (ClientTelemetryReceiver receiver : receivers) {
             receiver.exportMetrics(context, payload);
         }
     }

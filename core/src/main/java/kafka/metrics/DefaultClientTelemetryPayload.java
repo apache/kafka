@@ -35,8 +35,8 @@ public class DefaultClientTelemetryPayload implements ClientTelemetryPayload {
     DefaultClientTelemetryPayload(PushTelemetryRequest request) {
         this.clientInstanceId = request.data().clientInstanceId();
         this.isClientTerminating = request.data().terminating();
-        this.metricsContentType = request.getMetricsContentType();
-        this.metricsData = request.getMetricsData();
+        this.metricsContentType = request.metricsContentType();
+        this.metricsData = request.metricsData();
     }
 
     @Override
