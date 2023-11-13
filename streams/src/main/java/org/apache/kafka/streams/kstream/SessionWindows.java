@@ -187,7 +187,7 @@ public final class SessionWindows {
      */
     @Deprecated
     public long maintainMs() {
-        return Math.max(maintainDurationMs, gapMs);
+        return Math.max(maintainDurationMs, gapMs + graceMs);
     }
 
 
