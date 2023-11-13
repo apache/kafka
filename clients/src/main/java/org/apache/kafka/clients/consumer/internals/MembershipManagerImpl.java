@@ -46,15 +46,15 @@ import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Group manager for a single consumer that has configured a group id as defined in
- * {@link ConsumerConfig#GROUP_ID_CONFIG}, to use the Kafka-based offset management capability, and
- * the consumer group protocol to get automatically assigned partitions when calling the
+ * Group manager for a single consumer that has a group id defined in the config
+ * {@link ConsumerConfig#GROUP_ID_CONFIG}, to use the Kafka-based offset management capability,
+ * and the consumer group protocol to get automatically assigned partitions when calling the
  * subscribe API.
  *
  * <p/>
  *
  * While the subscribe API hasn't been called (or if the consumer called unsubscribe), this manager
- * will only be responsible for keeping the member in a {@link MemberState#UNSUBSCRIBED} state,
+ * will only be responsible for keeping the member in the {@link MemberState#UNSUBSCRIBED} state,
  * where it can commit offsets to the group identified by the {@link #groupId()}, without joining
  * the group.
  *
@@ -68,16 +68,21 @@ import java.util.concurrent.CompletableFuture;
  * <p/>
  *
  * Reconciliation process:<p/>
- * The reconciliation process is responsible for applying a new target assignment received from
- * the broker. It involves multiple async operations, so the member will continue to heartbeat
- * while these operations complete, to make sure that the member stays in the group while
- * reconciling.
+ * The member accepts all assignments received from the broker, resolves topic names from
+ * metadata, reconciles the resolved assignments, and keeps the unresolved to be reconciled when
+ * discovered with a metadata update. Reconciliations of resolved assignments are executed
+ * sequentially and acknowledged to the server as they complete. The reconciliation process
+ * involves multiple async operations, so the member will continue to heartbeat while these
+ * operations complete, to make sure that the member stays in the group while reconciling.
  *
  * <p/>
  *
  * Reconciliation steps:
  * <ol>
- *     <li>Resolve topic names for all topic IDs received in the target assignment.</li>
+ *     <li>Resolve topic names for all topic IDs received in the target assignment. Topic names
+ *     found in metadata are then ready to be reconciled. Topic IDs not found are kept as
+ *     unresolved, and the member request metadata updates until it resolves them (or the broker
+ *     removes it from the target assignment.</li>
  *     <li>Commit offsets if auto-commit is enabled.</li>
  *     <li>Invoke the user-defined onPartitionsRevoked listener.</li>
  *     <li>Invoke the user-defined onPartitionsAssigned listener.</li>
@@ -926,15 +931,13 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
 
     /**
      * When cluster metadata is updated, try to resolve topic names for topic IDs received in
-     * assignment, for which a topic name hasn't been resolved yet. Discovered topic named will
-     * be added to the local topic names cached, to be used in the reconciliation process.
-     *
-     * <p/>
-     *
-     * This will incrementally resolve topic names for all unknown topic IDs received in the
-     * target assignment that is trying to be reconciled. Once all topic names are resolved, it
-     * will signal it so that the reconciliation process can resume. If some topic names are
-     * still unknown, this will request another metadata update.
+     * assignment that hasn't been resolved yet.
+     * <ul>
+     *     <li>Try to find topic names for all unresolved assignments</li>
+     *     <li>Add discovered topic names to the local topic names cache</li>
+     *     <li>If any topics are resolved, trigger a reconciliation process</li>
+     *     <li>If some topics still remain unresolved, request another metadata update</li>
+     * </ul>
      */
     @Override
     public void onUpdate(ClusterResource clusterResource) {
