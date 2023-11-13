@@ -407,6 +407,21 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      *
      * @param timeout timeout of the poll loop
      * @return ConsumerRecord.  It can be empty if time timeout expires.
+     *
+     * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
+     *             function is called
+     * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while
+     *             this function is called
+     * @throws org.apache.kafka.common.errors.RecordTooLargeException if the fetched record is larger than the maximum
+     *             allowable size
+     * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors
+     * @throws java.lang.IllegalStateException if the consumer is not subscribed to any topics or manually assigned any
+     *             partitions to consume from or an unexpected error occurred
+     * @throws org.apache.kafka.clients.consumer.OffsetOutOfRangeException if the fetch position of the consumer is
+     *             out of range and no offset reset policy is configured.
+     * @throws org.apache.kafka.common.errors.TopicAuthorizationException if the consumer is not authorized to read
+     *             from a partition
+     * @throws org.apache.kafka.common.errors.SerializationException if the fetched records cannot be deserialized
      */
     @Override
     public ConsumerRecords<K, V> poll(final Duration timeout) {
@@ -414,6 +429,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
         acquireAndEnsureOpen();
         try {
+            wakeupTrigger.setFetchAction(fetchBuffer);
             kafkaConsumerMetrics.recordPollStart(timer.currentTimeMs());
 
             if (subscriptions.hasNoSubscriptionOrUserAssignment()) {
@@ -421,9 +437,14 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             }
 
             do {
+                // We must not allow wake-ups between polling for fetches and returning the records.
+                // If the polled fetches are not empty the consumed position has already been updated in the polling
+                // of the fetches. A wakeup between returned fetches and returning records would lead to never
+                // returning the records in the fetches. Thus, we trigger a possible wake-up before we poll fetches.
+                wakeupTrigger.maybeTriggerWakeup();
+
                 updateAssignmentMetadataIfNeeded(timer);
                 final Fetch<K, V> fetch = pollForFetches(timer);
-
                 if (!fetch.isEmpty()) {
                     if (fetch.records().isEmpty()) {
                         log.trace("Returning empty records from `poll()` "
@@ -438,6 +459,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             return ConsumerRecords.empty();
         } finally {
             kafkaConsumerMetrics.recordPollEnd(timer.currentTimeMs());
+            wakeupTrigger.clearTask();
             release();
         }
     }
@@ -636,7 +658,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             try {
                 return applicationEventHandler.addAndGet(event, time.timer(timeout));
             } finally {
-                wakeupTrigger.clearActiveTask();
+                wakeupTrigger.clearTask();
             }
         } finally {
             release();
@@ -922,7 +944,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             offsets.forEach(this::updateLastSeenEpochIfNewer);
             ConsumerUtils.getResult(commitFuture, time.timer(timeout));
         } finally {
-            wakeupTrigger.clearActiveTask();
+            wakeupTrigger.clearTask();
             kafkaConsumerMetrics.recordCommitSync(time.nanoseconds() - commitStart);
             release();
         }
