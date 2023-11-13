@@ -189,7 +189,7 @@ public class HeartbeatRequestManagerTest {
         when(membershipManager.shouldSendHeartbeat()).thenReturn(true);
         NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(1, result.unsentRequests.size());
-        result.unsentRequests.get(0).future().completeExceptionally(new KafkaException("fatal"));
+        result.unsentRequests.get(0).handler().onFailure(time.milliseconds(), new KafkaException("fatal"));
         verify(membershipManager).transitionToFailed();
         verify(backgroundEventHandler).add(any());
     }
@@ -210,7 +210,7 @@ public class HeartbeatRequestManagerTest {
         resetWithZeroHeartbeatInterval(Optional.of(DEFAULT_GROUP_INSTANCE_ID));
 
         List<String> subscribedTopics = Collections.singletonList("topic");
-        subscriptions.subscribe(new HashSet<>(subscribedTopics), new NoOpConsumerRebalanceListener());
+        subscriptions.subscribe(new HashSet<>(subscribedTopics), Optional.empty());
 
         // Update membershipManager's memberId and memberEpoch
         ConsumerGroupHeartbeatResponse result =

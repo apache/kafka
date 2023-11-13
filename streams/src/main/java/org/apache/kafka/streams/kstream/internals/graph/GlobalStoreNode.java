@@ -20,7 +20,7 @@ import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
-import org.apache.kafka.streams.state.StoreBuilder;
+import org.apache.kafka.streams.processor.internals.StoreFactory;
 
 public class GlobalStoreNode<KIn, VIn, S extends StateStore> extends StateStoreNode<S> {
 
@@ -31,7 +31,7 @@ public class GlobalStoreNode<KIn, VIn, S extends StateStore> extends StateStoreN
     private final ProcessorSupplier<KIn, VIn, Void, Void> stateUpdateSupplier;
 
 
-    public GlobalStoreNode(final StoreBuilder<S> storeBuilder,
+    public GlobalStoreNode(final StoreFactory storeBuilder,
                            final String sourceName,
                            final String topic,
                            final ConsumedInternal<KIn, VIn> consumed,

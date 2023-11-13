@@ -33,7 +33,6 @@ import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.Stack;
 
-import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.apache.kafka.common.utils.Utils.wrapNullable;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -404,23 +403,6 @@ public class SerializationTest {
         deserializer.configure(deserializerConfigs, true);
 
         return Serdes.serdeFrom(serializer, deserializer);
-    }
-
-    @Test
-    public void testByteBufferSerializer() {
-        final byte[] bytes = "Hello".getBytes(UTF_8);
-        final ByteBuffer heapBuffer0 = ByteBuffer.allocate(bytes.length + 1).put(bytes);
-        final ByteBuffer heapBuffer1 = ByteBuffer.allocate(bytes.length).put(bytes);
-        final ByteBuffer heapBuffer2 = ByteBuffer.wrap(bytes);
-        final ByteBuffer directBuffer0 = ByteBuffer.allocateDirect(bytes.length + 1).put(bytes);
-        final ByteBuffer directBuffer1 = ByteBuffer.allocateDirect(bytes.length).put(bytes);
-        try (final ByteBufferSerializer serializer = new ByteBufferSerializer()) {
-            assertArrayEquals(bytes, serializer.serialize(topic, heapBuffer0));
-            assertArrayEquals(bytes, serializer.serialize(topic, heapBuffer1));
-            assertArrayEquals(bytes, serializer.serialize(topic, heapBuffer2));
-            assertArrayEquals(bytes, serializer.serialize(topic, directBuffer0));
-            assertArrayEquals(bytes, serializer.serialize(topic, directBuffer1));
-        }
     }
 
     @ParameterizedTest

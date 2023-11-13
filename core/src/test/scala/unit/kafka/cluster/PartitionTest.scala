@@ -2172,6 +2172,66 @@ class PartitionTest extends AbstractPartitionTest {
   }
 
   @Test
+  def testHighWatermarkAdvanceShouldNotAdvanceWhenUnderMinISR(): Unit = {
+    configRepository.setTopicConfig(topicPartition.topic, TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "3")
+    val log = logManager.getOrCreateLog(topicPartition, topicId = None)
+    seedLogData(log, numRecords = 10, leaderEpoch = 4)
+
+    val controllerEpoch = 0
+    val leaderEpoch = 5
+    val remoteBrokerId1 = brokerId + 1
+    val remoteBrokerId2 = brokerId + 2
+    val replicas = Seq(brokerId, remoteBrokerId1, remoteBrokerId2)
+    val isr = Seq(brokerId, remoteBrokerId1)
+
+    val metadataCache = mock(classOf[KRaftMetadataCache])
+    addBrokerEpochToMockMetadataCache(metadataCache, replicas.toList)
+
+    val partition = new Partition(
+      topicPartition,
+      replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
+      interBrokerProtocolVersion = MetadataVersion.IBP_3_7_IV1,
+      localBrokerId = brokerId,
+      () => defaultBrokerEpoch(brokerId),
+      time,
+      alterPartitionListener,
+      delayedOperations,
+      metadataCache,
+      logManager,
+      alterPartitionManager
+    )
+    partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
+
+    assertTrue(partition.makeLeader(
+      new LeaderAndIsrPartitionState()
+        .setControllerEpoch(controllerEpoch)
+        .setLeader(brokerId)
+        .setLeaderEpoch(leaderEpoch)
+        .setIsr(isr.toList.map(Int.box).asJava)
+        .setPartitionEpoch(1)
+        .setReplicas(replicas.map(Int.box).asJava)
+        .setIsNew(true),
+      offsetCheckpoints, None), "Expected become leader transition to succeed")
+
+    assertTrue(partition.isUnderMinIsr)
+    assertEquals(0L, partition.localLogOrException.highWatermark)
+
+    fetchFollower(partition, replicaId = remoteBrokerId1, fetchOffset = log.logEndOffset)
+    assertEquals(0L, partition.localLogOrException.highWatermark)
+
+    // Though the maximum ISR has been larger than min ISR, the HWM can't advance.
+    fetchFollower(partition, replicaId = remoteBrokerId2, fetchOffset = log.logEndOffset)
+    assertEquals(0L, partition.localLogOrException.highWatermark)
+    assertEquals(3, partition.partitionState.maximalIsr.size)
+    assertEquals(1, alterPartitionManager.isrUpdates.size)
+
+    // Update the ISR to size 3
+    alterPartitionManager.completeIsrUpdate(2)
+    assertFalse(partition.isUnderMinIsr)
+    assertEquals(log.logEndOffset, partition.localLogOrException.highWatermark)
+  }
+
+  @Test
   def testAlterIsrLeaderAndIsrRace(): Unit = {
     val log = logManager.getOrCreateLog(topicPartition, topicId = None)
     seedLogData(log, numRecords = 10, leaderEpoch = 4)
