@@ -185,7 +185,7 @@ public class MembershipManagerImplTest {
     @Test
     public void testFencingWhenStateIsStable() {
         MembershipManager membershipManager = createMemberInStableState();
-        testFencedMemberReleasesAssignmentAndResetsEpochToRejoin(membershipManager);
+        testFencedMemberReleasesAssignmentAndTransitionsToJoining(membershipManager);
         verify(subscriptionState).assignFromSubscribed(Collections.emptySet());
     }
 
@@ -194,8 +194,137 @@ public class MembershipManagerImplTest {
         MembershipManager membershipManager = mockJoinAndReceiveAssignment(false);
         assertEquals(MemberState.RECONCILING, membershipManager.state());
 
-        testFencedMemberReleasesAssignmentAndResetsEpochToRejoin(membershipManager);
+        testFencedMemberReleasesAssignmentAndTransitionsToJoining(membershipManager);
         verify(subscriptionState).assignFromSubscribed(Collections.emptySet());
+    }
+
+    /**
+     * This is the case where a member is stuck reconciling and transition out of the RECONCILING
+     * state (due to failure). When the reconciliation completes it should not be applied because
+     * it is not relevant anymore (it should not update the assignment on the member or send ack).
+     */
+    @Test
+    public void testDelayedReconciliationResultDiscardedIfMemberNotInReconcilingStateAnymore() {
+        MembershipManagerImpl membershipManager = createMemberInStableState();
+        Uuid topicId1 = Uuid.randomUuid();
+        String topic1 = "topic1";
+        Set<TopicPartition> owned = Collections.singleton(new TopicPartition(topic1, 0));
+        mockOwnedPartitionAndAssignmentReceived(topicId1, topic1, owned, true);
+
+        // Reconciliation that does not complete stuck on revocation commit.
+        CompletableFuture<Void> commitResult = mockEmptyAssignmentAndRevocationStuckOnCommit(membershipManager);
+
+        // Member received fatal error while reconciling
+        membershipManager.transitionToFatal();
+
+        // Complete commit request
+        commitResult.complete(null);
+
+        // Member should not update the subscription or send ack when the delayed reconciliation
+        // completed.
+        verify(subscriptionState, never()).assignFromSubscribed(anySet());
+        assertNotEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
+    }
+
+    /**
+     * This is the case where a member is stuck reconciling an assignment A (waiting on
+     * metadata, commit or callbacks), and it rejoins (due to fence or unsubscribe/subscribe). If
+     * the reconciliation of A completes it should not be applied (it should not update the
+     * assignment on the member or send ack).
+     */
+    @Test
+    public void testDelayedReconciliationResultDiscardedIfMemberRejoins() {
+        MembershipManagerImpl membershipManager = createMemberInStableState();
+        Uuid topicId1 = Uuid.randomUuid();
+        String topic1 = "topic1";
+        Set<TopicPartition> owned = Collections.singleton(new TopicPartition(topic1, 0));
+        mockOwnedPartitionAndAssignmentReceived(topicId1, topic1, owned, true);
+
+        // Reconciliation that does not complete stuck on revocation commit.
+        CompletableFuture<Void> commitResult =
+                mockNewAssignmentAndRevocationStuckOnCommit(membershipManager, topicId1, topic1,
+                        Arrays.asList(1, 2), true);
+
+        // Get fenced and rejoin while still reconciling.
+        testFencedMemberReleasesAssignmentAndTransitionsToJoining(membershipManager);
+        clearInvocations(subscriptionState);
+
+        // Get new assignment A2 after rejoining. This should not trigger a reconciliation just
+        // yet because there is another on in progress, but should keep the new assignment ready
+        // to be reconciled next.
+        Uuid topicId3 = Uuid.randomUuid();
+        mockOwnedPartitionAndAssignmentReceived(topicId3, "topic3", owned, true);
+        receiveAssignment(topicId3, Collections.singletonList(5), membershipManager);
+        verifyReconciliationNotTriggered(membershipManager);
+        Set<TopicPartition> assignmentAfterRejoin = Collections.singleton(new TopicPartition("topic3", 5));
+        assertEquals(assignmentAfterRejoin, membershipManager.assignmentReadyToReconcile());
+
+        // Reconciliation completes when the member has already re-joined the group. Should not
+        // update the subscription state or send ack.
+        commitResult.complete(null);
+        verify(subscriptionState, never()).assignFromSubscribed(anyCollection());
+        assertNotEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
+
+        // Assignment received after rejoining should be ready to reconcile on the next
+        // reconciliation loop.
+        assertEquals(MemberState.RECONCILING, membershipManager.state());
+        assertEquals(assignmentAfterRejoin, membershipManager.assignmentReadyToReconcile());
+    }
+
+    /**
+     * This is the case where a member is stuck reconciling an assignment A (waiting on
+     * metadata, commit or callbacks), and the target assignment changes (due to new topics added
+     * to metadata, or new assignment received from broker). If the reconciliation of A completes
+     * t should be applied (should update the assignment on the member and send ack), and then
+     * the reconciliation of assignment B will be processed and applied in the next
+     * reconciliation loop.
+     */
+    @Test
+    public void testDelayedReconciliationResultAppliedWhenTargetChangedWithMetadataUpdate() {
+        // Member receives and reconciles topic1-partition0
+        Uuid topicId1 = Uuid.randomUuid();
+        String topic1 = "topic1";
+        MembershipManagerImpl membershipManager =
+                mockMemberSuccessfullyReceivesAndAcksAssignment(topicId1, topic1, Arrays.asList(0));
+        membershipManager.onHeartbeatRequestSent();
+        assertEquals(MemberState.STABLE, membershipManager.state());
+        clearInvocations(membershipManager, subscriptionState);
+        when(subscriptionState.assignedPartitions()).thenReturn(Collections.singleton(new TopicPartition(topic1, 0)));
+
+        // New assignment revoking the partitions owned and adding a new one (not in metadata).
+        // Reconciliation triggered for topic 1 (stuck on revocation commit) and topic2 waiting
+        // for metadata.
+        Uuid topicId2 = Uuid.randomUuid();
+        String topic2 = "topic2";
+        CompletableFuture<Void> commitResult =
+                mockNewAssignmentAndRevocationStuckOnCommit(membershipManager, topicId2, topic2,
+                        Arrays.asList(1, 2), false);
+        verify(metadata).requestUpdate(anyBoolean());
+        assertEquals(Collections.singleton(topicId2), membershipManager.topicsWaitingForMetadata());
+
+        // Metadata discovered for topic2 while reconciliation in progress to revoke topic1.
+        // Should not trigger a new reconciliation because there is one already in progress.
+        mockTopicNameInMetadataCache(Collections.singletonMap(topicId2, topic2), true);
+        membershipManager.onUpdate(null);
+        assertEquals(Collections.emptySet(), membershipManager.topicsWaitingForMetadata());
+        verifyReconciliationNotTriggered(membershipManager);
+
+        // Reconciliation in progress completes. Should be applied revoking topic 1 only. Newly
+        // discovered topic2 will be reconciled in the next reconciliation loop.
+        commitResult.complete(null);
+
+        // Member should update the subscription and send ack when the delayed reconciliation
+        // completes.
+        verify(subscriptionState).assignFromSubscribed(Collections.emptySet());
+        assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
+
+        // Pending assignment that was discovered in metadata should be ready to reconcile in the
+        // next reconciliation loop.
+        Set<TopicPartition> topic2Assignment = new HashSet<>(Arrays.asList(
+                new TopicPartition(topic2, 1),
+                new TopicPartition(topic2, 2)));
+        assertEquals(topic2Assignment, membershipManager.assignmentReadyToReconcile());
+        assertEquals(topic2Assignment, membershipManager.assignmentReadyToReconcile());
     }
 
     @Test
@@ -265,14 +394,9 @@ public class MembershipManagerImplTest {
         // reconcile the new assignment.
         Uuid topicId = Uuid.randomUuid();
         String topicName = "topic1";
-        ConsumerGroupHeartbeatResponseData.Assignment newAssignment2 = new ConsumerGroupHeartbeatResponseData.Assignment()
-                .setTopicPartitions(Collections.singletonList(
-                        new ConsumerGroupHeartbeatResponseData.TopicPartitions()
-                                .setTopicId(topicId)
-                                .setPartitions(Collections.singletonList(0))));
         when(metadata.topicNames()).thenReturn(Collections.singletonMap(topicId, topicName));
+        receiveAssignment(topicId, Collections.singletonList(0), membershipManager);
         Set<TopicPartition> expectedAssignment = Collections.singleton(new TopicPartition(topicName, 0));
-        membershipManager.onHeartbeatResponseReceived(createConsumerGroupHeartbeatResponse(newAssignment2).data());
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
         verify(subscriptionState).assignFromSubscribed(expectedAssignment);
 
@@ -333,23 +457,12 @@ public class MembershipManagerImplTest {
         mockOwnedPartitionAndAssignmentReceived(topicId, topicName, Collections.emptySet(), true);
 
         MembershipManagerImpl membershipManager = createMembershipManagerJoiningGroup();
-        ConsumerGroupHeartbeatResponseData.Assignment targetAssignment = new ConsumerGroupHeartbeatResponseData.Assignment()
-                .setTopicPartitions(Collections.singletonList(
-                        new ConsumerGroupHeartbeatResponseData.TopicPartitions()
-                                .setTopicId(topicId)
-                                .setPartitions(Arrays.asList(0, 1))));
-        ConsumerGroupHeartbeatResponse heartbeatResponse = createConsumerGroupHeartbeatResponse(targetAssignment);
-        membershipManager.onHeartbeatResponseReceived(heartbeatResponse.data());
+        receiveAssignment(topicId, Arrays.asList(0, 1), membershipManager);
 
-        assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
         Set<TopicPartition> assignedPartitions = new HashSet<>(Arrays.asList(
                 new TopicPartition(topicName, 0),
                 new TopicPartition(topicName, 1)));
-        assertEquals(assignedPartitions, membershipManager.currentAssignment());
-        assertFalse(membershipManager.reconciliationInProgress());
-
-        verify(commitRequestManager).resetAutoCommitTimer();
-        verify(subscriptionState).assignFromSubscribed(anyCollection());
+        verifyReconciliationTriggeredAndCompleted(membershipManager, assignedPartitions);
     }
 
     @Test
@@ -362,24 +475,13 @@ public class MembershipManagerImplTest {
 
         MembershipManagerImpl membershipManager = createMemberInStableState();
         // New assignment received, adding partitions 1 and 2 to the previously owned partition 0.
-        ConsumerGroupHeartbeatResponseData.Assignment targetAssignment = new ConsumerGroupHeartbeatResponseData.Assignment()
-                .setTopicPartitions(Collections.singletonList(
-                        new ConsumerGroupHeartbeatResponseData.TopicPartitions()
-                                .setTopicId(topicId)
-                                .setPartitions(Arrays.asList(0, 1, 2))));
-        ConsumerGroupHeartbeatResponse heartbeatResponse = createConsumerGroupHeartbeatResponse(targetAssignment);
-        membershipManager.onHeartbeatResponseReceived(heartbeatResponse.data());
+        receiveAssignment(topicId, Arrays.asList(0, 1, 2), membershipManager);
 
-        assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
         Set<TopicPartition> assignedPartitions = new HashSet<>(Arrays.asList(
                 ownedPartition,
                 new TopicPartition("topic1", 1),
                 new TopicPartition("topic1", 2)));
-        assertEquals(assignedPartitions, membershipManager.currentAssignment());
-        assertFalse(membershipManager.reconciliationInProgress());
-
-        verify(commitRequestManager).resetAutoCommitTimer();
-        verify(subscriptionState).assignFromSubscribed(anyCollection());
+        verifyReconciliationTriggeredAndCompleted(membershipManager, assignedPartitions);
     }
 
     @Test
@@ -407,17 +509,6 @@ public class MembershipManagerImplTest {
         verify(membershipManager, never()).markReconciliationInProgress();
         verify(membershipManager, never()).markReconciliationCompleted();
         verify(subscriptionState, never()).assignFromSubscribed(anyCollection());
-    }
-
-    private void receiveAssignment(Uuid topicId, List<Integer> partitions,
-                             MembershipManager membershipManager) {
-        ConsumerGroupHeartbeatResponseData.Assignment targetAssignment = new ConsumerGroupHeartbeatResponseData.Assignment()
-                .setTopicPartitions(Collections.singletonList(
-                        new ConsumerGroupHeartbeatResponseData.TopicPartitions()
-                                .setTopicId(topicId)
-                                .setPartitions(partitions)));
-        ConsumerGroupHeartbeatResponse heartbeatResponse = createConsumerGroupHeartbeatResponse(targetAssignment);
-        membershipManager.onHeartbeatResponseReceived(heartbeatResponse.data());
     }
 
     @Test
@@ -485,13 +576,7 @@ public class MembershipManagerImplTest {
 
         MembershipManagerImpl membershipManager = createMembershipManagerJoiningGroup();
         // New assignment received, revoking partition 0, and assigning new partitions 1 and 2.
-        ConsumerGroupHeartbeatResponseData.Assignment targetAssignment = new ConsumerGroupHeartbeatResponseData.Assignment()
-                .setTopicPartitions(Collections.singletonList(
-                        new ConsumerGroupHeartbeatResponseData.TopicPartitions()
-                                .setTopicId(topicId)
-                                .setPartitions(Arrays.asList(1, 2))));
-        ConsumerGroupHeartbeatResponse heartbeatResponse = createConsumerGroupHeartbeatResponse(targetAssignment);
-        membershipManager.onHeartbeatResponseReceived(heartbeatResponse.data());
+        receiveAssignment(topicId, Arrays.asList(1, 2), membershipManager);
 
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
         Set<TopicPartition> assignedPartitions = new HashSet<>(Arrays.asList(
@@ -501,27 +586,6 @@ public class MembershipManagerImplTest {
         assertFalse(membershipManager.reconciliationInProgress());
 
         verify(subscriptionState).assignFromSubscribed(anyCollection());
-    }
-
-    @Test
-    public void testMemberReceivesFatalErrorWhileReconciling() {
-        MembershipManager membershipManager = createMemberInStableState();
-        mockOwnedPartition("topic1", 0);
-
-        CompletableFuture<Void> commitResult = mockRevocationNoCallbacks(true);
-
-        receiveEmptyAssignment(membershipManager);
-
-        // Member stays in RECONCILING while the commit request hasn't completed.
-        assertEquals(MemberState.RECONCILING, membershipManager.state());
-
-        // Member received fatal error while reconciling
-        membershipManager.transitionToFatal();
-
-        // Complete commit request
-        commitResult.complete(null);
-
-        verify(subscriptionState, never()).assignFromSubscribed(anySet());
     }
 
     @Test
@@ -589,15 +653,9 @@ public class MembershipManagerImplTest {
 
         mockOwnedPartitionAndAssignmentReceived(topicId, topicName, Collections.emptySet(), true);
 
-        // Member received assignment to reconcile
+        // Member received assignment to reconcile;
         MembershipManagerImpl membershipManager = createMembershipManagerJoiningGroup();
-        ConsumerGroupHeartbeatResponseData.Assignment targetAssignment = new ConsumerGroupHeartbeatResponseData.Assignment()
-                .setTopicPartitions(Collections.singletonList(
-                        new ConsumerGroupHeartbeatResponseData.TopicPartitions()
-                                .setTopicId(topicId)
-                                .setPartitions(Arrays.asList(0, 1))));
-        ConsumerGroupHeartbeatResponse heartbeatResponse = createConsumerGroupHeartbeatResponse(targetAssignment);
-        membershipManager.onHeartbeatResponseReceived(heartbeatResponse.data());
+        receiveAssignment(topicId, Arrays.asList(0, 1), membershipManager);
 
         // Member should complete reconciliation
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
@@ -617,13 +675,7 @@ public class MembershipManagerImplTest {
 
 
         // Revoke one of the 2 partitions
-        targetAssignment = new ConsumerGroupHeartbeatResponseData.Assignment()
-                .setTopicPartitions(Collections.singletonList(
-                        new ConsumerGroupHeartbeatResponseData.TopicPartitions()
-                                .setTopicId(topicId)
-                                .setPartitions(Collections.singletonList(1))));
-        heartbeatResponse = createConsumerGroupHeartbeatResponse(targetAssignment);
-        membershipManager.onHeartbeatResponseReceived(heartbeatResponse.data());
+        receiveAssignment(topicId, Collections.singletonList(1), membershipManager);
 
         // Revocation should complete without requesting any metadata update given that the topic
         // received in target assignment should exist in local topic name cache.
@@ -633,6 +685,50 @@ public class MembershipManagerImplTest {
         testRevocationCompleted(membershipManager, remainingAssignment);
     }
 
+    private MembershipManagerImpl mockMemberSuccessfullyReceivesAndAcksAssignment(
+            Uuid topicId, String topicName, List<Integer> partitions) {
+        mockOwnedPartitionAndAssignmentReceived(topicId, topicName, Collections.emptySet(), true);
+
+        MembershipManagerImpl membershipManager = createMembershipManagerJoiningGroup();
+        receiveAssignment(topicId, partitions, membershipManager);
+
+        Set<TopicPartition> assignedPartitions = new HashSet<>();
+        partitions.forEach(tp -> assignedPartitions.add(new TopicPartition(topicName, tp)));
+        verifyReconciliationTriggeredAndCompleted(membershipManager, assignedPartitions);
+        return membershipManager;
+    }
+
+    private CompletableFuture<Void> mockEmptyAssignmentAndRevocationStuckOnCommit(
+            MembershipManagerImpl membershipManager) {
+        CompletableFuture<Void> commitResult = mockRevocationNoCallbacks(true);
+        receiveEmptyAssignment(membershipManager);
+        verifyReconciliationTriggered(membershipManager);
+        clearInvocations(membershipManager);
+        assertEquals(MemberState.RECONCILING, membershipManager.state());
+
+        return commitResult;
+    }
+
+    private CompletableFuture<Void> mockNewAssignmentAndRevocationStuckOnCommit(
+            MembershipManagerImpl membershipManager, Uuid topicId, String topicName,
+            List<Integer> partitions, boolean mockMetadata) {
+        CompletableFuture<Void> commitResult = mockRevocationNoCallbacks(true);
+        if (mockMetadata) {
+            when(metadata.topicNames()).thenReturn(Collections.singletonMap(topicId, topicName));
+        }
+        receiveAssignment(topicId, partitions, membershipManager);
+        verifyReconciliationTriggered(membershipManager);
+        clearInvocations(membershipManager);
+        assertEquals(MemberState.RECONCILING, membershipManager.state());
+
+        return commitResult;
+    }
+
+    private void verifyReconciliationTriggered(MembershipManagerImpl membershipManager) {
+        verify(membershipManager).markReconciliationInProgress();
+        assertEquals(MemberState.RECONCILING, membershipManager.state());
+    }
+
     private void verifyReconciliationNotTriggered(MembershipManagerImpl membershipManager) {
         verify(membershipManager, never()).markReconciliationInProgress();
         verify(membershipManager, never()).markReconciliationCompleted();
@@ -640,13 +736,16 @@ public class MembershipManagerImplTest {
 
     private void verifyReconciliationTriggeredAndCompleted(MembershipManagerImpl membershipManager,
                                                            Set<TopicPartition> expectedAssignment) {
+        assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
         verify(membershipManager).markReconciliationInProgress();
         verify(membershipManager).markReconciliationCompleted();
         assertFalse(membershipManager.reconciliationInProgress());
 
+        // Assignment applied
         verify(subscriptionState).assignFromSubscribed(expectedAssignment);
-        verify(commitRequestManager).resetAutoCommitTimer();
         assertEquals(expectedAssignment, membershipManager.currentAssignment());
+
+        verify(commitRequestManager).resetAutoCommitTimer();
     }
 
     private void mockAckSent(MembershipManagerImpl membershipManager) {
@@ -714,11 +813,6 @@ public class MembershipManagerImplTest {
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
     }
 
-    private void mockOwnedPartition(Set<TopicPartition> owned) {
-        when(subscriptionState.assignedPartitions()).thenReturn(owned);
-        when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
-    }
-
     private MembershipManagerImpl mockJoinAndReceiveAssignment(boolean expectSubscriptionUpdated) {
         return mockJoinAndReceiveAssignment(expectSubscriptionUpdated, createAssignment(expectSubscriptionUpdated));
     }
@@ -748,6 +842,16 @@ public class MembershipManagerImplTest {
         return membershipManager;
     }
 
+    private void receiveAssignment(Uuid topicId, List<Integer> partitions, MembershipManager membershipManager) {
+        ConsumerGroupHeartbeatResponseData.Assignment targetAssignment = new ConsumerGroupHeartbeatResponseData.Assignment()
+                .setTopicPartitions(Collections.singletonList(
+                        new ConsumerGroupHeartbeatResponseData.TopicPartitions()
+                                .setTopicId(topicId)
+                                .setPartitions(partitions)));
+        ConsumerGroupHeartbeatResponse heartbeatResponse = createConsumerGroupHeartbeatResponse(targetAssignment);
+        membershipManager.onHeartbeatResponseReceived(heartbeatResponse.data());
+    }
+
     private void receiveEmptyAssignment(MembershipManager membershipManager) {
         // New empty assignment received, revoking owned partition.
         ConsumerGroupHeartbeatResponseData.Assignment targetAssignment = new ConsumerGroupHeartbeatResponseData.Assignment()
@@ -760,7 +864,7 @@ public class MembershipManagerImplTest {
      * Fenced member should release assignment, reset epoch to 0, keep member ID, and transition
      * to JOINING to rejoin the group.
      */
-    private void testFencedMemberReleasesAssignmentAndResetsEpochToRejoin(MembershipManager membershipManager) {
+    private void testFencedMemberReleasesAssignmentAndTransitionsToJoining(MembershipManager membershipManager) {
         mockMemberHasAutoAssignedPartition();
 
         membershipManager.transitionToFenced();

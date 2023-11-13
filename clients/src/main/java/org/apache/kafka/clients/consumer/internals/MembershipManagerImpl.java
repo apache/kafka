@@ -38,6 +38,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.SortedSet;
@@ -202,6 +203,13 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      * after receiving a heartbeat response, or a metadata update.
      */
     private boolean reconciliationInProgress;
+
+    /**
+     * ID the member had when the reconciliation in progress started. This is used to identify if
+     * the member has rejoined while it was reconciling an assignment (in which case the result
+     * of the reconciliation is not applied.)
+     */
+    private String memberIdOnReconciliationStart;
 
 
     public MembershipManagerImpl(String groupId,
@@ -373,6 +381,10 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         resetEpoch();
         transitionTo(MemberState.JOINING);
         clearPendingAssignmentsAndLocalNamesCache();
+        // Reset member ID of the reconciliation in progress (if any), to make sure that if the
+        // reconciliation completes while the member is rejoining but hasn't received the new
+        // member ID yet, the reconciliation result is discarded.
+        memberIdOnReconciliationStart = null;
     }
 
     /**
@@ -477,6 +489,9 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         }
     }
 
+    /**
+     * @return True if there are no assignments waiting to be resolved from metadata or reconciled.
+     */
     private boolean allPendingAssignmentsReconciled() {
         return assignmentUnresolved.isEmpty() && assignmentReadyToReconcile.isEmpty();
     }
@@ -501,11 +516,11 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         boolean sameAssignmentReceived = assignedPartitions.equals(subscriptions.assignedPartitions());
 
         if (reconciliationInProgress || sameAssignmentReceived) {
-            String reason = null;
+            String reason;
             if (reconciliationInProgress) {
-                reason = "Another reconciliation is alraedy in progress. Assignment " +
+                reason = "Another reconciliation is already in progress. Assignment " +
                         assignmentReadyToReconcile + " will be handled in the next reconciliation loop.";
-            } else if (sameAssignmentReceived) {
+            } else {
                 reason = "Target assignment ready to reconcile is equals to the member current assignment.";
             }
             log.debug("Ignoring reconciliation attempt." + reason);
@@ -553,7 +568,9 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         // and assignment, executed sequentially)
         CompletableFuture<Void> reconciliationResult =
                 revocationResult.thenCompose(r -> {
-                    if (state == MemberState.RECONCILING) {
+                    boolean memberHasRejoined = !Objects.equals(memberIdOnReconciliationStart,
+                            memberId);
+                    if (state == MemberState.RECONCILING && !memberHasRejoined) {
 
                         // Make assignment effective on the client by updating the subscription state.
                         subscriptions.assignFromSubscribed(assignedPartitions);
@@ -569,12 +586,20 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
                         return invokeOnPartitionsAssignedCallback(addedPartitions);
 
                     } else {
-                        // Revocation callback completed but member already moved out of the
-                        // reconciling state.
+                        String reason;
+                        if (state != MemberState.RECONCILING) {
+                            reason = "The member already transitioned out of the reconciling " +
+                                    "state into " + state;
+                        } else {
+                            reason = "The member has re-joined the group.";
+                        }
+                        // Revocation callback completed but the reconciled assignment should not
+                        // be applied (not relevant anymore). This could be because the member
+                        // is not in the RECONCILING state anymore (fenced, failed, unsubscribed),
+                        // or because it has already re-joined the group.
                         CompletableFuture<Void> res = new CompletableFuture<>();
-                        res.completeExceptionally(new KafkaException("Interrupting " +
-                                "reconciliation after revocation, as the member already " +
-                                "transitioned out of the reconciling state into " + state));
+                        res.completeExceptionally(new KafkaException("Interrupting reconciliation" +
+                                " after revocation. " + reason));
                         return res;
                     }
                 });
@@ -622,6 +647,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      */
     void markReconciliationInProgress() {
         reconciliationInProgress = true;
+        memberIdOnReconciliationStart = memberId;
     }
 
     /**
@@ -875,11 +901,19 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
 
 
     /**
-     * @return Number of topics received in a target assignment that have not been reconciled yet
+     * @return Set of topic IDs received in a target assignment that have not been reconciled yet
      * because topic names are not in metadata. Visible for testing.
      */
     Set<Uuid> topicsWaitingForMetadata() {
         return Collections.unmodifiableSet(assignmentUnresolved.keySet());
+    }
+
+    /**
+     * @return Topic partitions received in a target assignment that have been resolved in
+     * metadata and are ready to be reconciled. Visible for testing.
+     */
+    Set<TopicPartition> assignmentReadyToReconcile() {
+        return Collections.unmodifiableSet(assignmentReadyToReconcile);
     }
 
     /**
