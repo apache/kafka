@@ -153,6 +153,9 @@ public class AgentTest {
             taskState(new TaskDone(fooSpec, actualStartTimeMs, doneMs, "worker expired", false, null)).
             build()).
             waitFor(client);
+
+        agent.beginShutdown();
+        agent.waitForShutdown();
     }
 
     @Test
@@ -334,6 +337,9 @@ public class AgentTest {
                     new TextNode("halted"), "baz")).
                 build()).
             waitFor(client);
+
+        agent.beginShutdown();
+        agent.waitForShutdown();
     }
 
     private static class MockKibosh implements AutoCloseable {
@@ -401,6 +407,9 @@ public class AgentTest {
             assertEquals(new KiboshControlFile(Collections.singletonList(
                 new KiboshFilesUnreadableFaultSpec("/bar", 456))), mockKibosh.read());
         }
+
+        agent.beginShutdown();
+        agent.waitForShutdown();
     }
 
     @Test
