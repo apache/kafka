@@ -226,7 +226,7 @@ public class KafkaMetricsCollectorTest {
         collector.collect(emitterCumulative);
         List<SinglePointMetric> result = emitterCumulative.emittedMetrics();
 
-        // Should get exactly 2 Kafka measurables since Metrics always includes a count measurable.
+        // Should get exactly 5 Kafka measurables since Metrics always includes a count measurable.
         assertEquals(5, result.size());
 
         result.stream()
