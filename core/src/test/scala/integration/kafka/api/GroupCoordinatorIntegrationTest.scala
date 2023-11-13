@@ -15,17 +15,17 @@ package kafka.api
 import kafka.integration.KafkaServerTestHarness
 import kafka.log.UnifiedLog
 import kafka.server.KafkaConfig
-import kafka.utils.TestUtils
+import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.consumer.OffsetAndMetadata
 import org.apache.kafka.common.TopicPartition
-import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions._
 
 import scala.jdk.CollectionConverters._
 import java.util.Properties
-
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.record.CompressionType
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 class GroupCoordinatorIntegrationTest extends KafkaServerTestHarness {
   val offsetsTopicCompressionCodec = CompressionType.GZIP
@@ -33,18 +33,23 @@ class GroupCoordinatorIntegrationTest extends KafkaServerTestHarness {
   overridingProps.put(KafkaConfig.OffsetsTopicPartitionsProp, "1")
   overridingProps.put(KafkaConfig.OffsetsTopicCompressionCodecProp, offsetsTopicCompressionCodec.id.toString)
 
-  override def generateConfigs = TestUtils.createBrokerConfigs(1, zkConnect, enableControlledShutdown = false).map {
+  override def generateConfigs = TestUtils.createBrokerConfigs(1, zkConnectOrNull, enableControlledShutdown = false).map {
+    if (isNewGroupCoordinatorEnabled()) {
+      overridingProps.put(KafkaConfig.UnstableApiVersionsEnableProp, "true")
+      overridingProps.put(KafkaConfig.NewGroupCoordinatorEnableProp, "true")
+    }
     KafkaConfig.fromProps(_, overridingProps)
   }
 
-  @Test
-  def testGroupCoordinatorPropagatesOffsetsTopicCompressionCodec(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testGroupCoordinatorPropagatesOffsetsTopicCompressionCodec(quorum: String): Unit = {
     val consumer = TestUtils.createConsumer(bootstrapServers())
     val offsetMap = Map(
       new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0) -> new OffsetAndMetadata(10, "")
     ).asJava
     consumer.commitSync(offsetMap)
-    val logManager = servers.head.getLogManager
+    val logManager = brokers.head.logManager
     def getGroupMetadataLogOpt: Option[UnifiedLog] =
       logManager.getLog(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0))
 
