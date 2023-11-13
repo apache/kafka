@@ -83,7 +83,7 @@ public class InternalTopologyBuilderTest {
 
     private final Serde<String> stringSerde = Serdes.String();
     private final InternalTopologyBuilder builder = new InternalTopologyBuilder();
-    private final StoreBuilder<?> storeBuilder = new MockKeyValueStoreBuilder("testStore", false);
+    private final StoreFactory storeBuilder = new MockKeyValueStoreBuilder("testStore", false).asFactory();
 
     @Test
     public void shouldAddSourceWithOffsetReset() {
@@ -213,7 +213,7 @@ public class InternalTopologyBuilderTest {
         final IllegalArgumentException exception = assertThrows(
                 IllegalArgumentException.class,
             () -> builder.addGlobalStore(
-                        new MockKeyValueStoreBuilder("global-store", false).withLoggingDisabled(),
+                        new MockKeyValueStoreBuilder("global-store", false).asFactory().withLoggingDisabled(),
                         "globalSource",
                         null,
                         null,
@@ -321,7 +321,7 @@ public class InternalTopologyBuilderTest {
         builder.addSource(null, "source-1", null, null, null, Pattern.compile("topic-1"));
         builder.addSource(null, "source-2", null, null, null, Pattern.compile("topic-2"));
         builder.addGlobalStore(
-            new MockKeyValueStoreBuilder("global-store", false).withLoggingDisabled(),
+            new MockKeyValueStoreBuilder("global-store", false).asFactory().withLoggingDisabled(),
             "globalSource",
             null,
             null,
@@ -345,7 +345,7 @@ public class InternalTopologyBuilderTest {
         builder.addSource(null, "source-1", null, null, null, "topic-1");
         builder.addSource(null, "source-2", null, null, null, "topic-2");
         builder.addGlobalStore(
-            new MockKeyValueStoreBuilder("global-store", false).withLoggingDisabled(),
+            new MockKeyValueStoreBuilder("global-store", false).asFactory().withLoggingDisabled(),
             "globalSource",
             null,
             null,
@@ -453,8 +453,8 @@ public class InternalTopologyBuilderTest {
 
     @Test
     public void shouldNotAllowToAddStoresWithSameNameWhenFirstStoreIsGlobal() {
-        final StoreBuilder<KeyValueStore<Object, Object>> globalBuilder =
-            new MockKeyValueStoreBuilder("testStore", false).withLoggingDisabled();
+        final StoreFactory globalBuilder =
+            new MockKeyValueStoreBuilder("testStore", false).asFactory().withLoggingDisabled();
 
         builder.addGlobalStore(
             globalBuilder,
@@ -480,8 +480,8 @@ public class InternalTopologyBuilderTest {
 
     @Test
     public void shouldNotAllowToAddStoresWithSameNameWhenSecondStoreIsGlobal() {
-        final StoreBuilder<KeyValueStore<Object, Object>> globalBuilder =
-            new MockKeyValueStoreBuilder("testStore", false).withLoggingDisabled();
+        final StoreFactory globalBuilder =
+            new MockKeyValueStoreBuilder("testStore", false).asFactory().withLoggingDisabled();
 
         builder.addStateStore(storeBuilder);
 
@@ -507,10 +507,10 @@ public class InternalTopologyBuilderTest {
 
     @Test
     public void shouldNotAllowToAddGlobalStoresWithSameName() {
-        final StoreBuilder<KeyValueStore<Object, Object>> firstGlobalBuilder =
-            new MockKeyValueStoreBuilder("testStore", false).withLoggingDisabled();
-        final StoreBuilder<KeyValueStore<Object, Object>> secondGlobalBuilder =
-            new MockKeyValueStoreBuilder("testStore", false).withLoggingDisabled();
+        final StoreFactory firstGlobalBuilder =
+            new MockKeyValueStoreBuilder("testStore", false).asFactory().withLoggingDisabled();
+        final StoreFactory secondGlobalBuilder =
+            new MockKeyValueStoreBuilder("testStore", false).asFactory().withLoggingDisabled();
 
         builder.addGlobalStore(
             firstGlobalBuilder,
@@ -721,7 +721,7 @@ public class InternalTopologyBuilderTest {
 
         oldNodeGroups = newNodeGroups;
         builder.addGlobalStore(
-            new MockKeyValueStoreBuilder("global-store", false).withLoggingDisabled(),
+            new MockKeyValueStoreBuilder("global-store", false).asFactory().withLoggingDisabled(),
             "globalSource",
             null,
             null,
@@ -820,7 +820,7 @@ public class InternalTopologyBuilderTest {
 
     @Test
     public void shouldNotAddNullStateStoreSupplier() {
-        assertThrows(NullPointerException.class, () -> builder.addStateStore(null));
+        assertThrows(NullPointerException.class, () -> builder.addStateStore((StoreBuilder<?>) null));
     }
 
     private Set<String> nodeNames(final Collection<ProcessorNode<?, ?, ?, ?>> nodes) {
@@ -1288,7 +1288,7 @@ public class InternalTopologyBuilderTest {
         final String globalTopic = "global-topic";
         builder.setApplicationId("X");
         builder.addGlobalStore(
-            new MockKeyValueStoreBuilder(globalStoreName, false).withLoggingDisabled(),
+            new MockKeyValueStoreBuilder(globalStoreName, false).asFactory().withLoggingDisabled(),
             "globalSource",
             null,
             null,
