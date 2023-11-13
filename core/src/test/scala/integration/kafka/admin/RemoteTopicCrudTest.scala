@@ -79,7 +79,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
     topicConfig.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
     topicConfig.put(TopicConfig.RETENTION_MS_CONFIG, "200")
     topicConfig.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, "100")
-    TestUtils.createTopicWithAdmin(createAdminClient(), testTopicName, brokers, numPartitions, numReplicationFactor,
+    TestUtils.createTopicWithAdmin(createAdminClient(), testTopicName, brokers, controllerServers, numPartitions, numReplicationFactor,
       topicConfig = topicConfig)
     verifyRemoteLogTopicConfigs(topicConfig)
   }
@@ -91,7 +91,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
     topicConfig.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
     topicConfig.put(TopicConfig.RETENTION_BYTES_CONFIG, "512")
     topicConfig.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, "256")
-    TestUtils.createTopicWithAdmin(createAdminClient(), testTopicName, brokers, numPartitions, numReplicationFactor,
+    TestUtils.createTopicWithAdmin(createAdminClient(), testTopicName, brokers, controllerServers, numPartitions, numReplicationFactor,
       topicConfig = topicConfig)
     verifyRemoteLogTopicConfigs(topicConfig)
   }
@@ -103,7 +103,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
     val topicConfig = new Properties()
     topicConfig.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
     topicConfig.put(TopicConfig.RETENTION_MS_CONFIG, "1001")
-    TestUtils.createTopicWithAdmin(createAdminClient(), testTopicName, brokers, numPartitions, numReplicationFactor,
+    TestUtils.createTopicWithAdmin(createAdminClient(), testTopicName, brokers, controllerServers, numPartitions, numReplicationFactor,
       topicConfig = topicConfig)
     verifyRemoteLogTopicConfigs(topicConfig)
   }
@@ -115,7 +115,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
     val topicConfig = new Properties()
     topicConfig.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
     topicConfig.put(TopicConfig.RETENTION_BYTES_CONFIG, "1025")
-    TestUtils.createTopicWithAdmin(createAdminClient(), testTopicName, brokers, numPartitions, numReplicationFactor,
+    TestUtils.createTopicWithAdmin(createAdminClient(), testTopicName, brokers, controllerServers, numPartitions, numReplicationFactor,
       topicConfig = topicConfig)
     verifyRemoteLogTopicConfigs(topicConfig)
   }
@@ -128,7 +128,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
     topicConfig.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
     topicConfig.put(TopicConfig.RETENTION_MS_CONFIG, "200")
     assertThrowsException(classOf[InvalidConfigurationException], () =>
-      TestUtils.createTopicWithAdmin(createAdminClient(), testTopicName, brokers, numPartitions, numReplicationFactor,
+      TestUtils.createTopicWithAdmin(createAdminClient(), testTopicName, brokers, controllerServers, numPartitions, numReplicationFactor,
         topicConfig = topicConfig))
   }
 
@@ -140,7 +140,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
     topicConfig.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
     topicConfig.put(TopicConfig.RETENTION_BYTES_CONFIG, "512")
     assertThrowsException(classOf[InvalidConfigurationException], () =>
-      TestUtils.createTopicWithAdmin(createAdminClient(), testTopicName, brokers, numPartitions, numReplicationFactor,
+      TestUtils.createTopicWithAdmin(createAdminClient(), testTopicName, brokers, controllerServers, numPartitions, numReplicationFactor,
         topicConfig = topicConfig))
   }
 
@@ -151,7 +151,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
     topicConfig.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
     topicConfig.put(TopicConfig.CLEANUP_POLICY_CONFIG, "compact")
     assertThrowsException(classOf[InvalidConfigurationException], () =>
-      TestUtils.createTopicWithAdmin(createAdminClient(), testTopicName, brokers, numPartitions, numReplicationFactor,
+      TestUtils.createTopicWithAdmin(createAdminClient(), testTopicName, brokers, controllerServers, numPartitions, numReplicationFactor,
         topicConfig = topicConfig))
   }
 
@@ -160,7 +160,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
   def testEnableRemoteLogOnExistingTopicTest(quorum: String): Unit = {
     val admin = createAdminClient()
     val topicConfig = new Properties()
-    TestUtils.createTopicWithAdmin(admin, testTopicName, brokers, numPartitions, numReplicationFactor,
+    TestUtils.createTopicWithAdmin(admin, testTopicName, brokers, controllerServers, numPartitions, numReplicationFactor,
       topicConfig = topicConfig)
 
     val configs = new util.HashMap[ConfigResource, util.Collection[AlterConfigOp]]()
@@ -181,11 +181,11 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
     val topicConfigWithRemoteStorage = new Properties()
     topicConfigWithRemoteStorage.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
     val message = assertThrowsException(classOf[InvalidConfigurationException],
-      () => TestUtils.createTopicWithAdmin(createAdminClient(), testTopicName, brokers, numPartitions,
+      () => TestUtils.createTopicWithAdmin(createAdminClient(), testTopicName, brokers, controllerServers, numPartitions,
         numReplicationFactor, topicConfig = topicConfigWithRemoteStorage))
     assertTrue(message.getMessage.contains("Tiered Storage functionality is disabled in the broker"))
 
-    TestUtils.createTopicWithAdmin(admin, testTopicName, brokers, numPartitions, numReplicationFactor)
+    TestUtils.createTopicWithAdmin(admin, testTopicName, brokers, controllerServers, numPartitions, numReplicationFactor)
     val configs = new util.HashMap[ConfigResource, util.Collection[AlterConfigOp]]()
     configs.put(new ConfigResource(ConfigResource.Type.TOPIC, testTopicName),
       Collections.singleton(
@@ -203,7 +203,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
     val admin = createAdminClient()
     val topicConfig = new Properties()
     topicConfig.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
-    TestUtils.createTopicWithAdmin(admin, testTopicName, brokers, numPartitions, numReplicationFactor,
+    TestUtils.createTopicWithAdmin(admin, testTopicName, brokers, controllerServers, numPartitions, numReplicationFactor,
       topicConfig = topicConfig)
 
     val configs = new util.HashMap[ConfigResource, util.Collection[AlterConfigOp]]()
@@ -224,7 +224,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
     val admin = createAdminClient()
     val topicConfig = new Properties()
     topicConfig.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
-    TestUtils.createTopicWithAdmin(admin, testTopicName, brokers, numPartitions, numReplicationFactor,
+    TestUtils.createTopicWithAdmin(admin, testTopicName, brokers, controllerServers, numPartitions, numReplicationFactor,
       topicConfig = topicConfig)
 
     val configs = new util.HashMap[ConfigResource, util.Collection[AlterConfigOp]]()
@@ -245,7 +245,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
     val admin = createAdminClient()
     val topicConfig = new Properties()
     topicConfig.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
-    TestUtils.createTopicWithAdmin(admin, testTopicName, brokers, numPartitions, numReplicationFactor,
+    TestUtils.createTopicWithAdmin(admin, testTopicName, brokers, controllerServers, numPartitions, numReplicationFactor,
       topicConfig = topicConfig)
 
     // inherited local retention ms is 1000
@@ -265,7 +265,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
     val admin = createAdminClient()
     val topicConfig = new Properties()
     topicConfig.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
-    TestUtils.createTopicWithAdmin(admin, testTopicName, brokers, numPartitions, numReplicationFactor,
+    TestUtils.createTopicWithAdmin(admin, testTopicName, brokers, controllerServers, numPartitions, numReplicationFactor,
       topicConfig = topicConfig)
 
     // inherited local retention bytes is 1024
@@ -288,9 +288,9 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
     topicConfig.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
     topicConfig.put(TopicConfig.RETENTION_MS_CONFIG, "200")
     topicConfig.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, "100")
-    TestUtils.createTopicWithAdmin(createAdminClient(), testTopicName, brokers, numPartitions, brokerCount,
+    TestUtils.createTopicWithAdmin(createAdminClient(), testTopicName, brokers, controllerServers, numPartitions, brokerCount,
       topicConfig = topicConfig)
-    TestUtils.deleteTopicWithAdmin(createAdminClient(), testTopicName, brokers)
+    TestUtils.deleteTopicWithAdmin(createAdminClient(), testTopicName, brokers, controllerServers)
     assertThrowsException(classOf[UnknownTopicOrPartitionException],
       () => TestUtils.describeTopic(createAdminClient(), testTopicName), "Topic should be deleted")
     TestUtils.waitUntilTrue(() =>
@@ -304,7 +304,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
     val topicConfig = new Properties()
     topicConfig.setProperty(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
 
-    TestUtils.createTopicWithAdmin(createAdminClient(), testTopicName, brokers, numPartitions, brokerCount,
+    TestUtils.createTopicWithAdmin(createAdminClient(), testTopicName, brokers, controllerServers, numPartitions, brokerCount,
       topicConfig = topicConfig)
 
     val tsDisabledProps = TestUtils.createBrokerConfigs(1, zkConnectOrNull).head
@@ -326,7 +326,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
     val topicConfig = new Properties()
     topicConfig.setProperty(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, false.toString)
 
-    TestUtils.createTopicWithAdmin(createAdminClient(), testTopicName, brokers, numPartitions, brokerCount,
+    TestUtils.createTopicWithAdmin(createAdminClient(), testTopicName, brokers, controllerServers, numPartitions, brokerCount,
       topicConfig = topicConfig)
 
     val tsDisabledProps = TestUtils.createBrokerConfigs(1, zkConnectOrNull).head
