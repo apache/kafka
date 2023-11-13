@@ -17,11 +17,10 @@
 package org.apache.kafka.common.telemetry.internals;
 
 import java.time.Instant;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * A LastValueTracker uses a ConcurrentMap to maintain historic values for a given key, and return
@@ -30,7 +29,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * @param <T> The type of the value.
  */
 public class LastValueTracker<T> {
-    private final ConcurrentMap<MetricKey, AtomicReference<InstantAndValue<T>>> counters = new ConcurrentHashMap<>();
+    private final Map<MetricKey, InstantAndValue<T>> counters = new ConcurrentHashMap<>();
 
     /**
      * Return the last instant/value for the given MetricKey, or Optional.empty if there isn't one.
@@ -43,22 +42,18 @@ public class LastValueTracker<T> {
      */
     public Optional<InstantAndValue<T>> getAndSet(MetricKey metricKey, Instant now, T value) {
         InstantAndValue<T> instantAndValue = new InstantAndValue<>(now, value);
-        AtomicReference<InstantAndValue<T>> valueOrNull = counters
-            .putIfAbsent(metricKey, new AtomicReference<>(instantAndValue));
+        InstantAndValue<T> valueOrNull = counters.put(metricKey, instantAndValue);
 
         // there wasn't already an entry, so return empty.
         if (valueOrNull == null) {
             return Optional.empty();
         }
 
-        // Update the atomic ref to point to our new InstantAndValue, but get the previous value
-        InstantAndValue<T> previousValue = valueOrNull.getAndSet(instantAndValue);
-
-        // Return the instance and the value.
-        return Optional.of(previousValue);
+        // Return the previous instance and the value.
+        return Optional.of(valueOrNull);
     }
 
-    public AtomicReference<InstantAndValue<T>> remove(MetricKey metricKey) {
+    public InstantAndValue<T> remove(MetricKey metricKey) {
         return counters.remove(metricKey);
     }
 

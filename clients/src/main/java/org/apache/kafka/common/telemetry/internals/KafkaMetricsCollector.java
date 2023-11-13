@@ -34,11 +34,11 @@ import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.metrics.stats.SimpleRate;
 import org.apache.kafka.common.metrics.stats.WindowedCount;
 import org.apache.kafka.common.telemetry.internals.LastValueTracker.InstantAndValue;
+import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.lang.reflect.Field;
-import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -56,7 +56,7 @@ import java.util.concurrent.ConcurrentHashMap;
  *     <li>{@link Measurable}</li>
  * </ol>
  *
- * {@link Gauge Gauges} can have any value but we only collect metrics with number values.
+ * {@link Gauge Gauges} can have any value, but we only collect metrics with number values.
  * {@link Measurable Measurables} are divided into simple types with single values
  * ({@link Avg}, {@link CumulativeCount}, {@link Min}, {@link Max}, {@link Rate},
  * {@link SimpleRate}, and {@link CumulativeSum}) and compound types ({@link Frequencies},
@@ -88,14 +88,14 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * <p>
  *
- * A Meter metric is always created with and reported as 2 KafkaExporter metrics: a rate and a
- * count. For eg: org.apache.kafka.common.network.Selector has Meter metric for "connection-close" but it
- * has to be created with a "connection-close-rate" metric of type rate and a "connection-close-total"
- * metric of type total. So, we will never get a KafkaExporter metric with type Meter.
+ * A Meter metric is always created with and reported as 2 metrics: a rate and a count. For eg:
+ * org.apache.kafka.common.network.Selector has Meter metric for "connection-close" but it has to be
+ * created with a "connection-close-rate" metric of type rate and a "connection-close-total"
+ * metric of type total.
  *
  * <p>
  *
- * Frequencies is created with a array of Frequency objects. When a Frequencies metric is registered, each
+ * Frequencies is created with an array of Frequency objects. When a Frequencies metric is registered, each
  * member Frequency object is converted into an anonymous Measurable and registered. So, a Frequencies metric
  * is reported with a set of measurables with name = Frequency.name(). As there is no way to figure out the
  * compound type, each component measurables is converted to a GAUGE_DOUBLE.
@@ -113,7 +113,7 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * <p>
  *
- * KafkaExporter -> OpenTelemetry mapping for measurables
+ * OpenTelemetry mapping for measurables:
  * Avg / Rate / Min / Max / Total / Sum -> Gauge
  * Count -> Sum
  * Meter has 2 elements :
@@ -127,7 +127,7 @@ public class KafkaMetricsCollector implements MetricsCollector {
     private static final Logger log = LoggerFactory.getLogger(KafkaMetricsCollector.class);
 
     private final StateLedger ledger;
-    private final Clock clock;
+    private final Time time;
     private final MetricNamingStrategy<MetricName> metricNamingStrategy;
 
     private static final Field METRIC_VALUE_PROVIDER_FIELD;
@@ -142,13 +142,13 @@ public class KafkaMetricsCollector implements MetricsCollector {
     }
 
     public KafkaMetricsCollector(MetricNamingStrategy<MetricName> metricNamingStrategy) {
-        this(metricNamingStrategy, Clock.systemUTC());
+        this(metricNamingStrategy, Time.SYSTEM);
     }
 
     // Visible for testing
-    public KafkaMetricsCollector(MetricNamingStrategy<MetricName> metricNamingStrategy, Clock clock) {
+    public KafkaMetricsCollector(MetricNamingStrategy<MetricName> metricNamingStrategy, Time time) {
         this.metricNamingStrategy = metricNamingStrategy;
-        this.clock = clock;
+        this.time = time;
         this.ledger = new StateLedger();
     }
 
@@ -185,7 +185,7 @@ public class KafkaMetricsCollector implements MetricsCollector {
                 collectMetric(metricsEmitter, metricKey, metric);
             } catch (Exception e) {
                 // catch and log to continue processing remaining metrics
-                log.error("Unexpected error processing Kafka metric {}", metricKey, e);
+                log.error("Error processing Kafka metric {}", metricKey, e);
             }
         }
     }
@@ -201,22 +201,22 @@ public class KafkaMetricsCollector implements MetricsCollector {
             return;
         }
 
+        Instant now = Instant.ofEpochMilli(time.milliseconds());
         if (isMeasurable(metric)) {
             Measurable measurable = metric.measurable();
             Double value = (Double) metricValue;
 
             if (measurable instanceof WindowedCount || measurable instanceof CumulativeSum) {
-                collectSum(metricKey, value, metricsEmitter);
-                collectDelta(metricKey, value, metricsEmitter);
+                collectSum(metricKey, value, metricsEmitter, now);
             } else {
-                collectGauge(metricKey, value, metricsEmitter);
+                collectGauge(metricKey, value, metricsEmitter, now);
             }
         } else {
             // It is non-measurable Gauge metric.
             // Collect the metric only if its value is a number.
             if (metricValue instanceof Number) {
                 Number value = (Number) metricValue;
-                collectGauge(metricKey, value, metricsEmitter);
+                collectGauge(metricKey, value, metricsEmitter, now);
             } else {
                 // skip non-measurable metrics
                 log.debug("Skipping non-measurable gauge metric {}", metricKey.name());
@@ -224,47 +224,40 @@ public class KafkaMetricsCollector implements MetricsCollector {
         }
     }
 
-    private void collectDelta(MetricKey originalKey, Double value, MetricsEmitter metricsEmitter) {
-        MetricKey metricKey = metricNamingStrategy.derivedMetricKey(originalKey, "delta");
+    private void collectSum(MetricKey metricKey, double value, MetricsEmitter metricsEmitter, Instant timestamp) {
         if (!metricsEmitter.shouldEmitMetric(metricKey)) {
             return;
         }
 
-        // calculate a getAndSet, and add to out if non-empty
-        final Instant timestamp = clock.instant();
-        InstantAndValue<Double> instantAndValue = ledger.delta(originalKey, timestamp, value);
+        if (metricsEmitter.shouldEmitDeltaMetrics()) {
+            InstantAndValue<Double> instantAndValue = ledger.delta(metricKey, timestamp, value);
 
-        metricsEmitter.emitMetric(
-            SinglePointMetric.deltaSum(metricKey, instantAndValue.getValue(), true, timestamp,
-                instantAndValue.getIntervalStart())
-        );
+            metricsEmitter.emitMetric(
+                SinglePointMetric.deltaSum(metricKey, instantAndValue.getValue(), true, timestamp,
+                    instantAndValue.getIntervalStart())
+            );
+        } else {
+            metricsEmitter.emitMetric(
+                SinglePointMetric.sum(metricKey, value, true, timestamp, ledger.instantAdded(metricKey))
+            );
+        }
     }
 
-    private void collectSum(MetricKey metricKey, double value, MetricsEmitter metricsEmitter) {
+    private void collectGauge(MetricKey metricKey, Number value, MetricsEmitter metricsEmitter, Instant timestamp) {
         if (!metricsEmitter.shouldEmitMetric(metricKey)) {
             return;
         }
 
         metricsEmitter.emitMetric(
-            SinglePointMetric.sum(metricKey, value, true, clock.instant(), ledger.instantAdded(metricKey))
-        );
-    }
-
-    private void collectGauge(MetricKey metricKey, Number value, MetricsEmitter metricsEmitter) {
-        if (!metricsEmitter.shouldEmitMetric(metricKey)) {
-            return;
-        }
-
-        metricsEmitter.emitMetric(
-            SinglePointMetric.gauge(metricKey, value, clock.instant())
+            SinglePointMetric.gauge(metricKey, value, timestamp)
         );
     }
 
     private static boolean isMeasurable(KafkaMetric metric) {
-        // KafkaMetric does not expose the internal MetricValueProvider and throws an IllegalStateException exception
-        // if .measurable() is called for a Gauge.
+        // KafkaMetric does not expose the internal MetricValueProvider and throws an IllegalStateException
+        // exception, if measurable() is called for a Gauge.
         // There are 2 ways to find the type of internal MetricValueProvider for a KafkaMetric - use reflection or
-        // get the information based on whether or not a IllegalStateException exception is thrown.
+        // get the information based on whether a IllegalStateException exception is thrown.
         // We use reflection so that we can avoid the cost of generating the stack trace when it's
         // not a measurable.
         try {
@@ -288,7 +281,7 @@ public class KafkaMetricsCollector implements MetricsCollector {
         private Instant instantAdded(MetricKey metricKey) {
             // lookup when the metric was added to use it as the interval start. That should always
             // exist, but if it doesn't (e.g. if there's a race) then we use now.
-            return metricAdded.computeIfAbsent(metricKey, x -> clock.instant());
+            return metricAdded.computeIfAbsent(metricKey, x -> Instant.ofEpochMilli(time.milliseconds()));
         }
 
         public void init(List<KafkaMetric> metrics) {
@@ -314,7 +307,7 @@ public class KafkaMetricsCollector implements MetricsCollector {
                 */
                 doubleDeltas.remove(metricKey);
             }
-            metricAdded.put(metricKey, clock.instant());
+            metricAdded.put(metricKey, Instant.ofEpochMilli(time.milliseconds()));
         }
 
         public void metricRemoval(KafkaMetric metric) {

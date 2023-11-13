@@ -49,10 +49,6 @@ public class SinglePointMetric implements MetricKeyable {
         return metricBuilder;
     }
 
-    public static SinglePointMetric create(MetricKey metricKey, Metric.Builder metric) {
-        return new SinglePointMetric(metricKey, metric);
-    }
-
     /*
         Methods to construct gauge metric type.
      */
@@ -105,7 +101,7 @@ public class SinglePointMetric implements MetricKeyable {
             .setAggregationTemporality(aggregationTemporality)
             .setIsMonotonic(monotonic)
             .addDataPoints(point);
-        return create(metricKey, metric);
+        return new SinglePointMetric(metricKey, metric);
     }
 
     private static SinglePointMetric gauge(MetricKey metricKey, NumberDataPoint.Builder point) {
@@ -113,15 +109,15 @@ public class SinglePointMetric implements MetricKeyable {
 
         Metric.Builder metric = Metric.newBuilder().setName(metricKey.name());
         metric.getGaugeBuilder().addDataPoints(point);
-        return create(metricKey, metric);
+        return new SinglePointMetric(metricKey, metric);
     }
 
     private static NumberDataPoint.Builder point(Instant timestamp, Number value) {
         if (value instanceof Long || value instanceof Integer) {
             return point(timestamp, value.longValue());
-        } else {
-            return point(timestamp, value.doubleValue());
         }
+
+        return point(timestamp, value.doubleValue());
     }
 
     private static NumberDataPoint.Builder point(Instant timestamp, long value) {

@@ -29,10 +29,10 @@ import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.CumulativeSum;
 import org.apache.kafka.common.metrics.stats.WindowedCount;
+import org.apache.kafka.common.utils.MockTime;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.time.Clock;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
@@ -44,8 +44,6 @@ import java.util.stream.Stream;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 public class KafkaMetricsCollectorTest {
 
@@ -57,17 +55,18 @@ public class KafkaMetricsCollectorTest {
     private MetricNamingStrategy<MetricName> metricNamingStrategy;
     private KafkaMetricsCollector collector;
 
-    private final TestEmitter emitter = new TestEmitter();
-    private final Clock clock = mock(Clock.class);
-    private final Instant timeReference = Instant.ofEpochMilli(1000L);
+    private TestEmitter emitterCumulative;
+    private TestEmitter emitterDelta;
+    private MockTime time;
 
     @BeforeEach
     public void setUp() {
         metrics = new Metrics();
         tags = Collections.singletonMap("tag", "value");
         metricName = metrics.metricName("name1", "group1", tags);
-
-        when(clock.instant()).thenReturn(timeReference);
+        time = new MockTime(0, 1000L, TimeUnit.MILLISECONDS.toNanos(1000L));
+        emitterCumulative = new TestEmitter();
+        emitterDelta = new TestEmitter(true);
 
         // Define metric naming strategy.
         metricNamingStrategy = TelemetryMetricNamingConvention.getClientTelemetryMetricNamingStrategy(DOMAIN);
@@ -75,7 +74,7 @@ public class KafkaMetricsCollectorTest {
         // Define collector to test.
         collector = new KafkaMetricsCollector(
             metricNamingStrategy,
-            clock
+            time
         );
 
         // Add reporter to metrics.
@@ -90,43 +89,59 @@ public class KafkaMetricsCollectorTest {
         sensor.record();
         sensor.record();
 
-        when(clock.instant()).thenReturn(timeReference.plusSeconds(60));
+        time.setCurrentTimeMs(time.milliseconds() + 60 * 1000L);
 
         // Collect metrics.
-        collector.collect(emitter);
-        List<SinglePointMetric> result = emitter.emittedMetrics();
+        collector.collect(emitterCumulative);
+        List<SinglePointMetric> result = emitterCumulative.emittedMetrics();
 
-        // Should get exactly 3 Kafka measurables since Metrics always includes a count measurable i.e.
-        // sum, delta sum, count.
-        assertEquals(3, result.size());
+        // Should get exactly 2 Kafka measurables since Metrics always includes a count measurable.
+        assertEquals(2, result.size());
 
         Metric counter = result.stream()
             .flatMap(metrics -> Stream.of(metrics.builder().build()))
             .filter(metric -> metric.getName().equals("test.domain.group1.name1")).findFirst().get();
 
-        Metric delta = result.stream()
-            .flatMap(metrics -> Stream.of(metrics.builder().build()))
-            .filter(metric -> metric.getName().equals("test.domain.group1.name1.delta")).findFirst().get();
-
         assertTrue(counter.hasSum());
-        assertTrue(delta.hasSum());
         assertEquals(tags, getTags(counter.getSum().getDataPoints(0).getAttributesList()));
-        assertEquals(tags, getTags(delta.getSum().getDataPoints(0).getAttributesList()));
 
-
-        assertEquals(AggregationTemporality.AGGREGATION_TEMPORALITY_DELTA, delta.getSum().getAggregationTemporality());
-        assertTrue(delta.getSum().getIsMonotonic());
-        NumberDataPoint point = delta.getSum().getDataPoints(0);
+        assertEquals(AggregationTemporality.AGGREGATION_TEMPORALITY_CUMULATIVE, counter.getSum().getAggregationTemporality());
+        assertTrue(counter.getSum().getIsMonotonic());
+        NumberDataPoint point = counter.getSum().getDataPoints(0);
         assertEquals(2d, point.getAsDouble(), 0.0);
         assertEquals(TimeUnit.SECONDS.toNanos(Instant.ofEpochSecond(61L).getEpochSecond()) +
             Instant.ofEpochSecond(61L).getNano(), point.getTimeUnixNano());
         assertEquals(TimeUnit.SECONDS.toNanos(Instant.ofEpochSecond(1L).getEpochSecond()) +
             Instant.ofEpochSecond(1L).getNano(), point.getStartTimeUnixNano());
+    }
 
+    @Test
+    public void testMeasurableCounterDeltaMetrics() {
+        Sensor sensor = metrics.sensor("test");
+        sensor.add(metricName, new WindowedCount());
 
-        assertEquals(AggregationTemporality.AGGREGATION_TEMPORALITY_CUMULATIVE, counter.getSum().getAggregationTemporality());
+        sensor.record();
+        sensor.record();
+
+        time.setCurrentTimeMs(time.milliseconds() + 60 * 1000L);
+
+        // Collect delta metrics.
+        collector.collect(emitterDelta);
+        List<SinglePointMetric> result = emitterDelta.emittedMetrics();
+
+        // Should get exactly 2 Kafka measurables since Metrics always includes a count measurable.
+        assertEquals(2, result.size());
+
+        Metric counter = result.stream()
+            .flatMap(metrics -> Stream.of(metrics.builder().build()))
+            .filter(metric -> metric.getName().equals("test.domain.group1.name1")).findFirst().get();
+
+        assertTrue(counter.hasSum());
+        assertEquals(tags, getTags(counter.getSum().getDataPoints(0).getAttributesList()));
+
+        assertEquals(AggregationTemporality.AGGREGATION_TEMPORALITY_DELTA, counter.getSum().getAggregationTemporality());
         assertTrue(counter.getSum().getIsMonotonic());
-        point = counter.getSum().getDataPoints(0);
+        NumberDataPoint point = counter.getSum().getDataPoints(0);
         assertEquals(2d, point.getAsDouble(), 0.0);
         assertEquals(TimeUnit.SECONDS.toNanos(Instant.ofEpochSecond(61L).getEpochSecond()) +
             Instant.ofEpochSecond(61L).getNano(), point.getTimeUnixNano());
@@ -143,35 +158,51 @@ public class KafkaMetricsCollectorTest {
         sensor.record(5L);
 
         // Collect metrics.
-        collector.collect(emitter);
-        List<SinglePointMetric> result = emitter.emittedMetrics();
+        collector.collect(emitterCumulative);
+        List<SinglePointMetric> result = emitterCumulative.emittedMetrics();
 
-        // Should get exactly 3 Kafka measurables since Metrics always includes a count measurable i.e.
-        // sum, delta sum, count.
-        assertEquals(3, result.size());
+        // Should get exactly 2 Kafka measurables since Metrics always includes a count measurable.
+        assertEquals(2, result.size());
 
         Metric counter = result.stream()
             .flatMap(metrics -> Stream.of(metrics.builder().build()))
             .filter(metric -> metric.getName().equals("test.domain.group1.name1")).findFirst().get();
 
-        Metric delta = result.stream()
+        assertTrue(counter.hasSum());
+        assertEquals(tags, getTags(counter.getSum().getDataPoints(0).getAttributesList()));
+        assertEquals(15, counter.getSum().getDataPoints(0).getAsDouble(), 0.0);
+    }
+
+    @Test
+    public void testMeasurableTotalDeltaMetrics() {
+        Sensor sensor = metrics.sensor("test");
+        sensor.add(metricName, new CumulativeSum());
+
+        sensor.record(10L);
+        sensor.record(5L);
+
+        // Collect metrics.
+        collector.collect(emitterDelta);
+        List<SinglePointMetric> result = emitterDelta.emittedMetrics();
+
+        // Should get exactly 2 Kafka measurables since Metrics always includes a count measurable.
+        assertEquals(2, result.size());
+
+        Metric counter = result.stream()
             .flatMap(metrics -> Stream.of(metrics.builder().build()))
-            .filter(metric -> metric.getName().equals("test.domain.group1.name1.delta")).findFirst().get();
+            .filter(metric -> metric.getName().equals("test.domain.group1.name1")).findFirst().get();
 
         assertTrue(counter.hasSum());
-        assertTrue(delta.hasSum());
         assertEquals(tags, getTags(counter.getSum().getDataPoints(0).getAttributesList()));
-        assertEquals(tags, getTags(delta.getSum().getDataPoints(0).getAttributesList()));
         assertEquals(15, counter.getSum().getDataPoints(0).getAsDouble(), 0.0);
-        assertEquals(15, delta.getSum().getDataPoints(0).getAsDouble(), 0.0);
     }
 
     @Test
     public void testMeasurableGauge() {
         metrics.addMetric(metricName, (config, now) -> 100.0);
 
-        collector.collect(emitter);
-        List<SinglePointMetric> result = emitter.emittedMetrics();
+        collector.collect(emitterCumulative);
+        List<SinglePointMetric> result = emitterCumulative.emittedMetrics();
 
         // Should get exactly 2 Kafka measurables since Metrics always includes a count measurable.
         assertEquals(2, result.size());
@@ -192,8 +223,8 @@ public class KafkaMetricsCollectorTest {
         metrics.addMetric(metrics.metricName("int", "group1", tags), (Gauge<Integer>) (config, now) -> 100);
         metrics.addMetric(metrics.metricName("long", "group1", tags), (Gauge<Long>) (config, now) -> 100L);
 
-        collector.collect(emitter);
-        List<SinglePointMetric> result = emitter.emittedMetrics();
+        collector.collect(emitterCumulative);
+        List<SinglePointMetric> result = emitterCumulative.emittedMetrics();
 
         // Should get exactly 2 Kafka measurables since Metrics always includes a count measurable.
         assertEquals(5, result.size());
@@ -223,8 +254,8 @@ public class KafkaMetricsCollectorTest {
             throw new RuntimeException();
         });
 
-        collector.collect(emitter);
-        List<SinglePointMetric> result = emitter.emittedMetrics();
+        collector.collect(emitterCumulative);
+        List<SinglePointMetric> result = emitterCumulative.emittedMetrics();
 
         //Verify only the global count of metrics exist
         assertEquals(1, result.size());
@@ -240,30 +271,30 @@ public class KafkaMetricsCollectorTest {
     public void testMetricRemoval() {
         metrics.addMetric(metricName, (config, now) -> 100.0);
 
-        collector.collect(emitter);
-        assertEquals(2, emitter.emittedMetrics().size());
+        collector.collect(emitterCumulative);
+        assertEquals(2, emitterCumulative.emittedMetrics().size());
 
         metrics.removeMetric(metricName);
         assertFalse(collector.getTrackedMetrics().contains(metricNamingStrategy.metricKey(metricName)));
 
         // verify that the metric was removed.
-        emitter.reset();
-        collector.collect(emitter);
-        List<SinglePointMetric> collected = emitter.emittedMetrics();
+        emitterCumulative.reset();
+        collector.collect(emitterCumulative);
+        List<SinglePointMetric> collected = emitterCumulative.emittedMetrics();
         assertEquals(1, collected.size());
         assertEquals("test.domain.kafka.count.count", collected.get(0).builder().build().getName());
     }
 
     @Test
-    public void testSecondDeltaCollectDouble() {
+    public void testSecondCollectCumulative() {
         Sensor sensor = metrics.sensor("test");
         sensor.add(metricName, new CumulativeSum());
 
         sensor.record();
         sensor.record();
-        when(clock.instant()).thenReturn(timeReference.plusSeconds(60));
+        time.setCurrentTimeMs(time.milliseconds() + 60 * 1000L);
 
-        collector.collect(emitter);
+        collector.collect(emitterCumulative);
 
         // Update it again by 5 and advance time by another 60 seconds.
         sensor.record();
@@ -271,33 +302,20 @@ public class KafkaMetricsCollectorTest {
         sensor.record();
         sensor.record();
         sensor.record();
-        when(clock.instant()).thenReturn(timeReference.plusSeconds(120));
+        time.setCurrentTimeMs(time.milliseconds() + 60 * 1000L);
 
-        emitter.reset();
-        collector.collect(emitter);
-        List<SinglePointMetric> result = emitter.emittedMetrics();
+        emitterCumulative.reset();
+        collector.collect(emitterCumulative);
+        List<SinglePointMetric> result = emitterCumulative.emittedMetrics();
 
-        assertEquals(3, result.size());
+        assertEquals(2, result.size());
 
 
         Metric cumulative = result.stream()
             .flatMap(metrics -> Stream.of(metrics.builder().build()))
             .filter(metric -> metric.getName().equals("test.domain.group1.name1")).findFirst().get();
 
-        Metric delta = result.stream()
-            .flatMap(metrics -> Stream.of(metrics.builder().build()))
-            .filter(metric -> metric.getName().equals("test.domain.group1.name1.delta")).findFirst().get();
-
-        NumberDataPoint point = delta.getSum().getDataPoints(0);
-        assertEquals(AggregationTemporality.AGGREGATION_TEMPORALITY_DELTA, delta.getSum().getAggregationTemporality());
-        assertTrue(delta.getSum().getIsMonotonic());
-        assertEquals(5d, point.getAsDouble(), 0.0);
-        assertEquals(TimeUnit.SECONDS.toNanos(Instant.ofEpochSecond(121L).getEpochSecond()) +
-            Instant.ofEpochSecond(121L).getNano(), point.getTimeUnixNano());
-        assertEquals(TimeUnit.SECONDS.toNanos(Instant.ofEpochSecond(61L).getEpochSecond()) +
-            Instant.ofEpochSecond(61L).getNano(), point.getStartTimeUnixNano());
-
-        point = cumulative.getSum().getDataPoints(0);
+        NumberDataPoint point = cumulative.getSum().getDataPoints(0);
         assertEquals(AggregationTemporality.AGGREGATION_TEMPORALITY_CUMULATIVE, cumulative.getSum().getAggregationTemporality());
         assertTrue(cumulative.getSum().getIsMonotonic());
         assertEquals(7d, point.getAsDouble(), 0.0);
@@ -308,12 +326,51 @@ public class KafkaMetricsCollectorTest {
     }
 
     @Test
+    public void testSecondDeltaCollectDouble() {
+        Sensor sensor = metrics.sensor("test");
+        sensor.add(metricName, new CumulativeSum());
+
+        sensor.record();
+        sensor.record();
+        time.setCurrentTimeMs(time.milliseconds() + 60 * 1000L);
+
+        collector.collect(emitterDelta);
+
+        // Update it again by 5 and advance time by another 60 seconds.
+        sensor.record();
+        sensor.record();
+        sensor.record();
+        sensor.record();
+        sensor.record();
+        time.setCurrentTimeMs(time.milliseconds() + 60 * 1000L);
+
+        emitterDelta.reset();
+        collector.collect(emitterDelta);
+        List<SinglePointMetric> result = emitterDelta.emittedMetrics();
+
+        assertEquals(2, result.size());
+
+        Metric cumulative = result.stream()
+            .flatMap(metrics -> Stream.of(metrics.builder().build()))
+            .filter(metric -> metric.getName().equals("test.domain.group1.name1")).findFirst().get();
+
+        NumberDataPoint point = cumulative.getSum().getDataPoints(0);
+        assertEquals(AggregationTemporality.AGGREGATION_TEMPORALITY_DELTA, cumulative.getSum().getAggregationTemporality());
+        assertTrue(cumulative.getSum().getIsMonotonic());
+        assertEquals(5d, point.getAsDouble(), 0.0);
+        assertEquals(TimeUnit.SECONDS.toNanos(Instant.ofEpochSecond(121L).getEpochSecond()) +
+            Instant.ofEpochSecond(121L).getNano(), point.getTimeUnixNano());
+        assertEquals(TimeUnit.SECONDS.toNanos(Instant.ofEpochSecond(61L).getEpochSecond()) +
+            Instant.ofEpochSecond(61L).getNano(), point.getStartTimeUnixNano());
+    }
+
+    @Test
     public void testCollectFilter() {
         metrics.addMetric(metricName, (config, now) -> 100.0);
 
-        emitter.reconfigurePredicate(k -> !k.key().name().endsWith(".count"));
-        collector.collect(emitter);
-        List<SinglePointMetric> result = emitter.emittedMetrics();
+        emitterCumulative.reconfigurePredicate(k -> !k.key().name().endsWith(".count"));
+        collector.collect(emitterCumulative);
+        List<SinglePointMetric> result = emitterCumulative.emittedMetrics();
 
         // Should get exactly 1 Kafka measurables because we excluded the count measurable
         assertEquals(1, result.size());
@@ -325,36 +382,7 @@ public class KafkaMetricsCollectorTest {
     }
 
     @Test
-    public void testCollectFilterDynamicPredicate() {
-        metrics.addMetric(metricName, (config, now) -> 100.0);
-        metrics.addMetric(metrics.metricName("name2", "group2", tags), (config, now) -> 100.0);
-
-        collector.collect(emitter);
-        List<SinglePointMetric> result = emitter.emittedMetrics();
-
-        assertEquals(3, result.size());
-
-        emitter.reset();
-        emitter.reconfigurePredicate(k -> k.key().name().endsWith(".count"));
-        collector.collect(emitter);
-        result = emitter.emittedMetrics();
-        assertEquals(1, result.size());
-
-        emitter.reset();
-        emitter.reconfigurePredicate(k -> k.key().name().contains("name"));
-        collector.collect(emitter);
-        result = emitter.emittedMetrics();
-        assertEquals(2, result.size());
-
-        emitter.reset();
-        emitter.reconfigurePredicate(key -> true);
-        collector.collect(emitter);
-        result = emitter.emittedMetrics();
-        assertEquals(3, result.size());
-    }
-
-    @Test
-    public void testCollectFilterWithDerivedMetrics() {
+    public void testCollectFilterWithCumulativeTemporality() {
         MetricName name1 = metrics.metricName("nonMeasurable", "group1", tags);
         MetricName name2 = metrics.metricName("windowed", "group1", tags);
         MetricName name3 = metrics.metricName("cumulative", "group1", tags);
@@ -365,34 +393,77 @@ public class KafkaMetricsCollectorTest {
         sensor.add(name2, new WindowedCount());
         sensor.add(name3, new CumulativeSum());
 
-        collector.collect(emitter);
-        List<SinglePointMetric> result = emitter.emittedMetrics();
+        collector.collect(emitterCumulative);
+        List<SinglePointMetric> result = emitterCumulative.emittedMetrics();
 
-        // no-filter shall result in all 6 data metrics.
-        assertEquals(6, result.size());
+        // no-filter shall result in all 4 data metrics.
+        assertEquals(4, result.size());
 
-        emitter.reset();
-        emitter.reconfigurePredicate(k -> !k.key().name().endsWith(".count"));
-        collector.collect(emitter);
-        result = emitter.emittedMetrics();
+        emitterCumulative.reset();
+        emitterCumulative.reconfigurePredicate(k -> !k.key().name().endsWith(".count"));
+        collector.collect(emitterCumulative);
+        result = emitterCumulative.emittedMetrics();
 
-        // Drop metrics for Count type (Measurable metric but other that Windowed or Cumulative).
-        assertEquals(5, result.size());
+        // Drop metrics for Count type.
+        assertEquals(3, result.size());
 
-        emitter.reset();
-        emitter.reconfigurePredicate(k -> !k.key().name().endsWith(".nonmeasurable"));
-        collector.collect(emitter);
-        result = emitter.emittedMetrics();
+        emitterCumulative.reset();
+        emitterCumulative.reconfigurePredicate(k -> !k.key().name().endsWith(".nonmeasurable"));
+        collector.collect(emitterCumulative);
+        result = emitterCumulative.emittedMetrics();
 
         // Drop non-measurable metric.
-        assertEquals(5, result.size());
+        assertEquals(3, result.size());
 
-        emitter.reset();
-        emitter.reconfigurePredicate(k -> !k.key().name().endsWith(".delta"));
-        collector.collect(emitter);
-        result = emitter.emittedMetrics();
+        emitterCumulative.reset();
+        emitterCumulative.reconfigurePredicate(key -> true);
+        collector.collect(emitterCumulative);
+        result = emitterCumulative.emittedMetrics();
 
-        // Drop all delta derived metrics.
+        // Again no filter.
+        assertEquals(4, result.size());
+    }
+
+    @Test
+    public void testCollectFilterWithDeltaTemporality() {
+        MetricName name1 = metrics.metricName("nonMeasurable", "group1", tags);
+        MetricName name2 = metrics.metricName("windowed", "group1", tags);
+        MetricName name3 = metrics.metricName("cumulative", "group1", tags);
+
+        metrics.addMetric(name1, (Gauge<Double>) (config, now) -> 99d);
+
+        Sensor sensor = metrics.sensor("test");
+        sensor.add(name2, new WindowedCount());
+        sensor.add(name3, new CumulativeSum());
+
+        collector.collect(emitterDelta);
+        List<SinglePointMetric> result = emitterDelta.emittedMetrics();
+
+        // no-filter shall result in all 4 data metrics.
+        assertEquals(4, result.size());
+
+        emitterDelta.reset();
+        emitterDelta.reconfigurePredicate(k -> !k.key().name().endsWith(".count"));
+        collector.collect(emitterDelta);
+        result = emitterDelta.emittedMetrics();
+
+        // Drop metrics for Count type.
+        assertEquals(3, result.size());
+
+        emitterDelta.reset();
+        emitterDelta.reconfigurePredicate(k -> !k.key().name().endsWith(".nonmeasurable"));
+        collector.collect(emitterDelta);
+        result = emitterDelta.emittedMetrics();
+
+        // Drop non-measurable metric.
+        assertEquals(3, result.size());
+
+        emitterDelta.reset();
+        emitterDelta.reconfigurePredicate(key -> true);
+        collector.collect(emitterDelta);
+        result = emitterDelta.emittedMetrics();
+
+        // Again no filter.
         assertEquals(4, result.size());
     }
 

@@ -22,7 +22,6 @@ import org.junit.jupiter.api.Test;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.Optional;
-import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -84,11 +83,10 @@ public class LastValueTrackerTest {
 
         assertTrue(lastValueTracker.contains(METRIC_NAME));
 
-        AtomicReference<InstantAndValue<Double>> result = lastValueTracker.remove(METRIC_NAME);
+        InstantAndValue<Double> result = lastValueTracker.remove(METRIC_NAME);
         assertNotNull(result);
-        assertNotNull(result.get());
-        assertEquals(instant1, result.get().getIntervalStart());
-        assertEquals(1d, result.get().getValue().longValue());
+        assertEquals(instant1, result.getIntervalStart());
+        assertEquals(1d, result.getValue().longValue());
     }
 
     @Test
@@ -102,7 +100,7 @@ public class LastValueTrackerTest {
         LastValueTracker<Double> lastValueTracker = new LastValueTracker<>();
         assertFalse(lastValueTracker.contains(METRIC_NAME));
 
-        AtomicReference<InstantAndValue<Double>> result = lastValueTracker.remove(METRIC_NAME);
+        InstantAndValue<Double> result = lastValueTracker.remove(METRIC_NAME);
         assertNull(result);
     }
 }

@@ -25,14 +25,25 @@ public class TestEmitter implements MetricsEmitter {
 
     private final List<SinglePointMetric> emittedMetrics;
     private Predicate<? super MetricKeyable> metricsPredicate = metricKeyable -> true;
+    private boolean onlyDeltaMetrics;
 
     public TestEmitter() {
+        this(false);
+    }
+
+    public TestEmitter(boolean onlyDeltaMetrics) {
         this.emittedMetrics = new ArrayList<>();
+        this.onlyDeltaMetrics = onlyDeltaMetrics;
     }
 
     @Override
     public boolean shouldEmitMetric(MetricKeyable metricKeyable) {
         return metricsPredicate.test(metricKeyable);
+    }
+
+    @Override
+    public boolean shouldEmitDeltaMetrics() {
+        return onlyDeltaMetrics;
     }
 
     @Override
