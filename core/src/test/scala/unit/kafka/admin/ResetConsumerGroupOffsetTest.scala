@@ -13,18 +13,18 @@
 package kafka.admin
 
 import java.io.{BufferedWriter, FileWriter}
-import java.text.{SimpleDateFormat}
+import java.text.SimpleDateFormat
 import java.util.{Calendar, Date, Properties}
-
 import joptsimple.OptionException
 import kafka.admin.ConsumerGroupCommand.ConsumerGroupService
 import kafka.server.KafkaConfig
-import kafka.utils.TestUtils
+import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.test
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 import scala.jdk.CollectionConverters._
 import scala.collection.Seq
@@ -48,7 +48,11 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
   val topic2 = "foo2"
 
   override def generateConfigs: Seq[KafkaConfig] = {
-    TestUtils.createBrokerConfigs(1, zkConnect, enableControlledShutdown = false)
+    if (isNewGroupCoordinatorEnabled()) {
+      overridingProps.put(KafkaConfig.UnstableApiVersionsEnableProp, "true")
+      overridingProps.put(KafkaConfig.NewGroupCoordinatorEnableProp, "true")
+    }
+    TestUtils.createBrokerConfigs(1, zkConnectOrNull, enableControlledShutdown = false)
       .map(KafkaConfig.fromProps(_, overridingProps))
   }
 
@@ -71,8 +75,9 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
     basicArgs ++ Array("--all-groups") ++ args
   }
 
-  @Test
-  def testResetOffsetsNotExistingGroup(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testResetOffsetsNotExistingGroup(quorum: String): Unit = {
     val group = "missing.group"
     val args = buildArgsForGroup(group, "--all-topics", "--to-current", "--execute")
     val consumerGroupCommand = getConsumerGroupService(args)
@@ -85,8 +90,9 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
     assertEquals(resetOffsets, committedOffsets(group = group))
   }
 
-  @Test
-  def testResetOffsetsExistingTopic(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testResetOffsetsExistingTopic(quorum: String): Unit = {
     val group = "new.group"
     val args = buildArgsForGroup(group, "--topic", topic, "--to-offset", "50")
     produceMessages(topic, 100)
@@ -95,8 +101,9 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
     resetAndAssertOffsets(args ++ Array("--execute"), expectedOffset = 50)
   }
 
-  @Test
-  def testResetOffsetsExistingTopicSelectedGroups(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testResetOffsetsExistingTopicSelectedGroups(quorum: String): Unit = {
     produceMessages(topic, 100)
     val groups =
       for (id <- 1 to 3) yield {
@@ -112,8 +119,9 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
     resetAndAssertOffsets(args ++ Array("--execute"), expectedOffset = 50)
   }
 
-  @Test
-  def testResetOffsetsExistingTopicAllGroups(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testResetOffsetsExistingTopicAllGroups(quorum: String): Unit = {
     val args = buildArgsForAllGroups("--topic", topic, "--to-offset", "50")
     produceMessages(topic, 100)
     for (group <- 1 to 3 map (group + _)) {
@@ -126,8 +134,9 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
     resetAndAssertOffsets(args ++ Array("--execute"), expectedOffset = 50)
   }
 
-  @Test
-  def testResetOffsetsAllTopicsAllGroups(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testResetOffsetsAllTopicsAllGroups(quorum: String): Unit = {
     val args = buildArgsForAllGroups("--all-topics", "--to-offset", "50")
     val topics = 1 to 3 map (topic + _)
     val groups = 1 to 3 map (group + _)
@@ -145,8 +154,9 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
     resetAndAssertOffsets(args ++ Array("--execute"), expectedOffset = 50, topics = topics)
   }
 
-  @Test
-  def testResetOffsetsToLocalDateTime(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testResetOffsetsToLocalDateTime(quorum: String): Unit = {
     val format = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS")
     val calendar = Calendar.getInstance()
     calendar.add(Calendar.DATE, -1)
@@ -161,8 +171,9 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
     resetAndAssertOffsets(args, expectedOffset = 0)
   }
 
-  @Test
-  def testResetOffsetsToZonedDateTime(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testResetOffsetsToZonedDateTime(quorum: String): Unit = {
     val format = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX")
 
     produceMessages(topic, 50)
@@ -177,101 +188,114 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
     resetAndAssertOffsets(args, expectedOffset = 50)
   }
 
-  @Test
-  def testResetOffsetsByDuration(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testResetOffsetsByDuration(quorum: String): Unit = {
     val args = buildArgsForGroup(group, "--all-topics", "--by-duration", "PT1M", "--execute")
     produceConsumeAndShutdown(topic, group, totalMessages = 100)
     resetAndAssertOffsets(args, expectedOffset = 0)
   }
 
-  @Test
-  def testResetOffsetsByDurationToEarliest(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testResetOffsetsByDurationToEarliest(quorum: String): Unit = {
     val args = buildArgsForGroup(group, "--all-topics", "--by-duration", "PT0.1S", "--execute")
     produceConsumeAndShutdown(topic, group, totalMessages = 100)
     resetAndAssertOffsets(args, expectedOffset = 100)
   }
 
-  @Test
-  def testResetOffsetsByDurationFallbackToLatestWhenNoRecords(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testResetOffsetsByDurationFallbackToLatestWhenNoRecords(quorum: String): Unit = {
     val topic = "foo2"
     val args = buildArgsForGroup(group, "--topic", topic, "--by-duration", "PT1M", "--execute")
     createTopic(topic)
     resetAndAssertOffsets(args, expectedOffset = 0, topics = Seq("foo2"))
 
-    adminZkClient.deleteTopic(topic)
+    deleteTopic(topic)
   }
 
-  @Test
-  def testResetOffsetsToEarliest(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testResetOffsetsToEarliest(quorum: String): Unit = {
     val args = buildArgsForGroup(group, "--all-topics", "--to-earliest", "--execute")
     produceConsumeAndShutdown(topic, group, totalMessages = 100)
     resetAndAssertOffsets(args, expectedOffset = 0)
   }
 
-  @Test
-  def testResetOffsetsToLatest(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testResetOffsetsToLatest(quorum: String): Unit = {
     val args = buildArgsForGroup(group, "--all-topics", "--to-latest", "--execute")
     produceConsumeAndShutdown(topic, group, totalMessages = 100)
     produceMessages(topic, 100)
     resetAndAssertOffsets(args, expectedOffset = 200)
   }
 
-  @Test
-  def testResetOffsetsToCurrentOffset(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testResetOffsetsToCurrentOffset(quorum: String): Unit = {
     val args = buildArgsForGroup(group, "--all-topics", "--to-current", "--execute")
     produceConsumeAndShutdown(topic, group, totalMessages = 100)
     produceMessages(topic, 100)
     resetAndAssertOffsets(args, expectedOffset = 100)
   }
 
-  @Test
-  def testResetOffsetsToSpecificOffset(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testResetOffsetsToSpecificOffset(quorum: String): Unit = {
     val args = buildArgsForGroup(group, "--all-topics", "--to-offset", "1", "--execute")
     produceConsumeAndShutdown(topic, group, totalMessages = 100)
     resetAndAssertOffsets(args, expectedOffset = 1)
   }
 
-  @Test
-  def testResetOffsetsShiftPlus(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testResetOffsetsShiftPlus(quorum: String): Unit = {
     val args = buildArgsForGroup(group, "--all-topics", "--shift-by", "50", "--execute")
     produceConsumeAndShutdown(topic, group, totalMessages = 100)
     produceMessages(topic, 100)
     resetAndAssertOffsets(args, expectedOffset = 150)
   }
 
-  @Test
-  def testResetOffsetsShiftMinus(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testResetOffsetsShiftMinus(quorum: String): Unit = {
     val args = buildArgsForGroup(group, "--all-topics", "--shift-by", "-50", "--execute")
     produceConsumeAndShutdown(topic, group, totalMessages = 100)
     produceMessages(topic, 100)
     resetAndAssertOffsets(args, expectedOffset = 50)
   }
 
-  @Test
-  def testResetOffsetsShiftByLowerThanEarliest(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testResetOffsetsShiftByLowerThanEarliest(quorum: String): Unit = {
     val args = buildArgsForGroup(group, "--all-topics", "--shift-by", "-150", "--execute")
     produceConsumeAndShutdown(topic, group, totalMessages = 100)
     produceMessages(topic, 100)
     resetAndAssertOffsets(args, expectedOffset = 0)
   }
 
-  @Test
-  def testResetOffsetsShiftByHigherThanLatest(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testResetOffsetsShiftByHigherThanLatest(quorum: String): Unit = {
     val args = buildArgsForGroup(group, "--all-topics", "--shift-by", "150", "--execute")
     produceConsumeAndShutdown(topic, group, totalMessages = 100)
     produceMessages(topic, 100)
     resetAndAssertOffsets(args, expectedOffset = 200)
   }
 
-  @Test
-  def testResetOffsetsToEarliestOnOneTopic(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testResetOffsetsToEarliestOnOneTopic(quorum: String): Unit = {
     val args = buildArgsForGroup(group, "--topic", topic, "--to-earliest", "--execute")
     produceConsumeAndShutdown(topic, group, totalMessages = 100)
     resetAndAssertOffsets(args, expectedOffset = 0)
   }
 
-  @Test
-  def testResetOffsetsToEarliestOnOneTopicAndPartition(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testResetOffsetsToEarliestOnOneTopicAndPartition(quorum: String): Unit = {
     val topic = "bar"
     createTopic(topic, 2, 1)
 
@@ -286,11 +310,12 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
     val expectedOffsets = Map(tp0 -> priorCommittedOffsets(tp0), tp1 -> 0L)
     resetAndAssertOffsetsCommitted(consumerGroupCommand, expectedOffsets, topic)
 
-    adminZkClient.deleteTopic(topic)
+    deleteTopic(topic)
   }
 
-  @Test
-  def testResetOffsetsToEarliestOnTopics(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testResetOffsetsToEarliestOnTopics(quorum: String): Unit = {
     val topic1 = "topic1"
     val topic2 = "topic2"
     createTopic(topic1, 1, 1)
@@ -310,12 +335,13 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
     assertEquals(Map(tp1 -> 0L), committedOffsets(topic1))
     assertEquals(Map(tp2 -> 0L), committedOffsets(topic2))
 
-    adminZkClient.deleteTopic(topic1)
-    adminZkClient.deleteTopic(topic2)
+    deleteTopic(topic1)
+    deleteTopic(topic2)
   }
 
-  @Test
-  def testResetOffsetsToEarliestOnTopicsAndPartitions(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testResetOffsetsToEarliestOnTopicsAndPartitions(quorum: String): Unit = {
     val topic1 = "topic1"
     val topic2 = "topic2"
 
@@ -339,13 +365,14 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
     assertEquals(priorCommittedOffsets1.toMap + (tp1 -> 0L), committedOffsets(topic1))
     assertEquals(priorCommittedOffsets2.toMap + (tp2 -> 0L), committedOffsets(topic2))
 
-    adminZkClient.deleteTopic(topic1)
-    adminZkClient.deleteTopic(topic2)
+    deleteTopic(topic1)
+    deleteTopic(topic2)
   }
 
-  @Test
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
   // This one deals with old CSV export/import format for a single --group arg: "topic,partition,offset" to support old behavior
-  def testResetOffsetsExportImportPlanSingleGroupArg(): Unit = {
+  def testResetOffsetsExportImportPlanSingleGroupArg(quorum: String): Unit = {
     val topic = "bar"
     val tp0 = new TopicPartition(topic, 0)
     val tp1 = new TopicPartition(topic, 1)
@@ -369,13 +396,14 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
     val importedOffsets = consumerGroupCommandExec.resetOffsets()
     assertEquals(Map(tp0 -> 2L, tp1 -> 2L), importedOffsets(group).map { case (k, v) => k -> v.offset })
 
-    adminZkClient.deleteTopic(topic)
+    deleteTopic(topic)
   }
 
-  @Test
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
   // This one deals with universal CSV export/import file format "group,topic,partition,offset",
   // supporting multiple --group args or --all-groups arg
-  def testResetOffsetsExportImportPlan(): Unit = {
+  def testResetOffsetsExportImportPlan(quorum: String): Unit = {
     val group1 = group + "1"
     val group2 = group + "2"
     val topic1 = "bar1"
@@ -418,11 +446,12 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
     val importedOffsets2 = consumerGroupCommandExec2.resetOffsets()
     assertEquals(Map(t1p0 -> 2L, t1p1 -> 2L), importedOffsets2(group1).map { case (k, v) => k -> v.offset })
 
-    adminZkClient.deleteTopic(topic)
+    deleteTopic(topic)
   }
 
-  @Test
-  def testResetWithUnrecognizedNewConsumerOption(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testResetWithUnrecognizedNewConsumerOption(quorum: String): Unit = {
     val cgcArgs = Array("--new-consumer", "--bootstrap-server", bootstrapServers(), "--reset-offsets", "--group", group, "--all-topics",
       "--to-offset", "2", "--export")
     assertThrows(classOf[OptionException], () => getConsumerGroupService(cgcArgs))
@@ -431,7 +460,7 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
   private def produceMessages(topic: String, numMessages: Int): Unit = {
     val records = (0 until numMessages).map(_ => new ProducerRecord[Array[Byte], Array[Byte]](topic,
       new Array[Byte](100 * 1000)))
-    TestUtils.produceMessages(servers, records, acks = 1)
+    TestUtils.produceMessages(brokers, records, acks = 1)
   }
 
   private def produceConsumeAndShutdown(topic: String, group: String, totalMessages: Int, numConsumers: Int = 1): Unit = {
