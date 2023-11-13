@@ -97,7 +97,7 @@ public enum KerberosError {
                 Integer errorCode = (Integer) KRB_EXCEPTION_RETURN_CODE_METHOD.invoke(cause);
                 return fromErrorCode(errorCode);
             } catch (Exception e) {
-                log.trace("Kerberos return code could not be determined from {} due to {}", exception, e);
+                log.trace("Kerberos return code could not be determined from {}", exception, e);
                 return null;
             }
         }
