@@ -167,7 +167,10 @@ public class SslFactory implements Reconfigurable, Closeable {
                             "which a keystore was configured.");
                 }
 
-                CertificateEntries.ensureCompatible(newSslEngineFactory.keystore(), sslEngineFactory.keystore());
+                boolean allowDnChanges = getBoolean(nextConfigs, BrokerSecurityConfigs.SSL_ALLOW_DN_CHANGES_CONFIG, BrokerSecurityConfigs.DEFAULT_SSL_ALLOW_DN_CHANGES_VALUE);
+                boolean allowSanChanges = getBoolean(nextConfigs, BrokerSecurityConfigs.SSL_ALLOW_SAN_CHANGES_CONFIG, BrokerSecurityConfigs.DEFAULT_SSL_ALLOW_SAN_CHANGES_VALUE);
+
+                CertificateEntries.ensureCompatible(newSslEngineFactory.keystore(), sslEngineFactory.keystore(), allowDnChanges, allowSanChanges);
             }
             if (sslEngineFactory.truststore() == null && newSslEngineFactory.truststore() != null) {
                 throw new ConfigException("Cannot add SSL truststore to an existing listener for which no " +
@@ -182,6 +185,18 @@ public class SslFactory implements Reconfigurable, Closeable {
         } catch (Exception e) {
             log.debug("Validation of dynamic config update of SSLFactory failed.", e);
             throw new ConfigException("Validation of dynamic config update of SSLFactory failed: " + e);
+        }
+    }
+
+    private static boolean getBoolean(final Map<String, Object> configs, final String key, final boolean defaultValue) {
+        final Object value = configs.getOrDefault(key, defaultValue);
+        if (value instanceof Boolean) {
+            return (boolean) value;
+        } else if (value instanceof String) {
+            return Boolean.parseBoolean((String) value);
+        } else {
+            log.warn("Invalid value (" + value + ") on internal configuration '" + key + "'. Please specify a true/false value.");
+            return defaultValue;
         }
     }
 
@@ -302,18 +317,31 @@ public class SslFactory implements Reconfigurable, Closeable {
             return entries;
         }
 
-        static void ensureCompatible(KeyStore newKeystore, KeyStore oldKeystore) throws GeneralSecurityException {
+        static void ensureCompatible(KeyStore newKeystore, KeyStore oldKeystore, boolean allowDnChanges, boolean allowSanChanges) throws GeneralSecurityException {
             List<CertificateEntries> newEntries = CertificateEntries.create(newKeystore);
             List<CertificateEntries> oldEntries = CertificateEntries.create(oldKeystore);
+
+            if (!allowDnChanges) {
+                ensureCompatibleDNs(newEntries, oldEntries);
+            }
+
+            if (!allowSanChanges) {
+                ensureCompatibleSANs(newEntries, oldEntries);
+            }
+        }
+
+        private static void ensureCompatibleDNs(List<CertificateEntries> newEntries, List<CertificateEntries> oldEntries) {
             if (newEntries.size() != oldEntries.size()) {
                 throw new ConfigException(String.format("Keystore entries do not match, existing store contains %d entries, new store contains %d entries",
                     oldEntries.size(), newEntries.size()));
             }
+
             for (int i = 0; i < newEntries.size(); i++) {
                 CertificateEntries newEntry = newEntries.get(i);
                 CertificateEntries oldEntry = oldEntries.get(i);
                 Principal newPrincipal = newEntry.subjectPrincipal;
                 Principal oldPrincipal = oldEntry.subjectPrincipal;
+
                 // Compare principal objects to compare canonical names (e.g. to ignore leading/trailing whitespaces).
                 // Canonical names may differ if the tags of a field changes from one with a printable string representation
                 // to one without or vice-versa due to optional conversion to hex representation based on the tag. So we
@@ -323,6 +351,19 @@ public class SslFactory implements Reconfigurable, Closeable {
                         " existing={alias=%s, DN=%s}, new={alias=%s, DN=%s}",
                         oldEntry.alias, oldEntry.subjectPrincipal, newEntry.alias, newEntry.subjectPrincipal));
                 }
+            }
+        }
+
+        private static void ensureCompatibleSANs(List<CertificateEntries> newEntries, List<CertificateEntries> oldEntries) {
+            if (newEntries.size() != oldEntries.size()) {
+                throw new ConfigException(String.format("Keystore entries do not match, existing store contains %d entries, new store contains %d entries",
+                    oldEntries.size(), newEntries.size()));
+            }
+
+            for (int i = 0; i < newEntries.size(); i++) {
+                CertificateEntries newEntry = newEntries.get(i);
+                CertificateEntries oldEntry = oldEntries.get(i);
+
                 if (!newEntry.subjectAltNames.containsAll(oldEntry.subjectAltNames)) {
                     throw new ConfigException(String.format("Keystore SubjectAltNames do not match: " +
                             " existing={alias=%s, SAN=%s}, new={alias=%s, SAN=%s}",
