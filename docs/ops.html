@@ -3602,7 +3602,6 @@ foo
 
   <ul>
     <li>Supporting JBOD configurations with multiple storage directories</li>
-    <li>Modifying certain dynamic configurations on the standalone KRaft controller</li>
   </ul>
 
   <h4 class="anchor-heading"><a id="kraft_zk_migration" class="anchor-link"></a><a href="#kraft_zk_migration">ZooKeeper to KRaft Migration</a></h4>
@@ -3611,8 +3610,6 @@ foo
     <b>ZooKeeper to KRaft migration is considered an Early Access feature and is not recommended for production clusters.</b>
     Please report issues with ZooKeeper to KRaft migration using the
     <a href="https://issues.apache.org/jira/projects/KAFKA" target="_blank">project JIRA</a> and the "kraft" component.
-  </p>
-
   </p>
 
   <h3>Terminology</h3>
@@ -3624,12 +3621,13 @@ foo
 
   <h3>Migration Phases</h3>
   In general, the migration process passes through several phases.
+
+  For
   <ul>
-    <li>In the <b>initial phase</b>, all the brokers are in ZK mode, and there is a ZK-based controller.</li>
-    <li>During the <b>initial metadata load</b>, a KRaft quorum loads the metadata from ZooKeeper,</li>
-    <li>In <b>hybrid phase</b>, some brokers are in ZK mode, but there is a KRaft controller.</li>
-    <li>In <b>dual-write phase</b>, all brokers are KRaft, but the KRaft controller is continuing to write to ZK.</li>
-    <li>When the migration has been <b>finalized</b>, we no longer write metadata to ZooKeeper.</li>
+    <li>In the <b>pre-migration phase</b>, all the brokers are in ZK mode, and there is a ZK-based controller quorum. But a KRaft controller quorum has been provisioned and has migration enabled</li>
+    <li>During the <b>initial metadata load</b>, a KRaft quorum loads the metadata from ZooKeeper.</li>
+    <li>In <b>migration phase</b>, all brokers are transitioning from ZK to KRaft. The KRaft controller has begun the data migration, brokers are being restarted, dual-writes are in progress. The KRaft controller is continuing to write to ZK.</li>
+    <li>In the post migration phase, when the migration has been <b>finalized</b>, we no longer write metadata to ZooKeeper.</li>
   </ul>
 
   <h3>Limitations</h3>
@@ -3639,7 +3637,7 @@ foo
          a migration, or you may break the cluster.</li>
     <li>After the migration has been finalized, it is not possible to revert back to ZooKeeper mode.</li>
     <li><a href="#kraft_missing">As noted above</a>, some features are not fully implemented in KRaft mode. If you are
-        using one of those features, you will not be able to migrate to KRaft yet.</li>
+        using one of those features, you are not able to migrate to KRaft yet.</li>
   </ul>
 
   <h3>Preparing for migration</h3>
