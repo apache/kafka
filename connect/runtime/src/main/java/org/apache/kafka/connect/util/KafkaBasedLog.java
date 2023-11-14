@@ -222,6 +222,13 @@ public class KafkaBasedLog<K, V> {
             protected Consumer<K, V> createConsumer() {
                 return consumer;
             }
+
+            @Override
+            public void stop() {
+                super.stop();
+                Utils.closeQuietly(producer, "producer");
+                Utils.closeQuietly(consumer, "consumer");
+            }
         };
     }
 
