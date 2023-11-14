@@ -177,7 +177,7 @@ class LogValidatorTest {
     val expectedMaxTimestampOffset = if (magic >= RecordBatch.MAGIC_VALUE_V2) 2 else 0
     assertEquals(expectedMaxTimestampOffset, validatedResults.shallowOffsetOfMaxTimestampMs,
       s"The offset of max timestamp should be $expectedMaxTimestampOffset")
-    verifyRecordConversionStats(validatedResults.recordValidationStats, numConvertedRecords = 0, records,
+    verifyRecordValidationStats(validatedResults.recordValidationStats, numConvertedRecords = 0, records,
       compressed = false)
   }
 
@@ -225,7 +225,7 @@ class LogValidatorTest {
       "Message size may have been changed")
 
     val stats = validatedResults.recordValidationStats
-    verifyRecordConversionStats(stats, numConvertedRecords = 3, records, compressed = true)
+    verifyRecordValidationStats(stats, numConvertedRecords = 3, records, compressed = true)
   }
 
   @Test
@@ -276,7 +276,7 @@ class LogValidatorTest {
     assertFalse(validatedResults.messageSizeMaybeChanged,
       "Message size should not have been changed")
 
-    verifyRecordConversionStats(validatedResults.recordValidationStats, numConvertedRecords = 0, records,
+    verifyRecordValidationStats(validatedResults.recordValidationStats, numConvertedRecords = 0, records,
       compressed = true)
   }
 
@@ -415,7 +415,7 @@ class LogValidatorTest {
 
     assertFalse(validatingResults.messageSizeMaybeChanged,
       "Message size should not have been changed")
-    verifyRecordConversionStats(validatingResults.recordValidationStats, numConvertedRecords = 0, records,
+    verifyRecordValidationStats(validatingResults.recordValidationStats, numConvertedRecords = 0, records,
       compressed = false)
   }
 
@@ -489,7 +489,7 @@ class LogValidatorTest {
     assertTrue(validatingResults.messageSizeMaybeChanged,
       "Message size should have been changed")
 
-    verifyRecordConversionStats(validatingResults.recordValidationStats, numConvertedRecords = 3, records,
+    verifyRecordValidationStats(validatingResults.recordValidationStats, numConvertedRecords = 3, records,
       compressed = true)
   }
 
@@ -540,7 +540,7 @@ class LogValidatorTest {
       s"Offset of max timestamp should be ${validatedRecords.records.asScala.size - 1}")
     assertTrue(validatedResults.messageSizeMaybeChanged, "Message size should have been changed")
 
-    verifyRecordConversionStats(validatedResults.recordValidationStats, numConvertedRecords = 3, records,
+    verifyRecordValidationStats(validatedResults.recordValidationStats, numConvertedRecords = 3, records,
       compressed = true)
   }
 
@@ -587,7 +587,7 @@ class LogValidatorTest {
       s"Offset of max timestamp should be ${validatedRecords.records.asScala.size - 1}")
     assertTrue(validatedResults.messageSizeMaybeChanged, "Message size should have been changed")
 
-    verifyRecordConversionStats(validatedResults.recordValidationStats, numConvertedRecords = 3, records,
+    verifyRecordValidationStats(validatedResults.recordValidationStats, numConvertedRecords = 3, records,
       compressed = true)
   }
 
@@ -661,7 +661,7 @@ class LogValidatorTest {
       s"Offset of max timestamp should be ${validatedRecords.records.asScala.size - 1}")
     assertFalse(validatedResults.messageSizeMaybeChanged, "Message size should not have been changed")
 
-    verifyRecordConversionStats(validatedResults.recordValidationStats, numConvertedRecords = 0, records,
+    verifyRecordValidationStats(validatedResults.recordValidationStats, numConvertedRecords = 0, records,
       compressed = true)
   }
 
@@ -944,7 +944,7 @@ class LogValidatorTest {
       PrimitiveRef.ofLong(offset), metricsRecorder, RequestLocal.withThreadConfinedCaching.bufferSupplier
     )
     checkOffsets(validatedResults.validatedRecords, offset)
-    verifyRecordConversionStats(validatedResults.recordValidationStats, numConvertedRecords = 3, records,
+    verifyRecordValidationStats(validatedResults.recordValidationStats, numConvertedRecords = 3, records,
       compressed = false)
   }
 
@@ -970,7 +970,7 @@ class LogValidatorTest {
       PrimitiveRef.ofLong(offset), metricsRecorder, RequestLocal.withThreadConfinedCaching.bufferSupplier
     )
     checkOffsets(validatedResults.validatedRecords, offset)
-    verifyRecordConversionStats(validatedResults.recordValidationStats, numConvertedRecords = 3, records,
+    verifyRecordValidationStats(validatedResults.recordValidationStats, numConvertedRecords = 3, records,
       compressed = false)
   }
 
@@ -996,7 +996,7 @@ class LogValidatorTest {
       PrimitiveRef.ofLong(offset), metricsRecorder, RequestLocal.withThreadConfinedCaching.bufferSupplier
     )
     checkOffsets(validatedResults.validatedRecords, offset)
-    verifyRecordConversionStats(validatedResults.recordValidationStats, numConvertedRecords = 3, records,
+    verifyRecordValidationStats(validatedResults.recordValidationStats, numConvertedRecords = 3, records,
       compressed = true)
   }
 
@@ -1022,7 +1022,7 @@ class LogValidatorTest {
       PrimitiveRef.ofLong(offset), metricsRecorder, RequestLocal.withThreadConfinedCaching.bufferSupplier
     )
     checkOffsets(validatedResults.validatedRecords, offset)
-    verifyRecordConversionStats(validatedResults.recordValidationStats, numConvertedRecords = 3, records,
+    verifyRecordValidationStats(validatedResults.recordValidationStats, numConvertedRecords = 3, records,
       compressed = true)
   }
 
@@ -1659,7 +1659,7 @@ class LogValidatorTest {
     }
   }
 
-  def verifyRecordConversionStats(stats: RecordValidationStats, numConvertedRecords: Int, records: MemoryRecords,
+  def verifyRecordValidationStats(stats: RecordValidationStats, numConvertedRecords: Int, records: MemoryRecords,
                                   compressed: Boolean): Unit = {
     assertNotNull(stats, "Records processing info is null")
     assertEquals(numConvertedRecords, stats.numRecordsConverted)

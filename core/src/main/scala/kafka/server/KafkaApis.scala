@@ -688,7 +688,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         entriesPerPartition = authorizedRequestInfo,
         requestLocal = requestLocal,
         responseCallback = sendResponseCallback,
-        recordConversionStatsCallback = processingStatsCallback,
+        recordValidationStatsCallback = processingStatsCallback,
         transactionalId = produceRequest.transactionalId()
       )
 

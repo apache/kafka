@@ -757,7 +757,7 @@ class ReplicaManager(val config: KafkaConfig,
    * @param entriesPerPartition           the records per partition to be appended
    * @param responseCallback              callback for sending the response
    * @param delayedProduceLock            lock for the delayed actions
-   * @param recordConversionStatsCallback callback for updating stats on record conversions
+   * @param recordValidationStatsCallback callback for updating stats on record conversions
    * @param requestLocal                  container for the stateful instances scoped to this request
    * @param transactionalId               transactional ID if the request is from a producer and the producer is transactional
    * @param actionQueue                   the action queue to use. ReplicaManager#actionQueue is used by default.
@@ -769,7 +769,7 @@ class ReplicaManager(val config: KafkaConfig,
                     entriesPerPartition: Map[TopicPartition, MemoryRecords],
                     responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
                     delayedProduceLock: Option[Lock] = None,
-                    recordConversionStatsCallback: Map[TopicPartition, RecordValidationStats] => Unit = _ => (),
+                    recordValidationStatsCallback: Map[TopicPartition, RecordValidationStats] => Unit = _ => (),
                     requestLocal: RequestLocal = RequestLocal.NoCaching,
                     transactionalId: String = null,
                     actionQueue: ActionQueue = this.actionQueue): Unit = {
@@ -855,7 +855,7 @@ class ReplicaManager(val config: KafkaConfig,
           }
         }
 
-        recordConversionStatsCallback(localProduceResults.map { case (k, v) => k -> v.info.recordValidationStats })
+        recordValidationStatsCallback(localProduceResults.map { case (k, v) => k -> v.info.recordValidationStats })
 
         if (delayedProduceRequestRequired(requiredAcks, allEntries, allResults)) {
           // create delayed produce operation

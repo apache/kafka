@@ -65,15 +65,17 @@ public class LogValidator {
     }
 
     public static class ValidationResult {
+        public final long logAppendTimeMs;
         public final MemoryRecords validatedRecords;
         public final long maxTimestampMs;
         public final long shallowOffsetOfMaxTimestampMs;
         public final boolean messageSizeMaybeChanged;
         public final RecordValidationStats recordValidationStats;
 
-        public ValidationResult(MemoryRecords validatedRecords, long maxTimestampMs,
+        public ValidationResult(long logAppendTimeMs, MemoryRecords validatedRecords, long maxTimestampMs,
                                 long shallowOffsetOfMaxTimestampMs, boolean messageSizeMaybeChanged,
                                 RecordValidationStats recordValidationStats) {
+            this.logAppendTimeMs = logAppendTimeMs;
             this.validatedRecords = validatedRecords;
             this.maxTimestampMs = maxTimestampMs;
             this.shallowOffsetOfMaxTimestampMs = shallowOffsetOfMaxTimestampMs;
@@ -227,6 +229,7 @@ public class LogValidator {
         RecordValidationStats recordValidationStats = new RecordValidationStats(
             builder.uncompressedBytesWritten(), builder.numRecords(), time.nanoseconds() - startNanos);
         return new ValidationResult(
+            now,
             convertedRecords,
             info.maxTimestamp,
             info.shallowOffsetOfMaxTimestamp,
@@ -298,6 +301,7 @@ public class LogValidator {
         }
 
         return new ValidationResult(
+            now,
             records,
             maxTimestamp,
             offsetOfMaxTimestamp,
@@ -424,6 +428,7 @@ public class LogValidator {
 
             RecordValidationStats recordValidationStats = new RecordValidationStats(uncompressedSizeInBytes, 0, 0);
             return new ValidationResult(
+                now,
                 records,
                 maxTimestamp,
                 lastOffset,
@@ -465,6 +470,7 @@ public class LogValidator {
             time.nanoseconds() - startNanos);
 
         return new ValidationResult(
+            logAppendTime,
             records,
             info.maxTimestamp,
             info.shallowOffsetOfMaxTimestamp,

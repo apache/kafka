@@ -69,7 +69,7 @@ public class RecordValidationStats {
 
     @Override
     public String toString() {
-        return String.format("RecordConversionStats(temporaryMemoryBytes=%d, numRecordsConverted=%d, conversionTimeNanos=%d)",
+        return String.format("RecordValidationStats(temporaryMemoryBytes=%d, numRecordsConverted=%d, conversionTimeNanos=%d)",
                 temporaryMemoryBytes, numRecordsConverted, conversionTimeNanos);
     }
 }
