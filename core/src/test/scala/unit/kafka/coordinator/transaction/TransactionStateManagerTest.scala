@@ -489,7 +489,8 @@ class TransactionStateManagerTest {
     transactionManager.addLoadingPartition(partitionId = 0, coordinatorEpoch = 15)
     val listResponse = transactionManager.listTransactionStates(
       filterProducerIds = Set.empty,
-      filterStateNames = Set.empty
+      filterStateNames = Set.empty,
+      0L
     )
     assertEquals(Errors.COORDINATOR_LOAD_IN_PROGRESS, Errors.forCode(listResponse.errorCode))
   }
@@ -529,7 +530,7 @@ class TransactionStateManagerTest {
       filterProducerIds: Set[Long] = Set.empty,
       filterStates: Set[String] = Set.empty
     ): Unit = {
-      val listResponse = transactionManager.listTransactionStates(filterProducerIds, filterStates)
+      val listResponse = transactionManager.listTransactionStates(filterProducerIds, filterStates, 0L)
       assertEquals(Errors.NONE, Errors.forCode(listResponse.errorCode))
       assertEquals(expectedTransactionalIds, listResponse.transactionStates.asScala.map(_.transactionalId).toSet)
       val expectedUnknownStates = filterStates.filter(state => TransactionState.fromName(state).isEmpty)
@@ -843,7 +844,7 @@ class TransactionStateManagerTest {
   }
 
   private def listExpirableTransactionalIds(): Set[String] = {
-    val activeTransactionalIds = transactionManager.listTransactionStates(Set.empty, Set.empty)
+    val activeTransactionalIds = transactionManager.listTransactionStates(Set.empty, Set.empty, 0L)
       .transactionStates
       .asScala
       .map(_.transactionalId)
