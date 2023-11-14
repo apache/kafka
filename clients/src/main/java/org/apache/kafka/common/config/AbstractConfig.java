@@ -101,7 +101,7 @@ public class AbstractConfig {
      *                            the constructor to resolve any variables in {@code originals}; may be null or empty
      * @param doLog               whether the configurations should be logged
      */
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "this-escape"})
     public AbstractConfig(ConfigDef definition, Map<?, ?> originals, Map<String, ?> configProviderProps, boolean doLog) {
         /* check that all the keys are really strings */
         for (Map.Entry<?, ?> entry : originals.entrySet())

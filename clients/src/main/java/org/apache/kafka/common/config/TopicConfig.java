@@ -76,11 +76,11 @@ public class TopicConfig {
         "their data. If set to -1, no time limit is applied.";
 
     public static final String REMOTE_LOG_STORAGE_ENABLE_CONFIG = "remote.storage.enable";
-    public static final String REMOTE_LOG_STORAGE_ENABLE_DOC = "To enable tier storage for a topic, set `remote.storage.enable` as true. " +
+    public static final String REMOTE_LOG_STORAGE_ENABLE_DOC = "To enable tiered storage for a topic, set this configuration as true. " +
             "You can not disable this config once it is enabled. It will be provided in future versions.";
 
     public static final String LOCAL_LOG_RETENTION_MS_CONFIG = "local.retention.ms";
-    public static final String LOCAL_LOG_RETENTION_MS_DOC = "The number of milli seconds to keep the local log segment before it gets deleted. " +
+    public static final String LOCAL_LOG_RETENTION_MS_DOC = "The number of milliseconds to keep the local log segment before it gets deleted. " +
             "Default value is -2, it represents `retention.ms` value is to be used. The effective value should always be less than or equal " +
             "to `retention.ms` value.";
 

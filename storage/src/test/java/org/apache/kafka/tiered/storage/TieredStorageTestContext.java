@@ -179,7 +179,7 @@ public final class TieredStorageTestContext implements AutoCloseable {
     }
 
     public void deleteTopic(String topic) {
-        TestUtils.deleteTopicWithAdmin(admin, topic, harness.brokers());
+        TestUtils.deleteTopicWithAdmin(admin, topic, harness.brokers(), harness.controllerServers());
     }
 
     /**
@@ -271,11 +271,18 @@ public final class TieredStorageTestContext implements AutoCloseable {
 
     public LocalTieredStorageSnapshot takeTieredStorageSnapshot() {
         int aliveBrokerId = harness.aliveBrokers().head().config().brokerId();
-        return LocalTieredStorageSnapshot.takeSnapshot(remoteStorageManagers.get(aliveBrokerId));
+        return LocalTieredStorageSnapshot.takeSnapshot(remoteStorageManager(aliveBrokerId));
     }
 
     public LocalTieredStorageHistory tieredStorageHistory(int brokerId) {
-        return remoteStorageManagers.get(brokerId).getHistory();
+        return remoteStorageManager(brokerId).getHistory();
+    }
+
+    public LocalTieredStorage remoteStorageManager(int brokerId) {
+        return remoteStorageManagers.stream()
+                .filter(rsm -> rsm.brokerId() == brokerId)
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("No remote storage manager found for broker " + brokerId));
     }
 
     public List<LocalTieredStorage> remoteStorageManagers() {

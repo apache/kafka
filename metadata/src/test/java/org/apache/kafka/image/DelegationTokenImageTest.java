@@ -56,7 +56,7 @@ public class DelegationTokenImageTest {
             tokenId,
             SecurityUtils.parseKafkaPrincipal(KafkaPrincipal.USER_TYPE + ":" + "fred"),
             SecurityUtils.parseKafkaPrincipal(KafkaPrincipal.USER_TYPE + ":" + "fred"),
-            new ArrayList<KafkaPrincipal>(),
+            new ArrayList<>(),
             0,
             1000,
             expireTimestamp);

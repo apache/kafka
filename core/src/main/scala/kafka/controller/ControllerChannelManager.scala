@@ -377,6 +377,7 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
   val stopReplicaRequestMap = mutable.Map.empty[Int, mutable.Map[TopicPartition, StopReplicaPartitionState]]
   val updateMetadataRequestBrokerSet = mutable.Set.empty[Int]
   val updateMetadataRequestPartitionInfoMap = mutable.Map.empty[TopicPartition, UpdateMetadataPartitionState]
+  private var updateType: LeaderAndIsrRequest.Type = LeaderAndIsrRequest.Type.UNKNOWN
   private var metadataInstance: ControllerChannelContext = _
 
   def sendRequest(brokerId: Int,
@@ -398,12 +399,17 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
     metadataInstance = metadataProvider()
   }
 
+  def setUpdateType(updateType: LeaderAndIsrRequest.Type): Unit = {
+    this.updateType = updateType
+  }
+
   def clear(): Unit = {
     leaderAndIsrRequestMap.clear()
     stopReplicaRequestMap.clear()
     updateMetadataRequestBrokerSet.clear()
     updateMetadataRequestPartitionInfoMap.clear()
     metadataInstance = null
+    updateType = LeaderAndIsrRequest.Type.UNKNOWN
   }
 
   def addLeaderAndIsrRequestForBrokers(brokerIds: Seq[Int],
@@ -543,8 +549,17 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
           .toSet[String]
           .map(topic => (topic, metadataInstance.topicIds.getOrElse(topic, Uuid.ZERO_UUID)))
           .toMap
-        val leaderAndIsrRequestBuilder = new LeaderAndIsrRequest.Builder(leaderAndIsrRequestVersion, controllerId,
-          controllerEpoch, brokerEpoch, leaderAndIsrPartitionStates.values.toBuffer.asJava, topicIds.asJava, leaders.asJava, kraftController)
+        val leaderAndIsrRequestBuilder = new LeaderAndIsrRequest.Builder(
+          leaderAndIsrRequestVersion,
+          controllerId,
+          controllerEpoch,
+          brokerEpoch,
+          leaderAndIsrPartitionStates.values.toBuffer.asJava,
+          topicIds.asJava,
+          leaders.asJava,
+          kraftController,
+          updateType
+        )
         sendRequest(broker, leaderAndIsrRequestBuilder, (r: AbstractResponse) => {
           val leaderAndIsrResponse = r.asInstanceOf[LeaderAndIsrResponse]
           handleLeaderAndIsrResponse(leaderAndIsrResponse, broker)
@@ -552,6 +567,7 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
       }
     }
     leaderAndIsrRequestMap.clear()
+    updateType = LeaderAndIsrRequest.Type.UNKNOWN
   }
 
   def handleLeaderAndIsrResponse(response: LeaderAndIsrResponse, broker: Int): Unit

@@ -55,8 +55,8 @@ public abstract class BaseReassignReplicaTest extends TieredStorageTestHarness {
         final String topicA = "topicA";
         final String topicB = "topicB";
         final Integer p0 = 0;
-        final Integer partitionCount = 5;
-        final Integer replicationFactor = 2;
+        final Integer partitionCount = 1;
+        final Integer replicationFactor = 1;
         final Integer maxBatchCountPerSegment = 1;
         final Map<Integer, List<Integer>> replicaAssignment = null;
         final boolean enableRemoteLogStorage = true;
@@ -66,13 +66,15 @@ public abstract class BaseReassignReplicaTest extends TieredStorageTestHarness {
         }
 
         builder
-                // create topicA with 5 partitions, 2 RF and ensure that the user-topic-partitions are mapped to
-                // metadata partitions
-                .createTopic(topicA, partitionCount, replicationFactor, maxBatchCountPerSegment,
+                // create topicA with 50 partitions and 2 RF. Using 50 partitions to ensure that the user-partitions
+                // are mapped to all the __remote_log_metadata partitions. This is required to ensure that
+                // TBRLMM able to handle the assignment of the newly created replica to one of the already assigned
+                // metadata partition
+                .createTopic(topicA, 50, 2, maxBatchCountPerSegment,
                         replicaAssignment, enableRemoteLogStorage)
                 .expectUserTopicMappedToMetadataPartitions(topicA, metadataPartitions)
                 // create topicB with 1 partition and 1 RF
-                .createTopic(topicB, 1, 1, maxBatchCountPerSegment,
+                .createTopic(topicB, partitionCount, replicationFactor, maxBatchCountPerSegment,
                         mkMap(mkEntry(p0, Collections.singletonList(broker0))), enableRemoteLogStorage)
                 // send records to partition 0
                 .expectSegmentToBeOffloaded(broker0, topicB, p0, 0, new KeyValueSpec("k0", "v0"))

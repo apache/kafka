@@ -36,7 +36,7 @@ import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.apache.kafka.tiered.storage.utils.ActionUtils.describeTopic;
+import static org.apache.kafka.tiered.storage.utils.TieredStorageTestUtils.describeTopic;
 
 public final class ExpectLeaderAction implements TieredStorageTestAction {
 

@@ -150,7 +150,7 @@ abstract class AbstractLogCleanerIntegrationTest {
       // move LSO forward to increase compaction bound
       log.updateHighWatermark(log.logEndOffset)
       incCounter()
-      (key, value, appendInfo.firstOffset.get.messageOffset)
+      (key, value, appendInfo.firstOffset)
     }
   }
 
@@ -163,5 +163,10 @@ abstract class AbstractLogCleanerIntegrationTest {
     val messageSet = TestUtils.singletonRecords(value = value.getBytes, codec = codec, key = key.toString.getBytes,
       magicValue = messageFormatVersion)
     (value, messageSet)
+  }
+
+  def closeLog(log: UnifiedLog): Unit = {
+    log.close()
+    logs -= log
   }
 }

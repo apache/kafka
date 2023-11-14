@@ -102,7 +102,7 @@ public abstract class RestServer {
     /**
      * Adds Jetty connector for each configured listener
      */
-    public void createConnectors(List<String> listeners, List<String> adminListeners) {
+    public final void createConnectors(List<String> listeners, List<String> adminListeners) {
         List<Connector> connectors = new ArrayList<>();
 
         for (String listener : listeners) {
@@ -125,14 +125,14 @@ public abstract class RestServer {
     /**
      * Creates regular (non-admin) Jetty connector according to configuration
      */
-    public Connector createConnector(String listener) {
+    public final Connector createConnector(String listener) {
         return createConnector(listener, false);
     }
 
     /**
      * Creates Jetty connector according to configuration
      */
-    public Connector createConnector(String listener, boolean isAdmin) {
+    public final Connector createConnector(String listener, boolean isAdmin) {
         Matcher listenerMatcher = LISTENER_PATTERN.matcher(listener);
 
         if (!listenerMatcher.matches())

@@ -58,4 +58,14 @@ public class ExponentialBackoff {
         long backoffValue = (long) (randomFactor * term);
         return backoffValue > maxInterval ? maxInterval : backoffValue;
     }
+
+    @Override
+    public String toString() {
+        return "ExponentialBackoff{" +
+                "multiplier=" + multiplier +
+                ", expMax=" + expMax +
+                ", initialInterval=" + initialInterval +
+                ", jitter=" + jitter +
+                '}';
+    }
 }

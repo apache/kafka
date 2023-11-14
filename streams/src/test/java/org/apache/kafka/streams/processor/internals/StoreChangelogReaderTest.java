@@ -91,6 +91,7 @@ import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 @RunWith(Parameterized.class)
+@SuppressWarnings("this-escape")
 public class StoreChangelogReaderTest extends EasyMockSupport {
 
     @Rule
@@ -389,37 +390,28 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
     }
 
     @Test
-    public void shouldPollWithRightTimeout() {
-        final TaskId taskId = new TaskId(0, 0);
-
-        EasyMock.expect(storeMetadata.offset()).andReturn(null).andReturn(9L).anyTimes();
-        EasyMock.expect(stateManager.changelogOffsets()).andReturn(singletonMap(tp, 5L));
-        EasyMock.expect(stateManager.taskId()).andReturn(taskId).anyTimes();
-        EasyMock.replay(stateManager, storeMetadata, store);
-
-        consumer.updateBeginningOffsets(Collections.singletonMap(tp, 5L));
-        adminClient.updateEndOffsets(Collections.singletonMap(tp, 11L));
-
-        final StoreChangelogReader changelogReader =
-            new StoreChangelogReader(time, config, logContext, adminClient, consumer, callback);
-
-        changelogReader.register(tp, stateManager);
-
-        if (type == STANDBY) {
-            changelogReader.transitToUpdateStandby();
-        }
-
-        changelogReader.restore(Collections.singletonMap(taskId, mock(Task.class)));
-
-        if (type == ACTIVE) {
-            assertEquals(Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG)), consumer.lastPollTimeout());
-        } else {
-            assertEquals(Duration.ZERO, consumer.lastPollTimeout());
-        }
+    public void shouldPollWithRightTimeoutWithStateUpdater() {
+        shouldPollWithRightTimeout(true);
     }
 
     @Test
-    public void shouldPollWithRightTimeoutWithStateUpdater() {
+    public void shouldPollWithRightTimeoutWithoutStateUpdater() {
+        shouldPollWithRightTimeout(false);
+    }
+
+    private void shouldPollWithRightTimeout(final boolean stateUpdaterEnabled) {
+        final Properties properties = new Properties();
+        properties.put(InternalConfig.STATE_UPDATER_ENABLED, stateUpdaterEnabled);
+        shouldPollWithRightTimeout(properties);
+    }
+
+    @Test
+    public void shouldPollWithRightTimeoutWithStateUpdaterDefault() {
+        final Properties properties = new Properties();
+        shouldPollWithRightTimeout(properties);
+    }
+
+    private void shouldPollWithRightTimeout(final Properties properties) {
         final TaskId taskId = new TaskId(0, 0);
 
         EasyMock.expect(storeMetadata.offset()).andReturn(null).andReturn(9L).anyTimes();
@@ -430,8 +422,6 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         consumer.updateBeginningOffsets(Collections.singletonMap(tp, 5L));
         adminClient.updateEndOffsets(Collections.singletonMap(tp, 11L));
 
-        final Properties properties = new Properties();
-        properties.put(InternalConfig.STATE_UPDATER_ENABLED, true);
         final StreamsConfig config = new StreamsConfig(StreamsTestUtils.getStreamsConfig("test-reader", properties));
 
         final StoreChangelogReader changelogReader =
@@ -444,7 +434,16 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         }
 
         changelogReader.restore(Collections.singletonMap(taskId, mock(Task.class)));
-        assertEquals(Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG)), consumer.lastPollTimeout());
+        if (type == ACTIVE) {
+            assertEquals(Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG)), consumer.lastPollTimeout());
+        } else {
+            if (!properties.containsKey(InternalConfig.STATE_UPDATER_ENABLED)
+                    || (boolean) properties.get(InternalConfig.STATE_UPDATER_ENABLED)) {
+                assertEquals(Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG)), consumer.lastPollTimeout());
+            } else {
+                assertEquals(Duration.ZERO, consumer.lastPollTimeout());
+            }
+        }
     }
 
     @Test
@@ -520,7 +519,11 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
     public void shouldRestoreFromBeginningAndCheckCompletion() {
         final TaskId taskId = new TaskId(0, 0);
 
-        EasyMock.expect(storeMetadata.offset()).andReturn(null).andReturn(9L).anyTimes();
+        if (type == STANDBY && logContext.logger(StoreChangelogReader.class).isDebugEnabled()) {
+            EasyMock.expect(storeMetadata.offset()).andReturn(null).andReturn(null).andReturn(9L).anyTimes();
+        } else {
+            EasyMock.expect(storeMetadata.offset()).andReturn(null).andReturn(9L).anyTimes();
+        }
         EasyMock.expect(stateManager.changelogOffsets()).andReturn(singletonMap(tp, 5L));
         EasyMock.expect(stateManager.taskId()).andReturn(taskId).anyTimes();
         EasyMock.replay(stateManager, storeMetadata, store);
@@ -1298,8 +1301,8 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
 
     @Test
     public void shouldNotThrowOnUnknownRevokedPartition() {
-        LogCaptureAppender.setClassLoggerToDebug(StoreChangelogReader.class);
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StoreChangelogReader.class)) {
+            appender.setClassLoggerToDebug(StoreChangelogReader.class);
             changelogReader.unregister(Collections.singletonList(new TopicPartition("unknown", 0)));
 
             assertThat(
