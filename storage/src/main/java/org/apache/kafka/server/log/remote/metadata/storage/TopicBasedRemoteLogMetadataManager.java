@@ -446,6 +446,20 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
         }
     }
 
+    private boolean isTopicExists(Admin adminClient, String topic) {
+        try {
+            TopicDescription description = adminClient.describeTopics(Collections.singleton(topic))
+                    .topicNameValues()
+                    .get(topic)
+                    .get();
+            log.info("Topic {} exists. Description: {}", topic, description);
+            return description != null;
+        } catch (ExecutionException | InterruptedException ex) {
+            log.info("Topic {} does not exist. Error: {}", topic, ex.getCause().getMessage());
+            return false;
+        }
+    }
+
     private boolean isPartitionsCountSameAsConfigured(Admin adminClient,
                                                       String topicName) throws InterruptedException, ExecutionException {
         log.debug("Getting topic details to check for partition count and replication factor.");
@@ -467,6 +481,7 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
         Map<String, String> topicConfigs = new HashMap<>();
         topicConfigs.put(TopicConfig.RETENTION_MS_CONFIG, Long.toString(rlmmConfig.metadataTopicRetentionMs()));
         topicConfigs.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE);
+        topicConfigs.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "false");
         return new NewTopic(rlmmConfig.remoteLogMetadataTopicName(),
                             rlmmConfig.metadataTopicPartitionsCount(),
                             rlmmConfig.metadataTopicReplicationFactor()).configs(topicConfigs);
@@ -477,20 +492,22 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
      * @return Returns true if the topic already exists, or it is created successfully.
      */
     private boolean createTopic(Admin adminClient, NewTopic topic) {
-        boolean topicCreated = false;
+        boolean topicExists = false;
         try {
-            adminClient.createTopics(Collections.singleton(topic)).all().get();
-            topicCreated = true;
+            topicExists = isTopicExists(adminClient, topic.name());
+            if (!topicExists) {
+                adminClient.createTopics(Collections.singleton(topic)).all().get();
+                topicExists = true;
+            }
         } catch (Exception e) {
             if (e.getCause() instanceof TopicExistsException) {
                 log.info("Topic [{}] already exists", topic.name());
-                topicCreated = true;
+                topicExists = true;
             } else {
                 log.error("Encountered error while creating remote log metadata topic.", e);
             }
         }
-
-        return topicCreated;
+        return topicExists;
     }
 
     public boolean isInitialized() {
