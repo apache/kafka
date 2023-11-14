@@ -426,6 +426,7 @@ class NodeToControllerRequestThreadTest {
     testRequestThread.enqueue(queueItem)
     pollUntil(testRequestThread, () => callbackResponse.get != null)
     assertNotNull(callbackResponse.get.authenticationException)
+    assertEquals(None, testRequestThread.activeControllerAddress())
   }
 
   @Test
