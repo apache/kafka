@@ -187,8 +187,8 @@ public class ConsumerTestBuilder implements Closeable {
             MembershipManager mm = spy(
                     new MembershipManagerImpl(
                         gi.groupState.groupId,
-                        gi.groupState.groupInstanceId.orElse(null),
-                        null,
+                        gi.groupState.groupInstanceId,
+                        Optional.empty(),
                         subscriptions,
                         commit,
                         metadata,

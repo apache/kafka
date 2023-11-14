@@ -216,26 +216,26 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      */
     private String memberIdOnReconciliationStart;
 
-
     public MembershipManagerImpl(String groupId,
                                  SubscriptionState subscriptions,
                                  CommitRequestManager commitRequestManager,
                                  ConsumerMetadata metadata,
                                  LogContext logContext) {
-        this(groupId, null, null, subscriptions, commitRequestManager, metadata, logContext);
+        this(groupId, Optional.empty(), Optional.empty(), subscriptions, commitRequestManager, metadata,
+                logContext);
     }
 
     public MembershipManagerImpl(String groupId,
-                                 String groupInstanceId,
-                                 String serverAssignor,
+                                 Optional<String> groupInstanceId,
+                                 Optional<String> serverAssignor,
                                  SubscriptionState subscriptions,
                                  CommitRequestManager commitRequestManager,
                                  ConsumerMetadata metadata,
                                  LogContext logContext) {
         this.groupId = groupId;
         this.state = MemberState.UNSUBSCRIBED;
-        this.serverAssignor = Optional.ofNullable(serverAssignor);
-        this.groupInstanceId = Optional.ofNullable(groupInstanceId);
+        this.serverAssignor = serverAssignor;
+        this.groupInstanceId = groupInstanceId;
         this.subscriptions = subscriptions;
         this.commitRequestManager = commitRequestManager;
         this.metadata = metadata;
@@ -529,7 +529,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
             } else {
                 reason = "Target assignment ready to reconcile is equals to the member current assignment.";
             }
-            log.debug("Ignoring reconciliation attempt." + reason);
+            log.debug("Ignoring reconciliation attempt. " + reason);
             return false;
         }
 
@@ -573,13 +573,13 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         // Future that will complete when the full reconciliation process completes (revocation
         // and assignment, executed sequentially)
         CompletableFuture<Void> reconciliationResult =
-                revocationResult.thenCompose(r -> {
+                revocationResult.thenCompose(__ -> {
                     boolean memberHasRejoined = !Objects.equals(memberIdOnReconciliationStart,
                             memberId);
                     if (state == MemberState.RECONCILING && !memberHasRejoined) {
 
-                        // Make assignment effective on the client by updating the subscription state.
-                        subscriptions.assignFromSubscribed(assignedPartitions);
+                        // Apply assignment
+                        CompletableFuture<Void> assignResult = assignPartitions(assignedPartitions, addedPartitions);
 
                         // Clear topic names cache only for topics that are not in the subscription anymore
                         for (TopicPartition tp : revokedPartitions) {
@@ -588,8 +588,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
                             }
                         }
 
-                        // Invoke user call back
-                        return invokeOnPartitionsAssignedCallback(addedPartitions);
+                        return assignResult;
 
                     } else {
                         String reason;
@@ -726,7 +725,6 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
             // revocation of a previously assigned topic.
             String nameFromSubscriptionCache = assignedTopicNamesCache.getOrDefault(topicId, null);
             return Optional.ofNullable(nameFromSubscriptionCache);
-
         }
     }
 
@@ -800,6 +798,29 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
             });
         });
         return revocationResult;
+    }
+
+
+    /**
+     * Make new assignment effective and trigger onPartitionsAssigned callback for the partitions
+     * added.
+     *
+     * @param assignedPartitions New assignment that will be updated in the member subscription
+     *                           state.
+     * @param addedPartitions    Partitions contained in the new assignment that were not owned by
+     *                           the member before. These will be provided to the
+     *                           onPartitionsAssigned callback.
+     * @return Future that will complete when the callback execution completes.
+     */
+    private CompletableFuture<Void> assignPartitions(
+            SortedSet<TopicPartition> assignedPartitions,
+            SortedSet<TopicPartition> addedPartitions) {
+
+        // Make assignment effective on the client by updating the subscription state.
+        subscriptions.assignFromSubscribed(assignedPartitions);
+
+        // Invoke user call back
+        return invokeOnPartitionsAssignedCallback(addedPartitions);
     }
 
     /**

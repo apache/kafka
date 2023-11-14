@@ -92,8 +92,8 @@ public class MembershipManagerImplTest {
     private MembershipManagerImpl createMembershipManagerJoiningGroup(String groupInstanceId,
                                                                       String serverAssignor) {
         MembershipManagerImpl manager = new MembershipManagerImpl(
-                GROUP_ID, groupInstanceId, serverAssignor, subscriptionState,
-                commitRequestManager, metadata, testBuilder.logContext);
+                GROUP_ID, Optional.ofNullable(groupInstanceId), Optional.ofNullable(serverAssignor),
+                subscriptionState, commitRequestManager, metadata, testBuilder.logContext);
         manager.transitionToJoining();
         return manager;
     }
