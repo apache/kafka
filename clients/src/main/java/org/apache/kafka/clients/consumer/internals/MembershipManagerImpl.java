@@ -518,8 +518,13 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      */
     boolean reconcile() {
         // Make copy of the assignment to reconcile as it could change as new assignments or metadata updates are received
-        SortedSet<TopicPartition> assignedPartitions = new TreeSet<>(assignmentReadyToReconcile);
-        boolean sameAssignmentReceived = assignedPartitions.equals(subscriptions.assignedPartitions());
+        SortedSet<TopicPartition> assignedPartitions = new TreeSet<>(COMPARATOR);
+        assignedPartitions.addAll(assignmentReadyToReconcile);
+
+        SortedSet<TopicPartition> ownedPartitions = new TreeSet<>(COMPARATOR);
+        ownedPartitions.addAll(subscriptions.assignedPartitions());
+
+        boolean sameAssignmentReceived = assignedPartitions.equals(ownedPartitions);
 
         if (reconciliationInProgress || sameAssignmentReceived) {
             String reason;
@@ -534,9 +539,6 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         }
 
         markReconciliationInProgress();
-
-        SortedSet<TopicPartition> ownedPartitions = new TreeSet<>(COMPARATOR);
-        ownedPartitions.addAll(subscriptions.assignedPartitions());
 
 
         // Partitions to assign (not previously owned)
