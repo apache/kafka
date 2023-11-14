@@ -239,6 +239,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         this.subscriptions = subscriptions;
         this.commitRequestManager = commitRequestManager;
         this.metadata = metadata;
+        this.metadata.addClusterUpdateListener(this);
         this.assignedTopicNamesCache = new HashMap<>();
         this.assignmentUnresolved = new HashMap<>();
         this.assignmentReadyToReconcile = new TreeSet<>(COMPARATOR);

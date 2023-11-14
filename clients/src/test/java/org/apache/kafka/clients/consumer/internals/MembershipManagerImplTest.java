@@ -58,7 +58,6 @@ public class MembershipManagerImplTest {
     private static final String GROUP_ID = "test-group";
     private static final String MEMBER_ID = "test-member-1";
     private static final int MEMBER_EPOCH = 1;
-    // private final LogContext logContext = new LogContext();
 
     private SubscriptionState subscriptionState;
     private ConsumerMetadata metadata;
@@ -112,6 +111,14 @@ public class MembershipManagerImplTest {
     public void testMembershipManagerInitSupportsEmptyGroupInstanceId() {
         createMembershipManagerJoiningGroup();
         createMembershipManagerJoiningGroup(null, null);
+    }
+
+    @Test
+    public void testMembershipManagerRegistersForClusterMetadataUpdates() {
+        MembershipManagerImpl manager = new MembershipManagerImpl(
+                GROUP_ID, subscriptionState, commitRequestManager,
+                metadata, testBuilder.logContext);
+        verify(metadata).addClusterUpdateListener(manager);
     }
 
     @Test
