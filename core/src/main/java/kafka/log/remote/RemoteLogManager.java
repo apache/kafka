@@ -1011,15 +1011,15 @@ public class RemoteLogManager implements Closeable {
                     // the epochs present in the segment lies in the checkpoint file. It will always return false
                     // since the checkpoint file was already truncated.
                     boolean shouldDeleteSegment = remoteLogRetentionHandler.isSegmentBreachByLogStartOffset(
-                        metadata, logStartOffset, epochWithOffsets);
+                            metadata, logStartOffset, epochWithOffsets);
                     boolean isValidSegment = false;
                     if (!shouldDeleteSegment) {
                         // check whether the segment contains the required epoch range with in the current leader epoch lineage.
                         isValidSegment = isRemoteSegmentWithinLeaderEpochs(metadata, logEndOffset, epochWithOffsets);
                         if (isValidSegment) {
                             shouldDeleteSegment =
-                                remoteLogRetentionHandler.isSegmentBreachedByRetentionTime(metadata) ||
-                                    remoteLogRetentionHandler.isSegmentBreachedByRetentionSize(metadata);
+                                    remoteLogRetentionHandler.isSegmentBreachedByRetentionTime(metadata) ||
+                                            remoteLogRetentionHandler.isSegmentBreachedByRetentionSize(metadata);
                         }
                     }
                     if (shouldDeleteSegment) {
