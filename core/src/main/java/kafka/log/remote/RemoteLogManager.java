@@ -88,7 +88,6 @@ import java.security.PrivilegedAction;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -134,11 +133,6 @@ public class RemoteLogManager implements Closeable {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(RemoteLogManager.class);
     private static final String REMOTE_LOG_READER_THREAD_NAME_PREFIX = "remote-log-reader";
-    private static final Set<RemoteLogSegmentState> SEGMENT_DELETION_VALID_STATES = Collections.unmodifiableSet(EnumSet.of(
-        RemoteLogSegmentState.COPY_SEGMENT_STARTED,
-        RemoteLogSegmentState.COPY_SEGMENT_FINISHED,
-        RemoteLogSegmentState.DELETE_SEGMENT_STARTED
-    ));
     private final RemoteLogManagerConfig rlmConfig;
     private final int brokerId;
     private final String logDir;
@@ -999,7 +993,7 @@ public class RemoteLogManager implements Closeable {
                     }
                     RemoteLogSegmentMetadata metadata = segmentsIterator.next();
 
-                    if (!SEGMENT_DELETION_VALID_STATES.contains(metadata.state())) {
+                    if (RemoteLogSegmentState.DELETE_SEGMENT_FINISHED.equals(metadata.state())) {
                         continue;
                     }
                     if (segmentsToDelete.contains(metadata)) {
