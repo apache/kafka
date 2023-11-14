@@ -163,18 +163,22 @@ public class MirrorConnectorsWithCustomForwardingAdminIntegrationTest extends Mi
 
         startClusters(additionalConfig);
 
-        primary.kafka().createAdminClient().createAcls(Arrays.asList(
-                new AclBinding(
-                        new ResourcePattern(ResourceType.TOPIC, "*", PatternType.LITERAL),
-                        new AccessControlEntry("User:connector", "*", AclOperation.ALL, AclPermissionType.ALLOW)
-                )
-        )).all().get();
-        backup.kafka().createAdminClient().createAcls(Arrays.asList(
-                new AclBinding(
-                        new ResourcePattern(ResourceType.TOPIC, "*", PatternType.LITERAL),
-                        new AccessControlEntry("User:connector", "*", AclOperation.ALL, AclPermissionType.ALLOW)
-                )
-        )).all().get();
+        try (Admin adminClient = primary.kafka().createAdminClient()) {
+            adminClient.createAcls(Arrays.asList(
+                    new AclBinding(
+                            new ResourcePattern(ResourceType.TOPIC, "*", PatternType.LITERAL),
+                            new AccessControlEntry("User:connector", "*", AclOperation.ALL, AclPermissionType.ALLOW)
+                    )
+            )).all().get();
+        }
+        try (Admin adminClient = backup.kafka().createAdminClient()) {
+            adminClient.createAcls(Arrays.asList(
+                    new AclBinding(
+                            new ResourcePattern(ResourceType.TOPIC, "*", PatternType.LITERAL),
+                            new AccessControlEntry("User:connector", "*", AclOperation.ALL, AclPermissionType.ALLOW)
+                    )
+            )).all().get();
+        }
     }
 
     @AfterEach
@@ -244,7 +248,9 @@ public class MirrorConnectorsWithCustomForwardingAdminIntegrationTest extends Mi
 
         // increase number of partitions
         Map<String, NewPartitions> newPartitions = Collections.singletonMap("test-topic-1", NewPartitions.increaseTo(NUM_PARTITIONS + 1));
-        primary.kafka().createAdminClient().createPartitions(newPartitions).all().get();
+        try (Admin adminClient = primary.kafka().createAdminClient()) {
+            adminClient.createPartitions(newPartitions).all().get();
+        }
 
         // make sure partition is created in the other cluster
         waitForTopicPartitionCreated(backup, "primary.test-topic-1", NUM_PARTITIONS + 1);
@@ -293,8 +299,12 @@ public class MirrorConnectorsWithCustomForwardingAdminIntegrationTest extends Mi
                         new AccessControlEntry("User:dummy", "*", AclOperation.DESCRIBE, AclPermissionType.ALLOW)
                 )
         );
-        primary.kafka().createAdminClient().createAcls(aclBindings).all().get();
-        backup.kafka().createAdminClient().createAcls(aclBindings).all().get();
+        try (Admin adminClient = primary.kafka().createAdminClient()) {
+            adminClient.createAcls(aclBindings).all().get();
+        }
+        try (Admin adminClient = backup.kafka().createAdminClient()) {
+            adminClient.createAcls(aclBindings).all().get();
+        }
 
         waitUntilMirrorMakerIsRunning(primary, CONNECTOR_LIST, mm2Config, BACKUP_CLUSTER_ALIAS, PRIMARY_CLUSTER_ALIAS);
         waitUntilMirrorMakerIsRunning(backup, CONNECTOR_LIST, mm2Config, PRIMARY_CLUSTER_ALIAS, BACKUP_CLUSTER_ALIAS);
