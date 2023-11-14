@@ -162,7 +162,7 @@ class ZkAdminManager(val config: KafkaConfig,
                    responseCallback: Map[String, ApiError] => Unit): Unit = {
 
     if (!metadataCache.asInstanceOf[ZkMetadataCache].isInitialized()) {
-      responseCallback(toCreate.view.mapValues(_ => new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION)).toMap)
+      responseCallback(toCreate.map(e => (e._1, new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION))).toMap)
     } else {
       // 1. map over topics creating assignment and calling zookeeper
       val brokers = metadataCache.getAliveBrokers()

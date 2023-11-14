@@ -161,7 +161,7 @@ class ZkAdminManagerTest {
       .setReplicationFactor(1)
 
     def responseCallback = (results: scala.collection.Map[String, ApiError]) =>
-      results.view.values.foreach(v => assertTrue(v.is(Errors.UNKNOWN_TOPIC_OR_PARTITION)))
+      results.values.foreach(v => assertTrue(v.is(Errors.UNKNOWN_TOPIC_OR_PARTITION)))
 
     zkAdminManager.createTopics(1000, false, Map("testTopic" -> creatableTopic), Map(),
       mock(classOf[ControllerMutationQuota]), responseCallback)
