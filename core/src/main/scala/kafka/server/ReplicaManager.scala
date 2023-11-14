@@ -763,7 +763,7 @@ class ReplicaManager(val config: KafkaConfig,
    * @param recordConversionStatsCallback callback for updating stats on record conversions
    * @param requestLocal                  container for the stateful instances scoped to this request
    * @param transactionalId               transactional ID if the request is from a producer and the producer is transactional
-   * @param defaultActionQueue                   the action queue to use. ReplicaManager#defaultActionQueue is used by default.
+   * @param actionQueue                   the action queue to use. ReplicaManager#defaultActionQueue is used by default.
    */
   def appendRecords(timeout: Long,
                     requiredAcks: Short,
