@@ -1043,8 +1043,8 @@ public class GroupMetadataManagerTest {
             );
         }
 
-        public List<ListGroupsResponseData.ListedGroup> sendListGroups(List<String> statesFilter) {
-            return groupMetadataManager.listGroups(statesFilter, lastCommittedOffset);
+        public List<ListGroupsResponseData.ListedGroup> sendListGroups(List<String> statesFilter, List<String> typesFilter) {
+            return groupMetadataManager.listGroups(statesFilter, typesFilter, lastCommittedOffset);
         }
 
         public List<ConsumerGroupDescribeResponseData.DescribedGroup> sendConsumerGroupDescribe(List<String> groupIds) {
@@ -9594,6 +9594,8 @@ public class GroupMetadataManagerTest {
             .withAssignors(Collections.singletonList(assignor))
             .withConsumerGroup(new ConsumerGroupBuilder(consumerGroupId, 10))
             .build();
+
+        // Create one generic group record.
         context.replay(newGroupMetadataRecord(
             classicGroupId,
             new GroupMetadataValue()
@@ -9611,9 +9613,11 @@ public class GroupMetadataManagerTest {
             .build()));
         context.replay(RecordHelpers.newGroupEpochRecord(consumerGroupId, 11));
 
+        // Test list group response without a group state or group type filter.
         Map<String, ListGroupsResponseData.ListedGroup> actualAllGroupMap =
-            context.sendListGroups(Collections.emptyList())
+            context.sendListGroups(Collections.emptyList(), Collections.emptyList())
                 .stream().collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
+
         Map<String, ListGroupsResponseData.ListedGroup> expectAllGroupMap =
             Stream.of(
                 new ListGroupsResponseData.ListedGroup()
@@ -9624,12 +9628,15 @@ public class GroupMetadataManagerTest {
                     .setGroupId(consumerGroupId)
                     .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
                     .setGroupState(ConsumerGroup.ConsumerGroupState.EMPTY.toString())
+                    .setGroupType(EMPTY.toString())
             ).collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
 
         assertEquals(expectAllGroupMap, actualAllGroupMap);
 
         context.commit();
-        actualAllGroupMap = context.sendListGroups(Collections.emptyList()).stream()
+
+        // Test list group response to check assigning state in the consumer group.
+        actualAllGroupMap = context.sendListGroups(Collections.emptyList(), Collections.emptyList()).stream()
             .collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
         expectAllGroupMap =
             Stream.of(
@@ -9645,7 +9652,20 @@ public class GroupMetadataManagerTest {
 
         assertEquals(expectAllGroupMap, actualAllGroupMap);
 
-        actualAllGroupMap = context.sendListGroups(Collections.singletonList("Empty")).stream()
+        // Test list group response with group state filter and no group type filter.
+        actualAllGroupMap = context.sendListGroups(Collections.singletonList("Empty"), Collections.emptyList()).stream()
+            .collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
+        expectAllGroupMap = Stream.of(
+            new ListGroupsResponseData.ListedGroup()
+                .setGroupId(classicGroup.groupId())
+                .setProtocolType(classicGroupType)
+                .setGroupState(EMPTY.toString())
+        ).collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
+
+        assertEquals(expectAllGroupMap, actualAllGroupMap);
+
+        // Test list group response with no group state filter and with group type filter.
+        actualAllGroupMap = context.sendListGroups(Collections.emptyList(), Collections.singletonList(classicGroupType)).stream()
             .collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
         expectAllGroupMap = Stream.of(
             new ListGroupsResponseData.ListedGroup()

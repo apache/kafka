@@ -32,6 +32,7 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.coordinator.group.Group.GroupType
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.storage.internals.log.VerificationGuard
 
@@ -1105,16 +1106,16 @@ private[group] class GroupCoordinator(
     }
   }
 
-  def handleListGroups(states: Set[String]): (Errors, List[GroupOverview]) = {
+  def handleListGroups(states: Set[String], groupTypes: Set[String]): (Errors, List[GroupOverview]) = {
     if (!isActive.get) {
       (Errors.COORDINATOR_NOT_AVAILABLE, List[GroupOverview]())
     } else {
       val errorCode = if (groupManager.isLoading) Errors.COORDINATOR_LOAD_IN_PROGRESS else Errors.NONE
-      // if states is empty, return all groups
-      val groups = if (states.isEmpty)
-        groupManager.currentGroups
-      else
-        groupManager.currentGroups.filter(g => states.contains(g.summary.state))
+      // Filter groups based on states and groupTypes. If either is empty, it won't filter on that criterion.
+      val groups = groupManager.currentGroups.filter { g =>
+        (states.isEmpty || states.contains(g.summary.state)) &&
+          (groupTypes.isEmpty || groupTypes.contains(g.overview.groupType))
+      }
       (errorCode, groups.map(_.overview).toList)
     }
   }

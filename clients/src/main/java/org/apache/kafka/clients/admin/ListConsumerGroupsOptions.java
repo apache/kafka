@@ -34,6 +34,8 @@ public class ListConsumerGroupsOptions extends AbstractOptions<ListConsumerGroup
 
     private Set<ConsumerGroupState> states = Collections.emptySet();
 
+    private Set<String> types = Collections.emptySet();
+
     /**
      * If states is set, only groups in these states will be returned by listConsumerGroups()
      * Otherwise, all groups are returned.
@@ -45,9 +47,26 @@ public class ListConsumerGroupsOptions extends AbstractOptions<ListConsumerGroup
     }
 
     /**
+     * If types is set, only groups of these types will be returned by listConsumerGroups()
+     * Otherwise, all groups are returned.
+     *
+     */
+    public ListConsumerGroupsOptions inTypes(Set<GroupType> types) {
+        this.types = (types == null) ? Collections.emptySet() : new HashSet<>(types);
+        return this;
+    }
+
+    /**
      * Returns the list of States that are requested or empty if no states have been specified
      */
     public Set<ConsumerGroupState> states() {
         return states;
+    }
+
+    /**
+     * Returns the list of Types that are requested or empty if no types have been specified
+     */
+    public Set<String> types() {
+        return types;
     }
 }

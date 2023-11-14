@@ -537,7 +537,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             runtime.scheduleReadOperation(
                 "list-groups",
                 tp,
-                (coordinator, lastCommittedOffset) -> coordinator.listGroups(request.statesFilter(), lastCommittedOffset)
+                (coordinator, lastCommittedOffset) -> coordinator.listGroups(request.statesFilter(), request.typesFilter(), lastCommittedOffset)
             ).handle((groups, exception) -> {
                 if (exception == null) {
                     synchronized (results) {

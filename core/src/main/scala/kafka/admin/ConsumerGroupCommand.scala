@@ -41,6 +41,7 @@ import scala.collection.immutable.TreeMap
 import scala.reflect.ClassTag
 import org.apache.kafka.common.ConsumerGroupState
 import org.apache.kafka.common.requests.ListOffsetsResponse
+import org.apache.kafka.coordinator.group.Group.GroupType
 
 object ConsumerGroupCommand extends Logging {
 
@@ -95,6 +96,15 @@ object ConsumerGroupCommand extends Logging {
 
   def consumerGroupStatesFromString(input: String): Set[ConsumerGroupState] = {
     val parsedStates = input.split(',').map(s => ConsumerGroupState.parse(s.trim)).toSet
+    if (parsedStates.contains(ConsumerGroupState.UNKNOWN)) {
+      val validStates = ConsumerGroupState.values().filter(_ != ConsumerGroupState.UNKNOWN)
+      throw new IllegalArgumentException(s"Invalid state list '$input'. Valid states are: ${validStates.mkString(", ")}")
+    }
+    parsedStates
+  }
+
+  def consumerGroupTypesFromString(input: String): Set[GroupType] = {
+    val parsedStates = input.split(',').map(s => GroupType.parse(s.trim)).toSet
     if (parsedStates.contains(ConsumerGroupState.UNKNOWN)) {
       val validStates = ConsumerGroupState.values().filter(_ != ConsumerGroupState.UNKNOWN)
       throw new IllegalArgumentException(s"Invalid state list '$input'. Valid states are: ${validStates.mkString(", ")}")
@@ -195,6 +205,15 @@ object ConsumerGroupCommand extends Logging {
           consumerGroupStatesFromString(stateValue)
         val listings = listConsumerGroupsWithState(states)
         printGroupStates(listings.map(e => (e.groupId, e.state.get.toString)))
+      }
+      if (opts.options.has(opts.typeOpt)) {
+        val typeValue = opts.options.valueOf(opts.typeOpt)
+        val types = if (typeValue == null || typeValue.isEmpty)
+          Set[GroupType]()
+        else
+          consumerGroupTypesFromString(types)
+        val listings = listConsumerGroupsWithType(types)
+        printGroupStates(listings.map(e => (e.groupId, e.state.get.toString)))
       } else
         listConsumerGroups().foreach(println(_))
     }
@@ -208,6 +227,13 @@ object ConsumerGroupCommand extends Logging {
     def listConsumerGroupsWithState(states: Set[ConsumerGroupState]): List[ConsumerGroupListing] = {
       val listConsumerGroupsOptions = withTimeoutMs(new ListConsumerGroupsOptions())
       listConsumerGroupsOptions.inStates(states.asJava)
+      val result = adminClient.listConsumerGroups(listConsumerGroupsOptions)
+      result.all.get.asScala.toList
+    }
+
+    def listConsumerGroupsWithType(types: Set[GroupType]): List[ConsumerGroupListing] = {
+      val listConsumerGroupsOptions = withTimeoutMs(new ListConsumerGroupsOptions())
+      listConsumerGroupsOptions.inTypes(types.asJava)
       val result = adminClient.listConsumerGroups(listConsumerGroupsOptions)
       result.all.get.asScala.toList
     }
@@ -1022,6 +1048,9 @@ object ConsumerGroupCommand extends Logging {
       "When specified with '--list', it displays the state of all groups. It can also be used to list groups with specific states." + nl +
       "Example: --bootstrap-server localhost:9092 --list --state stable,empty" + nl +
       "This option may be used with '--describe', '--list' and '--bootstrap-server' options only."
+    val TypeDoc = "When specified with '--list', it displays groups of the specified types. It can also be used to list groups with specific types." + nl +
+      "Example: --bootstrap-server localhost:9092 --list --type generic,consumer" + nl +
+      "This option may be used with the '--list' option only."
     val DeleteOffsetsDoc = "Delete offsets of consumer group. Supports one consumer group at the time, and multiple topics."
 
     val bootstrapServerOpt = parser.accepts("bootstrap-server", BootstrapServerDoc)
@@ -1088,6 +1117,10 @@ object ConsumerGroupCommand extends Logging {
                          .availableIf(describeOpt, listOpt)
                          .withOptionalArg()
                          .ofType(classOf[String])
+    val typeOpt = parser.accepts("type", TypeDoc)
+                        .availableIf(listOpt)
+                        .withOptionalArg()
+                        .ofType(classOf[String])
 
     options = parser.parse(args : _*)
 

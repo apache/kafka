@@ -99,6 +99,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -457,21 +458,27 @@ public class GroupMetadataManager {
      *                          If empty all groups are returned with their state.
      * @param typesFilter       The types of the groups we want to list.
      *                          If empty all groups are returned.
-     * @param committedOffset   A specified committed offset corresponding to this shard
+     * @param committedOffset   A specified committed offset corresponding to this shard.
      *
      * @return A list containing the ListGroupsResponseData.ListedGroup
      */
-
     public List<ListGroupsResponseData.ListedGroup> listGroups(
         List<String> statesFilter,
         List<String> typesFilter,
         long committedOffset
     ) {
-        Stream<Group> groupStream = groups.values(committedOffset).stream();
-        if (!statesFilter.isEmpty()) {
-            groupStream = groupStream.filter(group -> statesFilter.contains(group.stateAsString(committedOffset)));
-        }
-        return groupStream.map(group -> group.asListedGroup(committedOffset)).collect(Collectors.toList());
+        Predicate<Group> combinedFilter = group -> {
+            boolean stateCheck = statesFilter.isEmpty() || statesFilter.contains(group.stateAsString(committedOffset));
+            boolean typeCheck = typesFilter.isEmpty() || typesFilter.contains(group.type().toString());
+            return stateCheck && typeCheck;
+        };
+
+        Stream<Group> groupStream = groups.values(committedOffset).parallelStream();
+
+        return groupStream
+            .filter(combinedFilter)
+            .map(group -> group.asListedGroup(committedOffset))
+            .collect(Collectors.toList());
     }
 
 
