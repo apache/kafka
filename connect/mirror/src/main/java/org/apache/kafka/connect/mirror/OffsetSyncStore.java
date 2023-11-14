@@ -111,6 +111,12 @@ class OffsetSyncStore implements AutoCloseable {
             protected boolean readPartition(TopicPartition topicPartition) {
                 return topicPartition.partition() == 0;
             }
+
+            @Override
+            public void stop() {
+                super.stop();
+                Utils.closeQuietly(consumer, "consumer");
+            }
         };
     }
 
