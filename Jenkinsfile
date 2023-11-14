@@ -32,6 +32,9 @@ def isChangeRequest(env) {
 def doTest(env, target = "test") {
   sh """./gradlew -PscalaVersion=$SCALA_VERSION ${target} \
       --profile --continue -PkeepAliveMode="session" -PtestLoggingEvents=started,passed,skipped,failed \
+      --tests "org.apache.kafka.streams.integration.ConsistencyVectorIntegrationTest" \
+      --tests "org.apache.kafka.streams.integration.EosIntegrationTest" \
+      --tests "org.apache.kafka.streams.integration.NamedTopologyIntegrationTest" \
       -PignoreFailures=true -PmaxParallelForks=2 -PmaxTestRetries=1 -PmaxTestRetryFailures=10"""
   junit '**/build/test-results/**/TEST-*.xml'
 }
