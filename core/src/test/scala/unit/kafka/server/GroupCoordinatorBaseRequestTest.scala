@@ -478,10 +478,6 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     expectedMemberErrors: List[Errors],
     version: Short
   ): Unit = {
-    if (memberIds.size != expectedMemberErrors.size) {
-      fail("genericGroupLeave: memberIds and expectedMemberErrors have unmatched sizes.")
-    }
-
     val leaveGroupRequest = new LeaveGroupRequest.Builder(
       groupId,
       memberIds.map(memberId => new MemberIdentity()
@@ -495,7 +491,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
       expectedResponseData.setErrorCode(expectedLeaveGroupError.code)
     } else {
       expectedResponseData
-        .setMembers(List.tabulate(memberIds.length) { i =>
+        .setMembers(List.tabulate(expectedMemberErrors.length) { i =>
           new MemberResponse()
             .setMemberId(memberIds(i))
             .setGroupInstanceId(groupInstanceId)

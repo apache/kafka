@@ -66,7 +66,9 @@ class LeaveGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBa
       // Join the consumer group. Note that we don't heartbeat here so we must use
       // a session long enough for the duration of the test.
       val (memberId1, _) = joinDynamicConsumerGroupWithOldProtocol("grp-1")
-      val (_, _) = joinStaticConsumerGroupWithOldProtocol("grp-2", "group-instance-id")
+      if (version >= 3) {
+        joinStaticConsumerGroupWithOldProtocol("grp-2", "group-instance-id")
+      }
 
       // Request with empty group id.
       leaveGroupWithOldProtocol(
@@ -90,48 +92,50 @@ class LeaveGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBa
       leaveGroupWithOldProtocol(
         groupId = "grp-unknown",
         memberIds = List(memberId1),
-        expectedLeaveGroupError = Errors.NONE,
-        expectedMemberErrors = List(Errors.UNKNOWN_MEMBER_ID),
+        expectedLeaveGroupError = if (version >= 3) Errors.NONE else Errors.UNKNOWN_MEMBER_ID,
+        expectedMemberErrors = if (version >= 3) List(Errors.UNKNOWN_MEMBER_ID) else List.empty,
         version = version.toShort
       )
 
       // Request with unknown member ids.
       leaveGroupWithOldProtocol(
         groupId = "grp-1",
-        memberIds = List("unknown-member-id", JoinGroupRequest.UNKNOWN_MEMBER_ID),
-        expectedLeaveGroupError = Errors.NONE,
-        expectedMemberErrors = List(Errors.UNKNOWN_MEMBER_ID, Errors.UNKNOWN_MEMBER_ID),
+        memberIds = if (version >= 3) List("unknown-member-id", JoinGroupRequest.UNKNOWN_MEMBER_ID) else List("unknown-member-id"),
+        expectedLeaveGroupError = if (version >= 3) Errors.NONE else Errors.UNKNOWN_MEMBER_ID,
+        expectedMemberErrors = if (version >= 3) List(Errors.UNKNOWN_MEMBER_ID, Errors.UNKNOWN_MEMBER_ID) else List.empty,
         version = version.toShort
       )
 
       // Success GroupLeave request.
       leaveGroupWithOldProtocol(
         groupId = "grp-1",
-        memberIds = List(memberId1),
+        memberIds = if (version >= 3) List(memberId1) else List(memberId1),
         expectedLeaveGroupError = Errors.NONE,
-        expectedMemberErrors = List(Errors.NONE),
+        expectedMemberErrors = if (version >= 3) List(Errors.NONE) else List.empty,
         version = version.toShort
       )
 
-      // Request with fenced group instance id.
-      leaveGroupWithOldProtocol(
-        groupId = "grp-2",
-        memberIds = List("member-id-fenced"),
-        groupInstanceId = "group-instance-id",
-        expectedLeaveGroupError = Errors.NONE,
-        expectedMemberErrors = List(Errors.FENCED_INSTANCE_ID),
-        version = version.toShort
-      )
+      if (version >= 3) {
+        // Request with fenced group instance id.
+        leaveGroupWithOldProtocol(
+          groupId = "grp-2",
+          memberIds = List("member-id-fenced"),
+          groupInstanceId = "group-instance-id",
+          expectedLeaveGroupError = Errors.NONE,
+          expectedMemberErrors = List(Errors.FENCED_INSTANCE_ID),
+          version = version.toShort
+        )
 
-      // Having unknown member id will not affect the request processing.
-      leaveGroupWithOldProtocol(
-        groupId = "grp-2",
-        memberIds = List(JoinGroupRequest.UNKNOWN_MEMBER_ID),
-        groupInstanceId = "group-instance-id",
-        expectedLeaveGroupError = Errors.NONE,
-        expectedMemberErrors = List(Errors.NONE),
-        version = version.toShort
-      )
+        // Having unknown member id will not affect the request processing.
+        leaveGroupWithOldProtocol(
+          groupId = "grp-2",
+          memberIds = List(JoinGroupRequest.UNKNOWN_MEMBER_ID),
+          groupInstanceId = "group-instance-id",
+          expectedLeaveGroupError = Errors.NONE,
+          expectedMemberErrors = List(Errors.NONE),
+          version = version.toShort
+        )
+      }
     }
   }
 }
