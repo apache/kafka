@@ -1405,6 +1405,10 @@ public class WorkerSinkTaskTest {
         consumer.wakeup();
         EasyMock.expectLastCall();
 
+        // cancel closes the consumer
+        consumer.close();
+        EasyMock.expectLastCall();
+
         // task performs normal steps in advance of committing offsets
         final Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
         offsets.put(TOPIC_PARTITION, new OffsetAndMetadata(FIRST_OFFSET + 2));
