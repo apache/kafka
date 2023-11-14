@@ -35,6 +35,7 @@ public class ListTransactionsOptions extends AbstractOptions<ListTransactionsOpt
     private Set<TransactionState> filteredStates = Collections.emptySet();
     private Set<Long> filteredProducerIds = Collections.emptySet();
 
+    private Long durationFilter = 0L;
     /**
      * Filter only the transactions that are in a specific set of states. If no filter
      * is specified or if the passed set of states is empty, then transactions in all
@@ -61,6 +62,11 @@ public class ListTransactionsOptions extends AbstractOptions<ListTransactionsOpt
         return this;
     }
 
+    public ListTransactionsOptions durationFilter(Long durationMs) {
+        this.durationFilter = durationMs;
+        return this;
+    }
+
     /**
      * Returns the set of states to be filtered or empty if no states have been specified.
      *
@@ -81,11 +87,16 @@ public class ListTransactionsOptions extends AbstractOptions<ListTransactionsOpt
         return filteredProducerIds;
     }
 
+    public Long getDurationFilter() {
+        return durationFilter;
+    }
+
     @Override
     public String toString() {
         return "ListTransactionsOptions(" +
             "filteredStates=" + filteredStates +
             ", filteredProducerIds=" + filteredProducerIds +
+            ", durationFilter=" + durationFilter +
             ", timeoutMs=" + timeoutMs +
             ')';
     }
@@ -96,11 +107,12 @@ public class ListTransactionsOptions extends AbstractOptions<ListTransactionsOpt
         if (o == null || getClass() != o.getClass()) return false;
         ListTransactionsOptions that = (ListTransactionsOptions) o;
         return Objects.equals(filteredStates, that.filteredStates) &&
-            Objects.equals(filteredProducerIds, that.filteredProducerIds);
+            Objects.equals(filteredProducerIds, that.filteredProducerIds) &&
+            Objects.equals(durationFilter, that.durationFilter);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(filteredStates, filteredProducerIds);
+        return Objects.hash(filteredStates, filteredProducerIds, durationFilter);
     }
 }
