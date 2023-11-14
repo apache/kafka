@@ -116,6 +116,12 @@
             For more information about the early access tiered storage feature, please check <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-405%3A+Kafka+Tiered+Storage">KIP-405</a> and
             <a href="https://cwiki.apache.org/confluence/display/KAFKA/Kafka+Tiered+Storage+Early+Access+Release+Notes">Tiered Storage Early Access Release Note</a>.
         </li>
+        <li>Transaction partition verification (<a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-890%3A+Transactions+Server-Side+Defense">KIP-890</a>)
+            has been added to data partitions to prevent hanging transactions. Workloads with compression can experience InvalidRecordExceptions and UnknownServerExceptions.
+            This feature can be disabled by setting <code>transaction.partition.verification.enable</code> to false. Note that the default for 3.6 is true.
+            The configuration can also be updated dynamically and is applied to the broker.
+            This will be fixed in 3.6.1. See <a href="https://issues.apache.org/jira/browse/KAFKA-15653">KAFKA-15653</a> for more details.
+        </li>
     </ul>
 
 <h4><a id="upgrade_3_5_0" href="#upgrade_3_5_0">Upgrading to 3.5.0 from any version 0.8.x through 3.4.x</a></h4>

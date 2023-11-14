@@ -20,7 +20,7 @@ package kafka.server
 import java.io.{ByteArrayOutputStream, File, PrintStream}
 import java.net.InetSocketAddress
 import java.util
-import java.util.{Collections, Properties}
+import java.util.{Collections, Optional, OptionalInt, Properties}
 import java.util.concurrent.{CompletableFuture, TimeUnit}
 import javax.security.auth.login.Configuration
 import kafka.tools.StorageTool
@@ -33,6 +33,8 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{Exit, Time}
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata
 import org.apache.kafka.common.metadata.FeatureLevelRecord
+import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble.VerificationFlag.{REQUIRE_AT_LEAST_ONE_VALID, REQUIRE_METADATA_LOG_DIR}
+import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion}
 import org.apache.kafka.raft.RaftConfig.{AddressSpec, InetAddressSpec}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
 import org.apache.kafka.server.fault.{FaultHandler, MockFaultHandler}
@@ -41,6 +43,7 @@ import org.apache.zookeeper.{WatchedEvent, Watcher, ZooKeeper}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterAll, AfterEach, BeforeAll, BeforeEach, Tag, TestInfo}
 
+import java.nio.file.{Files, Paths}
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.mutable.ListBuffer
 import scala.collection.{Seq, immutable}
@@ -96,16 +99,37 @@ class KRaftQuorumImplementation(
     startup: Boolean,
     threadNamePrefix: Option[String],
   ): KafkaBroker = {
+    val metaPropertiesEnsemble = {
+      val loader = new MetaPropertiesEnsemble.Loader()
+      config.logDirs.foreach(loader.addLogDir(_))
+      loader.addMetadataLogDir(config.metadataLogDir)
+      val ensemble = loader.load()
+      val copier = new MetaPropertiesEnsemble.Copier(ensemble)
+      ensemble.emptyLogDirs().forEach(logDir => {
+        copier.setLogDirProps(logDir, new MetaProperties.Builder().
+          setVersion(MetaPropertiesVersion.V1).
+          setClusterId(clusterId).
+          setNodeId(config.nodeId).
+          build())
+      })
+      copier.setPreWriteHandler((logDir, _, _) => {
+        Files.createDirectories(Paths.get(logDir));
+      })
+      copier.writeLogDirChanges()
+      copier.copy()
+    }
+    metaPropertiesEnsemble.verify(Optional.of(clusterId),
+      OptionalInt.of(config.nodeId),
+      util.EnumSet.of(REQUIRE_AT_LEAST_ONE_VALID, REQUIRE_METADATA_LOG_DIR))
     val sharedServer = new SharedServer(config,
-      new MetaProperties(clusterId, config.nodeId),
+      metaPropertiesEnsemble,
       Time.SYSTEM,
       new Metrics(),
       controllerQuorumVotersFuture,
       faultHandlerFactory)
     var broker: BrokerServer = null
     try {
-      broker = new BrokerServer(sharedServer,
-        initialOfflineDirs = Seq())
+      broker = new BrokerServer(sharedServer)
       if (startup) broker.startup()
       broker
     } catch {
@@ -308,7 +332,11 @@ abstract class QuorumTestHarness extends Logging {
     }
     val nodeId = Integer.parseInt(props.getProperty(KafkaConfig.NodeIdProp))
     val metadataDir = TestUtils.tempDir()
-    val metaProperties = new MetaProperties(Uuid.randomUuid().toString, nodeId)
+    val metaProperties = new MetaProperties.Builder().
+      setVersion(MetaPropertiesVersion.V1).
+      setClusterId(Uuid.randomUuid().toString).
+      setNodeId(nodeId).
+      build()
     formatDirectories(immutable.Seq(metadataDir.getAbsolutePath), metaProperties)
 
     val metadataRecords = new util.ArrayList[ApiMessageAndVersion]
@@ -330,8 +358,14 @@ abstract class QuorumTestHarness extends Logging {
     props.setProperty(KafkaConfig.QuorumVotersProp, s"${nodeId}@localhost:0")
     val config = new KafkaConfig(props)
     val controllerQuorumVotersFuture = new CompletableFuture[util.Map[Integer, AddressSpec]]
+    val metaPropertiesEnsemble = new MetaPropertiesEnsemble.Loader().
+      addMetadataLogDir(metadataDir.getAbsolutePath).
+      load()
+    metaPropertiesEnsemble.verify(Optional.of(metaProperties.clusterId().get()),
+      OptionalInt.of(nodeId),
+      util.EnumSet.of(REQUIRE_AT_LEAST_ONE_VALID, REQUIRE_METADATA_LOG_DIR))
     val sharedServer = new SharedServer(config,
-      metaProperties,
+      metaPropertiesEnsemble,
       Time.SYSTEM,
       new Metrics(),
       controllerQuorumVotersFuture,
@@ -363,7 +397,7 @@ abstract class QuorumTestHarness extends Logging {
       faultHandlerFactory,
       metadataDir,
       controllerQuorumVotersFuture,
-      metaProperties.clusterId,
+      metaProperties.clusterId.get(),
       this,
       faultHandler)
   }

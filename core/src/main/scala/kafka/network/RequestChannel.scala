@@ -24,7 +24,7 @@ import com.fasterxml.jackson.databind.JsonNode
 import com.typesafe.scalalogging.Logger
 import com.yammer.metrics.core.Meter
 import kafka.network
-import kafka.server.KafkaConfig
+import kafka.server.{KafkaConfig, RequestLocal}
 import kafka.utils.{Logging, NotNothing, Pool}
 import kafka.utils.Implicits._
 import org.apache.kafka.common.config.ConfigResource
@@ -80,7 +80,7 @@ object RequestChannel extends Logging {
     }
   }
 
-  case class CallbackRequest(fun: () => Unit,
+  case class CallbackRequest(fun: RequestLocal => Unit,
                              originalRequest: Request) extends BaseRequest
 
   class Request(val processor: Int,

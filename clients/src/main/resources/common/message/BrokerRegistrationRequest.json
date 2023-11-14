@@ -14,14 +14,16 @@
 // limitations under the License.
 
 // Version 1 adds Zk broker epoch to the request if the broker is migrating from Zk mode to KRaft mode.
-//
+
 // Version 2 adds the PreviousBrokerEpoch for the KIP-966
+
+// Version 3 adds LogDirs for KIP-858
 {
   "apiKey":62,
   "type": "request",
   "listeners": ["controller"],
   "name": "BrokerRegistrationRequest",
-  "validVersions": "0-2",
+  "validVersions": "0-3",
   "flexibleVersions": "0+",
   "fields": [
     { "name": "BrokerId", "type": "int32", "versions": "0+", "entityType": "brokerId",
@@ -57,6 +59,8 @@
     { "name": "IsMigratingZkBroker", "type": "bool", "versions": "1+", "default": "false",
       "about": "If the required configurations for ZK migration are present, this value is set to true" },
     { "name": "PreviousBrokerEpoch", "type": "int64", "versions": "2+", "default": "-1",
-      "about": "The epoch before a clean shutdown." }
+      "about": "The epoch before a clean shutdown." },
+    { "name": "LogDirs", "type":  "[]uuid", "versions":  "3+",
+      "about": "Log directories configured in this broker which are available." }
   ]
 }
