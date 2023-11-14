@@ -740,9 +740,9 @@ class ReplicaManager(val config: KafkaConfig,
   /**
    * TODO: move this action queue to handle thread so we can simplify concurrency handling
    */
-  private val actionQueue = new DelayedActionQueue
+  private val defaultActionQueue = new DelayedActionQueue
 
-  def tryCompleteActions(): Unit = actionQueue.tryCompleteActions()
+  def tryCompleteActions(): Unit = defaultActionQueue.tryCompleteActions()
 
   /**
    * Append messages to leader replicas of the partition, and wait for them to be replicated to other replicas;
@@ -763,7 +763,7 @@ class ReplicaManager(val config: KafkaConfig,
    * @param recordConversionStatsCallback callback for updating stats on record conversions
    * @param requestLocal                  container for the stateful instances scoped to this request
    * @param transactionalId               transactional ID if the request is from a producer and the producer is transactional
-   * @param actionQueue                   the action queue to use. ReplicaManager#actionQueue is used by default.
+   * @param defaultActionQueue                   the action queue to use. ReplicaManager#defaultActionQueue is used by default.
    */
   def appendRecords(timeout: Long,
                     requiredAcks: Short,
@@ -775,7 +775,7 @@ class ReplicaManager(val config: KafkaConfig,
                     recordConversionStatsCallback: Map[TopicPartition, RecordConversionStats] => Unit = _ => (),
                     requestLocal: RequestLocal = RequestLocal.NoCaching,
                     transactionalId: String = null,
-                    actionQueue: ActionQueue = this.actionQueue): Unit = {
+                    actionQueue: ActionQueue = this.defaultActionQueue): Unit = {
     if (isValidRequiredAcks(requiredAcks)) {
 
       val verificationGuards: mutable.Map[TopicPartition, VerificationGuard] = mutable.Map[TopicPartition, VerificationGuard]()
