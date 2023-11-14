@@ -164,6 +164,12 @@ class WorkerSinkTask extends WorkerTask {
     }
 
     @Override
+    public void cancel() {
+        super.cancel();
+        Utils.closeQuietly(consumer, "consumer");
+    }
+
+    @Override
     public void stop() {
         // Offset commit is handled upon exit in work thread
         super.stop();
