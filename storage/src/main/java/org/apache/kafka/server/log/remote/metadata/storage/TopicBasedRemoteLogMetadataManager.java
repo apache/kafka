@@ -446,7 +446,7 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
         }
     }
 
-    private boolean isTopicExists(Admin adminClient, String topic) {
+    boolean isTopicExists(Admin adminClient, String topic) {
         try {
             TopicDescription description = adminClient.describeTopics(Collections.singleton(topic))
                     .topicNameValues()
@@ -477,7 +477,7 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
         return true;
     }
 
-    private NewTopic createRemoteLogMetadataTopicRequest() {
+    NewTopic createRemoteLogMetadataTopicRequest() {
         Map<String, String> topicConfigs = new HashMap<>();
         topicConfigs.put(TopicConfig.RETENTION_MS_CONFIG, Long.toString(rlmmConfig.metadataTopicRetentionMs()));
         topicConfigs.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE);
