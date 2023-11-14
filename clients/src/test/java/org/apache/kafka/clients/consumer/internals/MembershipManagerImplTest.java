@@ -883,8 +883,9 @@ public class MembershipManagerImplTest {
 
     /**
      * Member that intentionally leaves the group (via unsubscribe) should release assignment,
-     * reset epoch to -1, keep member ID, and transition to SENDING_LEAVE_REQUEST to send out a
-     * heartbeat with the leave epoch.
+     * reset epoch to -1, keep member ID, and transition to {@link MemberState#LEAVING} to send out a
+     * heartbeat with the leave epoch. Once the heartbeat request is sent out, the member should
+     * transition to {@link MemberState#UNSUBSCRIBED}
      */
     private void testLeaveGroupReleasesAssignmentAndResetsEpochToSendLeaveGroup(MembershipManager membershipManager) {
         mockMemberHasAutoAssignedPartition();
@@ -899,6 +900,8 @@ public class MembershipManagerImplTest {
         assertTrue(membershipManager.currentAssignment().isEmpty());
         assertEquals(MemberState.LEAVING, membershipManager.state());
         verify(subscriptionState).assignFromSubscribed(Collections.emptySet());
+        membershipManager.onHeartbeatRequestSent();
+        assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
     }
 
     private void testStateUpdateOnFatalFailure(MembershipManager membershipManager) {

@@ -122,6 +122,8 @@ public enum MemberState {
                 ACKNOWLEDGING, UNSUBSCRIBED, FENCED);
 
         LEAVING.previousValidStates = Arrays.asList(PREPARE_LEAVING);
+
+        UNSUBSCRIBED.previousValidStates = Arrays.asList(LEAVING);
     }
 
     private List<MemberState> previousValidStates;
