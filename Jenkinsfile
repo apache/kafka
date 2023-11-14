@@ -189,7 +189,7 @@ pipeline {
           }
           steps {
             doValidation()
-            doTest(env, 'unitTest')
+            doTest(env)
             echo 'Skipping Kafka Streams archetype test for PowerPC build'
           }
         }
