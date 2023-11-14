@@ -91,6 +91,7 @@ public class WorkerGroupMemberTest {
         MBeanServer server = ManagementFactory.getPlatformMBeanServer();
         //verify metric exists with correct prefix
         assertNotNull(server.getObjectInstance(new ObjectName("kafka.connect:type=grp1,client-id=client-1")));
+        member.stop();
     }
 
     @Test
