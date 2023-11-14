@@ -13,12 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// version 1: adds DurationFilter to list transactions older than specified duration
 {
   "apiKey": 66,
   "type": "request",
   "listeners": ["zkBroker", "broker"],
   "name": "ListTransactionsRequest",
+  // version 1: adds DurationFilter to list transactions older than specified duration
   "validVersions": "0-1",
   "flexibleVersions": "0+",
   "fields": [

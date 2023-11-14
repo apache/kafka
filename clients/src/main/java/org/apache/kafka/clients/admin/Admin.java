@@ -1633,7 +1633,8 @@ public interface Admin extends AutoCloseable {
      * coordinators in the cluster and collect the state of all transactions. Users
      * should typically attempt to reduce the size of the result set using
      * {@link ListTransactionsOptions#filterProducerIds(Collection)} or
-     * {@link ListTransactionsOptions#filterStates(Collection)}
+     * {@link ListTransactionsOptions#filterStates(Collection)} or
+     * {@link ListTransactionsOptions#durationFilter(Long)}
      *
      * @param options Options to control the method behavior (including filters)
      * @return The result
