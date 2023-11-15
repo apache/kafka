@@ -106,7 +106,8 @@ class KafkaApis(val requestChannel: RequestChannel,
                 val clusterId: String,
                 time: Time,
                 val tokenManager: DelegationTokenManager,
-                val apiVersionManager: ApiVersionManager
+                val apiVersionManager: ApiVersionManager,
+                val clientMetricsManager: Option[ClientMetricsManager]
 ) extends ApiRequestHandler with Logging {
 
   type FetchResponseStats = Map[TopicPartition, RecordConversionStats]
@@ -2754,7 +2755,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       resource.`type` match {
         case ConfigResource.Type.BROKER_LOGGER =>
           throw new InvalidRequestException(s"AlterConfigs is deprecated and does not support the resource type ${ConfigResource.Type.BROKER_LOGGER}")
-        case ConfigResource.Type.BROKER =>
+        case ConfigResource.Type.BROKER | ConfigResource.Type.CLIENT_METRICS =>
           authHelper.authorize(originalRequest.context, ALTER_CONFIGS, CLUSTER, CLUSTER_NAME)
         case ConfigResource.Type.TOPIC =>
           authHelper.authorize(originalRequest.context, ALTER_CONFIGS, TOPIC, resource.name)
@@ -2916,7 +2917,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     val (authorizedResources, unauthorizedResources) = configs.partition { case (resource, _) =>
       resource.`type` match {
-        case ConfigResource.Type.BROKER | ConfigResource.Type.BROKER_LOGGER =>
+        case ConfigResource.Type.BROKER | ConfigResource.Type.BROKER_LOGGER | ConfigResource.Type.CLIENT_METRICS =>
           authHelper.authorize(originalRequest.context, ALTER_CONFIGS, CLUSTER, CLUSTER_NAME)
         case ConfigResource.Type.TOPIC =>
           authHelper.authorize(originalRequest.context, ALTER_CONFIGS, TOPIC, resource.name)
