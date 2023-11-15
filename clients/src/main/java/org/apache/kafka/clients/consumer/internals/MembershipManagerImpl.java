@@ -216,6 +216,14 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      */
     private String memberIdOnReconciliationStart;
 
+    /**
+     * If the member is currently leaving the group after a call to {@link #leaveGroup()}}, this
+     * will have a future that will complete when the ongoing leave operation completes
+     * (callbacks executed and heartbeat request to leave is sent out). This will be empty is the
+     * member is not leaving.
+     */
+    private Optional<CompletableFuture<Void>> leaveGroupInProgress;
+
     public MembershipManagerImpl(String groupId,
                                  SubscriptionState subscriptions,
                                  CommitRequestManager commitRequestManager,
@@ -398,7 +406,20 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      */
     @Override
     public CompletableFuture<Void> leaveGroup() {
+        if (state == MemberState.UNSUBSCRIBED) {
+            // Member is not part of the group. No-op and return completed future to avoid
+            // unnecessary transitions.
+            return CompletableFuture.completedFuture(null);
+        }
+
+        if (state == MemberState.PREPARE_LEAVING || state == MemberState.LEAVING) {
+            // Member already leaving. No-op and return existing leave group future that will
+            // complete when the ongoing leave operation completes.
+            return leaveGroupInProgress.get();
+        }
+
         transitionTo(MemberState.PREPARE_LEAVING);
+        leaveGroupInProgress = Optional.of(new CompletableFuture<>());
 
         CompletableFuture<Void> callbackResult = invokeOnPartitionsRevokedOrLostToReleaseAssignment();
         callbackResult.whenComplete((result, error) -> {
@@ -415,10 +436,10 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
 
         clearPendingAssignmentsAndLocalNamesCache();
 
-        // Return callback future to indicate that the leave group is done when the callbacks
-        // complete, without waiting for the heartbeat to be sent out. (Best effort to send it
-        // but do not hold the leave group operation for it)
-        return callbackResult;
+        // Return future to indicate that the leave group is done when the callbacks
+        // complete, and the heartbeat to be sent out. (Best effort to send it, without waiting
+        // for a response or handling timeouts)
+        return leaveGroupInProgress.get();
     }
 
     /**
@@ -492,6 +513,8 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
             }
         } else if (state == MemberState.LEAVING) {
             transitionTo(MemberState.UNSUBSCRIBED);
+            leaveGroupInProgress.get().complete(null);
+            leaveGroupInProgress = Optional.empty();
         }
     }
 

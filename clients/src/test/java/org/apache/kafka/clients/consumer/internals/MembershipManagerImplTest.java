@@ -350,6 +350,64 @@ public class MembershipManagerImplTest {
     }
 
     @Test
+    public void testLeaveGroupWhenMemberAlreadyLeaving() {
+        MembershipManager membershipManager = createMemberInStableState();
+
+        // First leave attempt. Should trigger the callbacks and stay LEAVING until
+        // callbacks complete and the heartbeat is sent out.
+        mockLeaveGroup();
+        CompletableFuture<Void> leaveResult1 = membershipManager.leaveGroup();
+        assertFalse(leaveResult1.isDone());
+        assertEquals(MemberState.LEAVING, membershipManager.state());
+        verify(subscriptionState).assignFromSubscribed(Collections.emptySet());
+        clearInvocations(subscriptionState);
+
+        // Second leave attempt while the first one has not completed yet. Should not
+        // trigger any callbacks, and return a future that will complete when the ongoing first
+        // leave operation completes.
+        mockLeaveGroup();
+        CompletableFuture<Void> leaveResult2 = membershipManager.leaveGroup();
+        verify(subscriptionState, never()).rebalanceListener();
+        assertFalse(leaveResult2.isDone());
+
+        // Complete first leave group operation. Should also complete the second leave group.
+        membershipManager.onHeartbeatRequestSent();
+        assertTrue(leaveResult1.isDone());
+        assertFalse(leaveResult1.isCompletedExceptionally());
+        assertTrue(leaveResult2.isDone());
+        assertFalse(leaveResult2.isCompletedExceptionally());
+
+        // Subscription should have been updated only once with the first leave group.
+        verify(subscriptionState, never()).assignFromSubscribed(Collections.emptySet());
+    }
+
+    @Test
+    public void testLeaveGroupWhenMemberAlreadyLeft() {
+        MembershipManager membershipManager = createMemberInStableState();
+
+        // Leave group triggered and completed
+        mockLeaveGroup();
+        CompletableFuture<Void> leaveResult1 = membershipManager.leaveGroup();
+        assertEquals(MemberState.LEAVING, membershipManager.state());
+        membershipManager.onHeartbeatRequestSent();
+        assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
+        assertTrue(leaveResult1.isDone());
+        assertFalse(leaveResult1.isCompletedExceptionally());
+        verify(subscriptionState).assignFromSubscribed(Collections.emptySet());
+        clearInvocations(subscriptionState);
+
+        // Call to leave group again, when member already left. Should be no-op (no callbacks,
+        // no assignment updated)
+        mockLeaveGroup();
+        CompletableFuture<Void> leaveResult2 = membershipManager.leaveGroup();
+        assertTrue(leaveResult2.isDone());
+        assertFalse(leaveResult2.isCompletedExceptionally());
+        assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
+        verify(subscriptionState, never()).rebalanceListener();
+        verify(subscriptionState, never()).assignFromSubscribed(Collections.emptySet());
+    }
+
+    @Test
     public void testFatalFailureWhenStateIsUnjoined() {
         MembershipManagerImpl membershipManager = createMembershipManagerJoiningGroup();
         assertEquals(MemberState.JOINING, membershipManager.state());
@@ -888,20 +946,28 @@ public class MembershipManagerImplTest {
      * transition to {@link MemberState#UNSUBSCRIBED}
      */
     private void testLeaveGroupReleasesAssignmentAndResetsEpochToSendLeaveGroup(MembershipManager membershipManager) {
-        mockMemberHasAutoAssignedPartition();
-        doNothing().when(subscriptionState).markPendingRevocation(anySet());
+        mockLeaveGroup();
 
         CompletableFuture<Void> leaveResult = membershipManager.leaveGroup();
 
+        assertEquals(MemberState.LEAVING, membershipManager.state());
+        assertFalse(leaveResult.isDone(), "Leave group result should not complete until the " +
+                "heartbeat request to leave is sent out.");
+
+        membershipManager.onHeartbeatRequestSent();
+
+        assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
         assertTrue(leaveResult.isDone());
         assertFalse(leaveResult.isCompletedExceptionally());
         assertEquals(MEMBER_ID, membershipManager.memberId());
         assertEquals(-1, membershipManager.memberEpoch());
         assertTrue(membershipManager.currentAssignment().isEmpty());
-        assertEquals(MemberState.LEAVING, membershipManager.state());
         verify(subscriptionState).assignFromSubscribed(Collections.emptySet());
-        membershipManager.onHeartbeatRequestSent();
-        assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
+    }
+
+    private void mockLeaveGroup() {
+        mockMemberHasAutoAssignedPartition();
+        doNothing().when(subscriptionState).markPendingRevocation(anySet());
     }
 
     private void testStateUpdateOnFatalFailure(MembershipManager membershipManager) {
