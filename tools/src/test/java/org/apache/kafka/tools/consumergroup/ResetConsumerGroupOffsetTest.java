@@ -132,7 +132,7 @@ public class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
             "Can't find a coordinator");
         Map<TopicPartition, OffsetAndMetadata> resetOffsets = consumerGroupCommand.resetOffsets().get(group);
         assertEquals(Collections.emptyMap(), resetOffsets);
-        assertEquals(resetOffsets, committedOffsets(TOPIC, group));
+        assertEquals(Collections.emptyMap(), committedOffsets(TOPIC, group));
     }
 
     @Test
