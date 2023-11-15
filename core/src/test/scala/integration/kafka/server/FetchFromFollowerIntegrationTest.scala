@@ -65,6 +65,7 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
       admin,
       topic,
       brokers,
+      controllerServers,
       replicaAssignment = Map(0 -> Seq(leaderBrokerId, followerBrokerId))
     )
     TestUtils.waitUntilLeaderIsKnown(brokers, new TopicPartition(topic, 0))
@@ -108,6 +109,7 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
       admin,
       topic,
       brokers,
+      controllerServers,
       replicaAssignment = Map(0 -> Seq(leaderBrokerId, followerBrokerId))
     )
 
@@ -135,6 +137,7 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
       admin,
       topic,
       brokers,
+      controllerServers,
       replicaAssignment = Map(0 -> Seq(leaderBrokerId, followerBrokerId))
     )
 

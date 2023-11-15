@@ -586,4 +586,14 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         <Bug pattern="WA_AWAIT_NOT_IN_LOOP"/>
     </Match>
 
+    <Match>
+        <!-- Suppress the warnings about the caller not using the return value from Consumer. KafkaConsumer now
+             delegates all API calls to an internal instance of Consumer, which confuses SpotBugs. -->
+        <Or>
+            <Class name="org.apache.kafka.tools.ClientCompatibilityTest"/>
+            <Class name="org.apache.kafka.tools.StreamsResetter"/>
+        </Or>
+        <Bug pattern="RV_RETURN_VALUE_IGNORED_NO_SIDE_EFFECT"/>
+    </Match>
+
 </FindBugsFilter>
