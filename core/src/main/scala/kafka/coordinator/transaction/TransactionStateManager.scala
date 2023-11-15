@@ -327,8 +327,8 @@ class TransactionStateManager(brokerId: Int,
           }
         }
 
+        val now : Long = System.currentTimeMillis()
         def shouldInclude(txnMetadata: TransactionMetadata): Boolean = {
-          val now : Long = System.currentTimeMillis()
           if (txnMetadata.state == Dead) {
             // We filter the `Dead` state since it is a transient state which
             // indicates that the transactionalId and its metadata are in the
