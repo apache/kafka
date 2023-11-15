@@ -48,22 +48,33 @@ public class KafkaConsumerProducerDemo {
             boolean isAsync = args.length == 1 || !args[1].trim().equalsIgnoreCase("sync");
 
             // stage 1: clean any topics left from previous runs
-            Utils.recreateTopics(KafkaProperties.BOOTSTRAP_SERVERS, -1, TOPIC_NAME);
+            Utils.recreateTopics(KafkaProperties.BOOTSTRAP_SERVERS, 4, "topic-1");
+            Utils.recreateTopics(KafkaProperties.BOOTSTRAP_SERVERS, 4, "topic-2");
+            Utils.recreateTopics(KafkaProperties.BOOTSTRAP_SERVERS, 4, "topic-3");
             CountDownLatch latch = new CountDownLatch(2);
 
             // stage 2: produce records to topic1
-            Producer producerThread = new Producer(
-                "producer", KafkaProperties.BOOTSTRAP_SERVERS, TOPIC_NAME, isAsync, null, false, numRecords, -1, latch);
-            producerThread.start();
+            Producer producerThread0 = new Producer(
+                "producer", KafkaProperties.BOOTSTRAP_SERVERS, "topic-1", isAsync, null, false, numRecords, -1, latch);
+            producerThread0.start();
+            Producer producerThread1 = new Producer(
+                "producer", KafkaProperties.BOOTSTRAP_SERVERS, "topic-2", isAsync, null, false, numRecords, -1, latch);
+            producerThread1.start();
+            Producer producerThread2 = new Producer(
+                "producer", KafkaProperties.BOOTSTRAP_SERVERS, "topic-3", isAsync, null, false, numRecords, -1, latch);
+            producerThread2.start();
 
             // stage 3: consume records from topic1
             Consumer consumerThread = new Consumer(
-                "consumer", KafkaProperties.BOOTSTRAP_SERVERS, TOPIC_NAME, GROUP_NAME, Optional.empty(), false, numRecords, latch);
+                "consumer", KafkaProperties.BOOTSTRAP_SERVERS, TOPIC_NAME, GROUP_NAME, Optional.empty(), true,
+                numRecords, latch);
             consumerThread.start();
 
             if (!latch.await(5, TimeUnit.MINUTES)) {
                 Utils.printErr("Timeout after 5 minutes waiting for termination");
-                producerThread.shutdown();
+                producerThread0.shutdown();
+                producerThread1.shutdown();
+                producerThread2.shutdown();
                 consumerThread.shutdown();
             }
         } catch (Throwable e) {

@@ -32,13 +32,12 @@ import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
-
-import static java.util.Collections.singleton;
 
 /**
  * A simple consumer thread that subscribes to a topic, fetches new records and prints them.
@@ -80,7 +79,11 @@ public class Consumer extends Thread implements ConsumerRebalanceListener {
         try (KafkaConsumer<Integer, String> consumer = createKafkaConsumer()) {
             // subscribes to a list of topics to get dynamically assigned partitions
             // this class implements the rebalance listener that we pass here to be notified of such events
-            consumer.subscribe(singleton(topic), this);
+            ArrayList<String> topics = new ArrayList<>();
+            topics.add("topic-1");
+            topics.add("topic-2");
+            topics.add("topic-3");
+            consumer.subscribe(topics, this);
             Utils.printOut("Subscribed to %s", topic);
             while (!closed && remainingRecords > 0) {
                 try {
@@ -89,6 +92,8 @@ public class Consumer extends Thread implements ConsumerRebalanceListener {
                     // returns immediately if there are records or times out returning an empty record set
                     // the next poll must be called within session.timeout.ms to avoid group rebalance
                     ConsumerRecords<Integer, String> records = consumer.poll(Duration.ofSeconds(1));
+                    if (records.count() > 400)
+                        System.out.println("Reocrd number:" + records.count());
                     for (ConsumerRecord<Integer, String> record : records) {
                         Utils.maybePrintRecord(numRecords, record);
                     }
@@ -136,6 +141,7 @@ public class Consumer extends Thread implements ConsumerRebalanceListener {
         instanceId.ifPresent(id -> props.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, id));
         // disables auto commit when EOS is enabled, because offsets are committed with the transaction
         props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, readCommitted ? "false" : "true");
+        props.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 400);
         // key and value are just byte arrays, so we need to set appropriate deserializers
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, IntegerDeserializer.class);
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
@@ -145,6 +151,7 @@ public class Consumer extends Thread implements ConsumerRebalanceListener {
         }
         // sets the reset offset policy in case of invalid or no offset
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        System.out.print(props);
         return new KafkaConsumer<>(props);
     }
 
