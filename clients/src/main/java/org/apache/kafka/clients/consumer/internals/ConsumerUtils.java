@@ -56,6 +56,12 @@ import java.util.concurrent.TimeUnit;
 
 public final class ConsumerUtils {
 
+    /**
+     * This configuration has only package-level visibility in {@link ConsumerConfig}, so it's inaccessible in the
+     * internals package where most of its uses live. Attempts were made to move things around, but it was deemed
+     * better to leave it as is.
+     */
+    static final String THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED = "internal.throw.on.fetch.stable.offset.unsupported";
     public static final long DEFAULT_CLOSE_TIMEOUT_MS = 30 * 1000;
     public static final String CONSUMER_JMX_PREFIX = "kafka.consumer";
     public static final String CONSUMER_METRIC_GROUP_PREFIX = "consumer";
