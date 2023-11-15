@@ -534,6 +534,7 @@
     </subpackage>
 
     <subpackage name="cli">
+      <allow pkg="com.fasterxml.jackson" />
       <allow pkg="org.apache.kafka.connect.runtime" />
       <allow pkg="org.apache.kafka.connect.storage" />
       <allow pkg="org.apache.kafka.connect.util" />
