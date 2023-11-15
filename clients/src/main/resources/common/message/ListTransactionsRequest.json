@@ -28,7 +28,7 @@
     { "name": "ProducerIdFilters", "type": "[]int64", "versions": "0+", "entityType": "producerId",
       "about": "The producerIds to filter by: if empty, all transactions will be returned; if non-empty, only transactions which match one of the filtered producerIds will be returned"
     },
-    { "name": "DurationFilter", "type": "int64", "versions": "1+",
+    { "name": "DurationFilter", "type": "int64", "versions": "1+", "default": 0,
       "about": "Duration (in millis) to filter by: if <= 0, all transactions will be returned; otherwise, only transactions running longer than this duration will be returned"
     }
   ]

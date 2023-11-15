@@ -91,14 +91,19 @@ public class ListTransactionsHandlerTest {
         BrokerKey brokerKey = new BrokerKey(OptionalInt.of(brokerId));
         ListTransactionsOptions options = new ListTransactionsOptions();
         ListTransactionsHandler handler = new ListTransactionsHandler(options, logContext);
-        // case 1: able to set a valid duration filter when using API version 1
-        options.durationFilter(10L);
+        // case 1: check the default value for durationFilter
         ListTransactionsRequest request = handler.buildBatchedRequest(brokerId, singleton(brokerKey)).build((short) 1);
+        assertEquals(0L, request.data().durationFilter());
+        request = handler.buildBatchedRequest(brokerId, singleton(brokerKey)).build((short) 0);
+        assertEquals(0L, request.data().durationFilter());
+        // case 2: able to set a valid duration filter when using API version 1
+        options.durationFilter(10L);
+        request = handler.buildBatchedRequest(brokerId, singleton(brokerKey)).build((short) 1);
         assertEquals(10L, request.data().durationFilter());
         assertEquals(Collections.emptyList(), request.data().producerIdFilters());
-        // case 2: unable to set a valid duration filter when using API version 0
+        // case 3: unable to set a valid duration filter when using API version 0
         assertThrows(UnsupportedVersionException.class, () -> handler.buildBatchedRequest(brokerId, singleton(brokerKey)).build((short) 0));
-        // case 3: able to set duration filter to a value <= 0 when using API version 0
+        // case 4: able to set duration filter to 0 when using API version 0
         options.durationFilter(0L);
         ListTransactionsRequest request1 = handler.buildBatchedRequest(brokerId, singleton(brokerKey)).build((short) 0);
         assertEquals(0L, request1.data().durationFilter());
