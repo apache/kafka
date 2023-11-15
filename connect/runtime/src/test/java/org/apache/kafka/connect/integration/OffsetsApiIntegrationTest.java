@@ -426,9 +426,10 @@ public class OffsetsApiIntegrationTest {
         partition.put(SinkUtils.KAFKA_PARTITION_KEY, 0);
         List<ConnectorOffset> offsetsToAlter = Collections.singletonList(new ConnectorOffset(partition, null));
 
-        ConnectRestException e = assertThrows(ConnectRestException.class,
-                () -> connect.alterConnectorOffsets(CONNECTOR_NAME, new ConnectorOffsets(offsetsToAlter)));
-        assertThat(e.getMessage(), containsString("zombie sink task"));
+        String response = connect.alterConnectorOffsets(CONNECTOR_NAME, new ConnectorOffsets(offsetsToAlter));
+        assertThat(response, containsString("The Connect framework-managed offsets for this connector have been altered successfully"));
+
+        verifyEmptyConnectorOffsets(CONNECTOR_NAME);
     }
 
     @Test
@@ -783,8 +784,10 @@ public class OffsetsApiIntegrationTest {
         connect.stopConnector(CONNECTOR_NAME);
 
         // Try to reset the offsets
-        ConnectRestException e = assertThrows(ConnectRestException.class, () -> connect.resetConnectorOffsets(CONNECTOR_NAME));
-        assertThat(e.getMessage(), containsString("zombie sink task"));
+        String response = connect.resetConnectorOffsets(CONNECTOR_NAME);
+        assertThat(response, containsString("The Connect framework-managed offsets for this connector have been reset successfully"));
+
+        verifyEmptyConnectorOffsets(CONNECTOR_NAME);
     }
 
     @Test
