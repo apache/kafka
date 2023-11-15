@@ -18,27 +18,32 @@
 package org.apache.kafka.metadata;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.metadata.RegisterControllerRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.BatchReader;
 import org.apache.kafka.raft.internals.MemoryBatchReader;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.util.MockRandom;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -88,6 +93,50 @@ public class RecordTestUtils {
         ApiMessageAndVersion recordAndVersion
     ) {
         replayAll(target, Collections.singletonList(recordAndVersion));
+    }
+
+    public static <T extends ApiMessage> Optional<T> recordAtIndexAs(
+            Class<T> recordClazz,
+            List<ApiMessageAndVersion> recordsAndVersions,
+            int recordIndex
+    ) {
+        if (recordIndex > recordsAndVersions.size() - 1) {
+            return Optional.empty();
+        } else {
+            if (recordIndex == -1) {
+                return recordsAndVersions.stream().map(ApiMessageAndVersion::message)
+                    .filter(record -> record.getClass().isAssignableFrom(recordClazz))
+                    .map(recordClazz::cast)
+                    .findFirst();
+            } else {
+                ApiMessageAndVersion messageAndVersion = recordsAndVersions.get(recordIndex);
+                ApiMessage record = messageAndVersion.message();
+                if (record.getClass().isAssignableFrom(recordClazz)) {
+                    return Optional.of(recordClazz.cast(record));
+                } else {
+                    return Optional.empty();
+                }
+            }
+
+        }
+    }
+
+    public static class ImageDeltaPair<I, D> {
+        private final Supplier<I> imageSupplier;
+        private final Function<I, D> deltaCreator;
+
+        public ImageDeltaPair(Supplier<I> imageSupplier, Function<I, D> deltaCreator) {
+            this.imageSupplier = imageSupplier;
+            this.deltaCreator = deltaCreator;
+        }
+
+        public Supplier<I> imageSupplier() {
+            return imageSupplier;
+        }
+
+        public Function<I, D> deltaCreator() {
+            return deltaCreator;
+        }
     }
 
     public static class TestThroughAllIntermediateImagesLeadingToFinalImageHelper<D, I> {
@@ -156,6 +205,18 @@ public class RecordTestUtils {
                 }
             }
         }
+
+        /**
+         * Tests applying records in all variations of batch sizes will result in the same image as applying all records in one batch.
+         * @param fromRecords    The list of records to apply.
+         */
+        public void test(List<ApiMessageAndVersion> fromRecords) {
+            D finalImageDelta = createDeltaUponImage(getEmptyImage());
+            RecordTestUtils.replayAll(finalImageDelta, fromRecords);
+            I finalImage = createImageByApplyingDelta(finalImageDelta);
+
+            test(finalImage, fromRecords);
+        }
     }
 
     /**
@@ -212,7 +273,6 @@ public class RecordTestUtils {
      *
      * @param o     The input object. It will be modified in-place.
      */
-    @SuppressWarnings("unchecked")
     public static void deepSortRecords(Object o) throws Exception {
         if (o == null) {
             return;
@@ -288,5 +348,37 @@ public class RecordTestUtils {
         return new ApiMessageAndVersion(
             new TopicRecord().setName("test" + index).
             setTopicId(new Uuid(random.nextLong(), random.nextLong())), (short) 0);
+    }
+
+    public static RegisterControllerRecord createTestControllerRegistration(
+        int id,
+        boolean zkMigrationReady
+    ) {
+        return new RegisterControllerRecord().
+            setControllerId(id).
+            setIncarnationId(new Uuid(3465346L, id)).
+            setZkMigrationReady(zkMigrationReady).
+            setEndPoints(new RegisterControllerRecord.ControllerEndpointCollection(
+                Arrays.asList(
+                    new RegisterControllerRecord.ControllerEndpoint().
+                        setName("CONTROLLER").
+                        setHost("localhost").
+                        setPort(8000 + id).
+                        setSecurityProtocol(SecurityProtocol.PLAINTEXT.id),
+                    new RegisterControllerRecord.ControllerEndpoint().
+                        setName("CONTROLLER_SSL").
+                        setHost("localhost").
+                        setPort(9000 + id).
+                        setSecurityProtocol(SecurityProtocol.SSL.id)
+                ).iterator()
+            )).
+            setFeatures(new RegisterControllerRecord.ControllerFeatureCollection(
+                Arrays.asList(
+                    new RegisterControllerRecord.ControllerFeature().
+                        setName(MetadataVersion.FEATURE_NAME).
+                        setMinSupportedVersion(MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel()).
+                        setMaxSupportedVersion(MetadataVersion.IBP_3_6_IV1.featureLevel())
+                ).iterator()
+            ));
     }
 }

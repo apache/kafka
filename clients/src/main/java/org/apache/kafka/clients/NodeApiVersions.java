@@ -129,7 +129,7 @@ public class NodeApiVersions {
      */
     public short latestUsableVersion(ApiKeys apiKey, short oldestAllowedVersion, short latestAllowedVersion) {
         if (!supportedVersions.containsKey(apiKey))
-            throw new UnsupportedVersionException("The broker does not support " + apiKey);
+            throw new UnsupportedVersionException("The node does not support " + apiKey);
         ApiVersion supportedVersion = supportedVersions.get(apiKey);
         Optional<ApiVersion> intersectVersion = ApiVersionsResponse.intersect(supportedVersion,
             new ApiVersion()
@@ -140,7 +140,7 @@ public class NodeApiVersions {
         if (intersectVersion.isPresent())
             return intersectVersion.get().maxVersion();
         else
-            throw new UnsupportedVersionException("The broker does not support " + apiKey +
+            throw new UnsupportedVersionException("The node does not support " + apiKey +
                 " with version in range [" + oldestAllowedVersion + "," + latestAllowedVersion + "]. The supported" +
                 " range is [" + supportedVersion.minVersion() + "," + supportedVersion.maxVersion() + "].");
     }

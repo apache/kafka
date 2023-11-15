@@ -145,7 +145,7 @@ public class ConnectorsResource implements ConnectResource {
         checkAndPutConnectorConfigName(name, configs);
 
         FutureCallback<Herder.Created<ConnectorInfo>> cb = new FutureCallback<>();
-        herder.putConnectorConfig(name, configs, false, cb);
+        herder.putConnectorConfig(name, configs, createRequest.initialTargetState(), false, cb);
         Herder.Created<ConnectorInfo> info = requestHandler.completeOrForwardRequest(cb, "/connectors", "POST", headers, createRequest,
                 new TypeReference<ConnectorInfo>() { }, new CreatedConnectorInfoTranslator(), forward);
 
@@ -173,9 +173,11 @@ public class ConnectorsResource implements ConnectResource {
 
     @GET
     @Path("/{connector}/tasks-config")
-    @Operation(summary = "Get the configuration of all tasks for the specified connector")
+    @Operation(deprecated = true, summary = "Get the configuration of all tasks for the specified connector")
     public Map<ConnectorTaskId, Map<String, String>> getTasksConfig(
             final @PathParam("connector") String connector) throws Throwable {
+        log.warn("The 'GET /connectors/{connector}/tasks-config' endpoint is deprecated and will be removed in the next major release. "
+            + "Please use the 'GET /connectors/{connector}/tasks' endpoint instead.");
         FutureCallback<Map<ConnectorTaskId, Map<String, String>>> cb = new FutureCallback<>();
         herder.tasksConfig(connector, cb);
         return requestHandler.completeRequest(cb);
@@ -301,7 +303,7 @@ public class ConnectorsResource implements ConnectResource {
 
     @GET
     @Path("/{connector}/tasks")
-    @Operation(summary = "List all tasks for the specified connector")
+    @Operation(summary = "List all tasks and their configurations for the specified connector")
     public List<TaskInfo> getTaskConfigs(final @PathParam("connector") String connector) throws Throwable {
         FutureCallback<List<TaskInfo>> cb = new FutureCallback<>();
         herder.taskConfigs(connector, cb);

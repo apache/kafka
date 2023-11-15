@@ -49,6 +49,8 @@ import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.apache.kafka.streams.processor.internals.assignment.ReferenceContainer;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
+import org.apache.kafka.streams.processor.internals.tasks.DefaultTaskManager;
+import org.apache.kafka.streams.processor.internals.tasks.DefaultTaskManager.DefaultTaskExecutorCreator;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import java.util.Queue;
@@ -260,6 +262,12 @@ public class StreamThread extends Thread {
         }
     }
 
+    public boolean isStartingRunningOrPartitionAssigned() {
+        synchronized (stateLock) {
+            return state.equals(State.RUNNING) || state.equals(State.STARTING) || state.equals(State.PARTITIONS_ASSIGNED);
+        }
+    }
+
     private final Time time;
     private final Logger log;
     private final String logPrefix;
@@ -325,6 +333,7 @@ public class StreamThread extends Thread {
     private final AtomicBoolean leaveGroupRequested = new AtomicBoolean(false);
     private final boolean eosEnabled;
     private final boolean stateUpdaterEnabled;
+    private final boolean processingThreadsEnabled;
 
     public static StreamThread create(final TopologyMetadata topologyMetadata,
                                       final StreamsConfig config,
@@ -368,8 +377,8 @@ public class StreamThread extends Thread {
 
         final ThreadCache cache = new ThreadCache(logContext, cacheSizeBytes, streamsMetrics);
 
-        final boolean stateUpdaterEnabled =
-            InternalConfig.getBoolean(config.originals(), InternalConfig.STATE_UPDATER_ENABLED, false);
+        final boolean stateUpdaterEnabled = InternalConfig.getStateUpdaterEnabled(config.originals());
+        final boolean proceessingThreadsEnabled = InternalConfig.getProcessingThreadsEnabled(config.originals());
         final ActiveTaskCreator activeTaskCreator = new ActiveTaskCreator(
             topologyMetadata,
             config,
@@ -382,7 +391,9 @@ public class StreamThread extends Thread {
             threadId,
             processId,
             log,
-            stateUpdaterEnabled);
+            stateUpdaterEnabled,
+            proceessingThreadsEnabled
+        );
         final StandbyTaskCreator standbyTaskCreator = new StandbyTaskCreator(
             topologyMetadata,
             config,
@@ -393,6 +404,15 @@ public class StreamThread extends Thread {
             log,
             stateUpdaterEnabled);
 
+        final Tasks tasks = new Tasks(new LogContext(logPrefix));
+        final boolean processingThreadsEnabled =
+            InternalConfig.getProcessingThreadsEnabled(config.originals());
+
+        final DefaultTaskManager schedulingTaskManager =
+            maybeCreateSchedulingTaskManager(processingThreadsEnabled, stateUpdaterEnabled, topologyMetadata, time, threadId, tasks);
+        final StateUpdater stateUpdater =
+            maybeCreateAndStartStateUpdater(stateUpdaterEnabled, streamsMetrics, config, changelogReader, topologyMetadata, time, clientId, threadIdx);
+
         final TaskManager taskManager = new TaskManager(
             time,
             changelogReader,
@@ -400,11 +420,12 @@ public class StreamThread extends Thread {
             logPrefix,
             activeTaskCreator,
             standbyTaskCreator,
-            new Tasks(new LogContext(logPrefix)),
+            tasks,
             topologyMetadata,
             adminClient,
             stateDirectory,
-            maybeCreateAndStartStateUpdater(stateUpdaterEnabled, streamsMetrics, config, changelogReader, topologyMetadata, time, clientId, threadIdx)
+            stateUpdater,
+            schedulingTaskManager
         );
         referenceContainer.taskManager = taskManager;
 
@@ -447,6 +468,31 @@ public class StreamThread extends Thread {
         return streamThread.updateThreadMetadata(getSharedAdminClientId(clientId));
     }
 
+    private static DefaultTaskManager maybeCreateSchedulingTaskManager(final boolean processingThreadsEnabled,
+                                                                       final boolean stateUpdaterEnabled,
+                                                                       final TopologyMetadata topologyMetadata,
+                                                                       final Time time,
+                                                                       final String threadId,
+                                                                       final Tasks tasks) {
+        if (processingThreadsEnabled) {
+            if (!stateUpdaterEnabled) {
+                throw new IllegalStateException("Processing threads require the state updater to be enabled");
+            }
+
+            final DefaultTaskManager defaultTaskManager = new DefaultTaskManager(
+                time,
+                threadId,
+                tasks,
+                new DefaultTaskExecutorCreator(),
+                topologyMetadata.taskExecutionMetadata(),
+                1
+            );
+            defaultTaskManager.startTaskExecutors();
+            return defaultTaskManager;
+        }
+        return null;
+    }
+
     private static StateUpdater maybeCreateAndStartStateUpdater(final boolean stateUpdaterEnabled,
                                                                 final StreamsMetricsImpl streamsMetrics,
                                                                 final StreamsConfig streamsConfig,
@@ -465,6 +511,7 @@ public class StreamThread extends Thread {
         }
     }
 
+    @SuppressWarnings("this-escape")
     public StreamThread(final Time time,
                         final StreamsConfig config,
                         final Admin adminClient,
@@ -482,7 +529,8 @@ public class StreamThread extends Thread {
                         final Queue<StreamsException> nonFatalExceptionsToHandle,
                         final Runnable shutdownErrorHook,
                         final BiConsumer<Throwable, Boolean> streamsUncaughtExceptionHandler,
-                        final java.util.function.Consumer<Long> cacheResizer) {
+                        final java.util.function.Consumer<Long> cacheResizer
+                        ) {
         super(threadId);
         this.stateLock = new Object();
         this.adminClient = adminClient;
@@ -551,7 +599,8 @@ public class StreamThread extends Thread {
 
         this.numIterations = 1;
         this.eosEnabled = eosEnabled(config);
-        this.stateUpdaterEnabled = InternalConfig.getBoolean(config.originals(), InternalConfig.STATE_UPDATER_ENABLED, false);
+        this.stateUpdaterEnabled = InternalConfig.getStateUpdaterEnabled(config.originals());
+        this.processingThreadsEnabled = InternalConfig.getProcessingThreadsEnabled(config.originals());
     }
 
     private static final class InternalConsumerConfig extends ConsumerConfig {
@@ -614,7 +663,11 @@ public class StreamThread extends Thread {
                 if (size != -1L) {
                     cacheResizer.accept(size);
                 }
-                runOnce();
+                if (processingThreadsEnabled) {
+                    runOnceWithProcessingThreads();
+                } else {
+                    runOnceWithoutProcessingThreads();
+                }
 
                 // Check for a scheduled rebalance but don't trigger it until the current rebalance is done
                 if (!taskManager.rebalanceInProgress() && nextProbingRebalanceMs.get() < time.milliseconds()) {
@@ -759,11 +812,17 @@ public class StreamThread extends Thread {
      *                               or if the task producer got fenced (EOS)
      */
     // Visible for testing
-    void runOnce() {
+    void runOnceWithoutProcessingThreads() {
         final long startMs = time.milliseconds();
         now = startMs;
 
-        final long pollLatency = pollPhase();
+        final long pollLatency;
+        taskManager.resumePollingForPartitionsWithAvailableSpace();
+        try {
+            pollLatency = pollPhase();
+        } finally {
+            taskManager.updateLags();
+        }
 
         // Shutdown hook could potentially be triggered and transit the thread state to PENDING_SHUTDOWN during #pollRequests().
         // The task manager internal states could be uninitialized if the state transition happens during #onPartitionsAssigned().
@@ -787,7 +846,7 @@ public class StreamThread extends Thread {
         long totalProcessLatency = 0L;
         long totalPunctuateLatency = 0L;
         if (state == State.RUNNING
-            || (stateUpdaterEnabled && isRunning())) {
+            || (stateUpdaterEnabled && isStartingRunningOrPartitionAssigned())) {
             /*
              * Within an iteration, after processing up to N (N initialized as 1 upon start up) records for each applicable tasks, check the current time:
              *  1. If it is time to punctuate, do it;
@@ -846,7 +905,7 @@ public class StreamThread extends Thread {
 
                     if (log.isDebugEnabled()) {
                         log.debug("Committed all active tasks {} and standby tasks {} in {}ms",
-                            taskManager.activeTaskIds(), taskManager.standbyTaskIds(), commitLatency);
+                            taskManager.activeRunningTaskIds(), taskManager.standbyTaskIds(), commitLatency);
                     }
                 }
 
@@ -888,6 +947,78 @@ public class StreamThread extends Thread {
         }
     }
 
+    /**
+     * One iteration of a thread includes the following steps:
+     *
+     * 1. poll records from main consumer and add to buffer;
+     * 2. check the task manager for any exceptions to be handled
+     * 3. commit all tasks if necessary;
+     *
+     * @throws IllegalStateException If store gets registered after initialized is already finished
+     * @throws StreamsException      If the store's change log does not contain the partition
+     * @throws TaskMigratedException If another thread wrote to the changelog topic that is currently restored
+     *                               or if committing offsets failed (non-EOS)
+     *                               or if the task producer got fenced (EOS)
+     */
+    // Visible for testing
+    void runOnceWithProcessingThreads() {
+        final long startMs = time.milliseconds();
+        now = startMs;
+
+        final long pollLatency;
+        taskManager.resumePollingForPartitionsWithAvailableSpace();
+        try {
+            pollLatency = pollPhase();
+        } finally {
+            taskManager.updateLags();
+        }
+
+        // Shutdown hook could potentially be triggered and transit the thread state to PENDING_SHUTDOWN during #pollRequests().
+        // The task manager internal states could be uninitialized if the state transition happens during #onPartitionsAssigned().
+        // Should only proceed when the thread is still running after #pollRequests(), because no external state mutation
+        // could affect the task manager state beyond this point within #runOnce().
+        if (!isRunning()) {
+            log.debug("Thread state is already {}, skipping the run once call after poll request", state);
+            return;
+        }
+
+        long totalCommitLatency = 0L;
+        if (isRunning()) {
+
+            checkStateUpdater();
+
+            taskManager.maybeThrowTaskExceptionsFromProcessingThreads();
+            taskManager.signalTaskExecutors();
+
+            final long beforeCommitMs = now;
+            final int committed = maybeCommit();
+            final long commitLatency = Math.max(now - beforeCommitMs, 0);
+            totalCommitLatency += commitLatency;
+            if (committed > 0) {
+                totalCommittedSinceLastSummary += committed;
+                commitSensor.record(commitLatency / (double) committed, now);
+
+                if (log.isDebugEnabled()) {
+                    log.debug("Committed all active tasks {} and standby tasks {} in {}ms",
+                        taskManager.activeTaskIds(), taskManager.standbyTaskIds(), commitLatency);
+                }
+            }
+        }
+
+        now = time.milliseconds();
+        final long runOnceLatency = now - startMs;
+        pollRatioSensor.record((double) pollLatency / runOnceLatency, now);
+        commitRatioSensor.record((double) totalCommitLatency / runOnceLatency, now);
+
+        final boolean logProcessingSummary = now - lastLogSummaryMs > LOG_SUMMARY_INTERVAL_MS;
+        if (logProcessingSummary) {
+            log.info("Committed {} total tasks since the last update", totalCommittedSinceLastSummary);
+
+            totalCommittedSinceLastSummary = 0L;
+            lastLogSummaryMs = now;
+        }
+    }
+
     private void initializeAndRestorePhase() {
         final java.util.function.Consumer<Set<TopicPartition>> offsetResetter = partitions -> resetOffsets(partitions, null);
         final State stateSnapshot = state;
@@ -899,8 +1030,8 @@ public class StreamThread extends Thread {
             log.debug("State is {}; initializing tasks if necessary", stateSnapshot);
 
             if (taskManager.tryToCompleteRestoration(now, offsetResetter)) {
-                log.info("Restoration took {} ms for all tasks {}", time.milliseconds() - lastPartitionAssignedMs,
-                    taskManager.allTasks().keySet());
+                log.info("Restoration took {} ms for all active tasks {}", time.milliseconds() - lastPartitionAssignedMs,
+                    taskManager.activeTaskIds());
                 setState(State.RUNNING);
             }
 
@@ -1115,7 +1246,7 @@ public class StreamThread extends Thread {
         if (now - lastCommitMs > commitTimeMs) {
             if (log.isDebugEnabled()) {
                 log.debug("Committing all active tasks {} and standby tasks {} since {}ms has elapsed (commit interval is {}ms)",
-                          taskManager.activeTaskIds(), taskManager.standbyTaskIds(), now - lastCommitMs, commitTimeMs);
+                          taskManager.activeRunningTaskIds(), taskManager.standbyTaskIds(), now - lastCommitMs, commitTimeMs);
             }
 
             committed = taskManager.commit(
@@ -1126,7 +1257,7 @@ public class StreamThread extends Thread {
                     .collect(Collectors.toSet())
             );
 
-            if (committed > 0 && (now - lastPurgeMs) > purgeTimeMs) {
+            if ((now - lastPurgeMs) > purgeTimeMs) {
                 // try to purge the committed records for repartition topics if possible
                 taskManager.maybePurgeCommittedRecords();
                 lastPurgeMs = now;
@@ -1196,8 +1327,12 @@ public class StreamThread extends Thread {
         } catch (final Throwable e) {
             log.error("Failed to close changelog reader due to the following error:", e);
         }
-        if (leaveGroupRequested.get()) {
-            mainConsumer.unsubscribe();
+        try {
+            if (leaveGroupRequested.get()) {
+                mainConsumer.unsubscribe();
+            }
+        } catch (final Throwable e) {
+            log.error("Failed to unsubscribe due to the following error: ", e);
         }
         try {
             mainConsumer.close();

@@ -19,13 +19,16 @@ package org.apache.kafka.connect.runtime;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
+import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.transforms.util.RegexValidator;
 
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
@@ -90,48 +93,81 @@ public class SinkConnectorConfig extends ConnectorConfig {
      * @param props sink configuration properties
      */
     public static void validate(Map<String, String> props) {
-        final boolean hasTopicsConfig = hasTopicsConfig(props);
-        final boolean hasTopicsRegexConfig = hasTopicsRegexConfig(props);
-        final boolean hasDlqTopicConfig = hasDlqTopicConfig(props);
+        Map<String, ConfigValue> validatedConfig = new LinkedHashMap<>();
+        validate(props, validatedConfig);
+        validatedConfig.values().stream()
+                .filter(configValue -> !configValue.errorMessages().isEmpty())
+                .findFirst()
+                .ifPresent(configValue -> {
+                    throw new ConfigException(configValue.name(), configValue.value(), configValue.errorMessages().get(0));
+                });
+    }
+
+    /**
+     * Perform preflight validation for the sink-specific properties for a connector.
+     *
+     * @param props           the configuration for the sink connector
+     * @param validatedConfig any already-known {@link ConfigValue validation results} for the configuration.
+     *                        May be empty, but may not be null. Any configuration errors discovered by this method will
+     *                        be {@link ConfigValue#addErrorMessage(String) added} to a value in this map, adding a new
+     *                        entry if one for the problematic property does not already exist.
+     */
+    public static void validate(Map<String, String> props, Map<String, ConfigValue> validatedConfig) {
+        final String topicsList = props.get(TOPICS_CONFIG);
+        final String topicsRegex = props.get(TOPICS_REGEX_CONFIG);
+        final String dlqTopic = props.getOrDefault(DLQ_TOPIC_NAME_CONFIG, "").trim();
+        final boolean hasTopicsConfig = !Utils.isBlank(topicsList);
+        final boolean hasTopicsRegexConfig = !Utils.isBlank(topicsRegex);
+        final boolean hasDlqTopicConfig = !Utils.isBlank(dlqTopic);
 
         if (hasTopicsConfig && hasTopicsRegexConfig) {
-            throw new ConfigException(SinkTask.TOPICS_CONFIG + " and " + SinkTask.TOPICS_REGEX_CONFIG +
-                " are mutually exclusive options, but both are set.");
+            String errorMessage = TOPICS_CONFIG + " and " + TOPICS_REGEX_CONFIG + " are mutually exclusive options, but both are set.";
+            addErrorMessage(validatedConfig, TOPICS_CONFIG, topicsList, errorMessage);
+            addErrorMessage(validatedConfig, TOPICS_REGEX_CONFIG, topicsRegex, errorMessage);
         }
 
         if (!hasTopicsConfig && !hasTopicsRegexConfig) {
-            throw new ConfigException("Must configure one of " +
-                SinkTask.TOPICS_CONFIG + " or " + SinkTask.TOPICS_REGEX_CONFIG);
+            String errorMessage = "Must configure one of " + TOPICS_CONFIG + " or " + TOPICS_REGEX_CONFIG;
+            addErrorMessage(validatedConfig, TOPICS_CONFIG, topicsList, errorMessage);
+            addErrorMessage(validatedConfig, TOPICS_REGEX_CONFIG, topicsRegex, errorMessage);
         }
 
         if (hasDlqTopicConfig) {
-            String dlqTopic = props.get(DLQ_TOPIC_NAME_CONFIG).trim();
             if (hasTopicsConfig) {
                 List<String> topics = parseTopicsList(props);
                 if (topics.contains(dlqTopic)) {
-                    throw new ConfigException(String.format("The DLQ topic '%s' may not be included in the list of "
-                            + "topics ('%s=%s') consumed by the connector", dlqTopic, SinkTask.TOPICS_REGEX_CONFIG, topics));
+                    String errorMessage = String.format(
+                            "The DLQ topic '%s' may not be included in the list of topics ('%s=%s') consumed by the connector",
+                            dlqTopic, TOPICS_CONFIG, topics
+                    );
+                    addErrorMessage(validatedConfig, TOPICS_CONFIG, topicsList, errorMessage);
                 }
             }
             if (hasTopicsRegexConfig) {
-                String topicsRegexStr = props.get(SinkTask.TOPICS_REGEX_CONFIG);
-                Pattern pattern = Pattern.compile(topicsRegexStr);
+                Pattern pattern = Pattern.compile(topicsRegex);
                 if (pattern.matcher(dlqTopic).matches()) {
-                    throw new ConfigException(String.format("The DLQ topic '%s' may not be included in the regex matching the "
-                            + "topics ('%s=%s') consumed by the connector", dlqTopic, SinkTask.TOPICS_REGEX_CONFIG, topicsRegexStr));
+                    String errorMessage = String.format(
+                            "The DLQ topic '%s' may not be matched by the regex for the topics ('%s=%s') consumed by the connector",
+                            dlqTopic, TOPICS_REGEX_CONFIG, topicsRegex
+                    );
+                    addErrorMessage(validatedConfig, TOPICS_REGEX_CONFIG, topicsRegex, errorMessage);
                 }
             }
         }
+    }
+
+    private static void addErrorMessage(Map<String, ConfigValue> validatedConfig, String name, String value, String errorMessage) {
+        validatedConfig.computeIfAbsent(
+                name,
+                p -> new ConfigValue(name, value, Collections.emptyList(), new ArrayList<>())
+        ).addErrorMessage(
+                errorMessage
+        );
     }
 
     public static boolean hasTopicsConfig(Map<String, String> props) {
         String topicsStr = props.get(TOPICS_CONFIG);
         return !Utils.isBlank(topicsStr);
-    }
-
-    public static boolean hasTopicsRegexConfig(Map<String, String> props) {
-        String topicsRegexStr = props.get(TOPICS_REGEX_CONFIG);
-        return !Utils.isBlank(topicsRegexStr);
     }
 
     public static boolean hasDlqTopicConfig(Map<String, String> props) {

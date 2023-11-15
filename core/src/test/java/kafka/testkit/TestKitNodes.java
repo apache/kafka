@@ -17,17 +17,15 @@
 
 package kafka.testkit;
 
-import kafka.server.MetaProperties;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.network.ListenerName;
+import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
 import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.test.TestUtils;
 
+import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.NavigableMap;
 import java.util.TreeMap;
 
@@ -36,8 +34,8 @@ public class TestKitNodes {
         private boolean combined = false;
         private Uuid clusterId = null;
         private MetadataVersion bootstrapMetadataVersion = null;
-        private final NavigableMap<Integer, ControllerNode> controllerNodes = new TreeMap<>();
-        private final NavigableMap<Integer, BrokerNode> brokerNodes = new TreeMap<>();
+        private final NavigableMap<Integer, ControllerNode.Builder> controllerNodeBuilders = new TreeMap<>();
+        private final NavigableMap<Integer, BrokerNode.Builder> brokerNodeBuilders = new TreeMap<>();
 
         public Builder setClusterId(Uuid clusterId) {
             this.clusterId = clusterId;
@@ -54,42 +52,22 @@ public class TestKitNodes {
             return this;
         }
 
-        public Builder addNodes(TestKitNode[] nodes) {
-            for (TestKitNode node : nodes) {
-                addNode(node);
-            }
-            return this;
-        }
-
-        public Builder addNode(TestKitNode node) {
-            if (node instanceof ControllerNode) {
-                ControllerNode controllerNode = (ControllerNode) node;
-                controllerNodes.put(node.id(), controllerNode);
-            } else if (node instanceof BrokerNode) {
-                BrokerNode brokerNode = (BrokerNode) node;
-                brokerNodes.put(node.id(), brokerNode);
-            } else {
-                throw new RuntimeException("Can't handle TestKitNode subclass " +
-                        node.getClass().getSimpleName());
-            }
-            return this;
-        }
-
         public Builder setNumControllerNodes(int numControllerNodes) {
             if (numControllerNodes < 0) {
                 throw new RuntimeException("Invalid negative value for numControllerNodes");
             }
 
-            while (controllerNodes.size() > numControllerNodes) {
-                controllerNodes.pollFirstEntry();
+            while (controllerNodeBuilders.size() > numControllerNodes) {
+                controllerNodeBuilders.pollFirstEntry();
             }
-            while (controllerNodes.size() < numControllerNodes) {
+            while (controllerNodeBuilders.size() < numControllerNodes) {
                 int nextId = startControllerId();
-                if (!controllerNodes.isEmpty()) {
-                    nextId = controllerNodes.lastKey() + 1;
+                if (!controllerNodeBuilders.isEmpty()) {
+                    nextId = controllerNodeBuilders.lastKey() + 1;
                 }
-                controllerNodes.put(nextId, new ControllerNode.Builder().
-                    setId(nextId).build());
+                controllerNodeBuilders.put(nextId,
+                    new ControllerNode.Builder().
+                        setId(nextId));
             }
             return this;
         }
@@ -98,28 +76,59 @@ public class TestKitNodes {
             if (numBrokerNodes < 0) {
                 throw new RuntimeException("Invalid negative value for numBrokerNodes");
             }
-            while (brokerNodes.size() > numBrokerNodes) {
-                brokerNodes.pollFirstEntry();
+            while (brokerNodeBuilders.size() > numBrokerNodes) {
+                brokerNodeBuilders.pollFirstEntry();
             }
-            while (brokerNodes.size() < numBrokerNodes) {
+            while (brokerNodeBuilders.size() < numBrokerNodes) {
                 int nextId = startBrokerId();
-                if (!brokerNodes.isEmpty()) {
-                    nextId = brokerNodes.lastKey() + 1;
+                if (!brokerNodeBuilders.isEmpty()) {
+                    nextId = brokerNodeBuilders.lastKey() + 1;
                 }
-                brokerNodes.put(nextId, new BrokerNode.Builder().
-                    setId(nextId).build());
+                brokerNodeBuilders.put(nextId,
+                    new BrokerNode.Builder().
+                        setId(nextId));
             }
             return this;
         }
 
         public TestKitNodes build() {
-            if (clusterId == null) {
-                clusterId = Uuid.randomUuid();
+            String baseDirectory = TestUtils.tempDirectory().getAbsolutePath();
+            try {
+                if (clusterId == null) {
+                    clusterId = Uuid.randomUuid();
+                }
+                if (bootstrapMetadataVersion == null) {
+                    bootstrapMetadataVersion = MetadataVersion.latest();
+                }
+                TreeMap<Integer, ControllerNode> controllerNodes = new TreeMap<>();
+                for (ControllerNode.Builder builder : controllerNodeBuilders.values()) {
+                    ControllerNode node = builder.
+                        build(baseDirectory, clusterId, brokerNodeBuilders.containsKey(builder.id()));
+                    if (controllerNodes.put(node.id(), node) != null) {
+                        throw new RuntimeException("Duplicate builder for controller " + node.id());
+                    }
+                }
+                TreeMap<Integer, BrokerNode> brokerNodes = new TreeMap<>();
+                for (BrokerNode.Builder builder : brokerNodeBuilders.values()) {
+                    BrokerNode node = builder.
+                        build(baseDirectory, clusterId, controllerNodeBuilders.containsKey(builder.id()));
+                    if (brokerNodes.put(node.id(), node) != null) {
+                        throw new RuntimeException("Duplicate builder for broker " + node.id());
+                    }
+                }
+                return new TestKitNodes(baseDirectory,
+                    clusterId,
+                    bootstrapMetadataVersion,
+                    controllerNodes,
+                    brokerNodes);
+            } catch (Exception e) {
+                try {
+                    Files.delete(Paths.get(baseDirectory));
+                } catch (Exception x) {
+                    throw new RuntimeException("Failed to delete base directory " + baseDirectory, x);
+                }
+                throw e;
             }
-            if (bootstrapMetadataVersion == null) {
-                bootstrapMetadataVersion = MetadataVersion.latest();
-            }
-            return new TestKitNodes(clusterId, bootstrapMetadataVersion, controllerNodes, brokerNodes);
         }
 
         private int startBrokerId() {
@@ -134,23 +143,32 @@ public class TestKitNodes {
         }
     }
 
+    private final String baseDirectory;
     private final Uuid clusterId;
     private final MetadataVersion bootstrapMetadataVersion;
     private final NavigableMap<Integer, ControllerNode> controllerNodes;
     private final NavigableMap<Integer, BrokerNode> brokerNodes;
 
-    public boolean isCombined(int node) {
-        return controllerNodes.containsKey(node) && brokerNodes.containsKey(node);
-    }
-
-    private TestKitNodes(Uuid clusterId,
-                         MetadataVersion bootstrapMetadataVersion,
-                         NavigableMap<Integer, ControllerNode> controllerNodes,
-                         NavigableMap<Integer, BrokerNode> brokerNodes) {
+    private TestKitNodes(
+        String baseDirectory,
+        Uuid clusterId,
+        MetadataVersion bootstrapMetadataVersion,
+        NavigableMap<Integer, ControllerNode> controllerNodes,
+        NavigableMap<Integer, BrokerNode> brokerNodes
+    ) {
+        this.baseDirectory = baseDirectory;
         this.clusterId = clusterId;
         this.bootstrapMetadataVersion = bootstrapMetadataVersion;
         this.controllerNodes = controllerNodes;
         this.brokerNodes = brokerNodes;
+    }
+
+    public boolean isCombined(int node) {
+        return controllerNodes.containsKey(node) && brokerNodes.containsKey(node);
+    }
+
+    public String baseDirectory() {
+        return baseDirectory;
     }
 
     public Uuid clusterId() {
@@ -165,16 +183,12 @@ public class TestKitNodes {
         return controllerNodes;
     }
 
+    public BootstrapMetadata bootstrapMetadata() {
+        return BootstrapMetadata.fromVersion(bootstrapMetadataVersion(), "testkit");
+    }
+
     public NavigableMap<Integer, BrokerNode> brokerNodes() {
         return brokerNodes;
-    }
-
-    public MetaProperties controllerProperties(int id) {
-        return MetaProperties.apply(clusterId.toString(), id);
-    }
-
-    public MetaProperties brokerProperties(int id) {
-        return MetaProperties.apply(clusterId.toString(), id);
     }
 
     public ListenerName interBrokerListenerName() {
@@ -185,35 +199,7 @@ public class TestKitNodes {
         return new ListenerName("EXTERNAL");
     }
 
-    public TestKitNodes copyWithAbsolutePaths(String baseDirectory) {
-        NavigableMap<Integer, ControllerNode> newControllerNodes = new TreeMap<>();
-        NavigableMap<Integer, BrokerNode> newBrokerNodes = new TreeMap<>();
-        for (Entry<Integer, ControllerNode> entry : controllerNodes.entrySet()) {
-            ControllerNode node = entry.getValue();
-            newControllerNodes.put(entry.getKey(), new ControllerNode(node.id(),
-                absolutize(baseDirectory, node.metadataDirectory())));
-        }
-        for (Entry<Integer, BrokerNode> entry : brokerNodes.entrySet()) {
-            BrokerNode node = entry.getValue();
-            newBrokerNodes.put(entry.getKey(), new BrokerNode(node.id(),
-                node.incarnationId(), absolutize(baseDirectory, node.metadataDirectory()),
-                absolutize(baseDirectory, node.logDataDirectories()), node.propertyOverrides()));
-        }
-        return new TestKitNodes(clusterId, bootstrapMetadataVersion, newControllerNodes, newBrokerNodes);
-    }
-
-    private static List<String> absolutize(String base, Collection<String> directories) {
-        List<String> newDirectories = new ArrayList<>();
-        for (String directory : directories) {
-            newDirectories.add(absolutize(base, directory));
-        }
-        return newDirectories;
-    }
-
-    private static String absolutize(String base, String directory) {
-        if (Paths.get(directory).isAbsolute()) {
-            return directory;
-        }
-        return Paths.get(base, directory).toAbsolutePath().toString();
+    public ListenerName controllerListenerName() {
+        return new ListenerName("CONTROLLER");
     }
 }

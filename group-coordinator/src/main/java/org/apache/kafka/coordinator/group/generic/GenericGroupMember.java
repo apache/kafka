@@ -17,6 +17,7 @@
 
 package org.apache.kafka.coordinator.group.generic;
 
+import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol;
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection;
 import org.apache.kafka.common.message.JoinGroupResponseData;
@@ -347,6 +348,25 @@ public class GenericGroupMember {
      */
     public boolean isNew() {
         return isNew;
+    }
+
+    /**
+     * @return The described group member without metadata.
+     */
+    public DescribeGroupsResponseData.DescribedGroupMember describeNoMetadata() {
+        return new DescribeGroupsResponseData.DescribedGroupMember()
+            .setMemberId(memberId())
+            .setGroupInstanceId(groupInstanceId().orElse(null))
+            .setClientId(clientId())
+            .setClientHost(clientHost())
+            .setMemberAssignment(assignment());
+    }
+
+    /**
+     * @return The described group member with metadata corresponding to the provided protocol.
+     */
+    public DescribeGroupsResponseData.DescribedGroupMember describe(String protocolName) {
+        return describeNoMetadata().setMemberMetadata(metadata(protocolName));
     }
 
     /**

@@ -564,7 +564,7 @@ public class OffsetFetcherTest {
     }
 
     @Test
-    public void testRestOffsetsAuthorizationFailure() {
+    public void testResetOffsetsAuthorizationFailure() {
         buildFetcher();
         assignFromUser(singleton(tp0));
         subscriptions.requestOffsetReset(tp0, OffsetResetStrategy.LATEST);
@@ -1246,7 +1246,7 @@ public class OffsetFetcherTest {
         buildFetcher(metricConfig, isolationLevel, metadataExpireMs, subscriptionState, logContext);
 
         FetchMetricsRegistry metricsRegistry = new FetchMetricsRegistry(metricConfig.tags().keySet(), "consumertest-group");
-        FetchConfig<byte[], byte[]> fetchConfig = new FetchConfig<>(
+        FetchConfig fetchConfig = new FetchConfig(
                 minBytes,
                 maxBytes,
                 maxWaitMs,
@@ -1254,8 +1254,6 @@ public class OffsetFetcherTest {
                 maxPollRecords,
                 true, // check crc
                 CommonClientConfigs.DEFAULT_CLIENT_RACK,
-                new ByteArrayDeserializer(),
-                new ByteArrayDeserializer(),
                 isolationLevel);
         Fetcher<byte[], byte[]> fetcher = new Fetcher<>(
                 logContext,
@@ -1263,8 +1261,10 @@ public class OffsetFetcherTest {
                 metadata,
                 subscriptions,
                 fetchConfig,
+                new Deserializers<>(new ByteArrayDeserializer(), new ByteArrayDeserializer()),
                 new FetchMetricsManager(metrics, metricsRegistry),
-                time);
+                time,
+                apiVersions);
 
         assignFromUser(singleton(tp0));
 
@@ -1728,7 +1728,7 @@ public class OffsetFetcherTest {
                                    LogContext logContext) {
         time = new MockTime(1);
         subscriptions = subscriptionState;
-        metadata = new ConsumerMetadata(0, metadataExpireMs, false, false,
+        metadata = new ConsumerMetadata(0, 0, metadataExpireMs, false, false,
                 subscriptions, logContext, new ClusterResourceListeners());
         client = new MockClient(time, metadata);
         metrics = new Metrics(metricConfig, time);

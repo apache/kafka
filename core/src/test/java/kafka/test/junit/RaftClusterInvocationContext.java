@@ -26,7 +26,6 @@ import kafka.test.ClusterInstance;
 import kafka.testkit.KafkaClusterTestKit;
 import kafka.testkit.TestKitNodes;
 import kafka.zk.EmbeddedZookeeper;
-import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.utils.Utils;
@@ -143,7 +142,12 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
 
         @Override
         public String bootstrapServers() {
-            return clusterReference.get().clientProperties().getProperty(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG);
+            return clusterReference.get().bootstrapServers();
+        }
+
+        @Override
+        public String bootstrapControllers() {
+            return clusterReference.get().bootstrapControllers();
         }
 
         @Override
@@ -237,7 +241,8 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
 
         @Override
         public Admin createAdminClient(Properties configOverrides) {
-            Admin admin = Admin.create(clusterReference.get().clientProperties(configOverrides));
+            Admin admin = Admin.create(clusterReference.get().
+                newClientPropertiesBuilder(configOverrides).build());
             admins.add(admin);
             return admin;
         }

@@ -21,10 +21,10 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.RemovalCause;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
+import org.apache.kafka.server.log.remote.storage.RemoteResourceNotFoundException;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageException;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType;
@@ -32,6 +32,7 @@ import org.apache.kafka.server.util.ShutdownableThread;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.ByteArrayInputStream;
 import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
@@ -46,6 +47,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -75,7 +77,6 @@ public class RemoteIndexCache implements Closeable {
 
     private static final Logger log = LoggerFactory.getLogger(RemoteIndexCache.class);
     private static final String TMP_FILE_SUFFIX = ".tmp";
-
     public static final String REMOTE_LOG_INDEX_CACHE_CLEANER_THREAD = "remote-log-index-cleaner";
     public static final String DIR_NAME = "remote-log-index-cache";
 
@@ -99,6 +100,8 @@ public class RemoteIndexCache implements Closeable {
      * concurrent reads in-progress.
      */
     private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
+    private final RemoteStorageManager remoteStorageManager;
+    private final ShutdownableThread cleanerThread;
 
     /**
      * Actual cache implementation that this file wraps around.
@@ -111,50 +114,57 @@ public class RemoteIndexCache implements Closeable {
      *
      * We use {@link Caffeine} cache instead of implementing a thread safe LRU cache on our own.
      */
-    private final Cache<Uuid, Entry> internalCache;
-    private final RemoteStorageManager remoteStorageManager;
-    private final ShutdownableThread cleanerThread;
-
-    public RemoteIndexCache(RemoteStorageManager remoteStorageManager, String logDir) throws IOException {
-        this(1024, remoteStorageManager, logDir);
-    }
+    private Cache<Uuid, Entry> internalCache;
 
     /**
      * Creates RemoteIndexCache with the given configs.
      *
-     * @param maxSize              maximum number of segment index entries to be cached.
+     * @param maxSize              maximum bytes size of segment index entries to be cached.
      * @param remoteStorageManager RemoteStorageManager instance, to be used in fetching indexes.
      * @param logDir               log directory
      */
-    public RemoteIndexCache(int maxSize, RemoteStorageManager remoteStorageManager, String logDir) throws IOException {
+    public RemoteIndexCache(long maxSize, RemoteStorageManager remoteStorageManager, String logDir) throws IOException {
         this.remoteStorageManager = remoteStorageManager;
         cacheDir = new File(logDir, DIR_NAME);
 
-        internalCache = Caffeine.newBuilder()
-                .maximumSize(maxSize)
-                // removeListener is invoked when either the entry is invalidated (means manual removal by the caller) or
-                // evicted (means removal due to the policy)
-                .removalListener((Uuid key, Entry entry, RemovalCause cause) -> {
-                    // Mark the entries for cleanup and add them to the queue to be garbage collected later by the background thread.
-                    if (entry != null) {
-                        try {
-                            entry.markForCleanup();
-                        } catch (IOException e) {
-                            throw new KafkaException(e);
-                        }
-                        if (!expiredIndexes.offer(entry)) {
-                            log.error("Error while inserting entry {} for key {} into the cleaner queue because queue is full.", entry, key);
-                        }
-                    } else {
-                        log.error("Received entry as null for key {} when the it is removed from the cache.", key);
-                    }
-                }).build();
-
+        internalCache = initEmptyCache(maxSize);
         init();
 
         // Start cleaner thread that will clean the expired entries.
         cleanerThread = createCleanerThread();
         cleanerThread.start();
+    }
+
+    public void resizeCacheSize(long remoteLogIndexFileCacheSize) {
+        lock.writeLock().lock();
+        try {
+            internalCache.policy().eviction().orElseThrow(() -> new NoSuchElementException("No eviction policy is set for the remote index cache.")
+            ).setMaximum(remoteLogIndexFileCacheSize);
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    private Cache<Uuid, Entry> initEmptyCache(long maxSize) {
+        return Caffeine.newBuilder()
+                .maximumWeight(maxSize)
+                .weigher((Uuid key, Entry entry) -> {
+                    return (int) entry.entrySizeBytes;
+                })
+                // This listener is invoked each time an entry is being automatically removed due to eviction. The cache will invoke this listener
+                // during the atomic operation to remove the entry (refer: https://github.com/ben-manes/caffeine/wiki/Removal),
+                // hence, care must be taken to ensure that this operation is not expensive. Note that this listener is not invoked when
+                // RemovalCause from cache is EXPLICIT or REPLACED (e.g. on Cache.invalidate(), Cache.put() etc.) For a complete list see:
+                // https://github.com/ben-manes/caffeine/blob/0cef55168986e3816314e7fdba64cb0b996dd3cc/caffeine/src/main/java/com/github/benmanes/caffeine/cache/RemovalCause.java#L23
+                // Hence, any operation required after removal from cache must be performed manually for these scenarios.
+                .evictionListener((Uuid key, Entry entry, RemovalCause cause) -> {
+                    // Mark the entries for cleanup and add them to the queue to be garbage collected later by the background thread.
+                    if (entry != null) {
+                        enqueueEntryForCleanup(entry, key);
+                    } else {
+                        log.error("Received entry as null for key {} when the it is removed from the cache.", key);
+                    }
+                }).build();
     }
 
     public Collection<Entry> expiredIndexes() {
@@ -167,12 +177,54 @@ public class RemoteIndexCache implements Closeable {
     }
 
     // Visible for testing
+    public File cacheDir() {
+        return cacheDir;
+    }
+
+    public void remove(Uuid key) {
+        lock.readLock().lock();
+        try {
+            internalCache.asMap().computeIfPresent(key, (k, v) -> {
+                enqueueEntryForCleanup(v, k);
+                // Returning null to remove the key from the cache
+                return null;
+            });
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
+    public void removeAll(Collection<Uuid> keys) {
+        lock.readLock().lock();
+        try {
+            keys.forEach(key -> internalCache.asMap().computeIfPresent(key, (k, v) -> {
+                enqueueEntryForCleanup(v, k);
+                // Returning null to remove the key from the cache
+                return null;
+            }));
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
+    private void enqueueEntryForCleanup(Entry entry, Uuid key) {
+        try {
+            entry.markForCleanup();
+            if (!expiredIndexes.offer(entry)) {
+                log.error("Error while inserting entry {} for key {} into the cleaner queue because queue is full.", entry, key);
+            }
+        } catch (IOException e) {
+            throw new KafkaException(e);
+        }
+    }
+
+    // Visible for testing
     public ShutdownableThread cleanerThread() {
         return cleanerThread;
     }
 
     private ShutdownableThread createCleanerThread() {
-        ShutdownableThread thread = new ShutdownableThread("remote-log-index-cleaner") {
+        ShutdownableThread thread = new ShutdownableThread(REMOTE_LOG_INDEX_CACHE_CLEANER_THREAD) {
             public void doWork() {
                 try {
                     Entry entry = expiredIndexes.take();
@@ -192,10 +244,8 @@ public class RemoteIndexCache implements Closeable {
                     log.error("Error occurred while cleaning up expired entry", ex);
                 }
             }
-
         };
         thread.setDaemon(true);
-
         return thread;
     }
 
@@ -293,40 +343,36 @@ public class RemoteIndexCache implements Closeable {
         if (Files.exists(indexFile.toPath())) {
             try {
                 index = readIndex.apply(indexFile);
-            } catch (CorruptRecordException ex) {
+            } catch (CorruptIndexException ex) {
                 log.info("Error occurred while loading the stored index file {}", indexFile.getPath(), ex);
             }
         }
-
         if (index == null) {
             File tmpIndexFile = new File(indexFile.getParentFile(), indexFile.getName() + RemoteIndexCache.TMP_FILE_SUFFIX);
-
-            try (InputStream inputStream = fetchRemoteIndex.apply(remoteLogSegmentMetadata);) {
+            try (InputStream inputStream = fetchRemoteIndex.apply(remoteLogSegmentMetadata)) {
                 Files.copy(inputStream, tmpIndexFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
             }
-
             Utils.atomicMoveWithFallback(tmpIndexFile.toPath(), indexFile.toPath(), false);
             index = readIndex.apply(indexFile);
         }
-
         return index;
     }
 
     public Entry getIndexEntry(RemoteLogSegmentMetadata remoteLogSegmentMetadata) {
-        if (isRemoteIndexCacheClosed.get()) throw new IllegalStateException("Unable to fetch index for " +
-                "segment id=" + remoteLogSegmentMetadata.remoteLogSegmentId().id() + ". Instance is already closed.");
-
+        if (isRemoteIndexCacheClosed.get()) {
+            throw new IllegalStateException("Unable to fetch index for " +
+                    "segment id=" + remoteLogSegmentMetadata.remoteLogSegmentId().id() + ". Instance is already closed.");
+        }
         lock.readLock().lock();
         try {
             // while this thread was waiting for lock, another thread may have changed the value of isRemoteIndexCacheClosed.
             // check for index close again
             if (isRemoteIndexCacheClosed.get()) {
-                throw new IllegalStateException("Unable to fetch index for segment id="
+                throw new IllegalStateException("Unable to fetch index for segment-id = "
                         + remoteLogSegmentMetadata.remoteLogSegmentId().id() + ". Index instance is already closed.");
             }
-
             return internalCache.get(remoteLogSegmentMetadata.remoteLogSegmentId().id(),
-                    (Uuid uuid) -> createCacheEntry(remoteLogSegmentMetadata));
+                    uuid -> createCacheEntry(remoteLogSegmentMetadata));
         } finally {
             lock.readLock().unlock();
         }
@@ -334,7 +380,6 @@ public class RemoteIndexCache implements Closeable {
 
     private RemoteIndexCache.Entry createCacheEntry(RemoteLogSegmentMetadata remoteLogSegmentMetadata) {
         long startOffset = remoteLogSegmentMetadata.startOffset();
-
         try {
             File offsetIndexFile = remoteOffsetIndexFile(cacheDir, remoteLogSegmentMetadata);
             OffsetIndex offsetIndex = loadIndexFile(offsetIndexFile, remoteLogSegmentMetadata, rlsMetadata -> {
@@ -372,6 +417,10 @@ public class RemoteIndexCache implements Closeable {
             TransactionIndex txnIndex = loadIndexFile(txnIndexFile, remoteLogSegmentMetadata, rlsMetadata -> {
                 try {
                     return remoteStorageManager.fetchIndex(rlsMetadata, IndexType.TRANSACTION);
+                } catch (RemoteResourceNotFoundException e) {
+                    // Don't throw an exception since the transaction index may not exist because of no transactional
+                    // records. Instead, we return an empty stream so that an empty file is created in the cache
+                    return new ByteArrayInputStream(new byte[0]);
                 } catch (RemoteStorageException e) {
                     throw new KafkaException(e);
                 }
@@ -427,7 +476,6 @@ public class RemoteIndexCache implements Closeable {
 
                 // Note that internal cache does not require explicit cleaning/closing. We don't want to invalidate or cleanup
                 // the cache as both would lead to triggering of removal listener.
-
                 log.info("Close completed for RemoteIndexCache");
             } catch (InterruptedException e) {
                 throw new KafkaException(e);
@@ -447,16 +495,19 @@ public class RemoteIndexCache implements Closeable {
         // underlying files of the index) isn't performed while a read is in-progress for the entry. This is required in
         // addition to using the thread safe cache because, while the thread safety of the cache ensures that we can read
         // entries concurrently, it does not ensure that we won't mutate underlying files belonging to an entry.
-        private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
+        private final ReentrantReadWriteLock entryLock = new ReentrantReadWriteLock();
 
         private boolean cleanStarted = false;
 
         private boolean markedForCleanup = false;
 
+        private final long entrySizeBytes;
+
         public Entry(OffsetIndex offsetIndex, TimeIndex timeIndex, TransactionIndex txnIndex) {
             this.offsetIndex = offsetIndex;
             this.timeIndex = timeIndex;
             this.txnIndex = txnIndex;
+            this.entrySizeBytes = estimatedEntrySize();
         }
 
         // Visible for testing
@@ -484,30 +535,46 @@ public class RemoteIndexCache implements Closeable {
             return markedForCleanup;
         }
 
+        public long entrySizeBytes() {
+            return entrySizeBytes;
+        }
+
+        private long estimatedEntrySize() {
+            entryLock.readLock().lock();
+            try {
+                return offsetIndex.sizeInBytes() + timeIndex.sizeInBytes() + Files.size(txnIndex.file().toPath());
+            } catch (IOException e) {
+                log.warn("Error occurred when estimating remote index cache entry bytes size, just set 0 firstly.", e);
+                return 0L;
+            } finally {
+                entryLock.readLock().unlock();
+            }
+        }
+
         public OffsetPosition lookupOffset(long targetOffset) {
-            lock.readLock().lock();
+            entryLock.readLock().lock();
             try {
                 if (markedForCleanup) throw new IllegalStateException("This entry is marked for cleanup");
                 else return offsetIndex.lookup(targetOffset);
             } finally {
-                lock.readLock().unlock();
+                entryLock.readLock().unlock();
             }
         }
 
         public OffsetPosition lookupTimestamp(long timestamp, long startingOffset) throws IOException {
-            lock.readLock().lock();
+            entryLock.readLock().lock();
             try {
                 if (markedForCleanup) throw new IllegalStateException("This entry is marked for cleanup");
 
                 TimestampOffset timestampOffset = timeIndex.lookup(timestamp);
                 return offsetIndex.lookup(Math.max(startingOffset, timestampOffset.offset));
             } finally {
-                lock.readLock().unlock();
+                entryLock.readLock().unlock();
             }
         }
 
         public void markForCleanup() throws IOException {
-            lock.writeLock().lock();
+            entryLock.writeLock().lock();
             try {
                 if (!markedForCleanup) {
                     markedForCleanup = true;
@@ -516,12 +583,12 @@ public class RemoteIndexCache implements Closeable {
                     txnIndex.renameTo(new File(Utils.replaceSuffix(txnIndex.file().getPath(), "", LogFileUtils.DELETED_FILE_SUFFIX)));
                 }
             } finally {
-                lock.writeLock().unlock();
+                entryLock.writeLock().unlock();
             }
         }
 
         public void cleanup() throws IOException {
-            lock.writeLock().lock();
+            entryLock.writeLock().lock();
             try {
                 markForCleanup();
                 // no-op if clean is done already
@@ -542,19 +609,19 @@ public class RemoteIndexCache implements Closeable {
                     tryAll(actions);
                 }
             } finally {
-                lock.writeLock().unlock();
+                entryLock.writeLock().unlock();
             }
         }
 
         @Override
         public void close() {
-            lock.writeLock().lock();
+            entryLock.writeLock().lock();
             try {
                 Utils.closeQuietly(offsetIndex, "OffsetIndex");
                 Utils.closeQuietly(timeIndex, "TimeIndex");
                 Utils.closeQuietly(txnIndex, "TransactionIndex");
             } finally {
-                lock.writeLock().unlock();
+                entryLock.writeLock().unlock();
             }
         }
 
@@ -579,40 +646,31 @@ public class RemoteIndexCache implements Closeable {
      * @throws KafkaException Any other non IOExceptions are wrapped and thrown as KafkaException
      */
     private static void tryAll(List<StorageAction<Void, Exception>> actions) throws IOException {
-        IOException ioException = null;
-        List<Exception> exceptions = Collections.emptyList();
+        IOException firstIOException = null;
+        List<Exception> exceptions = new ArrayList<>();
         for (StorageAction<Void, Exception> action : actions) {
             try {
                 action.execute();
             } catch (IOException e) {
-                if (ioException == null) {
-                    ioException = e;
+                if (firstIOException == null) {
+                    firstIOException = e;
                 } else {
-                    if (exceptions.isEmpty()) {
-                        exceptions = new ArrayList<>();
-                    }
                     exceptions.add(e);
                 }
             } catch (Exception e) {
-                if (exceptions.isEmpty()) {
-                    exceptions = new ArrayList<>();
-                }
                 exceptions.add(e);
             }
         }
 
-        if (ioException != null) {
-            for (Exception exception : exceptions) {
-                ioException.addSuppressed(exception);
-            }
-            throw ioException;
+        if (firstIOException != null) {
+            exceptions.forEach(firstIOException::addSuppressed);
+            throw firstIOException;
         } else if (!exceptions.isEmpty()) {
             Iterator<Exception> iterator = exceptions.iterator();
             KafkaException kafkaException = new KafkaException(iterator.next());
             while (iterator.hasNext()) {
                 kafkaException.addSuppressed(iterator.next());
             }
-
             throw kafkaException;
         }
     }
@@ -666,6 +724,11 @@ public class RemoteIndexCache implements Closeable {
 
     public static String remoteTransactionIndexFileName(RemoteLogSegmentMetadata remoteLogSegmentMetadata) {
         return generateFileNamePrefixForIndex(remoteLogSegmentMetadata) + LogFileUtils.TXN_INDEX_FILE_SUFFIX;
+    }
+
+    // Visible for testing
+    public static String remoteDeletedSuffixIndexFileName(RemoteLogSegmentMetadata remoteLogSegmentMetadata) {
+        return generateFileNamePrefixForIndex(remoteLogSegmentMetadata) + LogFileUtils.DELETED_FILE_SUFFIX;
     }
 
 }

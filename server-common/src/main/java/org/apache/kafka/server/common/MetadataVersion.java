@@ -27,10 +27,10 @@ import org.apache.kafka.common.record.RecordVersion;
  * This class contains the different Kafka versions.
  * Right now, we use them for upgrades - users can configure the version of the API brokers will use to communicate between themselves.
  * This is only for inter-broker communications - when communicating with clients, the client decides on the API version.
- *
+ * <br>
  * Note that the ID we initialize for each version is important.
  * We consider a version newer than another if it is lower in the enum list (to avoid depending on lexicographic order)
- *
+ * <br>
  * Since the api protocol may change more than once within the same release and to facilitate people deploying code from
  * trunk, we have the concept of internal versions (first introduced during the 0.10.0 development cycle). For example,
  * the first time we introduce a version change in a release, say 0.10.0, we will add a config value "0.10.0-IV0" and a
@@ -173,16 +173,27 @@ public enum MetadataVersion {
     // Adds replica epoch to Fetch request (KIP-903).
     IBP_3_5_IV1(10, "3.5", "IV1", false),
 
-    // Support for SCRAM
+    // KRaft support for SCRAM
     IBP_3_5_IV2(11, "3.5", "IV2", true),
 
     // Remove leader epoch bump when KRaft controller shrinks the ISR (KAFKA-15021)
     IBP_3_6_IV0(12, "3.6", "IV0", false),
 
     // Add metadata transactions
-    IBP_3_6_IV1(13, "3.6", "IV1", true);
+    IBP_3_6_IV1(13, "3.6", "IV1", true),
 
-    // NOTE: update the default version in @ClusterTest annotation to point to the latest version
+    // Add KRaft support for Delegation Tokens
+    IBP_3_6_IV2(14, "3.6", "IV2", true),
+
+    // Implement KIP-919 controller registration.
+    IBP_3_7_IV0(15, "3.7", "IV0", true),
+
+    // Add ELR related supports (KIP-966).
+    IBP_3_7_IV1(16, "3.7", "IV1", true);
+
+    // NOTES when adding a new version:
+    //   Update the default version in @ClusterTest annotation to point to the latest version
+    //   Change expected message in org.apache.kafka.tools.FeatureCommandTest in multiple places (search for "Change expected message")
     public static final String FEATURE_NAME = "metadata.version";
 
     /**
@@ -274,6 +285,18 @@ public enum MetadataVersion {
         return this.isAtLeast(IBP_3_6_IV1);
     }
 
+    public boolean isDelegationTokenSupported() {
+        return this.isAtLeast(IBP_3_6_IV2);
+    }
+
+    public boolean isElrSupported() {
+        return this.isAtLeast(IBP_3_7_IV1);
+    }
+
+    public boolean isDirectoryAssignmentSupported() {
+        return false; // TODO: Bump IBP for JBOD support in KRaft
+    }
+
     public boolean isKRaftSupported() {
         return this.featureLevel > 0;
     }
@@ -301,7 +324,10 @@ public enum MetadataVersion {
     }
 
     public short registerBrokerRecordVersion() {
-        if (isMigrationSupported()) {
+        if (isDirectoryAssignmentSupported()) {
+            // new logDirs field
+            return (short) 3;
+        } else if (isMigrationSupported()) {
             // new isMigrationZkBroker field
             return (short) 2;
         } else if (isInControlledShutdownStateSupported()) {
@@ -311,8 +337,43 @@ public enum MetadataVersion {
         }
     }
 
+    public short registerControllerRecordVersion() {
+        if (isAtLeast(MetadataVersion.IBP_3_7_IV0)) {
+            return (short) 0;
+        } else {
+            throw new RuntimeException("Controller registration is not supported in " +
+                    "MetadataVersion " + this);
+        }
+    }
+
+    public boolean isControllerRegistrationSupported() {
+        return this.isAtLeast(MetadataVersion.IBP_3_7_IV0);
+    }
+
+    public short partitionChangeRecordVersion() {
+        if (isDirectoryAssignmentSupported()) {
+            return (short) 2;
+        } else if (isElrSupported()) {
+            return (short) 1;
+        } else {
+            return (short) 0;
+        }
+    }
+
+    public short partitionRecordVersion() {
+        if (isDirectoryAssignmentSupported()) {
+            return (short) 2;
+        } else if (isElrSupported()) {
+            return (short) 1;
+        } else {
+            return (short) 0;
+        }
+    }
+
     public short fetchRequestVersion() {
-        if (this.isAtLeast(IBP_3_5_IV1)) {
+        if (this.isAtLeast(IBP_3_7_IV0)) {
+            return 16;
+        } else if (this.isAtLeast(IBP_3_5_IV1)) {
             return 15;
         } else if (this.isAtLeast(IBP_3_5_IV0)) {
             return 14;

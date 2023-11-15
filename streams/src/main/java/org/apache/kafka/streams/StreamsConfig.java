@@ -42,6 +42,7 @@ import org.apache.kafka.streams.errors.LogAndFailExceptionHandler;
 import org.apache.kafka.streams.errors.ProductionExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.internals.StreamsConfigUtils;
+import org.apache.kafka.streams.internals.UpgradeFromValues;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
@@ -61,6 +62,7 @@ import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.kafka.common.IsolationLevel.READ_COMMITTED;
 import static org.apache.kafka.common.config.ConfigDef.ListSize.atMostOfSize;
@@ -155,6 +157,7 @@ public class StreamsConfig extends AbstractConfig {
     private static final long EOS_DEFAULT_COMMIT_INTERVAL_MS = 100L;
     private static final int DEFAULT_TRANSACTION_TIMEOUT = 10000;
 
+    @SuppressWarnings("unused")
     public static final int DUMMY_THREAD_INDEX = 1;
     public static final long MAX_TASK_IDLE_MS_DISABLED = -1;
 
@@ -238,14 +241,12 @@ public class StreamsConfig extends AbstractConfig {
     public static final String CLIENT_TAG_PREFIX = "client.tag.";
 
     /** {@code topology.optimization} */
-    private static final String CONFIG_ERROR_MSG = "Acceptable values are:"
-        + " \"+NO_OPTIMIZATION+\", \"+OPTIMIZE+\", "
-        + "or a comma separated list of specific optimizations: "
-        + "(\"+REUSE_KTABLE_SOURCE_TOPICS+\", \"+MERGE_REPARTITION_TOPICS+\" + "
-        + "\"SINGLE_STORE_SELF_JOIN+\").";
-
-
     public static final String TOPOLOGY_OPTIMIZATION_CONFIG = "topology.optimization";
+    private static final String CONFIG_ERROR_MSG = "Acceptable values are:"
+            + " \"+NO_OPTIMIZATION+\", \"+OPTIMIZE+\", "
+            + "or a comma separated list of specific optimizations: "
+            + "(\"+REUSE_KTABLE_SOURCE_TOPICS+\", \"+MERGE_REPARTITION_TOPICS+\" + "
+            + "\"SINGLE_STORE_SELF_JOIN+\").";
     private static final String TOPOLOGY_OPTIMIZATION_DOC = "A configuration telling Kafka "
         + "Streams if it should optimize the topology and what optimizations to apply. "
         + CONFIG_ERROR_MSG
@@ -289,121 +290,121 @@ public class StreamsConfig extends AbstractConfig {
      * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 0.10.0.x}.
      */
     @SuppressWarnings("WeakerAccess")
-    public static final String UPGRADE_FROM_0100 = "0.10.0";
+    public static final String UPGRADE_FROM_0100 = UpgradeFromValues.UPGRADE_FROM_0100.toString();
 
     /**
      * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 0.10.1.x}.
      */
     @SuppressWarnings("WeakerAccess")
-    public static final String UPGRADE_FROM_0101 = "0.10.1";
+    public static final String UPGRADE_FROM_0101 = UpgradeFromValues.UPGRADE_FROM_0101.toString();
 
     /**
      * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 0.10.2.x}.
      */
     @SuppressWarnings("WeakerAccess")
-    public static final String UPGRADE_FROM_0102 = "0.10.2";
+    public static final String UPGRADE_FROM_0102 = UpgradeFromValues.UPGRADE_FROM_0102.toString();
 
     /**
      * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 0.11.0.x}.
      */
     @SuppressWarnings("WeakerAccess")
-    public static final String UPGRADE_FROM_0110 = "0.11.0";
+    public static final String UPGRADE_FROM_0110 = UpgradeFromValues.UPGRADE_FROM_0110.toString();
 
     /**
      * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 1.0.x}.
      */
     @SuppressWarnings("WeakerAccess")
-    public static final String UPGRADE_FROM_10 = "1.0";
+    public static final String UPGRADE_FROM_10 = UpgradeFromValues.UPGRADE_FROM_10.toString();
 
     /**
      * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 1.1.x}.
      */
     @SuppressWarnings("WeakerAccess")
-    public static final String UPGRADE_FROM_11 = "1.1";
+    public static final String UPGRADE_FROM_11 = UpgradeFromValues.UPGRADE_FROM_11.toString();
 
     /**
      * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 2.0.x}.
      */
     @SuppressWarnings("WeakerAccess")
-    public static final String UPGRADE_FROM_20 = "2.0";
+    public static final String UPGRADE_FROM_20 = UpgradeFromValues.UPGRADE_FROM_20.toString();
 
     /**
      * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 2.1.x}.
      */
     @SuppressWarnings("WeakerAccess")
-    public static final String UPGRADE_FROM_21 = "2.1";
+    public static final String UPGRADE_FROM_21 = UpgradeFromValues.UPGRADE_FROM_21.toString();
 
     /**
      * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 2.2.x}.
      */
     @SuppressWarnings("WeakerAccess")
-    public static final String UPGRADE_FROM_22 = "2.2";
+    public static final String UPGRADE_FROM_22 = UpgradeFromValues.UPGRADE_FROM_22.toString();
 
     /**
      * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 2.3.x}.
      */
     @SuppressWarnings("WeakerAccess")
-    public static final String UPGRADE_FROM_23 = "2.3";
+    public static final String UPGRADE_FROM_23 = UpgradeFromValues.UPGRADE_FROM_23.toString();
 
     /**
      * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 2.4.x}.
      */
     @SuppressWarnings("WeakerAccess")
-    public static final String UPGRADE_FROM_24 = "2.4";
+    public static final String UPGRADE_FROM_24 = UpgradeFromValues.UPGRADE_FROM_24.toString();
 
     /**
      * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 2.5.x}.
      */
     @SuppressWarnings("WeakerAccess")
-    public static final String UPGRADE_FROM_25 = "2.5";
+    public static final String UPGRADE_FROM_25 = UpgradeFromValues.UPGRADE_FROM_25.toString();
 
     /**
      * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 2.6.x}.
      */
     @SuppressWarnings("WeakerAccess")
-    public static final String UPGRADE_FROM_26 = "2.6";
+    public static final String UPGRADE_FROM_26 = UpgradeFromValues.UPGRADE_FROM_26.toString();
 
     /**
      * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 2.7.x}.
      */
     @SuppressWarnings("WeakerAccess")
-    public static final String UPGRADE_FROM_27 = "2.7";
+    public static final String UPGRADE_FROM_27 = UpgradeFromValues.UPGRADE_FROM_27.toString();
 
     /**
      * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 2.8.x}.
      */
     @SuppressWarnings("WeakerAccess")
-    public static final String UPGRADE_FROM_28 = "2.8";
+    public static final String UPGRADE_FROM_28 = UpgradeFromValues.UPGRADE_FROM_28.toString();
 
     /**
      * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 3.0.x}.
      */
     @SuppressWarnings("WeakerAccess")
-    public static final String UPGRADE_FROM_30 = "3.0";
+    public static final String UPGRADE_FROM_30 = UpgradeFromValues.UPGRADE_FROM_30.toString();
 
     /**
      * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 3.1.x}.
      */
     @SuppressWarnings("WeakerAccess")
-    public static final String UPGRADE_FROM_31 = "3.1";
+    public static final String UPGRADE_FROM_31 = UpgradeFromValues.UPGRADE_FROM_31.toString();
 
     /**
      * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 3.2.x}.
      */
     @SuppressWarnings("WeakerAccess")
-    public static final String UPGRADE_FROM_32 = "3.2";
+    public static final String UPGRADE_FROM_32 = UpgradeFromValues.UPGRADE_FROM_32.toString();
 
     /**
      * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 3.3.x}.
      */
     @SuppressWarnings("WeakerAccess")
-    public static final String UPGRADE_FROM_33 = "3.3";
+    public static final String UPGRADE_FROM_33 = UpgradeFromValues.UPGRADE_FROM_33.toString();
 
     /**
      * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 3.4.x}.
      */
     @SuppressWarnings("WeakerAccess")
-    public static final String UPGRADE_FROM_34 = "3.4";
+    public static final String UPGRADE_FROM_34 = UpgradeFromValues.UPGRADE_FROM_34.toString();
 
     /**
      * Config value for parameter {@link #PROCESSING_GUARANTEE_CONFIG "processing.guarantee"} for at-least-once processing guarantees.
@@ -534,6 +535,7 @@ public class StreamsConfig extends AbstractConfig {
 
     public static final String ROCKS_DB = "rocksDB";
     public static final String IN_MEMORY = "in_memory";
+    public static final String DEFAULT_DSL_STORE = ROCKS_DB;
 
     /** {@code default.windowed.key.serde.inner} */
     @SuppressWarnings("WeakerAccess")
@@ -775,7 +777,7 @@ public class StreamsConfig extends AbstractConfig {
     @SuppressWarnings("WeakerAccess")
     public static final String RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_CONFIG = "rack.aware.assignment.non_overlap_cost";
     public static final String RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_DOC = "Cost associated with moving tasks from existing assignment. This config and <code>" + RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_CONFIG + "</code> controls whether the "
-        + "optimization algorithm favors minimizing cross rack traffic or minimize the movement of tasks in existing assignment. If set a larger value <code>" + RackAwareTaskAssignor.class.getName() + "<code/> will "
+        + "optimization algorithm favors minimizing cross rack traffic or minimize the movement of tasks in existing assignment. If set a larger value <code>" + RackAwareTaskAssignor.class.getName() + "</code> will "
         + "optimize to maintain the existing assignment. The default value is null which means it will use default non_overlap cost values in different assignors.";
 
 
@@ -993,13 +995,13 @@ public class StreamsConfig extends AbstractConfig {
                     Importance.LOW,
                     REPARTITION_PURGE_INTERVAL_MS_DOC)
             .define(CONNECTIONS_MAX_IDLE_MS_CONFIG,
-                    ConfigDef.Type.LONG,
+                    Type.LONG,
                     9 * 60 * 1000L,
-                    ConfigDef.Importance.LOW,
+                    Importance.LOW,
                     CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_DOC)
             .define(DEFAULT_DSL_STORE_CONFIG,
                     Type.STRING,
-                    ROCKS_DB,
+                    DEFAULT_DSL_STORE,
                     in(ROCKS_DB, IN_MEMORY),
                     Importance.LOW,
                     DEFAULT_DSL_STORE_DOC)
@@ -1009,10 +1011,10 @@ public class StreamsConfig extends AbstractConfig {
                     Importance.LOW,
                     DEFAULT_CLIENT_SUPPLIER_DOC)
             .define(METADATA_MAX_AGE_CONFIG,
-                    ConfigDef.Type.LONG,
+                    Type.LONG,
                     5 * 60 * 1000L,
                     atLeast(0),
-                    ConfigDef.Importance.LOW,
+                    Importance.LOW,
                     CommonClientConfigs.METADATA_MAX_AGE_DOC)
             .define(METRICS_NUM_SAMPLES_CONFIG,
                     Type.INT,
@@ -1069,25 +1071,25 @@ public class StreamsConfig extends AbstractConfig {
                     Type.LONG,
                     1000L,
                     atLeast(0L),
-                    ConfigDef.Importance.LOW,
+                    Importance.LOW,
                     CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_DOC)
             .define(RETRIES_CONFIG,
                     Type.INT,
                     0,
                     between(0, Integer.MAX_VALUE),
-                    ConfigDef.Importance.LOW,
+                    Importance.LOW,
                     CommonClientConfigs.RETRIES_DOC)
             .define(RETRY_BACKOFF_MS_CONFIG,
                     Type.LONG,
                     100L,
                     atLeast(0L),
-                    ConfigDef.Importance.LOW,
+                    Importance.LOW,
                     CommonClientConfigs.RETRY_BACKOFF_MS_DOC)
             .define(REQUEST_TIMEOUT_MS_CONFIG,
                     Type.INT,
                     40 * 1000,
                     atLeast(0),
-                    ConfigDef.Importance.LOW,
+                    Importance.LOW,
                     CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC)
             .define(ROCKSDB_CONFIG_SETTER_CLASS_CONFIG,
                     Type.CLASS,
@@ -1106,29 +1108,13 @@ public class StreamsConfig extends AbstractConfig {
                     Importance.LOW,
                     STATE_CLEANUP_DELAY_MS_DOC)
             .define(UPGRADE_FROM_CONFIG,
-                    ConfigDef.Type.STRING,
+                    Type.STRING,
                     null,
-                    in(null,
-                       UPGRADE_FROM_0100,
-                       UPGRADE_FROM_0101,
-                       UPGRADE_FROM_0102,
-                       UPGRADE_FROM_0110,
-                       UPGRADE_FROM_10,
-                       UPGRADE_FROM_11,
-                       UPGRADE_FROM_20,
-                       UPGRADE_FROM_21,
-                       UPGRADE_FROM_22,
-                       UPGRADE_FROM_23,
-                       UPGRADE_FROM_24,
-                       UPGRADE_FROM_25,
-                       UPGRADE_FROM_26,
-                       UPGRADE_FROM_27,
-                       UPGRADE_FROM_28,
-                       UPGRADE_FROM_30,
-                       UPGRADE_FROM_31,
-                       UPGRADE_FROM_32,
-                       UPGRADE_FROM_33,
-                       UPGRADE_FROM_34),
+                    in(Stream.concat(
+                            Stream.of((String) null),
+                            Arrays.stream(UpgradeFromValues.values()).map(UpgradeFromValues::toString)
+                        ).toArray(String[]::new)
+                    ),
                     Importance.LOW,
                     UPGRADE_FROM_DOC)
             .define(WINDOWED_INNER_CLASS_SERDE,
@@ -1211,6 +1197,17 @@ public class StreamsConfig extends AbstractConfig {
 
         // Private API to enable the state updater (i.e. state updating on a dedicated thread)
         public static final String STATE_UPDATER_ENABLED = "__state.updater.enabled__";
+
+        public static boolean getStateUpdaterEnabled(final Map<String, Object> configs) {
+            return InternalConfig.getBoolean(configs, InternalConfig.STATE_UPDATER_ENABLED, true);
+        }
+        
+        // Private API to enable processing threads (i.e. polling is decoupled from processing)
+        public static final String PROCESSING_THREADS_ENABLED = "__processing.threads.enabled__";
+
+        public static boolean getProcessingThreadsEnabled(final Map<String, Object> configs) {
+            return InternalConfig.getBoolean(configs, InternalConfig.PROCESSING_THREADS_ENABLED, false);
+        }
 
         public static boolean getBoolean(final Map<String, Object> configs, final String key, final boolean defaultValue) {
             final Object value = configs.getOrDefault(key, defaultValue);
@@ -1360,6 +1357,7 @@ public class StreamsConfig extends AbstractConfig {
         this(props, true);
     }
 
+    @SuppressWarnings("this-escape")
     protected StreamsConfig(final Map<?, ?> props,
                             final boolean doLog) {
         super(CONFIG, props, doLog);
@@ -1389,8 +1387,12 @@ public class StreamsConfig extends AbstractConfig {
     private void verifyEOSTransactionTimeoutCompatibility() {
         final long commitInterval = getLong(COMMIT_INTERVAL_MS_CONFIG);
         final String transactionTimeoutConfigKey = producerPrefix(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG);
-        final int transactionTimeout = originals().containsKey(transactionTimeoutConfigKey) ? (int) parseType(
-            transactionTimeoutConfigKey, originals().get(transactionTimeoutConfigKey), Type.INT) : DEFAULT_TRANSACTION_TIMEOUT;
+        final int transactionTimeout =
+                originals().containsKey(transactionTimeoutConfigKey) ?
+                    (int) Objects.requireNonNull(
+                        parseType(transactionTimeoutConfigKey, originals().get(transactionTimeoutConfigKey), Type.INT),
+                        "Could not parse config `" + COMMIT_INTERVAL_MS_CONFIG + "` because it's set to `null`") :
+                    DEFAULT_TRANSACTION_TIMEOUT;
 
         if (transactionTimeout < commitInterval) {
             throw new IllegalArgumentException(String.format("Transaction timeout %d was set lower than " +
@@ -1557,9 +1559,7 @@ public class StreamsConfig extends AbstractConfig {
 
         // Get main consumer override configs
         final Map<String, Object> mainConsumerProps = originalsWithPrefix(MAIN_CONSUMER_PREFIX);
-        for (final Map.Entry<String, Object> entry: mainConsumerProps.entrySet()) {
-            consumerProps.put(entry.getKey(), entry.getValue());
-        }
+        consumerProps.putAll(mainConsumerProps);
 
         // this is a hack to work around StreamsConfig constructor inside StreamsPartitionAssignor to avoid casting
         consumerProps.put(APPLICATION_ID_CONFIG, groupId);
@@ -1631,9 +1631,7 @@ public class StreamsConfig extends AbstractConfig {
 
         // Get restore consumer override configs
         final Map<String, Object> restoreConsumerProps = originalsWithPrefix(RESTORE_CONSUMER_PREFIX);
-        for (final Map.Entry<String, Object> entry: restoreConsumerProps.entrySet()) {
-            baseConsumerProps.put(entry.getKey(), entry.getValue());
-        }
+        baseConsumerProps.putAll(restoreConsumerProps);
 
         // no need to set group id for a restore consumer
         baseConsumerProps.remove(ConsumerConfig.GROUP_ID_CONFIG);
@@ -1666,9 +1664,7 @@ public class StreamsConfig extends AbstractConfig {
 
         // Get global consumer override configs
         final Map<String, Object> globalConsumerProps = originalsWithPrefix(GLOBAL_CONSUMER_PREFIX);
-        for (final Map.Entry<String, Object> entry: globalConsumerProps.entrySet()) {
-            baseConsumerProps.put(entry.getKey(), entry.getValue());
-        }
+        baseConsumerProps.putAll(globalConsumerProps);
 
         // no need to set group id for a global consumer
         baseConsumerProps.remove(ConsumerConfig.GROUP_ID_CONFIG);
@@ -1815,7 +1811,7 @@ public class StreamsConfig extends AbstractConfig {
      * @return an configured instance of key Serde class
      */
     @SuppressWarnings("WeakerAccess")
-    public Serde defaultKeySerde() {
+    public Serde<?> defaultKeySerde() {
         final Object keySerdeConfigSetting = get(DEFAULT_KEY_SERDE_CLASS_CONFIG);
         if (keySerdeConfigSetting ==  null) {
             throw new ConfigException("Please specify a key serde or set one through StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG");
@@ -1837,7 +1833,7 @@ public class StreamsConfig extends AbstractConfig {
      * @return an configured instance of value Serde class
      */
     @SuppressWarnings("WeakerAccess")
-    public Serde defaultValueSerde() {
+    public Serde<?> defaultValueSerde() {
         final Object valueSerdeConfigSetting = get(DEFAULT_VALUE_SERDE_CLASS_CONFIG);
         if (valueSerdeConfigSetting == null) {
             throw new ConfigException("Please specify a value serde or set one through StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG");

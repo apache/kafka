@@ -74,7 +74,8 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) {
     // in this test because it does not use FindCoordinator API.
     TestUtils.createOffsetsTopicWithAdmin(
       admin = admin,
-      brokers = raftCluster.brokers.collect(Collectors.toList[BrokerServer]).asScala
+      brokers = raftCluster.brokers.collect(Collectors.toList[BrokerServer]).asScala,
+      controllers = raftCluster.controllerServers().asScala.toSeq
     )
 
     // Heartbeat request to join the group. Note that the member subscribes
@@ -120,7 +121,7 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) {
 
     // This is the expected assignment.
     val expectedAssignment = new ConsumerGroupHeartbeatResponseData.Assignment()
-      .setAssignedTopicPartitions(List(new ConsumerGroupHeartbeatResponseData.TopicPartitions()
+      .setTopicPartitions(List(new ConsumerGroupHeartbeatResponseData.TopicPartitions()
         .setTopicId(topicId)
         .setPartitions(List[Integer](0, 1, 2).asJava)).asJava)
 

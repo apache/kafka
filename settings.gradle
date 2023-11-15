@@ -14,8 +14,8 @@
 // limitations under the License.
 
 plugins {
-    id 'com.gradle.enterprise' version '3.13.4'
-    id 'com.gradle.common-custom-user-data-gradle-plugin' version '1.11'
+    id 'com.gradle.enterprise' version '3.14.1'
+    id 'com.gradle.common-custom-user-data-gradle-plugin' version '1.11.1'
 }
 
 def isGithubActions = System.getenv('GITHUB_ACTIONS') != null
@@ -55,6 +55,7 @@ include 'clients',
     'connect:mirror',
     'connect:mirror-client',
     'connect:runtime',
+    'connect:test-plugins',
     'connect:transforms',
     'core',
     'examples',
@@ -91,8 +92,11 @@ include 'clients',
     'streams:upgrade-system-tests-31',
     'streams:upgrade-system-tests-32',
     'streams:upgrade-system-tests-33',
+    'streams:upgrade-system-tests-34',
+    'streams:upgrade-system-tests-35',
     'tools',
     'tools:tools-api',
     'trogdor'
 
+project(":storage:api").name = "storage-api"
 rootProject.name = 'kafka'

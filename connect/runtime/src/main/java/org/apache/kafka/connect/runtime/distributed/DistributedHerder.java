@@ -110,6 +110,8 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
+import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX;
 import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_TRACKING_ENABLE_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.CONNECT_PROTOCOL_V0;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocolCompatibility.EAGER;
@@ -277,7 +279,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                       ExecutorService forwardRequestExecutor,
                       // https://github.com/mockito/mockito/issues/2601 explains why we can't use varargs here
                       AutoCloseable[] uponShutdown) {
-        super(worker, workerId, kafkaClusterId, statusBackingStore, configBackingStore, connectorClientConfigOverridePolicy);
+        super(worker, workerId, kafkaClusterId, statusBackingStore, configBackingStore, connectorClientConfigOverridePolicy, time);
 
         this.time = time;
         this.herderMetrics = new HerderMetrics(metrics);
@@ -906,7 +908,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     @Override
     protected Map<String, ConfigValue> validateSinkConnectorConfig(SinkConnector connector, ConfigDef configDef, Map<String, String> config) {
         Map<String, ConfigValue> result = super.validateSinkConnectorConfig(connector, configDef, config);
-        validateSinkConnectorGroupId(result);
+        validateSinkConnectorGroupId(config, result);
         return result;
     }
 
@@ -919,12 +921,25 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
 
-    private void validateSinkConnectorGroupId(Map<String, ConfigValue> validatedConfig) {
-        ConfigValue validatedName = validatedConfig.get(ConnectorConfig.NAME_CONFIG);
-        String name = (String) validatedName.value();
-        if (workerGroupId.equals(SinkUtils.consumerGroupId(name))) {
-            validatedName.addErrorMessage("Consumer group for sink connector named " + name +
-                    " conflicts with Connect worker group " + workerGroupId);
+    private void validateSinkConnectorGroupId(Map<String, String> config, Map<String, ConfigValue> validatedConfig) {
+        String overriddenConsumerGroupIdConfig = CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX + GROUP_ID_CONFIG;
+        if (config.containsKey(overriddenConsumerGroupIdConfig)) {
+            String consumerGroupId = config.get(overriddenConsumerGroupIdConfig);
+            ConfigValue validatedGroupId = validatedConfig.computeIfAbsent(
+                    overriddenConsumerGroupIdConfig,
+                    p -> new ConfigValue(overriddenConsumerGroupIdConfig, consumerGroupId, Collections.emptyList(), new ArrayList<>())
+            );
+            if (workerGroupId.equals(consumerGroupId)) {
+                validatedGroupId.addErrorMessage("Consumer group " + consumerGroupId +
+                        " conflicts with Connect worker group " + workerGroupId);
+            }
+        } else {
+            ConfigValue validatedName = validatedConfig.get(ConnectorConfig.NAME_CONFIG);
+            String name = (String) validatedName.value();
+            if (workerGroupId.equals(SinkUtils.consumerGroupId(name))) {
+                validatedName.addErrorMessage("Consumer group for sink connector named " + name +
+                        " conflicts with Connect worker group " + workerGroupId);
+            }
         }
     }
 
@@ -1036,6 +1051,12 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     @Override
     public void putConnectorConfig(final String connName, final Map<String, String> config, final boolean allowReplace,
                                    final Callback<Created<ConnectorInfo>> callback) {
+        putConnectorConfig(connName, config, null, allowReplace, callback);
+    }
+
+    @Override
+    public void putConnectorConfig(final String connName, final Map<String, String> config, final TargetState targetState,
+                                   final boolean allowReplace, final Callback<Created<ConnectorInfo>> callback) {
         log.trace("Submitting connector config write request {}", connName);
         addRequest(
             () -> {
@@ -1066,7 +1087,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                             }
 
                             log.trace("Submitting connector config {} {} {}", connName, allowReplace, configState.connectors());
-                            writeToConfigTopicAsLeader(() -> configBackingStore.putConnectorConfig(connName, config));
+                            writeToConfigTopicAsLeader(() -> configBackingStore.putConnectorConfig(connName, config, targetState));
 
                             // Note that we use the updated connector config despite the fact that we don't have an updated
                             // snapshot yet. The existing task info should still be accurate.
@@ -1595,6 +1616,11 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             return false;
         }
         return true;
+    }
+
+    @Override
+    public void setClusterLoggerLevel(String namespace, String level) {
+        configBackingStore.putLoggerLevel(namespace, level);
     }
 
     // Should only be called from work thread, so synchronization should not be needed
@@ -2360,6 +2386,11 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 });
             }
             member.wakeup();
+        }
+
+        @Override
+        public void onLoggingLevelUpdate(String namespace, String level) {
+            setWorkerLoggerLevel(namespace, level);
         }
     }
 

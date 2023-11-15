@@ -108,9 +108,11 @@ import static java.util.Collections.singletonList;
 import static javax.ws.rs.core.Response.Status.FORBIDDEN;
 import static javax.ws.rs.core.Response.Status.SERVICE_UNAVAILABLE;
 import static org.apache.kafka.connect.runtime.AbstractStatus.State.FAILED;
+import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX;
 import static org.apache.kafka.connect.runtime.SourceConnectorConfig.ExactlyOnceSupportLevel.REQUIRED;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.CONNECT_PROTOCOL_V0;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG;
+import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.GROUP_ID_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.INTER_WORKER_KEY_GENERATION_ALGORITHM_DEFAULT;
 import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.CONNECT_PROTOCOL_V1;
 import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.CONNECT_PROTOCOL_V2;
@@ -688,7 +690,7 @@ public class DistributedHerderTest {
         }).when(herder).validateConnectorConfig(eq(CONN2_CONFIG), validateCallback.capture());
 
         // CONN2 is new, should succeed
-        doNothing().when(configBackingStore).putConnectorConfig(CONN2, CONN2_CONFIG);
+        doNothing().when(configBackingStore).putConnectorConfig(eq(CONN2), eq(CONN2_CONFIG), isNull());
 
         // This will occur just before/during the second tick
         doNothing().when(member).ensureActive();
@@ -696,6 +698,51 @@ public class DistributedHerderTest {
         // No immediate action besides this -- change will be picked up via the config log
 
         herder.putConnectorConfig(CONN2, CONN2_CONFIG, false, putConnectorCallback);
+        // This tick runs the initial herder request, which issues an asynchronous request for
+        // connector validation
+        herder.tick();
+
+        // Once that validation is complete, another request is added to the herder request queue
+        // for actually performing the config write; this tick is for that request
+        herder.tick();
+        time.sleep(1000L);
+        assertStatistics(3, 1, 100, 1000L);
+
+        ConnectorInfo info = new ConnectorInfo(CONN2, CONN2_CONFIG, Collections.emptyList(), ConnectorType.SOURCE);
+        verify(putConnectorCallback).onCompletion(isNull(), eq(new Herder.Created<>(true, info)));
+        verifyNoMoreInteractions(worker, member, configBackingStore, statusBackingStore, putConnectorCallback);
+    }
+
+    @Test
+    public void testCreateConnectorWithInitialState() throws Exception {
+        when(member.memberId()).thenReturn("leader");
+        when(member.currentProtocolVersion()).thenReturn(CONNECT_PROTOCOL_V0);
+        expectRebalance(1, Collections.emptyList(), Collections.emptyList(), true);
+        expectConfigRefreshAndSnapshot(SNAPSHOT);
+
+        when(statusBackingStore.connectors()).thenReturn(Collections.emptySet());
+        doNothing().when(member).poll(anyLong());
+
+        // Initial rebalance where this member becomes the leader
+        herder.tick();
+
+        // mock the actual validation since its asynchronous nature is difficult to test and should
+        // be covered sufficiently by the unit tests for the AbstractHerder class
+        ArgumentCaptor<Callback<ConfigInfos>> validateCallback = ArgumentCaptor.forClass(Callback.class);
+        doAnswer(invocation -> {
+            validateCallback.getValue().onCompletion(null, CONN2_CONFIG_INFOS);
+            return null;
+        }).when(herder).validateConnectorConfig(eq(CONN2_CONFIG), validateCallback.capture());
+
+        // CONN2 is new, should succeed
+        doNothing().when(configBackingStore).putConnectorConfig(eq(CONN2), eq(CONN2_CONFIG), eq(TargetState.STOPPED));
+
+        // This will occur just before/during the second tick
+        doNothing().when(member).ensureActive();
+
+        // No immediate action besides this -- change will be picked up via the config log
+
+        herder.putConnectorConfig(CONN2, CONN2_CONFIG, TargetState.STOPPED, false, putConnectorCallback);
         // This tick runs the initial herder request, which issues an asynchronous request for
         // connector validation
         herder.tick();
@@ -733,7 +780,7 @@ public class DistributedHerderTest {
         }).when(herder).validateConnectorConfig(eq(CONN2_CONFIG), validateCallback.capture());
 
         doThrow(new ConnectException("Error writing connector configuration to Kafka"))
-                .when(configBackingStore).putConnectorConfig(CONN2, CONN2_CONFIG);
+                .when(configBackingStore).putConnectorConfig(eq(CONN2), eq(CONN2_CONFIG), isNull());
 
         // This will occur just before/during the second tick
         doNothing().when(member).ensureActive();
@@ -806,6 +853,31 @@ public class DistributedHerderTest {
         assertEquals(
                 Collections.singletonList("Consumer group for sink connector named test-group conflicts with Connect worker group connect-test-group"),
                 nameConfig.errorMessages());
+    }
+
+    @Test
+    public void testConnectorGroupIdConflictsWithWorkerGroupId() {
+        String overriddenGroupId = CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX + GROUP_ID_CONFIG;
+        Map<String, String> config = new HashMap<>(CONN2_CONFIG);
+        config.put(overriddenGroupId, "connect-test-group");
+
+        SinkConnector connectorMock = mock(SinkConnector.class);
+
+        // CONN2 creation should fail because the worker group id (connect-test-group) conflicts with
+        // the consumer group id we would use for this sink
+        Map<String, ConfigValue> validatedConfigs = herder.validateSinkConnectorConfig(
+                connectorMock, SinkConnectorConfig.configDef(), config);
+
+        ConfigValue overriddenGroupIdConfig = validatedConfigs.get(overriddenGroupId);
+        assertEquals(
+                Collections.singletonList("Consumer group connect-test-group conflicts with Connect worker group connect-test-group"),
+                overriddenGroupIdConfig.errorMessages());
+
+        ConfigValue nameConfig = validatedConfigs.get(ConnectorConfig.NAME_CONFIG);
+        assertEquals(
+                Collections.emptyList(),
+                nameConfig.errorMessages()
+        );
     }
 
     @Test
@@ -2091,6 +2163,8 @@ public class DistributedHerderTest {
         herder.connectorConfig(CONN1, connectorConfigCb);
         FutureCallback<List<TaskInfo>> taskConfigsCb = new FutureCallback<>();
         herder.taskConfigs(CONN1, taskConfigsCb);
+        FutureCallback<Map<ConnectorTaskId, Map<String, String>>> tasksConfigCb = new FutureCallback<>();
+        herder.tasksConfig(CONN1, tasksConfigCb);
 
         herder.tick();
         assertTrue(listConnectorsCb.isDone());
@@ -2107,6 +2181,11 @@ public class DistributedHerderTest {
                         new TaskInfo(TASK1, TASK_CONFIG),
                         new TaskInfo(TASK2, TASK_CONFIG)),
                 taskConfigsCb.get());
+        Map<ConnectorTaskId, Map<String, String>> tasksConfig = new HashMap<>();
+        tasksConfig.put(TASK0, TASK_CONFIG);
+        tasksConfig.put(TASK1, TASK_CONFIG);
+        tasksConfig.put(TASK2, TASK_CONFIG);
+        assertEquals(tasksConfig, tasksConfigCb.get());
 
         // Config transformation should not occur when requesting connector or task info
         verify(configTransformer, never()).transform(eq(CONN1), any());
@@ -2150,7 +2229,7 @@ public class DistributedHerderTest {
             // Simulate response to writing config + waiting until end of log to be read
             configUpdateListener.onConnectorConfigUpdate(CONN1);
             return null;
-        }).when(configBackingStore).putConnectorConfig(eq(CONN1), eq(CONN1_CONFIG_UPDATED));
+        }).when(configBackingStore).putConnectorConfig(eq(CONN1), eq(CONN1_CONFIG_UPDATED), isNull());
 
         // As a result of reconfig, should need to update snapshot. With only connector updates, we'll just restart
         // connector without rebalance
