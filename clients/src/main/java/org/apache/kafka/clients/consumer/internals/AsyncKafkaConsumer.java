@@ -163,11 +163,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             this.clientId = config.getString(CommonClientConfigs.CLIENT_ID_CONFIG);
             LogContext logContext = createLogContext(config, groupRebalanceConfig);
             this.log = logContext.logger(getClass());
-            groupId.ifPresent(groupIdStr -> {
-                if (groupIdStr.isEmpty()) {
-                    log.warn("Support for using the empty group id by consumers is deprecated and will be removed in the next major release.");
-                }
-            });
+
+            if (this.groupId.isPresent() && this.groupId.get().isEmpty())
+                throw new InvalidGroupIdException("The configured group.id should not be an empty string or whitespace");
 
             log.debug("Initializing the Kafka consumer");
             this.defaultApiTimeoutMs = config.getInt(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
@@ -578,7 +576,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     private void maybeThrowInvalidGroupIdException() {
-        if (!groupId.isPresent() || groupId.get().isEmpty()) {
+        if (!groupId.isPresent()) {
             throw new InvalidGroupIdException("To use the group management or offset commit APIs, you must " +
                     "provide a valid " + ConsumerConfig.GROUP_ID_CONFIG + " in the consumer configuration.");
         }

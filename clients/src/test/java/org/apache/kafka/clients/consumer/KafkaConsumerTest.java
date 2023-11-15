@@ -409,6 +409,28 @@ public class KafkaConsumerTest {
 
     @ParameterizedTest
     @EnumSource(GroupProtocol.class)
+    public void testEmptyGroupId(GroupProtocol groupProtocol) {
+        assertThrows(KafkaException.class, () -> newConsumer(groupProtocol, ""));
+    }
+
+    @ParameterizedTest
+    @EnumSource(GroupProtocol.class)
+    public void testWhitespaceGroupId(GroupProtocol groupProtocol) {
+        assertThrows(KafkaException.class, () -> newConsumer(groupProtocol, "    "));
+    }
+
+    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
+    //       Once it is implemented, this should use both group protocols.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
+    public void testTrimWhitespaceFromGroupId(GroupProtocol groupProtocol) {
+        String groupId = "test";
+        KafkaConsumer<byte[], byte[]> kafkaConsumer = newConsumer(groupProtocol, "    " + groupId + "    ");
+        assertEquals(groupId, kafkaConsumer.groupMetadata().groupId());
+    }
+
+    @ParameterizedTest
+    @EnumSource(GroupProtocol.class)
     public void testSubscription(GroupProtocol groupProtocol) {
         consumer = newConsumer(groupProtocol, groupId);
 
