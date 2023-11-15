@@ -35,7 +35,7 @@ public enum BrokerRegistrationFencingChange {
 
     private final static Map<Byte, BrokerRegistrationFencingChange> VALUE_TO_ENUM =
         Arrays.stream(BrokerRegistrationFencingChange.values()).
-                collect(Collectors.toMap(v -> Byte.valueOf(v.value()), Function.identity()));
+                collect(Collectors.toMap(v -> v.value(), Function.identity()));
 
     public static Optional<BrokerRegistrationFencingChange> fromValue(byte value) {
         return Optional.ofNullable(VALUE_TO_ENUM.get(value));
