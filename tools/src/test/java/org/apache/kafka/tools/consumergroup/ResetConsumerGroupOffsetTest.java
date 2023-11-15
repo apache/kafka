@@ -25,7 +25,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.tools.consumergroup.ConsumerGroupCommand.ConsumerGroupService;
 import org.junit.jupiter.api.Test;
-import scala.collection.JavaConverters;
 import scala.collection.Seq;
 
 import java.io.BufferedWriter;
