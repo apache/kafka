@@ -404,7 +404,7 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
     val results = response.data.results
     assertEquals(1, results.size)
     checkAllErrorsAlteringCredentials(results, Errors.UNSUPPORTED_VERSION,
-                                      "when altering the credentials on unsupported IPB version")
+                                      "when altering the credentials on unsupported IBP version")
     assertEquals("The current metadata version does not support SCRAM", results.get(0).errorMessage)
   }
 

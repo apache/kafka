@@ -118,10 +118,6 @@ public class MetadataImageTest {
             .build(), Optional.empty());
     }
 
-    private static void testToImage(MetadataImage image, ImageWriterOptions options) {
-        testToImage(image, options, Optional.empty());
-    }
-
     static void testToImage(MetadataImage image, ImageWriterOptions options, Optional<List<ApiMessageAndVersion>> fromRecords) {
         testToImage(image, fromRecords.orElseGet(() -> getImageRecords(image, options)));
     }

@@ -13,11 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Version 1 adds InControlledShutdown
+// Version 2 adds IsMigratingZkBroker
+// Version 3 adds LogDirs
 {
   "apiKey": 0,
   "type": "metadata",
   "name": "RegisterBrokerRecord",
-  "validVersions": "0-2",
+  "validVersions": "0-3",
   "flexibleVersions": "0+",
   "fields": [
     { "name": "BrokerId", "type": "int32", "versions": "0+", "entityType": "brokerId",
@@ -53,6 +56,8 @@
     { "name": "Fenced", "type": "bool", "versions": "0+", "default": "true",
       "about": "True if the broker is fenced." },
     { "name": "InControlledShutdown", "type": "bool", "versions": "1+", "default": "false",
-      "about": "True if the broker is in controlled shutdown." }
+      "about": "True if the broker is in controlled shutdown." },
+    { "name": "LogDirs", "type":  "[]uuid", "versions":  "3+", "taggedVersions": "3+", "tag": "0",
+      "about": "Log directories configured in this broker which are available." }
   ]
 }

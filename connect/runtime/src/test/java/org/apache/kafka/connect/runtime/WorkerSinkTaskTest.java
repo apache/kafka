@@ -36,6 +36,7 @@ import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.RetriableException;
+import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.WorkerSinkTask.SinkTaskMetricsGroup;
 import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
@@ -57,6 +58,7 @@ import org.easymock.Capture;
 import org.easymock.CaptureType;
 import org.easymock.EasyMock;
 import org.easymock.IExpectationSetters;
+import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -674,7 +676,7 @@ public class WorkerSinkTaskTest {
                 rebalanceListener.getValue().onPartitionsAssigned(Collections.singleton(TOPIC_PARTITION));
                 return ConsumerRecords.empty();
             });
-        EasyMock.expect(consumer.assignment()).andReturn(INITIAL_ASSIGNMENT).times(4);
+        EasyMock.expect(consumer.assignment()).andReturn(INITIAL_ASSIGNMENT).times(3);
         sinkTask.close(Collections.singleton(TOPIC_PARTITION3));
         EasyMock.expectLastCall();
         EasyMock.expect(consumer.position(TOPIC_PARTITION)).andReturn(FIRST_OFFSET);
@@ -1381,7 +1383,7 @@ public class WorkerSinkTaskTest {
         expectTaskGetTopic(true);
 
         expectPollInitialAssignment();
-        EasyMock.expect(consumer.assignment()).andReturn(INITIAL_ASSIGNMENT).times(2);
+        EasyMock.expect(consumer.assignment()).andReturn(INITIAL_ASSIGNMENT).times(1);
 
         // Put one message through the task to get some offsets to commit
         expectConsumerPoll(1);
@@ -1536,7 +1538,7 @@ public class WorkerSinkTaskTest {
         EasyMock.expect(consumer.position(TOPIC_PARTITION)).andReturn(offsetTp1);
         EasyMock.expect(consumer.position(TOPIC_PARTITION2)).andReturn(offsetTp2);
         EasyMock.expect(consumer.position(TOPIC_PARTITION3)).andReturn(offsetTp3);
-        EasyMock.expect(consumer.assignment()).andReturn(new HashSet<>(rebalancedPartitions)).times(6);
+        EasyMock.expect(consumer.assignment()).andReturn(new HashSet<>(rebalancedPartitions)).times(5);
 
         // onPartitionsAssigned - step 2
         sinkTask.open(EasyMock.eq(rebalancedPartitions));
@@ -1999,6 +2001,32 @@ public class WorkerSinkTaskTest {
         PowerMock.verifyAll();
     }
 
+    @Test
+    public void testPartitionCountInCaseOfPartitionRevocation() {
+        MockConsumer<byte[], byte[]> mockConsumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
+        // Setting up Worker Sink Task to check metrics
+        workerTask = new WorkerSinkTask(
+                taskId, sinkTask, statusListener, TargetState.PAUSED, workerConfig, ClusterConfigState.EMPTY, metrics,
+                keyConverter, valueConverter, errorHandlingMetrics, headerConverter,
+                transformationChain, mockConsumer, pluginLoader, time,
+                RetryWithToleranceOperatorTest.NOOP_OPERATOR, null, statusBackingStore, Collections::emptyList);
+        mockConsumer.updateBeginningOffsets(new HashMap<TopicPartition, Long>() {{
+                put(TOPIC_PARTITION, 0 * 1L);
+                put(TOPIC_PARTITION2, 0 * 1L);
+            }});
+        workerTask.initialize(TASK_CONFIG);
+        workerTask.initializeAndStart();
+        // Initial Re-balance to assign INITIAL_ASSIGNMENT which is "TOPIC_PARTITION" and "TOPIC_PARTITION2"
+        mockConsumer.rebalance(INITIAL_ASSIGNMENT);
+        assertSinkMetricValue("partition-count", 2);
+        // Revoked "TOPIC_PARTITION" and second re-balance with "TOPIC_PARTITION2"
+        mockConsumer.rebalance(Collections.singleton(TOPIC_PARTITION2));
+        assertSinkMetricValue("partition-count", 1);
+        // Closing the Worker Sink Task which will update the partition count as 0.
+        workerTask.close();
+        assertSinkMetricValue("partition-count", 0);
+    }
+
     private void expectInitializeTask() {
         consumer.subscribe(EasyMock.eq(asList(TOPIC)), EasyMock.capture(rebalanceListener));
         PowerMock.expectLastCall();
@@ -2047,7 +2075,7 @@ public class WorkerSinkTaskTest {
         sinkTask.open(INITIAL_ASSIGNMENT);
         EasyMock.expectLastCall().andThrow(e);
 
-        EasyMock.expect(consumer.assignment()).andReturn(INITIAL_ASSIGNMENT).times(3);
+        EasyMock.expect(consumer.assignment()).andReturn(INITIAL_ASSIGNMENT).times(2);
         EasyMock.expect(consumer.poll(Duration.ofMillis(EasyMock.anyLong()))).andAnswer(
             () -> {
                 rebalanceListener.getValue().onPartitionsRevoked(INITIAL_ASSIGNMENT);
