@@ -11,7 +11,6 @@ Make sure you have python (>= 3.7.x) and java (>= 17) installed before running t
 
 Run `pip install -r requirements.txt` to get all the requirements for running the scripts.
 
-
 Bulding image and running tests locally
 ---------------------------------------
 - `docker_build_test.py` script builds and tests the docker image.
@@ -32,7 +31,6 @@ Creating a release
 Promoting a release
 -------------------
 `docker_promote.py` provides an interactive way to pull an RC Docker image and promote it to required dockerhub repo.
-
 
 Using the image in a docker container
 -------------------------------------

@@ -80,3 +80,7 @@ services:
       - ../file-input:/mnt/shared/config
     environment:
       CLUSTER_ID: '4L6g3nShT-eMCtK--X86sw'
+      # Set a property absent from the file
+      KAFKA_NODE_ID: 3
+      # Override an existing property
+      KAFKA_PROCESS_ROLES: 'broker,controller'
