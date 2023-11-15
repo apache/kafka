@@ -206,11 +206,11 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     private boolean reconciliationInProgress;
 
     /**
-     * ID the member had when the reconciliation in progress started. This is used to identify if
+     * Epoch the member had when the reconciliation in progress started. This is used to identify if
      * the member has rejoined while it was reconciling an assignment (in which case the result
      * of the reconciliation is not applied.)
      */
-    private String memberIdOnReconciliationStart;
+    private int memberEpochOnReconciliationStart;
 
     /**
      * If the member is currently leaving the group after a call to {@link #leaveGroup()}}, this
@@ -391,10 +391,6 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         resetEpoch();
         transitionTo(MemberState.JOINING);
         clearPendingAssignmentsAndLocalNamesCache();
-        // Reset member ID of the reconciliation in progress (if any), to make sure that if the
-        // reconciliation completes while the member is rejoining but hasn't received the new
-        // member ID yet, the reconciliation result is discarded.
-        memberIdOnReconciliationStart = null;
     }
 
     /**
@@ -595,8 +591,8 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         // and assignment, executed sequentially)
         CompletableFuture<Void> reconciliationResult =
                 revocationResult.thenCompose(__ -> {
-                    boolean memberHasRejoined = !Objects.equals(memberIdOnReconciliationStart,
-                            memberId);
+                    boolean memberHasRejoined = !Objects.equals(memberEpochOnReconciliationStart,
+                            memberEpoch);
                     if (state == MemberState.RECONCILING && !memberHasRejoined) {
                         // Apply assignment
                         CompletableFuture<Void> assignResult = assignPartitions(assignedPartitions, addedPartitions);
@@ -663,7 +659,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      */
     void markReconciliationInProgress() {
         reconciliationInProgress = true;
-        memberIdOnReconciliationStart = memberId;
+        memberEpochOnReconciliationStart = memberEpoch;
     }
 
     /**

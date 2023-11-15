@@ -251,8 +251,14 @@ public class MembershipManagerImplTest {
         CompletableFuture<Void> commitResult =
                 mockNewAssignmentAndRevocationStuckOnCommit(membershipManager, topicId1, topic1,
                         Arrays.asList(1, 2), true);
+        Set<TopicPartition> assignment1 = new HashSet<>();
+        assignment1.add(new TopicPartition(topic1, 1));
+        assignment1.add(new TopicPartition(topic1, 2));
+        assertEquals(assignment1, membershipManager.assignmentReadyToReconcile());
+        int currentEpoch = membershipManager.memberEpoch();
 
-        // Get fenced and rejoin while still reconciling.
+        // Get fenced and rejoin while still reconciling. Get new assignment to reconcile after
+        // rejoining.
         testFencedMemberReleasesAssignmentAndTransitionsToJoining(membershipManager);
         clearInvocations(subscriptionState);
 
@@ -261,7 +267,7 @@ public class MembershipManagerImplTest {
         // to be reconciled next.
         Uuid topicId3 = Uuid.randomUuid();
         mockOwnedPartitionAndAssignmentReceived(topicId3, "topic3", owned, true);
-        receiveAssignment(topicId3, Collections.singletonList(5), membershipManager);
+        receiveAssignmentAfterRejoin(topicId3, Collections.singletonList(5), membershipManager);
         verifyReconciliationNotTriggered(membershipManager);
         Set<TopicPartition> assignmentAfterRejoin = Collections.singleton(new TopicPartition("topic3", 5));
         assertEquals(assignmentAfterRejoin, membershipManager.assignmentReadyToReconcile());
@@ -917,6 +923,17 @@ public class MembershipManagerImplTest {
         membershipManager.onHeartbeatResponseReceived(heartbeatResponse.data());
     }
 
+    private void receiveAssignmentAfterRejoin(Uuid topicId, List<Integer> partitions, MembershipManager membershipManager) {
+        ConsumerGroupHeartbeatResponseData.Assignment targetAssignment = new ConsumerGroupHeartbeatResponseData.Assignment()
+                .setTopicPartitions(Collections.singletonList(
+                        new ConsumerGroupHeartbeatResponseData.TopicPartitions()
+                                .setTopicId(topicId)
+                                .setPartitions(partitions)));
+        ConsumerGroupHeartbeatResponse heartbeatResponse =
+                createConsumerGroupHeartbeatResponseWithBumpedEpoch(targetAssignment);
+        membershipManager.onHeartbeatResponseReceived(heartbeatResponse.data());
+    }
+
     private void receiveEmptyAssignment(MembershipManager membershipManager) {
         // New empty assignment received, revoking owned partition.
         ConsumerGroupHeartbeatResponseData.Assignment targetAssignment = new ConsumerGroupHeartbeatResponseData.Assignment()
@@ -984,6 +1001,20 @@ public class MembershipManagerImplTest {
                 .setErrorCode(Errors.NONE.code())
                 .setMemberId(MEMBER_ID)
                 .setMemberEpoch(MEMBER_EPOCH)
+                .setAssignment(assignment));
+    }
+
+    /**
+     * Create heartbeat response with the given assignment and a bumped epoch (incrementing by 1
+     * as default but could be any increment). This will be used to mock when a member
+     * receives a heartbeat response to the join request, and the response includes an assignment.
+     */
+    private ConsumerGroupHeartbeatResponse createConsumerGroupHeartbeatResponseWithBumpedEpoch(
+            ConsumerGroupHeartbeatResponseData.Assignment assignment) {
+        return new ConsumerGroupHeartbeatResponse(new ConsumerGroupHeartbeatResponseData()
+                .setErrorCode(Errors.NONE.code())
+                .setMemberId(MEMBER_ID)
+                .setMemberEpoch(MEMBER_EPOCH + 1)
                 .setAssignment(assignment));
     }
 
