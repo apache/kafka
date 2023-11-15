@@ -5,22 +5,29 @@ This directory contains docker image for Kafka.
 The scripts take a url containing kafka as input and generate the respective docker image.
 There are interactive python scripts to release the docker image and promote a release candidate.
 
+Local Setup
+-----------
+Make sure you have python (>= 3.7.x) and java (>= 17) installed before running the tests and scripts.
+
+Run `pip install -r requirements.txt` to get all the requirements for running the scripts.
+
+
 Bulding image and running tests locally
 ---------------------------------------
 - `docker_build_test.py` script builds and tests the docker image.
 - kafka binary tarball url along with image name, tag and type is needed to build the image. For detailed usage description check `python docker_build_test.py --help`.
 - Sanity tests for the docker image are present in test/docker_sanity_test.py.
-- By default image will be built and tested, but if only build is required pass `-b` flag and if only testing the given image is required pass `-t` flag.
+- By default image will be built and tested, but if you only want to build the image, pass `-b` flag and if you only want to test the given image pass `-t` flag.
 - An html test report will be generated after the tests are executed containing the results.
 
 Bulding image and running tests using github actions
 ----------------------------------------------------
 This is the recommended way to build, test and get a CVE report for the docker image.
-Just choose the image type and provide kafka url to Docker build test workflow. It will generate a test report and CVE report that can be shared to the community.
+Just choose the image type and provide kafka url to `Docker build test` workflow. It will generate a test report and CVE report that can be shared to the community.
 
 Creating a release
 ------------------
-`docker_release.py` provides an interactive way to build multi arch image and publish it a docker registry.
+`docker_release.py` provides an interactive way to build multi arch image and publish it to a docker registry.
 
 Promoting a release
 -------------------
