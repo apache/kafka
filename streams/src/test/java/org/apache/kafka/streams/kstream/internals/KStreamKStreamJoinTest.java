@@ -39,6 +39,9 @@ import org.apache.kafka.streams.processor.internals.InternalTopicConfig;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.streams.TestInputTopic;
+import org.apache.kafka.streams.state.BuiltinDslStoreSuppliers;
+import org.apache.kafka.streams.state.DslStoreSuppliers;
+import org.apache.kafka.streams.state.DslWindowParams;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
@@ -73,6 +76,7 @@ import java.util.Set;
 import java.util.Optional;
 import java.util.Spliterator;
 import java.util.Spliterators;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
@@ -82,6 +86,7 @@ import static java.time.Duration.ofMillis;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.SUBTOPOLOGY_0;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.hasItem;
+import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
@@ -355,6 +360,49 @@ public class KStreamKStreamJoinTest {
 
         //Case with other stream store supplier
         runJoin(streamJoined.withOtherStoreSupplier(otherStoreSupplier), joinWindows);
+    }
+
+    @Test
+    public void shouldJoinWithDslStoreSuppliersIfNoStoreSupplied() {
+        final JoinWindows joinWindows = JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100L));
+
+        final StreamJoined<String, Integer, Integer> streamJoined = StreamJoined.with(Serdes.String(), Serdes.Integer(), Serdes.Integer());
+        final AtomicInteger numCallsToWindow = new AtomicInteger(0);
+
+        final DslStoreSuppliers dslStoreSuppliers = new BuiltinDslStoreSuppliers.InMemoryDslStoreSuppliers() {
+            @Override
+            public WindowBytesStoreSupplier windowStore(final DslWindowParams params) {
+                numCallsToWindow.incrementAndGet();
+                return super.windowStore(params);
+            }
+        };
+
+        final WindowBytesStoreSupplier thisStoreSupplier = Stores.inMemoryWindowStore(
+                "in-memory-join-store-other",
+                Duration.ofMillis(joinWindows.size() + joinWindows.gracePeriodMs()),
+                Duration.ofMillis(joinWindows.size()),
+                true
+        );
+        final WindowBytesStoreSupplier otherStoreSupplier = Stores.inMemoryWindowStore(
+                "in-memory-join-store",
+                Duration.ofMillis(joinWindows.size() + joinWindows.gracePeriodMs()),
+                Duration.ofMillis(joinWindows.size()),
+                true
+        );
+
+        // neither side is supplied explicitly
+        runJoin(streamJoined.withDslStoreSuppliers(dslStoreSuppliers), joinWindows);
+        assertThat(numCallsToWindow.get(), is(2));
+
+        // one side is supplied explicitly, so we only increment once
+        runJoin(streamJoined.withDslStoreSuppliers(dslStoreSuppliers).withThisStoreSupplier(thisStoreSupplier), joinWindows);
+        assertThat(numCallsToWindow.get(), is(3));
+
+        // both sides are supplied explicitly, so we don't increment further
+        runJoin(streamJoined.withDslStoreSuppliers(dslStoreSuppliers)
+                .withThisStoreSupplier(thisStoreSupplier).withOtherStoreSupplier(otherStoreSupplier), joinWindows);
+        assertThat(numCallsToWindow.get(), is(3));
+
     }
 
     @Test

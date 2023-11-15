@@ -1038,6 +1038,7 @@ public class StreamsConfigTest {
         assertThrows(ConfigException.class, () -> new StreamsConfig(props));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldSpecifyRocksdbWhenNotExplicitlyAddedToConfigs() {
         final String expectedDefaultStoreType = StreamsConfig.ROCKS_DB;
@@ -1045,6 +1046,7 @@ public class StreamsConfigTest {
         assertEquals("default.dsl.store should be \"rocksDB\"", expectedDefaultStoreType, actualDefaultStoreType);
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldSpecifyInMemoryWhenExplicitlyAddedToConfigs() {
         final String expectedDefaultStoreType = StreamsConfig.IN_MEMORY;
@@ -1054,6 +1056,7 @@ public class StreamsConfigTest {
         assertEquals("default.dsl.store should be \"in_memory\"", expectedDefaultStoreType, actualDefaultStoreType);
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldThrowConfigExceptionWhenStoreTypeConfigNotValueInRange() {
         props.put(DEFAULT_DSL_STORE_CONFIG, "bad_config");

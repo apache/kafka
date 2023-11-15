@@ -21,11 +21,11 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.EmitStrategy;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.state.DslSessionParams;
 import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
-import org.apache.kafka.streams.state.internals.RocksDbTimeOrderedSessionBytesStoreSupplier;
 
 public class SessionStoreMaterializer<K, V> extends MaterializedStoreFactory<K, V, SessionStore<Bytes, byte[]>> {
 
@@ -60,28 +60,11 @@ public class SessionStoreMaterializer<K, V> extends MaterializedStoreFactory<K, 
     public StateStore build() {
         SessionBytesStoreSupplier supplier = (SessionBytesStoreSupplier) materialized.storeSupplier();
         if (supplier == null) {
-
-            switch (defaultStoreType) {
-                case IN_MEMORY:
-                    supplier = Stores.inMemorySessionStore(
-                            materialized.storeName(),
-                            Duration.ofMillis(retentionPeriod)
-                    );
-                    break;
-                case ROCKS_DB:
-                    supplier = emitStrategy.type() == EmitStrategy.StrategyType.ON_WINDOW_CLOSE ?
-                            new RocksDbTimeOrderedSessionBytesStoreSupplier(
-                                    materialized.storeName(),
-                                    retentionPeriod,
-                                    true) :
-                            Stores.persistentSessionStore(
-                                    materialized.storeName(),
-                                    Duration.ofMillis(retentionPeriod)
-                            );
-                    break;
-                default:
-                    throw new IllegalStateException("Unknown store type: " + materialized.storeType());
-            }
+            supplier = dslStoreSuppliers().sessionStore(new DslSessionParams(
+                    materialized.storeName(),
+                    Duration.ofMillis(retentionPeriod),
+                    emitStrategy
+            ));
         }
 
         final StoreBuilder<SessionStore<K, V>> builder = Stores.sessionStoreBuilder(

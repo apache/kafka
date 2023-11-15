@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.kstream.StreamJoined;
+import org.apache.kafka.streams.state.DslStoreSuppliers;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 
 import java.util.Map;
@@ -48,6 +49,10 @@ public class StreamJoinedInternal<K, V1, V2> extends StreamJoined<K, V1, V2> {
 
     public String storeName() {
         return storeName;
+    }
+
+    public DslStoreSuppliers dslStoreSuppliers() {
+        return dslStoreSuppliers;
     }
 
     public WindowBytesStoreSupplier thisStoreSupplier() {
