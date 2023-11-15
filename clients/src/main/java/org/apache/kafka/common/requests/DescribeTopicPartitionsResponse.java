@@ -17,8 +17,8 @@
 
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.message.DescribeTopicsResponseData;
-import org.apache.kafka.common.message.DescribeTopicsResponseData.DescribeTopicsResponseTopic;
+import org.apache.kafka.common.message.DescribeTopicPartitionsResponseData;
+import org.apache.kafka.common.message.DescribeTopicPartitionsResponseData.DescribeTopicPartitionsResponseTopic;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
@@ -28,16 +28,16 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class DescribeTopicsResponse extends AbstractResponse {
-    private final DescribeTopicsResponseData data;
+public class DescribeTopicPartitionsResponse extends AbstractResponse {
+    private final DescribeTopicPartitionsResponseData data;
 
-    public DescribeTopicsResponse(DescribeTopicsResponseData data) {
-        super(ApiKeys.DESCRIBE_TOPICS);
+    public DescribeTopicPartitionsResponse(DescribeTopicPartitionsResponseData data) {
+        super(ApiKeys.DESCRIBE_TOPIC_PARTITIONS);
         this.data = data;
     }
 
     @Override
-    public DescribeTopicsResponseData data() {
+    public DescribeTopicPartitionsResponseData data() {
         return data;
     }
 
@@ -66,16 +66,16 @@ public class DescribeTopicsResponse extends AbstractResponse {
         return errorCounts;
     }
 
-    public static DescribeTopicsResponse prepareResponse(int throttleTimeMs,
-                                                         List<DescribeTopicsResponseTopic> topics) {
-        DescribeTopicsResponseData responseData = new DescribeTopicsResponseData();
+    public static DescribeTopicPartitionsResponse prepareResponse(int throttleTimeMs,
+                                                                  List<DescribeTopicPartitionsResponseTopic> topics) {
+        DescribeTopicPartitionsResponseData responseData = new DescribeTopicPartitionsResponseData();
         responseData.setThrottleTimeMs(throttleTimeMs);
         topics.forEach(topicResponse -> responseData.topics().add(topicResponse));
-        return new DescribeTopicsResponse(responseData);
+        return new DescribeTopicPartitionsResponse(responseData);
     }
 
-    public static DescribeTopicsResponse parse(ByteBuffer buffer, short version) {
-        return new DescribeTopicsResponse(
-            new DescribeTopicsResponseData(new ByteBufferAccessor(buffer), version));
+    public static DescribeTopicPartitionsResponse parse(ByteBuffer buffer, short version) {
+        return new DescribeTopicPartitionsResponse(
+            new DescribeTopicPartitionsResponseData(new ByteBufferAccessor(buffer), version));
     }
 }

@@ -4100,7 +4100,7 @@ class KafkaApisTest extends Logging {
   }
 
   @Test
-  def testDescribeTopicsRequest(): Unit = {
+  def testDescribeTopicPartitionsRequest(): Unit = {
     // 1. Set up broker information
     val plaintextListener = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
     val broker = new UpdateMetadataBroker()
@@ -4188,48 +4188,48 @@ class KafkaApisTest extends Logging {
     updateKraftMetadataCache(metadataCache.asInstanceOf[KRaftMetadataCache], records)
     val api = createKafkaApis(authorizer = Some(authorizer), raftSupport = true)
 
-    // 4. Send DescribeTopicsRequest
-    var DescribeTopicsRequest = new DescribeTopicsRequest(new DescribeTopicsRequestData()
+    // 4. Send DescribeTopicPartitionsRequest
+    var DescribeTopicPartitionsRequest = new DescribeTopicPartitionsRequest(new DescribeTopicPartitionsRequestData()
     .setTopics(util.Arrays.asList(
-      new DescribeTopicsRequestData.TopicRequest().setName(authorizedTopic),
-      new DescribeTopicsRequestData.TopicRequest().setName(unauthorizedTopic),
+      new DescribeTopicPartitionsRequestData.TopicRequest().setName(authorizedTopic),
+      new DescribeTopicPartitionsRequestData.TopicRequest().setName(unauthorizedTopic),
     )))
 
-    var request = buildRequest(DescribeTopicsRequest, plaintextListener)
+    var request = buildRequest(DescribeTopicPartitionsRequest, plaintextListener)
     when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
       any[Long])).thenReturn(0)
 
-    api.handleDescribeTopicsRequest(request)
-    var response = verifyNoThrottling[DescribeTopicsResponse](request)
+    api.handleDescribeTopicPartitionsRequest(request)
+    var response = verifyNoThrottling[DescribeTopicPartitionsResponse](request)
 
     var metadataByTopicId = response.data().topics().asScala.groupBy(_.topicId()).map(kv => (kv._1, kv._2.head))
-    metadataByTopicId.foreach { case (topicId, describeTopicsResponseTopic) =>
+    metadataByTopicId.foreach { case (topicId, describeTopicPartitionsResponseTopic) =>
       if (topicId == authorizedTopicId) {
-        assertEquals(Errors.NONE.code(), describeTopicsResponseTopic.errorCode())
-        assertEquals(authorizedTopic, describeTopicsResponseTopic.name())
-        assertEquals(1, describeTopicsResponseTopic.partitions().size())
+        assertEquals(Errors.NONE.code(), describeTopicPartitionsResponseTopic.errorCode())
+        assertEquals(authorizedTopic, describeTopicPartitionsResponseTopic.name())
+        assertEquals(1, describeTopicPartitionsResponseTopic.partitions().size())
       } else {
-        assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED.code(), describeTopicsResponseTopic.errorCode())
-        assertEquals(unauthorizedTopic, describeTopicsResponseTopic.name())
+        assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED.code(), describeTopicPartitionsResponseTopic.errorCode())
+        assertEquals(unauthorizedTopic, describeTopicPartitionsResponseTopic.name())
       }
     }
 
     // Fetch all topics
-    DescribeTopicsRequest = new DescribeTopicsRequest(new DescribeTopicsRequestData())
-    request = buildRequest(DescribeTopicsRequest, plaintextListener)
+    DescribeTopicPartitionsRequest = new DescribeTopicPartitionsRequest(new DescribeTopicPartitionsRequestData())
+    request = buildRequest(DescribeTopicPartitionsRequest, plaintextListener)
     when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
       any[Long])).thenReturn(0)
 
-    api.handleDescribeTopicsRequest(request)
-    response = verifyNoThrottling[DescribeTopicsResponse](request)
+    api.handleDescribeTopicPartitionsRequest(request)
+    response = verifyNoThrottling[DescribeTopicPartitionsResponse](request)
 
     metadataByTopicId = response.data().topics().asScala.groupBy(_.topicId()).map(kv => (kv._1, kv._2.head))
     assertEquals(1, metadataByTopicId.size)
-    metadataByTopicId.foreach { case (topicId, describeTopicsResponseTopic) =>
+    metadataByTopicId.foreach { case (topicId, describeTopicPartitionsResponseTopic) =>
       if (topicId == authorizedTopicId) {
-        assertEquals(Errors.NONE.code(), describeTopicsResponseTopic.errorCode())
-        assertEquals(1, describeTopicsResponseTopic.partitions().size())
-        assertEquals(authorizedTopic, describeTopicsResponseTopic.name())
+        assertEquals(Errors.NONE.code(), describeTopicPartitionsResponseTopic.errorCode())
+        assertEquals(1, describeTopicPartitionsResponseTopic.partitions().size())
+        assertEquals(authorizedTopic, describeTopicPartitionsResponseTopic.name())
       }
     }
   }

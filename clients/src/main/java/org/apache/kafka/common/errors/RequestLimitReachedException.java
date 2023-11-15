@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.common.errors;
 
+/**
+ * A RequestLimitReachedException exception is an exception can be retried. The caller should reduce the requested resources.
+ */
+
 public class RequestLimitReachedException extends ApiException {
     public RequestLimitReachedException(String message) {
         super(message);

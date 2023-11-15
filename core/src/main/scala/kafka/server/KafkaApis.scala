@@ -43,7 +43,7 @@ import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
 import org.apache.kafka.common.message.CreateTopicsResponseData.{CreatableTopicResult, CreatableTopicResultCollection}
 import org.apache.kafka.common.message.DeleteRecordsResponseData.{DeleteRecordsPartitionResult, DeleteRecordsTopicResult}
 import org.apache.kafka.common.message.DeleteTopicsResponseData.{DeletableTopicResult, DeletableTopicResultCollection}
-import org.apache.kafka.common.message.DescribeTopicsResponseData.{DescribeTopicsResponsePartition, DescribeTopicsResponseTopic}
+import org.apache.kafka.common.message.DescribeTopicPartitionsResponseData.{DescribeTopicPartitionsResponsePartition, DescribeTopicPartitionsResponseTopic}
 import org.apache.kafka.common.message.ElectLeadersResponseData.{PartitionResult, ReplicaElectionResult}
 import org.apache.kafka.common.message.ListClientMetricsResourcesResponseData.ClientMetricsResource
 import org.apache.kafka.common.message.ListOffsetsRequestData.ListOffsetsPartition
@@ -121,7 +121,6 @@ class KafkaApis(val requestChannel: RequestChannel,
   val requestHelper = new RequestHandlerHelper(requestChannel, quotas, time)
   val aclApis = new AclApis(authHelper, authorizer, requestHelper, "broker", config)
   val configManager = new ConfigAdminManager(brokerId, config, configRepository)
-  val partitionRequestLimit = 2000
 
   def close(): Unit = {
     aclApis.close()
@@ -249,7 +248,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.DESCRIBE_QUORUM => forwardToControllerOrFail(request)
         case ApiKeys.CONSUMER_GROUP_HEARTBEAT => handleConsumerGroupHeartbeat(request).exceptionally(handleError)
         case ApiKeys.CONSUMER_GROUP_DESCRIBE => handleConsumerGroupDescribe(request).exceptionally(handleError)
-        case ApiKeys.DESCRIBE_TOPICS => handleDescribeTopicsRequest(request)
+        case ApiKeys.DESCRIBE_TOPIC_PARTITIONS => handleDescribeTopicPartitionsRequest(request)
         case ApiKeys.GET_TELEMETRY_SUBSCRIPTIONS => handleGetTelemetrySubscriptionsRequest(request)
         case ApiKeys.PUSH_TELEMETRY => handlePushTelemetryRequest(request)
         case ApiKeys.LIST_CLIENT_METRICS_RESOURCES => handleListClientMetricsResources(request)
@@ -1240,12 +1239,12 @@ class KafkaApis(val requestChannel: RequestChannel,
       .setPartitions(partitionData)
   }
 
-  private def describeTopicsResponseTopic(error: Errors,
+  private def DescribeTopicPartitionsResponseTopic(error: Errors,
                                           topic: String,
                                           topicId: Uuid,
                                           isInternal: Boolean,
-                                          partitionData: util.List[DescribeTopicsResponsePartition]): DescribeTopicsResponseTopic = {
-    new DescribeTopicsResponseTopic()
+                                          partitionData: util.List[DescribeTopicPartitionsResponsePartition]): DescribeTopicPartitionsResponseTopic = {
+    new DescribeTopicPartitionsResponseTopic()
       .setErrorCode(error.code)
       .setName(topic)
       .setTopicId(topicId)
@@ -1296,13 +1295,13 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
   }
 
-  private def getTopicMetadataForDescribeTopicResponse(topics: Map[String, Int], listenerName: ListenerName): Seq[DescribeTopicsResponseTopic] = {
+  private def getTopicMetadataForDescribeTopicResponse(topics: Map[String, Int], listenerName: ListenerName): Seq[DescribeTopicPartitionsResponseTopic] = {
     metadataCache match {
       case cache: KRaftMetadataCache => {
         val topicResponses = cache.getTopicMetadataForDescribeTopicResponse(
           topics.map(kvp => (kvp._1, kvp._2)).toSet,
           listenerName,
-          partitionRequestLimit)
+          config.maxRequestPartitionSizeLimit)
         val nonExistingTopics = topics.keySet.diff(topicResponses.map(_.name).toSet)
         val nonExistingTopicResponses =
           nonExistingTopics.map { topic =>
@@ -1314,7 +1313,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                 Errors.INVALID_TOPIC_EXCEPTION
             }
 
-            new DescribeTopicsResponseTopic()
+            new DescribeTopicPartitionsResponseTopic()
               .setErrorCode(error.code())
               .setName(topic)
               .setTopicId(cache.getTopicId(topic))
@@ -1456,11 +1455,11 @@ class KafkaApis(val requestChannel: RequestChannel,
       ))
   }
 
-  def handleDescribeTopicsRequest(request: RequestChannel.Request): Unit = {
-    val describeTopicsRequest = request.body[DescribeTopicsRequest]
+  def handleDescribeTopicPartitionsRequest(request: RequestChannel.Request): Unit = {
+    val DescribeTopicPartitionsRequest = request.body[DescribeTopicPartitionsRequest]
 
     val topics = scala.collection.mutable.Map[String, Int]()
-    describeTopicsRequest.data.topics.forEach { topic =>
+    DescribeTopicPartitionsRequest.data.topics.forEach { topic =>
       if (topic.name == null || topic.firstPartitionId() < 0) {
         throw new InvalidRequestException(s"Topic name and first partition id must be set.")
       }
@@ -1479,11 +1478,11 @@ class KafkaApis(val requestChannel: RequestChannel,
     // Do not disclose the existence of topics unauthorized for Describe, so we've not even checked if they exist or not
     val unauthorizedForDescribeTopicMetadata = {
       if (fetchAllTopics) {
-        Set.empty[DescribeTopicsResponseTopic]
+        Set.empty[DescribeTopicPartitionsResponseTopic]
       } else {
         // We should not return topicId when on unauthorized error, so we return zero uuid.
         unauthorizedForDescribeTopics.map(topic =>
-          describeTopicsResponseTopic(Errors.TOPIC_AUTHORIZATION_FAILED, topic, Uuid.ZERO_UUID, false, util.Collections.emptyList()))
+          DescribeTopicPartitionsResponseTopic(Errors.TOPIC_AUTHORIZATION_FAILED, topic, Uuid.ZERO_UUID, false, util.Collections.emptyList()))
       }
     }
 
@@ -1492,7 +1491,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val topicMetadata = getTopicMetadataForDescribeTopicResponse(targetTopics, request.context.listenerName)
 
     // get topic authorized operations
-    def setTopicAuthorizedOperations(topicMetadata: Seq[DescribeTopicsResponseTopic]): Unit = {
+    def setTopicAuthorizedOperations(topicMetadata: Seq[DescribeTopicPartitionsResponseTopic]): Unit = {
       topicMetadata.foreach { topicData =>
         topicData.setTopicAuthorizedOperations(authHelper.authorizedOperations(request, new Resource(ResourceType.TOPIC, topicData.name)))
       }
@@ -1506,7 +1505,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       request.header.correlationId, request.header.clientId))
 
     requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-      DescribeTopicsResponse.prepareResponse(requestThrottleMs, completeTopicMetadata.asJava)
+      DescribeTopicPartitionsResponse.prepareResponse(requestThrottleMs, completeTopicMetadata.asJava)
     )
   }
 

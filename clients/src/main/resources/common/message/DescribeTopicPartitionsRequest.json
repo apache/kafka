@@ -17,7 +17,7 @@
   "apiKey": 73,
   "type": "request",
   "listeners": ["broker"],
-  "name": "DescribeTopicsRequest",
+  "name": "DescribeTopicPartitionsRequest",
   "validVersions": "0",
   "flexibleVersions": "0+",
   "fields": [

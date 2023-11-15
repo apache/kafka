@@ -16,13 +16,13 @@
 {
   "apiKey": 73,
   "type": "response",
-  "name": "DescribeTopicsResponse",
+  "name": "DescribeTopicPartitionsResponse",
   "validVersions": "0",
   "flexibleVersions": "0+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+", "ignorable": true,
       "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
-    { "name": "Topics", "type": "[]DescribeTopicsResponseTopic", "versions": "0+",
+    { "name": "Topics", "type": "[]DescribeTopicPartitionsResponseTopic", "versions": "0+",
       "about": "Each topic in the response.", "fields": [
       { "name": "ErrorCode", "type": "int16", "versions": "0+",
         "about": "The topic error, or 0 if there was no error." },
@@ -31,7 +31,7 @@
       { "name": "TopicId", "type": "uuid", "versions": "0+", "ignorable": true, "about": "The topic id." },
       { "name": "IsInternal", "type": "bool", "versions": "0+", "default": "false", "ignorable": true,
         "about": "True if the topic is internal." },
-      { "name": "Partitions", "type": "[]DescribeTopicsResponsePartition", "versions": "0+",
+      { "name": "Partitions", "type": "[]DescribeTopicPartitionsResponsePartition", "versions": "0+",
         "about": "Each partition in the topic.", "fields": [
         { "name": "ErrorCode", "type": "int16", "versions": "0+",
           "about": "The partition error, or 0 if there was no error." },
@@ -55,7 +55,7 @@
           "about": "The set of offline replicas of this partition." }]},
       { "name": "TopicAuthorizedOperations", "type": "int32", "versions": "0+", "default": "-2147483648",
         "about": "32-bit bitfield to represent authorized operations for this topic." },
-      { "name": "NextPartition", "type": "int32", "versions": "0+", "default": "-1",
+      { "name": "NextPartition", "type": "int32", "versions": "0+", "default": "-1", "taggedVersions": "0+", "tag": 0,
         "about": "The first partition that exceed the request limit. " }]}
   ]
 }

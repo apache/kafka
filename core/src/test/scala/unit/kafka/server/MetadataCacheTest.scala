@@ -822,7 +822,7 @@ class MetadataCacheTest {
     recordSeq = recordSeq.appendedAll(partitionMap.values.toSeq)
     MetadataCacheTest.updateCache(metadataCache, updateMetadataRequest, recordSeq)
 
-    def checkTopicMetadata(topic: String, partitionIds: Set[Int], partitions: mutable.Buffer[DescribeTopicsResponsePartition]): Unit = {
+    def checkTopicMetadata(topic: String, partitionIds: Set[Int], partitions: mutable.Buffer[DescribeTopicPartitionsResponsePartition]): Unit = {
       partitions.foreach(partition => {
         val partitionId = partition.partitionIndex()
         assertTrue(partitionIds.contains(partitionId))

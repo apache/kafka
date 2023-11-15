@@ -34,7 +34,7 @@ import java.util
 import java.util.{Collections, Properties}
 import java.util.concurrent.ThreadLocalRandom
 import org.apache.kafka.common.config.ConfigResource
-import org.apache.kafka.common.message.DescribeTopicsResponseData.{DescribeTopicsResponsePartition, DescribeTopicsResponseTopic}
+import org.apache.kafka.common.message.DescribeTopicPartitionsResponseData.{DescribeTopicPartitionsResponsePartition, DescribeTopicPartitionsResponseTopic}
 import org.apache.kafka.common.message.{DescribeClientQuotasRequestData, DescribeClientQuotasResponseData}
 import org.apache.kafka.common.message.{DescribeUserScramCredentialsRequestData, DescribeUserScramCredentialsResponseData}
 import org.apache.kafka.metadata.{BrokerRegistration, PartitionRegistration, Replicas}
@@ -143,7 +143,7 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
 
   private def getPartitionMetadataForDescribeTopicResponse(image: MetadataImage,
                                                            topicName: String,
-                                                           listenerName: ListenerName): Option[List[DescribeTopicsResponsePartition]] = {
+                                                           listenerName: ListenerName): Option[List[DescribeTopicPartitionsResponsePartition]] = {
     Option(image.topics().getTopic(topicName)) match {
       case None => None
       case Some(topic) => {
@@ -166,7 +166,7 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
                   s"not found on leader ${partition.leader}")
                 Errors.LISTENER_NOT_FOUND
               }
-              new DescribeTopicsResponsePartition()
+              new DescribeTopicPartitionsResponsePartition()
                 .setErrorCode(error.code)
                 .setPartitionIndex(partitionId)
                 .setLeaderId(MetadataResponse.NO_LEADER_ID)
@@ -187,7 +187,7 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
                 Errors.NONE
               }
 
-              new DescribeTopicsResponsePartition()
+              new DescribeTopicPartitionsResponsePartition()
                 .setErrorCode(error.code)
                 .setPartitionIndex(partitionId)
                 .setLeaderId(leader.id())
@@ -268,7 +268,7 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
    */
   def getTopicMetadataForDescribeTopicResponse(topics: Set[(String, Int)],
                                                listenerName: ListenerName,
-                                               quota: Int): Seq[DescribeTopicsResponseTopic] = {
+                                               quota: Int): Seq[DescribeTopicPartitionsResponseTopic] = {
     val image = _currentImage
     var left = quota
     topics.toSeq.flatMap { case(topicName, startIndex) =>
@@ -276,7 +276,7 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
         val partitionResponse = getPartitionMetadataForDescribeTopicResponse(image, topicName, listenerName)
         partitionResponse.map( partitions => {
           val upperIndex = startIndex + left
-          val response = new DescribeTopicsResponseTopic()
+          val response = new DescribeTopicPartitionsResponseTopic()
             .setErrorCode(Errors.NONE.code)
             .setName(topicName)
             .setTopicId(Option(image.topics().getTopic(topicName).id()).getOrElse(Uuid.ZERO_UUID))
@@ -291,8 +291,8 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
           response
         })
       } else {
-        List[DescribeTopicsResponseTopic](
-          new DescribeTopicsResponseTopic()
+        List[DescribeTopicPartitionsResponseTopic](
+          new DescribeTopicPartitionsResponseTopic()
             .setErrorCode(Errors.REQUEST_LIMIT_REACHED.code)
             .setName(topicName)
             .setTopicId(Option(image.topics().getTopic(topicName).id()).getOrElse(Uuid.ZERO_UUID))
