@@ -56,17 +56,16 @@ public class WindowStoreMaterializer<K, V> extends MaterializedStoreFactory<K, V
 
     @Override
     public StateStore build() {
-        WindowBytesStoreSupplier supplier = (WindowBytesStoreSupplier) materialized.storeSupplier();
-        if (supplier == null) {
-            supplier = dslStoreSuppliers().windowStore(new DslWindowParams(
-                    materialized.storeName(),
-                    Duration.ofMillis(retentionPeriod),
-                    Duration.ofMillis(windows.size()),
-                    false,
-                    emitStrategy,
-                    false
-            ));
-        }
+        final WindowBytesStoreSupplier supplier = materialized.storeSupplier() == null
+                ? dslStoreSuppliers().windowStore(new DslWindowParams(
+                        materialized.storeName(),
+                        Duration.ofMillis(retentionPeriod),
+                        Duration.ofMillis(windows.size()),
+                        false,
+                        emitStrategy,
+                        false
+                ))
+                : (WindowBytesStoreSupplier) materialized.storeSupplier();
 
         final StoreBuilder<TimestampedWindowStore<K, V>> builder = Stores.timestampedWindowStoreBuilder(
                 supplier,

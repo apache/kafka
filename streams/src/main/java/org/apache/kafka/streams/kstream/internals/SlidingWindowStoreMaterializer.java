@@ -58,17 +58,16 @@ public class SlidingWindowStoreMaterializer<K, V> extends MaterializedStoreFacto
 
     @Override
     public StateStore build() {
-        WindowBytesStoreSupplier supplier = (WindowBytesStoreSupplier) materialized.storeSupplier();
-        if (supplier == null) {
-            supplier = dslStoreSuppliers().windowStore(new DslWindowParams(
-                    materialized.storeName(),
-                    Duration.ofMillis(retentionPeriod),
-                    Duration.ofMillis(windows.timeDifferenceMs()),
-                    false,
-                    emitStrategy,
-                    true
-            ));
-        }
+        final WindowBytesStoreSupplier supplier = materialized.storeSupplier() == null
+                ? dslStoreSuppliers().windowStore(new DslWindowParams(
+                        materialized.storeName(),
+                        Duration.ofMillis(retentionPeriod),
+                        Duration.ofMillis(windows.timeDifferenceMs()),
+                        false,
+                        emitStrategy,
+                        true
+                ))
+                : (WindowBytesStoreSupplier) materialized.storeSupplier();
 
         final StoreBuilder<TimestampedWindowStore<K, V>> builder = Stores
                 .timestampedWindowStoreBuilder(

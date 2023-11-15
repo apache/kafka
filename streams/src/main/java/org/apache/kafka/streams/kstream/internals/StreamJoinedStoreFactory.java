@@ -72,17 +72,16 @@ public class StreamJoinedStoreFactory<K, V1, V2> extends AbstractConfigurableSto
 
     @Override
     public StateStore build() {
-        WindowBytesStoreSupplier supplier = storeSupplier;
-        if (storeSupplier == null) {
-            supplier = dslStoreSuppliers().windowStore(new DslWindowParams(
-                    this.name,
-                    Duration.ofMillis(retentionPeriod()),
-                    Duration.ofMillis(windows.size()),
-                    true,
-                    EmitStrategy.onWindowUpdate(),
-                    false
-            ));
-        }
+        final WindowBytesStoreSupplier supplier = storeSupplier == null
+                ? dslStoreSuppliers().windowStore(new DslWindowParams(
+                        this.name,
+                        Duration.ofMillis(retentionPeriod()),
+                        Duration.ofMillis(windows.size()),
+                        true,
+                        EmitStrategy.onWindowUpdate(),
+                        false
+                ))
+                : storeSupplier;
 
         final StoreBuilder<? extends WindowStore<K, ?>> builder = Stores.windowStoreBuilder(
                 supplier,

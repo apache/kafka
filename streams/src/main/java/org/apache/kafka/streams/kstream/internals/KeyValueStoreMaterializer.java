@@ -44,10 +44,9 @@ public class KeyValueStoreMaterializer<K, V> extends MaterializedStoreFactory<K,
 
     @Override
     public StateStore build() {
-        KeyValueBytesStoreSupplier supplier = (KeyValueBytesStoreSupplier) materialized.storeSupplier();
-        if (supplier == null) {
-            supplier = dslStoreSuppliers().keyValueStore(new DslKeyValueParams(materialized.storeName()));
-        }
+        final KeyValueBytesStoreSupplier supplier = materialized.storeSupplier() == null
+                ? dslStoreSuppliers().keyValueStore(new DslKeyValueParams(materialized.storeName()))
+                : (KeyValueBytesStoreSupplier) materialized.storeSupplier();
 
         final StoreBuilder<?> builder;
         if (supplier instanceof VersionedBytesStoreSupplier) {

@@ -39,7 +39,7 @@ import org.apache.kafka.streams.processor.internals.InternalTopicConfig;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.streams.TestInputTopic;
-import org.apache.kafka.streams.state.BuiltinDslStoreSuppliers;
+import org.apache.kafka.streams.state.BuiltInDslStoreSuppliers;
 import org.apache.kafka.streams.state.DslStoreSuppliers;
 import org.apache.kafka.streams.state.DslWindowParams;
 import org.apache.kafka.streams.state.Stores;
@@ -369,7 +369,7 @@ public class KStreamKStreamJoinTest {
         final StreamJoined<String, Integer, Integer> streamJoined = StreamJoined.with(Serdes.String(), Serdes.Integer(), Serdes.Integer());
         final AtomicInteger numCallsToWindow = new AtomicInteger(0);
 
-        final DslStoreSuppliers dslStoreSuppliers = new BuiltinDslStoreSuppliers.InMemoryDslStoreSuppliers() {
+        final DslStoreSuppliers dslStoreSuppliers = new BuiltInDslStoreSuppliers.InMemoryDslStoreSuppliers() {
             @Override
             public WindowBytesStoreSupplier windowStore(final DslWindowParams params) {
                 numCallsToWindow.incrementAndGet();

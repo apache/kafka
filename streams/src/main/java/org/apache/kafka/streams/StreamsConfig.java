@@ -48,7 +48,7 @@ import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.RackAwareTaskAssignor;
-import org.apache.kafka.streams.state.BuiltinDslStoreSuppliers;
+import org.apache.kafka.streams.state.BuiltInDslStoreSuppliers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -533,6 +533,7 @@ public class StreamsConfig extends AbstractConfig {
     @Deprecated
     @SuppressWarnings("WeakerAccess")
     public static final String DEFAULT_DSL_STORE_CONFIG = "default.dsl.store";
+    @Deprecated
     public static final String DEFAULT_DSL_STORE_DOC = "The default state store type used by DSL operators.";
 
     @Deprecated
@@ -544,7 +545,7 @@ public class StreamsConfig extends AbstractConfig {
     /** {@code dsl.store.suppliers.class } */
     public static final String DSL_STORE_SUPPLIERS_CLASS_CONFIG = "dsl.store.suppliers.class";
     static final String DSL_STORE_SUPPLIERS_CLASS_DOC = "Defines which store implementations to plug in to DSL operators. Must implement the <code>org.apache.kafka.streams.state.DslStoreSuppliers</code> interface.";
-    public static final String DSL_STORE_SUPPLIERS_CLASS_DEFAULT = BuiltinDslStoreSuppliers.RocksDbDslStoreSuppliers.class.getName();
+    public static final String DSL_STORE_SUPPLIERS_CLASS_DEFAULT = BuiltInDslStoreSuppliers.RocksDBDslStoreSuppliers.class.getName();
 
     /** {@code default.windowed.key.serde.inner} */
     @SuppressWarnings("WeakerAccess")

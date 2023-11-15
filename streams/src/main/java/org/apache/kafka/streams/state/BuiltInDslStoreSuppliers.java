@@ -20,12 +20,12 @@ import org.apache.kafka.streams.kstream.EmitStrategy;
 import org.apache.kafka.streams.state.internals.RocksDbIndexedTimeOrderedWindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.RocksDbTimeOrderedSessionBytesStoreSupplier;
 
-public class BuiltinDslStoreSuppliers {
+public class BuiltInDslStoreSuppliers {
 
-    public static final DslStoreSuppliers ROCKS_DB = new RocksDbDslStoreSuppliers();
+    public static final DslStoreSuppliers ROCKS_DB = new RocksDBDslStoreSuppliers();
     public static final DslStoreSuppliers IN_MEMORY = new InMemoryDslStoreSuppliers();
 
-    public static class RocksDbDslStoreSuppliers implements DslStoreSuppliers {
+    public static class RocksDBDslStoreSuppliers implements DslStoreSuppliers {
 
         @Override
         public KeyValueBytesStoreSupplier keyValueStore(final DslKeyValueParams params) {

@@ -19,7 +19,7 @@ package org.apache.kafka.streams.kstream;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.state.BuiltinDslStoreSuppliers;
+import org.apache.kafka.streams.state.BuiltInDslStoreSuppliers;
 import org.apache.kafka.streams.state.DslKeyValueParams;
 import org.apache.kafka.streams.state.DslSessionParams;
 import org.apache.kafka.streams.state.DslStoreSuppliers;
@@ -73,8 +73,8 @@ public class Materialized<K, V, S extends StateStore> {
 
     // the built-in state store types
     public enum StoreType implements DslStoreSuppliers {
-        ROCKS_DB(BuiltinDslStoreSuppliers.ROCKS_DB),
-        IN_MEMORY(BuiltinDslStoreSuppliers.IN_MEMORY);
+        ROCKS_DB(BuiltInDslStoreSuppliers.ROCKS_DB),
+        IN_MEMORY(BuiltInDslStoreSuppliers.IN_MEMORY);
 
         private final DslStoreSuppliers delegate;
 
