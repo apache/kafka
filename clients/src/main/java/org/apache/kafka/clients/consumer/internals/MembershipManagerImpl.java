@@ -377,8 +377,14 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         // Update epoch to indicate that the member is not in the group anymore, so that the
         // onPartitionsLost is called to release assignment.
         memberEpoch = ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
-        invokeOnPartitionsLostCallback(subscriptions.assignedPartitions());
-
+        CompletableFuture<Void> callbackResult = invokeOnPartitionsLostCallback(subscriptions.assignedPartitions());
+        callbackResult.whenComplete((result, error) -> {
+            if (error != null) {
+                log.error("onPartitionsLost callback invocation failed while releasing assignment" +
+                        "after member failed with fatal error.", error);
+            }
+        });
+        subscriptions.assignFromSubscribed(Collections.emptySet());
         clearPendingAssignmentsAndLocalNamesCache();
         transitionTo(MemberState.FATAL);
     }
@@ -415,7 +421,6 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
 
         CompletableFuture<Void> callbackResult = invokeOnPartitionsRevokedOrLostToReleaseAssignment();
         callbackResult.whenComplete((result, error) -> {
-
             // Clear the subscription, no matter if the callback execution failed or succeeded.
             subscriptions.assignFromSubscribed(Collections.emptySet());
 
@@ -423,7 +428,6 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
             // group (even in the case where the member had no assignment to release or when the
             // callback execution failed.)
             transitionToSendingLeaveGroup();
-
         });
 
         clearPendingAssignmentsAndLocalNamesCache();
@@ -554,7 +558,6 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         }
 
         markReconciliationInProgress();
-
 
         // Partitions to assign (not previously owned)
         SortedSet<TopicPartition> addedPartitions = new TreeSet<>(COMPARATOR);
