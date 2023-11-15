@@ -330,6 +330,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         this.defaultApiTimeoutMs = config.getInt(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
         this.deserializers = new Deserializers<>(keyDeserializer, valueDeserializer);
         this.assignors = assignors;
+        this.groupInstanceId = Optional.ofNullable(config.getString(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG));
 
         ConsumerMetrics metricsRegistry = new ConsumerMetrics(CONSUMER_METRIC_GROUP_PREFIX);
         FetchMetricsManager fetchMetricsManager = new FetchMetricsManager(metrics, metricsRegistry.fetcherMetrics);
@@ -1202,7 +1203,11 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         private final BlockingQueue<OffsetCommitCallbackTask> callbackQueue = new LinkedBlockingQueue<>();
 
         public void submit(final OffsetCommitCallbackTask callback) {
-            callbackQueue.offer(callback);
+            try {
+                callbackQueue.offer(callback);
+            } catch (Exception e) {
+                log.error("Unexpected error encountered when adding offset commit callback to the invocation queue", e);
+            }
         }
 
         public void executeCallbacks() {
