@@ -32,6 +32,8 @@ import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Stream;
+
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
@@ -264,7 +266,14 @@ public class ClusterConnectionStatesTest {
 
     @Test
     public void testSingleIP() throws UnknownHostException {
-        assertEquals(1, ClientUtils.resolve("localhost", singleIPHostResolver).size());
+        InetAddress[] localhostIps = Stream.of(InetAddress.getByName("127.0.0.1")).toArray(InetAddress[]::new);
+        HostResolver hostResolver = host -> {
+            assertEquals("localhost", host);
+            return localhostIps;
+        };
+
+        connectionStates = new ClusterConnectionStates(reconnectBackoffMs, reconnectBackoffMax,
+            connectionSetupTimeoutMs, connectionSetupTimeoutMaxMs, new LogContext(), hostResolver);
 
         connectionStates.connecting(nodeId1, time.milliseconds(), "localhost");
         InetAddress currAddress = connectionStates.currentAddress(nodeId1);

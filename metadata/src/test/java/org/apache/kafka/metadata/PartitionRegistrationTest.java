@@ -280,8 +280,8 @@ public class PartitionRegistrationTest {
         PartitionRecord expectRecord = new PartitionRecord().
             setTopicId(topicID).
             setPartitionId(0).
-            setReplicas(Arrays.asList(new Integer[]{0, 1, 2, 3, 4})).
-            setIsr(Arrays.asList(new Integer[]{0, 1})).
+            setReplicas(Arrays.asList(0, 1, 2, 3, 4)).
+            setIsr(Arrays.asList(0, 1)).
             setLeader(0).
             setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value()).
             setLeaderEpoch(0).
@@ -290,8 +290,8 @@ public class PartitionRegistrationTest {
         when(metadataVersion.partitionRecordVersion()).thenReturn(version);
         if (version > 0) {
             expectRecord.
-                setEligibleLeaderReplicas(Arrays.asList(new Integer[]{2, 3})).
-                setLastKnownELR(Arrays.asList(new Integer[]{4}));
+                setEligibleLeaderReplicas(Arrays.asList(2, 3)).
+                setLastKnownELR(Arrays.asList(4));
         } else {
             when(metadataVersion.isElrSupported()).thenReturn(false);
         }
@@ -318,6 +318,7 @@ public class PartitionRegistrationTest {
         assertEquals(Replicas.toList(Replicas.NONE), Replicas.toList(partitionRegistration.addingReplicas));
     }
 
+    @Test
     public void testPartitionRegistrationToRecord_ElrShouldBeNullIfEmpty() {
         PartitionRegistration.Builder builder = new PartitionRegistration.Builder().
             setReplicas(new int[]{0, 1, 2, 3, 4}).
@@ -331,8 +332,8 @@ public class PartitionRegistrationTest {
         PartitionRecord expectRecord = new PartitionRecord().
             setTopicId(topicID).
             setPartitionId(0).
-            setReplicas(Arrays.asList(new Integer[]{0, 1, 2, 3, 4})).
-            setIsr(Arrays.asList(new Integer[]{0, 1})).
+            setReplicas(Arrays.asList(0, 1, 2, 3, 4)).
+            setIsr(Arrays.asList(0, 1)).
             setLeader(0).
             setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value()).
             setLeaderEpoch(0).
@@ -342,8 +343,9 @@ public class PartitionRegistrationTest {
             setMetadataVersion(MetadataVersion.latest()).
             setLossHandler(exceptions::add).
             build();
-        assertEquals(new ApiMessageAndVersion(expectRecord, (short) 2), partitionRegistration.toRecord(topicID, 0, options));
+        assertEquals(new ApiMessageAndVersion(expectRecord, (short) 1), partitionRegistration.toRecord(topicID, 0, options));
         assertEquals(Replicas.toList(Replicas.NONE), Replicas.toList(partitionRegistration.addingReplicas));
+        assertTrue(exceptions.isEmpty());
     }
 
     @Property

@@ -56,7 +56,7 @@ import java.util.Optional
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.{CompletableFuture, ExecutionException, TimeUnit, TimeoutException}
-import scala.collection.{Map, Seq}
+import scala.collection.Map
 import scala.compat.java8.OptionConverters.RichOptionForJava8
 import scala.jdk.CollectionConverters._
 
@@ -65,8 +65,7 @@ import scala.jdk.CollectionConverters._
  * A Kafka broker that runs in KRaft (Kafka Raft) mode.
  */
 class BrokerServer(
-  val sharedServer: SharedServer,
-  val initialOfflineDirs: Seq[String],
+  val sharedServer: SharedServer
 ) extends KafkaBroker {
   val config = sharedServer.brokerConfig
   val time = sharedServer.time
@@ -134,7 +133,7 @@ class BrokerServer(
 
   @volatile var brokerTopicStats: BrokerTopicStats = _
 
-  val clusterId: String = sharedServer.metaProps.clusterId
+  val clusterId: String = sharedServer.metaPropsEnsemble.clusterId().get()
 
   var brokerMetadataPublisher: BrokerMetadataPublisher = _
 
@@ -177,11 +176,6 @@ class BrokerServer(
 
       config.dynamicConfig.initialize(zkClientOpt = None)
 
-      lifecycleManager = new BrokerLifecycleManager(config,
-        time,
-        s"broker-${config.nodeId}-",
-        isZkBroker = false)
-
       /* start scheduler */
       kafkaScheduler = new KafkaScheduler(config.backgroundThreads)
       kafkaScheduler.startup()
@@ -197,10 +191,22 @@ class BrokerServer(
 
       // Create log manager, but don't start it because we need to delay any potential unclean shutdown log recovery
       // until we catch up on the metadata log and have up-to-date topic and broker configs.
-      logManager = LogManager(config, initialOfflineDirs, metadataCache, kafkaScheduler, time,
-        brokerTopicStats, logDirFailureChannel, keepPartitionMetadataFile = true)
+      logManager = LogManager(config,
+        sharedServer.metaPropsEnsemble.errorLogDirs().asScala.toSeq,
+        metadataCache,
+        kafkaScheduler,
+        time,
+        brokerTopicStats,
+        logDirFailureChannel,
+        keepPartitionMetadataFile = true)
 
       remoteLogManagerOpt = createRemoteLogManager()
+
+      lifecycleManager = new BrokerLifecycleManager(config,
+        time,
+        s"broker-${config.nodeId}-",
+        isZkBroker = false,
+        logDirs = logManager.directoryIds.values.toSet)
 
       // Enable delegation token cache for all SCRAM mechanisms to simplify dynamic update.
       // This keeps the cache up-to-date if new SCRAM mechanisms are enabled dynamically.
@@ -338,7 +344,7 @@ class BrokerServer(
       lifecycleManager.start(
         () => sharedServer.loader.lastAppliedOffset(),
         brokerLifecycleChannelManager,
-        sharedServer.metaProps.clusterId,
+        clusterId,
         listenerInfo.toBrokerRegistrationRequest,
         featuresRemapped,
         logManager.readBrokerEpochFromCleanShutdownFiles()
