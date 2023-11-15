@@ -51,9 +51,7 @@ public class MetadataCache {
     private final Node controller;
     private final Map<TopicPartition, PartitionMetadata> metadataByPartition;
     private final Map<String, Uuid> topicIds;
-
     private final Map<Uuid, String> topicNames;
-
     private Cluster clusterInstance;
 
     MetadataCache(String clusterId,
