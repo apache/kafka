@@ -100,7 +100,7 @@ public class MirrorSourceTask extends SourceTask {
         replicationPolicy = config.replicationPolicy();
         partitionStates = new HashMap<>();
         offsetSyncsTopic = config.offsetSyncsTopic();
-        consumer = MirrorUtils.newConsumer(config.sourceConsumerConfig());
+        consumer = MirrorUtils.newConsumer(config.sourceConsumerConfig("replication-consumer"));
         offsetProducer = MirrorUtils.newProducer(config.offsetSyncsTopicProducerConfig());
         Set<TopicPartition> taskTopicPartitions = config.taskTopicPartitions();
         Map<TopicPartition, Long> topicPartitionOffsets = loadOffsets(taskTopicPartitions);
@@ -305,7 +305,6 @@ public class MirrorSourceTask extends SourceTask {
     static class PartitionState {
         long previousUpstreamOffset = -1L;
         long previousDownstreamOffset = -1L;
-        long lastSyncUpstreamOffset = -1L;
         long lastSyncDownstreamOffset = -1L;
         long maxOffsetLag;
         boolean shouldSyncOffsets;
@@ -316,13 +315,14 @@ public class MirrorSourceTask extends SourceTask {
 
         // true if we should emit an offset sync
         boolean update(long upstreamOffset, long downstreamOffset) {
-            long upstreamStep = upstreamOffset - lastSyncUpstreamOffset;
-            long downstreamTargetOffset = lastSyncDownstreamOffset + upstreamStep;
-            if (lastSyncDownstreamOffset == -1L
-                    || downstreamOffset - downstreamTargetOffset >= maxOffsetLag
-                    || upstreamOffset - previousUpstreamOffset != 1L
-                    || downstreamOffset < previousDownstreamOffset) {
-                lastSyncUpstreamOffset = upstreamOffset;
+            // Emit an offset sync if any of the following conditions are true
+            boolean noPreviousSyncThisLifetime = lastSyncDownstreamOffset == -1L;
+            // the OffsetSync::translateDownstream method will translate this offset 1 past the last sync, so add 1.
+            // TODO: share common implementation to enforce this relationship
+            boolean translatedOffsetTooStale = downstreamOffset - (lastSyncDownstreamOffset + 1) >= maxOffsetLag;
+            boolean skippedUpstreamRecord = upstreamOffset - previousUpstreamOffset != 1L;
+            boolean truncatedDownstreamTopic = downstreamOffset < previousDownstreamOffset;
+            if (noPreviousSyncThisLifetime || translatedOffsetTooStale || skippedUpstreamRecord || truncatedDownstreamTopic) {
                 lastSyncDownstreamOffset = downstreamOffset;
                 shouldSyncOffsets = true;
             }

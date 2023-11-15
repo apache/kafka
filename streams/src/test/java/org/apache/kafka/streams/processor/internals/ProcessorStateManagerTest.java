@@ -35,6 +35,7 @@ import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager.StateStoreMetadata;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.TimestampedBytesStore;
+import org.apache.kafka.streams.state.internals.CachedStateStore;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.streams.state.internals.StoreQueryUtils;
 import org.apache.kafka.test.MockKeyValueStore;
@@ -369,6 +370,32 @@ public class ProcessorStateManagerTest {
 
         verify(context, store);
         assertTrue(changelogReader.isPartitionRegistered(persistentStorePartition));
+    }
+
+    @Test
+    public void shouldClearStoreCache() {
+        final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE);
+        reset(storeMetadata);
+        final CachingStore store = EasyMock.createMock(CachingStore.class);
+        expect(storeMetadata.changelogPartition()).andStubReturn(persistentStorePartition);
+        expect(storeMetadata.store()).andStubReturn(store);
+        expect(store.name()).andStubReturn(persistentStoreName);
+        store.clearCache();
+        expectLastCall().once();
+
+        context.uninitialize();
+        store.init((StateStoreContext) context, store);
+        replay(storeMetadata, context, store);
+
+        stateMgr.registerStateStores(singletonList(store), context);
+
+        stateMgr.registerStore(store, noopStateRestoreCallback, null);
+        assertTrue(changelogReader.isPartitionRegistered(persistentStorePartition));
+
+        stateMgr.recycle();
+        assertFalse(changelogReader.isPartitionRegistered(persistentStorePartition));
+        assertThat(stateMgr.getStore(persistentStoreName), equalTo(store));
+        verify(context, store);
     }
 
     @Test
@@ -1200,4 +1227,6 @@ public class ProcessorStateManagerTest {
             super(name, persistent);
         }
     }
+
+    interface CachingStore extends CachedStateStore, StateStore { }
 }

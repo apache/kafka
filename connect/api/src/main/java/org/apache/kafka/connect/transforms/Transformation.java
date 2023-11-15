@@ -26,6 +26,9 @@ import java.io.Closeable;
  * Single message transformation for Kafka Connect record types.
  * <p>
  * Connectors can be configured with transformations to make lightweight message-at-a-time modifications.
+ * <p>Kafka Connect may discover implementations of this interface using the Java {@link java.util.ServiceLoader} mechanism.
+ * To support this, implementations of this interface should also contain a service provider configuration file in
+ * {@code META-INF/services/org.apache.kafka.connect.transforms.Transformation}.
  *
  * @param <R> The type of record (must be an implementation of {@link ConnectRecord})
  */
@@ -47,10 +50,10 @@ public interface Transformation<R extends ConnectRecord<R>> extends Configurable
      */
     R apply(R record);
 
-    /** Configuration specification for this transformation. **/
+    /** Configuration specification for this transformation. */
     ConfigDef config();
 
-    /** Signal that this transformation instance will no longer will be used. **/
+    /** Signal that this transformation instance will no longer will be used. */
     @Override
     void close();
 

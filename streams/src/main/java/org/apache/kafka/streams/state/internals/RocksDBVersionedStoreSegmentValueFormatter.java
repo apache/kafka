@@ -19,6 +19,8 @@ package org.apache.kafka.streams.state.internals;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Helper utility for managing the bytes layout of the value stored in segments of the {@link RocksDBVersionedStore}.
@@ -90,6 +92,8 @@ import java.util.List;
  * from calling the method on degenerate rows as well.
  */
 final class RocksDBVersionedStoreSegmentValueFormatter {
+    private static final Logger LOG = LoggerFactory.getLogger(RocksDBVersionedStoreSegmentValueFormatter.class);
+
     private static final int TIMESTAMP_SIZE = 8;
     private static final int VALUE_SIZE = 4;
 
@@ -338,11 +342,33 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
             final ValueAndValueSize value = new ValueAndValueSize(valueOrNull);
 
             if (validFrom < nextTimestamp) {
-                // detected inconsistency edge case where older segment has [a,b) while newer store
-                // has [a,c), due to [b,c) having failed to write to newer store.
-                // remove entries from this store until the overlap is resolved.
-                // TODO: will be implemented in a follow-up PR
-                throw new UnsupportedOperationException("case not yet implemented");
+                // detected inconsistency edge case due to partial update, (i.e., a previous put()
+                // call required updating two different segments (or one segment and the latest
+                // value store) and the write to the older segment was successful whereas the write
+                // to the newer segment (or latest value store) failed. when this happened, a fatal
+                // error was thrown. streams has now restarted and we need to reconcile the store
+                // inconsistency caused by the partial update.
+                //
+                // because record versions are inserted into segments based on their validTo
+                // timestamps, the only situation in which two segments need to be updated for a
+                // single put() is when an existing record moves from a newer segment into an
+                // older segment (because its validTo timestamp is updated by the put record).
+                // when this happens, we first move the existing record from the newer to the
+                // older segment and afterwards update the newer segment with the new record.
+                // if only the first write (i.e., moving the existing record into the older segment)
+                // succeeded, then we have an overlap in [minTimestamp, nextTimestamp) ranges for
+                // the two segments, and this older segment is corrupted:
+                //  - the latest record of this older segment has [old_value, old_validFrom, updated_validTo),
+                //    which is incorrect because the dual write was not completed
+                //  - the earliest record of the newer segment has [old_value, old_validFrom, old_validTo),
+                //    which is still correct as it was never modified
+                //
+                // we have the older segment at hand, and need to truncate the partial write.
+                // do this by removing the latest entries from this segment until the overlap is resolved.
+                LOG.warn("Detected inconsistency among versioned store segments. "
+                    + "This indicates a previous failure to write to a state store. "
+                    + "Automatically recovering and continuing.");
+                truncateRecordsToTimestamp(validFrom);
             }
 
             if (nextTimestamp == validFrom) {
@@ -493,6 +519,77 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
                 return false;
             }
             return unpackedReversedTimestampAndValueSizes.get(index).timestamp == minTimestamp;
+        }
+
+        /**
+         * Delete all record versions newer than (or at) the provided timestamp, and also truncate
+         * any partial records which extend beyond the provided timestamp. In other words, when
+         * this method returns, nextTimestamp will be equal to the truncation timestamp.
+         *
+         * @param timestamp timestamp to truncate to
+         */
+        private void truncateRecordsToTimestamp(final long timestamp) {
+            if (timestamp <= minTimestamp) {
+                // all record versions in this segment will be truncated.
+                // if the total number of record versions is not one, or if the truncation timestamp
+                // does not match the minTimestamp of this segment, then this is unexpected (under
+                // normal, deterministic record processing post-recovery) and we log an extra warning
+                final int totalRecords = find(minTimestamp, false).index() + 1;
+                if (!((timestamp == minTimestamp) && (totalRecords == 1))) {
+                    LOG.warn("The versioned store inconsistency affects more than "
+                            + "one record version, even though under normal replay operations only one "
+                            + "record should be affected. Full records affected: {} (expected: 1). "
+                            + "New record timestamp: {} (expected: {}).",
+                        totalRecords,
+                        timestamp,
+                        unpackedReversedTimestampAndValueSizes.get(0).timestamp);
+                }
+
+                // delete everything in this current segment by replacing it with a degenerate segment
+                initializeWithRecord(new ValueAndValueSize(null), timestamp, timestamp);
+                return;
+            }
+
+            final SegmentSearchResult searchResult = find(timestamp, false);
+            // all records with later timestamps should be removed
+            int fullRecordsToTruncate = searchResult.index();
+            // additionally remove the current record as well, if its validFrom equals the
+            // timestamp to truncate to
+            if (searchResult.validFrom() == timestamp) {
+                fullRecordsToTruncate++;
+            }
+
+            // if the total number of record versions is not one, or if the truncation timestamp
+            // does not match the timestamp of the latest record in this segment, then this is
+            // unexpected (under normal, deterministic record processing post-recovery) and we log
+            // an extra warning
+            if (!((fullRecordsToTruncate == 1) && (searchResult.index == 0))) {
+                LOG.warn("The versioned store inconsistency affects more (or less) than "
+                    + "one record version, even though under normal replay operations only one "
+                    + "record should be affected. Full records affected: {} (expected: 1). "
+                    + "New record timestamp: {} (expected: {}).",
+                    fullRecordsToTruncate,
+                    timestamp,
+                    unpackedReversedTimestampAndValueSizes.get(0).timestamp);
+            }
+
+            if (fullRecordsToTruncate == 0) {
+                // no records to remove; update nextTimestamp and return
+                nextTimestamp = timestamp;
+                ByteBuffer.wrap(segmentValue, 0, TIMESTAMP_SIZE).putLong(0, timestamp);
+                return;
+            }
+
+            final int valuesLengthToRemove = cumulativeValueSizes.get(fullRecordsToTruncate - 1);
+            final int timestampAndValueSizesLengthToRemove = (TIMESTAMP_SIZE + VALUE_SIZE) * fullRecordsToTruncate;
+            final int newSegmentLength = segmentValue.length - valuesLengthToRemove - timestampAndValueSizesLengthToRemove;
+            segmentValue = ByteBuffer.allocate(newSegmentLength)
+                .putLong(timestamp) // update nextTimestamp as part of truncation
+                .putLong(minTimestamp)
+                .put(segmentValue, 2 * TIMESTAMP_SIZE + timestampAndValueSizesLengthToRemove, newSegmentLength - 2 * TIMESTAMP_SIZE)
+                .array();
+            nextTimestamp = timestamp;
+            resetDeserHelpers();
         }
 
         private static class TimestampAndValueSize {

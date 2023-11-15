@@ -31,6 +31,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.InvalidProducerEpochException;
 import org.apache.kafka.common.errors.ProducerFencedException;
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
@@ -55,34 +56,33 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockClientSupplier;
-
-import java.util.UUID;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.junit.MockitoJUnitRunner;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import java.util.Optional;
-import java.util.Set;
-import java.util.HashSet;
 
+import static java.util.Collections.emptyList;
+import static java.util.Collections.emptyMap;
+import static java.util.Collections.emptySet;
+import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.producerRecordSizeInBytes;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TOPIC_LEVEL_GROUP;
-
-import static org.easymock.EasyMock.expect;
-import static org.easymock.EasyMock.expectLastCall;
-import static org.easymock.EasyMock.mock;
-import static org.easymock.EasyMock.replay;
-import static org.easymock.EasyMock.verify;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
@@ -90,11 +90,11 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
-import static java.util.Collections.emptyList;
-import static java.util.Collections.emptyMap;
-import static java.util.Collections.emptySet;
-import static java.util.Collections.singletonMap;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class RecordCollectorTest {
 
     private final LogContext logContext = new LogContext("test ");
@@ -742,13 +742,11 @@ public class RecordCollectorTest {
     @Test
     public void shouldForwardFlushToStreamsProducer() {
         final StreamsProducer streamsProducer = mock(StreamsProducer.class);
-        expect(streamsProducer.eosEnabled()).andReturn(false);
-        streamsProducer.flush();
-        expectLastCall();
+        when(streamsProducer.eosEnabled()).thenReturn(false);
+        doNothing().when(streamsProducer).flush();
 
         final ProcessorTopology topology = mock(ProcessorTopology.class);
-        expect(topology.sinkTopics()).andStubReturn(Collections.emptySet());
-        replay(streamsProducer, topology);
+        when(topology.sinkTopics()).thenReturn(Collections.emptySet());
 
         final RecordCollector collector = new RecordCollectorImpl(
             logContext,
@@ -760,19 +758,14 @@ public class RecordCollectorTest {
         );
 
         collector.flush();
-
-        verify(streamsProducer);
     }
 
     @Test
     public void shouldForwardFlushToStreamsProducerEosEnabled() {
         final StreamsProducer streamsProducer = mock(StreamsProducer.class);
-        expect(streamsProducer.eosEnabled()).andReturn(true);
-        streamsProducer.flush();
-        expectLastCall();
+        when(streamsProducer.eosEnabled()).thenReturn(true);
+        doNothing().when(streamsProducer).flush();
         final ProcessorTopology topology = mock(ProcessorTopology.class);
-        expect(topology.sinkTopics()).andStubReturn(Collections.emptySet());
-        replay(streamsProducer, topology);
         
         final RecordCollector collector = new RecordCollectorImpl(
             logContext,
@@ -784,18 +777,14 @@ public class RecordCollectorTest {
         );
 
         collector.flush();
-
-        verify(streamsProducer);
     }
 
     @Test
     public void shouldNotAbortTxOnCloseCleanIfEosEnabled() {
         final StreamsProducer streamsProducer = mock(StreamsProducer.class);
-        expect(streamsProducer.eosEnabled()).andReturn(true);
+        when(streamsProducer.eosEnabled()).thenReturn(true);
         
         final ProcessorTopology topology = mock(ProcessorTopology.class);
-        expect(topology.sinkTopics()).andStubReturn(Collections.emptySet());
-        replay(streamsProducer, topology);
         
         final RecordCollector collector = new RecordCollectorImpl(
             logContext,
@@ -807,19 +796,15 @@ public class RecordCollectorTest {
         );
        
         collector.closeClean();
-
-        verify(streamsProducer);
     }
 
     @Test
     public void shouldAbortTxOnCloseDirtyIfEosEnabled() {
         final StreamsProducer streamsProducer = mock(StreamsProducer.class);
-        expect(streamsProducer.eosEnabled()).andReturn(true);
-        streamsProducer.abortTransaction();
+        when(streamsProducer.eosEnabled()).thenReturn(true);
+        doNothing().when(streamsProducer).abortTransaction();
         
         final ProcessorTopology topology = mock(ProcessorTopology.class);
-        expect(topology.sinkTopics()).andStubReturn(Collections.emptySet());
-        replay(streamsProducer, topology);
         
         final RecordCollector collector = new RecordCollectorImpl(
             logContext,
@@ -831,8 +816,6 @@ public class RecordCollectorTest {
         );
 
         collector.closeDirty();
-
-        verify(streamsProducer);
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
@@ -1388,6 +1371,80 @@ public class RecordCollectorTest {
 
         // Flush should not throw as producer is still alive.
         streamsProducer.flush();
+    }
+
+    @Test
+    public void shouldThrowStreamsExceptionUsingDefaultExceptionHandler() {
+        try (final ErrorStringSerializer errorSerializer = new ErrorStringSerializer()) {
+            final RecordCollector collector = newRecordCollector(new DefaultProductionExceptionHandler());
+            collector.initialize();
+
+            final StreamsException error = assertThrows(
+                StreamsException.class,
+                () -> collector.send(topic, "key", "val", null, 0, null, stringSerializer, errorSerializer, sinkNodeName, context)
+            );
+
+            assertThat(error.getCause(), instanceOf(SerializationException.class));
+        }
+    }
+
+    @Test
+    public void shouldDropRecordExceptionUsingAlwaysContinueExceptionHandler() {
+        try (final ErrorStringSerializer errorSerializer = new ErrorStringSerializer()) {
+            final RecordCollector collector = newRecordCollector(new AlwaysContinueProductionExceptionHandler());
+            collector.initialize();
+
+            collector.send(topic, "key", "val", null, 0, null, errorSerializer, stringSerializer, sinkNodeName, context);
+
+            assertThat(mockProducer.history().isEmpty(), equalTo(true));
+            assertThat(
+                streamsMetrics.metrics().get(new MetricName(
+                    "dropped-records-total",
+                    "stream-task-metrics",
+                    "The total number of dropped records",
+                    mkMap(
+                        mkEntry("thread-id", Thread.currentThread().getName()),
+                        mkEntry("task-id", taskId.toString())
+                    ))).metricValue(),
+                equalTo(1.0)
+            );
+        }
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    @Test
+    public void shouldNotCallProductionExceptionHandlerOnClassCastException() {
+        try (final ErrorStringSerializer errorSerializer = new ErrorStringSerializer()) {
+            final RecordCollector collector = newRecordCollector(new AlwaysContinueProductionExceptionHandler());
+            collector.initialize();
+
+            assertThat(mockProducer.history().isEmpty(), equalTo(true));
+            final StreamsException error = assertThrows(
+                StreamsException.class,
+                () -> collector.send(topic, true, "val", null, 0, null, (Serializer) errorSerializer, stringSerializer, sinkNodeName, context)
+            );
+
+            assertThat(error.getCause(), instanceOf(ClassCastException.class));
+        }
+    }
+
+    private RecordCollector newRecordCollector(final ProductionExceptionHandler productionExceptionHandler) {
+        return new RecordCollectorImpl(
+            logContext,
+            taskId,
+            streamsProducer,
+            productionExceptionHandler,
+            streamsMetrics,
+            topology
+        );
+    }
+
+    private static class ErrorStringSerializer extends StringSerializer {
+
+        @Override
+        public byte[] serialize(final String topic, final Headers headers, final String data) {
+            throw new SerializationException("Not Supported");
+        }
     }
 
     private StreamsProducer getExceptionalStreamsProducerOnSend(final Exception exception) {

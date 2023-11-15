@@ -101,7 +101,7 @@ public class AbstractConfig {
      *                            the constructor to resolve any variables in {@code originals}; may be null or empty
      * @param doLog               whether the configurations should be logged
      */
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "this-escape"})
     public AbstractConfig(ConfigDef definition, Map<?, ?> originals, Map<String, ?> configProviderProps, boolean doLog) {
         /* check that all the keys are really strings */
         for (Map.Entry<?, ?> entry : originals.entrySet())
@@ -194,7 +194,8 @@ public class AbstractConfig {
     }
 
     public String getString(String key) {
-        return (String) get(key);
+        final String res = (String) get(key);
+        return res == null ? res : res.trim();
     }
 
     public ConfigDef.Type typeOf(String key) {
@@ -517,7 +518,6 @@ public class AbstractConfig {
      * @param originals           The map of raw configs.
      * @return map of resolved config variable.
      */
-    @SuppressWarnings("unchecked")
     private Map<String, ?> resolveConfigVariables(Map<String, ?> configProviderProps, Map<String, Object> originals) {
         Map<String, String> providerConfigString;
         Map<String, ?> configProperties;

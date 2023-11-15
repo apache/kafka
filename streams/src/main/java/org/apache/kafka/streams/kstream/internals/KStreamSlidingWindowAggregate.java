@@ -31,6 +31,7 @@ import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import java.util.HashSet;
@@ -122,9 +123,11 @@ public class KStreamSlidingWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
 
             if (reverseIteratorPossible == null) {
                 try {
-                    windowStore.backwardFetch(record.key(), 0L, 0L);
-                    reverseIteratorPossible = true;
-                    log.debug("Sliding Windows aggregate using a reverse iterator");
+                    try (final WindowStoreIterator<ValueAndTimestamp<VAgg>> iterator
+                             = windowStore.backwardFetch(record.key(), 0L, 0L)) {
+                        reverseIteratorPossible = true;
+                        log.debug("Sliding Windows aggregate using a reverse iterator");
+                    }
                 } catch (final UnsupportedOperationException e)  {
                     reverseIteratorPossible = false;
                     log.debug("Sliding Windows aggregate using a forward iterator");
@@ -496,5 +499,10 @@ public class KStreamSlidingWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
 
         @Override
         public void close() {}
+
+        @Override
+        public boolean isVersioned() {
+            return false;
+        }
     }
 }

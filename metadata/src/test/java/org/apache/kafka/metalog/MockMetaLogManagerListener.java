@@ -54,13 +54,9 @@ public class MockMetaLogManagerListener implements RaftClient.Listener<ApiMessag
 
                 for (ApiMessageAndVersion messageAndVersion : batch.records()) {
                     ApiMessage message = messageAndVersion.message();
-                    StringBuilder bld = new StringBuilder();
-                    bld.append(COMMIT).append(" ").append(message.toString());
-                    serializedEvents.add(bld.toString());
+                    serializedEvents.add(COMMIT + " " + message.toString());
                 }
-                StringBuilder bld = new StringBuilder();
-                bld.append(LAST_COMMITTED_OFFSET).append(" ").append(lastCommittedOffset);
-                serializedEvents.add(bld.toString());
+                serializedEvents.add(LAST_COMMITTED_OFFSET + " " + lastCommittedOffset);
             }
         } finally {
             reader.close();
@@ -68,7 +64,7 @@ public class MockMetaLogManagerListener implements RaftClient.Listener<ApiMessag
     }
 
     @Override
-    public synchronized void handleSnapshot(SnapshotReader<ApiMessageAndVersion> reader) {
+    public synchronized void handleLoadSnapshot(SnapshotReader<ApiMessageAndVersion> reader) {
         long lastCommittedOffset = reader.lastContainedLogOffset();
         try {
             while (reader.hasNext()) {
@@ -76,13 +72,9 @@ public class MockMetaLogManagerListener implements RaftClient.Listener<ApiMessag
 
                 for (ApiMessageAndVersion messageAndVersion : batch.records()) {
                     ApiMessage message = messageAndVersion.message();
-                    StringBuilder bld = new StringBuilder();
-                    bld.append(SNAPSHOT).append(" ").append(message.toString());
-                    serializedEvents.add(bld.toString());
+                    serializedEvents.add(SNAPSHOT + " " + message.toString());
                 }
-                StringBuilder bld = new StringBuilder();
-                bld.append(LAST_COMMITTED_OFFSET).append(" ").append(lastCommittedOffset);
-                serializedEvents.add(bld.toString());
+                serializedEvents.add(LAST_COMMITTED_OFFSET + " " + lastCommittedOffset);
             }
         } finally {
             reader.close();
@@ -95,14 +87,10 @@ public class MockMetaLogManagerListener implements RaftClient.Listener<ApiMessag
         this.leaderAndEpoch = newLeaderAndEpoch;
 
         if (newLeaderAndEpoch.isLeader(nodeId)) {
-            StringBuilder bld = new StringBuilder();
-            bld.append(NEW_LEADER).append(" ").
-                append(nodeId).append(" ").append(newLeaderAndEpoch.epoch());
-            serializedEvents.add(bld.toString());
+            String bld = NEW_LEADER + " " + nodeId + " " + newLeaderAndEpoch.epoch();
+            serializedEvents.add(bld);
         } else if (oldLeaderAndEpoch.isLeader(nodeId)) {
-            StringBuilder bld = new StringBuilder();
-            bld.append(RENOUNCE).append(" ").append(newLeaderAndEpoch.epoch());
-            serializedEvents.add(bld.toString());
+            serializedEvents.add(RENOUNCE + " " + newLeaderAndEpoch.epoch());
         }
     }
 

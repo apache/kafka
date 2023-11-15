@@ -35,6 +35,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.common.utils.LogCaptureAppender;
+import org.apache.kafka.streams.processor.internals.AbstractPartitionGroup.RecordInfo;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockSourceNode;
 import org.apache.kafka.test.MockTimestampExtractor;
@@ -60,6 +61,7 @@ import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.nullValue;
+import static org.hamcrest.Matchers.startsWith;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
@@ -140,7 +142,7 @@ public class PartitionGroupTest {
 
     private void testFirstBatch(final PartitionGroup group) {
         StampedRecord record;
-        final PartitionGroup.RecordInfo info = new PartitionGroup.RecordInfo();
+        final PartitionGroup.RecordInfo info = new RecordInfo();
         assertThat(group.numBuffered(), is(0));
 
         // add three 3 records with timestamp 1, 3, 5 to partition-1
@@ -200,7 +202,7 @@ public class PartitionGroupTest {
 
     private void testSecondBatch(final PartitionGroup group) {
         StampedRecord record;
-        final PartitionGroup.RecordInfo info = new PartitionGroup.RecordInfo();
+        final PartitionGroup.RecordInfo info = new RecordInfo();
 
         // add 2 more records with timestamp 2, 4 to partition-1
         final List<ConsumerRecord<byte[], byte[]>> list3 = Arrays.asList(
@@ -323,7 +325,7 @@ public class PartitionGroupTest {
         assertEquals(0.0, metrics.metric(lastLatenessValue).metricValue());
 
         StampedRecord record;
-        final PartitionGroup.RecordInfo info = new PartitionGroup.RecordInfo();
+        final PartitionGroup.RecordInfo info = new RecordInfo();
 
         // get first two records from partition 1
         record = group.nextRecord(info, time.milliseconds());
@@ -435,22 +437,35 @@ public class PartitionGroupTest {
 
     @Test
     public void shouldEmptyPartitionsOnClear() {
-        final PartitionGroup group = getBasicGroup();
+        final PartitionGroup group =
+            new PartitionGroup(
+                logContext,
+                mkMap(
+                    mkEntry(partition1, queue1)
+                ),
+                tp -> OptionalLong.of(0L),
+                getValueSensor(metrics, lastLatenessValue),
+                enforcedProcessingSensor,
+                10
+            );
 
         final List<ConsumerRecord<byte[], byte[]>> list = Arrays.asList(
                 new ConsumerRecord<>("topic", 1, 1L, recordKey, recordValue),
                 new ConsumerRecord<>("topic", 1, 3L, recordKey, recordValue),
                 new ConsumerRecord<>("topic", 1, 5L, recordKey, recordValue));
         group.addRawRecords(partition1, list);
-        group.nextRecord(new PartitionGroup.RecordInfo(), time.milliseconds());
-        group.nextRecord(new PartitionGroup.RecordInfo(), time.milliseconds());
+        group.nextRecord(new RecordInfo(), time.milliseconds());
+        group.nextRecord(new RecordInfo(), time.milliseconds());
+        group.updateLags();
+
 
         group.clear();
 
         assertThat(group.numBuffered(), equalTo(0));
         assertThat(group.streamTime(), equalTo(RecordQueue.UNKNOWN));
-        assertThat(group.nextRecord(new PartitionGroup.RecordInfo(), time.milliseconds()), equalTo(null));
+        assertThat(group.nextRecord(new RecordInfo(), time.milliseconds()), equalTo(null));
         assertThat(group.partitionTimestamp(partition1), equalTo(RecordQueue.UNKNOWN));
+        hasNoFetchedLag(group, partition1);
 
         group.addRawRecords(partition1, list);
     }
@@ -470,7 +485,7 @@ public class PartitionGroupTest {
         group.addRawRecords(partition2, list2);
         assertEquals(list1.size() + list2.size(), group.numBuffered());
         assertTrue(group.allPartitionsBufferedLocally());
-        group.nextRecord(new PartitionGroup.RecordInfo(), time.milliseconds());
+        group.nextRecord(new RecordInfo(), time.milliseconds());
 
         // shrink list of queues
         group.updatePartitions(mkSet(createPartition2()), p -> {
@@ -482,7 +497,7 @@ public class PartitionGroupTest {
         assertEquals(list2.size(), group.numBuffered());
         assertEquals(1, group.streamTime());
         assertThrows(IllegalStateException.class, () -> group.partitionTimestamp(partition1));
-        assertThat(group.nextRecord(new PartitionGroup.RecordInfo(), time.milliseconds()), notNullValue());  // can access buffered records
+        assertThat(group.nextRecord(new RecordInfo(), time.milliseconds()), notNullValue());  // can access buffered records
         assertThat(group.partitionTimestamp(partition2), equalTo(2L));
     }
 
@@ -504,7 +519,7 @@ public class PartitionGroupTest {
 
         assertEquals(list1.size(), group.numBuffered());
         assertTrue(group.allPartitionsBufferedLocally());
-        group.nextRecord(new PartitionGroup.RecordInfo(), time.milliseconds());
+        group.nextRecord(new RecordInfo(), time.milliseconds());
 
         // expand list of queues
         group.updatePartitions(mkSet(createPartition1(), createPartition2()), p -> {
@@ -517,7 +532,7 @@ public class PartitionGroupTest {
         assertEquals(1, group.streamTime());
         assertThat(group.partitionTimestamp(partition1), equalTo(1L));
         assertThat(group.partitionTimestamp(partition2), equalTo(RecordQueue.UNKNOWN));
-        assertThat(group.nextRecord(new PartitionGroup.RecordInfo(), time.milliseconds()), notNullValue());  // can access buffered records
+        assertThat(group.nextRecord(new RecordInfo(), time.milliseconds()), notNullValue());  // can access buffered records
     }
 
     @Test
@@ -537,7 +552,7 @@ public class PartitionGroupTest {
         group.addRawRecords(partition1, list1);
         assertEquals(list1.size(), group.numBuffered());
         assertTrue(group.allPartitionsBufferedLocally());
-        group.nextRecord(new PartitionGroup.RecordInfo(), time.milliseconds());
+        group.nextRecord(new RecordInfo(), time.milliseconds());
 
         // expand and shrink list of queues
         group.updatePartitions(mkSet(createPartition2()), p -> {
@@ -550,7 +565,7 @@ public class PartitionGroupTest {
         assertEquals(1, group.streamTime());
         assertThrows(IllegalStateException.class, () -> group.partitionTimestamp(partition1));
         assertThat(group.partitionTimestamp(partition2), equalTo(RecordQueue.UNKNOWN));
-        assertThat(group.nextRecord(new PartitionGroup.RecordInfo(), time.milliseconds()), nullValue());  // all available records removed
+        assertThat(group.nextRecord(new RecordInfo(), time.milliseconds()), nullValue());  // all available records removed
     }
 
     @Test
@@ -575,7 +590,7 @@ public class PartitionGroupTest {
 
         assertThat(group.allPartitionsBufferedLocally(), is(false));
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(PartitionGroup.class)) {
-            LogCaptureAppender.setClassLoggerToTrace(PartitionGroup.class);
+            appender.setClassLoggerToTrace(PartitionGroup.class);
             assertThat(group.readyToProcess(0L), is(true));
             assertThat(
                 appender.getEvents(),
@@ -619,7 +634,7 @@ public class PartitionGroupTest {
 
         assertThat(group.allPartitionsBufferedLocally(), is(true));
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(PartitionGroup.class)) {
-            LogCaptureAppender.setClassLoggerToTrace(PartitionGroup.class);
+            appender.setClassLoggerToTrace(PartitionGroup.class);
             assertThat(group.readyToProcess(0L), is(true));
             assertThat(
                 appender.getEvents(),
@@ -654,7 +669,7 @@ public class PartitionGroupTest {
 
         assertThat(group.allPartitionsBufferedLocally(), is(false));
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(PartitionGroup.class)) {
-            LogCaptureAppender.setClassLoggerToTrace(PartitionGroup.class);
+            appender.setClassLoggerToTrace(PartitionGroup.class);
             assertThat(group.readyToProcess(0L), is(false));
             assertThat(
                 appender.getEvents(),
@@ -665,6 +680,7 @@ public class PartitionGroupTest {
             );
         }
         lags.put(partition2, OptionalLong.of(0L));
+        group.updateLags();
         assertThat(group.readyToProcess(0L), is(true));
     }
 
@@ -690,11 +706,12 @@ public class PartitionGroupTest {
         group.addRawRecords(partition1, list1);
 
         lags.put(partition2, OptionalLong.of(1L));
+        group.updateLags();
 
         assertThat(group.allPartitionsBufferedLocally(), is(false));
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(PartitionGroup.class)) {
-            LogCaptureAppender.setClassLoggerToTrace(PartitionGroup.class);
+            appender.setClassLoggerToTrace(PartitionGroup.class);
             assertThat(group.readyToProcess(0L), is(false));
             assertThat(
                 appender.getEvents(),
@@ -720,6 +737,7 @@ public class PartitionGroupTest {
             getValueSensor(metrics, totalBytesValue),
             1L
         );
+        group.updateLags();
 
         final List<ConsumerRecord<byte[], byte[]>> list1 = Arrays.asList(
             new ConsumerRecord<>("topic", 1, 1L, recordKey, recordValue),
@@ -729,7 +747,7 @@ public class PartitionGroupTest {
         assertThat(group.allPartitionsBufferedLocally(), is(false));
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(PartitionGroup.class)) {
-            LogCaptureAppender.setClassLoggerToTrace(PartitionGroup.class);
+            appender.setClassLoggerToTrace(PartitionGroup.class);
             assertThat(group.readyToProcess(0L), is(false));
             assertThat(
                 appender.getEvents(),
@@ -741,7 +759,7 @@ public class PartitionGroupTest {
         }
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(PartitionGroup.class)) {
-            LogCaptureAppender.setClassLoggerToTrace(PartitionGroup.class);
+            appender.setClassLoggerToTrace(PartitionGroup.class);
             assertThat(group.readyToProcess(1L), is(true));
             assertThat(
                 appender.getEvents(),
@@ -760,7 +778,7 @@ public class PartitionGroupTest {
         }
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(PartitionGroup.class)) {
-            LogCaptureAppender.setClassLoggerToTrace(PartitionGroup.class);
+            appender.setClassLoggerToTrace(PartitionGroup.class);
             assertThat(group.readyToProcess(2L), is(true));
             assertThat(
                 appender.getEvents(),
@@ -852,6 +870,74 @@ public class PartitionGroupTest {
             rawRecordsSizeInBytes += consumerRecordSizeInBytes(rawRecord);
         }
         return rawRecordsSizeInBytes;
+
+      private void hasNoFetchedLag(final PartitionGroup group, final TopicPartition partition) {
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(PartitionGroup.class)) {
+            appender.setClassLoggerToTrace(PartitionGroup.class);
+            assertFalse(group.readyToProcess(0L));
+            assertThat(appender.getEvents(), hasItem(Matchers.hasProperty("message",
+                equalTo(String.format("[test] Waiting to fetch data for %s", partition)))));
+        }
+    }
+
+    private void hasZeroFetchedLag(final PartitionGroup group, final TopicPartition partition) {
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(PartitionGroup.class)) {
+            appender.setClassLoggerToTrace(PartitionGroup.class);
+            assertFalse(group.readyToProcess(0L));
+            assertThat(appender.getEvents(), hasItem(Matchers.hasProperty("message",
+                startsWith(String.format("[test] Lag for %s is currently 0 and current time is %d. "
+                    + "Waiting for new data to be produced for configured idle time", partition, 0L)))));
+        }
+    }
+
+    @SuppressWarnings("SameParameterValue")
+    private void hasNonZeroFetchedLag(final PartitionGroup group, final TopicPartition partition, final long lag) {
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(PartitionGroup.class)) {
+            appender.setClassLoggerToTrace(PartitionGroup.class);
+            assertFalse(group.readyToProcess(0L));
+            assertThat(appender.getEvents(), hasItem(Matchers.hasProperty("message",
+                equalTo(String.format("[test] Lag for %s is currently %d, but no data is buffered locally. "
+                    + "Waiting to buffer some records.", partition, lag)))));
+        }
+    }
+
+
+    @Test
+    public void shouldUpdateLags() {
+        final HashMap<TopicPartition, OptionalLong> lags = new HashMap<>();
+        final PartitionGroup group = new PartitionGroup(
+            logContext,
+            mkMap(
+                mkEntry(partition1, queue1)
+            ),
+            tp -> lags.getOrDefault(tp, OptionalLong.empty()),
+            getValueSensor(metrics, lastLatenessValue),
+            enforcedProcessingSensor,
+            10L
+        );
+
+        hasNoFetchedLag(group, partition1);
+
+        lags.put(partition1, OptionalLong.of(5));
+
+        hasNoFetchedLag(group, partition1);
+
+        group.updateLags();
+
+        hasNonZeroFetchedLag(group, partition1, 5);
+
+        lags.put(partition1, OptionalLong.of(0));
+        group.updateLags();
+
+        hasZeroFetchedLag(group, partition1);
+
+        lags.remove(partition1);
+
+        hasZeroFetchedLag(group, partition1);
+
+        group.updateLags();
+
+        hasNoFetchedLag(group, partition1);
     }
 
     private PartitionGroup getBasicGroup() {

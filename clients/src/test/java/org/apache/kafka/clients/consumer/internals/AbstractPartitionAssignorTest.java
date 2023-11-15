@@ -165,8 +165,23 @@ public class AbstractPartitionAssignorTest {
                                             List<List<String>> consumerTopics,
                                             List<String> expectedAssignments,
                                             int numPartitionsWithRackMismatch) {
+        verifyRackAssignment(assignor, numPartitionsPerTopic, replicationFactor,
+                brokerRacks, consumerRacks, consumerTopics, Collections.emptyList(),
+                expectedAssignments, numPartitionsWithRackMismatch);
+
+    }
+
+    public static void verifyRackAssignment(AbstractPartitionAssignor assignor,
+                                            Map<String, Integer> numPartitionsPerTopic,
+                                            int replicationFactor,
+                                            List<String> brokerRacks,
+                                            List<String> consumerRacks,
+                                            List<List<String>> consumerTopics,
+                                            List<String> consumerOwnedPartitions,
+                                            List<String> expectedAssignments,
+                                            int numPartitionsWithRackMismatch) {
         List<String> consumers = IntStream.range(0, consumerRacks.size()).mapToObj(i -> "consumer" + i).collect(Collectors.toList());
-        List<Subscription> subscriptions = subscriptions(consumerTopics, consumerRacks);
+        List<Subscription> subscriptions = subscriptions(consumerTopics, consumerRacks, consumerOwnedPartitions);
         Map<String, List<PartitionInfo>> partitionsPerTopic = partitionsPerTopic(numPartitionsPerTopic, replicationFactor, brokerRacks);
 
         Map<String, Subscription> subscriptionsByConsumer = new HashMap<>(consumers.size());
@@ -205,11 +220,36 @@ public class AbstractPartitionAssignorTest {
         return Utils.join(partitions.stream().map(Object::toString).sorted().collect(Collectors.toList()), ", ");
     }
 
-    private static List<Subscription> subscriptions(List<List<String>> consumerTopics, List<String> consumerRacks) {
+    private static List<Subscription> subscriptions(List<List<String>> consumerTopics,
+                                                    List<String> consumerRacks,
+                                                    List<String> consumerOwnedPartitions) {
+        List<List<TopicPartition>> ownedPartitions = ownedPartitions(consumerOwnedPartitions, consumerTopics.size());
         List<Subscription> subscriptions = new ArrayList<>(consumerTopics.size());
-        for (int i = 0; i < consumerTopics.size(); i++)
-            subscriptions.add(new Subscription(consumerTopics.get(i), null, Collections.emptyList(), DEFAULT_GENERATION, Optional.ofNullable(consumerRacks.get(i))));
+        for (int i = 0; i < consumerTopics.size(); i++) {
+            subscriptions.add(new Subscription(consumerTopics.get(i), null, ownedPartitions.get(i),
+                    DEFAULT_GENERATION, Optional.ofNullable(consumerRacks.get(i))));
+        }
         return subscriptions;
+    }
+
+    private static List<List<TopicPartition>> ownedPartitions(List<String> consumerOwnedPartitions, int numConsumers) {
+        List<List<TopicPartition>> owedPartitions = new ArrayList<>(numConsumers);
+        for (int i = 0; i < numConsumers; i++) {
+            List<TopicPartition> owned = Collections.emptyList();
+            if (consumerOwnedPartitions == null || consumerOwnedPartitions.size() <= i)
+                owedPartitions.add(owned);
+            else {
+                String[] partitions = consumerOwnedPartitions.get(i).split(", ");
+                List<TopicPartition> topicPartitions = new ArrayList<>(partitions.length);
+                for (String partition : partitions) {
+                    String topic = partition.substring(0, partition.lastIndexOf('-'));
+                    int p = Integer.parseInt(partition.substring(partition.lastIndexOf('-') + 1));
+                    topicPartitions.add(new TopicPartition(topic, p));
+                }
+                owedPartitions.add(topicPartitions);
+            }
+        }
+        return owedPartitions;
     }
 
     private static Map<String, List<PartitionInfo>> partitionsPerTopic(Map<String, Integer> numPartitionsPerTopic,

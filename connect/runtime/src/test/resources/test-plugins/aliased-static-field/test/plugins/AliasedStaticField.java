@@ -30,7 +30,7 @@ import org.apache.kafka.connect.runtime.isolation.SamplingTestPlugin;
  * <p>Samples data about its initialization environment for later analysis.
  * Samples are shared between instances of the same class in a static variable.
  */
-public class AliasedStaticField extends SamplingTestPlugin implements Converter {
+public class AliasedStaticField implements SamplingTestPlugin, Converter {
 
   private static final Map<String, SamplingTestPlugin> SAMPLES;
   private static final ClassLoader STATIC_CLASS_LOADER;

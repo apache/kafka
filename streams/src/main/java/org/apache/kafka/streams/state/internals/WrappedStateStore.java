@@ -26,6 +26,7 @@ import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.TimestampedBytesStore;
+import org.apache.kafka.streams.state.VersionedBytesStore;
 
 /**
  * A storage engine wrapper for utilities like logging, caching, and metering.
@@ -37,6 +38,16 @@ public abstract class WrappedStateStore<S extends StateStore, K, V> implements S
             return true;
         } else if (stateStore instanceof WrappedStateStore) {
             return isTimestamped(((WrappedStateStore) stateStore).wrapped());
+        } else {
+            return false;
+        }
+    }
+
+    public static boolean isVersioned(final StateStore stateStore) {
+        if (stateStore instanceof VersionedBytesStore) {
+            return true;
+        } else if (stateStore instanceof WrappedStateStore) {
+            return isVersioned(((WrappedStateStore) stateStore).wrapped());
         } else {
             return false;
         }
@@ -76,6 +87,14 @@ public abstract class WrappedStateStore<S extends StateStore, K, V> implements S
             ((CachedStateStore) wrapped).flushCache();
         }
     }
+
+    @Override
+    public void clearCache() {
+        if (wrapped instanceof CachedStateStore) {
+            ((CachedStateStore) wrapped).clearCache();
+        }
+    }
+
 
     @Override
     public String name() {

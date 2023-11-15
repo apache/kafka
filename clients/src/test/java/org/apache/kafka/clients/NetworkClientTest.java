@@ -250,7 +250,7 @@ public class NetworkClientTest {
 
     private void awaitReady(NetworkClient client, Node node) {
         if (client.discoverBrokerVersions()) {
-            setExpectedApiVersionsResponse(ApiVersionsResponse.defaultApiVersionsResponse(
+            setExpectedApiVersionsResponse(TestUtils.defaultApiVersionsResponse(
                 ApiMessageType.ListenerType.ZK_BROKER));
         }
         while (!client.ready(node, time.milliseconds()))
@@ -461,7 +461,7 @@ public class NetworkClientTest {
 
     /**
      * This is a helper method that will execute two produce calls. The first call is expected to work and the
-     * second produce call is intentionally made to emulate a request timeout. In the case that a timeout occurrs
+     * second produce call is intentionally made to emulate a request timeout. In the case that a timeout occurs
      * during a request, we want to ensure that we {@link Metadata#requestUpdate() request a metadata update} so that
      * on a subsequent invocation of {@link NetworkClient#poll(long, long) poll}, the metadata request will be sent.
      *
@@ -475,7 +475,7 @@ public class NetworkClientTest {
      * @param requestTimeoutMs Timeout in ms
      */
     private void testRequestTimeout(int requestTimeoutMs) {
-        Metadata metadata = new Metadata(50, 5000, new LogContext(), new ClusterResourceListeners());
+        Metadata metadata = new Metadata(50, 50, 5000, new LogContext(), new ClusterResourceListeners());
         MetadataResponse metadataResponse = RequestTestUtils.metadataUpdateWith(2, Collections.emptyMap());
         metadata.updateWithCurrentRequestVersion(metadataResponse, false, time.milliseconds());
 
@@ -701,7 +701,7 @@ public class NetworkClientTest {
         int refreshBackoffMs = 50;
 
         MetadataResponse metadataResponse = RequestTestUtils.metadataUpdateWith(2, Collections.emptyMap());
-        Metadata metadata = new Metadata(refreshBackoffMs, 5000, new LogContext(), new ClusterResourceListeners());
+        Metadata metadata = new Metadata(refreshBackoffMs, refreshBackoffMs, 5000, new LogContext(), new ClusterResourceListeners());
         metadata.updateWithCurrentRequestVersion(metadataResponse, false, time.milliseconds());
 
         Cluster cluster = metadata.fetch();
@@ -712,7 +712,7 @@ public class NetworkClientTest {
 
         awaitReady(client, node1);
 
-        metadata.requestUpdate();
+        metadata.requestUpdate(true);
         time.sleep(refreshBackoffMs);
 
         client.poll(0, time.milliseconds());
@@ -1183,7 +1183,7 @@ public class NetworkClientTest {
     }
 
     private ApiVersionsResponse defaultApiVersionsResponse() {
-        return ApiVersionsResponse.defaultApiVersionsResponse(ApiMessageType.ListenerType.ZK_BROKER);
+        return TestUtils.defaultApiVersionsResponse(ApiMessageType.ListenerType.ZK_BROKER);
     }
 
     private static class TestCallbackHandler implements RequestCompletionHandler {

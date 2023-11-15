@@ -36,6 +36,7 @@ import org.slf4j.Logger;
 import static org.apache.kafka.streams.state.internals.RecordConverters.identity;
 import static org.apache.kafka.streams.state.internals.RecordConverters.rawValueToTimestampedValue;
 import static org.apache.kafka.streams.state.internals.WrappedStateStore.isTimestamped;
+import static org.apache.kafka.streams.state.internals.WrappedStateStore.isVersioned;
 
 /**
  * Shared functions to handle state store registration and cleanup between
@@ -48,7 +49,9 @@ final class StateManagerUtil {
     private StateManagerUtil() {}
 
     static RecordConverter converterForStore(final StateStore store) {
-        return isTimestamped(store) ? rawValueToTimestampedValue() : identity();
+        // should not prepend timestamp when restoring records for versioned store, as
+        // timestamp is used separately during put() process for restore of versioned stores
+        return (isTimestamped(store) && !isVersioned(store)) ? rawValueToTimestampedValue() : identity();
     }
 
     static boolean checkpointNeeded(final boolean enforceCheckpoint,

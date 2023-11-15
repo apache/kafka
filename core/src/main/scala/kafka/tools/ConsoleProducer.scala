@@ -24,33 +24,81 @@ import java.util.regex.Pattern
 import joptsimple.{OptionException, OptionParser, OptionSet}
 import kafka.common.MessageReader
 import kafka.utils.Implicits._
-import kafka.utils.{Exit, ToolsUtils}
+import kafka.utils.{Exit, Logging, ToolsUtils}
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
-import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
+import org.apache.kafka.clients.producer.{KafkaProducer, Producer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.record.CompressionType
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
+import org.apache.kafka.tools.api.RecordReader
 
-object ConsoleProducer {
+import scala.annotation.nowarn
+
+@nowarn("cat=deprecation")
+object ConsoleProducer extends Logging {
+
+  private[tools] def newReader(className: String, prop: Properties): RecordReader = {
+    val reader = Class.forName(className).getDeclaredConstructor().newInstance()
+    reader match {
+      case r: RecordReader =>
+        r.configure(prop.asInstanceOf[java.util.Map[String, _]])
+        r
+      case r: MessageReader =>
+        logger.warn("MessageReader is deprecated. Please use org.apache.kafka.tools.api.RecordReader instead")
+        new RecordReader {
+          private[this] var initialized = false
+
+          override def readRecords(inputStream: InputStream): java.util.Iterator[ProducerRecord[Array[Byte], Array[Byte]]] = {
+            if (initialized) throw new IllegalStateException("It is invalid to call readRecords again when the reader is based on deprecated MessageReader")
+            if (!initialized) {
+              r.init(inputStream, prop)
+              initialized = true
+            }
+            new java.util.Iterator[ProducerRecord[Array[Byte], Array[Byte]]] {
+              private[this] var current: ProducerRecord[Array[Byte], Array[Byte]] = _
+              // a flag used to avoid accessing readMessage again after it does return null
+              private[this] var done: Boolean = false
+
+              override def hasNext: Boolean = {
+                if (current != null) true
+                else if (done) false
+                else {
+                  current = r.readMessage()
+                  done = current == null
+                  !done
+                }
+              }
+
+              override def next(): ProducerRecord[Array[Byte], Array[Byte]] =
+                try if (hasNext) current
+                else throw new NoSuchElementException("no more records from input stream")
+                finally current = null
+            }
+          }
+          override def close(): Unit = r.close()
+        }
+      case _ => throw new IllegalArgumentException(f"the reader must extend ${classOf[RecordReader].getName}")
+    }
+  }
+
+  private[tools] def loopReader(producer: Producer[Array[Byte], Array[Byte]],
+                               reader: RecordReader,
+                                inputStream: InputStream,
+                               sync: Boolean): Unit = {
+    val iter = reader.readRecords(inputStream)
+    try while (iter.hasNext) send(producer, iter.next(), sync) finally reader.close()
+  }
 
   def main(args: Array[String]): Unit = {
 
     try {
-        val config = new ProducerConfig(args)
-        val reader = Class.forName(config.readerClass).getDeclaredConstructor().newInstance().asInstanceOf[MessageReader]
-        reader.init(System.in, getReaderProps(config))
-
-        val producer = new KafkaProducer[Array[Byte], Array[Byte]](producerProps(config))
-
-    Exit.addShutdownHook("producer-shutdown-hook", producer.close)
-
-        var record: ProducerRecord[Array[Byte], Array[Byte]] = null
-        do {
-          record = reader.readMessage()
-          if (record != null)
-            send(producer, record, config.sync)
-        } while (record != null)
+      val config = new ProducerConfig(args)
+      val input = System.in
+      val producer = new KafkaProducer[Array[Byte], Array[Byte]](producerProps(config))
+      try loopReader(producer, newReader(config.readerClass, getReaderProps(config)), input, config.sync)
+      finally producer.close()
+      Exit.exit(0)
     } catch {
       case e: joptsimple.OptionException =>
         System.err.println(e.getMessage)
@@ -59,10 +107,9 @@ object ConsoleProducer {
         e.printStackTrace
         Exit.exit(1)
     }
-    Exit.exit(0)
   }
 
-  private def send(producer: KafkaProducer[Array[Byte], Array[Byte]],
+  private def send(producer: Producer[Array[Byte], Array[Byte]],
                          record: ProducerRecord[Array[Byte], Array[Byte]], sync: Boolean): Unit = {
     if (sync)
       producer.send(record).get()
@@ -292,9 +339,8 @@ object ConsoleProducer {
     }
   }
 
-  class LineMessageReader extends MessageReader {
+  class LineMessageReader extends RecordReader {
     var topic: String = _
-    var reader: BufferedReader = _
     var parseKey = false
     var keySeparator = "\t"
     var parseHeaders = false
@@ -307,23 +353,23 @@ object ConsoleProducer {
     var headersSeparatorPattern: Pattern = _
     var nullMarker: String = _
 
-    override def init(inputStream: InputStream, props: Properties): Unit = {
-      topic = props.getProperty("topic")
+    override def configure(props: java.util.Map[String, _]): Unit = {
+      topic = props.get("topic").toString
       if (props.containsKey("parse.key"))
-        parseKey = props.getProperty("parse.key").trim.equalsIgnoreCase("true")
+        parseKey = props.get("parse.key").toString.trim.equalsIgnoreCase("true")
       if (props.containsKey("key.separator"))
-        keySeparator = props.getProperty("key.separator")
+        keySeparator = props.get("key.separator").toString
       if (props.containsKey("parse.headers"))
-        parseHeaders = props.getProperty("parse.headers").trim.equalsIgnoreCase("true")
+        parseHeaders = props.get("parse.headers").toString.trim.equalsIgnoreCase("true")
       if (props.containsKey("headers.delimiter"))
-        headersDelimiter = props.getProperty("headers.delimiter")
+        headersDelimiter = props.get("headers.delimiter").toString
       if (props.containsKey("headers.separator"))
-        headersSeparator = props.getProperty("headers.separator")
+        headersSeparator = props.get("headers.separator").toString
       headersSeparatorPattern = Pattern.compile(headersSeparator)
       if (props.containsKey("headers.key.separator"))
-        headersKeySeparator = props.getProperty("headers.key.separator")
+        headersKeySeparator = props.get("headers.key.separator").toString
       if (props.containsKey("ignore.error"))
-        ignoreError = props.getProperty("ignore.error").trim.equalsIgnoreCase("true")
+        ignoreError = props.get("ignore.error").toString.trim.equalsIgnoreCase("true")
       if (headersDelimiter == headersSeparator)
         throw new KafkaException("headers.delimiter and headers.separator may not be equal")
       if (headersDelimiter == headersKeySeparator)
@@ -331,7 +377,7 @@ object ConsoleProducer {
       if (headersSeparator == headersKeySeparator)
         throw new KafkaException("headers.separator and headers.key.separator may not be equal")
       if (props.containsKey("null.marker"))
-        nullMarker = props.getProperty("null.marker")
+        nullMarker = props.get("null.marker").toString
       if (nullMarker == keySeparator)
         throw new KafkaException("null.marker and key.separator may not be equal")
       if (nullMarker == headersSeparator)
@@ -340,38 +386,48 @@ object ConsoleProducer {
         throw new KafkaException("null.marker and headers.delimiter may not be equal")
       if (nullMarker == headersKeySeparator)
         throw new KafkaException("null.marker and headers.key.separator may not be equal")
-      reader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8))
     }
 
-    override def readMessage(): ProducerRecord[Array[Byte], Array[Byte]] = {
-      lineNumber += 1
-      if (printPrompt) print(">")
-      val line = reader.readLine()
-      line match {
-        case null => null
-        case line =>
-          val headers = parse(parseHeaders, line, 0, headersDelimiter, "headers delimiter")
-          val headerOffset = if (headers == null) 0 else headers.length + headersDelimiter.length
+    override def readRecords(inputStream: InputStream): java.util.Iterator[ProducerRecord[Array[Byte], Array[Byte]]] =
+      new java.util.Iterator[ProducerRecord[Array[Byte], Array[Byte]]] {
+        private[this] val reader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8))
+        private[this] var current: ProducerRecord[Array[Byte], Array[Byte]] = _
+        override def hasNext: Boolean =
+          if (current != null) true
+          else {
+            lineNumber += 1
+            if (printPrompt) print(">")
+            val line = reader.readLine()
+            current = line match {
+              case null => null
+              case line =>
+                val headers = parse(parseHeaders, line, 0, headersDelimiter, "headers delimiter")
+                val headerOffset = if (headers == null) 0 else headers.length + headersDelimiter.length
 
-          val key = parse(parseKey, line, headerOffset, keySeparator, "key separator")
-          val keyOffset = if (key == null) 0 else key.length + keySeparator.length
+                val key = parse(parseKey, line, headerOffset, keySeparator, "key separator")
+                val keyOffset = if (key == null) 0 else key.length + keySeparator.length
 
-          val value = line.substring(headerOffset + keyOffset)
+                val value = line.substring(headerOffset + keyOffset)
 
-          val record = new ProducerRecord[Array[Byte], Array[Byte]](
-            topic,
-            if (key != null && key != nullMarker) key.getBytes(StandardCharsets.UTF_8) else null,
-            if (value != null && value != nullMarker) value.getBytes(StandardCharsets.UTF_8) else null,
-          )
+                val record = new ProducerRecord[Array[Byte], Array[Byte]](
+                  topic,
+                  if (key != null && key != nullMarker) key.getBytes(StandardCharsets.UTF_8) else null,
+                  if (value != null && value != nullMarker) value.getBytes(StandardCharsets.UTF_8) else null,
+                )
 
-          if (headers != null && headers != nullMarker) {
-            splitHeaders(headers)
-              .foreach(header => record.headers.add(header._1, header._2))
+                if (headers != null && headers != nullMarker) {
+                  splitHeaders(headers)
+                    .foreach(header => record.headers.add(header._1, header._2))
+                }
+                record
+            }
+            current != null
           }
 
-          record
+        override def next(): ProducerRecord[Array[Byte], Array[Byte]] = if (!hasNext) throw new NoSuchElementException("no more record")
+        else try current finally current = null
       }
-    }
+
 
     private def parse(enabled: Boolean, line: String, startIndex: Int, demarcation: String, demarcationName: String): String = {
       (enabled, line.indexOf(demarcation, startIndex)) match {

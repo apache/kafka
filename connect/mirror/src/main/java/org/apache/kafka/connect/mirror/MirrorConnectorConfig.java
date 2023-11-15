@@ -29,7 +29,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.AUTO_OFFSET_RESET_CONFIG;
-import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
+import static org.apache.kafka.common.config.ConfigDef.CaseInsensitiveValidString.in;
 
 import java.util.Map;
 import java.util.HashMap;
@@ -84,6 +84,11 @@ public abstract class MirrorConnectorConfig extends AbstractConfig {
     public static final String REPLICATION_POLICY_SEPARATOR_DEFAULT =
             MirrorClientConfig.REPLICATION_POLICY_SEPARATOR_DEFAULT;
 
+    private static final String INTERNAL_TOPIC_SEPARATOR_ENABLED =  MirrorClientConfig.INTERNAL_TOPIC_SEPARATOR_ENABLED;
+    private static final String INTERNAL_TOPIC_SEPARATOR_ENABLED_DOC = MirrorClientConfig.INTERNAL_TOPIC_SEPARATOR_ENABLED_DOC;
+    public static final Boolean INTERNAL_TOPIC_SEPARATOR_ENABLED_DEFAULT =
+        DefaultReplicationPolicy.INTERNAL_TOPIC_SEPARATOR_ENABLED_DEFAULT;
+
     public static final String ADMIN_TASK_TIMEOUT_MILLIS = "admin.timeout.ms";
     private static final String ADMIN_TASK_TIMEOUT_MILLIS_DOC = "Timeout for administrative tasks, e.g. detecting new topics.";
     public static final long ADMIN_TASK_TIMEOUT_MILLIS_DEFAULT = 60000L;
@@ -107,9 +112,11 @@ public abstract class MirrorConnectorConfig extends AbstractConfig {
     public static final String OFFSET_SYNCS_TOPIC_LOCATION = "offset-syncs.topic.location";
     public static final String OFFSET_SYNCS_TOPIC_LOCATION_DEFAULT = SOURCE_CLUSTER_ALIAS_DEFAULT;
     public static final String OFFSET_SYNCS_TOPIC_LOCATION_DOC = "The location (source/target) of the offset-syncs topic.";
+    public static final String TASK_INDEX = "task.index";
 
     private final ReplicationPolicy replicationPolicy;
 
+    @SuppressWarnings("this-escape")
     protected MirrorConnectorConfig(ConfigDef configDef, Map<String, String> props) {
         super(configDef, props, true);
         replicationPolicy = getConfiguredInstance(REPLICATION_POLICY_CLASS, ReplicationPolicy.class);
@@ -139,22 +146,25 @@ public abstract class MirrorConnectorConfig extends AbstractConfig {
         return replicationPolicy;
     }
 
-    Map<String, Object> sourceProducerConfig() {
+    Map<String, Object> sourceProducerConfig(String role) {
         Map<String, Object> props = new HashMap<>();
         props.putAll(originalsWithPrefix(SOURCE_CLUSTER_PREFIX));
         props.keySet().retainAll(MirrorClientConfig.CLIENT_CONFIG_DEF.names());
         props.putAll(originalsWithPrefix(PRODUCER_CLIENT_PREFIX));
         props.putAll(originalsWithPrefix(SOURCE_PREFIX + PRODUCER_CLIENT_PREFIX));
+        addClientId(props, role);
         return props;
     }
 
-    Map<String, Object> sourceConsumerConfig() {
-        return sourceConsumerConfig(originals());
+    Map<String, Object> sourceConsumerConfig(String role) {
+        Map<String, Object> result = sourceConsumerConfig(originals());
+        addClientId(result, role);
+        return result;
     }
 
     static Map<String, Object> sourceConsumerConfig(Map<String, ?> props) {
         Map<String, Object> result = new HashMap<>();
-        result.putAll(Utils.entriesWithPrefix(props, SOURCE_PREFIX));
+        result.putAll(Utils.entriesWithPrefix(props, SOURCE_CLUSTER_PREFIX));
         result.keySet().retainAll(MirrorClientConfig.CLIENT_CONFIG_DEF.names());
         result.putAll(Utils.entriesWithPrefix(props, CONSUMER_CLIENT_PREFIX));
         result.putAll(Utils.entriesWithPrefix(props, SOURCE_PREFIX + CONSUMER_CLIENT_PREFIX));
@@ -163,25 +173,27 @@ public abstract class MirrorConnectorConfig extends AbstractConfig {
         return result;
     }
 
-    Map<String, Object> targetAdminConfig() {
+    Map<String, Object> targetAdminConfig(String role) {
         Map<String, Object> props = new HashMap<>();
         props.putAll(originalsWithPrefix(TARGET_CLUSTER_PREFIX));
         props.keySet().retainAll(MirrorClientConfig.CLIENT_CONFIG_DEF.names());
         props.putAll(originalsWithPrefix(ADMIN_CLIENT_PREFIX));
         props.putAll(originalsWithPrefix(TARGET_PREFIX + ADMIN_CLIENT_PREFIX));
+        addClientId(props, role);
         return props;
     }
 
-    Map<String, Object> targetProducerConfig() {
+    Map<String, Object> targetProducerConfig(String role) {
         Map<String, Object> props = new HashMap<>();
         props.putAll(originalsWithPrefix(TARGET_CLUSTER_PREFIX));
         props.keySet().retainAll(MirrorClientConfig.CLIENT_CONFIG_DEF.names());
         props.putAll(originalsWithPrefix(PRODUCER_CLIENT_PREFIX));
         props.putAll(originalsWithPrefix(TARGET_PREFIX + PRODUCER_CLIENT_PREFIX));
+        addClientId(props, role);
         return props;
     }
 
-    Map<String, Object> targetConsumerConfig() {
+    Map<String, Object> targetConsumerConfig(String role) {
         Map<String, Object> props = new HashMap<>();
         props.putAll(originalsWithPrefix(TARGET_CLUSTER_PREFIX));
         props.keySet().retainAll(MirrorClientConfig.CLIENT_CONFIG_DEF.names());
@@ -189,15 +201,17 @@ public abstract class MirrorConnectorConfig extends AbstractConfig {
         props.putAll(originalsWithPrefix(TARGET_PREFIX + CONSUMER_CLIENT_PREFIX));
         props.put(ENABLE_AUTO_COMMIT_CONFIG, "false");
         props.putIfAbsent(AUTO_OFFSET_RESET_CONFIG, "earliest");
+        addClientId(props, role);
         return props;
     }
 
-    Map<String, Object> sourceAdminConfig() {
+    Map<String, Object> sourceAdminConfig(String role) {
         Map<String, Object> props = new HashMap<>();
         props.putAll(originalsWithPrefix(SOURCE_CLUSTER_PREFIX));
         props.keySet().retainAll(MirrorClientConfig.CLIENT_CONFIG_DEF.names());
         props.putAll(originalsWithPrefix(ADMIN_CLIENT_PREFIX));
         props.putAll(originalsWithPrefix(SOURCE_PREFIX + ADMIN_CLIENT_PREFIX));
+        addClientId(props, role);
         return props;
     }
 
@@ -221,6 +235,16 @@ public abstract class MirrorConnectorConfig extends AbstractConfig {
         } catch (ClassNotFoundException e) {
             throw new KafkaException("Can't create instance of " + get(FORWARDING_ADMIN_CLASS), e);
         }
+    }
+
+    void addClientId(Map<String, Object> props, String role) {
+        String clientId = entityLabel() + (role == null ? "" : "|" + role);
+        props.compute(CommonClientConfigs.CLIENT_ID_CONFIG,
+                (k, userClientId) -> (userClientId == null ? "" : userClientId + "|") + clientId);
+    }
+
+    String entityLabel() {
+        return sourceClusterAlias() + "->" + targetClusterAlias() + "|" + connectorName();
     }
 
     @SuppressWarnings("deprecation")
@@ -261,6 +285,12 @@ public abstract class MirrorConnectorConfig extends AbstractConfig {
                     ConfigDef.Importance.LOW,
                     REPLICATION_POLICY_SEPARATOR_DOC)
             .define(
+                INTERNAL_TOPIC_SEPARATOR_ENABLED,
+                ConfigDef.Type.BOOLEAN,
+                INTERNAL_TOPIC_SEPARATOR_ENABLED_DEFAULT,
+                ConfigDef.Importance.LOW,
+                INTERNAL_TOPIC_SEPARATOR_ENABLED_DOC)
+            .define(
                     FORWARDING_ADMIN_CLASS,
                     ConfigDef.Type.CLASS,
                     FORWARDING_ADMIN_CLASS_DEFAULT,
@@ -288,4 +318,8 @@ public abstract class MirrorConnectorConfig extends AbstractConfig {
             )
             .withClientSslSupport()
             .withClientSaslSupport();
+
+    public static void main(String[] args) {
+        System.out.println(BASE_CONNECTOR_CONFIG_DEF.toHtml(4, config -> "mirror_connector_" + config));
+    }
 }

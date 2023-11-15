@@ -38,7 +38,7 @@ public class BufferValueTest {
     }
 
     @Test
-    public void shouldDeduplicateIndenticalValues() {
+    public void shouldDeduplicateIdenticalValues() {
         final byte[] bytes = {(byte) 0};
         final BufferValue bufferValue = new BufferValue(bytes, bytes, null, null);
         assertSame(bufferValue.priorValue(), bufferValue.oldValue());

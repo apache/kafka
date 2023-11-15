@@ -150,7 +150,7 @@ public class ConnectorConfig extends AbstractConfig {
     public static final String ERRORS_LOG_INCLUDE_MESSAGES_CONFIG = "errors.log.include.messages";
     public static final String ERRORS_LOG_INCLUDE_MESSAGES_DISPLAY = "Log Error Details";
     public static final boolean ERRORS_LOG_INCLUDE_MESSAGES_DEFAULT = false;
-    public static final String ERRORS_LOG_INCLUDE_MESSAGES_DOC = "Whether to include in the log the Connect record that resulted in a failure." +
+    public static final String ERRORS_LOG_INCLUDE_MESSAGES_DOC = "Whether to include in the log the Connect record that resulted in a failure. " +
             "For sink records, the topic, partition, offset, and timestamp will be logged. " +
             "For source records, the key and value (and their schemas), all headers, and the timestamp, Kafka topic, Kafka partition, source partition, " +
             "and source offset will be logged. " +
@@ -429,7 +429,10 @@ public class ConnectorConfig extends AbstractConfig {
                 final ConfigDef.Validator typeValidator = ConfigDef.LambdaValidator.with(
                     (String name, Object value) -> {
                         validateProps(prefix);
-                        getConfigDefFromConfigProvidingClass(typeConfig, (Class<?>) value);
+                        // The value will be null if the class couldn't be found; no point in performing follow-up validation
+                        if (value != null) {
+                            getConfigDefFromConfigProvidingClass(typeConfig, (Class<?>) value);
+                        }
                     },
                     () -> "valid configs for " + alias + " " + aliasKind.toLowerCase(Locale.ENGLISH));
                 newDef.define(typeConfig, Type.CLASS, ConfigDef.NO_DEFAULT_VALUE, typeValidator, Importance.HIGH,

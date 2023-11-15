@@ -23,7 +23,7 @@ import joptsimple.OptionException
 import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.raft.{KafkaRaftManager, RaftManager}
 import kafka.security.CredentialProvider
-import kafka.server.{KafkaConfig, KafkaRequestHandlerPool, MetaProperties, SimpleApiVersionManager}
+import kafka.server.{KafkaConfig, KafkaRequestHandlerPool, SimpleApiVersionManager}
 import kafka.utils.{CoreUtils, Exit, Logging}
 import org.apache.kafka.common.errors.InvalidConfigurationException
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
@@ -37,6 +37,7 @@ import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{TopicPartition, Uuid, protocol}
 import org.apache.kafka.raft.errors.NotLeaderException
 import org.apache.kafka.raft.{Batch, BatchReader, LeaderAndEpoch, RaftClient, RaftConfig}
+import org.apache.kafka.server.common.{Features, MetadataVersion}
 import org.apache.kafka.server.common.serialization.RecordSerde
 import org.apache.kafka.server.fault.ProcessTerminatingFaultHandler
 import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils, ShutdownableThread}
@@ -74,16 +75,15 @@ class TestRaftServer(
     tokenCache = new DelegationTokenCache(ScramMechanism.mechanismNames)
     credentialProvider = new CredentialProvider(ScramMechanism.mechanismNames, tokenCache)
 
-    val apiVersionManager = new SimpleApiVersionManager(ListenerType.CONTROLLER, true)
+    val apiVersionManager = new SimpleApiVersionManager(
+      ListenerType.CONTROLLER,
+      true,
+      false,
+      () => Features.fromKRaftVersion(MetadataVersion.MINIMUM_KRAFT_VERSION))
     socketServer = new SocketServer(config, metrics, time, credentialProvider, apiVersionManager)
 
-    val metaProperties = MetaProperties(
-      clusterId = Uuid.ZERO_UUID.toString,
-      nodeId = config.nodeId
-    )
-
     raftManager = new KafkaRaftManager[Array[Byte]](
-      metaProperties,
+      Uuid.ZERO_UUID.toString,
       config,
       new ByteArraySerde,
       partition,
@@ -180,7 +180,7 @@ class TestRaftServer(
       eventQueue.offer(HandleCommit(reader))
     }
 
-    override def handleSnapshot(reader: SnapshotReader[Array[Byte]]): Unit = {
+    override def handleLoadSnapshot(reader: SnapshotReader[Array[Byte]]): Unit = {
       eventQueue.offer(HandleSnapshot(reader))
     }
 

@@ -25,7 +25,7 @@ import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.admin.{Admin, NewPartitions}
-import org.apache.kafka.clients.consumer.KafkaConsumer
+import org.apache.kafka.clients.consumer.Consumer
 import org.apache.kafka.clients.producer._
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.TimeoutException
@@ -48,11 +48,17 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
     val overridingProps = new Properties()
     val numServers = 2
     overridingProps.put(KafkaConfig.NumPartitionsProp, 4.toString)
-    TestUtils.createBrokerConfigs(numServers, zkConnectOrNull, false, interBrokerSecurityProtocol = Some(securityProtocol),
-      trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties).map(KafkaConfig.fromProps(_, overridingProps))
+    TestUtils.createBrokerConfigs(
+      numServers,
+      zkConnectOrNull,
+      enableControlledShutdown = true,
+      interBrokerSecurityProtocol = Some(securityProtocol),
+      trustStoreFile = trustStoreFile,
+      saslProperties = serverSaslProperties
+    ).map(KafkaConfig.fromProps(_, overridingProps))
   }
 
-  private var consumer: KafkaConsumer[Array[Byte], Array[Byte]] = _
+  private var consumer: Consumer[Array[Byte], Array[Byte]] = _
   private val producers = Buffer[KafkaProducer[Array[Byte], Array[Byte]]]()
   protected var admin: Admin = _
 
@@ -148,7 +154,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
 
     try {
       // create topic
-      TestUtils.createTopicWithAdmin(admin, topic, brokers, 1, 2)
+      TestUtils.createTopicWithAdmin(admin, topic, brokers, controllerServers, 1, 2)
 
       // send a normal record
       val record0 = new ProducerRecord[Array[Byte], Array[Byte]](topic, partition, "key".getBytes(StandardCharsets.UTF_8),
@@ -202,7 +208,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
                               timeoutMs: Long = 20000L): Unit = {
     val partition = 0
     try {
-      TestUtils.createTopicWithAdmin(admin, topic, brokers, 1, 2)
+      TestUtils.createTopicWithAdmin(admin, topic, brokers, controllerServers, 1, 2)
 
       val futures = for (i <- 1 to numRecords) yield {
         val record = new ProducerRecord(topic, partition, s"key$i".getBytes(StandardCharsets.UTF_8),
@@ -257,7 +263,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
         topicProps.setProperty(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, "LogAppendTime")
       else
         topicProps.setProperty(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, "CreateTime")
-      TestUtils.createTopicWithAdmin(admin, topic, brokers, 1, 2, topicConfig = topicProps)
+      TestUtils.createTopicWithAdmin(admin, topic, brokers, controllerServers, 1, 2, topicConfig = topicProps)
 
       val recordAndFutures = for (i <- 1 to numRecords) yield {
         val record = new ProducerRecord(topic, partition, baseTimestamp + i, s"key$i".getBytes(StandardCharsets.UTF_8),
@@ -290,7 +296,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
 
     try {
       // create topic
-      TestUtils.createTopicWithAdmin(admin, topic, brokers, 1, 2)
+      TestUtils.createTopicWithAdmin(admin, topic, brokers, controllerServers, 1, 2)
 
       // non-blocking send a list of records
       val record0 = new ProducerRecord[Array[Byte], Array[Byte]](topic, null, "key".getBytes(StandardCharsets.UTF_8),
@@ -323,7 +329,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
     val producer = createProducer()
 
     try {
-      TestUtils.createTopicWithAdmin(admin, topic, brokers, 2, 2)
+      TestUtils.createTopicWithAdmin(admin, topic, brokers, controllerServers, 2, 2)
       val partition = 1
 
       val now = System.currentTimeMillis()
@@ -357,6 +363,53 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
     }
   }
 
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testSendToPartitionWithFollowerShutdownShouldNotTimeout(quorum: String): Unit = {
+    // This test produces to a leader that has follower that is shutting down. It shows that
+    // the produce request succeed, do not timeout and do not need to be retried.
+    val producer = createProducer()
+    val follower = 1
+    val replicas = List(0, follower)
+
+    try {
+      TestUtils.createTopicWithAdmin(admin, topic, brokers, controllerServers, 1, 3, Map(0 -> replicas))
+      val partition = 0
+
+      val now = System.currentTimeMillis()
+      val futures = (1 to numRecords).map { i =>
+        producer.send(new ProducerRecord(topic, partition, now, null, ("value" + i).getBytes(StandardCharsets.UTF_8)))
+      }
+
+      // Shutdown the follower
+      killBroker(follower)
+
+      // make sure all of them end up in the same partition with increasing offset values
+      futures.zip(0 until numRecords).foreach { case (future, offset) =>
+        val recordMetadata = future.get(30, TimeUnit.SECONDS)
+        assertEquals(offset.toLong, recordMetadata.offset)
+        assertEquals(topic, recordMetadata.topic)
+        assertEquals(partition, recordMetadata.partition)
+      }
+
+      consumer.assign(List(new TopicPartition(topic, partition)).asJava)
+
+      // make sure the fetched messages also respect the partitioning and ordering
+      val records = TestUtils.consumeRecords(consumer, numRecords)
+
+      records.zipWithIndex.foreach { case (record, i) =>
+        assertEquals(topic, record.topic)
+        assertEquals(partition, record.partition)
+        assertEquals(i.toLong, record.offset)
+        assertNull(record.key)
+        assertEquals(s"value${i + 1}", new String(record.value))
+        assertEquals(now, record.timestamp)
+      }
+    } finally {
+      producer.close()
+    }
+  }
+
   /**
     * Checks partitioning behavior before and after partitions are added
     *
@@ -369,7 +422,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
     val producer = createProducer(maxBlockMs = 5 * 1000L)
 
     // create topic
-    TestUtils.createTopicWithAdmin(admin, topic, brokers, 1, 2)
+    TestUtils.createTopicWithAdmin(admin, topic, brokers, controllerServers, 1, 2)
 
     val partition0 = 0
     var futures0 = (1 to numRecords).map { i =>
@@ -426,7 +479,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
   def testFlush(quorum: String): Unit = {
     val producer = createProducer(lingerMs = Int.MaxValue, deliveryTimeoutMs = Int.MaxValue)
     try {
-      TestUtils.createTopicWithAdmin(admin, topic, brokers, 2, 2)
+      TestUtils.createTopicWithAdmin(admin, topic, brokers, controllerServers, 2, 2)
       val record = new ProducerRecord[Array[Byte], Array[Byte]](topic,
         "value".getBytes(StandardCharsets.UTF_8))
       for (_ <- 0 until 50) {
@@ -446,7 +499,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testCloseWithZeroTimeoutFromCallerThread(quorum: String): Unit = {
-    TestUtils.createTopicWithAdmin(admin, topic, brokers, 2, 2)
+    TestUtils.createTopicWithAdmin(admin, topic, brokers, controllerServers, 2, 2)
     val partition = 0
     consumer.assign(List(new TopicPartition(topic, partition)).asJava)
     val record0 = new ProducerRecord[Array[Byte], Array[Byte]](topic, partition, null,
@@ -472,7 +525,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testCloseWithZeroTimeoutFromSenderThread(quorum: String): Unit = {
-    TestUtils.createTopicWithAdmin(admin, topic, brokers, 1, 2)
+    TestUtils.createTopicWithAdmin(admin, topic, brokers, controllerServers, 1, 2)
     val partition = 0
     consumer.assign(List(new TopicPartition(topic, partition)).asJava)
     val record = new ProducerRecord[Array[Byte], Array[Byte]](topic, partition, null, "value".getBytes(StandardCharsets.UTF_8))

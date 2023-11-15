@@ -18,6 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.ProduceResponseData;
+import org.apache.kafka.common.message.ProduceResponseData.LeaderIdAndEpoch;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
@@ -51,6 +52,8 @@ import java.util.stream.Collectors;
  * {@link Errors#CLUSTER_AUTHORIZATION_FAILED}
  * {@link Errors#TRANSACTIONAL_ID_AUTHORIZATION_FAILED}
  * {@link Errors#INVALID_RECORD}
+ * {@link Errors#INVALID_TXN_STATE}
+ * {@link Errors#INVALID_PRODUCER_ID_MAPPING}
  */
 public class ProduceResponse extends AbstractResponse {
     public static final long INVALID_OFFSET = -1L;
@@ -63,6 +66,8 @@ public class ProduceResponse extends AbstractResponse {
 
     /**
      * Constructor for Version 0
+     * This is deprecated in favor of using the ProduceResponseData constructor, KafkaApis should switch to that
+     * in KAFKA-10730
      * @param responses Produced data grouped by topic-partition
      */
     @Deprecated
@@ -71,7 +76,8 @@ public class ProduceResponse extends AbstractResponse {
     }
 
     /**
-     * Constructor for the latest version
+     * This is deprecated in favor of using the ProduceResponseData constructor, KafkaApis should switch to that
+     * in KAFKA-10730
      * @param responses Produced data grouped by topic-partition
      * @param throttleTimeMs Time in milliseconds the response was throttled
      */
@@ -96,6 +102,7 @@ public class ProduceResponse extends AbstractResponse {
                     .setLogAppendTimeMs(response.logAppendTime)
                     .setErrorMessage(response.errorMessage)
                     .setErrorCode(response.error.code())
+                    .setCurrentLeader(response.currentLeader != null ? response.currentLeader : new LeaderIdAndEpoch())
                     .setRecordErrors(response.recordErrors
                         .stream()
                         .map(e -> new ProduceResponseData.BatchIndexAndErrorMessage()
@@ -131,10 +138,12 @@ public class ProduceResponse extends AbstractResponse {
     public static final class PartitionResponse {
         public Errors error;
         public long baseOffset;
+        public long lastOffset;
         public long logAppendTime;
         public long logStartOffset;
         public List<RecordError> recordErrors;
         public String errorMessage;
+        public ProduceResponseData.LeaderIdAndEpoch currentLeader;
 
         public PartitionResponse(Errors error) {
             this(error, INVALID_OFFSET, RecordBatch.NO_TIMESTAMP, INVALID_OFFSET);
@@ -153,12 +162,31 @@ public class ProduceResponse extends AbstractResponse {
         }
 
         public PartitionResponse(Errors error, long baseOffset, long logAppendTime, long logStartOffset, List<RecordError> recordErrors, String errorMessage) {
+            this(error, baseOffset, INVALID_OFFSET, logAppendTime, logStartOffset, recordErrors, errorMessage, new ProduceResponseData.LeaderIdAndEpoch());
+        }
+
+        public PartitionResponse(Errors error, long baseOffset, long lastOffset, long logAppendTime, long logStartOffset, List<RecordError> recordErrors, String errorMessage) {
+            this(error, baseOffset, lastOffset, logAppendTime, logStartOffset, recordErrors, errorMessage, new ProduceResponseData.LeaderIdAndEpoch());
+        }
+
+        public PartitionResponse(
+            Errors error,
+            long baseOffset,
+            long lastOffset,
+            long logAppendTime,
+            long logStartOffset,
+            List<RecordError> recordErrors,
+            String errorMessage,
+            ProduceResponseData.LeaderIdAndEpoch currentLeader
+        ) {
             this.error = error;
             this.baseOffset = baseOffset;
+            this.lastOffset = lastOffset;
             this.logAppendTime = logAppendTime;
             this.logStartOffset = logStartOffset;
             this.recordErrors = recordErrors;
             this.errorMessage = errorMessage;
+            this.currentLeader = currentLeader;
         }
 
         @Override
@@ -167,16 +195,18 @@ public class ProduceResponse extends AbstractResponse {
             if (o == null || getClass() != o.getClass()) return false;
             PartitionResponse that = (PartitionResponse) o;
             return baseOffset == that.baseOffset &&
+                    lastOffset == that.lastOffset &&
                     logAppendTime == that.logAppendTime &&
                     logStartOffset == that.logStartOffset &&
                     error == that.error &&
                     Objects.equals(recordErrors, that.recordErrors) &&
-                    Objects.equals(errorMessage, that.errorMessage);
+                    Objects.equals(errorMessage, that.errorMessage) &&
+                    Objects.equals(currentLeader, that.currentLeader);
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(error, baseOffset, logAppendTime, logStartOffset, recordErrors, errorMessage);
+            return Objects.hash(error, baseOffset, lastOffset, logAppendTime, logStartOffset, recordErrors, errorMessage, currentLeader);
         }
 
         @Override
@@ -187,12 +217,16 @@ public class ProduceResponse extends AbstractResponse {
             b.append(error);
             b.append(",offset: ");
             b.append(baseOffset);
+            b.append(",lastOffset: ");
+            b.append(lastOffset);
             b.append(",logAppendTime: ");
             b.append(logAppendTime);
             b.append(", logStartOffset: ");
             b.append(logStartOffset);
             b.append(", recordErrors: ");
             b.append(recordErrors);
+            b.append(", currentLeader: ");
+            b.append(currentLeader);
             b.append(", errorMessage: ");
             if (errorMessage != null) {
                 b.append(errorMessage);

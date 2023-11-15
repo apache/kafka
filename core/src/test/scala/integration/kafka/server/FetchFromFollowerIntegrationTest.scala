@@ -18,17 +18,19 @@ package integration.kafka.server
 
 import kafka.server.{BaseFetchRequestTest, KafkaConfig}
 import kafka.utils.{TestInfoUtils, TestUtils}
+import org.apache.kafka.clients.admin.NewPartitionReassignment
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer, RangeAssignor}
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.FetchResponse
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.{Test, Timeout}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
+import java.util
 import java.util.{Collections, Properties}
 import java.util.concurrent.{Executors, TimeUnit}
 import scala.jdk.CollectionConverters._
@@ -59,12 +61,15 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
   def testFollowerCompleteDelayedFetchesOnReplication(quorum: String): Unit = {
     // Create a topic with 2 replicas where broker 0 is the leader and 1 is the follower.
     val admin = createAdminClient()
-    TestUtils.createTopicWithAdmin(
+    val partitionLeaders = TestUtils.createTopicWithAdmin(
       admin,
       topic,
       brokers,
+      controllerServers,
       replicaAssignment = Map(0 -> Seq(leaderBrokerId, followerBrokerId))
     )
+    TestUtils.waitUntilLeaderIsKnown(brokers, new TopicPartition(topic, 0))
+    assertTrue(partitionLeaders.values.forall(_ == leaderBrokerId))
 
     val version = ApiKeys.FETCH.latestVersion()
     val topicPartition = new TopicPartition(topic, 0)
@@ -95,14 +100,16 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
     }
   }
 
-  @Test
-  def testFetchFromLeaderWhilePreferredReadReplicaIsUnavailable(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testFetchFromLeaderWhilePreferredReadReplicaIsUnavailable(quorum: String): Unit = {
     // Create a topic with 2 replicas where broker 0 is the leader and 1 is the follower.
     val admin = createAdminClient()
     TestUtils.createTopicWithAdmin(
       admin,
       topic,
       brokers,
+      controllerServers,
       replicaAssignment = Map(0 -> Seq(leaderBrokerId, followerBrokerId))
     )
 
@@ -121,14 +128,16 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
     assertEquals(-1, getPreferredReplica)
   }
 
-  @Test
-  def testFetchFromFollowerWithRoll(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testFetchFromFollowerWithRoll(quorum: String): Unit = {
     // Create a topic with 2 replicas where broker 0 is the leader and 1 is the follower.
     val admin = createAdminClient()
     TestUtils.createTopicWithAdmin(
       admin,
       topic,
       brokers,
+      controllerServers,
       replicaAssignment = Map(0 -> Seq(leaderBrokerId, followerBrokerId))
     )
 
@@ -170,60 +179,85 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
     }
   }
 
-  @Test
-  def testRackAwareRangeAssignor(): Unit = {
-    val partitionList = servers.indices.toList
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testRackAwareRangeAssignor(quorum: String): Unit = {
+    val partitionList = brokers.indices.toList
 
     val topicWithAllPartitionsOnAllRacks = "topicWithAllPartitionsOnAllRacks"
-    createTopic(topicWithAllPartitionsOnAllRacks, servers.size, servers.size)
+    createTopic(topicWithAllPartitionsOnAllRacks, brokers.size, brokers.size)
 
     // Racks are in order of broker ids, assign leaders in reverse order
     val topicWithSingleRackPartitions = "topicWithSingleRackPartitions"
-    createTopicWithAssignment(topicWithSingleRackPartitions, partitionList.map(i => (i, Seq(servers.size - i - 1))).toMap)
+    createTopicWithAssignment(topicWithSingleRackPartitions, partitionList.map(i => (i, Seq(brokers.size - i - 1))).toMap)
 
     // Create consumers with instance ids in ascending order, with racks in the same order.
     consumerConfig.setProperty(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, classOf[RangeAssignor].getName)
-    val consumers = servers.map { server =>
+    val consumers = brokers.map { server =>
       consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
       consumerConfig.setProperty(ConsumerConfig.CLIENT_RACK_CONFIG, server.config.rack.orNull)
       consumerConfig.setProperty(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, s"instance-${server.config.brokerId}")
+      consumerConfig.setProperty(ConsumerConfig.METADATA_MAX_AGE_CONFIG, "1000")
       createConsumer()
     }
 
     val producer = createProducer()
     val executor = Executors.newFixedThreadPool(consumers.size)
 
-    def verifyAssignments(assignments: List[Set[TopicPartition]]): Unit = {
+    def verifyAssignments(partitionOrder: List[Int], topics: String*): Unit = {
+      val assignments = partitionOrder.map { p =>
+        topics.map(topic => new TopicPartition(topic, p)).toSet
+      }
+
       val assignmentFutures = consumers.zipWithIndex.map { case (consumer, i) =>
         executor.submit(() => {
           val expectedAssignment = assignments(i)
           TestUtils.pollUntilTrue(consumer, () => consumer.assignment() == expectedAssignment.asJava,
-            s"Timed out while awaiting expected assignment $expectedAssignment. The current assignment is ${consumer.assignment()}")
+            s"Timed out while awaiting expected assignment $expectedAssignment. The current assignment is ${consumer.assignment()}",
+            waitTimeMs = 30000)
         }, 0)
       }
-      assignmentFutures.foreach(future => assertEquals(0, future.get(20, TimeUnit.SECONDS)))
+      assignmentFutures.foreach(future => assertEquals(0, future.get(30, TimeUnit.SECONDS)))
 
       assignments.flatten.foreach { tp =>
         producer.send(new ProducerRecord(tp.topic, tp.partition, s"key-$tp".getBytes, s"value-$tp".getBytes))
       }
-      consumers.zipWithIndex.foreach { case (consumer, i) =>
-        val records = TestUtils.pollUntilAtLeastNumRecords(consumer, assignments(i).size)
+
+      val recordFutures = consumers.zipWithIndex.map { case (consumer, i) =>
+        executor.submit(() => {
+          TestUtils.pollUntilAtLeastNumRecords(consumer, assignments(i).size, waitTimeMs = 30000)
+        })
+      }
+      recordFutures.zipWithIndex.foreach { case (future, i) =>
+        val records = future.get(30, TimeUnit.SECONDS)
         assertEquals(assignments(i), records.map(r => new TopicPartition(r.topic, r.partition)).toSet)
       }
     }
 
+
     try {
       // Rack-based assignment results in partitions assigned in reverse order since partition racks are in the reverse order.
       consumers.foreach(_.subscribe(Collections.singleton(topicWithSingleRackPartitions)))
-      verifyAssignments(partitionList.reverse.map(p => Set(new TopicPartition(topicWithSingleRackPartitions, p))))
+      verifyAssignments(partitionList.reverse, topicWithSingleRackPartitions)
 
       // Non-rack-aware assignment results in ordered partitions.
       consumers.foreach(_.subscribe(Collections.singleton(topicWithAllPartitionsOnAllRacks)))
-      verifyAssignments(partitionList.map(p => Set(new TopicPartition(topicWithAllPartitionsOnAllRacks, p))))
+      verifyAssignments(partitionList, topicWithAllPartitionsOnAllRacks)
 
       // Rack-aware assignment with co-partitioning results in reverse assignment for both topics.
       consumers.foreach(_.subscribe(Set(topicWithSingleRackPartitions, topicWithAllPartitionsOnAllRacks).asJava))
-      verifyAssignments(partitionList.reverse.map(p => Set(new TopicPartition(topicWithAllPartitionsOnAllRacks, p), new TopicPartition(topicWithSingleRackPartitions, p))))
+      verifyAssignments(partitionList.reverse, topicWithAllPartitionsOnAllRacks, topicWithSingleRackPartitions)
+
+      // Perform reassignment for topicWithSingleRackPartitions to reverse the replica racks and
+      // verify that change in replica racks results in re-assignment based on new racks.
+      val admin = createAdminClient()
+      val reassignments = new util.HashMap[TopicPartition, util.Optional[NewPartitionReassignment]]()
+      partitionList.foreach { p =>
+        val newAssignment = new NewPartitionReassignment(Collections.singletonList(p))
+        reassignments.put(new TopicPartition(topicWithSingleRackPartitions, p), util.Optional.of(newAssignment))
+      }
+      admin.alterPartitionReassignments(reassignments).all().get(30, TimeUnit.SECONDS)
+      verifyAssignments(partitionList, topicWithAllPartitionsOnAllRacks, topicWithSingleRackPartitions)
 
     } finally {
       executor.shutdownNow()

@@ -27,6 +27,7 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.NavigableMap;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.TreeMap;
@@ -43,18 +44,22 @@ import static org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UND
  * Offset = offset of the first message in each epoch.
  */
 public class LeaderEpochFileCache {
+    private final TopicPartition topicPartition;
     private final LeaderEpochCheckpoint checkpoint;
     private final Logger log;
 
     private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
     private final TreeMap<Integer, EpochEntry> epochs = new TreeMap<>();
 
+
     /**
      * @param topicPartition the associated topic partition
      * @param checkpoint     the checkpoint file
      */
+    @SuppressWarnings("this-escape")
     public LeaderEpochFileCache(TopicPartition topicPartition, LeaderEpochCheckpoint checkpoint) {
         this.checkpoint = checkpoint;
+        this.topicPartition = topicPartition;
         LogContext logContext = new LogContext("[LeaderEpochCache " + topicPartition + "] ");
         log = logContext.logger(LeaderEpochFileCache.class);
         checkpoint.read().forEach(this::assign);
@@ -114,7 +119,6 @@ public class LeaderEpochFileCache {
     private void maybeTruncateNonMonotonicEntries(EpochEntry newEntry) {
         List<EpochEntry> removedEpochs = removeFromEnd(entry -> entry.epoch >= newEntry.epoch || entry.startOffset >= newEntry.startOffset);
 
-
         if (removedEpochs.size() > 1 || (!removedEpochs.isEmpty() && removedEpochs.get(0).startOffset != newEntry.startOffset)) {
 
             // Only log a warning if there were non-trivial removals. If the start offset of the new entry
@@ -146,6 +150,11 @@ public class LeaderEpochFileCache {
         }
 
         return removedEpochs;
+    }
+
+    public LeaderEpochFileCache cloneWithLeaderEpochCheckpoint(LeaderEpochCheckpoint leaderEpochCheckpoint) {
+        flushTo(leaderEpochCheckpoint);
+        return new LeaderEpochFileCache(this.topicPartition, leaderEpochCheckpoint);
     }
 
     public boolean nonEmpty() {
@@ -359,6 +368,16 @@ public class LeaderEpochFileCache {
         }
     }
 
+    public LeaderEpochFileCache writeTo(LeaderEpochCheckpoint leaderEpochCheckpoint) {
+        lock.readLock().lock();
+        try {
+            leaderEpochCheckpoint.write(epochEntries());
+            return new LeaderEpochFileCache(topicPartition, leaderEpochCheckpoint);
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
     /**
      * Delete all entries.
      */
@@ -381,23 +400,38 @@ public class LeaderEpochFileCache {
         }
     }
 
-    // Visible for testing
     public List<EpochEntry> epochEntries() {
-        lock.writeLock().lock();
-        try {
-            return new ArrayList<>(epochs.values());
-        } finally {
-            lock.writeLock().unlock();
-        }
-    }
-
-    private void flush() {
         lock.readLock().lock();
         try {
-            checkpoint.write(epochs.values());
+            return new ArrayList<>(epochs.values());
         } finally {
             lock.readLock().unlock();
         }
     }
 
+    public NavigableMap<Integer, Long> epochWithOffsets() {
+        lock.readLock().lock();
+        try {
+            NavigableMap<Integer, Long> epochWithOffsets = new TreeMap<>();
+            for (EpochEntry epochEntry : epochs.values()) {
+                epochWithOffsets.put(epochEntry.epoch, epochEntry.startOffset);
+            }
+            return epochWithOffsets;
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
+    private void flushTo(LeaderEpochCheckpoint leaderEpochCheckpoint) {
+        lock.readLock().lock();
+        try {
+            leaderEpochCheckpoint.write(epochs.values());
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
+    private void flush() {
+        flushTo(this.checkpoint);
+    }
 }

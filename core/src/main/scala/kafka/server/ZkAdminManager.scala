@@ -18,7 +18,6 @@ package kafka.server
 
 import java.util
 import java.util.Properties
-import kafka.admin.{AdminOperationException, AdminUtils}
 import kafka.common.TopicAlreadyMarkedForDeletionException
 import kafka.server.ConfigAdminManager.{prepareIncrementalConfigs, toLoggableProps}
 import kafka.server.DynamicConfig.QuotaConfigs
@@ -26,6 +25,7 @@ import kafka.server.metadata.ZkConfigRepository
 import kafka.utils._
 import kafka.utils.Implicits._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
+import org.apache.kafka.admin.AdminUtils
 import org.apache.kafka.clients.admin.{AlterConfigOp, ScramMechanism}
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.config.{ConfigDef, ConfigException, ConfigResource}
@@ -47,6 +47,7 @@ import org.apache.kafka.common.requests.CreateTopicsRequest._
 import org.apache.kafka.common.requests.{AlterConfigsRequest, ApiError}
 import org.apache.kafka.common.security.scram.internals.{ScramCredentialUtils, ScramFormatter}
 import org.apache.kafka.common.utils.Sanitizer
+import org.apache.kafka.server.common.AdminOperationException
 import org.apache.kafka.storage.internals.log.LogConfig
 
 import scala.collection.{Map, mutable, _}
@@ -73,7 +74,7 @@ class ZkAdminManager(val config: KafkaConfig,
   this.logIdent = "[Admin Manager on Broker " + config.brokerId + "]: "
 
   private val topicPurgatory = DelayedOperationPurgatory[DelayedOperation]("topic", config.brokerId)
-  private val adminZkClient = new AdminZkClient(zkClient)
+  private val adminZkClient = new AdminZkClient(zkClient, Some(config))
   private val configHelper = new ConfigHelper(metadataCache, config, new ZkConfigRepository(adminZkClient))
 
   private val createTopicPolicy =
@@ -183,8 +184,8 @@ class ZkAdminManager(val config: KafkaConfig,
           defaultReplicationFactor else topic.replicationFactor
 
         val assignments = if (topic.assignments.isEmpty) {
-          AdminUtils.assignReplicasToBrokers(
-            brokers, resolvedNumPartitions, resolvedReplicationFactor)
+          CoreUtils.replicaToBrokerAssignmentAsScala(AdminUtils.assignReplicasToBrokers(
+            brokers.asJavaCollection, resolvedNumPartitions, resolvedReplicationFactor))
         } else {
           val assignments = new mutable.HashMap[Int, Seq[Int]]
           // Note: we don't check that replicaAssignment contains unknown brokers - unlike in add-partitions case,
@@ -847,7 +848,7 @@ class ZkAdminManager(val config: KafkaConfig,
     try {
       if (describingAllUsers)
         adminZkClient.fetchAllEntityConfigs(ConfigType.User).foreach {
-          case (user, properties) => addToResultsIfHasScramCredential(user, properties) }
+          case (user, properties) => addToResultsIfHasScramCredential(Sanitizer.desanitize(user), properties) }
       else {
         // describing specific users
         val illegalUsers = users.get.filter(_.isEmpty).toSet

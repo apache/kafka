@@ -20,14 +20,14 @@ import java.util.concurrent.ScheduledFuture;
 
 /**
  * A scheduler for running jobs
- *
+ * <br>
  * This interface controls a job scheduler that allows scheduling either repeating background jobs
  * that execute periodically or delayed one-time actions that are scheduled in the future.
  */
 public interface Scheduler {
 
     /**
-     * Initialize this scheduler so it is ready to accept scheduling of tasks
+     * Initialize this scheduler, so it is ready to accept scheduling of tasks
      */
     void startup();
 
@@ -50,7 +50,7 @@ public interface Scheduler {
      * @param name The name of this task
      * @param task The task to run
      * @param delayMs The number of milliseconds to wait before the first execution
-     * @param periodMs The period in milliseconds with which to execute the task. If < 0 the task will execute only once.
+     * @param periodMs The period in milliseconds with which to execute the task. If &lt; 0 the task will execute only once.
      * @return A Future object to manage the task scheduled.
      */
     ScheduledFuture<?> schedule(String name, Runnable task, long delayMs, long periodMs);

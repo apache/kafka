@@ -204,9 +204,18 @@ public final class ConnectUtils {
         String result = Optional.ofNullable(config.groupId())
                 .orElse("connect");
         String userSpecifiedClientId = config.getString(CLIENT_ID_CONFIG);
-        if (userSpecifiedClientId != null) {
+        if (userSpecifiedClientId != null && !userSpecifiedClientId.trim().isEmpty()) {
             result += "-" + userSpecifiedClientId;
         }
         return result + "-";
+    }
+
+    /**
+     * Get the class name for an object in a null-safe manner.
+     * @param o the object whose class name is to be returned
+     * @return "null" if the object is null; or else the object's class name
+     */
+    public static String className(Object o) {
+        return o != null ? o.getClass().getName() : "null";
     }
 }

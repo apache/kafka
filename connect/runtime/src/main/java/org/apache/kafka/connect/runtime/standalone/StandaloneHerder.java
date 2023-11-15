@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.connect.runtime.standalone;
 
+import org.apache.kafka.common.utils.ThreadUtils;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.errors.AlreadyExistsException;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -31,12 +33,15 @@ import org.apache.kafka.connect.runtime.SinkConnectorConfig;
 import org.apache.kafka.connect.runtime.SourceConnectorConfig;
 import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.runtime.Worker;
-import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.runtime.rest.InternalRequestSignature;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
+import org.apache.kafka.connect.runtime.rest.entities.Message;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
+import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
+import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
 import org.apache.kafka.connect.storage.MemoryConfigBackingStore;
 import org.apache.kafka.connect.storage.MemoryStatusBackingStore;
@@ -68,7 +73,8 @@ public class StandaloneHerder extends AbstractHerder {
     private final AtomicLong requestSeqNum = new AtomicLong();
     private final ScheduledExecutorService requestExecutorService;
 
-    private ClusterConfigState configState;
+    // Visible for testing
+    ClusterConfigState configState;
 
     public StandaloneHerder(Worker worker, String kafkaClusterId,
                             ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy) {
@@ -77,7 +83,9 @@ public class StandaloneHerder extends AbstractHerder {
                 kafkaClusterId,
                 new MemoryStatusBackingStore(),
                 new MemoryConfigBackingStore(worker.configTransformer()),
-             connectorClientConfigOverridePolicy);
+                connectorClientConfigOverridePolicy,
+                Time.SYSTEM
+        );
     }
 
     // visible for testing
@@ -86,8 +94,9 @@ public class StandaloneHerder extends AbstractHerder {
                      String kafkaClusterId,
                      StatusBackingStore statusBackingStore,
                      MemoryConfigBackingStore configBackingStore,
-                     ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy) {
-        super(worker, workerId, kafkaClusterId, statusBackingStore, configBackingStore, connectorClientConfigOverridePolicy);
+                     ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy,
+                     Time time) {
+        super(worker, workerId, kafkaClusterId, statusBackingStore, configBackingStore, connectorClientConfigOverridePolicy, time);
         this.configState = ClusterConfigState.EMPTY;
         this.requestExecutorService = Executors.newSingleThreadScheduledExecutor();
         configBackingStore.setUpdateListener(new ConfigUpdateListener());
@@ -104,14 +113,7 @@ public class StandaloneHerder extends AbstractHerder {
     @Override
     public synchronized void stop() {
         log.info("Herder stopping");
-        requestExecutorService.shutdown();
-        try {
-            if (!requestExecutorService.awaitTermination(30, TimeUnit.SECONDS))
-                requestExecutorService.shutdownNow();
-        } catch (InterruptedException e) {
-            // ignore
-        }
-
+        ThreadUtils.shutdownExecutorServiceQuietly(requestExecutorService, 30, TimeUnit.SECONDS);
         // There's no coordination/hand-off to do here since this is all standalone. Instead, we
         // should just clean up the stuff we normally would, i.e. cleanly checkpoint and shutdown all
         // the tasks.
@@ -181,6 +183,12 @@ public class StandaloneHerder extends AbstractHerder {
                                                 final Map<String, String> config,
                                                 boolean allowReplace,
                                                 final Callback<Created<ConnectorInfo>> callback) {
+        putConnectorConfig(connName, config, null, allowReplace, callback);
+    }
+
+    @Override
+    public void putConnectorConfig(final String connName, final Map<String, String> config, final TargetState targetState,
+                                   final boolean allowReplace, final Callback<Created<ConnectorInfo>> callback) {
         try {
             validateConnectorConfig(config, (error, configInfos) -> {
                 if (error != null) {
@@ -189,7 +197,7 @@ public class StandaloneHerder extends AbstractHerder {
                 }
 
                 requestExecutorService.submit(
-                    () -> putConnectorConfig(connName, config, allowReplace, callback, configInfos)
+                    () -> putConnectorConfig(connName, config, targetState, allowReplace, callback, configInfos)
                 );
             });
         } catch (Throwable t) {
@@ -199,6 +207,7 @@ public class StandaloneHerder extends AbstractHerder {
 
     private synchronized void putConnectorConfig(String connName,
                                                  final Map<String, String> config,
+                                                 TargetState targetState,
                                                  boolean allowReplace,
                                                  final Callback<Created<ConnectorInfo>> callback,
                                                  ConfigInfos configInfos) {
@@ -219,7 +228,7 @@ public class StandaloneHerder extends AbstractHerder {
                 created = true;
             }
 
-            configBackingStore.putConnectorConfig(connName, config);
+            configBackingStore.putConnectorConfig(connName, config, targetState);
 
             startConnector(connName, (error, result) -> {
                 if (error != null) {
@@ -232,6 +241,17 @@ public class StandaloneHerder extends AbstractHerder {
                     callback.onCompletion(null, new Created<>(created, createConnectorInfo(connName)));
                 });
             });
+        } catch (Throwable t) {
+            callback.onCompletion(t, null);
+        }
+    }
+
+    @Override
+    public synchronized void stopConnector(String connName, Callback<Void> callback) {
+        try {
+            removeConnectorTasks(connName);
+            configBackingStore.putTargetState(connName, TargetState.STOPPED);
+            callback.onCompletion(null, null);
         } catch (Throwable t) {
             callback.onCompletion(t, null);
         }
@@ -358,6 +378,49 @@ public class StandaloneHerder extends AbstractHerder {
         cb.onCompletion(null, plan.restartConnectorStateInfo());
     }
 
+    @Override
+    public synchronized void connectorOffsets(String connName, Callback<ConnectorOffsets> cb) {
+        log.trace("Fetching offsets for connector: {}", connName);
+        super.connectorOffsets(connName, cb);
+    }
+
+    @Override
+    protected synchronized void modifyConnectorOffsets(String connName, Map<Map<String, ?>, Map<String, ?>> offsets, Callback<Message> cb) {
+        if (!modifyConnectorOffsetsChecks(connName, cb)) {
+            return;
+        }
+
+        worker.modifyConnectorOffsets(connName, configState.connectorConfig(connName), offsets, cb);
+    }
+
+    /**
+     * This method performs a few checks for external requests to modify (alter or reset) connector offsets and
+     * completes the callback exceptionally if any check fails.
+     * @param connName the name of the connector whose offsets are to be modified
+     * @param cb callback to invoke upon completion
+     * @return true if all the checks passed, false otherwise
+     */
+    private boolean modifyConnectorOffsetsChecks(String connName, Callback<Message> cb) {
+        if (!configState.contains(connName)) {
+            cb.onCompletion(new NotFoundException("Connector " + connName + " not found", null), null);
+            return false;
+        }
+
+        if (configState.targetState(connName) != TargetState.STOPPED || configState.taskCount(connName) != 0) {
+            cb.onCompletion(new BadRequestException("Connectors must be in the STOPPED state before their offsets can be modified. This can be done " +
+                    "for the specified connector by issuing a 'PUT' request to the '/connectors/" + connName + "/stop' endpoint"), null);
+            return false;
+        }
+
+        return true;
+    }
+
+    @Override
+    public void setClusterLoggerLevel(String namespace, String level) {
+        // In standalone mode, this single worker is the entire cluster
+        setWorkerLoggerLevel(namespace, level);
+    }
+
     private void startConnector(String connName, Callback<TargetState> onStart) {
         Map<String, String> connConfigs = configState.connectorConfig(connName);
         TargetState targetState = configState.targetState(connName);
@@ -422,7 +485,10 @@ public class StandaloneHerder extends AbstractHerder {
 
     private void updateConnectorTasks(String connName) {
         if (!worker.isRunning(connName)) {
-            log.info("Skipping update of connector {} since it is not running", connName);
+            log.info("Skipping update of tasks for connector {} since it is not running", connName);
+            return;
+        } else if (configState.targetState(connName) != TargetState.STARTED) {
+            log.info("Skipping update of tasks for connector {} since its target state is {}", connName, configState.targetState(connName));
             return;
         }
 
@@ -495,6 +561,11 @@ public class StandaloneHerder extends AbstractHerder {
         public void onRestartRequest(RestartRequest restartRequest) {
             // no-op
         }
+
+        @Override
+        public void onLoggingLevelUpdate(String namespace, String level) {
+            // no-op
+        }
     }
 
     static class StandaloneHerderRequest implements HerderRequest {
@@ -530,7 +601,7 @@ public class StandaloneHerder extends AbstractHerder {
     public void tasksConfig(String connName, Callback<Map<ConnectorTaskId, Map<String, String>>> callback) {
         Map<ConnectorTaskId, Map<String, String>> tasksConfig = buildTasksConfig(connName);
         if (tasksConfig.isEmpty()) {
-            callback.onCompletion(new NotFoundException("Connector " + connName + " not found"), tasksConfig);
+            callback.onCompletion(new NotFoundException("Connector " + connName + " not found"), null);
             return;
         }
         callback.onCompletion(null, tasksConfig);

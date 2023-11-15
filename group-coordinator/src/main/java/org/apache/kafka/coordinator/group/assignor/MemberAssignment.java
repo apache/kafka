@@ -16,34 +16,38 @@
  */
 package org.apache.kafka.coordinator.group.assignor;
 
-import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 
-import java.util.Collection;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * The partition assignment for a consumer group member.
  */
 public class MemberAssignment {
     /**
-     * The target partitions assigned to this member.
+     * The target partitions assigned to this member keyed by topicId.
      */
-    final Collection<TopicPartition> targetPartitions;
+    private final Map<Uuid, Set<Integer>> targetPartitions;
 
-    public MemberAssignment(
-        Collection<TopicPartition> targetPartitions
-    ) {
+    public MemberAssignment(Map<Uuid, Set<Integer>> targetPartitions) {
         Objects.requireNonNull(targetPartitions);
         this.targetPartitions = targetPartitions;
+    }
+
+    /**
+     * @return Target partitions keyed by topic Ids.
+     */
+    public Map<Uuid, Set<Integer>> targetPartitions() {
+        return this.targetPartitions;
     }
 
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-
         MemberAssignment that = (MemberAssignment) o;
-
         return targetPartitions.equals(that.targetPartitions);
     }
 

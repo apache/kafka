@@ -14,7 +14,7 @@
 # limitations under the License.
 
 from kafkatest.directory_layout.kafka_path import TOOLS_JAR_NAME, TOOLS_DEPENDANT_TEST_LIBS_JAR_NAME
-from kafkatest.version import DEV_BRANCH, LATEST_0_8_2
+from kafkatest.version import DEV_BRANCH, LATEST_0_8_2, LATEST_0_9
 from ducktape.cluster.remoteaccount import RemoteCommandError
 
 import importlib
@@ -60,8 +60,8 @@ Common requirements for both:
  * Log/debug to stderr
 
 Common communication for both:
- * `{ "name": "startup_complete" }` - Client succesfully started
- * `{ "name": "shutdown_complete" }` - Client succesfully terminated (after receiving SIGINT/SIGTERM)
+ * `{ "name": "startup_complete" }` - Client successfully started
+ * `{ "name": "shutdown_complete" }` - Client successfully terminated (after receiving SIGINT/SIGTERM)
 
 
 ==================
@@ -252,9 +252,10 @@ class VerifiableClientJava (VerifiableClient):
         cmd = ""
         if self.java_class_name == 'VerifiableProducer' and node.version <= LATEST_0_8_2:
             # 0.8.2.X releases do not have VerifiableProducer.java, so cheat and add
-            # the tools jar from trunk to the classpath
-            tools_jar = self.parent.path.jar(TOOLS_JAR_NAME, DEV_BRANCH)
-            tools_dependant_libs_jar = self.parent.path.jar(TOOLS_DEPENDANT_TEST_LIBS_JAR_NAME, DEV_BRANCH)
+            # the tools jar from 0.9.x to the classpath
+            # TODO remove with KAFKA-14762
+            tools_jar = self.parent.path.jar(TOOLS_JAR_NAME, LATEST_0_9)
+            tools_dependant_libs_jar = self.parent.path.jar(TOOLS_DEPENDANT_TEST_LIBS_JAR_NAME, LATEST_0_9)
             cmd += "for file in %s; do CLASSPATH=$CLASSPATH:$file; done; " % tools_jar
             cmd += "for file in %s; do CLASSPATH=$CLASSPATH:$file; done; " % tools_dependant_libs_jar
             cmd += "export CLASSPATH; "

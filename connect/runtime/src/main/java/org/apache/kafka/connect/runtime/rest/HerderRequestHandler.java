@@ -53,58 +53,17 @@ public class HerderRequestHandler {
     }
 
     /**
-     * Wait for a FutureCallback to complete. If it succeeds, return the parsed response. If it fails, try to forward the
-     * request to the leader.
-      */
-    public <T, U> T completeOrForwardRequest(FutureCallback<T> cb,
-                                                    String path,
-                                                    String method,
-                                                    HttpHeaders headers,
-                                                    Map<String, String> queryParameters,
-                                                    Object body,
-                                                    TypeReference<U> resultType,
-                                                    Translator<T, U> translator,
-                                                    Boolean forward) throws Throwable {
+     * Wait for a {@link FutureCallback} to complete and return the result if successful.
+     * @param cb the future callback to wait for
+     * @return the future callback's result if successful
+     * @param <T> the future's result type
+     * @throws Throwable if the future callback isn't successful
+     */
+    public <T> T completeRequest(FutureCallback<T> cb) throws Throwable {
         try {
             return cb.get(requestTimeoutMs, TimeUnit.MILLISECONDS);
         } catch (ExecutionException e) {
-            Throwable cause = e.getCause();
-
-            if (cause instanceof RequestTargetException) {
-                if (forward == null || forward) {
-                    // the only time we allow recursive forwarding is when no forward flag has
-                    // been set, which should only be seen by the first worker to handle a user request.
-                    // this gives two total hops to resolve the request before giving up.
-                    boolean recursiveForward = forward == null;
-                    RequestTargetException targetException = (RequestTargetException) cause;
-                    String forwardedUrl = targetException.forwardUrl();
-                    if (forwardedUrl == null) {
-                        // the target didn't know of the leader at this moment.
-                        throw new ConnectRestException(Response.Status.CONFLICT.getStatusCode(),
-                                "Cannot complete request momentarily due to no known leader URL, "
-                                        + "likely because a rebalance was underway.");
-                    }
-                    UriBuilder uriBuilder = UriBuilder.fromUri(forwardedUrl)
-                            .path(path)
-                            .queryParam("forward", recursiveForward);
-                    if (queryParameters != null) {
-                        queryParameters.forEach(uriBuilder::queryParam);
-                    }
-                    String forwardUrl = uriBuilder.build().toString();
-                    log.debug("Forwarding request {} {} {}", forwardUrl, method, body);
-                    return translator.translate(restClient.httpRequest(forwardUrl, method, headers, body, resultType));
-                } else {
-                    // we should find the right target for the query within two hops, so if
-                    // we don't, it probably means that a rebalance has taken place.
-                    throw new ConnectRestException(Response.Status.CONFLICT.getStatusCode(),
-                            "Cannot complete request because of a conflicting operation (e.g. worker rebalance)");
-                }
-            } else if (cause instanceof RebalanceNeededException) {
-                throw new ConnectRestException(Response.Status.CONFLICT.getStatusCode(),
-                        "Cannot complete request momentarily due to stale configuration (typically caused by a concurrent config change)");
-            }
-
-            throw cause;
+            throw e.getCause();
         } catch (TimeoutException e) {
             // This timeout is for the operation itself. None of the timeout error codes are relevant, so internal server
             // error is the best option
@@ -114,18 +73,64 @@ public class HerderRequestHandler {
         }
     }
 
+    /**
+     * Wait for a {@link FutureCallback} to complete. If it succeeds, return the parsed response. If it fails, try to forward the
+     * request to the indicated target.
+     */
+    public <T, U> T completeOrForwardRequest(FutureCallback<T> cb,
+                                             String path,
+                                             String method,
+                                             HttpHeaders headers,
+                                             Map<String, String> queryParameters,
+                                             Object body,
+                                             TypeReference<U> resultType,
+                                             Translator<T, U> translator,
+                                             Boolean forward) throws Throwable {
+        try {
+            return completeRequest(cb);
+        } catch (RequestTargetException e) {
+            if (forward == null || forward) {
+                // the only time we allow recursive forwarding is when no forward flag has
+                // been set, which should only be seen by the first worker to handle a user request.
+                // this gives two total hops to resolve the request before giving up.
+                boolean recursiveForward = forward == null;
+                String forwardedUrl = e.forwardUrl();
+                if (forwardedUrl == null) {
+                    // the target didn't know of the leader at this moment.
+                    throw new ConnectRestException(Response.Status.CONFLICT.getStatusCode(),
+                            "Cannot complete request momentarily due to no known leader URL, "
+                                    + "likely because a rebalance was underway.");
+                }
+                UriBuilder uriBuilder = UriBuilder.fromUri(forwardedUrl)
+                        .path(path)
+                        .queryParam("forward", recursiveForward);
+                if (queryParameters != null) {
+                    queryParameters.forEach(uriBuilder::queryParam);
+                }
+                String forwardUrl = uriBuilder.build().toString();
+                log.debug("Forwarding request {} {} {}", forwardUrl, method, body);
+                return translator.translate(restClient.httpRequest(forwardUrl, method, headers, body, resultType));
+            } else {
+                log.error("Request '{} {}' failed because it couldn't find the target Connect worker within two hops (between workers).",
+                        method, path);
+                // we should find the right target for the query within two hops, so if
+                // we don't, it probably means that a rebalance has taken place.
+                throw new ConnectRestException(Response.Status.CONFLICT.getStatusCode(),
+                        "Cannot complete request because of a conflicting operation (e.g. worker rebalance)");
+            }
+        } catch (RebalanceNeededException e) {
+            throw new ConnectRestException(Response.Status.CONFLICT.getStatusCode(),
+                    "Cannot complete request momentarily due to stale configuration (typically caused by a concurrent config change)");
+        }
+    }
+
     public <T, U> T completeOrForwardRequest(FutureCallback<T> cb, String path, String method, HttpHeaders headers, Object body,
                                              TypeReference<U> resultType, Translator<T, U> translator, Boolean forward) throws Throwable {
         return completeOrForwardRequest(cb, path, method, headers, null, body, resultType, translator, forward);
     }
 
-    public <T> T completeOrForwardRequest(FutureCallback<T> cb, String path, String method, HttpHeaders headers, Object body,
-                                                 TypeReference<T> resultType, Boolean forward) throws Throwable {
-        return completeOrForwardRequest(cb, path, method, headers, body, resultType, new IdentityTranslator<>(), forward);
-    }
-
     public <T> T completeOrForwardRequest(FutureCallback<T> cb, String path, String method, HttpHeaders headers,
-                                                 Object body, Boolean forward) throws Throwable {
+                                          Object body, Boolean forward) throws Throwable {
         return completeOrForwardRequest(cb, path, method, headers, body, null, new IdentityTranslator<>(), forward);
     }
 

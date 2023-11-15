@@ -27,7 +27,6 @@ import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig}
 import kafka.server.KafkaConfig
 import kafka.integration.KafkaServerTestHarness
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
-import org.apache.kafka.clients.consumer.internals.PrototypeAsyncConsumer
 import org.apache.kafka.common.network.{ListenerName, Mode}
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer, Deserializer, Serializer}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
@@ -171,23 +170,10 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
     producer
   }
 
-  def createAsyncConsumer[K, V](keyDeserializer: Deserializer[K] = new ByteArrayDeserializer,
-                                valueDeserializer: Deserializer[V] = new ByteArrayDeserializer,
-                                configOverrides: Properties = new Properties,
-                                configsToRemove: List[String] = List()): PrototypeAsyncConsumer[K, V] = {
-    val props = new Properties
-    props ++= consumerConfig
-    props ++= configOverrides
-    configsToRemove.foreach(props.remove(_))
-    val consumer = new PrototypeAsyncConsumer[K, V](props, keyDeserializer, valueDeserializer)
-    consumers += consumer
-    consumer
-  }
-
   def createConsumer[K, V](keyDeserializer: Deserializer[K] = new ByteArrayDeserializer,
                            valueDeserializer: Deserializer[V] = new ByteArrayDeserializer,
                            configOverrides: Properties = new Properties,
-                           configsToRemove: List[String] = List()): KafkaConsumer[K, V] = {
+                           configsToRemove: List[String] = List()): Consumer[K, V] = {
     val props = new Properties
     props ++= consumerConfig
     props ++= configOverrides

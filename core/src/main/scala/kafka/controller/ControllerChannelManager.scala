@@ -91,7 +91,9 @@ class ControllerChannelManager(controllerEpoch: () => Int,
         case Some(stateInfo) =>
           stateInfo.messageQueue.put(QueueItem(request.apiKey, request, callback, time.milliseconds()))
         case None =>
-          warn(s"Not sending request $request to broker $brokerId, since it is offline.")
+          warn(s"Not sending request ${request.apiKey.name} with controllerId=${request.controllerId()}, " +
+            s"controllerEpoch=${request.controllerEpoch()}, brokerEpoch=${request.brokerEpoch()} " +
+            s"to broker $brokerId, since it is offline.")
       }
     }
   }
@@ -361,7 +363,7 @@ class ControllerBrokerRequestBatch(
  * @param metadataProvider Provider to provide the relevant metadata to build the state needed to
  *                         send RPCs
  * @param metadataVersionProvider Provider to provide the metadata version used by the controller.
- * @param stateChangeLogger logger to log the various events while sending requests and receving
+ * @param stateChangeLogger logger to log the various events while sending requests and receiving
  *                          responses from the brokers
  * @param kraftController whether the controller is KRaft controller
  */
@@ -375,6 +377,7 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
   val stopReplicaRequestMap = mutable.Map.empty[Int, mutable.Map[TopicPartition, StopReplicaPartitionState]]
   val updateMetadataRequestBrokerSet = mutable.Set.empty[Int]
   val updateMetadataRequestPartitionInfoMap = mutable.Map.empty[TopicPartition, UpdateMetadataPartitionState]
+  private var updateType: LeaderAndIsrRequest.Type = LeaderAndIsrRequest.Type.UNKNOWN
   private var metadataInstance: ControllerChannelContext = _
 
   def sendRequest(brokerId: Int,
@@ -396,12 +399,17 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
     metadataInstance = metadataProvider()
   }
 
+  def setUpdateType(updateType: LeaderAndIsrRequest.Type): Unit = {
+    this.updateType = updateType
+  }
+
   def clear(): Unit = {
     leaderAndIsrRequestMap.clear()
     stopReplicaRequestMap.clear()
     updateMetadataRequestBrokerSet.clear()
     updateMetadataRequestPartitionInfoMap.clear()
     metadataInstance = null
+    updateType = LeaderAndIsrRequest.Type.UNKNOWN
   }
 
   def addLeaderAndIsrRequestForBrokers(brokerIds: Seq[Int],
@@ -541,8 +549,17 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
           .toSet[String]
           .map(topic => (topic, metadataInstance.topicIds.getOrElse(topic, Uuid.ZERO_UUID)))
           .toMap
-        val leaderAndIsrRequestBuilder = new LeaderAndIsrRequest.Builder(leaderAndIsrRequestVersion, controllerId,
-          controllerEpoch, brokerEpoch, leaderAndIsrPartitionStates.values.toBuffer.asJava, topicIds.asJava, leaders.asJava, kraftController)
+        val leaderAndIsrRequestBuilder = new LeaderAndIsrRequest.Builder(
+          leaderAndIsrRequestVersion,
+          controllerId,
+          controllerEpoch,
+          brokerEpoch,
+          leaderAndIsrPartitionStates.values.toBuffer.asJava,
+          topicIds.asJava,
+          leaders.asJava,
+          kraftController,
+          updateType
+        )
         sendRequest(broker, leaderAndIsrRequestBuilder, (r: AbstractResponse) => {
           val leaderAndIsrResponse = r.asInstanceOf[LeaderAndIsrResponse]
           handleLeaderAndIsrResponse(leaderAndIsrResponse, broker)
@@ -550,6 +567,7 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
       }
     }
     leaderAndIsrRequestMap.clear()
+    updateType = LeaderAndIsrRequest.Type.UNKNOWN
   }
 
   def handleLeaderAndIsrResponse(response: LeaderAndIsrResponse, broker: Int): Unit

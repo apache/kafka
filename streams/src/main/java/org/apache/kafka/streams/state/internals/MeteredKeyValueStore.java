@@ -169,7 +169,7 @@ public class MeteredKeyValueStore<K, V>
 
 
     @Deprecated
-    private void initStoreSerde(final ProcessorContext context) {
+    protected void initStoreSerde(final ProcessorContext context) {
         final String storeName = name();
         final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName, Boolean.FALSE);
         serdes = new StateSerdes<>(
@@ -179,7 +179,7 @@ public class MeteredKeyValueStore<K, V>
         );
     }
 
-    private void initStoreSerde(final StateStoreContext context) {
+    protected void initStoreSerde(final StateStoreContext context) {
         final String storeName = name();
         final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName, Boolean.FALSE);
         serdes = new StateSerdes<>(
@@ -200,7 +200,8 @@ public class MeteredKeyValueStore<K, V>
                     record.withKey(serdes.keyFrom(record.key()))
                         .withValue(new Change<>(
                             record.value().newValue != null ? serdes.valueFrom(record.value().newValue) : null,
-                            record.value().oldValue != null ? serdes.valueFrom(record.value().oldValue) : null
+                            record.value().oldValue != null ? serdes.valueFrom(record.value().oldValue) : null,
+                            record.value().isLatest
                         ))
                 ),
                 sendOldValues);
@@ -252,7 +253,8 @@ public class MeteredKeyValueStore<K, V>
 
         final QueryResult<R> result;
         final RangeQuery<K, V> typedQuery = (RangeQuery<K, V>) query;
-        final RangeQuery<Bytes, byte[]> rawRangeQuery;
+        RangeQuery<Bytes, byte[]> rawRangeQuery;
+        final boolean isKeyAscending = typedQuery.isKeyAscending();
         if (typedQuery.getLowerBound().isPresent() && typedQuery.getUpperBound().isPresent()) {
             rawRangeQuery = RangeQuery.withRange(
                 keyBytes(typedQuery.getLowerBound().get()),
@@ -264,6 +266,9 @@ public class MeteredKeyValueStore<K, V>
             rawRangeQuery = RangeQuery.withUpperBound(keyBytes(typedQuery.getUpperBound().get()));
         } else {
             rawRangeQuery = RangeQuery.withNoBounds();
+        }
+        if (!isKeyAscending) {
+            rawRangeQuery = rawRangeQuery.withDescendingKeys();
         }
         final QueryResult<KeyValueIterator<Bytes, byte[]>> rawResult =
             wrapped().query(rawRangeQuery, positionBound, config);
@@ -286,7 +291,6 @@ public class MeteredKeyValueStore<K, V>
         }
         return result;
     }
-
 
     @SuppressWarnings("unchecked")
     protected <R> QueryResult<R> runKeyQuery(final Query<R> query,
@@ -439,7 +443,7 @@ public class MeteredKeyValueStore<K, V>
         return byteEntries;
     }
 
-    private void maybeRecordE2ELatency() {
+    protected void maybeRecordE2ELatency() {
         // Context is null if the provided context isn't an implementation of InternalProcessorContext.
         // In that case, we _can't_ get the current timestamp, so we don't record anything.
         if (e2eLatencySensor.shouldRecord() && context != null) {

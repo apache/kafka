@@ -48,7 +48,7 @@ public class BootstrapMetadataTest {
             setFeatureLevel((short) 6), (short) 0)));
 
     @Test
-    public void testFromVersion() throws Exception {
+    public void testFromVersion() {
         assertEquals(new BootstrapMetadata(Collections.singletonList(
             new ApiMessageAndVersion(new FeatureLevelRecord().
                 setName(FEATURE_NAME).
@@ -58,20 +58,20 @@ public class BootstrapMetadataTest {
     }
 
     @Test
-    public void testFromRecordsList() throws Exception {
+    public void testFromRecordsList() {
         assertEquals(new BootstrapMetadata(SAMPLE_RECORDS1, IBP_3_3_IV2, "bar"),
             BootstrapMetadata.fromRecords(SAMPLE_RECORDS1, "bar"));
     }
 
     @Test
-    public void testFromRecordsListWithoutMetadataVersion() throws Exception {
+    public void testFromRecordsListWithoutMetadataVersion() {
         assertEquals("No FeatureLevelRecord for metadata.version was found in the bootstrap " +
             "metadata from quux", assertThrows(RuntimeException.class,
                 () -> BootstrapMetadata.fromRecords(emptyList(), "quux")).getMessage());
     }
 
     @Test
-    public void testCopyWithOnlyVersion() throws Exception {
+    public void testCopyWithOnlyVersion() {
         assertEquals(new BootstrapMetadata(SAMPLE_RECORDS1.subList(2, 3), IBP_3_3_IV2, "baz"),
                 BootstrapMetadata.fromRecords(SAMPLE_RECORDS1, "baz").copyWithOnlyVersion());
     }
@@ -82,7 +82,7 @@ public class BootstrapMetadataTest {
                 setFeatureLevel(IBP_3_0_IV1.featureLevel()), (short) 0)));
 
     @Test
-    public void testFromRecordsListWithOldMetadataVersion() throws Exception {
+    public void testFromRecordsListWithOldMetadataVersion() {
         RuntimeException exception = assertThrows(RuntimeException.class,
             () -> BootstrapMetadata.fromRecords(RECORDS_WITH_OLD_METADATA_VERSION, "quux"));
         assertEquals("Bootstrap metadata versions before 3.3-IV0 are not supported. Can't load " +

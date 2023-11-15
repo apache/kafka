@@ -17,31 +17,56 @@
 package kafka.api
 
 import kafka.utils.TestUtils.waitUntilTrue
+import org.apache.kafka.clients.consumer.{ConsumerConfig, GroupProtocol}
+import org.junit.jupiter.api.Assertions.{assertNotNull, assertNull, assertTrue}
 import org.junit.jupiter.api.Test
 
+import java.time.Duration
+import java.util.Properties
+import scala.jdk.CollectionConverters._
+
 class BaseAsyncConsumerTest extends AbstractConsumerTest {
+  val defaultBlockingAPITimeoutMs = 1000
+
   @Test
   def testCommitAsync(): Unit = {
-    val consumer = createAsyncConsumer()
+    val props = new Properties();
+    props.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name());
+    val consumer = createConsumer(configOverrides = props)
     val producer = createProducer()
     val numRecords = 10000
     val startingTimestamp = System.currentTimeMillis()
     val cb = new CountConsumerCommitCallback
     sendRecords(producer, numRecords, tp, startingTimestamp = startingTimestamp)
+    consumer.assign(List(tp).asJava)
     consumer.commitAsync(cb)
     waitUntilTrue(() => {
       cb.successCount == 1
-    }, "wait until commit is completed successfully", 5000)
+    }, "wait until commit is completed successfully", defaultBlockingAPITimeoutMs)
+    val committedOffset = consumer.committed(Set(tp).asJava, Duration.ofMillis(defaultBlockingAPITimeoutMs))
+    assertNotNull(committedOffset)
+    // No valid fetch position due to the absence of consumer.poll; and therefore no offset was committed to
+    // tp. The committed offset should be null. This is intentional.
+    assertNull(committedOffset.get(tp))
+    assertTrue(consumer.assignment.contains(tp))
   }
 
   @Test
   def testCommitSync(): Unit = {
-    val consumer = createAsyncConsumer()
+    val props = new Properties();
+    props.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name());
+    val consumer = createConsumer(configOverrides = props)
     val producer = createProducer()
     val numRecords = 10000
     val startingTimestamp = System.currentTimeMillis()
     sendRecords(producer, numRecords, tp, startingTimestamp = startingTimestamp)
-    consumer.commitSync();
-    // TODO: commitSync will be tested after implemented consumer.committed()
+    consumer.assign(List(tp).asJava)
+    consumer.commitSync()
+    val committedOffset = consumer.committed(Set(tp).asJava, Duration.ofMillis(defaultBlockingAPITimeoutMs))
+    assertNotNull(committedOffset)
+    // No valid fetch position due to the absence of consumer.poll; and therefore no offset was committed to
+    // tp. The committed offset should be null. This is intentional.
+    assertNull(committedOffset.get(tp))
+    assertTrue(consumer.assignment.contains(tp))
   }
 }

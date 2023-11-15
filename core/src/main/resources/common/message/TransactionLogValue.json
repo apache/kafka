@@ -16,24 +16,27 @@
 {
   "type": "data",
   "name": "TransactionLogValue",
-  "validVersions": "0",
-  "flexibleVersions": "none",
+  // Version 1 is the first flexible version.
+  // KIP-915: bumping the version will no longer make this record backward compatible.
+  // We suggest to add/remove only tagged fields to maintain backward compatibility.
+  "validVersions": "0-1",
+  "flexibleVersions": "1+",
   "fields": [
-    { "name": "ProducerId", "type": "int64", "versions": "0",
+    { "name": "ProducerId", "type": "int64", "versions": "0+",
       "about": "Producer id in use by the transactional id"},
-    { "name": "ProducerEpoch", "type": "int16", "versions": "0",
+    { "name": "ProducerEpoch", "type": "int16", "versions": "0+",
       "about": "Epoch associated with the producer id"},
-    { "name": "TransactionTimeoutMs", "type": "int32", "versions": "0",
+    { "name": "TransactionTimeoutMs", "type": "int32", "versions": "0+",
       "about": "Transaction timeout in milliseconds"},
-    { "name": "TransactionStatus", "type": "int8", "versions": "0",
+    { "name": "TransactionStatus", "type": "int8", "versions": "0+",
       "about": "TransactionState the transaction is in"},
-    { "name": "TransactionPartitions", "type": "[]PartitionsSchema", "versions": "0", "nullableVersions": "0",
+    { "name": "TransactionPartitions", "type": "[]PartitionsSchema", "versions": "0+", "nullableVersions": "0+",
       "about": "Set of partitions involved in the transaction", "fields": [
-      { "name": "Topic", "type": "string", "versions": "0"},
-      { "name": "PartitionIds", "type": "[]int32", "versions": "0"}]},
-    { "name": "TransactionLastUpdateTimestampMs", "type": "int64", "versions": "0",
+      { "name": "Topic", "type": "string", "versions": "0+"},
+      { "name": "PartitionIds", "type": "[]int32", "versions": "0+"}]},
+    { "name": "TransactionLastUpdateTimestampMs", "type": "int64", "versions": "0+",
       "about": "Time the transaction was last updated"},
-    { "name": "TransactionStartTimestampMs", "type": "int64", "versions": "0",
+    { "name": "TransactionStartTimestampMs", "type": "int64", "versions": "0+",
       "about": "Time the transaction was started"}
   ]
 }

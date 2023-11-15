@@ -56,7 +56,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
     super.generateConfigs
   }
 
-  override def configureSecurityBeforeServersStart(): Unit = {
+  override def configureSecurityBeforeServersStart(testInfo: TestInfo): Unit = {
     authorizationAdmin.initializeAcls()
   }
 

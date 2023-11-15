@@ -64,6 +64,7 @@ object RequestConvertToJson {
       case req: ExpireDelegationTokenRequest => ExpireDelegationTokenRequestDataJsonConverter.write(req.data, request.version)
       case req: FetchRequest => FetchRequestDataJsonConverter.write(req.data, request.version)
       case req: FindCoordinatorRequest => FindCoordinatorRequestDataJsonConverter.write(req.data, request.version)
+      case req: GetTelemetrySubscriptionsRequest => GetTelemetrySubscriptionsRequestDataJsonConverter.write(req.data, request.version)
       case req: HeartbeatRequest => HeartbeatRequestDataJsonConverter.write(req.data, request.version)
       case req: IncrementalAlterConfigsRequest => IncrementalAlterConfigsRequestDataJsonConverter.write(req.data, request.version)
       case req: InitProducerIdRequest => InitProducerIdRequestDataJsonConverter.write(req.data, request.version)
@@ -79,6 +80,7 @@ object RequestConvertToJson {
       case req: OffsetFetchRequest => OffsetFetchRequestDataJsonConverter.write(req.data, request.version)
       case req: OffsetsForLeaderEpochRequest => OffsetForLeaderEpochRequestDataJsonConverter.write(req.data, request.version)
       case req: ProduceRequest => ProduceRequestDataJsonConverter.write(req.data, request.version, false)
+      case req: PushTelemetryRequest => PushTelemetryRequestDataJsonConverter.write(req.data, request.version)
       case req: RenewDelegationTokenRequest => RenewDelegationTokenRequestDataJsonConverter.write(req.data, request.version)
       case req: SaslAuthenticateRequest => SaslAuthenticateRequestDataJsonConverter.write(req.data, request.version)
       case req: SaslHandshakeRequest => SaslHandshakeRequestDataJsonConverter.write(req.data, request.version)
@@ -96,6 +98,9 @@ object RequestConvertToJson {
       case req: DescribeTransactionsRequest => DescribeTransactionsRequestDataJsonConverter.write(req.data, request.version)
       case req: ListTransactionsRequest => ListTransactionsRequestDataJsonConverter.write(req.data, request.version)
       case req: ConsumerGroupHeartbeatRequest => ConsumerGroupHeartbeatRequestDataJsonConverter.write(req.data, request.version)
+      case req: ConsumerGroupDescribeRequest => ConsumerGroupDescribeRequestDataJsonConverter.write(req.data, request.version)
+      case req: ControllerRegistrationRequest => ControllerRegistrationRequestDataJsonConverter.write(req.data, request.version)
+      case req: AssignReplicasToDirsRequest => AssignReplicasToDirsRequestDataJsonConverter.write(req.data, request.version)
       case _ => throw new IllegalStateException(s"ApiKey ${request.apiKey} is not currently handled in `request`, the " +
         "code should be updated to do so.");
     }
@@ -140,6 +145,7 @@ object RequestConvertToJson {
       case res: ExpireDelegationTokenResponse => ExpireDelegationTokenResponseDataJsonConverter.write(res.data, version)
       case res: FetchResponse => FetchResponseDataJsonConverter.write(res.data, version, false)
       case res: FindCoordinatorResponse => FindCoordinatorResponseDataJsonConverter.write(res.data, version)
+      case res: GetTelemetrySubscriptionsResponse => GetTelemetrySubscriptionsResponseDataJsonConverter.write(res.data, version)
       case res: HeartbeatResponse => HeartbeatResponseDataJsonConverter.write(res.data, version)
       case res: IncrementalAlterConfigsResponse => IncrementalAlterConfigsResponseDataJsonConverter.write(res.data, version)
       case res: InitProducerIdResponse => InitProducerIdResponseDataJsonConverter.write(res.data, version)
@@ -155,6 +161,7 @@ object RequestConvertToJson {
       case res: OffsetFetchResponse => OffsetFetchResponseDataJsonConverter.write(res.data, version)
       case res: OffsetsForLeaderEpochResponse => OffsetForLeaderEpochResponseDataJsonConverter.write(res.data, version)
       case res: ProduceResponse => ProduceResponseDataJsonConverter.write(res.data, version)
+      case res: PushTelemetryResponse => PushTelemetryResponseDataJsonConverter.write(res.data, version)
       case res: RenewDelegationTokenResponse => RenewDelegationTokenResponseDataJsonConverter.write(res.data, version)
       case res: SaslAuthenticateResponse => SaslAuthenticateResponseDataJsonConverter.write(res.data, version)
       case res: SaslHandshakeResponse => SaslHandshakeResponseDataJsonConverter.write(res.data, version)
@@ -172,6 +179,9 @@ object RequestConvertToJson {
       case res: DescribeTransactionsResponse => DescribeTransactionsResponseDataJsonConverter.write(res.data, version)
       case res: ListTransactionsResponse => ListTransactionsResponseDataJsonConverter.write(res.data, version)
       case res: ConsumerGroupHeartbeatResponse => ConsumerGroupHeartbeatResponseDataJsonConverter.write(res.data, version)
+      case res: ConsumerGroupDescribeResponse => ConsumerGroupDescribeResponseDataJsonConverter.write(res.data, version)
+      case req: ControllerRegistrationResponse => ControllerRegistrationResponseDataJsonConverter.write(req.data, version)
+      case res: AssignReplicasToDirsResponse => AssignReplicasToDirsResponseDataJsonConverter.write(res.data, version)
       case _ => throw new IllegalStateException(s"ApiKey ${response.apiKey} is not currently handled in `response`, the " +
         "code should be updated to do so.");
     }

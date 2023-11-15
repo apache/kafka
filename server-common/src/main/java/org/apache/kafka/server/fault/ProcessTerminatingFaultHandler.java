@@ -66,13 +66,13 @@ final public class ProcessTerminatingFaultHandler implements FaultHandler {
 
         /**
          * Set if halt or exit should be used.
-         *
+         * <br>
          * When {@code value} is {@code false} {@code Exit.exit} is called, otherwise {@code Exit.halt} is
          * called. The default value is {@code true}.
-         *
+         * <br>
          * The default implementation of {@code Exit.exit} calls {@code Runtime.exit} which
          * blocks on all of the shutdown hooks executing.
-         *
+         * <br>
          * The default implementation of {@code Exit.halt} calls {@code Runtime.halt} which
          * forcibly terminates the JVM.
          */

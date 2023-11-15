@@ -33,6 +33,7 @@ public final class Batch<T> implements Iterable<T> {
     private final int sizeInBytes;
     private final long lastOffset;
     private final List<T> records;
+    private final List<ControlRecord> controlRecords;
 
     private Batch(
         long baseOffset,
@@ -40,7 +41,8 @@ public final class Batch<T> implements Iterable<T> {
         long appendTimestamp,
         int sizeInBytes,
         long lastOffset,
-        List<T> records
+        List<T> records,
+        List<ControlRecord> controlRecords
     ) {
         this.baseOffset = baseOffset;
         this.epoch = epoch;
@@ -48,6 +50,7 @@ public final class Batch<T> implements Iterable<T> {
         this.sizeInBytes = sizeInBytes;
         this.lastOffset = lastOffset;
         this.records = records;
+        this.controlRecords = controlRecords;
     }
 
     /**
@@ -79,6 +82,13 @@ public final class Batch<T> implements Iterable<T> {
     }
 
     /**
+     * The list of control records in the batch.
+     */
+    public List<ControlRecord> controlRecords() {
+        return controlRecords;
+    }
+
+    /**
      * The epoch of the leader that appended the record batch.
      */
     public int epoch() {
@@ -106,6 +116,7 @@ public final class Batch<T> implements Iterable<T> {
             ", sizeInBytes=" + sizeInBytes +
             ", lastOffset=" + lastOffset +
             ", records=" + records +
+            ", controlRecords=" + controlRecords +
             ')';
     }
 
@@ -119,7 +130,8 @@ public final class Batch<T> implements Iterable<T> {
             appendTimestamp == batch.appendTimestamp &&
             sizeInBytes == batch.sizeInBytes &&
             lastOffset == batch.lastOffset &&
-            Objects.equals(records, batch.records);
+            Objects.equals(records, batch.records) &&
+            Objects.equals(controlRecords, batch.controlRecords);
     }
 
     @Override
@@ -130,7 +142,8 @@ public final class Batch<T> implements Iterable<T> {
             appendTimestamp,
             sizeInBytes,
             lastOffset,
-            records
+            records,
+            controlRecords
         );
     }
 
@@ -143,22 +156,33 @@ public final class Batch<T> implements Iterable<T> {
      * @param epoch epoch of the leader that created this batch
      * @param appendTimestamp timestamp in milliseconds of when the batch was appended
      * @param sizeInBytes number of bytes used by this batch
-     * @param lastOffset offset of the last record of this batch
+     * @param records the list of records in this batch
      */
     public static <T> Batch<T> control(
         long baseOffset,
         int epoch,
         long appendTimestamp,
         int sizeInBytes,
-        long lastOffset
+        List<ControlRecord> records
     ) {
+        if (records.isEmpty()) {
+            throw new IllegalArgumentException(
+                String.format(
+                    "Control batch must contain at least one record; baseOffset = %d; epoch = %d",
+                    baseOffset,
+                    epoch
+                )
+            );
+        }
+
         return new Batch<>(
             baseOffset,
             epoch,
             appendTimestamp,
             sizeInBytes,
-            lastOffset,
-            Collections.emptyList()
+            baseOffset + records.size() - 1,
+            Collections.emptyList(),
+            records
         );
     }
 
@@ -181,7 +205,7 @@ public final class Batch<T> implements Iterable<T> {
         if (records.isEmpty()) {
             throw new IllegalArgumentException(
                 String.format(
-                    "Batch must contain at least one record; baseOffset = %s; epoch = %s",
+                    "Batch must contain at least one record; baseOffset = %d; epoch = %d",
                     baseOffset,
                     epoch
                 )
@@ -194,7 +218,8 @@ public final class Batch<T> implements Iterable<T> {
             appendTimestamp,
             sizeInBytes,
             baseOffset + records.size() - 1,
-            records
+            records,
+            Collections.emptyList()
         );
     }
 }

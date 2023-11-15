@@ -26,6 +26,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.kafka.connect.mirror.TestUtils.assertEqualsExceptClientId;
 import static org.apache.kafka.connect.mirror.TestUtils.makeProps;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -39,7 +40,7 @@ public class MirrorSourceConfigTest {
         List<TopicPartition> topicPartitions = Arrays.asList(new TopicPartition("topic-1", 2),
                 new TopicPartition("topic-3", 4), new TopicPartition("topic-5", 6));
         MirrorSourceConfig config = new MirrorSourceConfig(makeProps());
-        Map<String, String> props = config.taskConfigForTopicPartitions(topicPartitions);
+        Map<String, String> props = config.taskConfigForTopicPartitions(topicPartitions, 1);
         MirrorSourceTaskConfig taskConfig = new MirrorSourceTaskConfig(props);
         assertEquals(taskConfig.taskTopicPartitions(), new HashSet<>(topicPartitions),
                 "Setting topic property configuration failed");
@@ -144,10 +145,20 @@ public class MirrorSourceConfigTest {
                 "fetch.min.bytes", "1"
         );
         MirrorSourceConfig config = new MirrorSourceConfig(connectorProps);
-        assertEquals(config.sourceProducerConfig(), config.offsetSyncsTopicProducerConfig());
+        Map<String, Object> sourceProducerConfig = config.sourceProducerConfig("test");
+        Map<String, Object> offsetSyncsTopicSourceProducerConfig = config.offsetSyncsTopicProducerConfig();
+        assertEqualsExceptClientId(sourceProducerConfig, offsetSyncsTopicSourceProducerConfig);
+        assertEquals("source1->target2|ConnectorName|test", sourceProducerConfig.get("client.id"));
+        assertEquals("source1->target2|ConnectorName|" + MirrorSourceConfig.OFFSET_SYNCS_SOURCE_PRODUCER_ROLE,
+                offsetSyncsTopicSourceProducerConfig.get("client.id"));
         connectorProps.put("offset-syncs.topic.location", "target");
         config = new MirrorSourceConfig(connectorProps);
-        assertEquals(config.targetProducerConfig(), config.offsetSyncsTopicProducerConfig());
+        Map<String, Object> targetProducerConfig = config.targetProducerConfig("test");
+        Map<String, Object> offsetSyncsTopicTargetProducerConfig = config.offsetSyncsTopicProducerConfig();
+        assertEqualsExceptClientId(targetProducerConfig, offsetSyncsTopicTargetProducerConfig);
+        assertEquals("source1->target2|ConnectorName|test", targetProducerConfig.get("client.id"));
+        assertEquals("source1->target2|ConnectorName|" + MirrorSourceConfig.OFFSET_SYNCS_TARGET_PRODUCER_ROLE,
+                offsetSyncsTopicTargetProducerConfig.get("client.id"));
     }
 
     @Test
@@ -159,9 +170,19 @@ public class MirrorSourceConfigTest {
                 "retries", "123"
         );
         MirrorSourceConfig config = new MirrorSourceConfig(connectorProps);
-        assertEquals(config.sourceAdminConfig(), config.offsetSyncsTopicAdminConfig());
+        Map<String, Object> sourceAdminConfig = config.sourceAdminConfig("test");
+        Map<String, Object> offsetSyncsTopicSourceAdminConfig = config.offsetSyncsTopicAdminConfig();
+        assertEqualsExceptClientId(sourceAdminConfig, offsetSyncsTopicSourceAdminConfig);
+        assertEquals("source1->target2|ConnectorName|test", sourceAdminConfig.get("client.id"));
+        assertEquals("source1->target2|ConnectorName|" + MirrorSourceConfig.OFFSET_SYNCS_SOURCE_ADMIN_ROLE,
+                offsetSyncsTopicSourceAdminConfig.get("client.id"));
         connectorProps.put("offset-syncs.topic.location", "target");
         config = new MirrorSourceConfig(connectorProps);
-        assertEquals(config.targetAdminConfig(), config.offsetSyncsTopicAdminConfig());
+        Map<String, Object> targetAdminConfig = config.targetAdminConfig("test");
+        Map<String, Object> offsetSyncsTopicTargetAdminConfig = config.offsetSyncsTopicAdminConfig();
+        assertEqualsExceptClientId(targetAdminConfig, offsetSyncsTopicTargetAdminConfig);
+        assertEquals("source1->target2|ConnectorName|test", targetAdminConfig.get("client.id"));
+        assertEquals("source1->target2|ConnectorName|" + MirrorSourceConfig.OFFSET_SYNCS_TARGET_ADMIN_ROLE,
+                offsetSyncsTopicTargetAdminConfig.get("client.id"));
     }
 }

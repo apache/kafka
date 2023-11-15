@@ -16,12 +16,15 @@
  */
 package org.apache.kafka.clients.admin.internals;
 
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.DisconnectException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.FindCoordinatorRequest.NoBatchedFindCoordinatorsException;
 import org.apache.kafka.common.requests.OffsetFetchRequest.NoBatchedOffsetFetchRequestException;
+import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
@@ -80,7 +83,7 @@ import java.util.stream.Collectors;
  */
 public class AdminApiDriver<K, V> {
     private final Logger log;
-    private final long retryBackoffMs;
+    private final ExponentialBackoff retryBackoff;
     private final long deadlineMs;
     private final AdminApiHandler<K, V> handler;
     private final AdminApiFuture<K, V> future;
@@ -94,12 +97,17 @@ public class AdminApiDriver<K, V> {
         AdminApiFuture<K, V> future,
         long deadlineMs,
         long retryBackoffMs,
+        long retryBackoffMaxMs,
         LogContext logContext
     ) {
         this.handler = handler;
         this.future = future;
         this.deadlineMs = deadlineMs;
-        this.retryBackoffMs = retryBackoffMs;
+        this.retryBackoff = new ExponentialBackoff(
+            retryBackoffMs,
+            CommonClientConfigs.RETRY_BACKOFF_EXP_BASE,
+            retryBackoffMaxMs,
+            CommonClientConfigs.RETRY_BACKOFF_JITTER);
         this.log = logContext.logger(AdminApiDriver.class);
         retryLookup(future.lookupKeys());
     }
@@ -260,12 +268,31 @@ public class AdminApiDriver<K, V> {
                 .filter(future.lookupKeys()::contains)
                 .collect(Collectors.toSet());
             retryLookup(keysToUnmap);
+        } else if (t instanceof UnsupportedVersionException) {
+            if (spec.scope instanceof FulfillmentScope) {
+                int brokerId = ((FulfillmentScope) spec.scope).destinationBrokerId;
+                Map<K, Throwable> unrecoverableFailures =
+                    handler.handleUnsupportedVersionException(
+                        brokerId,
+                        (UnsupportedVersionException) t,
+                        spec.keys);
+                completeExceptionally(unrecoverableFailures);
+            } else {
+                Map<K, Throwable> unrecoverableLookupFailures =
+                    handler.lookupStrategy().handleUnsupportedVersionException(
+                        (UnsupportedVersionException) t,
+                        spec.keys);
+                completeLookupExceptionally(unrecoverableLookupFailures);
+                Set<K> keysToUnmap = spec.keys.stream()
+                    .filter(k -> !unrecoverableLookupFailures.containsKey(k))
+                    .collect(Collectors.toSet());
+                retryLookup(keysToUnmap);
+            }
         } else {
             Map<K, Throwable> errors = spec.keys.stream().collect(Collectors.toMap(
                 Function.identity(),
                 key -> t
             ));
-
             if (spec.scope instanceof FulfillmentScope) {
                 completeExceptionally(errors);
             } else {
@@ -279,7 +306,7 @@ public class AdminApiDriver<K, V> {
         if (requestState != null) {
             // Only apply backoff if it's not a retry of a lookup request
             if (spec.scope instanceof FulfillmentScope) {
-                requestState.clearInflight(currentTimeMs + retryBackoffMs);
+                requestState.clearInflightAndBackoff(currentTimeMs);
             } else {
                 requestState.clearInflight(currentTimeMs);
             }
@@ -406,9 +433,13 @@ public class AdminApiDriver<K, V> {
             return inflightRequest.isPresent();
         }
 
-        public void clearInflight(long nextAllowedRetryMs) {
+        public void clearInflight(long currentTimeMs) {
             this.inflightRequest = Optional.empty();
-            this.nextAllowedRetryMs = nextAllowedRetryMs;
+            this.nextAllowedRetryMs = currentTimeMs;
+        }
+
+        public void clearInflightAndBackoff(long currentTimeMs) {
+            clearInflight(currentTimeMs + retryBackoff.backoff(tries >= 1 ? tries - 1 : 0));
         }
 
         public void setInflight(RequestSpec<K> spec) {

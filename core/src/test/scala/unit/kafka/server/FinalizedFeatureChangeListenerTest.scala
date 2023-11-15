@@ -21,6 +21,7 @@ import kafka.server.metadata.ZkMetadataCache
 import kafka.utils.TestUtils
 import kafka.zk.{FeatureZNode, FeatureZNodeStatus, ZkVersion}
 import org.apache.kafka.common.feature.{Features, SupportedVersionRange}
+import org.apache.kafka.server.common.{Features => JFeatures}
 import org.apache.kafka.common.utils.Exit
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.IBP_3_2_IV0
@@ -32,6 +33,15 @@ import java.util.concurrent.{CountDownLatch, TimeoutException}
 import scala.jdk.CollectionConverters._
 
 class FinalizedFeatureChangeListenerTest extends QuorumTestHarness {
+  case class FinalizedFeaturesAndEpoch(features: Map[String, Short], epoch: Long) {
+    override def toString(): String = {
+      s"FinalizedFeaturesAndEpoch(features=$features, epoch=$epoch)"
+    }
+  }
+
+  def asJava(input: Map[String, Short]): java.util.Map[String, java.lang.Short] = {
+    input.map(kv => kv._1 -> kv._2.asInstanceOf[java.lang.Short]).asJava
+  }
 
   private def createBrokerFeatures(): BrokerFeatures = {
     val supportedFeaturesMap = Map[String, SupportedVersionRange](
@@ -64,8 +74,8 @@ class FinalizedFeatureChangeListenerTest extends QuorumTestHarness {
       val mayBeNewCacheContent = cache.getFeatureOption
       assertFalse(mayBeNewCacheContent.isEmpty)
       val newCacheContent = mayBeNewCacheContent.get
-      assertEquals(expectedCacheContent.get.features, newCacheContent.features)
-      assertEquals(expectedCacheContent.get.epoch, newCacheContent.epoch)
+      assertEquals(asJava(expectedCacheContent.get.features), newCacheContent.finalizedFeatures())
+      assertEquals(expectedCacheContent.get.epoch, newCacheContent.finalizedFeaturesEpoch())
     } else {
       val mayBeNewCacheContent = cache.getFeatureOption
       assertTrue(mayBeNewCacheContent.isEmpty)
@@ -94,7 +104,9 @@ class FinalizedFeatureChangeListenerTest extends QuorumTestHarness {
       assertTrue(updatedVersion > initialFinalizedFeatures.epoch)
 
       cache.waitUntilFeatureEpochOrThrow(updatedVersion, JTestUtils.DEFAULT_MAX_WAIT_MS)
-      assertEquals(FinalizedFeaturesAndEpoch(finalizedFeatures, updatedVersion), cache.getFeatureOption.get)
+      assertEquals(new JFeatures(MetadataVersion.IBP_2_8_IV1,
+        asJava(finalizedFeatures), updatedVersion, false),
+          cache.getFeatureOption.get)
       assertTrue(listener.isListenerInitiated)
     }
 
@@ -248,7 +260,8 @@ class FinalizedFeatureChangeListenerTest extends QuorumTestHarness {
         listener.isListenerDead &&
         // Make sure the cache contents are as expected, and, the incompatible features were not
         // applied.
-        cache.getFeatureOption.get.equals(initialFinalizedFeatures)
+          cache.getFeatureOption.get.equals(new JFeatures(MetadataVersion.IBP_2_8_IV1,
+            asJava(initialFinalizedFeatures.features), initialFinalizedFeatures.epoch, false))
       }, "Timed out waiting for listener death and FinalizedFeatureCache to be updated")
     } finally {
       Exit.resetExitProcedure()

@@ -25,11 +25,13 @@ import kafka.zk.EmbeddedZookeeper;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.AlterConfigsResult;
 import org.apache.kafka.clients.admin.DescribeTopicsResult;
 import org.apache.kafka.clients.admin.ListOffsetsOptions;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.admin.TopicDescription;
+import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -41,6 +43,7 @@ import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.errors.InvalidReplicationFactorException;
@@ -86,7 +89,6 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG;
-import static org.junit.Assert.assertFalse;
 
 /**
  * Setup an embedded Kafka cluster with specified number of brokers and specified broker properties. To be used for
@@ -340,7 +342,7 @@ public class EmbeddedKafkaCluster {
                     Throwable cause = e.getCause();
                     if (cause instanceof UnknownTopicOrPartitionException) {
                         results.put(topicName, Optional.empty());
-                        log.info("Found non-existant topic {}", topicName);
+                        log.info("Found non-existent topic {}", topicName);
                         continue;
                     }
                     throw new AssertionError("Could not describe topic(s)" + topicNames, e);
@@ -351,6 +353,25 @@ public class EmbeddedKafkaCluster {
         }
         log.info("Found topics {}", results);
         return results;
+    }
+
+    /**
+     * Update the configuration for the specified resources with the default options.
+     *
+     * @param configs The resources with their configs (topic is the only resource type with configs that can
+     *                be updated currently)
+     * @return The AlterConfigsResult
+     */
+    public AlterConfigsResult incrementalAlterConfigs(Map<ConfigResource, Collection<AlterConfigOp>> configs) {
+        AlterConfigsResult result;
+        log.info("Altering configs for topics {}", configs.keySet());
+        try (Admin admin = createAdminClient()) {
+            result = admin.incrementalAlterConfigs(configs);
+            log.info("Altered configurations {}", result.all().get());
+        } catch (Exception e) {
+            throw new AssertionError("Could not alter topic configurations " + configs.keySet(), e);
+        }
+        return result;
     }
 
     /**
@@ -507,6 +528,19 @@ public class EmbeddedKafkaCluster {
     /**
      * Consume all currently-available records for the specified topics in a given duration, or throw an exception.
      * @param maxDurationMs the max duration to wait for these records (in milliseconds).
+     * @param topics the topics to consume from
+     * @return a {@link ConsumerRecords} collection containing the records for all partitions of the given topics
+     */
+    public ConsumerRecords<byte[], byte[]> consumeAll(
+        long maxDurationMs,
+        String... topics
+    ) throws TimeoutException, InterruptedException, ExecutionException {
+        return consumeAll(maxDurationMs, null, null, topics);
+    }
+
+    /**
+     * Consume all currently-available records for the specified topics in a given duration, or throw an exception.
+     * @param maxDurationMs the max duration to wait for these records (in milliseconds).
      * @param consumerProps overrides to the default properties the consumer is constructed with; may be null
      * @param adminProps overrides to the default properties the admin used to query Kafka cluster metadata is constructed with; may be null
      * @param topics the topics to consume from
@@ -575,7 +609,9 @@ public class EmbeddedKafkaCluster {
             Admin admin,
             Collection<String> topics
     ) throws TimeoutException, InterruptedException, ExecutionException {
-        assertFalse("collection of topics may not be empty", topics.isEmpty());
+        if (topics.isEmpty()) {
+            throw new AssertionError("collection of topics may not be empty");
+        }
         return admin.describeTopics(topics)
                 .allTopicNames().get(maxDurationMs, TimeUnit.MILLISECONDS)
                 .entrySet().stream()
@@ -595,7 +631,9 @@ public class EmbeddedKafkaCluster {
             Admin admin,
             Collection<TopicPartition> topicPartitions
     ) throws TimeoutException, InterruptedException, ExecutionException {
-        assertFalse("collection of topic partitions may not be empty", topicPartitions.isEmpty());
+        if (topicPartitions.isEmpty()) {
+            throw new AssertionError("collection of topic partitions may not be empty");
+        }
         Map<TopicPartition, OffsetSpec> offsetSpecMap = topicPartitions.stream().collect(Collectors.toMap(Function.identity(), tp -> OffsetSpec.latest()));
         return admin.listOffsets(offsetSpecMap, new ListOffsetsOptions(IsolationLevel.READ_UNCOMMITTED))
                 .all().get(maxDurationMs, TimeUnit.MILLISECONDS)

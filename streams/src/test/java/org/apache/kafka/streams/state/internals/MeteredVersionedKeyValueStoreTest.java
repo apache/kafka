@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.streams.state.VersionedKeyValueStore.PUT_RETURN_CODE_VALID_TO_UNDEFINED;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.greaterThan;
@@ -71,7 +72,7 @@ public class MeteredVersionedKeyValueStoreTest {
 
     private static final String STORE_NAME = "versioned_store";
     private static final Serde<String> STRING_SERDE = new StringSerde();
-    private static final Serde<ValueAndTimestamp<String>> VALUE_AND_TIMESTAMP_SERDE = new NullableValueAndTimestampSerde<>(STRING_SERDE);
+    private static final Serde<ValueAndTimestamp<String>> VALUE_AND_TIMESTAMP_SERDE = new ValueAndTimestampSerde<>(STRING_SERDE);
     private static final String METRICS_SCOPE = "scope";
     private static final String STORE_LEVEL_GROUP = "stream-state-metrics";
     private static final String APPLICATION_ID = "test-app";
@@ -81,6 +82,7 @@ public class MeteredVersionedKeyValueStoreTest {
     private static final String VALUE = "v";
     private static final long TIMESTAMP = 10L;
     private static final Bytes RAW_KEY = new Bytes(STRING_SERDE.serializer().serialize(null, KEY));
+    private static final byte[] RAW_VALUE = STRING_SERDE.serializer().serialize(null, VALUE);
     private static final byte[] RAW_VALUE_AND_TIMESTAMP = VALUE_AND_TIMESTAMP_SERDE.serializer()
         .serialize(null, ValueAndTimestamp.make(VALUE, TIMESTAMP));
 
@@ -117,7 +119,7 @@ public class MeteredVersionedKeyValueStoreTest {
             METRICS_SCOPE,
             mockTime,
             STRING_SERDE,
-            VALUE_AND_TIMESTAMP_SERDE
+            STRING_SERDE
         );
     }
 
@@ -172,7 +174,7 @@ public class MeteredVersionedKeyValueStoreTest {
             METRICS_SCOPE,
             mockTime,
             keySerde,
-            new NullableValueAndTimestampSerde<>(valueSerde)
+            valueSerde
         );
         store.init((StateStoreContext) context, store);
 
@@ -191,9 +193,11 @@ public class MeteredVersionedKeyValueStoreTest {
 
     @Test
     public void shouldDelegateAndRecordMetricsOnPut() {
-        store.put(KEY, VALUE, TIMESTAMP);
+        when(inner.put(RAW_KEY, RAW_VALUE, TIMESTAMP)).thenReturn(PUT_RETURN_CODE_VALID_TO_UNDEFINED);
 
-        verify(inner).put(RAW_KEY, RAW_VALUE_AND_TIMESTAMP);
+        final long validto = store.put(KEY, VALUE, TIMESTAMP);
+
+        assertThat(validto, is(PUT_RETURN_CODE_VALID_TO_UNDEFINED));
         assertThat((Double) getMetric("put-rate").metricValue(), greaterThan(0.0));
     }
 

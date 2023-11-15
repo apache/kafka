@@ -19,9 +19,11 @@ package org.apache.kafka.connect.mirror;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.metrics.JmxReporter;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.test.MockMetricsReporter;
 import org.junit.jupiter.api.Test;
 
+import java.util.Locale;
 import java.util.Map;
 import java.util.HashMap;
 
@@ -43,22 +45,26 @@ public class MirrorConnectorConfigTest {
     @Test
     public void testSourceConsumerConfig() {
         Map<String, String> connectorProps = makeProps(
-                MirrorConnectorConfig.CONSUMER_CLIENT_PREFIX + "max.poll.interval.ms", "120000"
+                MirrorConnectorConfig.CONSUMER_CLIENT_PREFIX + "max.poll.interval.ms", "120000",
+                MirrorConnectorConfig.SOURCE_CLUSTER_PREFIX + "bootstrap.servers", "localhost:2345"
         );
         MirrorConnectorConfig config = new TestMirrorConnectorConfig(connectorProps);
-        Map<String, Object> connectorConsumerProps = config.sourceConsumerConfig();
+        Map<String, Object> connectorConsumerProps = config.sourceConsumerConfig("test");
         Map<String, Object> expectedConsumerProps = new HashMap<>();
         expectedConsumerProps.put("enable.auto.commit", "false");
         expectedConsumerProps.put("auto.offset.reset", "earliest");
         expectedConsumerProps.put("max.poll.interval.ms", "120000");
+        expectedConsumerProps.put("client.id", "source1->target2|ConnectorName|test");
+        expectedConsumerProps.put("bootstrap.servers", "localhost:2345");
         assertEquals(expectedConsumerProps, connectorConsumerProps);
 
         // checking auto.offset.reset override works
         connectorProps = makeProps(
-                MirrorConnectorConfig.CONSUMER_CLIENT_PREFIX + "auto.offset.reset", "latest"
+                MirrorConnectorConfig.CONSUMER_CLIENT_PREFIX + "auto.offset.reset", "latest",
+                MirrorConnectorConfig.SOURCE_CLUSTER_PREFIX + "bootstrap.servers", "localhost:2345"
         );
         config = new TestMirrorConnectorConfig(connectorProps);
-        connectorConsumerProps = config.sourceConsumerConfig();
+        connectorConsumerProps = config.sourceConsumerConfig("test");
         expectedConsumerProps.put("auto.offset.reset", "latest");
         expectedConsumerProps.remove("max.poll.interval.ms");
         assertEquals(expectedConsumerProps, connectorConsumerProps,
@@ -73,11 +79,12 @@ public class MirrorConnectorConfigTest {
                 prefix + "max.poll.interval.ms", "100"
         );
         MirrorConnectorConfig config = new TestMirrorConnectorConfig(connectorProps);
-        Map<String, Object> connectorConsumerProps = config.sourceConsumerConfig();
+        Map<String, Object> connectorConsumerProps = config.sourceConsumerConfig("test");
         Map<String, Object> expectedConsumerProps = new HashMap<>();
         expectedConsumerProps.put("enable.auto.commit", "false");
         expectedConsumerProps.put("auto.offset.reset", "latest");
         expectedConsumerProps.put("max.poll.interval.ms", "100");
+        expectedConsumerProps.put("client.id", "source1->target2|ConnectorName|test");
         assertEquals(expectedConsumerProps, connectorConsumerProps,
                 prefix + " source consumer config not matching");
     }
@@ -88,9 +95,10 @@ public class MirrorConnectorConfigTest {
                 MirrorConnectorConfig.PRODUCER_CLIENT_PREFIX + "acks", "1"
         );
         MirrorConnectorConfig config = new TestMirrorConnectorConfig(connectorProps);
-        Map<String, Object> connectorProducerProps = config.sourceProducerConfig();
+        Map<String, Object> connectorProducerProps = config.sourceProducerConfig("test");
         Map<String, Object> expectedProducerProps = new HashMap<>();
         expectedProducerProps.put("acks", "1");
+        expectedProducerProps.put("client.id", "source1->target2|ConnectorName|test");
         assertEquals(expectedProducerProps, connectorProducerProps,
                 MirrorConnectorConfig.PRODUCER_CLIENT_PREFIX  + " source product config not matching");
     }
@@ -100,9 +108,10 @@ public class MirrorConnectorConfigTest {
         String prefix = MirrorConnectorConfig.SOURCE_PREFIX + MirrorConnectorConfig.PRODUCER_CLIENT_PREFIX;
         Map<String, String> connectorProps = makeProps(prefix + "acks", "1");
         MirrorConnectorConfig config = new TestMirrorConnectorConfig(connectorProps);
-        Map<String, Object> connectorProducerProps = config.sourceProducerConfig();
+        Map<String, Object> connectorProducerProps = config.sourceProducerConfig("test");
         Map<String, Object> expectedProducerProps = new HashMap<>();
         expectedProducerProps.put("acks", "1");
+        expectedProducerProps.put("client.id", "source1->target2|ConnectorName|test");
         assertEquals(expectedProducerProps, connectorProducerProps,
                 prefix + " source producer config not matching");
     }
@@ -114,9 +123,10 @@ public class MirrorConnectorConfigTest {
                         "connections.max.idle.ms", "10000"
         );
         MirrorConnectorConfig config = new TestMirrorConnectorConfig(connectorProps);
-        Map<String, Object> connectorAdminProps = config.sourceAdminConfig();
+        Map<String, Object> connectorAdminProps = config.sourceAdminConfig("test");
         Map<String, Object> expectedAdminProps = new HashMap<>();
         expectedAdminProps.put("connections.max.idle.ms", "10000");
+        expectedAdminProps.put("client.id", "source1->target2|ConnectorName|test");
         assertEquals(expectedAdminProps, connectorAdminProps,
                 MirrorConnectorConfig.ADMIN_CLIENT_PREFIX + " source connector admin props not matching");
     }
@@ -126,9 +136,10 @@ public class MirrorConnectorConfigTest {
         String prefix = MirrorConnectorConfig.SOURCE_PREFIX + MirrorConnectorConfig.ADMIN_CLIENT_PREFIX;
         Map<String, String> connectorProps = makeProps(prefix + "connections.max.idle.ms", "10000");
         MirrorConnectorConfig config = new TestMirrorConnectorConfig(connectorProps);
-        Map<String, Object> connectorAdminProps = config.sourceAdminConfig();
+        Map<String, Object> connectorAdminProps = config.sourceAdminConfig("test");
         Map<String, Object> expectedAdminProps = new HashMap<>();
         expectedAdminProps.put("connections.max.idle.ms", "10000");
+        expectedAdminProps.put("client.id", "source1->target2|ConnectorName|test");
         assertEquals(expectedAdminProps, connectorAdminProps, prefix + " source connector admin props not matching");
     }
 
@@ -139,9 +150,10 @@ public class MirrorConnectorConfigTest {
                         "connections.max.idle.ms", "10000"
         );
         MirrorConnectorConfig config = new TestMirrorConnectorConfig(connectorProps);
-        Map<String, Object> connectorAdminProps = config.targetAdminConfig();
+        Map<String, Object> connectorAdminProps = config.targetAdminConfig("test");
         Map<String, Object> expectedAdminProps = new HashMap<>();
         expectedAdminProps.put("connections.max.idle.ms", "10000");
+        expectedAdminProps.put("client.id", "source1->target2|ConnectorName|test");
         assertEquals(expectedAdminProps, connectorAdminProps,
                 MirrorConnectorConfig.ADMIN_CLIENT_PREFIX + " target connector admin props not matching");
     }
@@ -151,9 +163,10 @@ public class MirrorConnectorConfigTest {
         String prefix = MirrorConnectorConfig.TARGET_PREFIX + MirrorConnectorConfig.ADMIN_CLIENT_PREFIX;
         Map<String, String> connectorProps = makeProps(prefix + "connections.max.idle.ms", "10000");
         MirrorConnectorConfig config = new TestMirrorConnectorConfig(connectorProps);
-        Map<String, Object> connectorAdminProps = config.targetAdminConfig();
+        Map<String, Object> connectorAdminProps = config.targetAdminConfig("test");
         Map<String, Object> expectedAdminProps = new HashMap<>();
         expectedAdminProps.put("connections.max.idle.ms", "10000");
+        expectedAdminProps.put("client.id", "source1->target2|ConnectorName|test");
         assertEquals(expectedAdminProps, connectorAdminProps, prefix + " source connector admin props not matching");
     }
 
@@ -162,6 +175,14 @@ public class MirrorConnectorConfigTest {
         ConfigException ce = assertThrows(ConfigException.class,
                 () -> new TestMirrorConnectorConfig(makeProps(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "abc")));
         assertTrue(ce.getMessage().contains(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG));
+    }
+
+    @Test
+    public void testCaseInsensitiveSecurityProtocol() {
+        final String saslSslLowerCase = SecurityProtocol.SASL_SSL.name.toLowerCase(Locale.ROOT);
+        final TestMirrorConnectorConfig config = new TestMirrorConnectorConfig(makeProps(
+                CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, saslSslLowerCase));
+        assertEquals(saslSslLowerCase, config.originalsStrings().get(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG));
     }
 
     @Test

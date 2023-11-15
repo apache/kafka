@@ -811,7 +811,7 @@ public class NetworkClient implements KafkaClient {
                     nodeId, disconnectState.remoteAddress());
                 break;
             case NOT_CONNECTED:
-                log.warn("Connection to node {} ({}) could not be established. Broker may not be available.", nodeId, disconnectState.remoteAddress());
+                log.warn("Connection to node {} ({}) could not be established. Node may not be available.", nodeId, disconnectState.remoteAddress());
                 break;
             default:
                 break; // Disconnections in other states are logged at debug level in Selector
@@ -956,12 +956,13 @@ public class NetworkClient implements KafkaClient {
         }
         NodeApiVersions nodeVersionInfo = new NodeApiVersions(
             apiVersionsResponse.data().apiKeys(),
-            apiVersionsResponse.data().supportedFeatures());
+            apiVersionsResponse.data().supportedFeatures(),
+            apiVersionsResponse.data().zkMigrationReady());
         apiVersions.update(node, nodeVersionInfo);
         this.connectionStates.ready(node);
-        log.debug("Node {} has finalized features epoch: {}, finalized features: {}, supported features: {}, API versions: {}.",
+        log.debug("Node {} has finalized features epoch: {}, finalized features: {}, supported features: {}, ZK migration ready: {}, API versions: {}.",
                 node, apiVersionsResponse.data().finalizedFeaturesEpoch(), apiVersionsResponse.data().finalizedFeatures(),
-                apiVersionsResponse.data().supportedFeatures(), nodeVersionInfo);
+                apiVersionsResponse.data().supportedFeatures(), apiVersionsResponse.data().zkMigrationReady(), nodeVersionInfo);
     }
 
     /**
@@ -1112,7 +1113,7 @@ public class NetworkClient implements KafkaClient {
             maybeFatalException.ifPresent(metadata::fatalError);
 
             // The disconnect may be the result of stale metadata, so request an update
-            metadata.requestUpdate();
+            metadata.requestUpdate(false);
         }
 
         @Override

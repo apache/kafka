@@ -25,8 +25,10 @@ import org.apache.kafka.common.config.provider.ConfigProvider;
 import org.apache.kafka.common.config.ConfigData;
 import org.apache.kafka.common.metrics.FakeMetricsReporter;
 
+import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.junit.jupiter.api.Test;
 
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.Collections;
@@ -105,9 +107,11 @@ public class MirrorMakerConfigTest {
         assertEquals("b__topic1", aClientConfig.replicationPolicy().formatRemoteTopic("b", "topic1"),
             "replication.policy.separator is honored");
         assertEquals(clusterABootstrap, aClientConfig.adminConfig().get("bootstrap.servers"),
-            "client configs include boostrap.servers");
-        assertEquals(ForwardingAdmin.class.getName(), aClientConfig.forwardingAdmin(aClientConfig.adminConfig()).getClass().getName(),
-                "Cluster a uses the default ForwardingAdmin");
+            "client configs include bootstrap.servers");
+        try (ForwardingAdmin forwardingAdmin = aClientConfig.forwardingAdmin(aClientConfig.adminConfig())) {
+            assertEquals(ForwardingAdmin.class.getName(), forwardingAdmin.getClass().getName(),
+                    "Cluster a uses the default ForwardingAdmin");
+        }
         assertEquals("PLAINTEXT", aClientConfig.adminConfig().get("security.protocol"),
             "client configs include security.protocol");
         assertEquals("SSL", aClientConfig.producerConfig().get("security.protocol"),
@@ -115,7 +119,7 @@ public class MirrorMakerConfigTest {
         assertFalse(aClientConfig.adminConfig().containsKey("xxx"),
             "unknown properties aren't included in client configs");
         assertFalse(aClientConfig.adminConfig().containsKey("metric.reporters"),
-            "top-leve metrics reporters aren't included in client configs");
+            "top-level metrics reporters aren't included in client configs");
         assertEquals("secret2", aClientConfig.getPassword("ssl.key.password").value(),
             "security properties are translated from external sources");
         assertEquals("secret2", ((Password) aClientConfig.adminConfig().get("ssl.key.password")).value(),
@@ -124,8 +128,10 @@ public class MirrorMakerConfigTest {
             "client configs should not include metrics reporter");
         assertFalse(bClientConfig.adminConfig().containsKey("metrics.reporter"),
             "client configs should not include metrics reporter");
-        assertEquals(FakeForwardingAdmin.class.getName(), bClientConfig.forwardingAdmin(bClientConfig.adminConfig()).getClass().getName(),
-                "Cluster b should use the FakeForwardingAdmin");
+        try (ForwardingAdmin forwardingAdmin = bClientConfig.forwardingAdmin(bClientConfig.adminConfig())) {
+            assertEquals(FakeForwardingAdmin.class.getName(), forwardingAdmin.getClass().getName(),
+                    "Cluster b should use the FakeForwardingAdmin");
+        }
     }
 
     @Test
@@ -248,9 +254,11 @@ public class MirrorMakerConfigTest {
         SourceAndTarget a = new SourceAndTarget("b", "a");
         SourceAndTarget b = new SourceAndTarget("a", "b");
         Map<String, String> aProps = mirrorConfig.workerConfig(a);
+        assertEquals("b->a", aProps.get("client.id"));
         assertEquals("123", aProps.get("offset.storage.replication.factor"));
         assertEquals("__", aProps.get("replication.policy.separator"));
         Map<String, String> bProps = mirrorConfig.workerConfig(b);
+        assertEquals("a->b", bProps.get("client.id"));
         assertEquals("456", bProps.get("status.storage.replication.factor"));
         assertEquals("client-one", bProps.get("producer.client.id"),
             "producer props should be passed through to worker producer config: " + bProps);
@@ -359,6 +367,14 @@ public class MirrorMakerConfigTest {
         ConfigException ce = assertThrows(ConfigException.class,
                 () -> new MirrorClientConfig(makeProps(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "abc")));
         assertTrue(ce.getMessage().contains(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG));
+    }
+
+    @Test
+    public void testCaseInsensitiveSecurityProtocol() {
+        final String saslSslLowerCase = SecurityProtocol.SASL_SSL.name.toLowerCase(Locale.ROOT);
+        final MirrorClientConfig config = new MirrorClientConfig(makeProps(
+                CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, saslSslLowerCase));
+        assertEquals(saslSslLowerCase, config.originalsStrings().get(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG));
     }
 
     @Test

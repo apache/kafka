@@ -33,10 +33,11 @@ import java.util.Set;
  * It keeps an internal ID of the assigned set of partitions which is updated to ensure the set of metrics it
  * records matches up with the topic-partitions in use.
  */
-class FetchMetricsManager {
+public class FetchMetricsManager {
 
     private final Metrics metrics;
     private final FetchMetricsRegistry metricsRegistry;
+    private final Sensor throttleTime;
     private final Sensor bytesFetched;
     private final Sensor recordsFetched;
     private final Sensor fetchLatency;
@@ -46,10 +47,14 @@ class FetchMetricsManager {
     private int assignmentId = 0;
     private Set<TopicPartition> assignedPartitions = Collections.emptySet();
 
-    FetchMetricsManager(Metrics metrics, FetchMetricsRegistry metricsRegistry) {
+    public FetchMetricsManager(Metrics metrics, FetchMetricsRegistry metricsRegistry) {
         this.metrics = metrics;
         this.metricsRegistry = metricsRegistry;
 
+        this.throttleTime = new SensorBuilder(metrics, "fetch-throttle-time")
+                .withAvg(metricsRegistry.fetchThrottleTimeAvg)
+                .withMax(metricsRegistry.fetchThrottleTimeMax)
+                .build();
         this.bytesFetched = new SensorBuilder(metrics, "bytes-fetched")
                 .withAvg(metricsRegistry.fetchSizeAvg)
                 .withMax(metricsRegistry.fetchSizeMax)
@@ -70,6 +75,10 @@ class FetchMetricsManager {
         this.recordsLead = new SensorBuilder(metrics, "records-lead")
                 .withMin(metricsRegistry.recordsLeadMin)
                 .build();
+    }
+
+    public Sensor throttleTimeSensor() {
+        return throttleTime;
     }
 
     void recordLatency(long requestLatencyMs) {
@@ -166,7 +175,7 @@ class FetchMetricsManager {
         }
     }
 
-    static String topicBytesFetchedMetricName(String topic) {
+    private static String topicBytesFetchedMetricName(String topic) {
         return "topic." + topic + ".bytes-fetched";
     }
 

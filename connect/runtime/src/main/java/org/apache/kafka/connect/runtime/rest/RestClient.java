@@ -31,6 +31,7 @@ import org.eclipse.jetty.client.util.StringContentProvider;
 import org.eclipse.jetty.http.HttpField;
 import org.eclipse.jetty.http.HttpFields;
 import org.eclipse.jetty.http.HttpStatus;
+import org.eclipse.jetty.util.ssl.SslContextFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -59,8 +60,8 @@ public class RestClient {
     }
 
     // VisibleForTesting
-    HttpClient httpClient() {
-        return new HttpClient(SSLUtils.createClientSideSslContextFactory(config));
+    HttpClient httpClient(SslContextFactory sslContextFactory) {
+        return sslContextFactory != null ? new HttpClient(sslContextFactory) : new HttpClient();
     }
 
     /**
@@ -97,7 +98,11 @@ public class RestClient {
     public <T> HttpResponse<T> httpRequest(String url, String method, HttpHeaders headers, Object requestBodyData,
                                                   TypeReference<T> responseFormat,
                                                   SecretKey sessionKey, String requestSignatureAlgorithm) {
-        HttpClient client = httpClient();
+        // Only try to load SSL configs if we have to (see KAFKA-14816)
+        SslContextFactory sslContextFactory = url.startsWith("https://")
+                ? SSLUtils.createClientSideSslContextFactory(config)
+                : null;
+        HttpClient client = httpClient(sslContextFactory);
         client.setFollowRedirects(false);
 
         try {

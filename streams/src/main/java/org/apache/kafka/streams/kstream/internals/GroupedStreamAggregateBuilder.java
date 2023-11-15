@@ -23,7 +23,7 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
 import org.apache.kafka.streams.kstream.internals.graph.StatefulProcessorNode;
 import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
-import org.apache.kafka.streams.state.StoreBuilder;
+import org.apache.kafka.streams.processor.internals.StoreFactory;
 
 import java.util.Collections;
 import java.util.Set;
@@ -67,12 +67,13 @@ class GroupedStreamAggregateBuilder<K, V> {
     }
 
     <KR, VR> KTable<KR, VR> build(final NamedInternal functionName,
-                                  final StoreBuilder<?> storeBuilder,
+                                  final StoreFactory storeFactory,
                                   final KStreamAggProcessorSupplier<K, V, KR, VR> aggregateSupplier,
                                   final String queryableStoreName,
                                   final Serde<KR> keySerde,
-                                  final Serde<VR> valueSerde) {
-        assert queryableStoreName == null || queryableStoreName.equals(storeBuilder.name());
+                                  final Serde<VR> valueSerde,
+                                  final boolean isOutputVersioned) {
+        assert queryableStoreName == null || queryableStoreName.equals(storeFactory.name());
 
         final String aggFunctionName = functionName.name();
 
@@ -81,7 +82,7 @@ class GroupedStreamAggregateBuilder<K, V> {
 
         if (repartitionRequired) {
             final OptimizableRepartitionNodeBuilder<K, V> repartitionNodeBuilder = optimizableRepartitionNodeBuilder();
-            final String repartitionTopicPrefix = userProvidedRepartitionTopicName != null ? userProvidedRepartitionTopicName : storeBuilder.name();
+            final String repartitionTopicPrefix = userProvidedRepartitionTopicName != null ? userProvidedRepartitionTopicName : storeFactory.name();
             sourceName = createRepartitionSource(repartitionTopicPrefix, repartitionNodeBuilder);
 
             // First time through we need to create a repartition node.
@@ -100,8 +101,9 @@ class GroupedStreamAggregateBuilder<K, V> {
             new StatefulProcessorNode<>(
                 aggFunctionName,
                 new ProcessorParameters<>(aggregateSupplier, aggFunctionName),
-                storeBuilder
+                storeFactory
             );
+        statefulProcessorNode.setOutputVersioned(isOutputVersioned);
 
         builder.addGraphNode(parentNode, statefulProcessorNode);
 

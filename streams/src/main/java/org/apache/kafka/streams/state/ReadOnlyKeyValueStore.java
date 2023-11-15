@@ -48,13 +48,13 @@ public interface ReadOnlyKeyValueStore<K, V> {
      * Get an iterator over a given range of keys. This iterator must be closed after use.
      * The returned iterator must be safe from {@link java.util.ConcurrentModificationException}s
      * and must not return null values.
-     * Order is not guaranteed as bytes lexicographical ordering might not represent key order.
+     * Order is based on the serialized byte[] of the keys, not the 'logical' key order.
      *
      * @param from The first key that could be in the range, where iteration starts from.
      *             A null value indicates that the range starts with the first element in the store.
      * @param to   The last key that could be in the range, where iteration ends.
      *             A null value indicates that the range ends with the last element in the store.
-     * @return The iterator for this range, from smallest to largest bytes.
+     * @return The iterator for this range, from key with the smallest bytes to the key with the largest bytes of keys.
      * @throws InvalidStateStoreException if the store is not initialized
      */
     KeyValueIterator<K, V> range(K from, K to);
@@ -63,13 +63,13 @@ public interface ReadOnlyKeyValueStore<K, V> {
      * Get a reverse iterator over a given range of keys. This iterator must be closed after use.
      * The returned iterator must be safe from {@link java.util.ConcurrentModificationException}s
      * and must not return null values.
-     * Order is not guaranteed as bytes lexicographical ordering might not represent key order.
+     * Order is based on the serialized byte[] of the keys, not the 'logical' key order.
      *
      * @param from The first key that could be in the range, where iteration ends.
      *             A null value indicates that the range starts with the first element in the store.
      * @param to   The last key that could be in the range, where iteration starts from.
      *             A null value indicates that the range ends with the last element in the store.
-     * @return The reverse iterator for this range, from largest to smallest key bytes.
+     * @return The iterator for this range, from key with the smallest bytes to the key with the largest bytes of keys.
      * @throws InvalidStateStoreException if the store is not initialized
      */
     default KeyValueIterator<K, V> reverseRange(K from, K to) {
@@ -117,6 +117,7 @@ public interface ReadOnlyKeyValueStore<K, V> {
      * @param <PS> Prefix Serializer type
      * @param <P> Prefix Type.
      * @return The iterator for keys having the specified prefix.
+     * @throws InvalidStateStoreException if the store is not initialized
      */
     default <PS extends Serializer<P>, P> KeyValueIterator<K, V> prefixScan(P prefix, PS prefixKeySerializer) {
         throw new UnsupportedOperationException();

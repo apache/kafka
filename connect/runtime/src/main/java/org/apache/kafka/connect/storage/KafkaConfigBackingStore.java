@@ -27,7 +27,6 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
@@ -78,6 +77,10 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Supplier;
+
+import static org.apache.kafka.connect.runtime.TargetState.PAUSED;
+import static org.apache.kafka.connect.runtime.TargetState.STOPPED;
+import static org.apache.kafka.connect.util.ConnectUtils.className;
 
 /**
  * <p>
@@ -189,7 +192,7 @@ import java.util.function.Supplier;
  * rebalance must be deferred.
  * </p>
  */
-public class KafkaConfigBackingStore implements ConfigBackingStore {
+public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore implements ConfigBackingStore {
     private static final Logger log = LoggerFactory.getLogger(KafkaConfigBackingStore.class);
 
     public static final String TARGET_STATE_PREFIX = "target-state-";
@@ -238,6 +241,10 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
     public static final Schema TARGET_STATE_V0 = SchemaBuilder.struct()
             .field("state", Schema.STRING_SCHEMA)
             .build();
+    public static final Schema TARGET_STATE_V1 = SchemaBuilder.struct()
+            .field("state", Schema.STRING_SCHEMA)
+            .field("state.v2", Schema.OPTIONAL_STRING_SCHEMA)
+            .build();
     public static final Schema TASK_COUNT_RECORD_V0 = SchemaBuilder.struct()
             .field("task-count", Schema.INT32_SCHEMA)
             .build();
@@ -262,6 +269,14 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
     public static final Schema RESTART_REQUEST_V0 = SchemaBuilder.struct()
             .field(INCLUDE_TASKS_FIELD_NAME, Schema.BOOLEAN_SCHEMA)
             .field(ONLY_FAILED_FIELD_NAME, Schema.BOOLEAN_SCHEMA)
+            .build();
+
+    public static final String LOGGER_CLUSTER_PREFIX = "logger-cluster-";
+    public static String LOGGER_CLUSTER_KEY(String namespace) {
+        return LOGGER_CLUSTER_PREFIX + namespace;
+    }
+    public static final Schema LOGGER_LEVEL_V0 = SchemaBuilder.struct()
+            .field("level", Schema.STRING_SCHEMA)
             .build();
 
     // Visible for testing
@@ -324,6 +339,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         this(converter, config, configTransformer, adminSupplier, clientIdBase, Time.SYSTEM);
     }
 
+    @SuppressWarnings("this-escape")
     KafkaConfigBackingStore(Converter converter, DistributedConfig config, WorkerConfigTransformer configTransformer, Supplier<TopicAdmin> adminSupplier, String clientIdBase, Time time) {
         this.lock = new Object();
         this.started = false;
@@ -331,6 +347,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         this.offset = -1;
         this.topicAdminSupplier = adminSupplier;
         this.clientId = Objects.requireNonNull(clientIdBase) + "configs";
+        this.time = time;
 
         this.baseProducerProps = baseProducerProps(config);
         // By default, Connect disables idempotent behavior for all producers, even though idempotence became
@@ -349,7 +366,6 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
 
         configLog = setupAndCreateKafkaBasedLog(this.topic, config);
         this.configTransformer = configTransformer;
-        this.time = time;
     }
 
     @Override
@@ -481,26 +497,34 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
     }
 
     /**
-     * Write this connector configuration to persistent storage and wait until it has been acknowledged and read back by
-     * tailing the Kafka log with a consumer. {@link #claimWritePrivileges()} must be successfully invoked before calling
+     * Write this connector configuration (and optionally a target state) to persistent storage and wait until it has been acknowledged and read
+     * back by tailing the Kafka log with a consumer. {@link #claimWritePrivileges()} must be successfully invoked before calling
      * this method if the worker is configured to use a fencable producer for writes to the config topic.
      *
      * @param connector  name of the connector to write data for
      * @param properties the configuration to write
+     * @param targetState the desired target state for the connector; may be {@code null} if no target state change is desired. Note that the default
+     *                    target state is {@link TargetState#STARTED} if no target state exists previously
      * @throws IllegalStateException if {@link #claimWritePrivileges()} is required, but was not successfully invoked before
      * this method was called
      * @throws PrivilegedWriteException if the worker is configured to use a fencable producer for writes to the config topic
      * and the write fails
      */
     @Override
-    public void putConnectorConfig(String connector, Map<String, String> properties) {
+    public void putConnectorConfig(String connector, Map<String, String> properties, TargetState targetState) {
         log.debug("Writing connector configuration for connector '{}'", connector);
         Struct connectConfig = new Struct(CONNECTOR_CONFIGURATION_V0);
         connectConfig.put("properties", properties);
         byte[] serializedConfig = converter.fromConnectData(topic, CONNECTOR_CONFIGURATION_V0, connectConfig);
         try {
             Timer timer = time.timer(READ_WRITE_TOTAL_TIMEOUT_MS);
-            sendPrivileged(CONNECTOR_KEY(connector), serializedConfig, timer);
+            List<ProducerKeyValue> keyValues = new ArrayList<>();
+            if (targetState != null) {
+                log.debug("Writing target state {} for connector {}", targetState, connector);
+                keyValues.add(new ProducerKeyValue(TARGET_STATE_KEY(connector), serializeTargetState(targetState)));
+            }
+            keyValues.add(new ProducerKeyValue(CONNECTOR_KEY(connector), serializedConfig));
+            sendPrivileged(keyValues, timer);
             configLog.readToEnd().get(timer.remainingMs(), TimeUnit.MILLISECONDS);
         } catch (InterruptedException | ExecutionException | TimeoutException e) {
             log.error("Failed to write connector configuration to Kafka: ", e);
@@ -631,16 +655,22 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
      */
     @Override
     public void putTargetState(String connector, TargetState state) {
-        Struct connectTargetState = new Struct(TARGET_STATE_V0);
-        connectTargetState.put("state", state.name());
-        byte[] serializedTargetState = converter.fromConnectData(topic, TARGET_STATE_V0, connectTargetState);
         log.debug("Writing target state {} for connector {}", state, connector);
         try {
-            configLog.send(TARGET_STATE_KEY(connector), serializedTargetState).get(READ_WRITE_TOTAL_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+            configLog.sendWithReceipt(TARGET_STATE_KEY(connector), serializeTargetState(state))
+                .get(READ_WRITE_TOTAL_TIMEOUT_MS, TimeUnit.MILLISECONDS);
         } catch (InterruptedException | ExecutionException | TimeoutException e) {
             log.error("Failed to write target state to Kafka", e);
             throw new ConnectException("Error writing target state to Kafka", e);
         }
+    }
+
+    private byte[] serializeTargetState(TargetState state) {
+        Struct connectTargetState = new Struct(TARGET_STATE_V1);
+        // Older workers don't support the STOPPED state; fall back on PAUSED
+        connectTargetState.put("state", state == STOPPED ? PAUSED.name() : state.name());
+        connectTargetState.put("state.v2", state.name());
+        return converter.fromConnectData(topic, TARGET_STATE_V1, connectTargetState);
     }
 
     /**
@@ -722,6 +752,20 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         }
     }
 
+    @Override
+    public void putLoggerLevel(String namespace, String level) {
+        log.debug("Writing level {} for logging namespace {} to Kafka", level, namespace);
+        Struct value = new Struct(LOGGER_LEVEL_V0);
+        value.put("level", level);
+        byte[] serializedValue = converter.fromConnectData(topic, value.schema(), value);
+        try {
+            configLog.sendWithReceipt(LOGGER_CLUSTER_KEY(namespace), serializedValue).get(READ_WRITE_TOTAL_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException | ExecutionException | TimeoutException e) {
+            log.error("Failed to write logger level to Kafka", e);
+            throw new ConnectException("Error writing logger level to Kafka", e);
+        }
+    }
+
     // package private for testing
     KafkaBasedLog<String, byte[]> setupAndCreateKafkaBasedLog(String topic, final WorkerConfig config) {
         String clusterId = config.kafkaClusterId();
@@ -764,7 +808,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
                 .replicationFactor(config.getShort(DistributedConfig.CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG))
                 .build();
 
-        return createKafkaBasedLog(topic, producerProps, consumerProps, new ConsumeCallback(), topicDescription, adminSupplier);
+        return createKafkaBasedLog(topic, producerProps, consumerProps, new ConsumeCallback(), topicDescription, adminSupplier, config, time);
     }
 
     /**
@@ -788,7 +832,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         if (!usesFencableWriter) {
             List<Future<RecordMetadata>> producerFutures = new ArrayList<>();
             keyValues.forEach(
-                    keyValue -> producerFutures.add(configLog.send(keyValue.key, keyValue.value))
+                    keyValue -> producerFutures.add(configLog.sendWithReceipt(keyValue.key, keyValue.value))
             );
 
             timer.update();
@@ -835,22 +879,14 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         }
     }
 
-    private KafkaBasedLog<String, byte[]> createKafkaBasedLog(String topic, Map<String, Object> producerProps,
-                                                              Map<String, Object> consumerProps,
-                                                              Callback<ConsumerRecord<String, byte[]>> consumedCallback,
-                                                              final NewTopic topicDescription, Supplier<TopicAdmin> adminSupplier) {
-        java.util.function.Consumer<TopicAdmin> createTopics = admin -> {
-            log.debug("Creating admin client to manage Connect internal config topic");
-            // Create the topic if it doesn't exist
-            Set<String> newTopics = admin.createTopics(topicDescription);
-            if (!newTopics.contains(topic)) {
-                // It already existed, so check that the topic cleanup policy is compact only and not delete
-                log.debug("Using admin client to check cleanup policy of '{}' topic is '{}'", topic, TopicConfig.CLEANUP_POLICY_COMPACT);
-                admin.verifyTopicCleanupPolicyOnlyCompact(topic,
-                        DistributedConfig.CONFIG_TOPIC_CONFIG, "connector configurations");
-            }
-        };
-        return new KafkaBasedLog<>(topic, producerProps, consumerProps, adminSupplier, consumedCallback, Time.SYSTEM, createTopics);
+    @Override
+    protected String getTopicConfig() {
+        return DistributedConfig.CONFIG_TOPIC_CONFIG;
+    }
+
+    @Override
+    protected String getTopicPurpose() {
+        return "connector configurations";
     }
 
     private class ConsumeCallback implements Callback<ConsumerRecord<String, byte[]>> {
@@ -899,6 +935,9 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
                 processTaskCountRecord(connectorName, value);
             } else if (record.key().equals(SESSION_KEY_KEY)) {
                 processSessionKeyRecord(value);
+            } else if (record.key().startsWith(LOGGER_CLUSTER_PREFIX)) {
+                String loggingNamespace = record.key().substring(LOGGER_CLUSTER_PREFIX.length());
+                processLoggerLevelRecord(loggingNamespace, value);
             } else {
                 log.error("Discarding config update record with invalid key: {}", record.key());
             }
@@ -908,6 +947,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
 
     private void processTargetStateRecord(String connectorName, SchemaAndValue value) {
         boolean removed = false;
+        boolean stateChanged = true;
         synchronized (lock) {
             if (value.value() == null) {
                 // When connector configs are removed, we also write tombstones for the target state.
@@ -925,17 +965,29 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
                     return;
                 }
                 @SuppressWarnings("unchecked")
-                Object targetState = ((Map<String, Object>) value.value()).get("state");
-                if (!(targetState instanceof String)) {
-                    log.error("Invalid data for target state for connector '{}': 'state' field should be a String but is {}",
+                Map<String, Object> valueMap = (Map<String, Object>) value.value();
+                Object targetState = valueMap.get("state.v2");
+                if (targetState != null && !(targetState instanceof String)) {
+                    log.error("Invalid data for target state for connector '{}': 'state.v2' field should be a String but is {}",
                             connectorName, className(targetState));
-                    return;
+                    // We don't return here; it's still possible that there's a value we can use in the older state field
+                    targetState = null;
+                }
+                if (targetState == null) {
+                    // This record may have been written by an older worker; fall back on the older state field
+                    targetState = valueMap.get("state");
+                    if (!(targetState instanceof String)) {
+                        log.error("Invalid data for target state for connector '{}': 'state' field should be a String but is {}",
+                                connectorName, className(targetState));
+                        return;
+                    }
                 }
 
                 try {
                     TargetState state = TargetState.valueOf((String) targetState);
                     log.debug("Setting target state for connector '{}' to {}", connectorName, targetState);
-                    connectorTargetStates.put(connectorName, state);
+                    TargetState prevState = connectorTargetStates.put(connectorName, state);
+                    stateChanged = !state.equals(prevState);
                 } catch (IllegalArgumentException e) {
                     log.error("Invalid target state for connector '{}': {}", connectorName, targetState);
                     return;
@@ -945,7 +997,9 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
 
         // Note that we do not notify the update listener if the target state has been removed.
         // Instead we depend on the removal callback of the connector config itself to notify the worker.
-        if (started && !removed)
+        // We also don't notify the update listener if the connector doesn't exist yet - a scenario that can
+        // occur if an explicit initial target state is specified in the connector creation request.
+        if (started && !removed && stateChanged && connectorConfigs.containsKey(connectorName))
             updateListener.onConnectorTargetStateChange(connectorName);
     }
 
@@ -1170,6 +1224,37 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
             updateListener.onSessionKeyUpdate(KafkaConfigBackingStore.this.sessionKey);
     }
 
+    private void processLoggerLevelRecord(String namespace, SchemaAndValue value) {
+        if (value.value() == null) {
+            log.error("Ignoring logging level for namespace {} because it is unexpectedly null", namespace);
+            return;
+        }
+        if (!(value.value() instanceof Map)) {
+            log.error("Ignoring logging level for namespace {} because the value is not a Map but is {}", namespace, className(value.value()));
+            return;
+        }
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> valueAsMap = (Map<String, Object>) value.value();
+
+        Object level = valueAsMap.get("level");
+        if (!(level instanceof String)) {
+            log.error("Invalid data for logging level key 'level' field with namespace {}; should be a String but it is {}", namespace, className(level));
+            return;
+        }
+
+        if (started) {
+            updateListener.onLoggingLevelUpdate(namespace, (String) level);
+        } else {
+            // TRACE level since there may be many of these records in the config topic
+            log.trace(
+                    "Ignoring old logging level {} for namespace {} that was writen to the config topic before this worker completed startup",
+                    level,
+                    namespace
+            );
+        }
+    }
+
     private ConnectorTaskId parseTaskId(String key) {
         String[] parts = key.split("-");
         if (parts.length < 3) return null;
@@ -1239,10 +1324,6 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
             return (int) (long) value;
         else
             throw new ConnectException("Expected integer value to be either Integer or Long");
-    }
-
-    private String className(Object o) {
-        return o != null ? o.getClass().getName() : "null";
     }
 }
 

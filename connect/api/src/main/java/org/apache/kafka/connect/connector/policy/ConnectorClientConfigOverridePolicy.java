@@ -27,6 +27,9 @@ import java.util.List;
  * <p>
  * Common use cases are ability to provide principal per connector, <code>sasl.jaas.config</code>
  * and/or enforcing that the producer/consumer configurations for optimizations are within acceptable ranges.
+ * <p>Kafka Connect discovers implementations of this interface using the Java {@link java.util.ServiceLoader} mechanism.
+ * To support this, implementations of this interface should also contain a service provider configuration file in
+ * {@code META-INF/services/org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy}.
  */
 public interface ConnectorClientConfigOverridePolicy extends Configurable, AutoCloseable {
 

@@ -84,7 +84,7 @@ object AlterPartitionManager {
     threadNamePrefix: String,
     brokerEpochSupplier: () => Long,
   ): AlterPartitionManager = {
-    val channelManager = BrokerToControllerChannelManager(
+    val channelManager = NodeToControllerChannelManager(
       controllerNodeProvider,
       time = time,
       metrics = metrics,
@@ -116,7 +116,7 @@ object AlterPartitionManager {
 }
 
 class DefaultAlterPartitionManager(
-  val controllerChannelManager: BrokerToControllerChannelManager,
+  val controllerChannelManager: NodeToControllerChannelManager,
   val scheduler: Scheduler,
   val time: Time,
   val brokerId: Int,
@@ -200,7 +200,7 @@ class DefaultAlterPartitionManager(
             if (response.authenticationException != null) {
               // For now we treat authentication errors as retriable. We use the
               // `NETWORK_EXCEPTION` error code for lack of a good alternative.
-              // Note that `BrokerToControllerChannelManager` will still log the
+              // Note that `NodeToControllerChannelManager` will still log the
               // authentication errors so that users have a chance to fix the problem.
               Errors.NETWORK_EXCEPTION
             } else if (response.versionMismatch != null) {
@@ -283,7 +283,7 @@ class DefaultAlterPartitionManager(
         val partitionData = new AlterPartitionRequestData.PartitionData()
           .setPartitionIndex(item.topicIdPartition.partition)
           .setLeaderEpoch(item.leaderAndIsr.leaderEpoch)
-          .setNewIsr(item.leaderAndIsr.isr.map(Integer.valueOf).asJava)
+          .setNewIsrWithEpochs(item.leaderAndIsr.isrWithBrokerEpoch.asJava)
           .setPartitionEpoch(item.leaderAndIsr.partitionEpoch)
 
         if (metadataVersion.isLeaderRecoverySupported) {

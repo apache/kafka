@@ -23,7 +23,10 @@ import org.apache.kafka.connect.runtime.rest.entities.ActiveTopicsInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigKeyInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
+import org.apache.kafka.connect.runtime.rest.entities.LoggerLevel;
+import org.apache.kafka.connect.runtime.rest.entities.Message;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
 import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.Callback;
@@ -104,6 +107,19 @@ public interface Herder {
      * @param callback callback to invoke when the configuration has been written
      */
     void putConnectorConfig(String connName, Map<String, String> config, boolean allowReplace, Callback<Created<ConnectorInfo>> callback);
+
+    /**
+     * Set the configuration for a connector, along with a target state optionally. This supports creation and updating.
+     * @param connName name of the connector
+     * @param config the connector's configuration
+     * @param targetState the desired target state for the connector; may be {@code null} if no target state change is desired. Note that the default
+     *                    target state is {@link TargetState#STARTED} if no target state exists previously
+     * @param allowReplace if true, allow overwriting previous configs; if false, throw {@link AlreadyExistsException}
+     *                     if a connector with the same name already exists
+     * @param callback callback to invoke when the configuration has been written
+     */
+    void putConnectorConfig(String connName, Map<String, String> config, TargetState targetState, boolean allowReplace,
+                            Callback<Created<ConnectorInfo>> callback);
 
     /**
      * Delete a connector and its configuration.
@@ -246,8 +262,22 @@ public interface Herder {
     void restartConnectorAndTasks(RestartRequest request, Callback<ConnectorStateInfo> cb);
 
     /**
+     * Stop the connector. This call will asynchronously suspend processing by the connector and
+     * shut down all of its tasks.
+     * @param connector name of the connector
+     * @param cb callback to invoke upon completion
+     */
+    void stopConnector(String connector, Callback<Void> cb);
+
+    /**
      * Pause the connector. This call will asynchronously suspend processing by the connector and all
      * of its tasks.
+     * <p>
+     * Note that, unlike {@link #stopConnector(String, Callback)}, tasks for this connector will not
+     * be shut down and none of their resources will be de-allocated. Instead, they will be left in an
+     * "idling" state where no data is polled from them (if source tasks) or given to them (if sink tasks),
+     * but all internal state kept by the tasks and their resources is left intact and ready to begin
+     * processing records again as soon as the connector is {@link #resumeConnector(String) resumed}.
      * @param connector name of the connector
      */
     void pauseConnector(String connector);
@@ -279,6 +309,61 @@ public interface Herder {
      * @return the list of ConfigKeyInfo of the plugin
      */
     List<ConfigKeyInfo> connectorPluginConfig(String pluginName);
+
+    /**
+     * Get the current offsets for a connector.
+     * @param connName the name of the connector whose offsets are to be retrieved
+     * @param cb callback to invoke upon completion
+     */
+    void connectorOffsets(String connName, Callback<ConnectorOffsets> cb);
+
+    /**
+     * Alter a connector's offsets.
+     * @param connName the name of the connector whose offsets are to be altered
+     * @param offsets a mapping from partitions to offsets that need to be written
+     * @param cb callback to invoke upon completion
+     */
+    void alterConnectorOffsets(String connName, Map<Map<String, ?>, Map<String, ?>> offsets, Callback<Message> cb);
+
+    /**
+     * Reset a connector's offsets.
+     * @param connName the name of the connector whose offsets are to be reset
+     * @param cb callback to invoke upon completion
+     */
+    void resetConnectorOffsets(String connName, Callback<Message> cb);
+
+    /**
+     * Get the level for a logger.
+     * @param logger the name of the logger to retrieve the level for; may not be null
+     * @return the level for the logger, or null if no logger with the given name exists
+     */
+    LoggerLevel loggerLevel(String logger);
+
+    /**
+     * Get the levels for all known loggers.
+     * @return a map of logger name to {@link LoggerLevel}; may be empty, but never null
+     */
+    Map<String, LoggerLevel> allLoggerLevels();
+
+    /**
+     * Set the level for a logging namespace (i.e., a specific logger and all of its children) on this
+     * worker. Changes should only last over the lifetime of the worker, and should be wiped if/when
+     * the worker is restarted.
+     * @param namespace the logging namespace to alter; may not be null
+     * @param level the new level to set for the namespace; may not be null
+     * @return all loggers that were affected by this action; may be empty (including if the specified
+     * level is not a valid logging level), but never null
+     */
+    List<String> setWorkerLoggerLevel(String namespace, String level);
+
+    /**
+     * Set the level for a logging namespace (i.e., a specific logger and all of its children) for all workers
+     * in the cluster. Changes should only last over the lifetime of workers, and should be wiped if/when
+     * workers are restarted.
+     * @param namespace the logging namespace to alter; may not be null
+     * @param level the new level to set for the namespace; may not be null
+     */
+    void setClusterLoggerLevel(String namespace, String level);
 
     enum ConfigReloadAction {
         NONE,

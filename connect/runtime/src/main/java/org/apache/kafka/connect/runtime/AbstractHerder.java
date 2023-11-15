@@ -26,6 +26,7 @@ import org.apache.kafka.common.config.ConfigDef.ConfigKey;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigTransformer;
 import org.apache.kafka.common.config.ConfigValue;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
@@ -33,7 +34,6 @@ import org.apache.kafka.connect.connector.policy.ConnectorClientConfigRequest;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.NotFoundException;
 import org.apache.kafka.connect.runtime.isolation.LoaderSwap;
-import org.apache.kafka.connect.runtime.isolation.PluginType;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.entities.ActiveTopicsInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfo;
@@ -41,8 +41,11 @@ import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigKeyInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigValueInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorType;
+import org.apache.kafka.connect.runtime.rest.entities.LoggerLevel;
+import org.apache.kafka.connect.runtime.rest.entities.Message;
 import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.source.SourceConnector;
@@ -55,6 +58,7 @@ import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.predicates.Predicate;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
+import org.apache.log4j.Level;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -71,6 +75,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -119,6 +124,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     private final ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy;
     protected volatile boolean running = false;
     private final ExecutorService connectorExecutor;
+    protected final Loggers loggers;
 
     private final ConcurrentMap<String, Connector> tempConnectors = new ConcurrentHashMap<>();
 
@@ -127,7 +133,8 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                           String kafkaClusterId,
                           StatusBackingStore statusBackingStore,
                           ConfigBackingStore configBackingStore,
-                          ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy) {
+                          ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy,
+                          Time time) {
         this.worker = worker;
         this.worker.herder = this;
         this.workerId = workerId;
@@ -136,6 +143,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         this.configBackingStore = configBackingStore;
         this.connectorClientConfigOverridePolicy = connectorClientConfigOverridePolicy;
         this.connectorExecutor = Executors.newCachedThreadPool();
+        this.loggers = new Loggers(time);
     }
 
     @Override
@@ -167,6 +175,12 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     @Override
     public void onStartup(String connector) {
         statusBackingStore.put(new ConnectorStatus(connector, ConnectorStatus.State.RUNNING,
+                workerId, generation()));
+    }
+
+    @Override
+    public void onStop(String connector) {
+        statusBackingStore.put(new ConnectorStatus(connector, AbstractStatus.State.STOPPED,
                 workerId, generation()));
     }
 
@@ -304,7 +318,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
 
         Map<ConnectorTaskId, Map<String, String>> configs = new HashMap<>();
         for (ConnectorTaskId cti : configState.tasks(connector)) {
-            configs.put(cti, configState.taskConfig(cti));
+            configs.put(cti, configState.rawTaskConfig(cti));
         }
 
         return configs;
@@ -315,7 +329,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         ConnectorStatus connector = statusBackingStore.get(connName);
         if (connector == null)
             throw new NotFoundException("No status found for connector " + connName);
-        
+
         Collection<TaskStatus> tasks = statusBackingStore.getAll(connName);
 
         ConnectorStateInfo.ConnectorState connectorState = new ConnectorStateInfo.ConnectorState(
@@ -364,7 +378,9 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     }
 
     protected Map<String, ConfigValue> validateSinkConnectorConfig(SinkConnector connector, ConfigDef configDef, Map<String, String> config) {
-        return configDef.validateAll(config);
+        Map<String, ConfigValue> result = configDef.validateAll(config);
+        SinkConnectorConfig.validate(config, result);
+        return result;
     }
 
     protected Map<String, ConfigValue> validateSourceConnectorConfig(SourceConnector connector, ConfigDef configDef, Map<String, String> config) {
@@ -471,7 +487,6 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                 enrichedConfigDef = ConnectorConfig.enrich(plugins(), SourceConnectorConfig.configDef(), connectorProps, false);
                 validatedConnectorConfig = validateSourceConnectorConfig((SourceConnector) connector, enrichedConfigDef, connectorProps);
             } else {
-                SinkConnectorConfig.validate(connectorProps);
                 connectorType = org.apache.kafka.connect.health.ConnectorType.SINK;
                 enrichedConfigDef = ConnectorConfig.enrich(plugins(), SinkConnectorConfig.configDef(), connectorProps, false);
                 validatedConnectorConfig = validateSinkConnectorConfig((SinkConnector) connector, enrichedConfigDef, connectorProps);
@@ -834,36 +849,102 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
 
         try (LoaderSwap loaderSwap = p.withClassLoader(pluginClass.getClassLoader())) {
             Object plugin = p.newPlugin(pluginName);
-            PluginType pluginType = PluginType.from(plugin.getClass());
-            ConfigDef configDefs;
-            switch (pluginType) {
-                case SINK:
-                case SOURCE:
-                    configDefs = ((Connector) plugin).config();
-                    break;
-                case CONVERTER:
-                    configDefs = ((Converter) plugin).config();
-                    break;
-                case HEADER_CONVERTER:
-                    configDefs = ((HeaderConverter) plugin).config();
-                    break;
-                case TRANSFORMATION:
-                    configDefs = ((Transformation<?>) plugin).config();
-                    break;
-                case PREDICATE:
-                    configDefs = ((Predicate<?>) plugin).config();
-                    break;
-                default:
-                    throw new BadRequestException("Invalid plugin type " + pluginType + ". Valid types are sink, source, converter, header_converter, transformation, predicate.");
+            // Contains definitions coming from Connect framework
+            ConfigDef baseConfigDefs = null;
+            // Contains definitions specifically declared on the plugin
+            ConfigDef pluginConfigDefs;
+            if (plugin instanceof SinkConnector) {
+                baseConfigDefs = SinkConnectorConfig.configDef();
+                pluginConfigDefs = ((SinkConnector) plugin).config();
+            } else if (plugin instanceof SourceConnector) {
+                baseConfigDefs = SourceConnectorConfig.configDef();
+                pluginConfigDefs = ((SourceConnector) plugin).config();
+            } else if (plugin instanceof Converter) {
+                pluginConfigDefs = ((Converter) plugin).config();
+            } else if (plugin instanceof HeaderConverter) {
+                pluginConfigDefs = ((HeaderConverter) plugin).config();
+            } else if (plugin instanceof Transformation) {
+                pluginConfigDefs = ((Transformation<?>) plugin).config();
+            } else if (plugin instanceof Predicate) {
+                pluginConfigDefs = ((Predicate<?>) plugin).config();
+            } else {
+                throw new BadRequestException("Invalid plugin class " + pluginName + ". Valid types are sink, source, converter, header_converter, transformation, predicate.");
             }
+
+            // Track config properties by name and, if the same property is defined in multiple places,
+            // give precedence to the one defined by the plugin class
+            // Preserve the ordering of properties as they're returned from each ConfigDef
+            Map<String, ConfigKey> configsMap = new LinkedHashMap<>(pluginConfigDefs.configKeys());
+            if (baseConfigDefs != null)
+                baseConfigDefs.configKeys().forEach(configsMap::putIfAbsent);
+
             List<ConfigKeyInfo> results = new ArrayList<>();
-            for (ConfigDef.ConfigKey configKey : configDefs.configKeys().values()) {
+            for (ConfigKey configKey : configsMap.values()) {
                 results.add(AbstractHerder.convertConfigKey(configKey));
             }
             return results;
         } catch (ClassNotFoundException e) {
             throw new ConnectException("Failed to load plugin class or one of its dependencies", e);
         }
+    }
+
+    @Override
+    public void connectorOffsets(String connName, Callback<ConnectorOffsets> cb) {
+        ClusterConfigState configSnapshot = configBackingStore.snapshot();
+        try {
+            if (!configSnapshot.contains(connName)) {
+                cb.onCompletion(new NotFoundException("Connector " + connName + " not found"), null);
+                return;
+            }
+            // The worker asynchronously processes the request and completes the passed callback when done
+            worker.connectorOffsets(connName, configSnapshot.connectorConfig(connName), cb);
+        } catch (Throwable t) {
+            cb.onCompletion(t, null);
+        }
+    }
+
+    @Override
+    public void alterConnectorOffsets(String connName, Map<Map<String, ?>, Map<String, ?>> offsets, Callback<Message> callback) {
+        if (offsets == null || offsets.isEmpty()) {
+            callback.onCompletion(new ConnectException("The offsets to be altered may not be null or empty"), null);
+            return;
+        }
+        modifyConnectorOffsets(connName, offsets, callback);
+    }
+
+    @Override
+    public void resetConnectorOffsets(String connName, Callback<Message> callback) {
+        modifyConnectorOffsets(connName, null, callback);
+    }
+
+    /**
+     * Service external requests to alter or reset connector offsets.
+     * @param connName the name of the connector whose offsets are to be modified
+     * @param offsets the offsets to be written; this should be {@code null} for offsets reset requests
+     * @param cb callback to invoke upon completion
+     */
+    protected abstract void modifyConnectorOffsets(String connName, Map<Map<String, ?>, Map<String, ?>> offsets, Callback<Message> cb);
+
+    @Override
+    public LoggerLevel loggerLevel(String logger) {
+        return loggers.level(logger);
+    }
+
+    @Override
+    public Map<String, LoggerLevel> allLoggerLevels() {
+        return loggers.allLevels();
+    }
+
+    @Override
+    public List<String> setWorkerLoggerLevel(String namespace, String desiredLevelStr) {
+        Level level = Level.toLevel(desiredLevelStr.toUpperCase(Locale.ROOT), null);
+
+        if (level == null) {
+            log.warn("Ignoring request to set invalid level '{}' for namespace {}", desiredLevelStr, namespace);
+            return Collections.emptyList();
+        }
+
+        return loggers.setLevel(namespace, level);
     }
 
 }
