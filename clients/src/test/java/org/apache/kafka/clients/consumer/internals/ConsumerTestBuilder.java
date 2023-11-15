@@ -306,11 +306,11 @@ public class ConsumerTestBuilder implements Closeable {
         }
     }
 
-    public static class PrototypeAsyncConsumerTestBuilder extends ApplicationEventHandlerTestBuilder {
+    public static class AsyncKafkaConsumerTestBuilder extends ApplicationEventHandlerTestBuilder {
 
-        final PrototypeAsyncConsumer<String, String> consumer;
+        final AsyncKafkaConsumer<String, String> consumer;
 
-        public PrototypeAsyncConsumerTestBuilder(Optional<GroupInformation> groupInfo) {
+        public AsyncKafkaConsumerTestBuilder(Optional<GroupInformation> groupInfo) {
             super(groupInfo);
             String clientId = config.getString(CommonClientConfigs.CLIENT_ID_CONFIG);
             List<ConsumerPartitionAssignor> assignors = ConsumerPartitionAssignor.getAssignorInstances(
@@ -325,7 +325,7 @@ public class ConsumerTestBuilder implements Closeable {
                     deserializers,
                     metricsManager,
                     time);
-            this.consumer = spy(new PrototypeAsyncConsumer<>(
+            this.consumer = spy(new AsyncKafkaConsumer<>(
                     logContext,
                     clientId,
                     deserializers,

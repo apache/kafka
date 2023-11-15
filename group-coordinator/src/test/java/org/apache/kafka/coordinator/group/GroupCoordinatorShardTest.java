@@ -95,7 +95,7 @@ public class GroupCoordinatorShardTest {
             new ConsumerGroupHeartbeatResponseData()
         );
 
-        when(coordinator.consumerGroupHeartbeat(
+        when(groupMetadataManager.consumerGroupHeartbeat(
             context,
             request
         )).thenReturn(result);
@@ -122,7 +122,7 @@ public class GroupCoordinatorShardTest {
             new OffsetCommitResponseData()
         );
 
-        when(coordinator.commitOffset(
+        when(offsetMetadataManager.commitOffset(
             context,
             request
         )).thenReturn(result);
