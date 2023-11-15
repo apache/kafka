@@ -154,7 +154,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     // to keep from repeatedly scanning subscriptions in poll(), cache the result during metadata updates
     private boolean cachedSubscriptionHasAllFetchPositions;
     private final WakeupTrigger wakeupTrigger = new WakeupTrigger();
-    private volatile boolean isFenced = false;
+    private boolean isFenced = false;
     private final Optional<String> groupInstanceId;
 
     private final OffsetCommitCallbackInvoker invoker = new OffsetCommitCallbackInvoker();
