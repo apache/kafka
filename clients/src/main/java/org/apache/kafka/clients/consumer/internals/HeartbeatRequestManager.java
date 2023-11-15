@@ -196,8 +196,6 @@ public class HeartbeatRequestManager implements RequestManager {
      *     <li>If the member can send a heartbeat, the timer is set to the current heartbeat interval.</li>
      * </ol>
      *
-     *
-     *
      * @return {@link PollResult} that includes a heartbeat request if one must be sent, and the
      * time to wait until the next poll.
      */

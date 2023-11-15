@@ -31,6 +31,11 @@ public class ConsumerGroupHeartbeatRequest extends AbstractRequest {
      */
     public static final int LEAVE_GROUP_MEMBER_EPOCH = -1;
 
+    /**
+     * A member epoch of <code>0</code> means that the member wants to join the group.
+     */
+    public static final int JOIN_GROUP_MEMBER_EPOCH = 0;
+
     public static class Builder extends AbstractRequest.Builder<ConsumerGroupHeartbeatRequest> {
         private final ConsumerGroupHeartbeatRequestData data;
 

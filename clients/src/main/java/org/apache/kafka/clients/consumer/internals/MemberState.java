@@ -88,8 +88,8 @@ public enum MemberState {
 
     /**
      * Member has committed offsets and releases its assignment, so it stays in this state until
-     * the next heartbeat request is sent out with epoch -1 to effectively leave the group. This
-     * state indicates that the next heartbeat request must be sent without waiting for the
+     * the next heartbeat request is sent out with epoch -1 or -2 to effectively leave the group.
+     * This state indicates that the next heartbeat request must be sent without waiting for the
      * heartbeat interval to expire.
      */
     LEAVING,
@@ -101,9 +101,7 @@ public enum MemberState {
      */
     FATAL;
 
-    /**
-     * Valid state transitions
-     */
+    // Valid state transitions
     static {
 
         STABLE.previousValidStates = Arrays.asList(JOINING, ACKNOWLEDGING);

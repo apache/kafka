@@ -86,9 +86,11 @@ import java.util.concurrent.CompletableFuture;
  *     <li>Commit offsets if auto-commit is enabled.</li>
  *     <li>Invoke the user-defined onPartitionsRevoked listener.</li>
  *     <li>Invoke the user-defined onPartitionsAssigned listener.</li>
- *     <li>When the above steps complete, the member acknowledges the target assignment by
- *     sending a heartbeat request back to the broker, including the full target assignment
- *     that was just reconciled.</li>
+ *     <li>When the above steps complete, the member acknowledges the reconciled assignment,
+ *     which is the subset of the target that was resolved from metadata and actually reconciled.
+ *     The ack is performed by sending a heartbeat request back to the broker, including the
+ *     reconciled assignment.
+ *     .</li>
  * </ol>
  *
  * Note that user-defined callbacks are triggered from this manager that runs in the
@@ -97,6 +99,11 @@ import java.util.concurrent.CompletableFuture;
  * know that it can proceed with the reconciliation.
  */
 public class MembershipManagerImpl implements MembershipManager, ClusterResourceListener {
+
+    /**
+     * TopicPartition comparator based on topic name and partition id.
+     */
+    private final static TopicPartitionComparator COMPARATOR = new TopicPartitionComparator();
 
     /**
      * Group ID of the consumer group the member will be part of, provided when creating the current
@@ -152,11 +159,6 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     private final ConsumerMetadata metadata;
 
     /**
-     * TopicPartition comparator based on topic name and partition id.
-     */
-    private final static TopicPartitionComparator COMPARATOR = new TopicPartitionComparator();
-
-    /**
      * Logger.
      */
     private final Logger log;
@@ -195,12 +197,6 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      * is already another on in process.
      */
     private final SortedSet<TopicPartition> assignmentReadyToReconcile;
-
-    /**
-     * Epoch that a member must include a heartbeat request to indicate that it want to join or
-     * re-join a group.
-     */
-    public static final int JOIN_GROUP_EPOCH = 0;
 
     /**
      * If there is a reconciliation running (triggering commit, callbacks) for the
@@ -361,7 +357,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         CompletableFuture<Void> callbackResult = invokeOnPartitionsLostCallback(subscriptions.assignedPartitions());
         callbackResult.whenComplete((result, error) -> {
             if (error != null) {
-                log.debug("OnPartitionsLost callback invocation failed while releasing assignment" +
+                log.error("onPartitionsLost callback invocation failed while releasing assignment" +
                         "after member got fenced. Member will rejoin the group anyways.", error);
             }
             subscriptions.assignFromSubscribed(Collections.emptySet());
@@ -602,7 +598,6 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
                     boolean memberHasRejoined = !Objects.equals(memberIdOnReconciliationStart,
                             memberId);
                     if (state == MemberState.RECONCILING && !memberHasRejoined) {
-
                         // Apply assignment
                         CompletableFuture<Void> assignResult = assignPartitions(assignedPartitions, addedPartitions);
 
@@ -612,9 +607,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
                                 assignedTopicNamesCache.values().remove(tp.topic());
                             }
                         }
-
                         return assignResult;
-
                     } else {
                         String reason;
                         if (state != MemberState.RECONCILING) {
@@ -641,10 +634,9 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
                 // won't send the ack, and the expectation is that the broker will kick the
                 // member out of the group after the rebalance timeout expires, leading to a
                 // RECONCILING -> FENCED transition.
-                log.error("Reconciliation failed. ", error);
+                log.error("Reconciliation failed.", error);
             } else {
                 if (state == MemberState.RECONCILING) {
-
                     // Make assignment effective on the broker by transitioning to send acknowledge.
                     transitionTo(MemberState.ACKNOWLEDGING);
 
@@ -655,16 +647,10 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
                     // reconcile (new assignments might have been received or discovered in
                     // metadata)
                     assignmentReadyToReconcile.removeAll(assignedPartitions);
-
                 } else {
                     log.debug("New assignment processing completed but the member already " +
                             "transitioned out of the reconciliation state into {}. Interrupting " +
                             "reconciliation as it's not relevant anymore,", state);
-                    // TODO: double check if subscription state changes needed. This is expected to be
-                    //  the case where the member got fenced, failed or unsubscribed while the
-                    //  reconciliation was in process. Transitions to those states update the
-                    //  subscription state accordingly so it shouldn't be necessary to make any changes
-                    //  to the subscription state at this point.
                 }
             }
         });
@@ -705,7 +691,6 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      * </ol>
      */
     private void resolveMetadataForUnresolvedAssignment() {
-
         // Try to resolve topic names from metadata cache or subscription cache, and move
         // assignments from the "unresolved" collection, to the "readyToReconcile" one.
         Iterator<Map.Entry<Uuid, List<Integer>>> it = assignmentUnresolved.entrySet().iterator();
@@ -715,12 +700,12 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
             List<Integer> topicPartitions = e.getValue();
 
             Optional<String> nameFromMetadata = findTopicNameInGlobalOrLocalCache(topicId);
-            if (nameFromMetadata.isPresent()) {
+            nameFromMetadata.ifPresent(resolvedTopicName -> {
                 // Name resolved, so assignment is ready for reconciliation.
                 assignmentReadyToReconcile.addAll(buildAssignedPartitionsWithTopicName(topicPartitions,
-                        nameFromMetadata.get()));
+                        resolvedTopicName));
                 it.remove();
-            }
+            });
         }
 
         if (!assignmentUnresolved.isEmpty()) {
@@ -801,20 +786,19 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         }
 
         commitResult.whenComplete((result, error) -> {
-
             if (error != null) {
                 // Commit request failed (commit request manager internally retries on
                 // retriable errors, so at this point we assume this is non-retriable, but
                 // proceed with the revocation anyway).
-                log.debug("Commit request before revocation failed with non-retriable error. Will" +
+                log.error("Commit request before revocation failed with non-retriable error. Will" +
                         " proceed with the revocation anyway.", error);
             }
 
             CompletableFuture<Void> userCallbackResult = invokeOnPartitionsRevokedCallback(revokedPartitions);
             userCallbackResult.whenComplete((callbackResult, callbackError) -> {
                 if (callbackError != null) {
-                    log.error("User provided callback failed on invocation of onPartitionsRevoked" +
-                            " for partitions {}", revokedPartitions, callbackError);
+                    log.error("onPartitionsRevoked callback invocation failed for partitions {}",
+                            revokedPartitions, callbackError);
                     revocationResult.completeExceptionally(callbackError);
                 } else {
                     revocationResult.complete(null);
@@ -924,7 +908,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     }
 
     private void resetEpoch() {
-        this.memberEpoch = JOIN_GROUP_EPOCH;
+        this.memberEpoch = ConsumerGroupHeartbeatRequest.JOIN_GROUP_MEMBER_EPOCH;
     }
 
     /**
