@@ -195,7 +195,7 @@ public class SslFactory implements Reconfigurable, Closeable {
         } else if (value instanceof String) {
             return Boolean.parseBoolean((String) value);
         } else {
-            log.warn("Invalid value (" + value + ") on internal configuration '" + key + "'. Please specify a true/false value.");
+            log.warn("Invalid value (" + value + ") on configuration '" + key + "'. Please specify a true/false value.");
             return defaultValue;
         }
     }
