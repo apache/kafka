@@ -36,6 +36,7 @@ import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.Tag;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -125,6 +126,8 @@ public class MetricsReporterIntegrationTest {
             final Object initialMetricValue = METRIC_NAME_TO_INITIAL_VALUE.get(metricName.name());
             assertThat(initialMetricValue, notNullValue());
         });
+
+        kafkaStreams.close(Duration.ofSeconds(30));
     }
 
 }

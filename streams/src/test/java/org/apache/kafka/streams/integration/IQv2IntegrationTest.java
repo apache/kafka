@@ -418,6 +418,8 @@ public class IQv2IntegrationTest {
             })
         );
 
+        // do not use the harness streams
+        kafkaStreams.close();
         kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration(testInfo));
         kafkaStreams.cleanUp();
 
