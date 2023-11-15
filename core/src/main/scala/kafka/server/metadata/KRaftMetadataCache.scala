@@ -270,12 +270,12 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
                                                listenerName: ListenerName,
                                                quota: Int): Seq[DescribeTopicPartitionsResponseTopic] = {
     val image = _currentImage
-    var left = quota
+    var remaining = quota
     topics.toSeq.flatMap { case(topicName, startIndex) =>
-      if (left > 0) {
+      if (remaining > 0) {
         val partitionResponse = getPartitionMetadataForDescribeTopicResponse(image, topicName, listenerName)
         partitionResponse.map( partitions => {
-          val upperIndex = startIndex + left
+          val upperIndex = startIndex + remaining
           val response = new DescribeTopicPartitionsResponseTopic()
             .setErrorCode(Errors.NONE.code)
             .setName(topicName)
@@ -287,7 +287,7 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
           if (partitions.size > upperIndex) {
             response.setNextPartition(upperIndex)
           }
-          left -= response.partitions().size()
+          remaining -= response.partitions().size()
           response
         })
       } else {

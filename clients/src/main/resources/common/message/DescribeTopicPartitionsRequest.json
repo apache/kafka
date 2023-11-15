@@ -14,7 +14,7 @@
 // limitations under the License.
 
 {
-  "apiKey": 73,
+  "apiKey": 74,
   "type": "request",
   "listeners": ["broker"],
   "name": "DescribeTopicPartitionsRequest",

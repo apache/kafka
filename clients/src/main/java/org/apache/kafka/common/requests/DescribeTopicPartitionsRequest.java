@@ -37,9 +37,12 @@ public class DescribeTopicPartitionsRequest extends AbstractRequest {
         }
 
         public Builder(List<String> topics) {
-            super(ApiKeys.DESCRIBE_TOPIC_PARTITIONS, ApiKeys.DESCRIBE_TOPIC_PARTITIONS.oldestVersion(), ApiKeys.DESCRIBE_TOPIC_PARTITIONS.latestVersion());
+            super(ApiKeys.DESCRIBE_TOPIC_PARTITIONS, ApiKeys.DESCRIBE_TOPIC_PARTITIONS.oldestVersion(),
+                ApiKeys.DESCRIBE_TOPIC_PARTITIONS.latestVersion());
             DescribeTopicPartitionsRequestData data = new DescribeTopicPartitionsRequestData();
-            topics.forEach(topicName -> data.topics().add(new DescribeTopicPartitionsRequestData.TopicRequest().setName(topicName)));
+            topics.forEach(topicName -> data.topics().add(
+                new DescribeTopicPartitionsRequestData.TopicRequest().setName(topicName))
+            );
             this.data = data;
         }
 

@@ -1240,10 +1240,10 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   private def DescribeTopicPartitionsResponseTopic(error: Errors,
-                                          topic: String,
-                                          topicId: Uuid,
-                                          isInternal: Boolean,
-                                          partitionData: util.List[DescribeTopicPartitionsResponsePartition]): DescribeTopicPartitionsResponseTopic = {
+                                                   topic: String,
+                                                   topicId: Uuid,
+                                                   isInternal: Boolean,
+                                                   partitionData: util.List[DescribeTopicPartitionsResponsePartition]): DescribeTopicPartitionsResponseTopic = {
     new DescribeTopicPartitionsResponseTopic()
       .setErrorCode(error.code)
       .setName(topic)
