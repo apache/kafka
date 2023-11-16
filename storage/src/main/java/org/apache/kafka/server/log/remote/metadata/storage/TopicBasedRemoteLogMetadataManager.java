@@ -17,6 +17,7 @@
 package org.apache.kafka.server.log.remote.metadata.storage;
 
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.CreateTopicsResult;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.producer.RecordMetadata;
@@ -45,6 +46,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -54,6 +56,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.stream.Collectors;
 
 /**
  * This is the {@link RemoteLogMetadataManager} implementation with storage as an internal topic with name {@link TopicBasedRemoteLogMetadataManagerConfig#REMOTE_LOG_METADATA_TOPIC_NAME}.
@@ -477,7 +480,7 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
         return true;
     }
 
-    NewTopic createRemoteLogMetadataTopicRequest() {
+    private NewTopic createRemoteLogMetadataTopicRequest() {
         Map<String, String> topicConfigs = new HashMap<>();
         topicConfigs.put(TopicConfig.RETENTION_MS_CONFIG, Long.toString(rlmmConfig.metadataTopicRetentionMs()));
         topicConfigs.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE);
@@ -488,23 +491,36 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
     }
 
     /**
-     * @param topic topic to be created.
+     * @param newTopic topic to be created.
      * @return Returns true if the topic already exists, or it is created successfully.
      */
-    private boolean createTopic(Admin adminClient, NewTopic topic) {
+    private boolean createTopic(Admin adminClient, NewTopic newTopic) {
         boolean topicExists = false;
+        String topic = newTopic.name();
         try {
-            topicExists = isTopicExists(adminClient, topic.name());
+            topicExists = isTopicExists(adminClient, topic);
             if (!topicExists) {
-                adminClient.createTopics(Collections.singleton(topic)).all().get();
+                CreateTopicsResult result = adminClient.createTopics(Collections.singleton(newTopic));
+                result.all().get();
+                List<String> overriddenConfigs = result.config(topic).get()
+                        .entries()
+                        .stream()
+                        .filter(entry -> !entry.isDefault())
+                        .map(entry -> entry.name() + "=" + entry.value())
+                        .collect(Collectors.toList());
+                log.info("Topic {} created. TopicId: {}, numPartitions: {}, replicationFactor: {}, config: {}",
+                        topic, result.topicId(topic).get(), result.numPartitions(topic).get(),
+                        result.replicationFactor(topic).get(), overriddenConfigs);
                 topicExists = true;
             }
         } catch (Exception e) {
+            // This exception can still occur as multiple brokers may call create topics and one of them may become
+            // successful and other would throw TopicExistsException
             if (e.getCause() instanceof TopicExistsException) {
-                log.info("Topic [{}] already exists", topic.name());
+                log.info("Topic [{}] already exists", topic);
                 topicExists = true;
             } else {
-                log.error("Encountered error while creating remote log metadata topic.", e);
+                log.error("Encountered error while creating {} topic.", topic, e);
             }
         }
         return topicExists;

@@ -17,7 +17,6 @@
 package org.apache.kafka.server.log.remote.metadata.storage;
 
 import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
@@ -75,9 +74,20 @@ public class TopicBasedRemoteLogMetadataManagerTest {
         Properties adminConfig = remoteLogMetadataManagerHarness.adminClientConfig();
         ListenerName listenerName = remoteLogMetadataManagerHarness.listenerName();
         try (Admin admin = remoteLogMetadataManagerHarness.createAdminClient(listenerName, adminConfig)) {
-            NewTopic newTopic = topicBasedRlmm().createRemoteLogMetadataTopicRequest();
-            boolean isTopicExists = topicBasedRlmm().isTopicExists(admin, newTopic.name());
+            String topic = topicBasedRlmm().config().remoteLogMetadataTopicName();
+            boolean isTopicExists = topicBasedRlmm().isTopicExists(admin, topic);
             Assertions.assertTrue(isTopicExists);
+        }
+    }
+
+    @Test
+    public void testTopicDoesNotExists() {
+        Properties adminConfig = remoteLogMetadataManagerHarness.adminClientConfig();
+        ListenerName listenerName = remoteLogMetadataManagerHarness.listenerName();
+        try (Admin admin = remoteLogMetadataManagerHarness.createAdminClient(listenerName, adminConfig)) {
+            String topic = "dummy-test-topic";
+            boolean isTopicExists = topicBasedRlmm().isTopicExists(admin, topic);
+            Assertions.assertFalse(isTopicExists);
         }
     }
 
