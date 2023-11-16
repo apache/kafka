@@ -37,13 +37,13 @@ import java.util.Optional;
 
 /**
  * This class represents a utility to capture a checkpoint in a file. It writes down to the file in the below format.
- *
+ * <pre>
  * ========= File beginning =========
  * version: int
  * entries-count: int
  * entry-as-string-on-each-line
  * ========= File end ===============
- *
+ * </pre>
  * Each entry is represented as a string on each line in the checkpoint file. {@link EntryFormatter} is used
  * to convert the entry into a string and vice versa.
  *

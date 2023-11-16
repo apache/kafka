@@ -535,6 +535,7 @@ public class StreamsConfig extends AbstractConfig {
 
     public static final String ROCKS_DB = "rocksDB";
     public static final String IN_MEMORY = "in_memory";
+    public static final String DEFAULT_DSL_STORE = ROCKS_DB;
 
     /** {@code default.windowed.key.serde.inner} */
     @SuppressWarnings("WeakerAccess")
@@ -1000,7 +1001,7 @@ public class StreamsConfig extends AbstractConfig {
                     CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_DOC)
             .define(DEFAULT_DSL_STORE_CONFIG,
                     Type.STRING,
-                    ROCKS_DB,
+                    DEFAULT_DSL_STORE,
                     in(ROCKS_DB, IN_MEMORY),
                     Importance.LOW,
                     DEFAULT_DSL_STORE_DOC)
@@ -1199,6 +1200,13 @@ public class StreamsConfig extends AbstractConfig {
 
         public static boolean getStateUpdaterEnabled(final Map<String, Object> configs) {
             return InternalConfig.getBoolean(configs, InternalConfig.STATE_UPDATER_ENABLED, true);
+        }
+        
+        // Private API to enable processing threads (i.e. polling is decoupled from processing)
+        public static final String PROCESSING_THREADS_ENABLED = "__processing.threads.enabled__";
+
+        public static boolean getProcessingThreadsEnabled(final Map<String, Object> configs) {
+            return InternalConfig.getBoolean(configs, InternalConfig.PROCESSING_THREADS_ENABLED, false);
         }
 
         public static boolean getBoolean(final Map<String, Object> configs, final String key, final boolean defaultValue) {

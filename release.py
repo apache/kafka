@@ -491,6 +491,35 @@ Some of these may be used from these previous settings loaded from %s:
 Do you have all of of these setup? (y/n): """ % (PREFS_FILE, json.dumps(prefs, indent=2))):
     fail("Please try again once you have all the prerequisites ready.")
 
+apache_id = sanitize_input("Please enter your apache-id: ")
+
+print("Begin to check if you have met all the pre-requisites for the release process")
+
+try:
+    test_maven = cmd_output("mvn -v")
+    if "Apache Maven" in test_maven:
+        print("Pre-requisite met: You have maven cli in place")
+    else:
+        fail("Pre-requisite not met: You need to install maven CLI")
+except Exception as e:
+    fail(f"Pre-requisite not met: Unable to check if maven cli is installed. Error: {e}")
+
+try:
+    test_sftp = subprocess.run(f"sftp {apache_id}@home.apache.org".split())
+    if test_sftp.returncode != 0:
+        fail("Pre-requisite not met: Cannot establish sftp connection. Please check your apache-id and ssh keys.")
+    print("Pre-requisite met: sftp connection is successful")
+except Exception as e:
+    fail(f"Pre-requisite not met: Unable to check if sftp connection is successful. Error: {e}")
+
+try:
+    test_svn = cmd_output("svn --version")
+    if "svn" in test_svn:
+        print("Pre-requisite met: You have svn cli in place")
+    else:
+        fail("Pre-requisite not met: You need to install svn cli")
+except Exception as e:
+    fail(f"Pre-requisite not met: Unable to check if svn cli is installed. Error: {e}")
 
 starting_branch = cmd_output('git rev-parse --abbrev-ref HEAD')
 

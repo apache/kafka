@@ -39,7 +39,7 @@ import org.apache.kafka.common.message.{DescribeUserScramCredentialsRequestData,
 import org.apache.kafka.metadata.{PartitionRegistration, Replicas}
 import org.apache.kafka.server.common.{Features, MetadataVersion}
 
-import scala.collection.{Seq, Set, mutable}
+import scala.collection.{Map, Seq, Set, mutable}
 import scala.jdk.CollectionConverters._
 import scala.compat.java8.OptionConverters._
 
@@ -280,17 +280,17 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
     Option(image.topics().getTopic(tp.topic())).foreach { topic =>
       topic.partitions().values().forEach { partition =>
         partition.replicas.foreach { replicaId =>
-          result.put(replicaId, Option(image.cluster().broker(replicaId)) match {
-            case None => Node.noNode()
-            case Some(broker) if broker.fenced() => Node.noNode()
-            case Some(broker) => broker.node(listenerName.value()).asScala.getOrElse(Node.noNode())
-          })
+          val broker = image.cluster().broker(replicaId)
+          if (broker != null && !broker.fenced()) {
+            broker.node(listenerName.value).ifPresent { node =>
+              if (!node.isEmpty)
+                result.put(replicaId, node)
+            }
+          }
         }
       }
     }
-    result.toMap.filter(pair => pair match {
-      case (_, node) => !node.isEmpty
-    })
+    result
   }
 
   /**

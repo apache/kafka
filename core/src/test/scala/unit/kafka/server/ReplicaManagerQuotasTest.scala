@@ -30,7 +30,7 @@ import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.server.util.{KafkaScheduler, MockTime}
-import org.apache.kafka.storage.internals.log.{FetchDataInfo, FetchIsolation, FetchParams, LogDirFailureChannel, LogOffsetMetadata, LogOffsetSnapshot}
+import org.apache.kafka.storage.internals.log.{FetchDataInfo, FetchIsolation, FetchParams, LogConfig, LogDirFailureChannel, LogOffsetMetadata, LogOffsetSnapshot}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 import org.mockito.ArgumentMatchers.{any, anyBoolean, anyInt, anyLong}
@@ -261,6 +261,7 @@ class ReplicaManagerQuotasTest {
     when(log.lastStableOffset).thenReturn(5)
     when(log.logEndOffsetMetadata).thenReturn(new LogOffsetMetadata(20L))
     when(log.topicId).thenReturn(Some(topicId))
+    when(log.config).thenReturn(new LogConfig(Collections.emptyMap()))
 
     //if we ask for len 1 return a message
     when(log.read(anyLong,

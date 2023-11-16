@@ -135,13 +135,17 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
         }
         observedStreamTime = Math.max(observedStreamTime, timestamp);
 
-        return doPut(
+        final long foundTs = doPut(
             versionedStoreClient,
             observedStreamTime,
             key,
             value,
             timestamp
         );
+
+        StoreQueryUtils.updatePosition(position, stateStoreContext);
+
+        return foundTs;
     }
 
     @Override
@@ -165,6 +169,8 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
             null,
             timestamp
         );
+
+        StoreQueryUtils.updatePosition(position, stateStoreContext);
 
         return existingRecord;
     }
@@ -393,9 +399,19 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
     }
 
     @Override
-    public <R> QueryResult<R> query(final Query<R> query,
-                                    final PositionBound positionBound,
-                                    final QueryConfig config) {
+    public void close() {
+        open = false;
+
+        segmentStores.close();
+        // closing segments store includes closing latest value store, since they share the
+        // same physical RocksDB instance
+    }
+
+    @Override
+    public <R> QueryResult<R> query(
+        final Query<R> query,
+        final PositionBound positionBound,
+        final QueryConfig config) {
         return StoreQueryUtils.handleBasicQueries(
             query,
             positionBound,
@@ -404,15 +420,6 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
             position,
             stateStoreContext
         );
-    }
-
-    @Override
-    public void close() {
-        open = false;
-
-        segmentStores.close();
-        // closing segments store includes closing latest value store, since they share the
-        // same physical RocksDB instance
     }
 
     @Override

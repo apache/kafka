@@ -34,6 +34,7 @@ import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.query.RangeQuery;
+import org.apache.kafka.streams.query.VersionedKeyQuery;
 import org.apache.kafka.streams.query.WindowKeyQuery;
 import org.apache.kafka.streams.query.WindowRangeQuery;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -94,6 +95,10 @@ public final class StoreQueryUtils {
             mkEntry(
                 WindowRangeQuery.class,
                 StoreQueryUtils::runWindowRangeQuery
+            ),
+            mkEntry(
+                VersionedKeyQuery.class,
+                StoreQueryUtils::runVersionedKeyQuery
             ),
             mkEntry(
                 MultiVersionedKeyQuery.class,
@@ -219,9 +224,9 @@ public final class StoreQueryUtils {
 
     @SuppressWarnings("unchecked")
     private static <R> QueryResult<R> runKeyQuery(final Query<R> query,
-                                                  final PositionBound positionBound,
-                                                  final QueryConfig config,
-                                                  final StateStore store) {
+        final PositionBound positionBound,
+        final QueryConfig config,
+        final StateStore store) {
         if (store instanceof KeyValueStore) {
             final KeyQuery<Bytes, byte[]> rawKeyQuery = (KeyQuery<Bytes, byte[]>) query;
             final KeyValueStore<Bytes, byte[]> keyValueStore =
@@ -243,9 +248,9 @@ public final class StoreQueryUtils {
 
     @SuppressWarnings("unchecked")
     private static <R> QueryResult<R> runWindowKeyQuery(final Query<R> query,
-                                                        final PositionBound positionBound,
-                                                        final QueryConfig config,
-                                                        final StateStore store) {
+        final PositionBound positionBound,
+        final QueryConfig config,
+        final StateStore store) {
         if (store instanceof WindowStore) {
             final WindowKeyQuery<Bytes, byte[]> windowKeyQuery =
                 (WindowKeyQuery<Bytes, byte[]>) query;
@@ -279,9 +284,9 @@ public final class StoreQueryUtils {
 
     @SuppressWarnings("unchecked")
     private static <R> QueryResult<R> runWindowRangeQuery(final Query<R> query,
-                                                          final PositionBound positionBound,
-                                                          final QueryConfig config,
-                                                          final StateStore store) {
+        final PositionBound positionBound,
+        final QueryConfig config,
+        final StateStore store) {
         if (store instanceof WindowStore) {
             final WindowRangeQuery<Bytes, byte[]> windowRangeQuery =
                 (WindowRangeQuery<Bytes, byte[]>) query;
@@ -344,18 +349,50 @@ public final class StoreQueryUtils {
     }
 
     @SuppressWarnings("unchecked")
+    private static <R> QueryResult<R> runVersionedKeyQuery(final Query<R> query,
+        final PositionBound positionBound,
+        final QueryConfig config,
+        final StateStore store) {
+        if (store instanceof VersionedKeyValueStore) {
+            final VersionedKeyValueStore<Bytes, byte[]> versionedKeyValueStore =
+                (VersionedKeyValueStore<Bytes, byte[]>) store;
+            final VersionedKeyQuery<Bytes, byte[]> rawKeyQuery =
+                (VersionedKeyQuery<Bytes, byte[]>) query;
+            try {
+                final VersionedRecord<byte[]> bytes;
+                if (((VersionedKeyQuery<?, ?>) query).asOfTimestamp().isPresent()) {
+                    bytes = versionedKeyValueStore.get(rawKeyQuery.key(),
+                        ((VersionedKeyQuery<?, ?>) query).asOfTimestamp().get().toEpochMilli());
+                } else {
+                    bytes = versionedKeyValueStore.get(rawKeyQuery.key());
+                }
+                return (QueryResult<R>) QueryResult.forResult(bytes);
+            } catch (final Exception e) {
+                final String message = parseStoreException(e, store, query);
+                return QueryResult.forFailure(
+                    FailureReason.STORE_EXCEPTION,
+                    message
+                );
+            }
+
+        } else {
+            return QueryResult.forUnknownQueryType(query, store);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
     private static <R> QueryResult<R> runMultiVersionedKeyQuery(final Query<R> query,
-                                                                final PositionBound positionBound,
-                                                                final QueryConfig config,
-                                                                final StateStore store) {
+        final PositionBound positionBound,
+        final QueryConfig config,
+        final StateStore store) {
         if (store instanceof VersionedKeyValueStore) {
             final RocksDBVersionedStore rocksDBVersionedStore = (RocksDBVersionedStore) store;
             final MultiVersionedKeyQuery<Bytes, byte[]> rawKeyQuery = (MultiVersionedKeyQuery<Bytes, byte[]>) query;
             try {
                 final ValueIterator<VersionedRecord<byte[]>> bytes = rocksDBVersionedStore.get(rawKeyQuery.key(),
-                                                                                               rawKeyQuery.fromTime().get().toEpochMilli(),
-                                                                                               rawKeyQuery.toTime().get().toEpochMilli(),
-                                                                                               rawKeyQuery.isAscending());
+                    rawKeyQuery.fromTime().get().toEpochMilli(),
+                    rawKeyQuery.toTime().get().toEpochMilli(),
+                    rawKeyQuery.isAscending());
                 return (QueryResult<R>) QueryResult.forResult(bytes);
             } catch (final Exception e) {
                 final String message = parseStoreException(e, store, query);
@@ -367,8 +404,7 @@ public final class StoreQueryUtils {
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
-    public static <V> Function<byte[], V> getDeserializeValue(final StateSerdes<?, V> serdes,
-                                                              final StateStore wrapped) {
+    public static <V> Function<byte[], V> getDeserializeValue(final StateSerdes<?, V> serdes, final StateStore wrapped) {
         final Serde<V> valueSerde = serdes.valueSerde();
         final boolean timestamped = WrappedStateStore.isTimestamped(wrapped);
         final Deserializer<V> deserializer;
@@ -382,32 +418,25 @@ public final class StoreQueryUtils {
         return byteArray -> deserializer.deserialize(serdes.topic(), byteArray);
     }
 
-//    public static <V> ValueIterator<VersionedRecord<V>> deserializeValueIterator(final StateSerdes<?, V> serdes,
-//                                                                                 final ValueIterator<VersionedRecord<byte[]>> rawValueIterator) {
-//
-//        final List<VersionedRecord<V>> versionedRecords = new ArrayList<>();
-//        while (rawValueIterator.hasNext()) {
-//            final VersionedRecord<byte[]> rawVersionedRecord = rawValueIterator.next();
-//            final Deserializer<V> valueDeserializer = serdes.valueDeserializer();
-//            final long timestamp = rawVersionedRecord.timestamp();
-//            final long validTo = rawVersionedRecord.validTo();
-//            final V value = valueDeserializer.deserialize(serdes.topic(), rawVersionedRecord.value());
-//            versionedRecords.add(new VersionedRecord<>(value, timestamp, validTo));
-//        }
-//        return new VersionedRecordIterator<>(versionedRecords.listIterator());
-//    }
-
     @SuppressWarnings({"unchecked", "rawtypes"})
     public static <V> Function<VersionedRecord<byte[]>, VersionedRecord<V>> getDeserializeValue(final StateSerdes<?, V> serdes) {
         final Serde<V> valueSerde = serdes.valueSerde();
         final Deserializer<V> deserializer = valueSerde.deserializer();
         return rawVersionedRecord -> new VersionedRecord<>(deserializer.deserialize(serdes.topic(), rawVersionedRecord.value()),
-                                                           rawVersionedRecord.timestamp(),
-                                                           rawVersionedRecord.validTo());
+                                                                                    rawVersionedRecord.timestamp(),
+                                                                                    rawVersionedRecord.validTo());
+    }
+
+    public static <V> VersionedRecord<V> deserializeVersionedRecord(final StateSerdes<?, V> serdes,
+        final VersionedRecord<byte[]> rawVersionedRecord) {
+        final Deserializer<V> valueDeserializer = serdes.valueDeserializer();
+        final long timestamp = rawVersionedRecord.timestamp();
+        final V value = valueDeserializer.deserialize(serdes.topic(), rawVersionedRecord.value());
+        return new VersionedRecord<>(value, timestamp);
     }
 
     public static void checkpointPosition(final OffsetCheckpoint checkpointFile,
-                                          final Position position) {
+        final Position position) {
         try {
             checkpointFile.write(positionToTopicPartitionMap(position));
         } catch (final IOException e) {

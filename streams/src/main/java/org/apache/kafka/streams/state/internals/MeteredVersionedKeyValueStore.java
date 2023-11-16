@@ -22,6 +22,7 @@ import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.p
 import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.prepareValueSerde;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
 
+
 import java.time.Instant;
 import java.util.Map;
 import java.util.Objects;
@@ -42,6 +43,7 @@ import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.query.RangeQuery;
+import org.apache.kafka.streams.query.VersionedKeyQuery;
 import org.apache.kafka.streams.query.internals.InternalQueryResultUtil;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StateSerdes;
@@ -111,6 +113,10 @@ public class MeteredVersionedKeyValueStore<K, V>
                     (query, positionBound, config, store) -> runKeyQuery(query, positionBound, config)
                 ),
                 mkEntry(
+                    VersionedKeyQuery.class,
+                    (query, positionBound, config, store) -> runVersionedKeyQuery(query, positionBound, config)
+                ),
+                mkEntry(
                     MultiVersionedKeyQuery.class,
                     (query, positionBound, config, store) -> runMultiVersionedKeyQuery(query, positionBound, config)
                 )
@@ -165,6 +171,7 @@ public class MeteredVersionedKeyValueStore<K, V>
                 throw new ProcessorStateException(message, e);
             }
         }
+
         @SuppressWarnings("unchecked")
         @Override
         public <R> QueryResult<R> query(final Query<R> query, final PositionBound positionBound, final QueryConfig config) {
@@ -214,26 +221,21 @@ public class MeteredVersionedKeyValueStore<K, V>
         }
 
         @SuppressWarnings("unchecked")
-        private <R> QueryResult<R> runMultiVersionedKeyQuery(final Query<R> query,
-                                                               final PositionBound positionBound,
-                                                               final QueryConfig config) {
+        private <R> QueryResult<R> runVersionedKeyQuery(final Query<R> query,
+                                                          final PositionBound positionBound,
+                                                          final QueryConfig config) {
             final QueryResult<R> result;
-            final MultiVersionedKeyQuery<K, V> typedKeyQuery = (MultiVersionedKeyQuery<K, V>) query;
-
-            final Instant fromTime = typedKeyQuery.fromTime().isPresent() ? typedKeyQuery.fromTime().get() : Instant.ofEpochMilli(Long.MIN_VALUE);
-            final Instant toTime = typedKeyQuery.toTime().isPresent() ? typedKeyQuery.toTime().get() : Instant.ofEpochMilli(Long.MAX_VALUE);
-            MultiVersionedKeyQuery<Bytes, byte[]> rawKeyQuery = MultiVersionedKeyQuery.withKey(keyBytes(typedKeyQuery.key()));
-            rawKeyQuery = rawKeyQuery.fromTime(fromTime).toTime(toTime);
-            if (!typedKeyQuery.isAscending()) {
-                rawKeyQuery = rawKeyQuery.withDescendingTimestamps();
+            final VersionedKeyQuery<K, V> typedKeyQuery = (VersionedKeyQuery<K, V>) query;
+            VersionedKeyQuery<Bytes, byte[]> rawKeyQuery = VersionedKeyQuery.withKey(keyBytes(typedKeyQuery.key()));
+            if (typedKeyQuery.asOfTimestamp().isPresent()) {
+                rawKeyQuery = rawKeyQuery.asOf(typedKeyQuery.asOfTimestamp().get());
             }
-
-            final QueryResult<ValueIterator<VersionedRecord<byte[]>>> rawResult = wrapped().query(rawKeyQuery, positionBound, config);
-            if (rawResult.isSuccess()) {
-                final MeteredMultiVersionedKeyQueryIterator<V> typedResult = new MeteredMultiVersionedKeyQueryIterator<V>(rawResult.getResult(),
-                                                                                                                          StoreQueryUtils.getDeserializeValue(plainValueSerdes));
-                final QueryResult<MeteredMultiVersionedKeyQueryIterator<V>> typedQueryResult =
-                    InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, typedResult);
+            final QueryResult<VersionedRecord<byte[]>> rawResult =
+                wrapped().query(rawKeyQuery, positionBound, config);
+            if (rawResult.isSuccess() && rawResult.getResult() != null) {
+                final VersionedRecord<V> versionedRecord = StoreQueryUtils.deserializeVersionedRecord(plainValueSerdes, rawResult.getResult());
+                final QueryResult<VersionedRecord<V>> typedQueryResult =
+                    InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, versionedRecord);
                 result = (QueryResult<R>) typedQueryResult;
             } else {
                 // the generic type doesn't matter, since failed queries have no result set.
@@ -241,6 +243,31 @@ public class MeteredVersionedKeyValueStore<K, V>
             }
             return result;
         }
+
+      @SuppressWarnings("unchecked")
+      private <R> QueryResult<R> runMultiVersionedKeyQuery(final Query<R> query, final PositionBound positionBound, final QueryConfig config) {
+          final QueryResult<R> result;
+          final MultiVersionedKeyQuery<K, V> typedKeyQuery = (MultiVersionedKeyQuery<K, V>) query;
+
+          final Instant fromTime = typedKeyQuery.fromTime().isPresent() ? typedKeyQuery.fromTime().get() : Instant.ofEpochMilli(Long.MIN_VALUE);
+          final Instant toTime = typedKeyQuery.toTime().isPresent() ? typedKeyQuery.toTime().get() : Instant.ofEpochMilli(Long.MAX_VALUE);
+          MultiVersionedKeyQuery<Bytes, byte[]> rawKeyQuery = MultiVersionedKeyQuery.withKey(keyBytes(typedKeyQuery.key()));
+          rawKeyQuery = rawKeyQuery.fromTime(fromTime).toTime(toTime);
+          if (!typedKeyQuery.isAscending()) {
+            rawKeyQuery = rawKeyQuery.withDescendingTimestamps();
+          }
+
+          final QueryResult<ValueIterator<VersionedRecord<byte[]>>> rawResult = wrapped().query(rawKeyQuery, positionBound, config);
+          if (rawResult.isSuccess()) {
+            final MeteredMultiVersionedKeyQueryIterator<V> typedResult = new MeteredMultiVersionedKeyQueryIterator<V>(rawResult.getResult(), StoreQueryUtils.getDeserializeValue(plainValueSerdes));
+            final QueryResult<MeteredMultiVersionedKeyQueryIterator<V>> typedQueryResult = InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, typedResult);
+            result = (QueryResult<R>) typedQueryResult;
+          } else {
+            // the generic type doesn't matter, since failed queries have no result set.
+            result = (QueryResult<R>) rawResult;
+          }
+          return result;
+      }
 
         @SuppressWarnings("unchecked")
         @Override

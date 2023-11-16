@@ -65,8 +65,10 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
       admin,
       topic,
       brokers,
+      controllerServers,
       replicaAssignment = Map(0 -> Seq(leaderBrokerId, followerBrokerId))
     )
+    TestUtils.waitUntilLeaderIsKnown(brokers, new TopicPartition(topic, 0))
     assertTrue(partitionLeaders.values.forall(_ == leaderBrokerId))
 
     val version = ApiKeys.FETCH.latestVersion()
@@ -107,6 +109,7 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
       admin,
       topic,
       brokers,
+      controllerServers,
       replicaAssignment = Map(0 -> Seq(leaderBrokerId, followerBrokerId))
     )
 
@@ -134,6 +137,7 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
       admin,
       topic,
       brokers,
+      controllerServers,
       replicaAssignment = Map(0 -> Seq(leaderBrokerId, followerBrokerId))
     )
 
