@@ -873,7 +873,7 @@ class MetadataCacheTest {
 
     // KRaft=true Type=FULL
     var updateMetadataRequest = updateMetadataRequestBuilder.apply()
-    ZkMetadataCache.maybeInjectDeletedPartitions(initialSnapshot, updateMetadataRequest)
+    ZkMetadataCache.maybeInjectDeletedPartitionsFromFullMetadataRequest(initialSnapshot, updateMetadataRequest)
     verifyTopicStates(updateMetadataRequest) { topicStates =>
       assertEquals(3, topicStates.size)
       assertEquals(3, topicStates("test-topic-1").values.toSeq.count(_.leader() == -2))
@@ -883,7 +883,7 @@ class MetadataCacheTest {
     // KRaft=false Type=FULL
     updateMetadataRequest = updateMetadataRequestBuilder.apply()
     updateMetadataRequest.data().setIsKRaftController(false)
-    ZkMetadataCache.maybeInjectDeletedPartitions(initialSnapshot, updateMetadataRequest)
+    ZkMetadataCache.maybeInjectDeletedPartitionsFromFullMetadataRequest(initialSnapshot, updateMetadataRequest)
     verifyTopicStates(updateMetadataRequest) { topicStates =>
       assertEquals(1, topicStates.size)
       assertFalse(topicStates.contains("test-topic-1"))
@@ -893,7 +893,7 @@ class MetadataCacheTest {
     // KRaft=true Type=INCREMENTAL
     updateMetadataRequest = updateMetadataRequestBuilder.apply()
     updateMetadataRequest.data().setType(AbstractControlRequest.Type.INCREMENTAL.toByte)
-    ZkMetadataCache.maybeInjectDeletedPartitions(initialSnapshot, updateMetadataRequest)
+    ZkMetadataCache.maybeInjectDeletedPartitionsFromFullMetadataRequest(initialSnapshot, updateMetadataRequest)
     verifyTopicStates(updateMetadataRequest) { topicStates =>
       assertEquals(1, topicStates.size)
       assertFalse(topicStates.contains("test-topic-1"))
@@ -903,7 +903,7 @@ class MetadataCacheTest {
     // KRaft=true Type=UNKNOWN
     updateMetadataRequest = updateMetadataRequestBuilder.apply()
     updateMetadataRequest.data().setType(AbstractControlRequest.Type.UNKNOWN.toByte)
-    ZkMetadataCache.maybeInjectDeletedPartitions(initialSnapshot, updateMetadataRequest)
+    ZkMetadataCache.maybeInjectDeletedPartitionsFromFullMetadataRequest(initialSnapshot, updateMetadataRequest)
     verifyTopicStates(updateMetadataRequest) { topicStates =>
       assertEquals(1, topicStates.size)
       assertFalse(topicStates.contains("test-topic-1"))
