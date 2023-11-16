@@ -56,6 +56,8 @@ public class AssignmentsManager {
      * being submitted to {@link AssignmentsManager}, if there
      * is no request in flight already.
      * The interval is reset when a new assignment is submitted.
+     * If {@link AssignReplicasToDirsRequest#MAX_ASSIGNMENTS_PER_REQUEST}
+     * is reached, we ignore this interval and dispatch immediately.
      */
     private static final long DISPATCH_INTERVAL_NS = TimeUnit.MILLISECONDS.toNanos(500);
 
@@ -67,7 +69,7 @@ public class AssignmentsManager {
     private final Supplier<Long> brokerEpochSupplier;
     private final KafkaEventQueue eventQueue;
 
-    // These variables should only be mutated from the event loop thread
+    // These variables should only be mutated from the KafkaEventQueue thread
     private Map<TopicIdPartition, AssignmentEvent> inflight = null;
     private Map<TopicIdPartition, AssignmentEvent> pending = new HashMap<>();
     private final ExponentialBackoff resendExponentialBackoff =
@@ -112,7 +114,7 @@ public class AssignmentsManager {
          */
         @Override
         public void handleException(Throwable e) {
-            throw new RuntimeException(e);
+            log.error("Unexpected error handling {}", this, e);
         }
     }
 
@@ -135,13 +137,13 @@ public class AssignmentsManager {
         public void run() throws Exception {
             AssignmentEvent existing = pending.getOrDefault(partition, null);
             if (existing != null && existing.timestampNs > timestampNs) {
-                if (log.isTraceEnabled()) {
-                    log.trace("Dropping assignment {} because it's older than {}", this, existing);
+                if (log.isDebugEnabled()) {
+                    log.debug("Dropping assignment {} because it's older than {}", this, existing);
                 }
                 return;
             }
-            if (log.isTraceEnabled()) {
-                log.trace("Received new assignment {}", this);
+            if (log.isDebugEnabled()) {
+                log.debug("Received new assignment {}", this);
             }
             pending.put(partition, this);
             if (inflight == null || inflight.isEmpty()) {
@@ -202,8 +204,8 @@ public class AssignmentsManager {
             }
             Map<TopicIdPartition, Uuid> assignment = inflight.entrySet().stream()
                     .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().dirId));
-            if (log.isTraceEnabled()) {
-                log.trace("Dispatching {} assignments:  {}", assignment.size(), assignment);
+            if (log.isDebugEnabled()) {
+                log.debug("Dispatching {} assignments:  {}", assignment.size(), assignment);
             }
             channelManager.sendRequest(new AssignReplicasToDirsRequest.Builder(
                     buildRequestData(brokerId, brokerEpochSupplier.get(), assignment)),
@@ -230,14 +232,16 @@ public class AssignmentsManager {
                 failedAttempts = 0;
                 AssignReplicasToDirsResponseData data = ((AssignReplicasToDirsResponse) response.responseBody()).data();
                 Set<AssignmentEvent> failed = filterFailures(data, inflight);
-                log.warn("Re-queueing assignments: ", failed);
+                log.warn("Re-queueing assignments: {}", failed);
                 if (!failed.isEmpty()) {
                     for (AssignmentEvent event : failed) {
                         pending.put(event.partition, event);
                     }
                 }
                 inflight = null;
-                scheduleDispatch();
+                if (!pending.isEmpty()) {
+                    scheduleDispatch();
+                }
             }
         }
     }
@@ -253,44 +257,50 @@ public class AssignmentsManager {
         }
         @Override
         public void onComplete(ClientResponse response) {
-            if (log.isTraceEnabled()) {
-                log.trace("Received controller response: {}", response);
+            if (log.isDebugEnabled()) {
+                log.debug("Received controller response: {}", response);
             }
             appendResponseEvent(response);
         }
         void appendResponseEvent(ClientResponse response) {
-            eventQueue.append(new AssignmentResponseEvent(response));
+            eventQueue.prepend(new AssignmentResponseEvent(response));
         }
     }
 
     private void scheduleDispatch() {
-        scheduleDispatch(time.nanoseconds() + DISPATCH_INTERVAL_NS);
+        if (pending.size() < AssignReplicasToDirsRequest.MAX_ASSIGNMENTS_PER_REQUEST) {
+            scheduleDispatch(DISPATCH_INTERVAL_NS);
+        } else {
+            log.debug("Too many pending assignments, dispatching immediately");
+            eventQueue.enqueue(EventQueue.EventInsertionType.APPEND, DispatchEvent.TAG + "-immediate",
+                    new EventQueue.NoDeadlineFunction(), new DispatchEvent());
+        }
     }
 
-    private void scheduleDispatch(long deadlineNs) {
+    private void scheduleDispatch(long delayNs) {
         if (log.isTraceEnabled()) {
-            log.trace("Scheduling dispatch in {}ns", deadlineNs - time.nanoseconds());
+            log.debug("Scheduling dispatch in {}ns", delayNs);
         }
         eventQueue.enqueue(EventQueue.EventInsertionType.DEFERRED, DispatchEvent.TAG,
-                new EventQueue.LatestDeadlineFunction(deadlineNs), new DispatchEvent());
+                new EventQueue.LatestDeadlineFunction(time.nanoseconds() + delayNs), new DispatchEvent());
     }
 
     private void requeueAllAfterFailure() {
         if (inflight != null) {
-            log.trace("Re-queueing all in-flight assignments after failure");
+            log.debug("Re-queueing all in-flight assignments after failure");
             for (AssignmentEvent event : inflight.values()) {
                 pending.put(event.partition, event);
             }
             inflight = null;
             ++failedAttempts;
             long backoffNs = TimeUnit.MILLISECONDS.toNanos(resendExponentialBackoff.backoff(failedAttempts));
-            scheduleDispatch(time.nanoseconds() + DISPATCH_INTERVAL_NS + backoffNs);
+            scheduleDispatch(DISPATCH_INTERVAL_NS + backoffNs);
         }
     }
 
     private static boolean responseIsError(ClientResponse response) {
         if (response == null) {
-            log.trace("Response is null");
+            log.debug("Response is null");
             return true;
         }
         if (response.authenticationException() != null) {
