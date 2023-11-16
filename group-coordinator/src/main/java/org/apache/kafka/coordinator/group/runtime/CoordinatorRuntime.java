@@ -34,19 +34,17 @@ import org.apache.kafka.server.util.timer.TimerTask;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.slf4j.Logger;
 
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.OptionalLong;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.function.Supplier;
 
 /**
  * The CoordinatorRuntime provides a framework to implement coordinators such as the group coordinator
@@ -660,8 +658,20 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         @Override
         public void run() {
             try {
+                runAsync().get();
+            } catch (Throwable t) {
+                complete(t);
+            }
+        }
+
+        /**
+         * Called by the CoordinatorEventProcessor when the event is executed.
+         */
+        @Override
+        public CompletableFuture<Void> runAsync() {
+            try {
                 // Get the context of the coordinator or fail if the coordinator is not in active state.
-                withActiveContextOrThrow(tp, context -> {
+                return withActiveContextOrThrowAsync(tp, context -> {
                     long prevLastWrittenOffset = context.lastWrittenOffset;
 
                     // Execute the operation.
@@ -677,6 +687,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                         } else {
                             complete(null);
                         }
+                        return CompletableFuture.completedFuture(null);
                     } else {
                         // If the records are not empty, first, they are applied to the state machine,
                         // second, then are written to the partition/log, and finally, the response
@@ -689,23 +700,31 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
 
                             // Write the records to the log and update the last written
                             // offset.
-                            long offset = partitionWriter.append(tp, result.records());
-                            context.updateLastWrittenOffset(offset);
+                            return partitionWriter.appendAsync(tp, result.records()).thenAccept(offset -> {
+                                context.updateLastWrittenOffset(offset);
 
-                            // Add the response to the deferred queue.
-                            if (!future.isDone()) {
-                                context.deferredEventQueue.add(offset, this);
-                            } else {
-                                complete(null);
-                            }
+                                // Add the response to the deferred queue.
+                                if (!future.isDone()) {
+                                    context.deferredEventQueue.add(offset, this);
+                                } else {
+                                    complete(null);
+                                }
+                            }).whenComplete((none, t) -> {
+                                if (t != null) {
+                                    context.revertLastWrittenOffset(prevLastWrittenOffset);
+                                    complete(t);
+                                }
+                            });
                         } catch (Throwable t) {
                             context.revertLastWrittenOffset(prevLastWrittenOffset);
                             complete(t);
+                            return CompletableFuture.completedFuture(null);
                         }
                     }
                 });
             } catch (Throwable t) {
                 complete(t);
+                return CompletableFuture.completedFuture(null);
             }
         }
 
@@ -985,6 +1004,107 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     }
 
     /**
+     * It's somewhat similar to EventAccumulator, but it doesn't keep a queue of
+     * running / runnable ops, the running ops are just running and runnable ops
+     * are scheduled back to a request handler thread.
+     * To keep the example small, we just synchronize event.run functionality, but
+     * this can completely get rid of events and just run arbitrary multi-stage
+     * execution on the request pool.
+     * The usage pattern is similar to <code>inLock</code> functionality, only for asynchronous functions.
+     * // TODO: think through shutdown flow, maybe it just works out of box, because there are no new threads.
+     */
+    static private class NonBlockingSynchronizer<K> {
+
+        private final Map<K, Queue<Supplier<CompletableFuture<Void>>>> waitingOps = new HashMap<>();
+
+        /**
+         * Synchronize operations with the same key.  The method is supposed to run on a request handler
+         * thread.
+         * @param key The key
+         * @param op The operation to run
+         */
+        public void runSynchronized(K key, Supplier<CompletableFuture<Void>> op) {
+            synchronized (waitingOps) {
+                // Create the ops queue, if needed.  An existing ops queue means the op for this key
+                // is already executing, so we must wait.
+                boolean[] canExecute = new boolean[] { false };
+                Queue<Supplier<CompletableFuture<Void>>> ops = waitingOps.computeIfAbsent(key, k -> {
+                    canExecute[0] = true;
+                    return new LinkedList<>();
+                });
+
+                if (!canExecute[0]) {
+                    ops.add(op);
+                    return;
+                }
+            }
+
+            // This op can be executed directly.
+            executeOp(key, op);
+        }
+
+        /**
+         * Wrap the function with the request handler pool execution context -- when the wrapper function
+         * is executed, the wrapped function is scheduled to request handler pool.
+         * @param fun The wrapped function
+         * @return The wrapper function
+         */
+        private Consumer<Supplier<CompletableFuture<Void>>> wrap(Consumer<Supplier<CompletableFuture<Void>>> fun) {
+            // TODO: this doesn't work right now due to circular dependency, but this can be solved.
+            // TODO: return KafkaRequestHandler.wrap(fun);
+            return fun;
+        }
+
+        /**
+         * Execute operation
+         * @param key The key
+         * @param op The operation
+         */
+        private void executeOp(K key, Supplier<CompletableFuture<Void>> op) {
+            // Wrap the execution for the next op to run on a request handler thread.
+            Consumer<Supplier<CompletableFuture<Void>>> wrappedExecuteOp = wrap(nextOp -> {
+                executeOp(key, nextOp);
+            });
+
+            // Callback to be called on completion.
+            BiConsumer<Void, Throwable> completeOp = (none, t) -> {
+                // TODO: log exception
+
+                // Regardless of the previous operation outcome, schedule the next one, if any.
+                Supplier<CompletableFuture<Void>> nextOp = null;
+                synchronized (waitingOps) {
+                    Queue<Supplier<CompletableFuture<Void>>> ops = waitingOps.get(key);
+                    if (ops == null) {
+                        // This cannot happen, unless we have a bug.
+                        // TODO: log some bad error.
+                        return;
+                    }
+
+                    nextOp = ops.poll();
+
+                    if (nextOp == null) {
+                        // No more ops to run.  Remove the queue to indicate that a new op
+                        // can execute.
+                        waitingOps.remove(key);
+                        return;
+                    }
+                }
+
+                // Execute the next op outside the lock.
+                wrappedExecuteOp.accept(nextOp);
+            };
+
+            try {
+                // Execute the op.
+                op.get().whenComplete(completeOp);
+            } catch (Throwable t) {
+                // Failed synchronously, complete inline.
+                completeOp.accept(null, t);
+            }
+        }
+  }
+
+    /**
      * The log prefix.
      */
     private final String logPrefix;
@@ -1057,6 +1177,12 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     private volatile MetadataImage metadataImage = MetadataImage.EMPTY;
 
     /**
+     * The non-blocking synchronizer to make sure that operations working on the same
+     * partition are not executed concurrently.
+     */
+    private final NonBlockingSynchronizer<TopicPartition> synchronizer = new NonBlockingSynchronizer<>();
+
+    /**
      * Constructor.
      *
      * @param logPrefix                         The log prefix.
@@ -1110,11 +1236,12 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
      * @throws NotCoordinatorException If the event processor is closed.
      */
     private void enqueue(CoordinatorEvent event) {
-        try {
-            processor.enqueue(event);
-        } catch (RejectedExecutionException ex) {
-            throw new NotCoordinatorException("Can't accept an event because the processor is closed", ex);
-        }
+        synchronizer.runSynchronized(event.key(), () -> event.runAsync().whenComplete((none, t) -> {
+            if (t != null) {
+                log.error("Failed to run event {} due to: {}.", event, t.getMessage(), t);
+                event.complete(t);
+            }
+        }));
     }
 
     /**
@@ -1192,6 +1319,40 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             }
         } finally {
             context.lock.unlock();
+        }
+    }
+
+    /**
+     * Calls the provided function with the context iff the context is active; throws
+     * an exception otherwise. This method ensures that the context lock is acquired
+     * before calling the function and releases afterwards.
+     *
+     * @param tp    The topic partition.
+     * @param asyncFunc  The function that will receive the context.
+     * @throws NotCoordinatorException
+     * @throws CoordinatorLoadInProgressException
+     */
+    private CompletableFuture<Void> withActiveContextOrThrowAsync(
+            TopicPartition tp,
+            Function<CoordinatorContext, CompletableFuture<Void>> asyncFunc
+    ) throws NotCoordinatorException, CoordinatorLoadInProgressException {
+        CoordinatorContext context = contextOrThrow(tp);
+
+        CompletableFuture<Void> result = null;
+        try {
+            context.lock.lock();
+            if (context.state == CoordinatorState.ACTIVE) {
+                // TODO: it's not a good practice to hold lock around async calls, should use event accumulator to synchronize
+                result = asyncFunc.apply(context).whenComplete((none, t) -> context.lock.unlock());
+                return result;
+            } else if (context.state == CoordinatorState.LOADING) {
+                throw Errors.COORDINATOR_LOAD_IN_PROGRESS.exception();
+            } else {
+                throw Errors.NOT_COORDINATOR.exception();
+            }
+        } finally {
+            if (result == null)
+                context.lock.unlock();
         }
     }
 

@@ -20,6 +20,8 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
 
 /**
  * A simple interface to write records to Partitions/Logs. It contains the minimum
@@ -92,4 +94,20 @@ public interface PartitionWriter<T> {
         TopicPartition tp,
         List<T> records
     ) throws KafkaException;
+
+    /**
+     * Write records to the partitions. Records are written in one batch so
+     * atomicity is guaranteed.
+     *
+     * @param tp        The partition to write records to.
+     * @param records   The list of records. The records are written in a single batch.
+     * @return The future log end offset right after the written records.
+     * @throws KafkaException Any KafkaException caught during the write operation.
+     */
+    default CompletableFuture<Long> appendAsync(
+            TopicPartition tp,
+            List<T> records
+    ) throws KafkaException {
+        return CompletableFuture.completedFuture(append(tp, records));
+    }
 }
