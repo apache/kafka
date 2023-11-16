@@ -5740,13 +5740,16 @@ class KafkaApisTest extends Logging {
   @ParameterizedTest
   @ApiKeyVersionsSource(apiKey = ApiKeys.LIST_GROUPS)
   def testListGroupsRequest(version: Short): Unit = {
+    System.out.println("Version is " + version);
     val listGroupsRequest = new ListGroupsRequestData()
       .setStatesFilter(if (version >= 4) List("Stable", "Empty").asJava else List.empty.asJava)
+      .setTypesFilter(if (version >= 5) List("generic", "consumer").asJava else List.empty.asJava)
 
     val requestChannelRequest = buildRequest(new ListGroupsRequest.Builder(listGroupsRequest).build(version))
 
     val expectedListGroupsRequest = new ListGroupsRequestData()
       .setStatesFilter(if (version >= 4) List("Stable", "Empty").asJava else List.empty.asJava)
+      .setTypesFilter(if (version >= 5) List("generic", "consumer").asJava else List.empty.asJava)
 
     val future = new CompletableFuture[ListGroupsResponseData]()
     when(groupCoordinator.listGroups(
@@ -5760,12 +5763,19 @@ class KafkaApisTest extends Logging {
       .setGroups(List(
         new ListGroupsResponseData.ListedGroup()
           .setGroupId("group1")
+          .setProtocolType("protocol1")
           .setGroupState(if (version >= 4) "Stable" else "")
-          .setProtocolType("protocol1"),
+          .setGroupType(if (version >= 5) "consumer" else ""),
         new ListGroupsResponseData.ListedGroup()
           .setGroupId("group2")
+          .setProtocolType("protocol2")
           .setGroupState(if (version >= 4) "Empty" else "")
-          .setProtocolType("qwerty")
+          .setGroupType(if (version >= 5) "generic" else ""),
+        new ListGroupsResponseData.ListedGroup()
+          .setGroupId("group3")
+          .setProtocolType("protocol3")
+          .setGroupState(if (version >= 4) "Stable" else "")
+          .setGroupType(if (version >= 5) "generic" else ""),
       ).asJava)
 
     future.complete(expectedListGroupsResponse)
@@ -5777,11 +5787,13 @@ class KafkaApisTest extends Logging {
   def testListGroupsRequestFutureFailed(): Unit = {
     val listGroupsRequest = new ListGroupsRequestData()
       .setStatesFilter(List("Stable", "Empty").asJava)
+      .setTypesFilter(List("generic", "consumer").asJava)
 
     val requestChannelRequest = buildRequest(new ListGroupsRequest.Builder(listGroupsRequest).build())
 
     val expectedListGroupsRequest = new ListGroupsRequestData()
       .setStatesFilter(List("Stable", "Empty").asJava)
+      .setTypesFilter(List("generic", "consumer").asJava)
 
     val future = new CompletableFuture[ListGroupsResponseData]()
     when(groupCoordinator.listGroups(
