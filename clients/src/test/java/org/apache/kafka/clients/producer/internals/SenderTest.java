@@ -19,6 +19,7 @@ package org.apache.kafka.clients.producer.internals;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientResponse;
+import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.NodeApiVersions;
@@ -112,6 +113,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.apache.kafka.clients.producer.internals.ProducerTestUtils.runUntil;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -144,6 +146,8 @@ public class SenderTest {
 
     private TopicPartition tp0 = new TopicPartition("test", 0);
     private TopicPartition tp1 = new TopicPartition("test", 1);
+
+    private TopicPartition tp2 = new TopicPartition("test", 2);
     private MockTime time = new MockTime();
     private int batchSize = 16 * 1024;
     private ProducerMetadata metadata = new ProducerMetadata(0, 0, Long.MAX_VALUE, TOPIC_IDLE_MS,
@@ -3234,6 +3238,190 @@ public class SenderTest {
         }
     }
 
+    /**
+     * Test the scenario that FetchResponse returns NOT_LEADER_OR_FOLLOWER, indicating change in leadership, but it
+     * does not contain new leader info(defined in KIP-951).
+     */
+    @Test
+    public void testWhenProduceResponseReturnsWithALeaderShipChangeErrorButNoNewLeaderInformation()
+        throws InterruptedException {
+        // Setup 3 partitions, tp0 & tp1 return with NOT_LEADER_OR_FOLLOWER, tp2 doesn't return an error.
+        Metrics m = new Metrics();
+        SenderMetricsRegistry senderMetrics = new SenderMetricsRegistry(m);
+        try {
+            // SETUP
+            String metricGrpName = "producer-metrics-test-stats-1";
+            long totalSize = 1024 * 1024;
+            BufferPool pool = new BufferPool(totalSize, batchSize, metrics, time,
+                metricGrpName);
+            long retryBackoffMaxMs = 100L;
+            // lingerMs is 0 to send batch as soon as any records are available on it.
+            this.accumulator = new RecordAccumulator(logContext, batchSize,
+                CompressionType.NONE, 0, 10L, retryBackoffMaxMs,
+                DELIVERY_TIMEOUT_MS, metrics, metricGrpName, time, apiVersions, null, pool);
+            Sender sender = new Sender(logContext, client, metadata, this.accumulator, false,
+                MAX_REQUEST_SIZE, ACKS_ALL,
+                10, senderMetrics, time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, null,
+                apiVersions);
+            // Update metadata with leader-epochs.
+            int tp0LeaderEpoch = 100;
+            int tp1LeaderEpoch = 200;
+            int tp2LeaderEpoch = 300;
+            this.client.updateMetadata(
+                RequestTestUtils.metadataUpdateWith(1, Collections.singletonMap("test", 3),
+                    tp -> {
+                        if (tp0.equals(tp)) {
+                            return tp0LeaderEpoch;
+                        }  else if (tp1.equals(tp)) {
+                            return tp1LeaderEpoch;
+                        } else if (tp2.equals(tp)) {
+                            return tp2LeaderEpoch;
+                        } else {
+                            throw new RuntimeException("unexpected tp " + tp);
+                        }
+                    }));
+            Cluster startingMetadataCluster = metadata.fetch();
+
+            // Produce to tp0/1/2, where NO_LEADER_OR_FOLLOWER without new leader info is returned for tp0/1, and tp2 is returned without errors.
+            Future<RecordMetadata> futureIsProducedTp0 = appendToAccumulator(tp0, 0L, "key", "value");
+            Future<RecordMetadata> futureIsProducedTp1 = appendToAccumulator(tp1, 0L, "key", "value");
+            Future<RecordMetadata> futureIsProducedTp2 = appendToAccumulator(tp2, 0L, "key", "value");
+            sender.runOnce(); // connect
+            sender.runOnce(); // send produce request
+            assertEquals(1, sender.inFlightBatches(tp0).size());
+            assertEquals(1, sender.inFlightBatches(tp1).size());
+            assertEquals(1, sender.inFlightBatches(tp2).size());
+            assertTrue(client.hasInFlightRequests());
+            Map<TopicPartition, OffsetAndError> responses = new LinkedHashMap<>();
+            responses.put(tp0, new OffsetAndError(-1, Errors.NOT_LEADER_OR_FOLLOWER));
+            responses.put(tp1, new OffsetAndError(-1, Errors.NOT_LEADER_OR_FOLLOWER));
+            responses.put(tp2, new OffsetAndError(100, Errors.NONE));
+            client.respond(produceResponse(responses));
+            sender.runOnce(); // receive produce response, batch scheduled for retry
+            assertTrue(!futureIsProducedTp0.isDone(), "Produce request to tp0 should be unfinished.");
+            assertTrue(!futureIsProducedTp1.isDone(), "Produce request to tp1 should be unfinished.");
+            assertTrue(futureIsProducedTp2.isDone(), "Produce request to tp0 should be done.");
+
+            // Validate metadata is unchanged as new leader info wasn't received.
+            assertEquals(startingMetadataCluster, metadata.fetch());
+
+            // Validate metadata-refresh is requested as NOT_LEADER_OR_FOLLOWER received earlier
+            assertTrue(metadata.updateRequested());
+
+            // TEST that a subsequent retry waits the backoff period as the new leader info is yet not available.
+            sender.runOnce(); //send produce request
+            assertEquals(0, sender.inFlightBatches(tp0).size());
+            assertEquals(0, sender.inFlightBatches(tp1).size());
+            assertFalse(client.hasInFlightRequests());
+        } finally {
+            m.close();
+        }
+    }
+
+    /**
+     * Test the scenario that FetchResponse returns NOT_LEADER_OR_FOLLOWER, indicating change in leadership, along with
+     * new leader info(defined in KIP-951).
+     */
+    @Test
+    public void testWhenProduceResponseReturnsWithALeaderShipChangeErrorAndNewLeaderInformation()
+        throws InterruptedException {
+        // Setup 3 partitions, tp0 & tp1 return with NOT_LEADER_OR_FOLLOWER, tp2 doesn't return an error.
+        Metrics m = new Metrics();
+        SenderMetricsRegistry senderMetrics = new SenderMetricsRegistry(m);
+        try {
+            // SETUP
+            String metricGrpName = "producer-metrics-test-stats-1";
+            long totalSize = 1024 * 1024;
+            BufferPool pool = new BufferPool(totalSize, batchSize, metrics, time,
+                metricGrpName);
+            long retryBackoffMaxMs = 100L;
+            // lingerMs is 0 to send batch as soon as any records are available on it.
+            this.accumulator = new RecordAccumulator(logContext, batchSize,
+                CompressionType.NONE, 0, 10L, retryBackoffMaxMs,
+                DELIVERY_TIMEOUT_MS, metrics, metricGrpName, time, apiVersions, null, pool);
+            Sender sender = new Sender(logContext, client, metadata, this.accumulator, false,
+                MAX_REQUEST_SIZE, ACKS_ALL,
+                10, senderMetrics, time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, null,
+                apiVersions);
+            // Update metadata with leader-epochs.
+            int tp0LeaderEpoch = 100;
+            int tp1LeaderEpoch = 200;
+            int tp2LeaderEpoch = 300;
+            this.client.updateMetadata(
+                RequestTestUtils.metadataUpdateWith(1, Collections.singletonMap("test", 3),
+                    tp -> {
+                        if (tp0.equals(tp)) {
+                            return tp0LeaderEpoch;
+                        }  else if (tp1.equals(tp)) {
+                            return tp1LeaderEpoch;
+                        } else if (tp2.equals(tp)) {
+                            return tp2LeaderEpoch;
+                        } else {
+                            throw new RuntimeException("unexpected tp " + tp);
+                        }
+                    }));
+            Cluster startingMetadataCluster = metadata.fetch();
+
+            // Produce to tp0/1/2, where NO_LEADER_OR_FOLLOWER with new leader info is returned for tp0/1, and tp2 is returned without errors.
+            Future<RecordMetadata> futureIsProducedTp0 = appendToAccumulator(tp0, 0L, "key", "value");
+            Future<RecordMetadata> futureIsProducedTp1 = appendToAccumulator(tp1, 0L, "key", "value");
+            Future<RecordMetadata> futureIsProducedTp2 = appendToAccumulator(tp2, 0L, "key", "value");
+            sender.runOnce(); // connect
+            sender.runOnce(); // send produce request
+            assertEquals(1, sender.inFlightBatches(tp0).size());
+            assertEquals(1, sender.inFlightBatches(tp1).size());
+            assertEquals(1, sender.inFlightBatches(tp2).size());
+            assertTrue(client.hasInFlightRequests());
+
+            Node newNodeForTp0 = new Node(9990, "newhost9990", 9990, "newrack9990");
+            Node newNodeForTp1 = new Node(9991, "newhost9991", 9991, "newrack9991");
+            List<Node> newNodes = Arrays.asList(newNodeForTp0, newNodeForTp1);
+
+            Map<TopicPartition, OffsetAndError> responses = new LinkedHashMap<>();
+            responses.put(tp0, new OffsetAndError(-1, Errors.NOT_LEADER_OR_FOLLOWER));
+            responses.put(tp1, new OffsetAndError(-1, Errors.NOT_LEADER_OR_FOLLOWER));
+            responses.put(tp2, new OffsetAndError(100, Errors.NONE));
+
+            Map<TopicPartition, ProduceResponseData.LeaderIdAndEpoch> partitionLeaderInfo = new HashMap<>();
+            ProduceResponseData.LeaderIdAndEpoch tp0LeaderInfo = new ProduceResponseData.LeaderIdAndEpoch();
+            tp0LeaderInfo.setLeaderEpoch(tp0LeaderEpoch + 1);
+            tp0LeaderInfo.setLeaderId(newNodeForTp0.id());
+            partitionLeaderInfo.put(tp0, tp0LeaderInfo);
+            ProduceResponseData.LeaderIdAndEpoch tp1LeaderInfo = new ProduceResponseData.LeaderIdAndEpoch();
+            tp1LeaderInfo.setLeaderEpoch(tp1LeaderEpoch + 1);
+            tp1LeaderInfo.setLeaderId(newNodeForTp1.id());
+            partitionLeaderInfo.put(tp1, tp1LeaderInfo);
+
+            client.respond(produceResponse(responses, partitionLeaderInfo, newNodes));
+            sender.runOnce(); // receive produce response, batch scheduled for retry
+            assertTrue(!futureIsProducedTp0.isDone(), "Produce request to tp0 should be unfinished.");
+            assertTrue(!futureIsProducedTp1.isDone(), "Produce request to tp1 should be unfinished.");
+            assertTrue(futureIsProducedTp2.isDone(), "Produce request to tp0 should be done.");
+
+            // Validate metadata is unchanged as new leader info wasn't received.
+            assertNotEquals(startingMetadataCluster, metadata.fetch());
+            // Validate metadata cached has updated leader info for tp0/1.
+            Metadata.LeaderAndEpoch tp0NewLeaderInfo = metadata.currentLeader(tp0);
+            assertEquals(newNodeForTp0, tp0NewLeaderInfo.leader.get());
+            assertEquals(tp0LeaderEpoch + 1, tp0NewLeaderInfo.epoch.get());
+            Metadata.LeaderAndEpoch tp1NewLeaderInfo = metadata.currentLeader(tp1);
+            assertEquals(newNodeForTp1, tp1NewLeaderInfo.leader.get());
+            assertEquals(tp1LeaderEpoch + 1, tp1NewLeaderInfo.epoch.get());
+
+            // Validate metadata-refresh is requested as NOT_LEADER_OR_FOLLOWER received earlier
+            assertTrue(metadata.updateRequested());
+
+            // TEST that a subsequent retry skips the backoff as a new leader information is available.
+            sender.runOnce(); //send produce request
+            assertEquals(1, sender.inFlightBatches(tp0).size());
+            assertEquals(1, sender.inFlightBatches(tp1).size());
+            assertTrue(client.hasInFlightRequests());
+        } finally {
+            m.close();
+        }
+    }
+
+
     private void verifyErrorMessage(ProduceResponse response, String expectedMessage) throws Exception {
         Future<RecordMetadata> future = appendToAccumulator(tp0, 0L, "key", "value");
         sender.runOnce(); // connect
@@ -3362,6 +3550,13 @@ public class SenderTest {
     }
 
     private ProduceResponse produceResponse(Map<TopicPartition, OffsetAndError> responses) {
+        return produceResponse(responses, null, null);
+    }
+
+    /**
+     * It creates response with new leader info and new nodes, as stated in KIP-951
+     */
+    private ProduceResponse produceResponse(Map<TopicPartition, OffsetAndError> responses, Map<TopicPartition, ProduceResponseData.LeaderIdAndEpoch> partitionLeaderInfo, List<Node> nodes) {
         ProduceResponseData data = new ProduceResponseData();
 
         for (Map.Entry<TopicPartition, OffsetAndError> entry : responses.entrySet()) {
@@ -3380,11 +3575,27 @@ public class SenderTest {
                     .setErrorCode(offsetAndError.error.code())
                     .setRecordErrors(offsetAndError.recordErrors);
 
+            if (partitionLeaderInfo != null && partitionLeaderInfo.containsKey(topicPartition)) {
+                partitionData.setCurrentLeader(partitionLeaderInfo.get(topicPartition));
+            }
+
             topicData.partitionResponses().add(partitionData);
+        }
+
+        if (nodes != null) {
+            nodes.stream().map(n -> {
+                ProduceResponseData.NodeEndpoint nodeEndPt = new ProduceResponseData.NodeEndpoint();
+                nodeEndPt.setNodeId(n.id());
+                nodeEndPt.setPort(n.port());
+                nodeEndPt.setHost(n.host());
+                nodeEndPt.setRack(n.rack());
+                return nodeEndPt;
+            }).forEach(nodeEndpoint -> data.nodeEndpoints().add(nodeEndpoint));
         }
 
         return new ProduceResponse(data);
     }
+
     private ProduceResponse produceResponse(TopicPartition tp, long offset, Errors error, int throttleTimeMs) {
         return produceResponse(tp, offset, error, throttleTimeMs, -1L, null);
     }

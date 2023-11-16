@@ -22,31 +22,37 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.nio.ByteBuffer;
 
+/**
+ * A client telemetry payload as sent by the client to the telemetry receiver. The payload is
+ * received by the broker's {@link ClientTelemetryReceiver} implementation.
+ */
 @InterfaceStability.Evolving
 public interface ClientTelemetryPayload {
 
     /**
+     * Method returns the client's instance id.
+     *
      * @return Client's instance id.
      */
     Uuid clientInstanceId();
 
     /**
-     * Indicates whether client is terminating, e.g., the last metrics push from this client instance.
-     * <p>
-     *To avoid the receiving broker’s metrics rate-limiter discarding this out-of-profile push, the
-     * PushTelemetryRequest.Terminating field must be set to true. A broker must only allow one such
-     * unthrottled metrics push for each combination of client instance ID and SubscriptionId.
+     * Indicates whether the client is terminating and thus making its last metrics push.
      *
      * @return {@code true} if client is terminating, else false
      */
     boolean isTerminating();
 
     /**
+     * Method returns the content-type format of the metrics data which is being sent by the client.
+     *
      * @return Metrics data content-type/serialization format.
      */
     String contentType();
 
     /**
+     * Method returns the serialized metrics data as received by the client.
+     *
      * @return Serialized metrics data.
      */
     ByteBuffer data();

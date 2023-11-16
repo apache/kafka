@@ -16,10 +16,14 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import java.util.List;
+import java.util.stream.Collectors;
+import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.FetchSessionHandler;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.NetworkClientUtils;
+import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
@@ -47,7 +51,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Predicate;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.consumer.internals.FetchUtils.requestMetadataUpdate;
 
@@ -70,13 +73,16 @@ public abstract class AbstractFetch implements Closeable {
 
     private final Map<Integer, FetchSessionHandler> sessionHandlers;
 
+    private final ApiVersions apiVersions;
+
     public AbstractFetch(final LogContext logContext,
                          final ConsumerMetadata metadata,
                          final SubscriptionState subscriptions,
                          final FetchConfig fetchConfig,
                          final FetchBuffer fetchBuffer,
                          final FetchMetricsManager metricsManager,
-                         final Time time) {
+                         final Time time,
+                         final ApiVersions apiVersions) {
         this.log = logContext.logger(AbstractFetch.class);
         this.logContext = logContext;
         this.metadata = metadata;
@@ -88,6 +94,7 @@ public abstract class AbstractFetch implements Closeable {
         this.nodesWithPendingFetchRequests = new HashSet<>();
         this.metricsManager = metricsManager;
         this.time = time;
+        this.apiVersions = apiVersions;
     }
 
     /**
@@ -159,6 +166,7 @@ public abstract class AbstractFetch implements Closeable {
             final Set<TopicPartition> partitions = new HashSet<>(responseData.keySet());
             final FetchMetricsAggregator metricAggregator = new FetchMetricsAggregator(metricsManager, partitions);
 
+            Map<TopicPartition, Metadata.LeaderIdAndEpoch> partitionsWithUpdatedLeaderInfo = new HashMap<>();
             for (Map.Entry<TopicPartition, FetchResponseData.PartitionData> entry : responseData.entrySet()) {
                 TopicPartition partition = entry.getKey();
                 FetchRequest.PartitionData requestData = data.sessionPartitions().get(partition);
@@ -186,6 +194,15 @@ public abstract class AbstractFetch implements Closeable {
                 log.debug("Fetch {} at offset {} for partition {} returned fetch data {}",
                         fetchConfig.isolationLevel, fetchOffset, partition, partitionData);
 
+                Errors partitionError = Errors.forCode(partitionData.errorCode());
+                if (partitionError == Errors.NOT_LEADER_OR_FOLLOWER || partitionError == Errors.FENCED_LEADER_EPOCH) {
+                    log.debug("For {}, received error {}, with leaderIdAndEpoch {}", partition, partitionError, partitionData.currentLeader());
+                    if (partitionData.currentLeader().leaderId() != -1 && partitionData.currentLeader().leaderEpoch() != -1) {
+                        partitionsWithUpdatedLeaderInfo.put(partition, new Metadata.LeaderIdAndEpoch(
+                            Optional.of(partitionData.currentLeader().leaderId()), Optional.of(partitionData.currentLeader().leaderEpoch())));
+                    }
+                }
+
                 CompletedFetch completedFetch = new CompletedFetch(
                         logContext,
                         subscriptions,
@@ -196,6 +213,20 @@ public abstract class AbstractFetch implements Closeable {
                         fetchOffset,
                         requestVersion);
                 fetchBuffer.add(completedFetch);
+            }
+
+            if (!partitionsWithUpdatedLeaderInfo.isEmpty()) {
+                List<Node> leaderNodes = response.data().nodeEndpoints().stream()
+                    .map(e -> new Node(e.nodeId(), e.host(), e.port(), e.rack()))
+                    .filter(e -> !e.equals(Node.noNode()))
+                    .collect(Collectors.toList());
+                Set<TopicPartition> updatedPartitions = metadata.updatePartitionLeadership(partitionsWithUpdatedLeaderInfo, leaderNodes);
+                updatedPartitions.forEach(
+                    tp -> {
+                        log.debug("For {}, as the leader was updated, position will be validated.", tp);
+                        subscriptions.maybeValidatePositionForCurrentLeader(apiVersions, tp, metadata.currentLeader(tp));
+                    }
+                );
             }
 
             metricsManager.recordLatency(resp.requestLatencyMs());

@@ -133,7 +133,9 @@ public abstract class AbstractJoinIntegrationTest {
         new Input<>(INPUT_TOPIC_LEFT, null, 12),
         new Input<>(INPUT_TOPIC_RIGHT, null, 13),
         new Input<>(INPUT_TOPIC_RIGHT, "d", 14),
-        new Input<>(INPUT_TOPIC_LEFT, "D", 15)
+        new Input<>(INPUT_TOPIC_LEFT, "D", 15),
+        new Input<>(INPUT_TOPIC_LEFT, null, "E", 16),
+        new Input<>(INPUT_TOPIC_RIGHT, null, "e", 17)
     );
 
     // used for stream-stream self joins where only one input topic is needed
@@ -297,6 +299,12 @@ public abstract class AbstractJoinIntegrationTest {
         Input(final String topic, final V value, final long timestamp) {
             this.topic = topic;
             record = KeyValue.pair(ANY_UNIQUE_KEY, value);
+            this.timestamp = timestamp;
+        }
+
+        Input(final String topic, final Long key, final V value, final long timestamp) {
+            this.topic = topic;
+            record = KeyValue.pair(key, value);
             this.timestamp = timestamp;
         }
     }

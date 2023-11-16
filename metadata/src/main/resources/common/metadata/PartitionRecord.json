@@ -17,9 +17,9 @@
   "apiKey": 3,
   "type": "metadata",
   "name": "PartitionRecord",
-  "validVersions": "0-1",
-  // Version 1 implements Eligiable Leader Replicas and LastKnownELR as described in KIP-966.
-  //
+  // Version 1 implements Eligible Leader Replicas and LastKnownELR as described in KIP-966.
+  // Version 2 adds Directories for KIP-858
+  "validVersions": "0-2",
   "flexibleVersions": "0+",
   "fields": [
     { "name": "PartitionId", "type": "int32", "versions": "0+", "default": "-1",
@@ -47,6 +47,8 @@
       "about": "The eligible leader replicas of this partition." },
     { "name": "LastKnownELR", "type": "[]int32", "default": "null", "entityType": "brokerId",
       "versions": "1+", "nullableVersions": "1+", "taggedVersions": "1+", "tag": 2,
-      "about": "The last known eligible leader replicas of this partition." }
+      "about": "The last known eligible leader replicas of this partition." },
+    { "name": "Directories", "type": "[]uuid", "versions": "2+",
+      "about": "The log directory hosting each replica, sorted in the same exact order as the Replicas field."}
   ]
 }
