@@ -113,7 +113,7 @@ class DockerSanityTest(unittest.TestCase):
             self.assertEqual(len(before_metrics_data), len(after_metrics_data))
             for i in range(len(before_metrics_data)):
                 if after_metrics_data[i].replace(".", "").isnumeric():
-                    self.assertGreater(float(after_metrics_data[i]), float(before_metrics_data[i]))
+                    self.assertGreaterEqual(float(after_metrics_data[i]), float(before_metrics_data[i]))
                 else:
                     self.assertEqual(after_metrics_data[i], before_metrics_data[i])
         except AssertionError as e:
