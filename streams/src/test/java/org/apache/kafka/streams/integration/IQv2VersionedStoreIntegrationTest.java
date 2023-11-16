@@ -214,8 +214,8 @@ public class IQv2VersionedStoreIntegrationTest {
                                               final int arrayUpperBound,
                                               final boolean ascending) {
 
-          final StateQueryRequest<VersionedRecordIterator<Integer>> request = StateQueryRequest.inStore(STORE_NAME).withQuery(query);
-          final StateQueryResult<VersionedRecordIterator<Integer>> result = kafkaStreams.query(request);
+          final StateQueryRequest<VersionedRecordIterator<Integer>> request = StateQueryRequest.inStore(STORE_NAME).withQuery(query).withPositionBound(PositionBound.at(INPUT_POSITION));
+          final StateQueryResult<VersionedRecordIterator<Integer>> result = IntegrationTestUtils.iqv2WaitForResult(kafkaStreams, request);
           final QueryResult<VersionedRecordIterator<Integer>> queryResult = result.getOnlyPartitionResult();
           final boolean failure = queryResult.isFailure();
           if (failure) {
