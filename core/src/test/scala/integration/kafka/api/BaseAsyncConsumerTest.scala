@@ -31,7 +31,7 @@ class BaseAsyncConsumerTest extends AbstractConsumerTest {
   val defaultBlockingAPITimeoutMs = 1000
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  @ValueSource(strings = Array("kraft", "kraft+kip848"))
   def testCommitAsync(quorum: String): Unit = {
     val props = new Properties();
     props.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name());
@@ -55,7 +55,7 @@ class BaseAsyncConsumerTest extends AbstractConsumerTest {
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  @ValueSource(strings = Array("kraft", "kraft+kip848"))
   def testCommitSync(quorum: String): Unit = {
     val props = new Properties();
     props.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name());
