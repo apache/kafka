@@ -567,7 +567,7 @@ class ReplicaManagerTest {
           Collections.singletonMap(topic, Uuid.randomUuid()),
           Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava,
           false,
-          LeaderAndIsrRequest.Type.UNKNOWN
+          AbstractControlRequest.Type.UNKNOWN
         ).build()
         replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest, (_, _) => ())
         replicaManager.getPartitionOrException(new TopicPartition(topic, partition))
@@ -2696,7 +2696,7 @@ class ReplicaManagerTest {
       topicIds.asJava,
       Set(new Node(0, "host0", 0), new Node(1, "host1", 1)).asJava,
       true,
-      LeaderAndIsrRequest.Type.FULL
+      AbstractControlRequest.Type.FULL
     ).build()
 
     replicaManager.becomeLeaderOrFollower(0, lisr, (_, _) => ())
