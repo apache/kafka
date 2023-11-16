@@ -366,7 +366,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
                 log.error("onPartitionsLost callback invocation failed while releasing assignment" +
                         " after member got fenced. Member will rejoin the group anyways.", error);
             }
-            updateSubscription(Collections.emptySet());
+            updateSubscription(Collections.emptySet(), true);
             transitionToJoining();
         });
     }
@@ -386,7 +386,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
                 log.error("onPartitionsLost callback invocation failed while releasing assignment" +
                         "after member failed with fatal error.", error);
             }
-            updateSubscription(Collections.emptySet());
+            updateSubscription(Collections.emptySet(), true);
         });
     }
 
@@ -401,10 +401,14 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
 
     /**
      * Update a new assignment by setting the assigned partitions in the member subscription.
+     *
+     * @param assignedPartitions Topic partitions to take as the new subscription assignment
+     * @param clearAssignments True if the
      */
-    private void updateSubscription(Collection<TopicPartition> assignedPartitions) {
+    private void updateSubscription(Collection<TopicPartition> assignedPartitions,
+                                    boolean clearAssignments) {
         subscriptions.assignFromSubscribed(assignedPartitions);
-        if (assignedPartitions.isEmpty()) {
+        if (clearAssignments) {
             clearPendingAssignmentsAndLocalNamesCache();
         }
     }
@@ -461,7 +465,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         CompletableFuture<Void> callbackResult = invokeOnPartitionsRevokedOrLostToReleaseAssignment();
         callbackResult.whenComplete((result, error) -> {
             // Clear the subscription, no matter if the callback execution failed or succeeded.
-            updateSubscription(Collections.emptySet());
+            updateSubscription(Collections.emptySet(), true);
 
             // Transition to ensure that a heartbeat request is sent out to effectively leave the
             // group (even in the case where the member had no assignment to release or when the
@@ -867,7 +871,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
             SortedSet<TopicPartition> addedPartitions) {
 
         // Make assignment effective on the client by updating the subscription state.
-        updateSubscription(assignedPartitions);
+        updateSubscription(assignedPartitions, false);
 
         // Invoke user call back
         return invokeOnPartitionsAssignedCallback(addedPartitions);

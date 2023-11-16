@@ -274,7 +274,6 @@ public class MembershipManagerImplTest {
         assignment1.add(new TopicPartition(topic1, 1));
         assignment1.add(new TopicPartition(topic1, 2));
         assertEquals(assignment1, membershipManager.assignmentReadyToReconcile());
-        int currentEpoch = membershipManager.memberEpoch();
 
         // Get fenced and rejoin while still reconciling. Get new assignment to reconcile after
         // rejoining.
@@ -355,7 +354,6 @@ public class MembershipManagerImplTest {
         Set<TopicPartition> topic2Assignment = new HashSet<>(Arrays.asList(
                 new TopicPartition(topic2, 1),
                 new TopicPartition(topic2, 2)));
-        assertEquals(topic2Assignment, membershipManager.assignmentReadyToReconcile());
         assertEquals(topic2Assignment, membershipManager.assignmentReadyToReconcile());
     }
 
