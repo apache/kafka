@@ -42,15 +42,15 @@ public class ClientMetricsReceiverPluginTest {
         assertEquals(0, telemetryReceiver.exportMetricsInvokedCount);
         assertTrue(telemetryReceiver.metricsData.isEmpty());
 
+        byte[] metrics = "test-metrics".getBytes(StandardCharsets.UTF_8);
         ClientMetricsReceiverPlugin.instance().exportMetrics(ClientMetricsTestUtils.requestContext(),
             new PushTelemetryRequest.Builder(
                 new PushTelemetryRequestData()
-                    .setMetrics("test-metrics".getBytes(StandardCharsets.UTF_8)))
+                    .setMetrics(metrics))
                 .build());
 
         assertEquals(1, telemetryReceiver.exportMetricsInvokedCount);
         assertEquals(1, telemetryReceiver.metricsData.size());
-        assertEquals("test-metrics", new String(
-            telemetryReceiver.metricsData.get(0).array()));
+        assertEquals(metrics, telemetryReceiver.metricsData.get(0).array());
     }
 }

@@ -55,10 +55,10 @@ public class ClientMetricsInstanceMetadata {
     }
 
     public boolean isMatch(Map<String, Pattern> patterns) {
-        if (patterns != null && !patterns.isEmpty()) {
+        if (!patterns.isEmpty()) {
             return matchPatterns(patterns);
         }
-        // Empty pattern or missing pattern still considered as a match.
+        // Empty pattern is still considered as a match.
         return true;
     }
 

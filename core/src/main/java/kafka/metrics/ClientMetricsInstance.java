@@ -30,7 +30,7 @@ public class ClientMetricsInstance {
     private final Uuid clientInstanceId;
     private final ClientMetricsInstanceMetadata instanceMetadata;
     private final int subscriptionId;
-    private final long subscriptionUpdateEpoch;
+    private final int subscriptionVersion;
     private final Set<String> metrics;
     private final int pushIntervalMs;
 
@@ -40,11 +40,11 @@ public class ClientMetricsInstance {
     private volatile Errors lastKnownError;
 
     public ClientMetricsInstance(Uuid clientInstanceId, ClientMetricsInstanceMetadata instanceMetadata,
-        int subscriptionId, long subscriptionUpdateEpoch, Set<String> metrics, int pushIntervalMs) {
+        int subscriptionId, int subscriptionVersion, Set<String> metrics, int pushIntervalMs) {
         this.clientInstanceId = Objects.requireNonNull(clientInstanceId);
         this.instanceMetadata = Objects.requireNonNull(instanceMetadata);
         this.subscriptionId = subscriptionId;
-        this.subscriptionUpdateEpoch = subscriptionUpdateEpoch;
+        this.subscriptionVersion = subscriptionVersion;
         this.metrics = metrics;
         this.terminating = false;
         this.pushIntervalMs = pushIntervalMs;
@@ -63,12 +63,12 @@ public class ClientMetricsInstance {
         return pushIntervalMs;
     }
 
-    public long subscriptionUpdateEpoch() {
-        return subscriptionUpdateEpoch;
-    }
-
     public int subscriptionId() {
         return subscriptionId;
+    }
+
+    public int subscriptionVersion() {
+        return subscriptionVersion;
     }
 
     public Set<String> metrics() {
@@ -91,17 +91,17 @@ public class ClientMetricsInstance {
         this.lastKnownError = lastKnownError;
     }
 
-    public synchronized boolean maybeUpdateGetRequestEpoch(long timestamp) {
+    public synchronized boolean maybeUpdateGetRequestEpoch(long currentTime) {
         long lastRequestEpoch = Math.max(lastGetRequestEpoch, lastPushRequestEpoch);
-        long timeElapsedSinceLastMsg = System.currentTimeMillis() - lastRequestEpoch;
+        long timeElapsedSinceLastMsg = currentTime - lastRequestEpoch;
         if (timeElapsedSinceLastMsg >= pushIntervalMs) {
-            lastGetRequestEpoch = timestamp;
+            lastGetRequestEpoch = currentTime;
             return true;
         }
         return false;
     }
 
-    public synchronized boolean maybeUpdatePushRequestEpoch(long timestamp) {
+    public synchronized boolean maybeUpdatePushRequestEpoch(long currentTime) {
         /*
          Immediate push request after get subscriptions fetch can be accepted outside push interval
          time as client applies a jitter to the push interval, which might result in a request being
@@ -109,13 +109,14 @@ public class ClientMetricsInstance {
         */
         boolean canAccept = lastGetRequestEpoch > lastPushRequestEpoch;
         if (!canAccept) {
-            long timeElapsedSinceLastMsg = System.currentTimeMillis() - lastPushRequestEpoch;
+            long lastRequestEpoch = Math.max(lastGetRequestEpoch, lastPushRequestEpoch);
+            long timeElapsedSinceLastMsg = currentTime - lastRequestEpoch;
             canAccept = timeElapsedSinceLastMsg >= pushIntervalMs;
         }
 
         // Update the timestamp only if the request can be accepted.
         if (canAccept) {
-            lastPushRequestEpoch = timestamp;
+            lastPushRequestEpoch = currentTime;
         }
         return canAccept;
     }

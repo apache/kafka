@@ -34,11 +34,9 @@ public class ClientMetricsInstanceMetadataTest {
     @Test
     public void testIsMatchValid() throws UnknownHostException {
         Uuid uuid = Uuid.randomUuid();
-        ClientMetricsInstanceMetadata instanceMetadata = new ClientMetricsInstanceMetadata(uuid,
-            ClientMetricsTestUtils.requestContext());
+        ClientMetricsInstanceMetadata instanceMetadata = new ClientMetricsInstanceMetadata(uuid, ClientMetricsTestUtils.requestContext());
         // We consider empty/missing client matching patterns as valid
         assertTrue(instanceMetadata.isMatch(Collections.emptyMap()));
-        assertTrue(instanceMetadata.isMatch(null));
 
         assertTrue(instanceMetadata.isMatch(
             Collections.singletonMap(ClientMetricsConfigs.CLIENT_ID, Pattern.compile(".*"))));

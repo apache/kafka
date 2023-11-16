@@ -82,10 +82,8 @@ public class ClientMetricsConfigs extends AbstractConfig {
     public static final String CLIENT_SOURCE_ADDRESS = "client_source_address";
     public static final String CLIENT_SOURCE_PORT = "client_source_port";
 
-    // Empty string in client-metrics resource configs indicates that all the metrics are subscribed.
-    public static final String ALL_SUBSCRIBED_METRICS_CONFIG = "\"\"";
-    // Empty string representing all subscribed metrics in subscription response.
-    public static final String ALL_SUBSCRIBED_METRICS = "";
+    // '*' in client-metrics resource configs indicates that all the metrics are subscribed.
+    public static final String ALL_SUBSCRIBED_METRICS_CONFIG = "*";
 
     public static final int DEFAULT_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
     private static final int MIN_INTERVAL_MS = 100; // 100ms

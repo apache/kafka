@@ -73,7 +73,15 @@ public class PushTelemetryRequest extends AbstractRequest {
     public PushTelemetryResponse errorResponse(int throttleTimeMs, Errors errors) {
         PushTelemetryResponseData responseData = new PushTelemetryResponseData();
         responseData.setErrorCode(errors.code());
-        responseData.setThrottleTimeMs(throttleTimeMs);
+        /*
+         THROTTLING_QUOTA_EXCEEDED is thrown in telemetry APIs when the telemetry request
+         arrives prior the configured minimum interval between two consecutive telemetry requests.
+         In this case, the throttleTimeMs should not be included in the response to avoid the
+         muting of the client channel for all the other requests.
+        */
+        if (Errors.THROTTLING_QUOTA_EXCEEDED != errors) {
+            responseData.setThrottleTimeMs(throttleTimeMs);
+        }
         return new PushTelemetryResponse(responseData);
     }
 

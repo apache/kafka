@@ -40,12 +40,13 @@ import org.apache.kafka.common.requests.GetTelemetrySubscriptionsResponse;
 import org.apache.kafka.common.requests.PushTelemetryRequest;
 import org.apache.kafka.common.requests.PushTelemetryResponse;
 import org.apache.kafka.common.requests.RequestContext;
+import org.apache.kafka.common.utils.Crc32C;
+import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -58,8 +59,8 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
-import java.util.zip.CRC32;
 
 /**
  * Handles client telemetry metrics requests/responses, subscriptions and instance information.
@@ -78,18 +79,27 @@ public class ClientMetricsManager implements Closeable {
     private static final int CM_CACHE_MAX_SIZE = 16384;
     private final Cache<Uuid, ClientMetricsInstance> clientInstanceCache;
     private final Map<String, SubscriptionInfo> subscriptionMap;
+    private final Time time;
 
-    // The last subscription updated time is used to determine if the next telemetry request needs
-    // to re-evaluate the subscription id as per changes subscriptions.
-    private volatile long lastSubscriptionUpdateEpoch;
+    // The latest subscription version is used to determine if subscription has changed and needs
+    // to re-evaluate the client instance subscription id as per changed subscriptions.
+    private final AtomicInteger subscriptionUpdateVersion;
+
+    private ClientMetricsManager() {
+        this(Time.SYSTEM);
+    }
 
     // Visible for testing
-    ClientMetricsManager() {
-        subscriptionMap = new ConcurrentHashMap<>();
-        clientInstanceCache = new SynchronizedCache<>(new LRUCache<>(CM_CACHE_MAX_SIZE));
+    ClientMetricsManager(Time time) {
+        this.subscriptionMap = new ConcurrentHashMap<>();
+        this.subscriptionUpdateVersion = new AtomicInteger(0);
+        this.clientInstanceCache = new SynchronizedCache<>(new LRUCache<>(CM_CACHE_MAX_SIZE));
+        this.time = time;
     }
 
     public void updateSubscription(String subscriptionName, Properties properties) {
+        // Validate the subscription properties.
+        ClientMetricsConfigs.validate(subscriptionName, properties);
         // IncrementalAlterConfigs API will send empty configs when all the configs are deleted
         // for respective subscription. In that case, we need to remove the subscription from the map.
         if (properties.isEmpty()) {
@@ -97,25 +107,18 @@ public class ClientMetricsManager implements Closeable {
             if (subscriptionMap.containsKey(subscriptionName)) {
                 log.info("Removing subscription [{}] from the subscription map", subscriptionName);
                 subscriptionMap.remove(subscriptionName);
-                updateLastSubscriptionUpdateEpoch();
+                this.subscriptionUpdateVersion.incrementAndGet();
             }
             return;
         }
 
-        ClientMetricsConfigs configs = new ClientMetricsConfigs(properties);
-        updateClientSubscription(subscriptionName, configs);
-        /*
-         Update last subscription updated time to current time to indicate that there is a change
-         in the subscription. This will be used to determine if the next telemetry request needs
-         to re-evaluate the subscription id as per changes subscriptions.
-        */
-        updateLastSubscriptionUpdateEpoch();
+        updateClientSubscription(subscriptionName, new ClientMetricsConfigs(properties));
     }
 
     public GetTelemetrySubscriptionsResponse processGetTelemetrySubscriptionRequest(
         GetTelemetrySubscriptionsRequest request, int telemetryMaxBytes, RequestContext requestContext, int throttleMs) {
 
-        long now = System.currentTimeMillis();
+        long now = time.milliseconds();
         Uuid clientInstanceId = Optional.ofNullable(request.data().clientInstanceId())
             .filter(id -> !id.equals(Uuid.ZERO_UUID))
             .orElse(generateNewClientId());
@@ -123,12 +126,12 @@ public class ClientMetricsManager implements Closeable {
         /*
          Get the client instance from the cache or create a new one. If subscription has changed
          since the last request, then the client instance will be re-evaluated. Validation of the
-         request will be done after the client instance is created. If client issued get telemetry
-         request prior to push interval, then the client should get a throttle error but if the
-         subscription has changed since the last request then the client should get the updated
+         request will be done after the client instance is created. If client issues another get
+         telemetry request prior to push interval, then the client should get a throttle error but if
+         the subscription has changed since the last request then the client should get the updated
          subscription immediately.
         */
-        ClientMetricsInstance clientInstance = clientInstance(clientInstanceId, requestContext, now);
+        ClientMetricsInstance clientInstance = clientInstance(clientInstanceId, requestContext);
 
         try {
             // Validate the get request parameters for the client instance.
@@ -145,14 +148,14 @@ public class ClientMetricsManager implements Closeable {
         int telemetryMaxBytes, RequestContext requestContext, int throttleMs) {
 
         Uuid clientInstanceId = request.data().clientInstanceId();
-        if (clientInstanceId == null || clientInstanceId == Uuid.ZERO_UUID) {
+        if (clientInstanceId == null || Uuid.RESERVED.contains(clientInstanceId)) {
             String msg = String.format("Invalid request from the client [%s], invalid client instance id",
                 clientInstanceId);
             return request.getErrorResponse(throttleMs, new InvalidRequestException(msg));
         }
 
-        long now = System.currentTimeMillis();
-        ClientMetricsInstance clientInstance = clientInstance(clientInstanceId, requestContext, now);
+        long now = time.milliseconds();
+        ClientMetricsInstance clientInstance = clientInstance(clientInstanceId, requestContext);
 
         try {
             // Validate the push request parameters for the client instance.
@@ -186,18 +189,20 @@ public class ClientMetricsManager implements Closeable {
         subscriptionMap.clear();
     }
 
-    private synchronized void updateLastSubscriptionUpdateEpoch() {
-        this.lastSubscriptionUpdateEpoch = System.currentTimeMillis();
-    }
-
     private void updateClientSubscription(String subscriptionName, ClientMetricsConfigs configs) {
         List<String> metrics = configs.getList(ClientMetricsConfigs.SUBSCRIPTION_METRICS);
         int pushInterval = configs.getInt(ClientMetricsConfigs.PUSH_INTERVAL_MS);
         List<String> clientMatchPattern = configs.getList(ClientMetricsConfigs.CLIENT_MATCH_PATTERN);
 
+        /*
+         Update last subscription updated time to current time to indicate that there is a change
+         in the subscription. This will be used to determine if the next telemetry request needs
+         to re-evaluate the subscription id as per changes subscriptions.
+        */
+        int version = this.subscriptionUpdateVersion.incrementAndGet();
         SubscriptionInfo newSubscription =
             new SubscriptionInfo(subscriptionName, metrics, pushInterval,
-                ClientMetricsConfigs.parseMatchingPatterns(clientMatchPattern));
+                ClientMetricsConfigs.parseMatchingPatterns(clientMatchPattern), version);
 
         subscriptionMap.put(subscriptionName, newSubscription);
     }
@@ -210,17 +215,17 @@ public class ClientMetricsManager implements Closeable {
         return id;
     }
 
-    private ClientMetricsInstance clientInstance(Uuid clientInstanceId, RequestContext requestContext,
-        long timestamp) {
+    private ClientMetricsInstance clientInstance(Uuid clientInstanceId, RequestContext requestContext) {
         ClientMetricsInstance clientInstance = clientInstanceCache.get(clientInstanceId);
 
         if (clientInstance == null) {
             /*
              If the client instance is not present in the cache, then create a new client instance
              and update the cache. This can also happen when the telemetry request is received by
-             the separate broker instance. Though cache is synchronized, but it is possible that
-             concurrent calls can create the same client instance. Hence, safeguard the client instance
-             creation with a double-checked lock to ensure that only one instance is created.
+             the separate broker instance.
+             Though cache is synchronized, but it is possible that concurrent calls can create the same
+             client instance. Hence, safeguard the client instance creation with a double-checked lock
+             to ensure that only one instance is created.
             */
             synchronized (this) {
                 clientInstance = clientInstanceCache.get(clientInstanceId);
@@ -230,23 +235,24 @@ public class ClientMetricsManager implements Closeable {
 
                 ClientMetricsInstanceMetadata instanceMetadata = new ClientMetricsInstanceMetadata(
                     clientInstanceId, requestContext);
-                clientInstance = createClientInstanceAndUpdateCache(clientInstanceId, instanceMetadata, timestamp);
+                clientInstance = createClientInstanceAndUpdateCache(clientInstanceId, instanceMetadata);
             }
-        } else if (clientInstance.subscriptionUpdateEpoch() < lastSubscriptionUpdateEpoch) {
+        } else if (clientInstance.subscriptionVersion() < subscriptionUpdateVersion.get()) {
             /*
-             If the last subscription update time for client instance is older than the subscription
-             updated time, then re-evaluate the subscription information for the client as per the
+             If the last subscription update version for client instance is older than the subscription
+             updated version, then re-evaluate the subscription information for the client as per the
              updated subscriptions. This is to ensure that the client instance is always in sync with
-             the latest subscription information. Though cache is synchronized, but it is possible that
-             concurrent calls can create the same client instance. Hence, safeguard the client instance
-             update with a double-checked lock to ensure that only one instance is created.
+             the latest subscription information.
+             Though cache is synchronized, but it is possible that concurrent calls can create the same
+             client instance. Hence, safeguard the client instance update with a double-checked lock
+              to ensure that only one instance is created.
             */
             synchronized (this) {
                 clientInstance = clientInstanceCache.get(clientInstanceId);
-                if (clientInstance.subscriptionUpdateEpoch() >= lastSubscriptionUpdateEpoch) {
+                if (clientInstance.subscriptionVersion() >= subscriptionUpdateVersion.get()) {
                     return clientInstance;
                 }
-                clientInstance = createClientInstanceAndUpdateCache(clientInstanceId, clientInstance.instanceMetadata(), timestamp);
+                clientInstance = createClientInstanceAndUpdateCache(clientInstanceId, clientInstance.instanceMetadata());
             }
         }
 
@@ -254,45 +260,45 @@ public class ClientMetricsManager implements Closeable {
     }
 
     private ClientMetricsInstance createClientInstanceAndUpdateCache(Uuid clientInstanceId,
-        ClientMetricsInstanceMetadata instanceMetadata, long timestamp) {
+        ClientMetricsInstanceMetadata instanceMetadata) {
 
-        ClientMetricsInstance clientInstance = createClientInstance(clientInstanceId, instanceMetadata,
-            timestamp);
+        ClientMetricsInstance clientInstance = createClientInstance(clientInstanceId, instanceMetadata);
         clientInstanceCache.put(clientInstanceId, clientInstance);
         return clientInstance;
     }
 
-    private ClientMetricsInstance createClientInstance(Uuid clientInstanceId,
-        ClientMetricsInstanceMetadata instanceMetadata, long timestamp) {
+    private ClientMetricsInstance createClientInstance(Uuid clientInstanceId, ClientMetricsInstanceMetadata instanceMetadata) {
 
         int pushIntervalMs = ClientMetricsConfigs.DEFAULT_INTERVAL_MS;
         // Keep a set of metrics to avoid duplicates in case of overlapping subscriptions.
         Set<String> subscribedMetrics = new HashSet<>();
         boolean allMetricsSubscribed = false;
 
-        for (SubscriptionInfo info : subscriptions()) {
+        int currentSubscriptionVersion = 0;
+        for (SubscriptionInfo info : subscriptionMap.values()) {
             if (instanceMetadata.isMatch(info.matchPattern())) {
                 allMetricsSubscribed = allMetricsSubscribed || info.metrics().contains(
                     ClientMetricsConfigs.ALL_SUBSCRIBED_METRICS_CONFIG);
                 subscribedMetrics.addAll(info.metrics());
                 pushIntervalMs = Math.min(pushIntervalMs, info.intervalMs());
+                currentSubscriptionVersion = Math.max(currentSubscriptionVersion, info.version());
             }
         }
 
         /*
-         If client matches with any subscription that has empty metrics string, then it means that client
-         is subscribed to all the metrics, so just send the empty string as the subscribed metrics.
+         If client matches with any subscription that has * metrics string, then it means that client
+         is subscribed to all the metrics, so just send the * string as the subscribed metrics.
         */
         if (allMetricsSubscribed) {
+            // Only add an * to indicate that all metrics are subscribed.
             subscribedMetrics.clear();
-            // Add an empty string to indicate that all metrics are subscribed.
-            subscribedMetrics.add(ClientMetricsConfigs.ALL_SUBSCRIBED_METRICS);
+            subscribedMetrics.add(ClientMetricsConfigs.ALL_SUBSCRIBED_METRICS_CONFIG);
         }
 
         int subscriptionId = computeSubscriptionId(subscribedMetrics, pushIntervalMs, clientInstanceId);
 
-        return new ClientMetricsInstance(clientInstanceId, instanceMetadata, subscriptionId, timestamp,
-            subscribedMetrics, pushIntervalMs);
+        return new ClientMetricsInstance(clientInstanceId, instanceMetadata, subscriptionId,
+            currentSubscriptionVersion, subscribedMetrics, pushIntervalMs);
     }
 
     /**
@@ -301,10 +307,9 @@ public class ClientMetricsManager implements Closeable {
      * the PushIntervalMs, XORed with the ClientInstanceId.
      */
     private int computeSubscriptionId(Set<String> metrics, int pushIntervalMs, Uuid clientInstanceId) {
-        CRC32 crc = new CRC32();
         byte[] metricsBytes = (metrics.toString() + pushIntervalMs).getBytes(StandardCharsets.UTF_8);
-        crc.update(ByteBuffer.wrap(metricsBytes));
-        return (int) crc.getValue() ^ clientInstanceId.hashCode();
+        long computedCrc = Crc32C.compute(metricsBytes, 0, metricsBytes.length);
+        return (int) computedCrc ^ clientInstanceId.hashCode();
     }
 
     private GetTelemetrySubscriptionsResponse createGetSubscriptionResponse(Uuid clientInstanceId,
@@ -390,13 +395,13 @@ public class ClientMetricsManager implements Closeable {
     }
 
     // Visible for testing
-    long lastSubscriptionUpdateEpoch() {
-        return lastSubscriptionUpdateEpoch;
+    ClientMetricsInstance clientInstance(Uuid clientInstanceId) {
+        return clientInstanceCache.get(clientInstanceId);
     }
 
     // Visible for testing
-    ClientMetricsInstance clientInstance(Uuid clientInstanceId) {
-        return clientInstanceCache.get(clientInstanceId);
+    int subscriptionUpdateVersion() {
+        return subscriptionUpdateVersion.get();
     }
 
     public static class SubscriptionInfo {
@@ -405,13 +410,15 @@ public class ClientMetricsManager implements Closeable {
         private final Set<String> metrics;
         private final int intervalMs;
         private final Map<String, Pattern> matchPattern;
+        private final int version;
 
         public SubscriptionInfo(String name, List<String> metrics, int intervalMs,
-            Map<String, Pattern> matchPattern) {
+            Map<String, Pattern> matchPattern, int version) {
             this.name = name;
             this.metrics = new HashSet<>(metrics);
             this.intervalMs = intervalMs;
             this.matchPattern = matchPattern;
+            this.version = version;
         }
 
         public String name() {
@@ -428,6 +435,10 @@ public class ClientMetricsManager implements Closeable {
 
         public Map<String, Pattern> matchPattern() {
             return matchPattern;
+        }
+
+        public int version() {
+            return version;
         }
     }
 }
