@@ -635,13 +635,15 @@ class ConnectDistributedTest(Test):
     @cluster(num_nodes=6)
     @matrix(
         security_protocol=[SecurityConfig.PLAINTEXT, SecurityConfig.SASL_SSL],
-        exactly_once_source=[True, False], connect_protocol=['sessioned', 'compatible', 'eager'],
+        exactly_once_source=[True, False],
+        connect_protocol=['sessioned', 'compatible', 'eager'],
         metadata_quorum=[quorum.zk],
         use_new_coordinator=[False]
     )
     @matrix(
         security_protocol=[SecurityConfig.PLAINTEXT, SecurityConfig.SASL_SSL],
-        exactly_once_source=[True, False], connect_protocol=['sessioned', 'compatible', 'eager'],
+        exactly_once_source=[True, False], 
+        connect_protocol=['sessioned', 'compatible', 'eager'],
         metadata_quorum=[quorum.isolated_kraft],
         use_new_coordinator=[True, False]
     )

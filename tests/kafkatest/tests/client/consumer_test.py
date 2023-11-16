@@ -534,15 +534,15 @@ class AssignmentValidationTest(VerifiableConsumerTest):
     @cluster(num_nodes=6)
     @matrix(
         assignment_strategy=["org.apache.kafka.clients.consumer.RangeAssignor",
-                                 "org.apache.kafka.clients.consumer.RoundRobinAssignor",
-                                 "org.apache.kafka.clients.consumer.StickyAssignor"], 
+                             "org.apache.kafka.clients.consumer.RoundRobinAssignor",
+                             "org.apache.kafka.clients.consumer.StickyAssignor"], 
         metadata_quorum=[quorum.zk],
         use_new_coordinator=[False]
     )
     @matrix(
         assignment_strategy=["org.apache.kafka.clients.consumer.RangeAssignor",
-                                 "org.apache.kafka.clients.consumer.RoundRobinAssignor",
-                                 "org.apache.kafka.clients.consumer.StickyAssignor"], 
+                             "org.apache.kafka.clients.consumer.RoundRobinAssignor",
+                             "org.apache.kafka.clients.consumer.StickyAssignor"], 
         metadata_quorum=[quorum.isolated_kraft],
         use_new_coordinator=[True, False]
     )

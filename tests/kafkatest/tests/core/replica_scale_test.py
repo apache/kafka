@@ -62,14 +62,8 @@ class ReplicaScaleTest(Test):
         metadata_quorum=[quorum.isolated_kraft],
         use_new_coordinator=[True, False]
     )
-    def test_produce_consume(
-        self,
-        topic_count,
-        partition_count,
-        replication_factor,
-        metadata_quorum=quorum.zk,
-        use_new_coordinator=False
-    ):
+    def test_produce_consume(self, topic_count, partition_count, replication_factor, 
+                             metadata_quorum=quorum.zk, use_new_coordinator=False):
         topics_create_start_time = time.time()
         for i in range(topic_count):
             topic = "replicas_produce_consume_%d" % i
@@ -137,14 +131,8 @@ class ReplicaScaleTest(Test):
         metadata_quorum=[quorum.isolated_kraft],
         use_new_coordinator=[True, False]
     )
-    def test_clean_bounce(
-        self,
-        topic_count,
-        partition_count,
-        replication_factor,
-        metadata_quorum=quorum.zk,
-        use_new_coordinator=False
-    ):
+    def test_clean_bounce(self, topic_count, partition_count, replication_factor,
+                          metadata_quorum=quorum.zk, use_new_coordinator=False):
         topics_create_start_time = time.time()
         for i in range(topic_count):
             topic = "topic-%04d" % i
