@@ -42,30 +42,6 @@ import java.util.stream.Collectors;
 
 public class LeaderAndIsrRequest extends AbstractControlRequest {
 
-    public enum Type {
-        UNKNOWN(0),
-        INCREMENTAL(1),
-        FULL(2);
-
-        private final byte type;
-        private Type(int type) {
-            this.type = (byte) type;
-        }
-
-        public byte toByte() {
-            return type;
-        }
-
-        public static Type fromByte(byte type) {
-            for (Type t : Type.values()) {
-                if (t.type == type) {
-                    return t;
-                }
-            }
-            return UNKNOWN;
-        }
-    }
-
     public static class Builder extends AbstractControlRequest.Builder<LeaderAndIsrRequest> {
 
         private final List<LeaderAndIsrPartitionState> partitionStates;
