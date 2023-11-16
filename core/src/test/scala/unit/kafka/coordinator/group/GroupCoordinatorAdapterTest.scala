@@ -327,14 +327,15 @@ class GroupCoordinatorAdapterTest {
 
   @Test
   def testListGroups(): Unit = {
-    testListGroups(null, Set.empty)
-    testListGroups(List(), Set.empty)
-    testListGroups(List("Stable"), Set("Stable"))
+    testListGroups(null, Set.empty, Set.empty)
+    testListGroups(List(), Set.empty, Set.empty)
+    testListGroups(List("Stable"), Set("Stable"), Set.empty)
   }
 
   def testListGroups(
     statesFilter: List[String],
-    expectedStatesFilter: Set[String]
+    expectedStatesFilter: Set[String],
+    expectedTypesFilter: Set[String]
   ): Unit = {
     val groupCoordinator = mock(classOf[GroupCoordinator])
     val adapter = new GroupCoordinatorAdapter(groupCoordinator, Time.SYSTEM)
@@ -343,10 +344,10 @@ class GroupCoordinatorAdapterTest {
     val data = new ListGroupsRequestData()
       .setStatesFilter(statesFilter.asJava)
 
-    when(groupCoordinator.handleListGroups(expectedStatesFilter)).thenReturn {
+    when(groupCoordinator.handleListGroups(expectedStatesFilter, expectedTypesFilter)).thenReturn {
       (Errors.NOT_COORDINATOR, List(
-        GroupOverview("group1", "protocol1", "Stable"),
-        GroupOverview("group2", "qwerty", "Empty")
+        GroupOverview("group1", "protocol1", "Stable", "generic"),
+        GroupOverview("group2", "qwerty", "Empty", "consumer")
       ))
     }
 
@@ -359,11 +360,13 @@ class GroupCoordinatorAdapterTest {
         new ListGroupsResponseData.ListedGroup()
           .setGroupId("group1")
           .setGroupState("Stable")
-          .setProtocolType("protocol1"),
+          .setProtocolType("protocol1")
+          .setGroupType("generic"),
         new ListGroupsResponseData.ListedGroup()
           .setGroupId("group2")
           .setGroupState("Empty")
           .setProtocolType("qwerty")
+          .setGroupType("consumer")
       ).asJava)
 
     assertTrue(future.isDone)

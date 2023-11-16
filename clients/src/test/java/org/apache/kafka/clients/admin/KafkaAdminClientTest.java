@@ -2799,8 +2799,8 @@ public class KafkaAdminClientTest {
 
             assertEquals(2, listings.size());
             List<ConsumerGroupListing> expected = new ArrayList<>();
-            expected.add(new ConsumerGroupListing("group-2", true, Optional.of(ConsumerGroupState.EMPTY)));
-            expected.add(new ConsumerGroupListing("group-1", false, Optional.of(ConsumerGroupState.STABLE)));
+            expected.add(new ConsumerGroupListing("group-2", true).setState(Optional.of(ConsumerGroupState.EMPTY)));
+            expected.add(new ConsumerGroupListing("group-1", false).setState(Optional.of(ConsumerGroupState.STABLE)));
             assertEquals(expected, listings);
             assertEquals(0, result.errors().get().size());
         }
@@ -2830,7 +2830,7 @@ public class KafkaAdminClientTest {
             ListConsumerGroupsResult result = env.adminClient().listConsumerGroups(options);
             Collection<ConsumerGroupListing> listing = result.all().get();
             assertEquals(1, listing.size());
-            List<ConsumerGroupListing> expected = Collections.singletonList(new ConsumerGroupListing("group-1", false, Optional.empty()));
+            List<ConsumerGroupListing> expected = Collections.singletonList(new ConsumerGroupListing("group-1", false));
             assertEquals(expected, listing);
 
             // But we cannot set a state filter with older broker

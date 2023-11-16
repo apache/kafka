@@ -622,7 +622,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   }
 
   def overview: GroupOverview = {
-    GroupOverview(groupId, protocolType.getOrElse(""), state.toString, protocolType.get)
+    GroupOverview(groupId, protocolType.getOrElse(""), state.toString, "generic")
   }
 
   def initializeOffsets(offsets: collection.Map[TopicPartition, CommitRecordMetadataAndOffset],
