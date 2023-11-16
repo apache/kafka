@@ -17,14 +17,14 @@
 package org.apache.kafka.streams.state.internals;
 
 import java.util.ListIterator;
-import org.apache.kafka.streams.state.ValueIterator;
 import org.apache.kafka.streams.state.VersionedRecord;
+import org.apache.kafka.streams.state.VersionedRecordIterator;
 
-public class VersionedRecordIterator<V> implements ValueIterator<VersionedRecord<V>> {
+public class VersionedRecordIteratorImpl<V> implements VersionedRecordIterator<V> {
 
     protected final ListIterator<VersionedRecord<V>> iterator;
 
-    public VersionedRecordIterator(final ListIterator<VersionedRecord<V>> iterator) {
+    public VersionedRecordIteratorImpl(final ListIterator<VersionedRecord<V>> iterator) {
         this.iterator = iterator;
     }
 

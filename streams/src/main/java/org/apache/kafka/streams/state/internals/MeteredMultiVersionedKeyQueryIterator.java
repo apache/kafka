@@ -17,16 +17,16 @@
 package org.apache.kafka.streams.state.internals;
 
 import java.util.function.Function;
-import org.apache.kafka.streams.state.ValueIterator;
+import org.apache.kafka.streams.state.VersionedRecordIterator;
 import org.apache.kafka.streams.state.VersionedRecord;
 
-public class MeteredMultiVersionedKeyQueryIterator<V> implements ValueIterator<VersionedRecord<V>> {
+public class MeteredMultiVersionedKeyQueryIterator<V> implements VersionedRecordIterator<V> {
 
-    private final ValueIterator<VersionedRecord<byte[]>> iterator;
+    private final VersionedRecordIterator<byte[]> iterator;
     private final Function<VersionedRecord<byte[]>, VersionedRecord<V>> deserializeValue;
 
 
-    public MeteredMultiVersionedKeyQueryIterator(final ValueIterator<VersionedRecord<byte[]>> iterator,
+    public MeteredMultiVersionedKeyQueryIterator(final VersionedRecordIterator<byte[]> iterator,
                                                  final Function<VersionedRecord<byte[]>, VersionedRecord<V>> deserializeValue) {
         this.iterator = iterator;
         this.deserializeValue = deserializeValue;

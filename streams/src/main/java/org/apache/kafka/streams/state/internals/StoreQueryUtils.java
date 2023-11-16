@@ -41,9 +41,9 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StateSerdes;
-import org.apache.kafka.streams.state.ValueIterator;
 import org.apache.kafka.streams.state.VersionedKeyValueStore;
 import org.apache.kafka.streams.state.VersionedRecord;
+import org.apache.kafka.streams.state.VersionedRecordIterator;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
@@ -389,10 +389,10 @@ public final class StoreQueryUtils {
             final RocksDBVersionedStore rocksDBVersionedStore = (RocksDBVersionedStore) store;
             final MultiVersionedKeyQuery<Bytes, byte[]> rawKeyQuery = (MultiVersionedKeyQuery<Bytes, byte[]>) query;
             try {
-                final ValueIterator<VersionedRecord<byte[]>> bytes = rocksDBVersionedStore.get(rawKeyQuery.key(),
-                    rawKeyQuery.fromTime().get().toEpochMilli(),
-                    rawKeyQuery.toTime().get().toEpochMilli(),
-                    rawKeyQuery.isAscending());
+                final VersionedRecordIterator<byte[]> bytes = rocksDBVersionedStore.get(rawKeyQuery.key(),
+                                                                                        rawKeyQuery.fromTime().get().toEpochMilli(),
+                                                                                        rawKeyQuery.toTime().get().toEpochMilli(),
+                                                                                        rawKeyQuery.isAscending());
                 return (QueryResult<R>) QueryResult.forResult(bytes);
             } catch (final Exception e) {
                 final String message = parseStoreException(e, store, query);

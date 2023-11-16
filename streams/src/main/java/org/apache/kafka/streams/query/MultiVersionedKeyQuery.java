@@ -20,8 +20,7 @@ import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
 import org.apache.kafka.common.annotation.InterfaceStability.Evolving;
-import org.apache.kafka.streams.state.ValueIterator;
-import org.apache.kafka.streams.state.VersionedRecord;
+import org.apache.kafka.streams.state.VersionedRecordIterator;
 
 /**
  * Interactive query for retrieving a set of records with the same specified key and different timestamps within the specified time range.
@@ -32,7 +31,7 @@ import org.apache.kafka.streams.state.VersionedRecord;
  *  @param <V> The type of the result returned by this query.
  */
 @Evolving
-public final class MultiVersionedKeyQuery<K, V> implements Query<ValueIterator<VersionedRecord<V>>> {
+public final class MultiVersionedKeyQuery<K, V> implements Query<VersionedRecordIterator<V>> {
 
     private final K key;
     private final Optional<Instant> fromTime;

@@ -49,10 +49,10 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
-import org.apache.kafka.streams.state.ValueIterator;
 import org.apache.kafka.streams.state.VersionedBytesStore;
 import org.apache.kafka.streams.state.VersionedKeyValueStore;
 import org.apache.kafka.streams.state.VersionedRecord;
+import org.apache.kafka.streams.state.VersionedRecordIterator;
 import org.apache.kafka.streams.state.internals.StoreQueryUtils.QueryHandler;
 
 /**
@@ -257,7 +257,7 @@ public class MeteredVersionedKeyValueStore<K, V>
             rawKeyQuery = rawKeyQuery.withDescendingTimestamps();
           }
 
-          final QueryResult<ValueIterator<VersionedRecord<byte[]>>> rawResult = wrapped().query(rawKeyQuery, positionBound, config);
+          final QueryResult<VersionedRecordIterator<byte[]>> rawResult = wrapped().query(rawKeyQuery, positionBound, config);
           if (rawResult.isSuccess()) {
             final MeteredMultiVersionedKeyQueryIterator<V> typedResult = new MeteredMultiVersionedKeyQueryIterator<V>(rawResult.getResult(), StoreQueryUtils.getDeserializeValue(plainValueSerdes));
             final QueryResult<MeteredMultiVersionedKeyQueryIterator<V>> typedQueryResult = InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, typedResult);

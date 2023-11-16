@@ -51,7 +51,7 @@ import org.apache.kafka.streams.query.StateQueryRequest;
 import org.apache.kafka.streams.query.StateQueryResult;
 import org.apache.kafka.streams.query.VersionedKeyQuery;
 import org.apache.kafka.streams.state.Stores;
-import org.apache.kafka.streams.state.ValueIterator;
+import org.apache.kafka.streams.state.VersionedRecordIterator;
 import org.apache.kafka.streams.state.VersionedRecord;
 import org.apache.kafka.test.IntegrationTest;
 import org.junit.After;
@@ -98,8 +98,6 @@ public class IQv2VersionedStoreIntegrationTest {
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class);
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class);
         try (final KafkaProducer<Integer, Integer> producer = new KafkaProducer<>(producerProps)) {
-//            producer.send(new ProducerRecord<>(INPUT_TOPIC_NAME, 0, RECORD_TIMESTAMP_OLD, RECORD_KEY, RECORD_VALUE_OLD)).get();
-//            producer.send(new ProducerRecord<>(INPUT_TOPIC_NAME, 0, RECORD_TIMESTAMP_NEW, RECORD_KEY, RECORD_VALUE_NEW)).get();
             producer.send(new ProducerRecord<>(INPUT_TOPIC_NAME, 0,  RECORD_TIMESTAMPS[0], RECORD_KEY, RECORD_VALUES[0])).get();
             producer.send(new ProducerRecord<>(INPUT_TOPIC_NAME, 0,  RECORD_TIMESTAMPS[1], RECORD_KEY, RECORD_VALUES[1])).get();
             producer.send(new ProducerRecord<>(INPUT_TOPIC_NAME, 0,  RECORD_TIMESTAMPS[2], RECORD_KEY, RECORD_VALUES[2])).get();
@@ -215,9 +213,9 @@ public class IQv2VersionedStoreIntegrationTest {
         final int arrayUpperBound,
         final boolean ascending) {
 
-      final StateQueryRequest<ValueIterator<VersionedRecord<Integer>>> request = StateQueryRequest.inStore(STORE_NAME).withQuery(query);
-      final StateQueryResult<ValueIterator<VersionedRecord<Integer>>> result = kafkaStreams.query(request);
-      final QueryResult<ValueIterator<VersionedRecord<Integer>>> queryResult = result.getOnlyPartitionResult();
+      final StateQueryRequest<VersionedRecordIterator<Integer>> request = StateQueryRequest.inStore(STORE_NAME).withQuery(query);
+      final StateQueryResult<VersionedRecordIterator<Integer>> result = kafkaStreams.query(request);
+      final QueryResult<VersionedRecordIterator<Integer>> queryResult = result.getOnlyPartitionResult();
       final boolean failure = queryResult.isFailure();
       if (failure) {
         throw new AssertionError(queryResult.toString());
@@ -231,9 +229,9 @@ public class IQv2VersionedStoreIntegrationTest {
       );
 
 
-      final Map<Integer, QueryResult<ValueIterator<VersionedRecord<Integer>>>> partitionResults = result.getPartitionResults();
-      for (final Entry<Integer, QueryResult<ValueIterator<VersionedRecord<Integer>>>> entry : partitionResults.entrySet()) {
-        try (final ValueIterator<VersionedRecord<Integer>> iterator = entry.getValue().getResult()) {
+      final Map<Integer, QueryResult<VersionedRecordIterator<Integer>>> partitionResults = result.getPartitionResults();
+      for (final Entry<Integer, QueryResult<VersionedRecordIterator<Integer>>> entry : partitionResults.entrySet()) {
+        try (final VersionedRecordIterator<Integer> iterator = entry.getValue().getResult()) {
           int i = ascending ? arrayUpperBound : 0;
           int iteratorSize = 0;
           while (iterator.hasNext()) {

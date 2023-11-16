@@ -29,7 +29,7 @@ import java.util.Iterator;
  *
  * @param <V> Type of values
  */
-public interface ValueIterator<V> extends Iterator<V>, Closeable {
+public interface VersionedRecordIterator<V> extends Iterator<VersionedRecord<V>>, Closeable {
 
     @Override
     void close();

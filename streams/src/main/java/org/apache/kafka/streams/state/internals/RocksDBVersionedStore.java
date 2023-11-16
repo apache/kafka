@@ -46,9 +46,9 @@ import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
-import org.apache.kafka.streams.state.ValueIterator;
 import org.apache.kafka.streams.state.VersionedKeyValueStore;
 import org.apache.kafka.streams.state.VersionedRecord;
+import org.apache.kafka.streams.state.VersionedRecordIterator;
 import org.apache.kafka.streams.state.internals.RocksDBVersionedStoreSegmentValueFormatter.SegmentValue;
 import org.apache.kafka.streams.state.internals.RocksDBVersionedStoreSegmentValueFormatter.SegmentValue.SegmentSearchResult;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
@@ -266,7 +266,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
         return null;
     }
 
-    public ValueIterator<VersionedRecord<byte[]>> get(final Bytes key, final long fromTimestamp, final long toTimestamp, final boolean isAscending) {
+    public VersionedRecordIterator<byte[]> get(final Bytes key, final long fromTimestamp, final long toTimestamp, final boolean isAscending) {
 
         Objects.requireNonNull(key, "key cannot be null");
         validateStoreOpen();
@@ -292,7 +292,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
             if (queryResults.size() == 0) {
                 LOG.warn("Returning null for expired get.");
             }
-            return new VersionedRecordIterator<>(queryResults.listIterator());
+            return new VersionedRecordIteratorImpl<>(queryResults.listIterator());
         } else {
             // take a RocksDB snapshot to return the segments content at the query time (in order to guarantee consistency)
             final Snapshot snapshot = latestValueStore.getSnapshot();
@@ -334,57 +334,9 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
 
             latestValueStore.releaseSnapshot(snapshot);
 
-            return new VersionedRecordIterator<>(queryResults.listIterator());
+            return new VersionedRecordIteratorImpl<>(queryResults.listIterator());
         }
     }
-
-    public ValueIterator<VersionedRecord<byte[]>> get2(final Bytes key, final long fromTimestamp, final long toTimestamp, final boolean isAscending) {
-
-        Objects.requireNonNull(key, "key cannot be null");
-        validateStoreOpen();
-
-        final List<VersionedRecord<byte[]>> queryResults = new ArrayList<>();
-
-        if (toTimestamp < observedStreamTime - historyRetention) {
-            // history retention exceeded. we still check the latest value store in case the
-            // latest record version satisfies the timestamp bound, in which case it should
-            // still be returned (i.e., the latest record version per key never expires).
-            final byte[] rawLatestValueAndTimestamp = latestValueStore.get(key);
-            if (rawLatestValueAndTimestamp != null) {
-                final long recordTimestamp = LatestValueFormatter.getTimestamp(rawLatestValueAndTimestamp);
-                if (recordTimestamp <= toTimestamp) {
-                    // latest value satisfies timestamp bound
-                    queryResults.add(new VersionedRecord<>(
-                        LatestValueFormatter.getValue(rawLatestValueAndTimestamp),
-                        recordTimestamp
-                    ));
-                }
-            }
-
-            // history retention has elapsed and the latest record version (if present) does
-            // not satisfy the timestamp bound. return null for predictability, even if data
-            // is still present in segments.
-            if (queryResults.size() == 0) {
-                LOG.warn("Returning null for expired get.");
-            }
-            return new VersionedRecordIterator<>(queryResults.listIterator());
-        } else {
-            // first check the latest value store
-            final byte[] rawLatestValueAndTimestamp = latestValueStore.get(key);
-            if (rawLatestValueAndTimestamp != null) {
-                final long recordTimestamp = LatestValueFormatter.getTimestamp(rawLatestValueAndTimestamp);
-                if (recordTimestamp <= toTimestamp) {
-                    queryResults.add(new VersionedRecord<>(LatestValueFormatter.getValue(rawLatestValueAndTimestamp), recordTimestamp));
-                }
-            }
-
-
-
-
-            return new VersionedRecordIterator<>(queryResults.listIterator());
-        }
-    }
-
 
     @Override
     public String name() {
@@ -1097,6 +1049,22 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
 
             return ByteBuffer.allocate(TIMESTAMP_SIZE + rawValue.length)
                 .putLong(timestamp)
+                .put(rawValue)
+                .array();
+        }
+
+        /**
+         * @return the formatted bytes containing the provided {@code rawValue},
+         * {@code validFrom}, and {@code validTo}
+         */
+        static byte[] from(final byte[] rawValue, final long validFrom, final long validTo) {
+            if (rawValue == null) {
+                throw new IllegalStateException("Cannot store tombstone in latest value");
+            }
+
+            return ByteBuffer.allocate(2 * TIMESTAMP_SIZE + rawValue.length)
+                .putLong(validFrom)
+                .putLong(validTo)
                 .put(rawValue)
                 .array();
         }

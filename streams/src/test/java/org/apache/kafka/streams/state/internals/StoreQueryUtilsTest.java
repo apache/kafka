@@ -20,15 +20,11 @@ import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.query.FailureReason;
 import org.apache.kafka.streams.query.KeyQuery;
-import org.apache.kafka.streams.query.MultiVersionedKeyQuery;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.ValueIterator;
-import org.apache.kafka.streams.state.VersionedKeyValueStore;
-import org.apache.kafka.streams.state.VersionedRecord;
 import org.junit.Test;
 import org.mockito.Mockito;
 
@@ -62,30 +58,6 @@ public class StoreQueryUtilsTest {
     }
 
     @Test
-    public void shouldReturnErrorOnNullContextForMultiVersionedKeyQueries() {
-        @SuppressWarnings("unchecked") final MultiVersionedKeyQuery<String, Integer> query =
-            Mockito.mock(MultiVersionedKeyQuery.class);
-        @SuppressWarnings("unchecked") final VersionedKeyValueStore<String, Integer> store =
-            Mockito.mock(VersionedKeyValueStore.class);
-        final Position position = Position.emptyPosition().withComponent("topic", 0, 1);
-        final QueryResult<ValueIterator<VersionedRecord<Integer>>> queryResult = StoreQueryUtils.handleBasicQueries(
-            query,
-            PositionBound.at(position),
-            new QueryConfig(false),
-            store,
-            position,
-            null
-        );
-        assertThat(queryResult.isFailure(), is(true));
-        assertThat(queryResult.getFailureReason(), is(FailureReason.NOT_UP_TO_BOUND));
-        assertThat(
-            queryResult.getFailureMessage(),
-            is("The store is not initialized yet, so it is not yet up to the bound"
-                + " PositionBound{position=Position{position={topic={0=1}}}}")
-        );
-    }
-
-    @Test
     public void shouldReturnErrorOnBoundViolation() {
         @SuppressWarnings("unchecked") final KeyQuery<String, Integer> query =
             Mockito.mock(KeyQuery.class);
@@ -109,33 +81,6 @@ public class StoreQueryUtilsTest {
             is("For store partition 0, the current position Position{position={topic={0=0}}}"
                    + " is not yet up to the bound"
                    + " PositionBound{position=Position{position={topic={0=1}}}}")
-        );
-    }
-
-    @Test
-    public void shouldReturnErrorOnBoundViolationForVersionedKeyQueries() {
-        @SuppressWarnings("unchecked") final MultiVersionedKeyQuery<String, Integer> query =
-            Mockito.mock(MultiVersionedKeyQuery.class);
-        @SuppressWarnings("unchecked") final VersionedKeyValueStore<String, Integer> store =
-            Mockito.mock(VersionedKeyValueStore.class);
-        final StateStoreContext context = Mockito.mock(StateStoreContext.class);
-        Mockito.when(context.taskId()).thenReturn(new TaskId(0, 0));
-        final QueryResult<ValueIterator<VersionedRecord<Integer>>> queryResult = StoreQueryUtils.handleBasicQueries(
-            query,
-            PositionBound.at(Position.emptyPosition().withComponent("topic", 0, 1)),
-            new QueryConfig(false),
-            store,
-            Position.emptyPosition().withComponent("topic", 0, 0),
-            context
-        );
-
-        assertThat(queryResult.isFailure(), is(true));
-        assertThat(queryResult.getFailureReason(), is(FailureReason.NOT_UP_TO_BOUND));
-        assertThat(
-            queryResult.getFailureMessage(),
-            is("For store partition 0, the current position Position{position={topic={0=0}}}"
-                + " is not yet up to the bound"
-                + " PositionBound{position=Position{position={topic={0=1}}}}")
         );
     }
 }

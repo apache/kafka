@@ -44,7 +44,7 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.StateStoreContext;
-import org.apache.kafka.streams.state.ValueIterator;
+import org.apache.kafka.streams.state.VersionedRecordIterator;
 import org.apache.kafka.streams.state.VersionedRecord;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.StreamsTestUtils;
@@ -828,11 +828,10 @@ public class RocksDBVersionedStoreTest {
     }
 
     private List<VersionedRecord<String>> getFromStore(final String key, final long fromTime, final long toTime, final boolean isAscending) {
-        final ValueIterator<VersionedRecord<byte[]>> versionedRecords
-            = store.get(new Bytes(STRING_SERIALIZER.serialize(null, key)), fromTime, toTime, isAscending);
+        final VersionedRecordIterator<byte[]> resultRecords = store.get(new Bytes(STRING_SERIALIZER.serialize(null, key)), fromTime, toTime, isAscending);
         final List<VersionedRecord<String>> versionedRecordsList = new ArrayList<>();
-        while (versionedRecords.hasNext()) {
-            versionedRecordsList.add(deserializedRecord(versionedRecords.next()));
+        while (resultRecords.hasNext()) {
+            versionedRecordsList.add(deserializedRecord(resultRecords.next()));
         }
         return versionedRecordsList;
     }
