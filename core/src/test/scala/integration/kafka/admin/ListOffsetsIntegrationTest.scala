@@ -74,6 +74,13 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
     assertEquals(1, maxTimestampOffset.offset())
   }
 
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testEarliestLocalTimestampOffset(quorum: String): Unit = {
+    val earliestLocalTimestamp = runFetchOffsets(adminClient, OffsetSpec.earliestLocalTimestamp())
+    assertEquals(0, earliestLocalTimestamp.offset())
+  }
+
   private def runFetchOffsets(adminClient: Admin,
                               offsetSpec: OffsetSpec): ListOffsetsResult.ListOffsetsResultInfo = {
     val tp = new TopicPartition(topicName, 0)

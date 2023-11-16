@@ -236,6 +236,23 @@ public class GetOffsetShellTest {
     }
 
     @ClusterTest
+    public void testGetEarliestLocalTimestampOffsets() {
+        setUp();
+
+        for (String time : new String[] {"-4", "earliest-local-timestamp"}) {
+            List<Row> offsets = executeAndParse("--topic-partitions", "topic.*:0", "--time", time);
+            List<Row> expected = Arrays.asList(
+                    new Row("topic1", 0, 0L),
+                    new Row("topic2", 0, 0L),
+                    new Row("topic3", 0, 0L),
+                    new Row("topic4", 0, 0L)
+            );
+
+            assertEquals(expected, offsets);
+        }
+    }
+
+    @ClusterTest
     public void testGetOffsetsByTimestamp() {
         setUp();
 

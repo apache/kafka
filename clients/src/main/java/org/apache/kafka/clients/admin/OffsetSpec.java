@@ -26,6 +26,7 @@ public class OffsetSpec {
     public static class EarliestSpec extends OffsetSpec { }
     public static class LatestSpec extends OffsetSpec { }
     public static class MaxTimestampSpec extends OffsetSpec { }
+    public static class EarliestLocalTimestampSpec extends OffsetSpec { }
     public static class TimestampSpec extends OffsetSpec {
         private final long timestamp;
 
@@ -68,6 +69,10 @@ public class OffsetSpec {
      */
     public static OffsetSpec maxTimestamp() {
         return new MaxTimestampSpec();
+    }
+
+    public static OffsetSpec earliestLocalTimestamp() {
+        return new EarliestLocalTimestampSpec();
     }
 
 }
