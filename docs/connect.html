@@ -41,7 +41,7 @@
     <p>In standalone mode all work is performed in a single process. This configuration is simpler to setup and get started with and may be useful in situations where only one worker makes sense (e.g. collecting log files), but it does not benefit from some of the features of Kafka Connect such as fault tolerance. You can start a standalone process with the following command:</p>
 
     <pre class="brush: bash;">
-&gt; bin/connect-standalone.sh config/connect-standalone.properties [connector1.properties connector2.properties ...]</pre>
+&gt; bin/connect-standalone.sh config/connect-standalone.properties [connector1.properties connector2.json ...]</pre>
 
     <p>The first parameter is the configuration for the worker. This includes settings such as the Kafka connection parameters, serialization format, and how frequently to commit offsets. The provided example should work well with a local cluster running with the default configuration provided by <code>config/server.properties</code>. It will require tweaking to use with a different configuration or production deployment. All workers (both standalone and distributed) require a few configs:</p>
     <ul>
@@ -60,7 +60,7 @@
     
     <p>Starting with 2.3.0, client configuration overrides can be configured individually per connector by using the prefixes <code>producer.override.</code> and <code>consumer.override.</code> for Kafka sources or Kafka sinks respectively. These overrides are included with the rest of the connector's configuration properties.</p>
 
-    <p>The remaining parameters are connector configuration files. You may include as many as you want, but all will execute within the same process (on different threads). You can also choose not to specify any connector configuration files on the command line, and instead use the REST API to create connectors at runtime after your standalone worker starts.</p>
+    <p>The remaining parameters are connector configuration files. Each file may either be a Java Properties file or a JSON file containing an object with the same structure as the request body of either the <code>POST /connectors</code> endpoint or the <code>PUT /connectors/{name}/config</code> endpoint (see the <a href="/{{version}}/generated/connect_rest.yaml">OpenAPI documentation</a>). You may include as many as you want, but all will execute within the same process (on different threads). You can also choose not to specify any connector configuration files on the command line, and instead use the REST API to create connectors at runtime after your standalone worker starts.</p>
 
     <p>Distributed mode handles automatic balancing of work, allows you to scale up (or down) dynamically, and offers fault tolerance both in the active tasks and for configuration and offset commit data. Execution is very similar to standalone mode:</p>
 
@@ -293,7 +293,7 @@ listeners=http://localhost:8080,https://localhost:8443</pre>
 
     <ul>
         <li><code>GET /connectors</code> - return a list of active connectors</li>
-        <li><code>POST /connectors</code> - create a new connector; the request body should be a JSON object containing a string <code>name</code> field and an object <code>config</code> field with the connector configuration parameters</li>
+        <li><code>POST /connectors</code> - create a new connector; the request body should be a JSON object containing a string <code>name</code> field and an object <code>config</code> field with the connector configuration parameters. The JSON object may also optionally contain a string <code>initial_state</code> field which can take the following values - <code>STOPPED</code>, <code>PAUSED</code> or <code>RUNNING</code> (the default value)</li>
         <li><code>GET /connectors/{name}</code> - get information about a specific connector</li>
         <li><code>GET /connectors/{name}/config</code> - get the configuration parameters for a specific connector</li>
         <li><code>PUT /connectors/{name}/config</code> - update the configuration parameters for a specific connector</li>
