@@ -32,7 +32,7 @@ class BaseAsyncConsumerTest extends AbstractConsumerTest {
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
-  def testCommitAsync(): Unit = {
+  def testCommitAsync(quorum: String): Unit = {
     val props = new Properties();
     props.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name());
     val consumer = createConsumer(configOverrides = props)
@@ -56,7 +56,7 @@ class BaseAsyncConsumerTest extends AbstractConsumerTest {
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
-  def testCommitSync(): Unit = {
+  def testCommitSync(quorum: String): Unit = {
     val props = new Properties();
     props.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name());
     val consumer = createConsumer(configOverrides = props)
