@@ -220,6 +220,14 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      */
     private Optional<CompletableFuture<Void>> leaveGroupInProgress;
 
+    /**
+     * True if the member has registered to be notified when the cluster metadata is updated.
+     * This is initially false, as the member that is not part of a consumer group does not
+     * require metadata updated. This becomes true the first time the member joins on the
+     * {@link #transitionToJoining()}
+     */
+    private boolean isRegisteredForMetadataUpdates;
+
     public MembershipManagerImpl(String groupId,
                                  SubscriptionState subscriptions,
                                  CommitRequestManager commitRequestManager,
@@ -243,7 +251,6 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         this.subscriptions = subscriptions;
         this.commitRequestManager = commitRequestManager;
         this.metadata = metadata;
-        this.metadata.addClusterUpdateListener(this);
         this.assignedTopicNamesCache = new HashMap<>();
         this.assignmentUnresolved = new HashMap<>();
         this.assignmentReadyToReconcile = new TreeSet<>(COMPARATOR);
@@ -397,6 +404,18 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         resetEpoch();
         transitionTo(MemberState.JOINING);
         clearPendingAssignmentsAndLocalNamesCache();
+        registerForMetadataUpdates();
+    }
+
+    /**
+     * Register to get notified when the cluster metadata is updated, via the
+     * {@link #onUpdate(ClusterResource)}. Register only if the manager is not register already.
+     */
+    private void registerForMetadataUpdates() {
+        if (!isRegisteredForMetadataUpdates) {
+            this.metadata.addClusterUpdateListener(this);
+            isRegisteredForMetadataUpdates = true;
+        }
     }
 
     /**
