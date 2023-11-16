@@ -399,8 +399,26 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     /**
      * {@inheritDoc}
      */
-    @Override
-    public void transitionToJoining() {
+    public void onSubscriptionUpdated() {
+        if (state == MemberState.UNSUBSCRIBED) {
+            transitionToJoining();
+        }
+        // TODO: If the member is already part of the group, this should only ensure that the
+        //  updated subscription is included in the next heartbeat request.
+    }
+
+    /**
+     * Transition to the {@link MemberState#JOINING} state, indicating that the member will
+     * try to join the group on the next heartbeat request. This is expected to be invoked when
+     * the user calls the subscribe API, or when the member wants to rejoin after getting fenced.
+     * Visible for testing.
+     */
+    void transitionToJoining() {
+        if (state == MemberState.FATAL) {
+            log.warn("No action taken to join the group with the updated subscription because " +
+                    "the member is in FATAL state");
+            return;
+        }
         resetEpoch();
         transitionTo(MemberState.JOINING);
         clearPendingAssignmentsAndLocalNamesCache();
@@ -423,7 +441,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      */
     @Override
     public CompletableFuture<Void> leaveGroup() {
-        if (state == MemberState.UNSUBSCRIBED) {
+        if (state == MemberState.UNSUBSCRIBED || state == MemberState.FATAL) {
             // Member is not part of the group. No-op and return completed future to avoid
             // unnecessary transitions.
             return CompletableFuture.completedFuture(null);

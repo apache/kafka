@@ -86,13 +86,6 @@ public interface MembershipManager {
     Set<TopicPartition> currentAssignment();
 
     /**
-     * Transition to the {@link MemberState#JOINING} state, indicating that the member will
-     * try to join the group on the next heartbeat request. This is expected to be invoked when
-     * the user calls the subscribe API, or when the member wants to rejoin after getting fenced.
-     */
-    void transitionToJoining();
-
-    /**
      * Transition the member to the FENCED state, where the member will release the assignment by
      * calling the onPartitionsLost callback, and when the callback completes, it will transition
      * to {@link MemberState#JOINING} to rejoin the group. This is expected to be invoked when
@@ -128,4 +121,13 @@ public interface MembershipManager {
      * could be the case then the member is not in a group, or when it failed with a fatal error.
      */
     boolean shouldSkipHeartbeat();
+
+    /**
+     * Join the group with the updated subscription, if the member is not part of it yet. If the
+     * member is already part of the group, this will only ensure that the updated subscription
+     * is included in the next heartbeat request.
+     * <p/>
+     * Note that list of topics of the subscription is taken from the shared subscription state.
+     */
+    void onSubscriptionUpdated();
 }

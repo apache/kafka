@@ -34,7 +34,6 @@ import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * <p>Manages the request creation and response handling for the heartbeat. The module creates a
@@ -132,48 +131,6 @@ public class HeartbeatRequestManager implements RequestManager {
         this.heartbeatRequestState = heartbeatRequestState;
         this.membershipManager = membershipManager;
         this.backgroundEventHandler = backgroundEventHandler;
-    }
-
-    /**
-     * This will ensure that the member starts sending heartbeats to join the group with the
-     * updated subscription, if it is not already part of it. If the member is already part of
-     * the group, this will only ensure that the updated subscription is sent on the next
-     * heartbeat request. No action will be taken if the member is in a {@link MemberState#FATAL}
-     * state.
-     * <p/>
-     * Note that list of topics of the subscription is taken from the shared subscription state.
-     */
-    public void onSubscriptionUpdated() {
-        if (membershipManager.state() == MemberState.FATAL) {
-            logger.debug("No action taken join the group or update the subscription because " +
-                    "the member is in FATAL state");
-            return;
-        }
-
-        if (membershipManager.state() == MemberState.UNSUBSCRIBED) {
-            membershipManager.transitionToJoining();
-        }
-    }
-
-    /**
-     * Release assignment and send heartbeat request to leave the group. If the member is not
-     * part of the group or is in a FATAL state this won't take any action and will return a
-     * completed future.
-     *
-     * @return Future that will complete when the callback execution completes and the heartbeat
-     * request to leave is sent out. The future will fail it the callback execution fails.
-     */
-    public CompletableFuture<Void> onUnsubscribe() {
-        boolean notInGroup =
-                membershipManager.state() == MemberState.UNSUBSCRIBED ||
-                        membershipManager.state() == MemberState.FATAL;
-        if (notInGroup) {
-            return CompletableFuture.completedFuture(null);
-        }
-        // TODO: Consider no-op if member is already LEAVING too (repeated calls to unsubscribe
-        //  potentially storming the broker?). To double check the current behaviour, as it does
-        //  not seem to handle it that way.
-        return membershipManager.leaveGroup();
     }
 
     /**

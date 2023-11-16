@@ -16,12 +16,12 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-import org.apache.kafka.clients.consumer.internals.HeartbeatRequestManager;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.internals.CachedSupplier;
 import org.apache.kafka.clients.consumer.internals.CommitRequestManager;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkThread;
+import org.apache.kafka.clients.consumer.internals.MembershipManager;
 import org.apache.kafka.clients.consumer.internals.RequestManagers;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
@@ -176,17 +176,17 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
     }
 
     /**
-     * Process event that indicates that the subscription state changed. This will make the
+     * Process event that indicates that the subscription changed. This will make the
      * consumer join the group if it is not part of it yet, or send the updated subscription if
      * it is already a member.
      */
     private void processSubscriptionChangeEvent() {
-        if (!requestManagers.heartbeatRequestManager.isPresent()) {
-            throw new RuntimeException("Heartbeat request manager not present when processing a " +
+        if (!requestManagers.membershipManager.isPresent()) {
+            throw new RuntimeException("Group membership manager not present when processing a " +
                     "subscribe event");
         }
-        HeartbeatRequestManager heartbeatManager = requestManagers.heartbeatRequestManager.get();
-        heartbeatManager.onSubscriptionUpdated();
+        MembershipManager membershipManager = requestManagers.membershipManager.get();
+        membershipManager.onSubscriptionUpdated();
     }
 
     /**
@@ -198,12 +198,12 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
      *              the group is sent out.
      */
     private void processUnsubscribeEvent(UnsubscribeApplicationEvent event) {
-        if (!requestManagers.heartbeatRequestManager.isPresent()) {
-            throw new RuntimeException("Heartbeat request manager not present when processing an " +
+        if (!requestManagers.membershipManager.isPresent()) {
+            throw new RuntimeException("Group membership manager not present when processing an " +
                     "unsubscribe event");
         }
-        HeartbeatRequestManager heartbeatManager = requestManagers.heartbeatRequestManager.get();
-        CompletableFuture<Void> result = heartbeatManager.onUnsubscribe();
+        MembershipManager membershipManager = requestManagers.membershipManager.get();
+        CompletableFuture<Void> result = membershipManager.leaveGroup();
         event.chain(result);
     }
 

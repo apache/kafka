@@ -763,7 +763,6 @@ public class MembershipManagerImplTest {
         mockRevocationNoCallbacks(false);
         mockTopicNameInMetadataCache(Collections.singletonMap(topicId, topicName), false);
 
-
         // Revoke one of the 2 partitions
         receiveAssignment(topicId, Collections.singletonList(1), membershipManager);
 
@@ -773,6 +772,15 @@ public class MembershipManagerImplTest {
         Set<TopicPartition> remainingAssignment = Collections.singleton(new TopicPartition(topicName, 1));
 
         testRevocationCompleted(membershipManager, remainingAssignment);
+    }
+
+    @Test
+    public void testOnSubscriptionUpdatedTransitionsToJoiningOnlyIfNotInGroup() {
+        MembershipManagerImpl membershipManager = createMemberInStableState();
+        verify(membershipManager).transitionToJoining();
+        clearInvocations(membershipManager);
+        membershipManager.onSubscriptionUpdated();
+        verify(membershipManager, never()).transitionToJoining();
     }
 
     private MembershipManagerImpl mockMemberSuccessfullyReceivesAndAcksAssignment(
