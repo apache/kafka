@@ -27,7 +27,7 @@ import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.ReplicaManager.{AtMinIsrPartitionCountMetricName, FailedIsrUpdatesPerSecMetricName, IsrExpandsPerSecMetricName, IsrShrinksPerSecMetricName, LeaderCountMetricName, OfflineReplicaCountMetricName, PartitionCountMetricName, PartitionsWithLateTransactionsCountMetricName, ProducerIdCountMetricName, ReassigningPartitionsMetricName, UnderMinIsrPartitionCountMetricName, UnderReplicatedPartitionsMetricName}
 import kafka.server.ReplicaManager.createLogReadResult
 import kafka.server.checkpoints.{LazyOffsetCheckpoints, OffsetCheckpointFile, OffsetCheckpoints}
-import kafka.server.metadata.ZkMetadataCache
+import kafka.server.metadata.{KRaftMetadataCache, ZkMetadataCache}
 import kafka.utils.Implicits._
 import kafka.utils._
 import kafka.zk.KafkaZkClient
@@ -56,6 +56,7 @@ import org.apache.kafka.common.{ElectionType, IsolationLevel, Node, TopicIdParti
 import org.apache.kafka.image.{LocalReplicaChanges, MetadataImage, TopicsDelta}
 import org.apache.kafka.metadata.LeaderConstants.NO_LEADER
 import org.apache.kafka.server.common
+import org.apache.kafka.server.common.DirectoryEventHandler
 import org.apache.kafka.server.common.MetadataVersion._
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.{Scheduler, ShutdownableThread}
@@ -271,8 +272,7 @@ class ReplicaManager(val config: KafkaConfig,
                      threadNamePrefix: Option[String] = None,
                      val brokerEpochSupplier: () => Long = () => -1,
                      addPartitionsToTxnManager: Option[AddPartitionsToTxnManager] = None,
-                     assignmentManager: Option[AssignmentsManager] = None,
-                     lifecycleManager: Option[BrokerLifecycleManager] = None
+                     directoryEventHandler: DirectoryEventHandler = DirectoryEventHandler.NOOP
                      ) extends Logging {
   private val metricsGroup = new KafkaMetricsGroup(this.getClass)
 
@@ -2325,6 +2325,10 @@ class ReplicaManager(val config: KafkaConfig,
            s"for partitions ${partitionsWithOfflineFutureReplica.mkString(",")} because they are in the failed log directory $dir.")
     }
     logManager.handleLogDirFailure(dir)
+    if (dir == config.metadataLogDir) {
+      fatal(s"Shutdown broker because the metadata log dir $dir has failed")
+      Exit.halt(1)
+    }
 
     if (notifyController) {
       if (config.migrationEnabled) {
@@ -2332,16 +2336,12 @@ class ReplicaManager(val config: KafkaConfig,
         Exit.halt(1)
       }
       if (zkClient.isEmpty) {
-        if (lifecycleManager.isDefined) {
-          val uuid = logManager.directoryId(dir)
-          if (uuid.isDefined) {
-            lifecycleManager.get.propagateDirectoryFailure(uuid.get)
-          } else {
-            fatal(s"Unable to propagate directory failure disabled because directory $dir has no UUID")
-            Exit.halt(1)
-          }
+        val uuid = logManager.directoryId(dir)
+        if (uuid.isDefined) {
+          directoryEventHandler.handleFailure(uuid.get)
         } else {
-          warn(s"Log dir $dir failed but propagation is disabled because lifecycleManager is not defined")
+          fatal(s"Unable to propagate directory failure disabled because directory $dir has no UUID")
+          Exit.halt(1)
         }
       } else {
         zkClient.get.propagateLogDirEvent(localBrokerId)
@@ -2357,7 +2357,7 @@ class ReplicaManager(val config: KafkaConfig,
    * then the listener is notified of the assignment.
    */
   def maybeNotifyPartitionAssignedToDirectory(tp: TopicPartition, dir: String): Unit = {
-    if (assignmentManager.isDefined) {
+    if (metadataCache.isInstanceOf[KRaftMetadataCache]) {
       logManager.directoryId(dir) match {
         case None => throw new IllegalStateException(s"Assignment into unidentified directory: ${dir}")
         case Some(dirId) =>
@@ -2369,10 +2369,10 @@ class ReplicaManager(val config: KafkaConfig,
                 throw new IllegalStateException(s"Assignment for topic without ID: ${tp.topic()}")
               case Some(topicId) =>
                 val topicIdPartition = new common.TopicIdPartition(topicId, tp.partition())
-                assignmentManager.get.onAssignment(topicIdPartition, dirId)
+                directoryEventHandler.handleAssignment(topicIdPartition, dirId)
             }
           }
-      }
+        }
     }
   }
 

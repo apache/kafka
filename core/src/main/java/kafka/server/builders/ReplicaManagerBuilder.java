@@ -20,8 +20,6 @@ package kafka.server.builders;
 import kafka.log.LogManager;
 import kafka.server.AddPartitionsToTxnManager;
 import kafka.server.AlterPartitionManager;
-import kafka.server.AssignmentsManager;
-import kafka.server.BrokerLifecycleManager;
 import kafka.server.BrokerTopicStats;
 import kafka.server.DelayedDeleteRecords;
 import kafka.server.DelayedElectLeader;
@@ -37,6 +35,7 @@ import kafka.log.remote.RemoteLogManager;
 import kafka.zk.KafkaZkClient;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.server.common.DirectoryEventHandler;
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel;
 import org.apache.kafka.server.util.Scheduler;
 import scala.compat.java8.OptionConverters;
@@ -68,8 +67,7 @@ public class ReplicaManagerBuilder {
     private Optional<String> threadNamePrefix = Optional.empty();
     private Long brokerEpoch = -1L;
     private Optional<AddPartitionsToTxnManager> addPartitionsToTxnManager = Optional.empty();
-    private Optional<AssignmentsManager> assignmentsManager = Optional.empty();
-    private Optional<BrokerLifecycleManager> lifecycleManager = Optional.empty();
+    private DirectoryEventHandler directoryEventHandler = DirectoryEventHandler.NOOP;
 
     public ReplicaManagerBuilder setConfig(KafkaConfig config) {
         this.config = config;
@@ -176,13 +174,8 @@ public class ReplicaManagerBuilder {
         return this;
     }
 
-    public ReplicaManagerBuilder setAssignmentsManager(AssignmentsManager assignmentsManager) {
-        this.assignmentsManager = Optional.of(assignmentsManager);
-        return this;
-    }
-
-    public ReplicaManagerBuilder setLifecycleManager(BrokerLifecycleManager lifecycleManager) {
-        this.lifecycleManager = Optional.of(lifecycleManager);
+    public ReplicaManagerBuilder setDirectoryEventHandler(DirectoryEventHandler directoryEventHandler) {
+        this.directoryEventHandler = directoryEventHandler;
         return this;
     }
 
@@ -215,7 +208,6 @@ public class ReplicaManagerBuilder {
                              OptionConverters.toScala(threadNamePrefix),
                              () -> brokerEpoch,
                              OptionConverters.toScala(addPartitionsToTxnManager),
-                             OptionConverters.toScala(assignmentsManager),
-                             OptionConverters.toScala(lifecycleManager));
+                             directoryEventHandler);
     }
 }
