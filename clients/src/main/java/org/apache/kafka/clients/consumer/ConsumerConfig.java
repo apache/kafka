@@ -662,6 +662,7 @@ public class ConsumerConfig extends AbstractConfig {
         CommonClientConfigs.warnDisablingExponentialBackoff(this);
         Map<String, Object> refinedConfigs = CommonClientConfigs.postProcessReconnectBackoffConfigs(this, parsedValues);
         maybeOverrideClientId(refinedConfigs);
+        maybeOverrideEnableAutoCommit(refinedConfigs);
         return refinedConfigs;
     }
 
@@ -695,17 +696,17 @@ public class ConsumerConfig extends AbstractConfig {
         return newConfigs;
     }
 
-    boolean maybeOverrideEnableAutoCommit() {
+    private void maybeOverrideEnableAutoCommit(Map<String, Object> configs) {
         Optional<String> groupId = Optional.ofNullable(getString(CommonClientConfigs.GROUP_ID_CONFIG));
-        boolean enableAutoCommit = getBoolean(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG);
+        Map<String, Object> originals = originals();
+        boolean enableAutoCommit = originals.containsKey(ENABLE_AUTO_COMMIT_CONFIG) ? getBoolean(ENABLE_AUTO_COMMIT_CONFIG) : false;
         if (!groupId.isPresent()) { // overwrite in case of default group id where the config is not explicitly provided
-            if (!originals().containsKey(ENABLE_AUTO_COMMIT_CONFIG)) {
-                enableAutoCommit = false;
+            if (!originals.containsKey(ENABLE_AUTO_COMMIT_CONFIG)) {
+                configs.put(ENABLE_AUTO_COMMIT_CONFIG, false);
             } else if (enableAutoCommit) {
-                throw new InvalidConfigurationException(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG + " cannot be set to true when default group id (null) is used.");
+                throw new InvalidConfigurationException(ENABLE_AUTO_COMMIT_CONFIG + " cannot be set to true when default group id (null) is used.");
             }
         }
-        return enableAutoCommit;
     }
 
     public ConsumerConfig(Properties props) {
