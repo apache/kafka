@@ -19,8 +19,11 @@ package org.apache.kafka.connect.integration;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ConsumerGroupListing;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.SourceConnectorConfig;
+import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffset;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
@@ -37,6 +40,7 @@ import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
 import javax.ws.rs.core.Response;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -408,11 +412,7 @@ public class OffsetsApiIntegrationTest {
             connect.kafka().produce(TOPIC, 0, "key", "value");
         }
 
-        // Configure a sink connector whose sink task blocks in its stop method
-        Map<String, String> connectorConfigs = new HashMap<>();
-        connectorConfigs.put(CONNECTOR_CLASS_CONFIG, BlockingConnectorTest.BlockingSinkConnector.class.getName());
-        connectorConfigs.put(TOPICS_CONFIG, TOPIC);
-        connectorConfigs.put("block", "Task::stop");
+        Map<String, String> connectorConfigs = baseSinkConnectorConfigs();
 
         connect.configureConnector(CONNECTOR_NAME, connectorConfigs);
         connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME, 1,
@@ -420,15 +420,22 @@ public class OffsetsApiIntegrationTest {
 
         connect.stopConnector(CONNECTOR_NAME);
 
-        // Try to delete the offsets for the single topic partition
-        Map<String, Object> partition = new HashMap<>();
-        partition.put(SinkUtils.KAFKA_TOPIC_KEY, TOPIC);
-        partition.put(SinkUtils.KAFKA_PARTITION_KEY, 0);
-        List<ConnectorOffset> offsetsToAlter = Collections.singletonList(new ConnectorOffset(partition, null));
+        // Start an out-of-band consumer to represent a consumer for some zombie task
+        Map<String, Object> consumerProps = new HashMap<>();
+        consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, SinkUtils.consumerGroupId(CONNECTOR_NAME));
+        try (KafkaConsumer<byte[], byte[]> consumer = connect.kafka().createConsumerAndSubscribeTo(consumerProps, TOPIC)) {
+            consumer.poll(Duration.ofMillis(5000));
 
-        ConnectRestException e = assertThrows(ConnectRestException.class,
-                () -> connect.alterConnectorOffsets(CONNECTOR_NAME, new ConnectorOffsets(offsetsToAlter)));
-        assertThat(e.getMessage(), containsString("zombie sink task"));
+            // Try to delete the offsets for the single topic partition
+            Map<String, Object> partition = new HashMap<>();
+            partition.put(SinkUtils.KAFKA_TOPIC_KEY, TOPIC);
+            partition.put(SinkUtils.KAFKA_PARTITION_KEY, 0);
+            List<ConnectorOffset> offsetsToAlter = Collections.singletonList(new ConnectorOffset(partition, null));
+
+            ConnectRestException e = assertThrows(ConnectRestException.class,
+                    () -> connect.alterConnectorOffsets(CONNECTOR_NAME, new ConnectorOffsets(offsetsToAlter)));
+            assertThat(e.getMessage(), containsString("zombie sink task"));
+        }
     }
 
     @Test
@@ -758,6 +765,7 @@ public class OffsetsApiIntegrationTest {
 
     @Test
     public void testResetSinkConnectorOffsetsZombieSinkTasks() throws Exception {
+        workerProps.put(WorkerConfig.TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG, "15000");
         connect = connectBuilder.build();
         connect.start();
         connect.kafka().createTopic(TOPIC, 1);
@@ -767,11 +775,7 @@ public class OffsetsApiIntegrationTest {
             connect.kafka().produce(TOPIC, 0, "key", "value");
         }
 
-        // Configure a sink connector whose sink task blocks in its stop method
-        Map<String, String> connectorConfigs = new HashMap<>();
-        connectorConfigs.put(CONNECTOR_CLASS_CONFIG, BlockingConnectorTest.BlockingSinkConnector.class.getName());
-        connectorConfigs.put(TOPICS_CONFIG, TOPIC);
-        connectorConfigs.put("block", "Task::stop");
+        Map<String, String> connectorConfigs = baseSinkConnectorConfigs();
 
         connect.configureConnector(CONNECTOR_NAME, connectorConfigs);
         connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME, 1,
@@ -782,9 +786,15 @@ public class OffsetsApiIntegrationTest {
 
         connect.stopConnector(CONNECTOR_NAME);
 
-        // Try to reset the offsets
-        ConnectRestException e = assertThrows(ConnectRestException.class, () -> connect.resetConnectorOffsets(CONNECTOR_NAME));
-        assertThat(e.getMessage(), containsString("zombie sink task"));
+        // Start an out-of-band consumer to represent a consumer for some zombie task
+        Map<String, Object> consumerProps = new HashMap<>();
+        consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, SinkUtils.consumerGroupId(CONNECTOR_NAME));
+        try (KafkaConsumer<byte[], byte[]> consumer = connect.kafka().createConsumerAndSubscribeTo(consumerProps, TOPIC)) {
+            consumer.poll(Duration.ofMillis(5000));
+            // Try to reset the offsets
+            ConnectRestException e = assertThrows(ConnectRestException.class, () -> connect.resetConnectorOffsets(CONNECTOR_NAME));
+            assertThat(e.getMessage(), containsString("zombie sink task"));
+        }
     }
 
     @Test
