@@ -247,12 +247,10 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         closeTimeout = timeout;
         wakeup();
 
-        if (timeoutMs > 0) {
-            try {
-                join(timeoutMs);
-            } catch (InterruptedException e) {
-                log.error("Interrupted while waiting for consumer network thread to complete", e);
-            }
+        try {
+            join();
+        } catch (InterruptedException e) {
+            log.error("Interrupted while waiting for consumer network thread to complete", e);
         }
     }
 

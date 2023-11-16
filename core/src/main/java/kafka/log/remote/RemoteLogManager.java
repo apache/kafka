@@ -515,11 +515,15 @@ public class RemoteLogManager implements Closeable {
         while (maybeEpoch.isPresent()) {
             int epoch = maybeEpoch.getAsInt();
 
+            // KAFKA-15802: Add a new API for RLMM to choose how to implement the predicate.
+            // currently, all segments are returned and then iterated, and filtered
             Iterator<RemoteLogSegmentMetadata> iterator = remoteLogMetadataManager.listRemoteLogSegments(topicIdPartition, epoch);
             while (iterator.hasNext()) {
                 RemoteLogSegmentMetadata rlsMetadata = iterator.next();
-                if (rlsMetadata.maxTimestampMs() >= timestamp && rlsMetadata.endOffset() >= startingOffset &&
-                        isRemoteSegmentWithinLeaderEpochs(rlsMetadata, unifiedLog.logEndOffset(), epochWithOffsets)) {
+                if (rlsMetadata.maxTimestampMs() >= timestamp
+                    && rlsMetadata.endOffset() >= startingOffset
+                    && isRemoteSegmentWithinLeaderEpochs(rlsMetadata, unifiedLog.logEndOffset(), epochWithOffsets)
+                    && rlsMetadata.state().equals(RemoteLogSegmentState.COPY_SEGMENT_FINISHED)) {
                     return lookupTimestamp(rlsMetadata, timestamp, startingOffset);
                 }
             }
@@ -989,6 +993,10 @@ public class RemoteLogManager implements Closeable {
                         return;
                     }
                     RemoteLogSegmentMetadata metadata = segmentsIterator.next();
+
+                    if (RemoteLogSegmentState.DELETE_SEGMENT_FINISHED.equals(metadata.state())) {
+                        continue;
+                    }
                     if (segmentsToDelete.contains(metadata)) {
                         continue;
                     }
